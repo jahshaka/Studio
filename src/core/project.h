@@ -106,7 +106,7 @@ enum class ModelTypes
     Object,			// Supported
     Mesh,			// Supported
     SoundEffect,
-    Music,
+    Music,			// Supported
     Shader,			// Supported
     Variant,
     File,			// Supported

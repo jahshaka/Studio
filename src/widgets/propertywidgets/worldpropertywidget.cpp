@@ -41,6 +41,11 @@ WorldPropertyWidget::WorldPropertyWidget()
 
 	skySelector = this->addComboBox("Sky");
 
+	ambientMusicSelector = this->addComboBox("Background Ambience");
+
+	connect(ambientMusicSelector,		SIGNAL(currentIndexChanged(int)),
+			this,						SLOT(onBackgroundAmbienceChanged(int)));
+
 	connect(skySelector,				SIGNAL(currentIndexChanged(int)),
 			this,						SLOT(onSkyChanged(int)));
 
@@ -68,6 +73,7 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 		worldGravity->setValue(scene->gravity);
 
 		auto skiesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Sky));
+		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music));
 
 		if (skiesAvailableFromDatabase.isEmpty()) {
 			skyColor->setColorValue(scene->skyColor);
@@ -88,6 +94,19 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 		skySelector->setCurrentItemData(scene->skyGuid);
 		// If we only have one sky, we need to trigger the update function
 		if (skiesAvailableFromDatabase.count() == 1) onSkyChanged(0);
+
+		if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
+		else ambientMusicSelector->show();
+
+		ambientMusicSelector->getWidget()->blockSignals(true);	// don't register initial signals
+		ambientMusicSelector->clear();
+		for (const auto music : musicFilesAvailableFromDatabase) ambientMusicSelector->addItem(music.name, music.guid);
+		ambientMusicSelector->getWidget()->blockSignals(false);
+		// If we have a current audio clip set that as the current item
+		ambientMusicSelector->setCurrentItemData(scene->ambientMusicGuid);
+		// If we only have one audio clip, we need to trigger the update function
+		// Maybe this is not needed depending on how we want to trigger audio playback
+		if (musicFilesAvailableFromDatabase.count() == 1) onBackgroundAmbienceChanged(0);
     }
 	else {
         this->scene.clear();
@@ -191,5 +210,15 @@ void WorldPropertyWidget::onSkyColorChanged(QColor color)
 void WorldPropertyWidget::onAmbientColorChanged(QColor color)
 {
     scene->setAmbientColor(color);
+}
+
+void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
+{
+	Q_UNUSED(index)
+
+	auto currentGuid = skySelector->getCurrentItemData();
+	QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(currentGuid).name);
+
+	// Start playing here
 }
 

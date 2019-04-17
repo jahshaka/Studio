@@ -40,6 +40,7 @@ namespace Contants
     QString DB_THUMBS_TABLE   = "thumbnails";
 	QString DB_ASSETS_TABLE	= "assets";
 
+    QList<QString> AUDIO_EXTS   = { "mp3", "wav" };
     QList<QString> IMAGE_EXTS   = { "png", "jpg" };
     QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "blend"};
     QList<QString> WHITELIST    = { "txt", "frag", "vert", "vs", "fs" };

@@ -155,6 +155,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     //scene already contains root node, so just add children
     auto sceneObj = projectObj["scene"].toObject();
 	scene->skyGuid = sceneObj["skyGuid"].toString();
+	scene->ambientMusicGuid = sceneObj["ambientMusicGuid"].toString();
 	scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
 	scene->skyType = static_cast<iris::SkyType>(sceneObj["skyType"].toInt());
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
