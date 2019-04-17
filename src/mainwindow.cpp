@@ -2329,7 +2329,7 @@ void MainWindow::setupViewPort()
 	editor_menu = new QPushButton("Editor");
 	editor_menu->setObjectName("editor_menu");
 	editor_menu->setCursor(Qt::PointingHandCursor);
-	effect_menu = new QPushButton("Effects");
+	effect_menu = new QPushButton("Materials");
 	effect_menu->setObjectName("effects_menu");
 	effect_menu->setCursor(Qt::PointingHandCursor);
 	assets_menu = new QPushButton("Assets");
