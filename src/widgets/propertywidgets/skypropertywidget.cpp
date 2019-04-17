@@ -156,6 +156,13 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			cubemapTop = this->addTexturePicker("Top");
 			cubemapBottom = this->addTexturePicker("Bottom");
 
+
+			// connect signals from skymapwidget
+			connect(skyMapWidget, &SkyMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
+				onSlotChanged(value, guid, (int)pos);
+			});
+
+
 			// remember the image on the tiles... TODO
 			connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
 				onSlotChanged(value, guid, 0);

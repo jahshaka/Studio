@@ -50,6 +50,7 @@ public:
 
 	bool flipedHorizontal = false;
 	bool flipedVertical = false;
+	bool shouldEmit = false;
 
 	QString textureGuid;
 	QString path;

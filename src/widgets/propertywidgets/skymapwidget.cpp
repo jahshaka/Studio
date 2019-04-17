@@ -27,6 +27,7 @@ SkyMapWidget::SkyMapWidget() : QWidget()
 	setMinimumHeight(180);
 	layout->setVerticalSpacing(0);
 	layout->setHorizontalSpacing(0);
+	addCubeMapImages(QString(),QString(), QString(), QString(), QString(), QString());
 }
 
 void SkyMapWidget::addTopImage(QString topImagePath)
@@ -111,6 +112,7 @@ CubeMapButton::CubeMapButton(QString imagePath, SkyMapWidget* parent) : QPushBut
 	configureUi();
 	configureConnections();
 	setMinimumHeight(60);
+	shouldEmit = true;
 }
 
 void CubeMapButton::setStringPosition(QString string)
@@ -155,8 +157,10 @@ void CubeMapButton::setImage(QString path)
 	}
 	this->path = path;
 
-	emit parent->valueChanged(path, position);
-	emit parent->valuesChanged(path, textureGuid, position);
+	if (shouldEmit) {
+		emit parent->valueChanged(path, position);
+		emit parent->valuesChanged(path, textureGuid, position);
+	}
 }
 
 void CubeMapButton::configureConnections()
@@ -308,8 +312,10 @@ void CubeMapButton::clearImage()
 	path.clear();
 	pixmap = QPixmap();
 	image = QImage();
-	emit parent->valueChanged(path, position);
-	emit parent->valuesChanged(path, textureGuid, position);
+	if (shouldEmit) {
+		emit parent->valueChanged(path, position);
+		emit parent->valuesChanged(path, textureGuid, position);
+	}
 }
 
 void CubeMapButton::rotateImage(int degrees)
