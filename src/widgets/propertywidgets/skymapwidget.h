@@ -66,7 +66,6 @@ public:
 	QPushButton* clear;
 	SkyMapWidget* parent;
 private:
-	void configureConnections();
 	void configureUi();
 protected:
 	void paintEvent(QPaintEvent* event) override;
@@ -74,6 +73,7 @@ protected:
 	virtual void leaveEvent(QEvent* event) override;
 	void dragEnterEvent(QDragEnterEvent* event) override;
 	void dropEvent(QDropEvent* event) override;
+	void mousePressEvent(QMouseEvent*) override;
 };
 
 class SkyMapWidget : public QWidget {
@@ -98,6 +98,7 @@ signals:
 	void valuesChanged(QString value, QString guid, CubeMapPosition pos);
 	void rotationChanged(int degree, CubeMapPosition pos);
 	void orientationFlipChanged(Qt::Orientation orientation, CubeMapPosition pos);
+	
 };
 
 

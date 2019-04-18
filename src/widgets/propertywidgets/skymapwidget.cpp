@@ -103,15 +103,12 @@ void SkyMapWidget::removeCubeMapImageIfPresent(CubeMapButton* btn)
 	}
 }
 
-
-
 CubeMapButton::CubeMapButton(QString imagePath, SkyMapWidget* parent) : QPushButton()
 {
 	path = imagePath;
 	this->parent = parent;
 	setImage(imagePath);
 	configureUi();
-	configureConnections();
 	setMinimumHeight(60);
 	shouldEmit = true;
 	setAcceptDrops(true);
@@ -163,64 +160,6 @@ void CubeMapButton::setImage(QString path)
 		emit parent->valueChanged(path, position);
 		emit parent->valuesChanged(path, textureGuid, position);
 	}
-}
-
-void CubeMapButton::configureConnections()
-{
-	connect(this, &CubeMapButton::clicked, [=]() {
-		//create menu
-		auto select = new QAction("Select");
-		auto clear = new QAction("Clear");
-
-		auto rotate360 = new QAction("Roate image to 360 degrees");
-		auto rotate90 = new QAction("Roate image to 90 degrees");
-		auto rotate180 = new QAction("Roate image to 180 degrees");
-		auto rotate270 = new QAction("Roate image to 270 degrees");
-
-		auto flipHorizontal = new QAction("Flip Horizontally");
-		auto flipVertical = new QAction("Flip Vertically");
-
-		auto rotate = new QMenu("Rotate");
-		auto flip = new QMenu("Flip");
-		rotate->addActions({ rotate90, rotate180, rotate270, rotate360 });
-		flip->addActions({ flipHorizontal, flipVertical });
-
-		auto menu = new QMenu();
-		menu->addActions({ select, clear });
-		menu->addMenu(rotate);
-		menu->addMenu(flip);
-		menu->setStyleSheet(StyleSheet::QMenu());
-		flip->setStyleSheet(StyleSheet::QMenu());
-		rotate->setStyleSheet(StyleSheet::QMenu());
-
-		connect(select, &QAction::triggered, [=]() {
-			selectImage();
-			});
-		connect(clear, &QAction::triggered, [=]() {
-			clearImage();
-			});
-		connect(rotate360, &QAction::triggered, [=]() {
-			rotateImage(360);
-			});
-		connect(rotate90, &QAction::triggered, [=]() {
-			rotateImage(90);
-			});
-		connect(rotate180, &QAction::triggered, [=]() {
-			rotateImage(180);
-			});
-		connect(rotate270, &QAction::triggered, [=]() {
-			rotateImage(270);
-			});
-		connect(flipHorizontal, &QAction::triggered, [=]() {
-			flipImage(Qt::Orientation::Horizontal);
-			});
-		connect(flipVertical, &QAction::triggered, [=]() {
-			flipImage(Qt::Orientation::Vertical);
-			});
-		menu->exec(mapToGlobal(QPoint(0,0)));
-	});
-
-	
 }
 
 void CubeMapButton::configureUi()
@@ -329,12 +268,70 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 	event->acceptProposedAction();
 }
 
+void CubeMapButton::mousePressEvent(QMouseEvent* e)
+{
+	if (e->button() == Qt::LeftButton) {
+		selectImage();
+	}
+	else {
+		auto select = new QAction("Select");
+		auto clear = new QAction("Clear");
+
+		auto rotate360 = new QAction("Roate image to 360 degrees");
+		auto rotate90 = new QAction("Roate image to 90 degrees");
+		auto rotate180 = new QAction("Roate image to 180 degrees");
+		auto rotate270 = new QAction("Roate image to 270 degrees");
+
+		auto flipHorizontal = new QAction("Flip Horizontally");
+		auto flipVertical = new QAction("Flip Vertically");
+
+		auto rotate = new QMenu("Rotate");
+		auto flip = new QMenu("Flip");
+		rotate->addActions({ rotate90, rotate180, rotate270, rotate360 });
+		flip->addActions({ flipHorizontal, flipVertical });
+
+		auto menu = new QMenu();
+		menu->addActions({ select, clear });
+		menu->addMenu(rotate);
+		menu->addMenu(flip);
+		menu->setStyleSheet(StyleSheet::QMenu());
+		flip->setStyleSheet(StyleSheet::QMenu());
+		rotate->setStyleSheet(StyleSheet::QMenu());
+
+		connect(select, &QAction::triggered, [=]() {
+			selectImage();
+			});
+		connect(clear, &QAction::triggered, [=]() {
+			clearImage();
+			});
+		connect(rotate360, &QAction::triggered, [=]() {
+			rotateImage(360);
+			});
+		connect(rotate90, &QAction::triggered, [=]() {
+			rotateImage(90);
+			});
+		connect(rotate180, &QAction::triggered, [=]() {
+			rotateImage(180);
+			});
+		connect(rotate270, &QAction::triggered, [=]() {
+			rotateImage(270);
+			});
+		connect(flipHorizontal, &QAction::triggered, [=]() {
+			flipImage(Qt::Orientation::Horizontal);
+			});
+		connect(flipVertical, &QAction::triggered, [=]() {
+			flipImage(Qt::Orientation::Vertical);
+			});
+		menu->exec(mapToGlobal(QPoint(0, 0)));
+	}
+}
+
 void CubeMapButton::selectImage()
 {
 	auto widget = new AssetPickerWidget(ModelTypes::Texture);
 	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
 		setImage(item->data(Qt::UserRole).toString());
-		}); 
+	}); 
 }
 
 void CubeMapButton::clearImage()
