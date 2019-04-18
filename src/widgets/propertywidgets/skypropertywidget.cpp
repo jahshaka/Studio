@@ -149,12 +149,12 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 		case iris::SkyType::CUBEMAP: {
 			skyMapWidget = this->addSkyMapWidget();
-			cubemapFront = this->addTexturePicker("Front");
+			/*cubemapFront = this->addTexturePicker("Front");
 			cubemapBack = this->addTexturePicker("Back");
 			cubemapLeft = this->addTexturePicker("Left");
 			cubemapRight = this->addTexturePicker("Right");
 			cubemapTop = this->addTexturePicker("Top");
-			cubemapBottom = this->addTexturePicker("Bottom");
+			cubemapBottom = this->addTexturePicker("Bottom");*/
 
 
 			// connect signals from skymapwidget
@@ -164,7 +164,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 
 			// remember the image on the tiles... TODO
-			connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			/*connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
 				onSlotChanged(value, guid, 0);
 			});
 
@@ -186,7 +186,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 			connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
 				onSlotChanged(value, guid, 5);
-			});
+			});*/
 
 			setSkyMap(skyDefinition);
 
@@ -407,12 +407,12 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 
 	skyMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
-	cubemapFront->setTexture(front);
+	/*cubemapFront->setTexture(front);
 	cubemapBack->setTexture(back);
 	cubemapTop->setTexture(top);
 	cubemapBottom->setTexture(bottom);
 	cubemapLeft->setTexture(left);
-	cubemapRight->setTexture(right);
+	cubemapRight->setTexture(right);*/
 
 	// We need at least one valid image to get some metadata from
 	QImage *info;
