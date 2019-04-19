@@ -42,9 +42,13 @@ WorldPropertyWidget::WorldPropertyWidget()
 	skySelector = this->addComboBox("Sky");
 
 	ambientMusicSelector = this->addComboBox("Background Ambience");
+	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
 
 	connect(ambientMusicSelector,		SIGNAL(currentIndexChanged(int)),
 			this,						SLOT(onBackgroundAmbienceChanged(int)));
+
+	connect(ambientMusicVolume,			SIGNAL(valueChanged(float)),
+			this,						SLOT(onAmbientMusicVolumeChanged(float)));
 
 	connect(skySelector,				SIGNAL(currentIndexChanged(int)),
 			this,						SLOT(onSkyChanged(int)));
@@ -100,13 +104,14 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 
 		ambientMusicSelector->getWidget()->blockSignals(true);	// don't register initial signals
 		ambientMusicSelector->clear();
+		ambientMusicSelector->addItem("None", "");
 		for (const auto music : musicFilesAvailableFromDatabase) ambientMusicSelector->addItem(music.name, music.guid);
-		ambientMusicSelector->getWidget()->blockSignals(false);
 		// If we have a current audio clip set that as the current item
 		ambientMusicSelector->setCurrentItemData(scene->ambientMusicGuid);
+		ambientMusicSelector->getWidget()->blockSignals(false);
 		// If we only have one audio clip, we need to trigger the update function
 		// Maybe this is not needed depending on how we want to trigger audio playback
-		if (musicFilesAvailableFromDatabase.count() == 1) onBackgroundAmbienceChanged(0);
+		//if (musicFilesAvailableFromDatabase.count() == 1) onBackgroundAmbienceChanged(0);
     }
 	else {
         this->scene.clear();
@@ -214,11 +219,25 @@ void WorldPropertyWidget::onAmbientColorChanged(QColor color)
 
 void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
 {
-	Q_UNUSED(index)
+	if (index == 0) {
+		scene->ambientMusicGuid = "";
+		scene->stopPlayingAmbientMusic();
+		return;
+	}
 
-	auto currentGuid = skySelector->getCurrentItemData();
-	QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(currentGuid).name);
+	auto currentGuid = ambientMusicSelector->getCurrentItemData();
+	auto asset = db->fetchAsset(currentGuid);
+	auto name = asset.name;
+	QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), name);
 
 	// Start playing here
+	scene->ambientMusicGuid = currentGuid;
+	scene->setAmbientMusic(fullPathToAudio);
+	scene->startPlayingAmbientMusic();
+}
+
+void WorldPropertyWidget::onAmbientMusicVolumeChanged(float volume)
+{
+	scene->setAmbientMusicVolume(volume);
 }
 

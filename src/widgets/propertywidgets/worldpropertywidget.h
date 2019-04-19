@@ -44,6 +44,7 @@ public slots:
     void onSkyColorChanged(QColor color);
     void onAmbientColorChanged(QColor color);
     void onBackgroundAmbienceChanged(int index);
+	void onAmbientMusicVolumeChanged(float volume);
 
 private:
     QSharedPointer<iris::Scene> scene;
@@ -53,6 +54,7 @@ private:
     HFloatSliderWidget *worldGravity;
 	ComboBoxWidget *skySelector;
 	ComboBoxWidget *ambientMusicSelector;
+	HFloatSliderWidget *ambientMusicVolume;
 
 	Database *db;
 };
