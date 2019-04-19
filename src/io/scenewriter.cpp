@@ -88,7 +88,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 
 	sceneObj["skyType"] = static_cast<int>(scene->skyType);
     sceneObj["skyGuid"] = scene->skyGuid;
-    sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
+	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
+	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
     sceneObj["skyColor"] = jsonColor(scene->skyColor);
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);

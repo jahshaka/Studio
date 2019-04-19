@@ -156,6 +156,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     auto sceneObj = projectObj["scene"].toObject();
 	scene->skyGuid = sceneObj["skyGuid"].toString();
 	scene->ambientMusicGuid = sceneObj["ambientMusicGuid"].toString();
+	auto volume = sceneObj["ambientMusicVolume"].toDouble(50);
+	scene->setAmbientMusicVolume(volume);
+	auto asset = handle->fetchAsset(scene->ambientMusicGuid);
+	if (!asset.name.isEmpty()) {
+		QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+		
+		scene->setAmbientMusic(fullPathToAudio);
+		scene->startPlayingAmbientMusic();
+	}
+
 	scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
 	scene->skyType = static_cast<iris::SkyType>(sceneObj["skyType"].toInt());
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
