@@ -865,6 +865,7 @@ void MainWindow::openProject(bool playMode)
 void MainWindow::closeProject()
 {
     {
+		scene->stopPlayingAmbientMusic();
         scene->getPhysicsEnvironment()->stopPhysics();
         scene->getPhysicsEnvironment()->stopSimulation();
 

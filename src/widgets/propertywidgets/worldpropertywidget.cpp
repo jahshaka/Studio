@@ -41,6 +41,15 @@ WorldPropertyWidget::WorldPropertyWidget()
 
 	skySelector = this->addComboBox("Sky");
 
+	ambientMusicSelector = this->addComboBox("Background Ambience");
+	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
+
+	connect(ambientMusicSelector,		SIGNAL(currentIndexChanged(int)),
+			this,						SLOT(onBackgroundAmbienceChanged(int)));
+
+	connect(ambientMusicVolume,			SIGNAL(valueChanged(float)),
+			this,						SLOT(onAmbientMusicVolumeChanged(float)));
+
 	connect(skySelector,				SIGNAL(currentIndexChanged(int)),
 			this,						SLOT(onSkyChanged(int)));
 
@@ -68,6 +77,7 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 		worldGravity->setValue(scene->gravity);
 
 		auto skiesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Sky));
+		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music));
 
 		if (skiesAvailableFromDatabase.isEmpty()) {
 			skyColor->setColorValue(scene->skyColor);
@@ -88,6 +98,20 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 		skySelector->setCurrentItemData(scene->skyGuid);
 		// If we only have one sky, we need to trigger the update function
 		if (skiesAvailableFromDatabase.count() == 1) onSkyChanged(0);
+
+		if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
+		else ambientMusicSelector->show();
+
+		ambientMusicSelector->getWidget()->blockSignals(true);	// don't register initial signals
+		ambientMusicSelector->clear();
+		ambientMusicSelector->addItem("None", "");
+		for (const auto music : musicFilesAvailableFromDatabase) ambientMusicSelector->addItem(music.name, music.guid);
+		// If we have a current audio clip set that as the current item
+		ambientMusicSelector->setCurrentItemData(scene->ambientMusicGuid);
+		ambientMusicSelector->getWidget()->blockSignals(false);
+		// If we only have one audio clip, we need to trigger the update function
+		// Maybe this is not needed depending on how we want to trigger audio playback
+		//if (musicFilesAvailableFromDatabase.count() == 1) onBackgroundAmbienceChanged(0);
     }
 	else {
         this->scene.clear();
@@ -191,5 +215,29 @@ void WorldPropertyWidget::onSkyColorChanged(QColor color)
 void WorldPropertyWidget::onAmbientColorChanged(QColor color)
 {
     scene->setAmbientColor(color);
+}
+
+void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
+{
+	if (index == 0) {
+		scene->ambientMusicGuid = "";
+		scene->stopPlayingAmbientMusic();
+		return;
+	}
+
+	auto currentGuid = ambientMusicSelector->getCurrentItemData();
+	auto asset = db->fetchAsset(currentGuid);
+	auto name = asset.name;
+	QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), name);
+
+	// Start playing here
+	scene->ambientMusicGuid = currentGuid;
+	scene->setAmbientMusic(fullPathToAudio);
+	scene->startPlayingAmbientMusic();
+}
+
+void WorldPropertyWidget::onAmbientMusicVolumeChanged(float volume)
+{
+	scene->setAmbientMusicVolume(volume);
 }
 

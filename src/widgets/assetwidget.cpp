@@ -218,6 +218,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
     assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
     assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
+    assetFilterCombo->addItem("Music", QVariant::fromValue(static_cast<int>(ModelTypes::Music)));
 
     filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
     filterGroupLayout->addWidget(assetFilterCombo);
@@ -559,6 +560,12 @@ void AssetWidget::addItem(const AssetRecord &assetData)
 		int skyType = prop.value("sky").toObject().value("type").toInt();
 		item->setData(SKY_TYPE_ROLE, skyType);
 		item->setData(MODEL_TYPE_ROLE, assetData.type);
+		item->setIcon(QIcon(":/icons/icons8-file-sky.png"));
+	}
+
+	if (assetData.type == static_cast<int>(ModelTypes::Music)) {
+		item->setData(MODEL_TYPE_ROLE, assetData.type);
+		item->setIcon(QIcon(":/icons/icons8-file-music.png"));
 	}
 
     if (assetData.type == static_cast<int>(ModelTypes::Shader)) {
@@ -2375,6 +2382,14 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                     AssetManager::addAsset(assetFile);
                 }
 
+				if (asset->type == ModelTypes::Music) {
+					auto assetMusic = new AssetMusic;
+					assetMusic->assetGuid = assetGuid;
+					assetMusic->fileName = asset->fileName;
+					assetMusic->path = fileToCopyTo;
+					AssetManager::addAsset(assetMusic);
+				}
+
                 if (asset->type == ModelTypes::Texture) {
                     auto assetTexture = new AssetTexture;
                     assetTexture->assetGuid = assetGuid;
@@ -2603,8 +2618,9 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	// 3. Shaders
 	// 4. Meshes
 	// 5. Skies
-	// 6. Asset files (these contain their own assets)
-    // 7. Regular files
+	// 6. Music
+	// 7. Asset files (these contain their own assets)
+    // 8. Regular files
 
 	// Path, GUID, Parent
 	QList<directory_tuple> finalImportList;
@@ -2633,6 +2649,12 @@ void AssetWidget::importAsset(const QStringList &fileNames)
             finalImportList.append(file);
         }
     }
+
+	for (const auto& music : fileNameList) {
+		if (Constants::AUDIO_EXTS.contains(QFileInfo(music.path).suffix().toLower())) {
+			finalImportList.append(music);
+		}
+	}
 
     for (const auto &shader : fileNameList) {
         if (QFileInfo(shader.path).suffix() == Constants::SHADER_EXT) {

@@ -187,6 +187,24 @@ struct AssetSky : public Asset
     }
 };
 
+struct AssetMusic : public Asset
+{
+	AssetMusic()
+	{
+		type = ModelTypes::Music;
+	}
+
+	virtual QVariant getValue()
+	{
+		return value;
+	}
+
+	virtual void setValue(QVariant val)
+	{
+		value = val;
+	}
+};
+
 class AssetManager
 {
 public:
