@@ -46,6 +46,7 @@ class PlayBack
 	QPointF prevMousePos;
 
 	bool _isPlaying = false;
+	QMap<QString, QMatrix4x4> nodeTransforms;
 public:
 	bool isScenePlaying() { return _isPlaying; }
 
@@ -56,6 +57,9 @@ public:
 	void setController(CameraControllerBase* controller);
 
 	void renderScene(iris::Viewport& viewport, float dt);
+
+	void saveNodeTransforms();
+	void restoreNodeTransforms();
 
 	void playScene();
 	void pause();

@@ -94,6 +94,20 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 	//renderer->renderScene(dt, &vp);
 }
 
+void PlayBack::saveNodeTransforms()
+{
+	for (auto node : scene->nodes) {
+		nodeTransforms.insert(node->guid, node->getLocalTransform());
+	}
+}
+
+void PlayBack::restoreNodeTransforms()
+{
+	for (auto node : scene->nodes) {
+		node->setLocalTransform(nodeTransforms[node->guid]);
+	}
+}
+
 void PlayBack::mousePressEvent(QMouseEvent * evt)
 {
 	prevMousePos = evt->localPos();
@@ -136,6 +150,7 @@ void PlayBack::wheelEvent(QWheelEvent *event)
 void PlayBack::playScene()
 {
 	_isPlaying = true;
+	saveNodeTransforms();
 	vrController->setPlayState(_isPlaying);
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
@@ -147,6 +162,7 @@ void PlayBack::pause() {}
 void PlayBack::stopScene()
 {
 	_isPlaying = false;
+	restoreNodeTransforms();
 	vrController->setPlayState(_isPlaying);
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
