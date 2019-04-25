@@ -51,6 +51,7 @@ class QTreeWidget;
 class QIcon;
 class QUndoStack;
 class QToolButton;
+class QOffscreenSurface;
 
 class TransformSlidersUi;
 class LightLayerWidget;
@@ -138,6 +139,7 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
+    void makeLoadingGLContextCurrent();
     void grabOpenGLContextHack();
     void goToDesktop();
     void setupProjectDB();
@@ -380,6 +382,9 @@ private slots:
 	void changeProjection(bool val);
 
 private:
+    QOpenGLContext* loadingContext;
+    QOffscreenSurface* loadingSurface;
+
     Ui::MainWindow *ui;
     SurfaceView* surface;
     SceneViewWidget* sceneView;
