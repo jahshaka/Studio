@@ -220,7 +220,9 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 		painter.drawImage(QRect(0, 0, width(), height()), intermedaryImage);
 	}
 	else {
-		painter.fillRect(0, 0, width(), height(), QColor(0, 0, 0, 0));
+		painter.fillRect(0, 0, width(), height(), QColor(80, 80, 80));
+		painter.setPen(QPen(QColor(0, 0, 0), 2));
+		painter.drawRect(0, 0, width(), height());
 	}
 	if (container->isVisible()) {
 		painter.setPen(QPen(QColor(20,20,20, 40), 2));
@@ -292,8 +294,8 @@ void CubeMapButton::mousePressEvent(QMouseEvent* e)
 
 		auto menu = new QMenu();
 		menu->addActions({ select, clear });
-		menu->addMenu(rotate);
-		menu->addMenu(flip);
+		if (!image.isNull) menu->addMenu(rotate);
+		if (!image.isNull) menu->addMenu(flip);
 		menu->setStyleSheet(StyleSheet::QMenu());
 		flip->setStyleSheet(StyleSheet::QMenu());
 		rotate->setStyleSheet(StyleSheet::QMenu());
