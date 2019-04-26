@@ -302,6 +302,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     viewport = new iris::Viewport();
 
+    vrCam = nullptr;
     defaultCam = new EditorCameraController(this);
     orbitalCam = new OrbitalCameraController(this);
     viewerCam = new ViewerCameraController();
@@ -514,8 +515,10 @@ void SceneViewWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
     scene->setCamera(editorCam);
-    renderer->setScene(scene);
-    vrCam->setScene(scene);
+    if (!!renderer)
+        renderer->setScene(scene);
+    if (vrCam)
+        vrCam->setScene(scene);
 
 	playback->setScene(scene);
 

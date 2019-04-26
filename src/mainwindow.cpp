@@ -197,6 +197,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	restoreState(settings->getValue("windowState", "").toByteArray());
 
 	undoStackCount = 0;
+
+    QSurfaceFormat format;
+    format.setDepthBufferSize(32);
+    format.setMajorVersion(3);
+    format.setMinorVersion(2);
+    format.setProfile(QSurfaceFormat::CoreProfile);
+
+    loadingContext = new QOpenGLContext();
+    loadingContext->setFormat(format);
+    auto globContext = QOpenGLContext::globalShareContext();
+    loadingContext->setShareContext(globContext);
+    loadingContext->create();
+
+    loadingSurface = new QOffscreenSurface();
+    loadingSurface->setFormat(format);
+    loadingSurface->create();
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -567,6 +583,11 @@ void MainWindow::stopAnimWidget()
     animWidget->stopAnimation();
 }
 
+void MainWindow::makeLoadingGLContextCurrent()
+{
+    loadingContext->makeCurrent(loadingSurface);
+}
+
 void MainWindow::setupProjectDB()
 {
     const QString path = IrisUtils::join(
@@ -804,17 +825,10 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-	//UiManager::playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
-	//playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
-	// switch to editor so sceneView can initialize
-	// if playMode == true then it'll switch to the player afterwards
-	// none of this switching will show during the loading process (nick)
-	switchSpace(WindowSpaces::EDITOR);
-    
 	if(!!scene)
-		removeScene();
-    sceneView->makeCurrent();
+        removeScene();
 
+    makeLoadingGLContextCurrent();
     std::unique_ptr<SceneReader> reader(new SceneReader);
 	reader->setDatabaseHandle(db);
 
@@ -1080,6 +1094,7 @@ void MainWindow::refreshThumbnail(QListWidgetItem *item)
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
+    //this->sceneView->context()->setShareContext(loadingContext);
     this->sceneView->setScene(scene);
 	this->playerView->setScene(scene);
     this->sceneHierarchyWidget->setScene(scene);
