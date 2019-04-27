@@ -150,9 +150,11 @@ void CubeMapButton::setImage(QString path)
 		image = QImage();
 	}
 	else {
+		
 		auto thumb = ThumbnailManager::createThumbnail(path, 60, height());
 		image = *thumb->thumb;
-		image = image.scaled(QSize(28, 28));
+		//the path may be invalid returning an invalid image;
+		if (!image.isNull()) image = image.scaled(QSize(28, 28));
 	}
 	this->path = path;
 
@@ -175,7 +177,7 @@ void CubeMapButton::configureUi()
 	containerLayout->addWidget(positionLabel);
 	layout->addWidget(container);
 
-	container->setVisible(false);
+	if(!image.isNull()) container->setVisible(false);
 	setCursor(Qt::PointingHandCursor);
 	setLayout(layout);
 
@@ -221,7 +223,7 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 	}
 	else {
 		painter.fillRect(0, 0, width(), height(), QColor(80, 80, 80));
-		painter.setPen(QPen(QColor(0, 0, 0), 2));
+		painter.setPen(QPen(QColor(0, 0, 0, 50), 2));
 		painter.drawRect(0, 0, width(), height());
 	}
 	if (container->isVisible()) {
@@ -239,7 +241,7 @@ void CubeMapButton::enterEvent(QEvent* event)
 void CubeMapButton::leaveEvent(QEvent* event)
 {
 	QPushButton::leaveEvent(event);
-	container->setVisible(false);
+	if(!image.isNull()) container->setVisible(false);
 }
 
 void CubeMapButton::dragEnterEvent(QDragEnterEvent* event)
@@ -294,8 +296,8 @@ void CubeMapButton::mousePressEvent(QMouseEvent* e)
 
 		auto menu = new QMenu();
 		menu->addActions({ select, clear });
-		if (!image.isNull) menu->addMenu(rotate);
-		if (!image.isNull) menu->addMenu(flip);
+		if (!image.isNull()) menu->addMenu(rotate);
+		if (!image.isNull()) menu->addMenu(flip);
 		menu->setStyleSheet(StyleSheet::QMenu());
 		flip->setStyleSheet(StyleSheet::QMenu());
 		rotate->setStyleSheet(StyleSheet::QMenu());
