@@ -668,7 +668,8 @@ void MainWindow::switchSpace(WindowSpaces space)
 			if (UiManager::isSceneOpen) {
 				//if (settings->getValue("auto_save", true).toBool()) saveScene();
 				//saveScene();
-                updateCurrentSceneThumbnail();
+				if (sceneView->isInitialized())
+					updateCurrentSceneThumbnail();
 				pmContainer->populateDesktop(true);
 			}
 			
@@ -805,6 +806,12 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 
 void MainWindow::saveScene()
 {
+	// if the sceneView isnt initialized then the scene was never
+	// opened in edit mode. This also means no renderer was initialized.
+	// There's no need to save (nick)
+	if (!sceneView->isInitialized())
+		return;
+
 	SceneWriter writer;
     auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
                                       scene,

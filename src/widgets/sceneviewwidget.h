@@ -126,6 +126,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	HandGizmoHandler* handGizmoHandler;
 
 	PlayBack* playback;
+	bool initialized;
 public:
 	bool showFps;
 
@@ -249,6 +250,8 @@ public:
 
 	void begin();
 	void end();
+
+	bool isInitialized() { return initialized; }
 	
 protected:
     void initializeGL();

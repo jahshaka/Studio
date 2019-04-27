@@ -341,6 +341,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	handGizmoHandler = new HandGizmoHandler();
 
 	playback = new PlayBack();
+	initialized = false;
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -661,6 +662,8 @@ void SceneViewWidget::initializeGL()
     thumbGen->setDatabase(database);
 
 	animPath = new AnimationPath();
+
+	initialized = true;
 
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
