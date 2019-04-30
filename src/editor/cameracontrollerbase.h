@@ -27,7 +27,8 @@ class CameraControllerBase
 public:
 	CameraControllerBase();
 
-    virtual void setCamera(iris::CameraNodePtr  cam);
+	virtual void setCamera(iris::CameraNodePtr  cam);
+	iris::CameraNodePtr getCamera() { return camera; }
 
     virtual void onMouseDown(Qt::MouseButton button);
     virtual void onMouseUp(Qt::MouseButton button);

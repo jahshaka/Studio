@@ -863,6 +863,9 @@ void MainWindow::openProject(bool playMode)
 
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
+		// needs to be done so controllers can have the correct
+		// camera
+		playerView->setScene(scene);
         wireCheckAction->setChecked(editorData->showLightWires);
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
     }
@@ -873,7 +876,7 @@ void MainWindow::openProject(bool playMode)
     if (playMode) {
         playBtn->setToolTip("Pause the scene");
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-        onPlaySceneButton();
+        //onPlaySceneButton();
     }
 
     
@@ -934,6 +937,10 @@ void MainWindow::closeProject()
 	}
 
     switchSpace(WindowSpaces::DESKTOP);
+
+	if (sceneView->isInitialized())
+		sceneView->end();
+	playerView->end();
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj

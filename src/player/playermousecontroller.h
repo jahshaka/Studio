@@ -20,7 +20,7 @@ For more information see the LICENSE file
 class PlayerMouseController : public CameraControllerBase
 {
 	iris::ScenePtr scene;
-	iris::CameraNodePtr camera;
+	//iris::CameraNodePtr camera;
 	iris::ViewerNodePtr viewer;
 
     float pitch;

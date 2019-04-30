@@ -45,7 +45,7 @@ void PlayerWidget::createUI()
 	playIcon = QIcon(":/icons/g_play.svg");
 	stopIcon = QIcon(":/icons/g_stop.svg");
 
-	auto playBtn = new QPushButton(playerControls);
+	playBtn = new QPushButton(playerControls);
 	playBtn->setCursor(Qt::PointingHandCursor);
 	playBtn->setToolTip("Play the scene");
 	playBtn->setToolTipDuration(-1);
@@ -78,7 +78,7 @@ void PlayerWidget::createUI()
 	});
 	*/
 
-	connect(playBtn, &QPushButton::pressed, [playBtn, this]() {
+	connect(playBtn, &QPushButton::pressed, [this]() {
 		if (playerView->isScenePlaying()) {
 			playerView->stopScene();
 			playBtn->setIcon(playIcon);
@@ -118,4 +118,8 @@ void PlayerWidget::begin()
 void PlayerWidget::end()
 {
 	playerView->end();
+	if (playerView->isScenePlaying()) {
+		playerView->stopScene();
+		playBtn->setIcon(playIcon);
+	}
 }

@@ -71,6 +71,10 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 	auto scene = UiManager::sceneViewWidget->getScene();
 	//auto renderer = UiManager::sceneViewWidget->getRenderer();
 
+	if (camController->getCamera() != scene->camera)
+		irisLog("Controller mismatch!");
+	qDebug() << scene->camera->getLocalRot();
+
 	scene->update(dt);
 
 	auto activeViewer = scene->getActiveVrViewer();

@@ -86,9 +86,9 @@ void PlayerView::start()
 
 void PlayerView::end()
 {
-	if (playback->isScenePlaying()) {
-		stopScene();
-	}
+	//if (playback->isScenePlaying()) {
+	//	stopScene();
+	//}
 	scene->getCamera()->setLocalTransform(savedCameraMatrix);
 }
 
