@@ -21,6 +21,7 @@ class Upgrader : protected QObject
 public:
 	Upgrader() = default;
 	void checkIfDeprecatedVersion();
+	void checkIfSchemaNeedsUpdating();
 };
 
 #endif // UPGRADER_H

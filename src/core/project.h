@@ -45,6 +45,27 @@ struct ProjectTileData {
     QString     guid;
 };
 
+enum AssetViewFilter : int
+{
+	Editor = 1,
+	AssetsView,
+	Effects,
+	DontShow // Use for dependencies and hidden types later on
+};
+
+struct DatabaseMetadataRecord
+{
+	QDateTime dateCreated;
+	QString hash;
+	QString version;
+	QByteArray data;
+
+	// specific version
+	int major;
+	int minor;
+	int patch;
+};
+
 struct AssetRecord
 {
     QString     guid;
