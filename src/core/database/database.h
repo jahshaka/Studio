@@ -67,14 +67,16 @@ public:
                              const QByteArray &thumbnail = QByteArray(),
                              const QByteArray &properties = QByteArray(),
                              const QByteArray &tags = QByteArray(),
-                             const QByteArray &asset = QByteArray());
+                             const QByteArray &asset = QByteArray(),
+							 const AssetViewFilter view_filter = AssetViewFilter::Editor);
 
 	QString createAssetEntry(const QString &projectGuid,
 							 const QString &guid,
 							 const QString &assetname,
 							 const int &type,
 							 const QByteArray &asset = QByteArray(),
-							 const QByteArray &properties = QByteArray());
+							 const QByteArray &properties = QByteArray(),
+							 const AssetViewFilter view_filter = AssetViewFilter::Editor);
 
     bool createDependency(const int &dependerType,
                           const int &dependeeType,
@@ -110,6 +112,9 @@ public:
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
+	bool updateAssetViewFilter(const QString& guid, const int& filter);
+	void updateSchema();
+	bool updateMetadataVersion(const QString &version);
 
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
@@ -144,6 +149,7 @@ public:
 
     QStringList hasMultipleDependers(const QString &guid);
     bool hasDependencies(const QString &guid);
+	DatabaseMetadataRecord getDbMetadata();
 
     // IMPORT ===============================================================================
     bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids);
@@ -211,6 +217,9 @@ private:
     QString foldersTableSchema;
     QString metadataTableSchema;
     QString favoritesTableSchema;
+
+	QString version080SchemaUpdate;
+	QString version080SchemaDowngrade;
 
     QSqlDatabase db;
 };
