@@ -100,7 +100,7 @@ public:
 	void clearViewer();
 	QString getAssetType(int);
 
-	void importJahModel(const QString &filename);
+	void importJahModel(const QString &filename, bool addToLibrary = true);
 	void importJahBundle(const QString &filename);
 	void importModel(const QString &filename, bool jfx = false);
 

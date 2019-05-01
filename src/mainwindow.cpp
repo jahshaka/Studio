@@ -2707,6 +2707,7 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(_assetView);
 	//ui->stackedWidget->addWidget(new QWidget(this));
 	shaderGraph = new shadergraph::MainWindow(this,db);
+	shaderGraph->setAssetView(_assetView);
 	ui->stackedWidget->addWidget(shaderGraph);
 	ui->stackedWidget->addWidget(playerView);
 
