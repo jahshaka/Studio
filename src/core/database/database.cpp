@@ -448,7 +448,7 @@ QString Database::createAssetEntry(
 		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
 		" last_updated, guid, properties, author, asset, license, tags, view_filter)"
 		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :asset, :license, :tags. :view_filter)"
+		" datetime(), :guid, :properties, :author, :asset, :license, :tags, :view_filter)"
 	);
 
 	query.bindValue(":name", assetName);
@@ -924,7 +924,7 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -937,6 +937,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
             data.parent = query.value(3).toString();
             data.type = query.value(4).toInt();
             data.properties = query.value(5).toByteArray();
+            data.view_filter = query.value(6).toInt();
             return data;
         }
     }
@@ -952,7 +953,7 @@ QVector<AssetRecord> Database::fetchAssets()
     QSqlQuery query;
     query.prepare(
         "SELECT A.name, A.thumbnail, A.guid, C.collection_id, A.type, A.collection, A.properties, "
-        "A.author, A.license, A.tags, A.project_guid, A.asset "
+        "A.author, A.license, A.tags, A.project_guid, A.asset, A.view_filter "
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.view_filter = :view_filter "
@@ -984,6 +985,7 @@ QVector<AssetRecord> Database::fetchAssets()
             data.license = record.value(8).toString();
             data.tags = record.value(9).toByteArray();
 			data.asset = record.value(11).toByteArray();
+			data.view_filter = record.value(12).toInt();
         }
 
         Globals::assetNames.insert(data.guid, data.name);
@@ -1181,7 +1183,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -1205,6 +1207,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
                 data.properties = selectAssetQuery.value(14).toByteArray();
                 data.asset = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail = selectAssetQuery.value(16).toByteArray();
+                data.view_filter = selectAssetQuery.value(17).toInt();
                 assetList.push_back(data);
             }
         }
@@ -1218,9 +1221,9 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -1250,6 +1253,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         //}
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -1576,7 +1580,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -1600,6 +1604,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
                 data.properties     = selectAssetQuery.value(14).toByteArray();
                 data.asset          = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail      = selectAssetQuery.value(16).toByteArray();
+                data.view_filter	= selectAssetQuery.value(17).toInt();
                 assetList.push_back(data);
             }
         }
@@ -1613,9 +1618,9 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -1647,6 +1652,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         }
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -1742,7 +1748,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         QSqlQuery selectAssetQuery;
         selectAssetQuery.prepare(
             "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-            "author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets WHERE guid = ?"
+            "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE guid = ?"
         );
         selectAssetQuery.addBindValue(asset);
 
@@ -1766,6 +1772,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
                 data.properties = selectAssetQuery.value(14).toByteArray();
                 data.asset = selectAssetQuery.value(15).toByteArray();
                 data.thumbnail = selectAssetQuery.value(16).toByteArray();
+                data.view_filter = selectAssetQuery.value(17).toInt();
                 assetList.push_back(data);
             }
         }
@@ -1779,9 +1786,9 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -1802,6 +1809,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         insertExportAssetQuery.bindValue(":asset", asset.asset);
 
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -1938,7 +1946,8 @@ void Database::createExportScene(const QString &outTempFilePath)
         "    tags			   BLOB,"
         "    properties        BLOB,"
         "    asset             BLOB,"
-        "    thumbnail         BLOB"
+        "    thumbnail         BLOB,"
+		"    view_filter       INTEGER"
         ")";
 
     QSqlQuery createAssetsTableQuery(dbe);
@@ -1982,7 +1991,7 @@ void Database::createExportScene(const QString &outTempFilePath)
     QSqlQuery selectAssetQuery;
     selectAssetQuery.prepare(
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
-        "license, hash, version, parent, tags, properties, asset, thumbnail FROM assets WHERE project_guid = ?"
+        "license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE project_guid = ?"
     );
     selectAssetQuery.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(selectAssetQuery, "selectAssetQuery");
@@ -2007,6 +2016,7 @@ void Database::createExportScene(const QString &outTempFilePath)
         data.properties = selectAssetQuery.value(14).toByteArray();
         data.asset = selectAssetQuery.value(15).toByteArray();
         data.thumbnail = selectAssetQuery.value(16).toByteArray();
+        data.view_filter = selectAssetQuery.value(17).toInt();
         assetList.push_back(data);
     }
 
@@ -2015,9 +2025,9 @@ void Database::createExportScene(const QString &outTempFilePath)
         insertExportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
 
         insertExportAssetQuery.bindValue(":guid", asset.guid);
@@ -2037,6 +2047,7 @@ void Database::createExportScene(const QString &outTempFilePath)
         insertExportAssetQuery.bindValue(":properties", asset.properties);
         insertExportAssetQuery.bindValue(":asset", asset.asset);
         insertExportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertExportAssetQuery.bindValue(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertExportAssetQuery, "insertExportAssetQuery");
     }
@@ -2538,7 +2549,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     QSqlQuery selectAssetQuery(dbe);
     selectAssetQuery.prepare(
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
-        "license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
+        "license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
     );
     executeAndCheckQuery(selectAssetQuery, "selectAssetQuery");
 
@@ -2609,9 +2620,9 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
 
         insertImportAssetQuery.bindValue(":guid", asset.guid);
@@ -2657,6 +2668,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         }
 
         insertImportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertImportAssetQuery.bindValue(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertImportAssetQuery, "insertImportAssetQuery");
     }
@@ -2753,6 +2765,7 @@ QString Database::importAsset(
 	const QMap<QString, QString>& newNames,
     QMap<QString, QString> &outGuids,
     QVector<AssetRecord> &assetRecords,
+	AssetViewFilter view_filter_to,
 	const QString &parent)
 {
     QSqlDatabase importConnection = QSqlDatabase();
@@ -2869,10 +2882,11 @@ QString Database::importAsset(
 			if (!parent.isEmpty()) data.projectGuid = parent;
 			data.depender = assetGuids.value(record.value(2).toString());
 			data.dependee = assetGuids.value(record.value(3).toString());
+
 			data.id = GUIDManager::generateGUID();
 		}
 
-		depsToImport.push_back(data);
+		if (!data.depender.isEmpty()) depsToImport.push_back(data);
 	}
 
 	for (const auto &asset : assetsToImport) {
@@ -2880,9 +2894,9 @@ QString Database::importAsset(
 		insertAssetQuery.prepare(
 			"INSERT INTO assets"
 			" (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-			" license, hash, version, parent, tags, properties, asset, thumbnail)"
+			" license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
 			" VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+			" :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
 		);
 
         if (jafType == ModelTypes::Texture) {
@@ -2906,6 +2920,7 @@ QString Database::importAsset(
 		insertAssetQuery.bindValue(":properties", asset.properties);
 		insertAssetQuery.bindValue(":asset", asset.asset);
 		insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+		insertAssetQuery.bindValue(":view_filter", asset.view_filter);
 
 		executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
 	}
@@ -2950,7 +2965,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     QSqlQuery selectAssetQuery(importConnection);
     selectAssetQuery.prepare(
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-        "author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
+        "author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
     );
     executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
@@ -3007,6 +3022,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             data.properties = record.value(14).toByteArray();
             data.asset = record.value(15).toByteArray();
             data.thumbnail = record.value(16).toByteArray();
+            data.view_filter = record.value(17).toInt();
         }
 
         assetsToImport.push_back(data);
@@ -3058,9 +3074,9 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         insertAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
 
         //if (jafType == ModelTypes::Texture) {
@@ -3084,6 +3100,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
         insertAssetQuery.bindValue(":properties", asset.properties);
         insertAssetQuery.bindValue(":asset", asset.asset);
         insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertAssetQuery.bindValue(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
     }
@@ -3115,7 +3132,8 @@ QString Database::copyAsset(
 	const QString & guid,
 	const QMap<QString, QString>& newNames,
 	QVector<AssetRecord> &oldAssetRecords,
-	const QString & parent)
+	const QString &parent,
+	AssetViewFilter view_filter_to)
 {
     QMap<QString, QString> assetGuids; /* old x new guid */
     const QString guidToReturn = GUIDManager::generateGUID();
@@ -3203,9 +3221,9 @@ QString Database::copyAsset(
         insertAssetQuery.prepare(
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail)"
+            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail)"
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
         );
         insertAssetQuery.bindValue(":guid", asset.guid);
         insertAssetQuery.bindValue(":type", asset.type);
@@ -3224,6 +3242,7 @@ QString Database::copyAsset(
         insertAssetQuery.bindValue(":properties", asset.properties);
         insertAssetQuery.bindValue(":asset", asset.asset);
         insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
+        insertAssetQuery.bindValue(":view_filter", view_filter_to);
         executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
     }
 

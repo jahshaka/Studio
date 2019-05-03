@@ -158,6 +158,7 @@ public:
                         const QMap<QString, QString> &newNames,
                         QMap<QString, QString> &outGuids,
                         QVector<AssetRecord> &assetRecords,
+						AssetViewFilter view_filter_to,
                         const QString &parent = QString());
 
     QString importAssetBundle(const QString &pathToDb,
@@ -170,7 +171,8 @@ public:
                       const QString &guid,
                       const QMap<QString, QString> &newNames,
                       QVector<AssetRecord> &oldAssetRecords,
-                      const QString &parent);
+                      const QString &parent,
+					  AssetViewFilter view_filter_to);
 
     // EXPORT ===============================================================================
     bool createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath);
