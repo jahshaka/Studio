@@ -1099,7 +1099,8 @@ void AssetView::importJahModel(const QString &fileName)
                             QDir(temporaryDir.path()).filePath("asset.db"),
                             QMap<QString, QString>(),
                             guidCompareMap,
-                            records);
+                            records,
+							AssetViewFilter::AssetsView);
 
         const QString assetFolder = QDir(assetPath).filePath(guid);
         QDir().mkpath(assetFolder);
@@ -1672,7 +1673,8 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 
     QString guidReturned = db->copyAsset(
         jafType, guid, newNames,
-        oldAssetRecords, Globals::project->getProjectGuid()
+        oldAssetRecords, Globals::project->getProjectGuid(),
+		AssetViewFilter::Editor
     );
 
     for (auto &asset : AssetManager::getAssets()) {

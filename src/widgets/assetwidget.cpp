@@ -2155,6 +2155,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                 newNames,
                 guidCompareMap,
                 oldAssetRecords,
+				AssetViewFilter::Editor,
                 assetItem.selectedGuid
             );
 

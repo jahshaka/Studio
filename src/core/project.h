@@ -85,6 +85,7 @@ struct AssetRecord
 	QByteArray  asset;
 	QByteArray  tags;
 	QByteArray  properties;
+	int			view_filter;
 };
 
 struct DependencyRecord
