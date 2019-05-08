@@ -35,6 +35,8 @@ ColorView::ColorView(QColor color, QWidget *parent ) : QWidget(parent)
 
 void ColorView::configureView()
 {
+	setWindowModality(Qt::ApplicationModal);
+
     setAttribute(Qt::WA_MacShowFocusRect, false);
     setStyleSheet(StyleSheet::QWidgetDark());
 	setWindowFlag(Qt::SubWindow);
@@ -467,10 +469,10 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	if (geometry().y() < 0) move(geometry().x(), 10); // if too high
 }
 
-ColorView * ColorView::getSingleston(QWidget *parent)
+ColorView * ColorView::getSingleston()
 {
 	if (instance == nullptr)
-		instance = new ColorView(QColor(), parent);
+		instance = new ColorView();
 
 	return instance;
 }
