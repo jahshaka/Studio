@@ -182,7 +182,7 @@ class ColorView : public QWidget
 public:
     ColorView(QColor color= QColor(), QWidget *parent = nullptr);
 	void showAtPosition(QMouseEvent *event, QColor color);
-	static ColorView* getSingleston();
+	static ColorView* getSingleston(QWidget* parent = nullptr);
 
 	static ColorView* instance;
 private:

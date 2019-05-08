@@ -37,7 +37,7 @@ void ColorView::configureView()
 {
     setAttribute(Qt::WA_MacShowFocusRect, false);
     setStyleSheet(StyleSheet::QWidgetDark());
-    
+	setWindowFlag(Qt::SubWindow);
 	setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint );
 	setAttribute(Qt::WA_TranslucentBackground);
 
@@ -467,10 +467,10 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	if (geometry().y() < 0) move(geometry().x(), 10); // if too high
 }
 
-ColorView * ColorView::getSingleston()
+ColorView * ColorView::getSingleston(QWidget *parent)
 {
 	if (instance == nullptr)
-		instance = new ColorView();
+		instance = new ColorView(QColor(), parent);
 
 	return instance;
 }
