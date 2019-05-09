@@ -35,9 +35,11 @@ ColorView::ColorView(QColor color, QWidget *parent ) : QWidget(parent)
 
 void ColorView::configureView()
 {
+	setWindowModality(Qt::ApplicationModal);
+
     setAttribute(Qt::WA_MacShowFocusRect, false);
     setStyleSheet(StyleSheet::QWidgetDark());
-    
+	setWindowFlag(Qt::SubWindow);
 	setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint );
 	setAttribute(Qt::WA_TranslucentBackground);
 
