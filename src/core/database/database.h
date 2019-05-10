@@ -122,7 +122,8 @@ public:
     QVector<AssetRecord> fetchChildAssets(const QString &parent, int filter = -1, bool showDependencies = true);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
     QVector<AssetRecord> fetchAssetsByCollection(const int &collection_id);
-    QVector<AssetRecord> fetchAssetsByType(const int &type);
+	QVector<AssetRecord> fetchAssetsByType(const int &type);
+	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchThumbnails();
     QVector<AssetRecord> fetchFavorites();
