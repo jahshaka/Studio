@@ -907,6 +907,10 @@ void MainWindow::closeProject()
 
     UiManager::mainWindow->setWindowTitle(originalTitle);
 
+	if (sceneView->isInitialized())
+		sceneView->end();
+	playerView->end();
+
     scene->cleanup();
     scene.clear();
 
@@ -919,9 +923,7 @@ void MainWindow::closeProject()
 
     switchSpace(WindowSpaces::DESKTOP);
 
-	if (sceneView->isInitialized())
-		sceneView->end();
-	playerView->end();
+
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -2663,6 +2665,7 @@ void MainWindow::setupDesktop()
 {
 	pmContainer = new ProjectManager(db, this);
 	pmContainer->mainWindow = this;
+	UiManager::setProjectManager(pmContainer);
 	_assetView = new AssetView(db, this);
 	_assetView->installEventFilter(this);
 

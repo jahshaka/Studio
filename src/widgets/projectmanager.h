@@ -58,7 +58,8 @@ public:
 	void updateTile(const QString &id, const QByteArray &arr);
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
-    void cleanupOnClose();
+	void cleanupOnClose();
+	void openProjectFromGuid(const QString &guid);
 
 	ModelData loadAiSceneFromModel(const QPair<QString, QString> asset);
 	MainWindow *mainWindow;

@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "core/project.h"
 #include "widgets/sceneviewwidget.h"
+#include "widgets/projectmanager.h"
 
 #include <QUndoStack>
 #include <QUndoCommand>
@@ -24,6 +25,7 @@ AnimationWidget *UiManager::animationWidget = Q_NULLPTR;
 SceneViewWidget *UiManager::sceneViewWidget = Q_NULLPTR;
 SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
 SceneNodePropertiesWidget *UiManager::propertyWidget = Q_NULLPTR;
+ProjectManager *UiManager::projectManager = Q_NULLPTR;
 
 QUndoStack *UiManager::undoStack = Q_NULLPTR;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
@@ -62,6 +64,16 @@ void UiManager::setSceneViewWidget(SceneViewWidget *value)
 AnimationWidget *UiManager::getAnimationWidget()
 {
     return animationWidget;
+}
+
+ProjectManager *UiManager::getProjectManager()
+{
+	return projectManager;
+}
+
+void UiManager::setProjectManager(ProjectManager *value)
+{
+	projectManager = value;
 }
 
 void UiManager::setAnimationWidget(AnimationWidget *value)
