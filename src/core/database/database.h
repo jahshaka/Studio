@@ -129,6 +129,7 @@ public:
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
     QVector<ProjectTileData> fetchProjects();
+    ProjectTileData fetchProject(const QString &guid);
     QVector<FolderRecord> fetchChildFolders(const QString &parent);
     QVector<FolderRecord> fetchCrumbTrail(const QString &parent);
     QVector<AssetRecord> fetchAssetThumbnails(const QStringList &guids);

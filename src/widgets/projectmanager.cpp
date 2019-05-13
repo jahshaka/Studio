@@ -257,6 +257,25 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	loadProjectAssets();
 }
 
+void ProjectManager::openProjectFromGuid(const QString &guid)
+{
+	if (Globals::project->getProjectGuid() == guid) return;
+
+	// If we're opening a new scene, close the old one first
+	if (UiManager::isSceneOpen) mainWindow->closeProject();
+
+	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
+
+	Globals::project->setProjectPath(QDir(QDir(projectFolder).filePath("Projects")).filePath(guid), db->fetchProject(guid).name);
+	Globals::project->setProjectGuid(guid);
+
+	this->openInPlayMode = true;
+
+	//assetGuids.clear();
+	loadProjectAssets();
+}
+
 QString projectBlobGuid;
 int on_extract_entry(const char *filename, void *arg) {
     QFileInfo fInfo(filename);

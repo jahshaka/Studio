@@ -1528,6 +1528,29 @@ QVector<ProjectTileData> Database::fetchProjects()
     return tileData;
 }
 
+ProjectTileData Database::fetchProject(const QString &guid)
+{
+	QSqlQuery query;
+	query.prepare("SELECT name, thumbnail, guid FROM projects WHERE guid = ?");
+	query.addBindValue(guid);
+	executeAndCheckQuery(query, "FetchProject");
+
+	ProjectTileData tileData;
+	while (query.next()) {
+		ProjectTileData data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.name = record.value(0).toString();
+			data.thumbnail = record.value(1).toByteArray();
+			data.guid = record.value(2).toString();
+		}
+
+		return data;
+	}
+
+	return ProjectTileData();
+}
+
 QByteArray Database::getSceneBlobGlobal() const
 {
     QSqlQuery query;

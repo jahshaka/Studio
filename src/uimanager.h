@@ -19,6 +19,7 @@ class MainWindow;
 class SceneViewWidget;
 class SceneHierarchyWidget;
 class SceneNodePropertiesWidget;
+class ProjectManager;
 
 /*
 Tied directly to the WindowSpaces enum
@@ -39,6 +40,10 @@ public:
     static SceneViewWidget* sceneViewWidget;
     static SceneHierarchyWidget* sceneHierarchyWidget;
 	static SceneNodePropertiesWidget* propertyWidget;
+
+	static ProjectManager *projectManager;
+	static ProjectManager *getProjectManager();
+	static void setProjectManager(ProjectManager *value);
 
     static AnimationWidget *getAnimationWidget();
     static void setAnimationWidget(AnimationWidget *value);
