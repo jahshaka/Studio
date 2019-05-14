@@ -37,6 +37,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	ui->sceneTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	ui->sceneTree->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 	ui->sceneTree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+	ui->sceneTree->header()->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     ui->sceneTree->viewport()->installEventFilter(this);
     ui->sceneTree->setItemDelegate(new TreeItemDelegate(this));
 
@@ -191,6 +192,7 @@ void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
     if (!!sceneNode) {
         auto item = treeItemList[sceneNode->getNodeId()];
         ui->sceneTree->setCurrentItem(item);
+		ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(), QAbstractItemView::PositionAtCenter);
     }
 }
 
