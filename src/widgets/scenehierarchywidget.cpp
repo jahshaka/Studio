@@ -73,14 +73,14 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	hiddenIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-eye-48-dim.png"), QIcon::Selected);
 
     pickableIcon = new QIcon;
-    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50.png"), QIcon::Normal);
-    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50.png"), QIcon::Selected);
+    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Normal);
+    pickableIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Selected);
 
     disabledIcon = new QIcon;
-    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Normal);
-    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cursor-filled-50-dim.png"), QIcon::Selected);
+    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-dim.png"), QIcon::Normal);
+    disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-dim.png"), QIcon::Selected);
 
-	ui->sceneTree->setStyleSheet(
+    ui->sceneTree->setStyleSheet(
 		"QTreeView, QTreeWidget { show-decoration-selected: 1; paint-alternating-row-colors-for-empty-area: 1; }"
 		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
 		//"QTreeWidget::branch { background-color: #202020; }"

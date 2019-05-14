@@ -128,5 +128,7 @@
         <file>icons/utility.png</file>
         <file>icons/icons8-file-sky.png</file>
         <file>icons/icons8-file-music.png</file>
+        <file>icons/lock-filled.png</file>
+        <file>icons/lock-dim.png</file>
     </qresource>
 </RCC>
