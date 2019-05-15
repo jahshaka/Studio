@@ -27,7 +27,6 @@ public:
 	void checkForUpdate();
     void checkForPlayerUpdate();
     void checkForAppUpdate();
-    void checkForMinerUpdate();
 private :
     QUrl url;    
 	QString type;
