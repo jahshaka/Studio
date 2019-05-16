@@ -39,6 +39,7 @@ class Database;
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
 class SkyPropertyWidget;
+class WorldSkyPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -84,6 +85,7 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
 	SkyPropertyWidget *skyPropView;
+	WorldSkyPropertyWidget *worldSkyPropView;
 	MeshPropertyWidget* meshPropView;
 	HandPropertyWidget* handPropView;
     PhysicsPropertyWidget *physicsPropView;

@@ -161,52 +161,53 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	auto asset = handle->fetchAsset(scene->ambientMusicGuid);
 	if (!asset.name.isEmpty()) {
 		QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
-		
 		scene->setAmbientMusic(fullPathToAudio);
 		scene->startPlayingAmbientMusic();
 	}
 
-	scene->setSkyColor(this->readColor(sceneObj["skyColor"].toObject()));
 	scene->skyType = static_cast<iris::SkyType>(sceneObj["skyType"].toInt());
     scene->setAmbientColor(this->readColor(sceneObj["ambientColor"].toObject()));
 
-	// Find the requisite asset and read the sky data from it
-	// The scene will never hold this information, always read it from the asset
-	QJsonDocument propDoc = QJsonDocument::fromBinaryData(handle->fetchAssetData(scene->skyGuid));
-	QJsonObject skyDefinition = propDoc.object();
+	QJsonObject skyDataDef = sceneObj["skyData"].toObject();
+	for (const auto &key : skyDataDef.keys()) {
+		scene->skyData.insert(key, skyDataDef.value(key).toObject());
+	}
 
 	switch (scene->skyType) {
         case iris::SkyType::SINGLE_COLOR: {
-			scene->skyColor = readColor(skyDefinition.value("skyColor").toObject());
+			scene->skyColor = readColor(scene->skyData.value("SingleColor").value("skyColor").toObject());
 			break;
 		}
 
 		case iris::SkyType::REALISTIC: {
-			scene->skyRealistic.luminance		= skyDefinition["luminance"].toDouble(1.f);
-			scene->skyRealistic.reileigh		= skyDefinition["reileigh"].toDouble(2.5f);
-			scene->skyRealistic.mieCoefficient	= skyDefinition["mieCoefficient"].toDouble(.053f);
-			scene->skyRealistic.mieDirectionalG = skyDefinition["mieDirectionalG"].toDouble(.75f);
-			scene->skyRealistic.turbidity		= skyDefinition["turbidity"].toDouble(.32f);
-			scene->skyRealistic.sunPosX			= skyDefinition["sunPosX"].toDouble(10.f);
-			scene->skyRealistic.sunPosY			= skyDefinition["sunPosY"].toDouble(7.f);
-			scene->skyRealistic.sunPosZ			= skyDefinition["sunPosZ"].toDouble(10.f);
+			auto realisticDefinition = scene->skyData.value("Realistic");
+
+			scene->skyRealistic.luminance		= realisticDefinition["luminance"].toDouble(1.f);
+			scene->skyRealistic.reileigh		= realisticDefinition["reileigh"].toDouble(2.5f);
+			scene->skyRealistic.mieCoefficient	= realisticDefinition["mieCoefficient"].toDouble(.053f);
+			scene->skyRealistic.mieDirectionalG = realisticDefinition["mieDirectionalG"].toDouble(.75f);
+			scene->skyRealistic.turbidity		= realisticDefinition["turbidity"].toDouble(.32f);
+			scene->skyRealistic.sunPosX			= realisticDefinition["sunPosX"].toDouble(10.f);
+			scene->skyRealistic.sunPosY			= realisticDefinition["sunPosY"].toDouble(7.f);
+			scene->skyRealistic.sunPosZ			= realisticDefinition["sunPosZ"].toDouble(10.f);
 			break;
 		}
 
 		case iris::SkyType::EQUIRECTANGULAR: {
-			QString textureGuid = skyDefinition["equiSkyGuid"].toString();
+			QString textureGuid = scene->skyData.value("Equirectangular").value("equiSkyGuid").toString();
 			auto image = IrisUtils::join(Globals::project->getProjectFolder(), handle->fetchAsset(textureGuid).name);
 			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
 			break;
 		}
 
         case iris::SkyType::CUBEMAP: {
-			auto front = handle->fetchAsset(skyDefinition["front"].toString()).name;
-			auto back = handle->fetchAsset(skyDefinition["back"].toString()).name;
-			auto left = handle->fetchAsset(skyDefinition["left"].toString()).name;
-			auto right = handle->fetchAsset(skyDefinition["right"].toString()).name;
-			auto top = handle->fetchAsset(skyDefinition["top"].toString()).name;
-			auto bottom = handle->fetchAsset(skyDefinition["bottom"].toString()).name;
+			auto cubeDefs = scene->skyData.value("Cubemap");
+			auto front = handle->fetchAsset(cubeDefs["front"].toString()).name;
+			auto back = handle->fetchAsset(cubeDefs["back"].toString()).name;
+			auto left = handle->fetchAsset(cubeDefs["left"].toString()).name;
+			auto right = handle->fetchAsset(cubeDefs["right"].toString()).name;
+			auto top = handle->fetchAsset(cubeDefs["top"].toString()).name;
+			auto bottom = handle->fetchAsset(cubeDefs["bottom"].toString()).name;
 
 			QVector<QString> sides = { front, back, top, bottom, left, right };
 			for (int i = 0; i < sides.count(); ++i) {
@@ -233,10 +234,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		}
 
         case iris::SkyType::GRADIENT: {
-			scene->gradientTop = SceneReader::readColor(skyDefinition.value("gradientTop").toObject());
-			scene->gradientMid = SceneReader::readColor(skyDefinition.value("gradientMid").toObject());
-			scene->gradientBot = SceneReader::readColor(skyDefinition.value("gradientBot").toObject());
-			scene->gradientOffset = skyDefinition.value("gradientOffset").toDouble();
+			auto gradientDefinition = scene->skyData.value("Gradient");
+
+			scene->gradientTop = SceneReader::readColor(gradientDefinition.value("gradientTop").toObject());
+			scene->gradientMid = SceneReader::readColor(gradientDefinition.value("gradientMid").toObject());
+			scene->gradientBot = SceneReader::readColor(gradientDefinition.value("gradientBot").toObject());
+			scene->gradientOffset = gradientDefinition.value("gradientOffset").toDouble();
 			break;
 		}
 

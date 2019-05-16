@@ -86,12 +86,19 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 {
     QJsonObject sceneObj;
 
+	QJsonObject skyDefs;
+	QMapIterator<QString, QJsonObject> it(scene->skyData);
+	while (it.hasNext()) {
+		it.next();
+		skyDefs.insert(it.key(), it.value());
+	}
+
 	sceneObj["skyType"] = static_cast<int>(scene->skyType);
     sceneObj["skyGuid"] = scene->skyGuid;
+    sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;
     sceneObj["gravity"] = scene->gravity;
-    sceneObj["skyColor"] = jsonColor(scene->skyColor);
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
