@@ -2864,29 +2864,70 @@ void MainWindow::setupToolBar()
 
 void MainWindow::setupShortcuts()
 {
+
+	auto showToolbarMenu = [=]() {
+
+	};
+
     // Translation, Rotation and Scaling gizmo shortcuts for
-    QShortcut *shortcut = new QShortcut(QKeySequence("t"),sceneView);
-    connect(shortcut, SIGNAL(activated()), this, SLOT(translateGizmo()));
+    QShortcut *shortcut = new QShortcut(QKeySequence("q"),sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		showToolbarMenu();
+		// when t, t is pressed
+		QShortcut* sc = new QShortcut(QKeySequence("t"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			translateGizmo();
+		});
 
-    shortcut = new QShortcut(QKeySequence("r"),sceneView);
-    connect(shortcut, SIGNAL(activated()), this, SLOT(rotateGizmo()));
+		sc = sc = new QShortcut(QKeySequence("r"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			rotateGizmo();
+		});
 
-    shortcut = new QShortcut(QKeySequence("alt+s"),sceneView);
-    connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
+		sc = sc = new QShortcut(QKeySequence("s"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			scaleGizmo();
+		});
+
+		sc = sc = new QShortcut(QKeySequence("g"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			useGlobalTransform();
+		});
+
+		sc = sc = new QShortcut(QKeySequence("l"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			useLocalTransform();
+		});
+
+		sc = sc = new QShortcut(QKeySequence("f"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			useFreeCamera();
+		});
+
+		sc = sc = new QShortcut(QKeySequence("a"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			useArcballCam();
+		});
+
+		sc = sc = new QShortcut(QKeySequence("o"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			emit projectionChangeRequested(false);
+		});
+
+		sc = sc = new QShortcut(QKeySequence("p"), sceneView);
+		connect(sc, &QShortcut::activated, [=]() {
+			emit projectionChangeRequested(true); 
+		});
+
+		 
+		
+	});
+
 
     // Save
 	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView);
 	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
-
-	shortcut = new QShortcut(QKeySequence("o"), sceneView);
-	connect(shortcut, &QShortcut::activated, [=]() {
-		emit projectionChangeRequested(false);
-	});
-
-	shortcut = new QShortcut(QKeySequence("p"), sceneView);
-	connect(shortcut, &QShortcut::activated, [=]() {
-		emit projectionChangeRequested(true);
-	});
+	
 }
 
 void MainWindow::toggleDockWidgets()
