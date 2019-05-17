@@ -10,6 +10,7 @@ InfoWidget::InfoWidget(MainWindowMenus menu) : CustomDialog()
 
 	menus = menu;
 	if (menus == MainWindowMenus::Editormenu) configureEditorMenu();
+	if (menus == MainWindowMenus::Datamenu) configureDataMenu();
 }
 
 
@@ -51,9 +52,30 @@ void InfoWidget::configureEditorMenu()
 	show();
 }
 
+void InfoWidget::dataMenu(QKeyEvent*event)
+{
+	if (event->key() == Qt::Key::Key_F) emit toggleFps();
+	if (event->key() == Qt::Key::Key_V) emit togglePerspective();
+}
+
+void InfoWidget::configureDataMenu()
+{
+	auto wid = new QWidget;
+	auto lay = new QVBoxLayout;
+	wid->setLayout(lay);
+	lay->addWidget(new QLabel("Access Key.....I"));
+	lay->addWidget(new QLabel("F ..... Toggle FPS Info"));
+	lay->addWidget(new QLabel("V ..... Toggle View Info"));	
+
+	insertWidget(wid);
+	setStyleSheet(StyleSheet::QLabelWhite());
+	show();
+}
+
 void InfoWidget::keyPressEvent(QKeyEvent* event)
 {
 	if (menus == MainWindowMenus::Editormenu) editorMenu(event);
+	if (menus == MainWindowMenus::Datamenu) dataMenu(event);
 
 	close();
 }

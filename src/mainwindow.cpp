@@ -2873,9 +2873,6 @@ void MainWindow::setupToolBar()
 
 void MainWindow::setupShortcuts()
 {
-
-	
-
     // Translation, Rotation and Scaling gizmo shortcuts for
     QShortcut *shortcut = new QShortcut(QKeySequence("q"),sceneView);
 	connect(shortcut, &QShortcut::activated, [=]() {
@@ -2908,16 +2905,41 @@ void MainWindow::setupShortcuts()
 		connect(info, &InfoWidget::perspective, [=]() {
 			emit projectionChangeRequested(true);
 			});
-
-
-
 	});
 
+	shortcut = new QShortcut(QKeySequence("i"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		auto info = new InfoWidget(MainWindowMenus::Datamenu);
+
+		connect(info, &InfoWidget::toggleFps, [=]() {
+			sceneView->setShowFps(!sceneView->showFps);
+		});
+
+		connect(info, &InfoWidget::togglePerspective, [=]() {
+			sceneView->setShowPerspeciveLabel(!sceneView->showPerspevtiveLabel);
+		});
+	});
 
     // Save
 	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView);
 	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
-	
+
+	shortcut = new QShortcut(QKeySequence("s"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		switchSpace(WindowSpaces::DESKTOP);
+	});
+	shortcut = new QShortcut(QKeySequence("p"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		switchSpace(WindowSpaces::PLAYER);
+	});
+	shortcut = new QShortcut(QKeySequence("m"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		switchSpace(WindowSpaces::EFFECT);
+	});
+	shortcut = new QShortcut(QKeySequence("a"), sceneView);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		switchSpace(WindowSpaces::ASSETS);
+	});
 }
 
 void MainWindow::toggleDockWidgets()
