@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "customdialog.h"
-#include "../misc/stylesheet.h"
+
 
 #include <QGraphicsDropShadowEffect>
 #include <QVBoxLayout>
@@ -36,7 +36,7 @@ CustomDialog::CustomDialog(Qt::Orientation ori) : QDialog()
     holder->setLayout(holderLayout);
     holder->setStyleSheet(StyleSheet::QWidgetDark());
     holder->setGraphicsEffect(effect);
-    holder->setFixedSize(300,200);
+    //holder->setFixedSize(300,200);
 	holderLayout->addStretch();
 
     buttonWidget = new QWidget; 

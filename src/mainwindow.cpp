@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "core/thumbnailmanager.h"
 #include "dialogs/donatedialog.h"
 #include "dialogs/custompopup.h"
+#include "dialogs/infowidget.h"
 #include "core/assethelper.h"
 #include "core/scenenodehelper.h"
 
@@ -140,6 +141,7 @@ For more information see the LICENSE file
 
 #include "shadergraph/shadergraphmainwindow.h"
 #include "../src/player/playerwidget.h"
+
 
 enum class VRButtonMode : int
 {
@@ -496,6 +498,13 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (obj == surface) return handleMouseWheel(static_cast<QWheelEvent*>(event));
             break;
         }
+
+		case QEvent::KeyPress: {
+			if (obj->objectName() == "displayWidget") {
+				static_cast<InfoWidget*>(obj)->close();
+			}
+			return QWidget::eventFilter(obj, event);
+		}
 
         default:
             break;
@@ -2751,14 +2760,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionGlobalSpace = new QAction;
+    actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
 	actionGlobalSpace->setIcon(fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
-    QAction *actionLocalSpace = new QAction;
+    actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
@@ -2767,14 +2776,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionFreeCamera = new QAction;
+    actionFreeCamera = new QAction;
     actionFreeCamera->setObjectName(QStringLiteral("actionFreeCamera"));
     actionFreeCamera->setCheckable(true);
 	actionFreeCamera->setToolTip("Free Camera | Freely move and orient the camera");
 	actionFreeCamera->setIcon(fontIcons->icon(fa::eye, options));
 	toolBar->addAction(actionFreeCamera);
 
-	QAction *actionArcballCam = new QAction;
+	actionArcballCam = new QAction;
 	actionArcballCam->setObjectName(QStringLiteral("actionArcballCam"));
 	actionArcballCam->setCheckable(true);
 	actionArcballCam->setToolTip("Arc Ball Camera | Move and orient the camera around a fixed point | With this button selected, you are now able to move around a fixed point.");
@@ -2865,62 +2874,43 @@ void MainWindow::setupToolBar()
 void MainWindow::setupShortcuts()
 {
 
-	auto showToolbarMenu = [=]() {
-
-	};
+	
 
     // Translation, Rotation and Scaling gizmo shortcuts for
     QShortcut *shortcut = new QShortcut(QKeySequence("q"),sceneView);
 	connect(shortcut, &QShortcut::activated, [=]() {
-		showToolbarMenu();
-		// when t, t is pressed
-		QShortcut* sc = new QShortcut(QKeySequence("t"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			translateGizmo();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("r"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			rotateGizmo();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("s"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			scaleGizmo();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("g"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			useGlobalTransform();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("l"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			useLocalTransform();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("f"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			useFreeCamera();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("a"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			useArcballCam();
-		});
-
-		sc = sc = new QShortcut(QKeySequence("o"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			emit projectionChangeRequested(false);
-		});
-
-		sc = sc = new QShortcut(QKeySequence("p"), sceneView);
-		connect(sc, &QShortcut::activated, [=]() {
-			emit projectionChangeRequested(true); 
-		});
-
-		 
 		
+		auto info = new InfoWidget(MainWindowMenus::Editormenu);
+		connect(info, &InfoWidget::translateTool, [=]() {
+			translateGizmo();
+			});
+		connect(info, &InfoWidget::rotateTool, [=]() {
+			rotateGizmo();
+			});
+		connect(info, &InfoWidget::scaleTool, [=]() {
+			scaleGizmo();
+			});
+		connect(info, &InfoWidget::useGlobalSpace, [=]() {
+			useGlobalTransform();
+			});
+		connect(info, &InfoWidget::useLocalSpace, [=]() {
+			useLocalTransform();
+			});
+		connect(info, &InfoWidget::useFreeCamera, [=]() {
+			useFreeCamera();
+			});
+		connect(info, &InfoWidget::useArcballCamera, [=]() {
+			useArcballCam();
+			});
+		connect(info, &InfoWidget::orthagonal, [=]() {
+			emit projectionChangeRequested(false);
+			});
+		connect(info, &InfoWidget::perspective, [=]() {
+			emit projectionChangeRequested(true);
+			});
+
+
+
 	});
 
 
@@ -3190,21 +3180,25 @@ MainWindow::~MainWindow()
 void MainWindow::useFreeCamera()
 {
     sceneView->setFreeCameraMode();
+	actionFreeCamera->setChecked(true);
 }
 
 void MainWindow::useArcballCam()
 {
     sceneView->setArcBallCameraMode();
+	actionArcballCam->setChecked(true);
 }
 
 void MainWindow::useLocalTransform()
 {
     sceneView->setGizmoTransformToLocal();
+	actionLocalSpace->setChecked(true);
 }
 
 void MainWindow::useGlobalTransform()
 {
     sceneView->setGizmoTransformToGlobal();
+	actionGlobalSpace->setChecked(true);
 }
 
 void MainWindow::translateGizmo()

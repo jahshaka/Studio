@@ -54,7 +54,6 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/materialreader.hpp"
 #include "dialogs/customdialog.h"
-#include "misc/stylesheet.h"
 
 ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
