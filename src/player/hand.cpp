@@ -291,7 +291,7 @@ QMatrix4x4 LeftHand::getBeamOffset(int handIndex)
 
 void RightHand::update(float dt)
 {
-	auto turnSpeed = 4.0f;
+	auto turnSpeed = 2.0f;
 	hoverDist = 1000;
 	// RIGHT CONTROLLER
 	auto rightTouch = iris::VrManager::getDefaultDevice()->getTouchController(1);
