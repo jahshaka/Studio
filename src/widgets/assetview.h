@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef ASSETVIEW_H
+#ifndef ASSETVIEW_H 
 #define ASSETVIEW_H
 
 #include <QWidget>

@@ -4,6 +4,7 @@
 enum class MainWindowMenus {
 	Editormenu,
 	Datamenu,
+	WorkspaceMenu, 
 };
 
 class InfoWidget : public CustomDialog
@@ -19,6 +20,11 @@ private:
 
 	void dataMenu(QKeyEvent*);
 	void configureDataMenu();
+
+	void workspaceMenu(QKeyEvent*);
+	void configureWorkspaceMenu();
+
+
 	MainWindowMenus menus;
 protected:
 	void keyPressEvent(QKeyEvent* event) override;

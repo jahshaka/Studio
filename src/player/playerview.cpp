@@ -11,6 +11,7 @@ For more information see the LICENSE file
 #include "playerview.h"
 #include <QTimer>
 #include <QElapsedTimer>
+#include <QShortcut>
 #include "constants.h"
 #include "uimanager.h"
 #include "widgets/sceneviewwidget.h"
@@ -23,6 +24,7 @@ For more information see the LICENSE file
 #include "playermousecontroller.h"
 #include "src/core/keyboardstate.h"
 #include "playback.h"
+#include "src/dialogs/infowidget.h"
 
 PlayerView::PlayerView(QWidget* parent) :
 	QOpenGLWidget(parent)
@@ -47,6 +49,11 @@ PlayerView::PlayerView(QWidget* parent) :
 
 	// needed in order to get key events http://stackoverflow.com/a/7879484/991834
 	setFocusPolicy(Qt::ClickFocus);
+
+	auto shortcut = new QShortcut(QKeySequence("v"), this);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		auto dia = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+		});
 }                                                       
 void PlayerView::initializeGL()
 {

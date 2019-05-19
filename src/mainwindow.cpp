@@ -2924,22 +2924,11 @@ void MainWindow::setupShortcuts()
 	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView);
 	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
 
-	shortcut = new QShortcut(QKeySequence("s"), sceneView);
+	shortcut = new QShortcut(QKeySequence("v"), sceneView);
 	connect(shortcut, &QShortcut::activated, [=]() {
-		switchSpace(WindowSpaces::DESKTOP);
+		auto dia = new InfoWidget(MainWindowMenus::WorkspaceMenu);
 	});
-	shortcut = new QShortcut(QKeySequence("p"), sceneView);
-	connect(shortcut, &QShortcut::activated, [=]() {
-		switchSpace(WindowSpaces::PLAYER);
-	});
-	shortcut = new QShortcut(QKeySequence("m"), sceneView);
-	connect(shortcut, &QShortcut::activated, [=]() {
-		switchSpace(WindowSpaces::EFFECT);
-	});
-	shortcut = new QShortcut(QKeySequence("a"), sceneView);
-	connect(shortcut, &QShortcut::activated, [=]() {
-		switchSpace(WindowSpaces::ASSETS);
-	});
+	
 }
 
 void MainWindow::toggleDockWidgets()

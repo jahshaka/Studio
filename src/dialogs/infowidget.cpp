@@ -1,7 +1,7 @@
 #include "infowidget.h"
 #include <QKeyEvent>
-
-
+#include "src/widgets/sceneviewwidget.h"
+#include "src/uimanager.h"
 InfoWidget::InfoWidget(MainWindowMenus menu) : CustomDialog()
 {
 	setAttribute(Qt::WA_NoSystemBackground, true);
@@ -11,6 +11,7 @@ InfoWidget::InfoWidget(MainWindowMenus menu) : CustomDialog()
 	menus = menu;
 	if (menus == MainWindowMenus::Editormenu) configureEditorMenu();
 	if (menus == MainWindowMenus::Datamenu) configureDataMenu();
+	if (menus == MainWindowMenus::WorkspaceMenu) configureWorkspaceMenu();
 }
 
 
@@ -72,10 +73,38 @@ void InfoWidget::configureDataMenu()
 	show();
 }
 
+void InfoWidget::workspaceMenu(QKeyEvent* event)
+{
+	if (event->key() == Qt::Key::Key_S) UiManager::sceneViewWidget->mainWindow->switchSpace(WindowSpaces::DESKTOP);
+	if (event->key() == Qt::Key::Key_P && UiManager::isSceneOpen) UiManager::sceneViewWidget->mainWindow->switchSpace(WindowSpaces::PLAYER);
+	if (event->key() == Qt::Key::Key_E && UiManager::isSceneOpen) UiManager::sceneViewWidget->mainWindow->switchSpace(WindowSpaces::EDITOR);
+	if (event->key() == Qt::Key::Key_M) UiManager::sceneViewWidget->mainWindow->switchSpace(WindowSpaces::EFFECT);
+	if (event->key() == Qt::Key::Key_A) UiManager::sceneViewWidget->mainWindow->switchSpace(WindowSpaces::ASSETS);
+}
+
+void InfoWidget::configureWorkspaceMenu()
+{
+	auto wid = new QWidget;
+	auto lay = new QVBoxLayout;
+	wid->setLayout(lay);
+	lay->addWidget(new QLabel("Access Key.....v"));
+	lay->addWidget(new QLabel("S ..... Scene Window"));
+	if (UiManager::isSceneOpen) lay->addWidget(new QLabel("P ..... Player Window"));
+	if (UiManager::isSceneOpen) lay->addWidget(new QLabel("E ..... Editor Window"));
+	lay->addWidget(new QLabel("M ..... Materials Window"));
+	lay->addWidget(new QLabel("A ..... Asset Window"));
+
+
+	insertWidget(wid);
+	setStyleSheet(StyleSheet::QLabelWhite());
+	show();
+}
+
 void InfoWidget::keyPressEvent(QKeyEvent* event)
 {
 	if (menus == MainWindowMenus::Editormenu) editorMenu(event);
 	if (menus == MainWindowMenus::Datamenu) dataMenu(event);
+	if (menus == MainWindowMenus::WorkspaceMenu) workspaceMenu(event);
 
 	close();
 }
