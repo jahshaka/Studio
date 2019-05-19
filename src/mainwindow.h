@@ -31,10 +31,6 @@ For more information see the LICENSE file
 #include "core/project.h"
 #include "shadergraph/shadergraphmainwindow.h"
 
-#ifdef MINER_ENABLED
-#include "../thirdparty/miner/minerui.h"
-#endif
-
 namespace Ui {
     class MainWindow;
 }
@@ -94,7 +90,6 @@ class AssetWidget;
 class AssetModelPanel;
 class AssetMaterialPanel;
 
-class MinerUI;
 
 #include "widgets/scenenodepropertieswidget.h"
 

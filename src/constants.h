@@ -61,13 +61,10 @@ namespace Constants
 	extern QString ASSET_EXT;
 
     extern QString UPDATE_CHECK_URL;
-    extern QString MINER_CHECK_URL;
     extern QString PLAYER_CHECK_URL;
     extern QString APP_CHECK_URL;
 
-	extern QString MINER_DEFAULT_WALLET_ID;
-	extern QString MINER_DEFAULT_POOL;
-	extern QString MINER_DEFAULT_PASSWORD;
+
 
     extern int FPS_90;
     extern int FPS_60;

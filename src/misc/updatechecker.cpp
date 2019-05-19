@@ -32,10 +32,7 @@ void UpdateChecker::checkForAppUpdate(){
     url = Constants::UPDATE_CHECK_URL + Constants::CONTENT_VERSION;
 	checkForUpdate();
 }
-void UpdateChecker::checkForMinerUpdate(){
-    url = Constants::MINER_CHECK_URL + Constants::CONTENT_VERSION;
-	checkForUpdate();
-}
+
 
 void UpdateChecker::checkForUpdate()
 {

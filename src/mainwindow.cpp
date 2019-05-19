@@ -2387,21 +2387,6 @@ void MainWindow::setupViewPort()
 
 #endif
 
-
-	auto minerBtn = new QPushButton;
-	minerBtn->setObjectName("miner");
-	minerBtn->setIcon(QIcon(":/icons/mining.png"));
-	minerBtn->setIconSize(QSize(26, 26));
-	minerBtn->setStyleSheet("background:transparent;");
-	minerBtn->setCursor(Qt::PointingHandCursor);
-	connect(minerBtn, &QPushButton::pressed, [this]() {
-		auto popup = new CustomPopup(QCursor::pos());
-		popup->addConfirmAndCancelButtons("visit","close");
-		popup->addMessage("The miner has been moved out of the application, press visit to download");
-		popup->addTitle("Attention");
-		popup->exec();
-	});
-
 	help = new QPushButton;
 	help->setObjectName("helpButton");
 	help->setText(QChar(fa::questioncircle));
@@ -2444,7 +2429,6 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
-	bl->addWidget(minerBtn);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
