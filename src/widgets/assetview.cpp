@@ -1029,7 +1029,7 @@ int on_extract_entry_av(const char *filename, void *arg) {
 	return 0;
 }
 
-void AssetView::importJahModel(const QString &fileName)
+void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
 {
     QFileInfo entryInfo(fileName);
 
@@ -1121,63 +1121,65 @@ void AssetView::importJahModel(const QString &fileName)
             bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
         }
 
-        if (jafString == "material") {
-            viewers->setCurrentIndex(0);
-            renameModelField->setText(QFileInfo(filename).baseName());
-            viewer->loadJafMaterial(guid);
-            addToJahLibrary(filename, guid, true);
-        }
+		if (addToLibrary) {
+			if (jafString == "material") {
+				viewers->setCurrentIndex(0);
+				renameModelField->setText(QFileInfo(filename).baseName());
+				viewer->loadJafMaterial(guid);
+				addToJahLibrary(filename, guid, true);
+			}
 
-        if (jafString == "shader") {
-            viewers->setCurrentIndex(0);
-            renameModelField->setText(QFileInfo(filename).baseName());
-            viewer->loadJafShader(guid, guidCompareMap);
-            addToJahLibrary(filename, guid, true);
-        }
+			if (jafString == "shader") {
+				viewers->setCurrentIndex(0);
+				renameModelField->setText(QFileInfo(filename).baseName());
+				viewer->loadJafShader(guid, guidCompareMap);
+				addToJahLibrary(filename, guid, true);
+			}
 
-		if (jafString == "sky") {
-			viewers->setCurrentIndex(0);
-			renameModelField->setText(QFileInfo(filename).baseName());
-			viewer->loadJafSky(guid);
-			addToJahLibrary(filename, guid, true);
+			if (jafString == "sky") {
+				viewers->setCurrentIndex(0);
+				renameModelField->setText(QFileInfo(filename).baseName());
+				viewer->loadJafSky(guid);
+				addToJahLibrary(filename, guid, true);
+			}
+
+			if (jafString == "texture") {
+				renameModelField->setText(QFileInfo(filename).baseName());
+
+				{
+					viewers->setCurrentIndex(1);
+					auto assetPath = IrisUtils::join(
+						QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+						"AssetStore",
+						guid,
+						db->fetchAsset(guid).name
+					);
+
+					QPixmap image(assetPath);
+					assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+				}
+
+				addToJahLibrary(filename, guid, true);
+			}
+
+			if (jafString == "object") {
+				viewers->setCurrentIndex(0);
+				// Open the asset
+				QString path;
+				// if model
+				QDir dir(assetFolder);
+				foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
+					if (Constants::MODEL_EXTS.contains(file.suffix())) {
+						path = file.absoluteFilePath();
+						break;
+					}
+				}
+
+				renameModelField->setText(QFileInfo(filename).baseName());
+				viewer->loadJafModel(path, guid);
+				addToJahLibrary(filename, guid, true);
+			}
 		}
-
-        if (jafString == "texture") {
-            renameModelField->setText(QFileInfo(filename).baseName());
-
-            {
-                viewers->setCurrentIndex(1);
-                auto assetPath = IrisUtils::join(
-                    QStandardPaths::writableLocation(QStandardPaths::DataLocation),
-                    "AssetStore",
-                    guid,
-                    db->fetchAsset(guid).name
-                );
-
-                QPixmap image(assetPath);
-                assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
-            }
-
-            addToJahLibrary(filename, guid, true);
-        }
-
-        if (jafString == "object") {
-            viewers->setCurrentIndex(0);
-            // Open the asset
-            QString path;
-            // if model
-            QDir dir(assetFolder);
-            foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-                if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                    path = file.absoluteFilePath();
-                    break;
-                }
-            }
-
-            renameModelField->setText(QFileInfo(filename).baseName());
-            viewer->loadJafModel(path, guid);
-            addToJahLibrary(filename, guid, true);
-        }
     }
 }
 

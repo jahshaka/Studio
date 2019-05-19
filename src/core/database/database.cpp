@@ -1126,7 +1126,7 @@ QVector<AssetRecord> Database::fetchAssetsByCollection(const int &collection_id)
 QVector<AssetRecord> Database::fetchAssetsByType(const int &type)
 {
     QSqlQuery query;
-    query.prepare("SELECT guid, type, name, asset FROM assets WHERE type = ? AND project_guid = ?");
+    query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets WHERE type = ? AND project_guid = ?");
     query.addBindValue(type);
     query.addBindValue(Globals::project->getProjectGuid());
     executeAndCheckQuery(query, "fetchAssetsByType");
@@ -1139,13 +1139,39 @@ QVector<AssetRecord> Database::fetchAssetsByType(const int &type)
             data.guid = record.value(0).toString();
             data.type = record.value(1).toInt();
             data.name = record.value(2).toString();
-            data.asset = record.value(3).toByteArray();
+			data.thumbnail = query.value(3).toByteArray();
+            data.asset = record.value(4).toByteArray();
         }
 
         tileData.push_back(data);
     }
 
     return tileData;
+}
+
+QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& filter)
+{
+	QSqlQuery query;
+	query.prepare("SELECT guid, type, name, thumbnail, asset FROM assets WHERE view_filter = ?");
+	query.addBindValue(filter);
+	executeAndCheckQuery(query, "fetchAssetsByViewFilter");
+
+	QVector<AssetRecord> tileData;
+	while (query.next()) {
+		AssetRecord data;
+		QSqlRecord record = query.record();
+		for (int i = 0; i < record.count(); i++) {
+			data.guid = record.value(0).toString();
+			data.type = record.value(1).toInt();
+			data.name = record.value(2).toString();
+			data.thumbnail = query.value(3).toByteArray();
+			data.asset = record.value(4).toByteArray();
+		}
+
+		tileData.push_back(data);
+	}
+
+	return tileData;
 }
 
 void Database::createExportBundle(const QStringList & objectGuids, const QString & outTempFilePath)
@@ -2784,7 +2810,7 @@ QString Database::importAsset(
 	QSqlQuery selectAssetQuery(importConnection);
 	selectAssetQuery.prepare(
 		"SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-		"author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
+		"author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
 	);
 	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
@@ -2841,6 +2867,7 @@ QString Database::importAsset(
 			data.properties = record.value(14).toByteArray();
 			data.asset = record.value(15).toByteArray();
 			data.thumbnail = record.value(16).toByteArray();
+			data.view_filter = record.value(17).toInt();
 		}
 
 		assetsToImport.push_back(data);
