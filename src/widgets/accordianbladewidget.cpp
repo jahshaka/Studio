@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "propertywidget.h"
 #include "ui_propertywidget.h"
 
+#include "src/widgets/propertywidgets/skymapwidget.h"
+
 
 // TODO - omit height calculation
 AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
@@ -160,6 +162,28 @@ Widget4D * AccordianBladeWidget::addVector4Widget(const QString &, float xValue,
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
 	return widget;
+}
+
+CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QStringList list)
+{
+	auto widget = new CubeMapWidget();
+	widget->addCubeMapImages(list);
+	minimum_height += widget->height() + stretch;
+	ui->contentpane->layout()->addWidget(widget);
+	return widget;
+}
+
+CubeMapWidget* AccordianBladeWidget::addCubeMapWidget()
+{
+	auto widget = new CubeMapWidget();
+	minimum_height += widget->height() + stretch;
+	ui->contentpane->layout()->addWidget(widget);
+	return widget;
+}
+
+CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back)
+{
+	return addCubeMapWidget({top,bottom,left,front,right,back});
 }
 
 PropertyWidget *AccordianBladeWidget::addPropertyWidget()

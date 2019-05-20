@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
+#include "src/widgets/propertywidgets/skymapwidget.h"
 
 #include "widgets/propertywidgets/worldpropertywidget.h"
 
@@ -147,15 +148,23 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::CUBEMAP: {
-			cubemapFront = this->addTexturePicker("Front");
+			skyMapWidget = this->addCubeMapWidget();
+			/*cubemapFront = this->addTexturePicker("Front");
 			cubemapBack = this->addTexturePicker("Back");
 			cubemapLeft = this->addTexturePicker("Left");
 			cubemapRight = this->addTexturePicker("Right");
 			cubemapTop = this->addTexturePicker("Top");
-			cubemapBottom = this->addTexturePicker("Bottom");
+			cubemapBottom = this->addTexturePicker("Bottom");*/
+
+
+			// connect signals from skymapwidget
+			connect(skyMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
+				onSlotChanged(value, guid, (int)pos);
+			});
+
 
 			// remember the image on the tiles... TODO
-			connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
+			/*connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
 				onSlotChanged(value, guid, 0);
 			});
 
@@ -177,7 +186,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 			connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
 				onSlotChanged(value, guid, 5);
-			});
+			});*/
 
 			setSkyMap(skyDefinition);
 
@@ -396,12 +405,14 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 	cubeMapDefinition.insert("top", skyDataDefinition["top"].toString());
 	cubeMapDefinition.insert("bottom", skyDataDefinition["bottom"].toString());
 
-	cubemapFront->setTexture(front);
+	skyMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
+
+	/*cubemapFront->setTexture(front);
 	cubemapBack->setTexture(back);
 	cubemapTop->setTexture(top);
 	cubemapBottom->setTexture(bottom);
 	cubemapLeft->setTexture(left);
-	cubemapRight->setTexture(right);
+	cubemapRight->setTexture(right);*/
 
 	// We need at least one valid image to get some metadata from
 	QImage *info;
