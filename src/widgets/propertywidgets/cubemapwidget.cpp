@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "skymapwidget.h"
+#include "cubemapwidget.h"
 #include "src/core/thumbnailmanager.h"
 #include "widgets/assetpickerwidget.h"
 #include "misc/stylesheet.h"
@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QMenu>
 
-SkyMapWidget::SkyMapWidget() : QWidget()
+CubeMapWidget::CubeMapWidget() : QWidget()
 {
 	layout = new QGridLayout;
 	setLayout(layout);
@@ -31,7 +31,7 @@ SkyMapWidget::SkyMapWidget() : QWidget()
 	addCubeMapImages(QString(),QString(), QString(), QString(), QString(), QString());
 }
 
-void SkyMapWidget::addTopImage(QString topImagePath)
+void CubeMapWidget::addTopImage(QString topImagePath)
 {
 	removeCubeMapImageIfPresent(top);
 	top = new CubeMapButton(topImagePath, this);
@@ -39,7 +39,7 @@ void SkyMapWidget::addTopImage(QString topImagePath)
 	layout->addWidget(top, 0, 1,1,1);
 }
 
-void SkyMapWidget::addBottomImage(QString bottomImagePath)
+void CubeMapWidget::addBottomImage(QString bottomImagePath)
 {
 	removeCubeMapImageIfPresent(bottom);
 	bottom = new CubeMapButton(bottomImagePath, this);
@@ -47,7 +47,7 @@ void SkyMapWidget::addBottomImage(QString bottomImagePath)
 	layout->addWidget(bottom, 3, 1,1,1);
 }
 
-void SkyMapWidget::addLeftImage(QString leftImagePath)
+void CubeMapWidget::addLeftImage(QString leftImagePath)
 {
 	removeCubeMapImageIfPresent(left);
 	left = new CubeMapButton(leftImagePath, this);
@@ -55,7 +55,7 @@ void SkyMapWidget::addLeftImage(QString leftImagePath)
 	layout->addWidget(left, 1, 0,1,1);
 }
 
-void SkyMapWidget::addRightImage(QString rightImagePath)
+void CubeMapWidget::addRightImage(QString rightImagePath)
 {
 	removeCubeMapImageIfPresent(right);
 	right = new CubeMapButton(rightImagePath, this);
@@ -63,7 +63,7 @@ void SkyMapWidget::addRightImage(QString rightImagePath)
 	layout->addWidget(right, 1, 2,1,1);
 }
 
-void SkyMapWidget::addFrontImage(QString frontImagePath)
+void CubeMapWidget::addFrontImage(QString frontImagePath)
 {
 	removeCubeMapImageIfPresent(front);
 	front = new CubeMapButton(frontImagePath, this);
@@ -71,7 +71,7 @@ void SkyMapWidget::addFrontImage(QString frontImagePath)
 	layout->addWidget(front, 1, 1,1,1);
 }
 
-void SkyMapWidget::addBackImage(QString backImagePath)
+void CubeMapWidget::addBackImage(QString backImagePath)
 {
 	removeCubeMapImageIfPresent(back);
 	back = new CubeMapButton(backImagePath, this);
@@ -79,7 +79,7 @@ void SkyMapWidget::addBackImage(QString backImagePath)
 	layout->addWidget(back, 1, 3,1,1);
 }
 
-void SkyMapWidget::addCubeMapImages(QString top, QString bottom, QString left, QString front, QString right, QString back)
+void CubeMapWidget::addCubeMapImages(QString top, QString bottom, QString left, QString front, QString right, QString back)
 {
 	addTopImage(top);
 	addBottomImage(bottom);
@@ -89,13 +89,13 @@ void SkyMapWidget::addCubeMapImages(QString top, QString bottom, QString left, Q
 	addBackImage(back);
 }
 
-void SkyMapWidget::addCubeMapImages(QStringList list)
+void CubeMapWidget::addCubeMapImages(QStringList list)
 {
 	if (list.length() < 6) return;
 	addCubeMapImages(list[0], list[1], list[2], list[3], list[4], list[5]);
 }
 
-void SkyMapWidget::removeCubeMapImageIfPresent(CubeMapButton* btn)
+void CubeMapWidget::removeCubeMapImageIfPresent(CubeMapButton* btn)
 {
 	if (btn != nullptr) {
 		layout->removeWidget(btn);
@@ -103,7 +103,7 @@ void SkyMapWidget::removeCubeMapImageIfPresent(CubeMapButton* btn)
 	}
 }
 
-CubeMapButton::CubeMapButton(QString imagePath, SkyMapWidget* parent) : QPushButton()
+CubeMapButton::CubeMapButton(QString imagePath, CubeMapWidget* parent) : QPushButton()
 {
 	path = imagePath;
 	this->parent = parent;

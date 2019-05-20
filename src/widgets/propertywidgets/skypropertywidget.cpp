@@ -148,7 +148,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::CUBEMAP: {
-			skyMapWidget = this->addSkyMapWidget();
+			skyMapWidget = this->addCubeMapWidget();
 			/*cubemapFront = this->addTexturePicker("Front");
 			cubemapBack = this->addTexturePicker("Back");
 			cubemapLeft = this->addTexturePicker("Left");
@@ -158,7 +158,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 
 			// connect signals from skymapwidget
-			connect(skyMapWidget, &SkyMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
+			connect(skyMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
 				onSlotChanged(value, guid, (int)pos);
 			});
 

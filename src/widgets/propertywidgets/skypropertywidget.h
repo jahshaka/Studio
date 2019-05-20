@@ -121,7 +121,7 @@ private:
 	TexturePickerWidget* cubemapTop;
 	TexturePickerWidget* cubemapBottom;
 
-	SkyMapWidget* skyMapWidget;
+	CubeMapWidget* skyMapWidget;
 };
 
 #endif // SKYPROPERTYWIDGET_H

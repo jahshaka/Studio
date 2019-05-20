@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef SKYMAPWIDGET_H
-#define SKYMAPWIDGET_H
+#ifndef CUBEMAPWIDGET_H
+#define CUBEMAPWIDGET_H
 
 #include <QWidget>
 #include <QPushButton>
@@ -27,7 +27,7 @@ enum class CubeMapPosition {
 	bottom = 5
 };
 
-class SkyMapWidget;
+class CubeMapWidget;
 class CubeMapButton : public QPushButton {
 
 	enum class Rotation {
@@ -39,7 +39,7 @@ class CubeMapButton : public QPushButton {
 	};
 
 public:
-	CubeMapButton(QString imagePath, SkyMapWidget* parent);
+	CubeMapButton(QString imagePath, CubeMapWidget* parent);
 	void setStringPosition(QString string);
 	void setPosition(CubeMapPosition pos);
 	void setImage(QString path);
@@ -64,7 +64,7 @@ public:
 	QWidget* container;
 	QPushButton* select;
 	QPushButton* clear;
-	SkyMapWidget* parent;
+	CubeMapWidget* parent;
 private:
 	void configureUi();
 protected:
@@ -76,10 +76,10 @@ protected:
 	void mousePressEvent(QMouseEvent*) override;
 };
 
-class SkyMapWidget : public QWidget {
+class CubeMapWidget : public QWidget {
 	Q_OBJECT
 public:
-	SkyMapWidget();
+	CubeMapWidget();
 	QGridLayout* layout;
 	void addTopImage(QString topImagePath);
 	void addBottomImage(QString bottomImagePath);

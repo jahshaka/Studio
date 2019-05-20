@@ -27,7 +27,7 @@ class ComboBoxWidget;
 class TextInputWidget;
 class LabelWidget;
 class FilePickerWidget;
-class SkyMapWidget;
+class CubeMapWidget;
 // class PropertyWidget;
 #include "propertywidget.h"
 #include "src/shadergraph//propertywidgets/propertywidgetbase.h"
@@ -55,9 +55,9 @@ public:
 	Widget2D*				addVector2Widget(const QString&, float xValue, float yValue);
 	Widget3D*				addVector3Widget(const QString&, float xValue, float yValue, float zValue);
 	Widget4D*				addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
-	SkyMapWidget*			addSkyMapWidget(QStringList list);
-	SkyMapWidget*			addSkyMapWidget();
-	SkyMapWidget*			addSkyMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back);
+	CubeMapWidget*			addCubeMapWidget(QStringList list);
+	CubeMapWidget*			addCubeMapWidget();
+	CubeMapWidget*			addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back);
 
     PropertyWidget*         addPropertyWidget();
 

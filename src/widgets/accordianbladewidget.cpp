@@ -164,26 +164,26 @@ Widget4D * AccordianBladeWidget::addVector4Widget(const QString &, float xValue,
 	return widget;
 }
 
-SkyMapWidget* AccordianBladeWidget::addSkyMapWidget(QStringList list)
+CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QStringList list)
 {
-	auto widget = new SkyMapWidget();
+	auto widget = new CubeMapWidget();
 	widget->addCubeMapImages(list);
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
 	return widget;
 }
 
-SkyMapWidget* AccordianBladeWidget::addSkyMapWidget()
+CubeMapWidget* AccordianBladeWidget::addCubeMapWidget()
 {
-	auto widget = new SkyMapWidget();
+	auto widget = new CubeMapWidget();
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
 	return widget;
 }
 
-SkyMapWidget* AccordianBladeWidget::addSkyMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back)
+CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back)
 {
-	return addSkyMapWidget({top,bottom,left,front,right,back});
+	return addCubeMapWidget({top,bottom,left,front,right,back});
 }
 
 PropertyWidget *AccordianBladeWidget::addPropertyWidget()
