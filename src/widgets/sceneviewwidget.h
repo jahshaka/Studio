@@ -364,6 +364,7 @@ signals:
                             QOpenGLFunctions_3_2_Core* gl);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 	void updateToolbarButton();
+	void changeSkyFromAssetWidget(int index);
 
 };
 

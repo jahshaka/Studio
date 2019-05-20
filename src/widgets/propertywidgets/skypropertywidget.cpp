@@ -45,6 +45,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 										? QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object()
 										: QJsonObject();
 
+	//const QJsonObject skyDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object();
+
 	clearPanel(this->layout());
 
 	setMouseTracking(true);
@@ -283,7 +285,6 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
-        //skyTypeChanged(static_cast<int>(scene->skyType));
     } else {
         this->scene.clear();
     }
@@ -304,9 +305,7 @@ void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::Sky
 void SkyPropertyWidget::hideEvent(QHideEvent *event)
 {
 	Q_UNUSED(event)
-
 	updateAssetAndKeys();
-
 	return;
 }
 

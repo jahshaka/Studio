@@ -27,8 +27,13 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "io/assetmanager.h"
 
+#include "widgets/sceneviewwidget.h"
+
 WorldSkyPropertyWidget::WorldSkyPropertyWidget()
 {
+	connect(Globals::sceneViewWidget, &SceneViewWidget::changeSkyFromAssetWidget, this, [this](int index) {
+		skyTypeChanged(index);
+	});
 }
 
 void WorldSkyPropertyWidget::skyTypeChanged(int index)

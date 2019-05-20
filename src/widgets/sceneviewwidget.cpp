@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QtMath>
 #include <QTreeWidget>
 #include <QTimer>
+#include <QJsonDocument>
 
 #include "irisgl/src/graphics/font.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
@@ -200,10 +201,10 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
     QMap<int, QVariant> roleDataMap;
     while (!stream.atEnd()) stream >> roleDataMap;
 
-    qDebug() << roleDataMap.value(0).toInt();
-	qDebug() << roleDataMap.value(1).toString();
-	qDebug() << roleDataMap.value(2).toString();
-	qDebug() << roleDataMap.value(3).toString();
+ //   qDebug() << roleDataMap.value(0).toInt();		// type
+	//qDebug() << roleDataMap.value(1).toString();
+	//qDebug() << roleDataMap.value(2).toString();
+	//qDebug() << roleDataMap.value(3).toString();	// guid
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
         auto ppos = dragScenePos;
@@ -263,7 +264,20 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
                 mainWindow->sceneNodeSelected(node);
             }
         }
-    }
+	}
+	else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Sky)) {
+		auto skyGuid = roleDataMap.value(3).toString();
+
+		const QJsonObject skyDefinition = QJsonDocument::fromBinaryData(database->fetchAssetData(skyGuid)).object();
+		const QJsonObject skyProperties = QJsonDocument::fromBinaryData(database->fetchAsset(skyGuid).properties).object();
+
+		int skyTypeIndex = skyProperties.value("sky").toObject().value("type").toInt();
+
+		scene->skyData.insert(scene->skyTypeToStr[skyTypeIndex], skyDefinition);
+		scene->skyType = static_cast<iris::SkyType>(skyTypeIndex);
+
+		emit changeSkyFromAssetWidget(skyTypeIndex);
+	}
 }
 
 void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
