@@ -281,10 +281,10 @@ void CubeMapButton::mousePressEvent(QMouseEvent* e)
 		auto select = new QAction("Select");
 		auto clear = new QAction("Clear");
 
-		auto rotate360 = new QAction("Roate image to 360 degrees");
-		auto rotate90 = new QAction("Roate image to 90 degrees");
-		auto rotate180 = new QAction("Roate image to 180 degrees");
-		auto rotate270 = new QAction("Roate image to 270 degrees");
+		auto rotate360 = new QAction("Rotate image to 360 degrees");
+		auto rotate90 = new QAction("Rotate image to 90 degrees");
+		auto rotate180 = new QAction("Rotate image to 180 degrees");
+		auto rotate270 = new QAction("Rotate image to 270 degrees");
 
 		auto flipHorizontal = new QAction("Flip Horizontally");
 		auto flipVertical = new QAction("Flip Vertically");
