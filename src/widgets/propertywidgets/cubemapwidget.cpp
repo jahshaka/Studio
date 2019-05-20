@@ -154,7 +154,7 @@ void CubeMapButton::setImage(QString path)
 		auto thumb = ThumbnailManager::createThumbnail(path, 60, height());
 		image = *thumb->thumb;
 		//the path may be invalid returning an invalid image;
-		if (!image.isNull()) image = image.scaled(QSize(28, 28));
+		//if (!image.isNull()) image = image.scaled(QSize(28, 28));
 	}
 	this->path = path;
 
