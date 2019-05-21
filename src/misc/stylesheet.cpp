@@ -92,27 +92,14 @@ const QString StyleSheet::QPushButtonGreyscaleBig()
 const QString StyleSheet::QWidgetDark() {
     return QString(
         "QWidget{ background: rgba(26,26,26,1);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
-    );
-}
 
-const QString StyleSheet::QWidgetTransparent()
-{
-	return QString(
-		"QWidget{ background: rgba(26,26,26,0);border: 1px solid rgba(0,0,0,0); padding:0px; spacing : 0px;}"
-	);
+    );
 }
 
 const QString StyleSheet::QLabelWhite() {
     return QString(
         "QLabel{ color : rgba(255, 255,255, .9); }"
     );
-}
-
-const QString StyleSheet::QLabelBlack()
-{
-	return QString(
-		"QLabel{ color : rgba(20, 20, 20, .9); }"
-	);
 }
 
 const QString StyleSheet::QComboBox() {
@@ -195,16 +182,6 @@ const QString StyleSheet::QAbstractScrollArea()
 		"QScrollBar::up-arrow:horizontal, QScrollBar::down-arrow:horizontal {	background: rgba(0, 0, 0, 0);border: 0px solid white;}"
 		
 		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
-	);
-}
-
-const QString StyleSheet::QMenu()
-{
-	return QString(
-		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9); border-radius : 2px; }"
-		"QMenu::item{padding: 6px 20px 6px 14px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
 	);
 }
 
