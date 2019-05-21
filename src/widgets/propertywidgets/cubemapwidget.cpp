@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "cubemapwidget.h"
 #include "src/core/thumbnailmanager.h"
 #include "widgets/assetpickerwidget.h"
+#include "globals.h"
 #include "misc/stylesheet.h"
 #include <QPainter>
 #include <QMimeData>
@@ -20,7 +21,7 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QMenu>
 
-CubeMapWidget::CubeMapWidget() : QWidget()
+CubeMapWidget::CubeMapWidget(QWidget *parent) : QWidget(parent)
 {
 	layout = new QGridLayout;
 	setLayout(layout);
@@ -28,7 +29,6 @@ CubeMapWidget::CubeMapWidget() : QWidget()
 	setMinimumHeight(180);
 	layout->setVerticalSpacing(0);
 	layout->setHorizontalSpacing(0);
-	addCubeMapImages(QString(),QString(), QString(), QString(), QString(), QString());
 }
 
 void CubeMapWidget::addTopImage(QString topImagePath)
@@ -158,6 +158,8 @@ void CubeMapButton::setImage(QString path)
 	}
 	this->path = path;
 
+	qDebug() << "The path is " << path;
+
 	if (shouldEmit) {
 		emit parent->valueChanged(path, position);
 		emit parent->valuesChanged(path, textureGuid, position);
@@ -265,8 +267,7 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 	// extend getting guid to filepicker dialog...
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();
-		//changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
-		setImage(roleDataMap.value(1).toString());
+		setImage(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
 	event->acceptProposedAction();

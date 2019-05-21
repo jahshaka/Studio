@@ -19,9 +19,7 @@ For more information see the LICENSE file
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
-#include "src/widgets/propertywidgets/skymapwidget.h"
-
-#include "widgets/propertywidgets/worldpropertywidget.h"
+#include "src/widgets/propertywidgets/cubemapwidget.h"
 
 #include "globals.h"
 #include "core/database/database.h"
@@ -32,25 +30,23 @@ For more information see the LICENSE file
 
 SkyPropertyWidget::SkyPropertyWidget()
 {
+	setMouseTracking(true);
 }
 
 void SkyPropertyWidget::skyTypeChanged(int index)
 {
 	if (skyGuid.isEmpty()) return;
 
-	//QJsonDocument skyProperties = QJsonDocument::fromBinaryData(db->fetchAsset(scene->skyGuid).properties);
-	//QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
-	//auto switchedIndex = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
-
-	const QJsonObject skyDefinition = static_cast<int>(currentSky) == index
+	// The current sky gets set when the asset is selected to be the type it was saved as
+	// This function can be called after it has been initialized so if the starting type
+	// and the index differ it is a new sky. Wipe the properties and start over.
+	// If it's the same, do nothing but if it's new, reset to defaults
+	const QJsonObject skyDefinition = currentSky == static_cast<iris::SkyType>(index)
 										? QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object()
 										: QJsonObject();
-
-	//const QJsonObject skyDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object();
+	currentSky = static_cast<iris::SkyType>(index);
 
 	clearPanel(this->layout());
-
-	setMouseTracking(true);
 
 	skySelector = this->addComboBox("Sky Type");
 	skySelector->addItem("Single Color");
@@ -151,44 +147,10 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 		case iris::SkyType::CUBEMAP: {
 			skyMapWidget = this->addCubeMapWidget();
-			/*cubemapFront = this->addTexturePicker("Front");
-			cubemapBack = this->addTexturePicker("Back");
-			cubemapLeft = this->addTexturePicker("Left");
-			cubemapRight = this->addTexturePicker("Right");
-			cubemapTop = this->addTexturePicker("Top");
-			cubemapBottom = this->addTexturePicker("Bottom");*/
 
-
-			// connect signals from skymapwidget
 			connect(skyMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
-				onSlotChanged(value, guid, (int)pos);
+				onSlotChanged(value, guid, static_cast<int>(pos));
 			});
-
-
-			// remember the image on the tiles... TODO
-			/*connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 0);
-			});
-
-			connect(cubemapBack, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 1);
-			});
-
-			connect(cubemapLeft, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 2);
-			});
-
-			connect(cubemapRight, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 3);
-			});
-
-			connect(cubemapTop, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 4);
-			});
-
-			connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 5);
-			});*/
 
 			setSkyMap(skyDefinition);
 
@@ -249,13 +211,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 	}
 
-	// This is a bug, the world property widget should get and set the current sky type, not this widget
-	currentSky = static_cast<iris::SkyType>(index);
-
 	if (skyDefinition.isEmpty()) {
 		updateAssetAndKeys();
-		worldPropWidget->setScene(scene);
-		//worldPropWidget->onSkyChanged(index);
 	}
 }
 
@@ -307,6 +264,7 @@ void SkyPropertyWidget::setDatabase(Database *db)
 void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType)
 {
 	skyGuid = guid;
+	currentSky = skyType;
 	skyTypeChanged(static_cast<int>(skyType));
 }
 
@@ -315,7 +273,6 @@ void SkyPropertyWidget::hideEvent(QHideEvent *event)
 {
 	Q_UNUSED(event)
 	updateAssetAndKeys();
-	return;
 }
 
 void SkyPropertyWidget::updateAssetAndKeys()
@@ -406,13 +363,6 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 
 	skyMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
-	/*cubemapFront->setTexture(front);
-	cubemapBack->setTexture(back);
-	cubemapTop->setTexture(top);
-	cubemapBottom->setTexture(bottom);
-	cubemapLeft->setTexture(left);
-	cubemapRight->setTexture(right);*/
-
 	// We need at least one valid image to get some metadata from
 	QImage *info;
 	bool useTex = false;
@@ -425,9 +375,9 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 		}
 	}
 
-	if (useTex) {
-		scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
-	}
+	//if (useTex) {
+	//	scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
+	//}
 }
 
 void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
@@ -438,7 +388,7 @@ void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
 	auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
 	auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
 
-	scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
+	//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
 }
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)

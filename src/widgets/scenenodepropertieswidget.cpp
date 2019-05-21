@@ -52,7 +52,6 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	skyPropView = new SkyPropertyWidget();
 	skyPropView->setPanelTitle("Sky");
 	skyPropView->setDatabase(db);
-	skyPropView->worldPropWidget = worldPropView;
 	skyPropView->expand();
 
 	worldSkyPropView = new WorldSkyPropertyWidget();

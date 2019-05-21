@@ -79,7 +79,7 @@ protected:
 class CubeMapWidget : public QWidget {
 	Q_OBJECT
 public:
-	CubeMapWidget();
+	CubeMapWidget(QWidget *parent = Q_NULLPTR);
 	QGridLayout* layout;
 	void addTopImage(QString topImagePath);
 	void addBottomImage(QString bottomImagePath);

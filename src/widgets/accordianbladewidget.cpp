@@ -34,7 +34,7 @@ For more information see the LICENSE file
 #include "propertywidget.h"
 #include "ui_propertywidget.h"
 
-#include "src/widgets/propertywidgets/skymapwidget.h"
+#include "src/widgets/propertywidgets/cubemapwidget.h"
 
 
 // TODO - omit height calculation
@@ -175,7 +175,7 @@ CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QStringList list)
 
 CubeMapWidget* AccordianBladeWidget::addCubeMapWidget()
 {
-	auto widget = new CubeMapWidget();
+	auto widget = new CubeMapWidget(this);
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
 	return widget;

@@ -24,7 +24,6 @@ For more information see the LICENSE file
 
 class Database;
 
-class WorldPropertyWidget;
 class ColorValueWidget;
 class ColorPickerWidget;
 class TexturePicker;
@@ -47,7 +46,6 @@ public:
 	void setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType);
 
 	void hideEvent(QHideEvent *event);
-	WorldPropertyWidget* worldPropWidget;
 
 protected slots:
     void setEquiMap(const QString &guid);
@@ -114,14 +112,7 @@ private:
 	QJsonObject materialDefinition;
 	QJsonObject realisticDefinition;
 
-	TexturePickerWidget* cubemapFront;
-	TexturePickerWidget* cubemapBack;
-	TexturePickerWidget* cubemapLeft;
-	TexturePickerWidget* cubemapRight;
-	TexturePickerWidget* cubemapTop;
-	TexturePickerWidget* cubemapBottom;
-
-	CubeMapWidget* skyMapWidget;
+	CubeMapWidget *skyMapWidget;
 };
 
 #endif // SKYPROPERTYWIDGET_H
