@@ -480,6 +480,7 @@ private:
 
 	QVector<bool> widgetStates;	// use the order in the enum
 
+    WindowSpaces previousSpace;
     WindowSpaces currentSpace;
 	QPushButton *playSimBtn;
 
