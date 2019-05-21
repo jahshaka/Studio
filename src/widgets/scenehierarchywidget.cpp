@@ -685,6 +685,23 @@ QTreeWidget * SceneHierarchyWidget::getWidget()
     return ui->sceneTree;
 }
 
+void SceneHierarchyWidget::selectNode(QString nodeId)
+{
+	std::function<void(QTreeWidgetItem*, QString)> hightlightNode;
+	hightlightNode = [=](QTreeWidgetItem* treeItem, QString nodeId)
+	{
+		for (int i = 0; i < treeItem->childCount(); i++) {
+			auto item = treeItem->child(i);
+			if (item->data(0, Qt::UserRole) == nodeId) {
+				ui->sceneTree->setItemSelected(item, true);
+				return;
+			}
+
+			hightlightNode(item, nodeId);
+		}
+	};
+}
+
 SceneHierarchyWidget::~SceneHierarchyWidget()
 {
     delete ui;

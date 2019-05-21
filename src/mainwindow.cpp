@@ -884,6 +884,10 @@ void MainWindow::openProject(bool playMode)
 	undoStackCount = 0;
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
+
+	// highlight root node
+	sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
+	sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
 }
 
 void MainWindow::closeProject()
