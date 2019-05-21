@@ -76,18 +76,10 @@ void PlayerWidget::createUI()
 		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
 		//UiManager::restartScene();
 	});
-	*/
+    */
 
 	connect(playBtn, &QPushButton::pressed, [this]() {
-		if (playerView->isScenePlaying()) {
-			playerView->stopScene();
-			playBtn->setIcon(playIcon);
-		}
-		else {
-			playerView->playScene();
-			playBtn->setIcon(stopIcon);
-			playerView->setFocus();
-		}
+        onPlayScene();
 	});
 	/*
 	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
@@ -121,5 +113,18 @@ void PlayerWidget::end()
 	if (playerView->isScenePlaying()) {
 		playerView->stopScene();
 		playBtn->setIcon(playIcon);
-	}
+    }
+}
+
+void PlayerWidget::onPlayScene()
+{
+    if (playerView->isScenePlaying()) {
+        playerView->stopScene();
+        playBtn->setIcon(playIcon);
+    }
+    else {
+        playerView->playScene();
+        playBtn->setIcon(stopIcon);
+        playerView->setFocus();
+    }
 }

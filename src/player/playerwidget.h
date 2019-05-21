@@ -3,9 +3,11 @@
 
 #include <QWidget>
 #include <QObject>
+#include <QIcon>
 #include "irisglfwd.h"
 
 class PlayerView;
+class QPushButton;
 
 class PlayerWidget : public QWidget
 {
@@ -23,6 +25,9 @@ public:
 
 	void begin();
 	void end();
+
+public slots:
+    void onPlayScene();
 };
 
 #endif PLAYERWIDGET_H
