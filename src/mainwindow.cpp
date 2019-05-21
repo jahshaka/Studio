@@ -2926,10 +2926,18 @@ void MainWindow::setupShortcuts()
 
     shortcut = new QShortcut(QKeySequence("ctrl+tab"), this);
     connect(shortcut, &QShortcut::activated, [=]() {
-        if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) && UiManager::isSceneOpen)
+        if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) && !UiManager::isSceneOpen)
             return;
 
         this->switchSpace(previousSpace);
+    });
+
+    shortcut = new QShortcut(QKeySequence("space"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        if (currentSpace == WindowSpaces::EDITOR)
+            onPlaySceneButton();
+        else if (currentSpace == WindowSpaces::PLAYER)
+            playerView->onPlayScene();
     });
 }
 
