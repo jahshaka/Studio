@@ -46,7 +46,6 @@ public:
     bool eventFilter(QObject *object, QEvent *ev);
     void setTexture(QString path);
     QString getTexturePath();
-	QString getTextureGuidFromItem(QListWidgetItem*);
 
     void dragEnterEvent(QDragEnterEvent*);
     void dropEvent(QDropEvent*);
