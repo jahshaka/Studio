@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "cubemapwidget.h"
+#include "src/globals.h"
 #include "src/core/thumbnailmanager.h"
 #include "widgets/assetpickerwidget.h"
 #include "misc/stylesheet.h"
@@ -20,7 +21,7 @@ For more information see the LICENSE file
 #include <QAction>
 #include <QMenu>
 
-CubeMapWidget::CubeMapWidget() : QWidget()
+CubeMapWidget::CubeMapWidget(QWidget *parent) : QWidget(parent)
 {
 	layout = new QGridLayout;
 	setLayout(layout);
@@ -266,7 +267,8 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();
 		//changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
-		setImage(roleDataMap.value(1).toString());
+		qDebug() << roleDataMap.value(1).toString();
+		setImage(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
 	event->acceptProposedAction();
@@ -334,6 +336,7 @@ void CubeMapButton::selectImage()
 {
 	auto widget = new AssetPickerWidget(ModelTypes::Texture);
 	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
+		textureGuid = item->data(Qt::DisplayRole).toString();
 		setImage(item->data(Qt::UserRole).toString());
 	}); 
 }

@@ -34,7 +34,7 @@ For more information see the LICENSE file
 #include "propertywidget.h"
 #include "ui_propertywidget.h"
 
-#include "src/widgets/propertywidgets/skymapwidget.h"
+#include "src/widgets/propertywidgets/cubemapwidget.h"
 
 
 // TODO - omit height calculation

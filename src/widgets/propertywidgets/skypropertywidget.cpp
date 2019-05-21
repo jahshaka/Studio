@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
-#include "src/widgets/propertywidgets/skymapwidget.h"
+#include "src/widgets/propertywidgets/cubemapwidget.h"
 
 #include "widgets/propertywidgets/worldpropertywidget.h"
 
