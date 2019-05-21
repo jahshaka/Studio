@@ -63,6 +63,7 @@ void AssetPickerWidget::populateWidget(QString filter)
             }
 
             item->setData(Qt::UserRole, asset->path);
+            item->setData(MODEL_GUID_ROLE, asset->assetGuid);
 
             if (filter.isEmpty()) {
                 ui->assetView->addItem(item);

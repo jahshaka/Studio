@@ -131,6 +131,7 @@ void TexturePickerWidget::clear()
 
 void TexturePickerWidget::changeMap(QListWidgetItem *item)
 {
+	textureGuid = textureGuid = item->data(MODEL_GUID_ROLE).toString();
     setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
 }
 

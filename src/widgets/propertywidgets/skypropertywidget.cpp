@@ -41,7 +41,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	//QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
 	//auto switchedIndex = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
 
-	const QJsonObject skyDefinition = static_cast<int>(scene->skyType) == index
+	const QJsonObject skyDefinition = static_cast<int>(currentSky) == index
 										? QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object()
 										: QJsonObject();
 
