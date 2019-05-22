@@ -93,9 +93,14 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->setDragEnabled(true);
 	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
 
-	connect(ui->hideDeps, &QCheckBox::toggled, [this](bool state) {
-		hideDependencies = !state;
-		updateAssetView(assetItem.selectedGuid, -1, !state);
+	activeFilter = SettingsManager::getDefaultManager()->getValue("active_filter", 0).toInt();
+	showDependencies = SettingsManager::getDefaultManager()->getValue("show_dependencies", false).toBool();
+	ui->showDeps->setChecked(showDependencies);
+
+	connect(ui->showDeps, &QCheckBox::toggled, [this](bool state) {
+		showDependencies = state;
+		SettingsManager::getDefaultManager()->setValue("show_dependencies", state);
+		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	});
 
     ui->assetView->setItemDelegate(new ListViewDelegate());
@@ -171,7 +176,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     });
 
     connect(goUpOneControl, &QPushButton::pressed, [this]() {
-        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, -1, false);
+        updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, activeFilter, showDependencies);
     });
 
 	setMouseTracking(true);
@@ -188,7 +193,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		currentSize = iconSize;
 		ui->assetView->setIconSize(currentSize);
 		ui->assetView->setItemDelegate(new ListViewDelegate());
-		updateAssetView(assetItem.selectedGuid);
+		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	});
 
 	connect(toggleListView, &QPushButton::pressed, [this]() {
@@ -198,7 +203,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		currentSize = listSize;
 		ui->assetView->setIconSize(currentSize);
 		ui->assetView->setItemDelegate(new QStyledItemDelegate());
-		updateAssetView(assetItem.selectedGuid);
+		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	});
 
 	ui->switcher->setLayout(toggleLayout);
@@ -210,8 +215,8 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
     ui->filterWidget->setLayout(filterGroupLayout);
 
-    assetFilterCombo = new QComboBox;
-    assetFilterCombo->addItem("All Assets", QVariant::fromValue(static_cast<int>(-1)));
+    assetFilterCombo = new QComboBox(this);
+    assetFilterCombo->addItem("All Assets", QVariant::fromValue(0));
     assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
     assetFilterCombo->addItem("Materials", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
     assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
@@ -219,12 +224,18 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
     assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
     assetFilterCombo->addItem("Music", QVariant::fromValue(static_cast<int>(ModelTypes::Music)));
+    assetFilterCombo->addItem("Skies", QVariant::fromValue(static_cast<int>(ModelTypes::Sky)));
+
+	int index = assetFilterCombo->findData(activeFilter);
+	assetFilterCombo->setCurrentIndex(index);
 
     filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
     filterGroupLayout->addWidget(assetFilterCombo);
 
     connect<void(QComboBox::*)(int)>(assetFilterCombo, &QComboBox::currentIndexChanged, this, [&](int index) {
-        updateAssetView(assetItem.selectedGuid, assetFilterCombo->itemData(index).toInt());
+		activeFilter = assetFilterCombo->itemData(index).toInt();
+		SettingsManager::getDefaultManager()->setValue("active_filter", activeFilter);
+        updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
     });
 
     ui->filterWidget->setStyleSheet(
@@ -383,7 +394,7 @@ void AssetWidget::trigger()
 
 void AssetWidget::refresh()
 {
-	updateAssetView(assetItem.selectedGuid);
+	updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	populateAssetTree(false);
 }
 
@@ -474,7 +485,7 @@ void AssetWidget::populateAssetTree(bool initialRun)
 	ui->assetTree->expandItem(rootTreeItem);
 
 	if (initialRun) {
-		updateAssetView(Globals::project->getProjectGuid());
+		updateAssetView(Globals::project->getProjectGuid(), activeFilter, showDependencies);
 		rootTreeItem->setSelected(true);
 		assetItem.item = rootTreeItem;
 		assetItem.selectedGuid = Globals::project->getProjectGuid();
@@ -624,7 +635,7 @@ void AssetWidget::addCrumbs(const QVector<FolderRecord> &folderData)
 		}
 		connect(crumb, &QPushButton::pressed, [folder, crumb, this]() {
 			assetItem.selectedGuid = folder.guid;
-			updateAssetView(folder.guid);
+			updateAssetView(folder.guid, activeFilter, showDependencies);
 			syncTreeAndView(folder.guid);
 		});
 		breadCrumbLayout->addWidget(crumb);
@@ -746,7 +757,7 @@ void AssetWidget::treeItemSelected(QTreeWidgetItem *item)
 {
 	assetItem.item = item;
 	assetItem.selectedGuid = item->data(0, MODEL_GUID_ROLE).toString();
-	updateAssetView(item->data(0, MODEL_GUID_ROLE).toString());
+	updateAssetView(item->data(0, MODEL_GUID_ROLE).toString(), activeFilter, showDependencies);
 }
 
 void AssetWidget::treeItemChanged(QTreeWidgetItem *item, int column)
@@ -1064,7 +1075,7 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
     } else if (item->data(MODEL_ITEM_TYPE) == MODEL_FOLDER) {
         const QString guid = item->data(MODEL_GUID_ROLE).toString();
         assetItem.selectedGuid = guid;
-        updateAssetView(guid);
+        updateAssetView(guid, activeFilter, showDependencies);
         syncTreeAndView(guid);
     }
 }
@@ -1547,7 +1558,7 @@ void AssetWidget::searchAssets(QString searchString)
 		// keep a list of last db fetch in memory OR search entire db...
 	}
 	else {
-		updateAssetView(assetItem.selectedGuid);
+		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	}
 }
 
@@ -1649,7 +1660,7 @@ void AssetWidget::deleteItem()
                 if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
             }
 
-            updateAssetView(assetItem.selectedGuid);
+            updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
             populateAssetTree(false);
             return;
         }
@@ -1737,7 +1748,7 @@ void AssetWidget::deleteItem()
                 }
 
                 //delete ui->assetView->takeItem(ui->assetView->row(item));
-                updateAssetView(assetItem.selectedGuid);
+                updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
                 populateAssetTree(false);
             });
         }
@@ -1759,7 +1770,7 @@ void AssetWidget::deleteItem()
                 }
 
                 //delete ui->assetView->takeItem(ui->assetView->row(item));
-                updateAssetView(assetItem.selectedGuid);
+                updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
                 populateAssetTree(false);
             });
         }
@@ -1947,7 +1958,7 @@ void AssetWidget::createFolder()
 
 	populateAssetTree(false);
 	// We could just addItem but this is by choice and also so we can order folders first
-	updateAssetView(assetItem.selectedGuid);
+	updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	//syncTreeAndView(assetItem.selectedGuid);
 }
 
@@ -2678,7 +2689,7 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	importRegularAssets(finalImportList);
     importJafAssets(finalJafAssetImportList);
 	populateAssetTree(false);
-	updateAssetView(assetItem.selectedGuid);
+	updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	//syncTreeAndView(assetItem.selectedGuid);
 }
 
@@ -2698,7 +2709,7 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
         for (int i = 0; i < ui->assetView->count(); i++) {
             QListWidgetItem* item = ui->assetView->item(i);
             if (item->data(MODEL_GUID_ROLE).toString() == result->id) {
-                updateAssetView(assetItem.selectedGuid);
+                updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
             }
         }
     }

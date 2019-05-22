@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "propertywidgets/physicspropertywidget.h"
 #include "propertywidgets/handpropertywidget.h"
 #include "propertywidgets/skypropertywidget.h"
+#include "propertywidgets/worldskypropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -43,7 +44,6 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 
     fogPropView = new FogPropertyWidget();
     fogPropView->setPanelTitle("Fog");
-    fogPropView->expand();
 
     worldPropView = new WorldPropertyWidget();
     worldPropView->setPanelTitle("World");
@@ -52,8 +52,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	skyPropView = new SkyPropertyWidget();
 	skyPropView->setPanelTitle("Sky");
 	skyPropView->setDatabase(db);
-	skyPropView->worldPropWidget = worldPropView;
 	skyPropView->expand();
+
+	worldSkyPropView = new WorldSkyPropertyWidget();
+	worldSkyPropView->setPanelTitle("Sky");
+	worldSkyPropView->setDatabase(db);
+	worldSkyPropView->expand();
 
     transformPropView = new AccordianBladeWidget();
     transformPropView->setPanelTitle("Transformation");
@@ -94,6 +98,7 @@ void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
     if (!!scene) {
         this->scene = scene;
         skyPropView->setScene(this->scene);
+		worldSkyPropView->setScene(this->scene);
     }
 }
 
@@ -114,8 +119,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->setScene(sceneNode->scene);
             worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->scene);
-            widgetPropertyLayout->addWidget(fogPropView);
             widgetPropertyLayout->addWidget(worldPropView);
+            widgetPropertyLayout->addWidget(worldSkyPropView);
+            widgetPropertyLayout->addWidget(fogPropView);
         }
         else {
             transformPropView->setParent(this);

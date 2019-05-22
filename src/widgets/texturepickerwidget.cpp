@@ -50,6 +50,11 @@ QString TexturePickerWidget::getTexturePath()
     return filePath;
 }
 
+QString TexturePickerWidget::getTextureGuidFromItem(QListWidgetItem*)
+{
+	return QString();
+}
+
 void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 {
 //    const QString mimeType = "application/x-qabstractitemmodeldatalist";
@@ -87,7 +92,11 @@ void TexturePickerWidget::changeTextureMap()
 void TexturePickerWidget::pickTextureMap()
 {
     auto widget = new AssetPickerWidget(ModelTypes::Texture);
-    connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
+    //connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
+	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
+		textureGuid = getTextureGuidFromItem(item);
+		changeMap(textureGuid);
+	});
 }
 
 QString TexturePickerWidget::loadTexture()
@@ -131,6 +140,7 @@ void TexturePickerWidget::clear()
 
 void TexturePickerWidget::changeMap(QListWidgetItem *item)
 {
+	textureGuid = textureGuid = item->data(MODEL_GUID_ROLE).toString();
     setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
 }
 

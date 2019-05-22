@@ -1069,6 +1069,8 @@ DatabaseMetadataRecord Database::getDbMetadata()
 		irisLog(
 			"There was an error fetching db metadata " + query.lastError().text()
 		);
+
+		return DatabaseMetadataRecord();
 	}
 
 	DatabaseMetadataRecord record;

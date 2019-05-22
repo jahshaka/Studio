@@ -9,8 +9,8 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef SKYPROPERTYWIDGET_H
-#define SKYPROPERTYWIDGET_H
+#ifndef WORLDSKYPROPERTYWIDGET_H
+#define WORLDSKYPROPERTYWIDGET_H
 
 #include <QWidget>
 #include <QSharedPointer>
@@ -34,18 +34,14 @@ namespace iris {
     class LightNode;
 }
 
-class SkyPropertyWidget: public AccordianBladeWidget
+class WorldSkyPropertyWidget: public AccordianBladeWidget
 {
     Q_OBJECT
 
 public:
-    SkyPropertyWidget();
+    WorldSkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
-
-	void setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType);
-
-	void hideEvent(QHideEvent *event);
 
 protected slots:
     void setEquiMap(const QString &guid);
@@ -74,12 +70,9 @@ protected slots:
 private:
     Database *db;
     QSharedPointer<iris::Scene> scene;
-    iris::SkyType currentSky;
-	QString skyGuid;
 
 	void updateAssetAndKeys();
 
-	QJsonObject skyProperties;
 
     ComboBoxWidget *skySelector;
 
@@ -112,7 +105,7 @@ private:
 	QJsonObject materialDefinition;
 	QJsonObject realisticDefinition;
 
-	class CubeMapWidget *skyMapWidget;
+	class CubeMapWidget *cubeMapWidget;
 };
 
-#endif // SKYPROPERTYWIDGET_H
+#endif // WORLDSKYPROPERTYWIDGET_H

@@ -75,8 +75,10 @@ set(SRCS
     src/widgets/propertywidgets/lightpropertywidget.cpp 
     src/widgets/propertywidgets/materialpropertywidget.cpp 
     src/widgets/propertywidgets/skypropertywidget.cpp 
+    src/widgets/propertywidgets/worldskypropertywidget.cpp 
     src/widgets/propertywidgets/worldpropertywidget.cpp 
     src/widgets/propertywidgets/physicspropertywidget.cpp 
+    src/widgets/propertywidgets/cubemapwidget.cpp 
     src/io/scenewriter.cpp 
     src/core/thumbnailmanager.cpp 
     src/widgets/propertywidgets/fogpropertywidget.cpp 
@@ -204,10 +206,12 @@ set(HEADERS
     src/widgets/propertywidgets/transformpropertywidget.h 
     src/widgets/propertywidgets/lightpropertywidget.h 
     src/widgets/propertywidgets/materialpropertywidget.h 
+    src/widgets/propertywidgets/worldskypropertywidget.h 
     src/widgets/propertywidgets/skypropertywidget.h 
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
     src/widgets/propertywidgets/physicspropertywidget.h 
+	src/widgets/propertywidgets/cubemapwidget.h
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/widgets/propertywidgets/scenepropertywidget.h 

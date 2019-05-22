@@ -9,7 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "skypropertywidget.h"
+#include "worldskypropertywidget.h"
 
 #include "irisgl/src/materials/defaultskymaterial.h"
 
@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
+
 #include "src/widgets/propertywidgets/cubemapwidget.h"
 
 #include "globals.h"
@@ -28,25 +29,40 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "io/assetmanager.h"
 
-SkyPropertyWidget::SkyPropertyWidget()
+#include "widgets/sceneviewwidget.h"
+
+WorldSkyPropertyWidget::WorldSkyPropertyWidget()
 {
-	setMouseTracking(true);
+	connect(Globals::sceneViewWidget, &SceneViewWidget::changeSkyFromAssetWidget, this, [this](int index) {
+		skyTypeChanged(index);
+	});
 }
 
-void SkyPropertyWidget::skyTypeChanged(int index)
+void WorldSkyPropertyWidget::skyTypeChanged(int index)
 {
-	if (skyGuid.isEmpty()) return;
-
-	// The current sky gets set when the asset is selected to be the type it was saved as
-	// This function can be called after it has been initialized so if the starting type
-	// and the index differ it is a new sky. Wipe the properties and start over.
-	// If it's the same, do nothing but if it's new, reset to defaults
-	const QJsonObject skyDefinition = currentSky == static_cast<iris::SkyType>(index)
-										? QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object()
-										: QJsonObject();
-	currentSky = static_cast<iris::SkyType>(index);
+	scene->skyType = static_cast<iris::SkyType>(index);
 
 	clearPanel(this->layout());
+	setMouseTracking(true);
+
+	QJsonObject skyDefinition;
+	switch (static_cast<iris::SkyType>(index)) {
+	case iris::SkyType::SINGLE_COLOR:
+		skyDefinition = scene->skyData.value("SingleColor");
+		break;
+	case iris::SkyType::REALISTIC:
+		skyDefinition = scene->skyData.value("Realistic");
+		break;
+	case iris::SkyType::GRADIENT:
+		skyDefinition = scene->skyData.value("Gradient");
+		break;
+	case iris::SkyType::EQUIRECTANGULAR:
+		skyDefinition = scene->skyData.value("Equirectangular");
+		break;
+	case iris::SkyType::CUBEMAP:
+		skyDefinition = scene->skyData.value("Cubemap");
+		break;
+	}
 
 	skySelector = this->addComboBox("Sky Type");
 	skySelector->addItem("Single Color");
@@ -59,20 +75,15 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 	connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
 
-	switch (static_cast<iris::SkyType>(index)) {
+	switch (scene->skyType) {
 		case iris::SkyType::SINGLE_COLOR: {
 			singleColor = this->addColorPicker("Sky Color");
 			connect(singleColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onSingleSkyColorChanged(QColor)));
 
-			// This should be revisited, some differences between scene color and our default
-			if (skyDefinition.isEmpty()) {
-				singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(QColor(72, 72, 72)));
-				singleColor->setColorValue(QColor(72, 72, 72));
-			}
-			else {
-				singleColor->setColorValue(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
-				onSingleSkyColorChanged(SceneReader::readColor(skyDefinition.value("skyColor").toObject()));
-			}
+			QColor skyColor = SceneReader::readColor(skyDefinition.value("skyColor").toObject());
+			singleColor->setColorValue(skyColor);
+			singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(skyColor));
+			onSingleSkyColorChanged(skyColor);
 
 			break;
 		}
@@ -87,35 +98,41 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			sunPosX = addFloatValueSlider("Strafe X", 0, 1.f, 10.f);
 			sunPosZ = addFloatValueSlider("Strafe Z", 0, 1.f, 10.f);
 
-			connect(luminance, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
-			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
-			connect(mieCoefficient, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieCoeffGChanged);
-			connect(mieDirectionalG, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieDireChanged);
-			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onTurbidityChanged);
-			connect(sunPosX, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosXChanged);
-			connect(sunPosY, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosYChanged);
-			connect(sunPosZ, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosZChanged);
+			connect(luminance, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onLuminanceChanged);
+			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onReileighChanged);
+			connect(mieCoefficient, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onMieCoeffGChanged);
+			connect(mieDirectionalG, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onMieDireChanged);
+			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onTurbidityChanged);
+			connect(sunPosX, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunPosXChanged);
+			connect(sunPosY, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunPosYChanged);
+			connect(sunPosZ, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunPosZChanged);
+	
+			reileigh->setValue(skyDefinition.value("reileigh").toDouble());
+			luminance->setValue(skyDefinition.value("luminance").toDouble());
+			mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
+			mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
+			turbidity->setValue(skyDefinition.value("turbidity").toDouble());
+			sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
+			sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
+			sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
 
-			if (skyDefinition.isEmpty()) {
-				realisticDefinition.insert("luminance", luminance->getValue());
-				realisticDefinition.insert("reileigh", reileigh->getValue());
-				realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
-				realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
-				realisticDefinition.insert("turbidity", turbidity->getValue());
-				realisticDefinition.insert("sunPosX", sunPosX->getValue());
-				realisticDefinition.insert("sunPosY", sunPosY->getValue());
-				realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
-			}
-			else {
-				reileigh->setValue(skyDefinition.value("reileigh").toDouble());
-				luminance->setValue(skyDefinition.value("luminance").toDouble());
-				mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
-				mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
-				turbidity->setValue(skyDefinition.value("turbidity").toDouble());
-				sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
-				sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
-				sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
-			}
+			realisticDefinition.insert("luminance", luminance->getValue());
+			realisticDefinition.insert("reileigh", reileigh->getValue());
+			realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
+			realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
+			realisticDefinition.insert("turbidity", turbidity->getValue());
+			realisticDefinition.insert("sunPosX", sunPosX->getValue());
+			realisticDefinition.insert("sunPosY", sunPosY->getValue());
+			realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
+
+			scene->skyRealistic.luminance = skyDefinition["luminance"].toDouble();
+			scene->skyRealistic.reileigh = skyDefinition["reileigh"].toDouble();
+			scene->skyRealistic.mieCoefficient = skyDefinition["mieCoefficient"].toDouble();
+			scene->skyRealistic.mieDirectionalG = skyDefinition["mieDirectionalG"].toDouble();
+			scene->skyRealistic.turbidity = skyDefinition["turbidity"].toDouble();
+			scene->skyRealistic.sunPosX = skyDefinition["sunPosX"].toDouble();
+			scene->skyRealistic.sunPosY = skyDefinition["sunPosY"].toDouble();
+			scene->skyRealistic.sunPosZ = skyDefinition["sunPosZ"].toDouble();
 
 			break;
 		}
@@ -129,12 +146,12 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
 				// Remember that asset names are unique (auto incremented) so this is fine
 				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
-				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
+				db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
 				if (!assetGuid.isEmpty()) {
 					db->createDependency(
-						static_cast<int>(ModelTypes::Sky),
+						static_cast<int>(ModelTypes::Sky),		// Not really but who cares
 						static_cast<int>(ModelTypes::Texture),
-						skyGuid, assetGuid,
+						scene->skyGuid, assetGuid,
 						Globals::project->getProjectGuid()
 					);
 
@@ -146,11 +163,11 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::CUBEMAP: {
-			skyMapWidget = this->addCubeMapWidget();
+			cubeMapWidget = this->addCubeMapWidget();
 
-			connect(skyMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
+			connect(cubeMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
 				onSlotChanged(value, guid, static_cast<int>(pos));
-			});
+				});
 
 			setSkyMap(skyDefinition);
 
@@ -190,43 +207,39 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			connect(colorBot->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(onGradientBotColorChanged(QColor)));
 			connect(offset, SIGNAL(valueChanged(float)), SLOT(onGradientOffsetChanged(float)));
 
-			if (skyDefinition.isEmpty()) {
-				gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(QColor(255, 146, 138)));
-				gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(QColor("white")));
-				gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(QColor(64, 128, 255)));
-				gradientDefinition.insert("gradientOffset", .73f);
+			colorTop->setColorValue(SceneReader::readColor(skyDefinition.value("gradientTop").toObject()));
+			colorMid->setColorValue(SceneReader::readColor(skyDefinition.value("gradientMid").toObject()));
+			colorBot->setColorValue(SceneReader::readColor(skyDefinition.value("gradientBot").toObject()));
+			offset->setValue(skyDefinition.value("gradientOffset").toDouble());
 
-				colorTop->setColorValue(QColor(255, 146, 138));
-				colorMid->setColorValue(QColor("white"));
-				colorBot->setColorValue(QColor(64, 128, 255));
-			}
-			else {
-				colorTop->setColorValue(SceneReader::readColor(skyDefinition.value("gradientTop").toObject()));
-				colorMid->setColorValue(SceneReader::readColor(skyDefinition.value("gradientMid").toObject()));
-				colorBot->setColorValue(SceneReader::readColor(skyDefinition.value("gradientBot").toObject()));
-				offset->setValue(skyDefinition.value("gradientOffset").toDouble());
-			}
+			gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(colorTop->getPicker()->getColor()));
+			gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(colorMid->getPicker()->getColor()));
+			gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(colorBot->getPicker()->getColor()));
+			gradientDefinition.insert("gradientOffset", .73f);
+
+			scene->gradientTop = SceneReader::readColor(skyDefinition.value("gradientTop").toObject());
+			scene->gradientMid = SceneReader::readColor(skyDefinition.value("gradientMid").toObject());
+			scene->gradientBot = SceneReader::readColor(skyDefinition.value("gradientBot").toObject());
+			scene->gradientOffset = skyDefinition.value("gradientOffset").toDouble();
 
 			break;
 		}
 	}
 
-	if (skyDefinition.isEmpty()) {
-		updateAssetAndKeys();
-	}
+	scene->switchSkyTexture(scene->skyType);
 }
 
-void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
+void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 {
 	// Normally there'd be a check for if value is empty here but in that case we can clear the guid
 	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
-	db->deleteDependency(skyGuid, guid);
+	db->deleteDependency(scene->skyGuid, guid);
 	// Remember that asset names are unique (auto incremented) so this is fine
 	if (!assetGuid.isEmpty()) {
 		db->createDependency(
 			static_cast<int>(ModelTypes::Sky),
 			static_cast<int>(ModelTypes::Texture),
-			skyGuid,
+			scene->skyGuid,
 			assetGuid,
 			Globals::project->getProjectGuid()
 		);
@@ -242,54 +255,34 @@ void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 		default: break;
 	}
 
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setSkyMap(cubeMapDefinition);
-	}
+	if (!!scene) setSkyMap(cubeMapDefinition);
 }
 
-void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldSkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
+		skyTypeChanged(static_cast<int>(scene->skyType));
     } else {
         this->scene.clear();
     }
 }
 
-void SkyPropertyWidget::setDatabase(Database *db)
+void WorldSkyPropertyWidget::setDatabase(Database *db)
 {
     this->db = db;
 }
 
-void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType)
+void WorldSkyPropertyWidget::updateAssetAndKeys()
 {
-	skyGuid = guid;
-	currentSky = skyType;
-	skyTypeChanged(static_cast<int>(skyType));
-}
+	QJsonObject skyProperties = QJsonObject();
 
-// Let's hijack this event and use it to update the asset in the db (iKlsR)
-void SkyPropertyWidget::hideEvent(QHideEvent *event)
-{
-	Q_UNUSED(event)
-	updateAssetAndKeys();
-}
-
-void SkyPropertyWidget::updateAssetAndKeys()
-{
-	QJsonObject properties;
-	QJsonObject skyProps;
-	skyProps.insert("type", static_cast<int>(currentSky));
-	properties.insert("sky", skyProps);
-
-	skyProperties = QJsonObject();
-	skyProperties.insert("guid", skyGuid);
-
-	switch (currentSky) {
+	switch (scene->skyType) {
 	case iris::SkyType::SINGLE_COLOR: {
 		for (const QString& key : singleColorDefinition.keys()) {
 			skyProperties.insert(key, singleColorDefinition.value(key));
 		}
+		scene->skyData.insert("SingleColor", skyProperties);
 		break;
 	}
 
@@ -297,6 +290,7 @@ void SkyPropertyWidget::updateAssetAndKeys()
 		for (const QString& key : realisticDefinition.keys()) {
 			skyProperties.insert(key, realisticDefinition.value(key));
 		}
+		scene->skyData.insert("Realistic", skyProperties);
 		break;
 	}
 
@@ -304,6 +298,7 @@ void SkyPropertyWidget::updateAssetAndKeys()
 		for (const QString& key : equiSkyDefinition.keys()) {
 			skyProperties.insert(key, equiSkyDefinition.value(key));
 		}
+		scene->skyData.insert("Equirectangular", skyProperties);
 		break;
 	}
 
@@ -311,6 +306,7 @@ void SkyPropertyWidget::updateAssetAndKeys()
 		for (const QString& key : cubeMapDefinition.keys()) {
 			skyProperties.insert(key, cubeMapDefinition.value(key));
 		}
+		scene->skyData.insert("Cubemap", skyProperties);
 		break;
 	}
 
@@ -325,27 +321,24 @@ void SkyPropertyWidget::updateAssetAndKeys()
 		for (const QString& key : gradientDefinition.keys()) {
 			skyProperties.insert(key, gradientDefinition.value(key));
 		}
+		scene->skyData.insert("Gradient", skyProperties);
 		break;
 	}
 	}
-
-	db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toBinaryData());
-	db->updateAssetProperties(skyGuid, QJsonDocument(properties).toBinaryData());
-	// Not really used but keep around for now, the intent is clear (iKlsR)
-	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 }
 
-void SkyPropertyWidget::setEquiMap(const QString &guid)
+void WorldSkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (!guid.isEmpty()) {
 		equiSkyDefinition.insert("equiSkyGuid", guid);
         auto image = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(guid).name);
         equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
         scene->setSkyTexture(iris::Texture2D::load(image, false));
+		updateAssetAndKeys();
     }
 }
 
-void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
+void WorldSkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
 	auto front = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["front"].toString()).name);
 	auto back = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["back"].toString()).name);
@@ -361,7 +354,7 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 	cubeMapDefinition.insert("top", skyDataDefinition["top"].toString());
 	cubeMapDefinition.insert("bottom", skyDataDefinition["bottom"].toString());
 
-	skyMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
+	cubeMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
 	// We need at least one valid image to get some metadata from
 	QImage *info;
@@ -375,156 +368,173 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 		}
 	}
 
-	//if (useTex) {
-	//	scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
-	//}
+	if (useTex) {
+		scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
+		updateAssetAndKeys();
+	}
 }
 
-void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
+void WorldSkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
 {
-	auto vert = materialDefinition.value("vertexShader").toString();
-	auto frag = materialDefinition.value("fragmentShader").toString();
+	//auto vert = materialDefinition.value("vertexShader").toString();
+	//auto frag = materialDefinition.value("fragmentShader").toString();
 
-	auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
-	auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
+	//auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
+	//auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
 
 	//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
 }
 
-void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
+void WorldSkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 {
 	singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyColor = color;
+		scene->skyColor = color;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onMaterialChanged(int index)
+void WorldSkyPropertyWidget::onMaterialChanged(int index)
 {
 	Q_UNUSED(index)
 
-	QJsonDocument shaderData = QJsonDocument::fromBinaryData(db->fetchAssetData(shaderSelector->getCurrentItemData()));
-	QJsonObject shaderDataDefinition = shaderData.object();
+	//QJsonDocument shaderData = QJsonDocument::fromBinaryData(db->fetchAssetData(shaderSelector->getCurrentItemData()));
+	//QJsonObject shaderDataDefinition = shaderData.object();
 
-	auto vert = shaderDataDefinition.value("vertex_shader").toString();
-	auto frag = shaderDataDefinition.value("fragment_shader").toString();
+	//auto vert = shaderDataDefinition.value("vertex_shader").toString();
+	//auto frag = shaderDataDefinition.value("fragment_shader").toString();
 
-	materialDefinition.insert("materialGuid", shaderSelector->getCurrentItemData());
-	materialDefinition.insert("vertexShader", vert);
-	materialDefinition.insert("fragmentShader", frag);
+	//materialDefinition.insert("materialGuid", shaderSelector->getCurrentItemData());
+	//materialDefinition.insert("vertexShader", vert);
+	//materialDefinition.insert("fragmentShader", frag);
 
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setSkyFromCustomMaterial(materialDefinition);
-	}
+	//if (!!scene) {
+	//	if (scene->skyGuid == skyGuid) {
+	//		setSkyFromCustomMaterial(materialDefinition);
+	//		updateAssetAndKeys();
+	//	}
+	//}
 }
 
-void SkyPropertyWidget::onEquiTextureChanged(QString guid)
+void WorldSkyPropertyWidget::onEquiTextureChanged(QString guid)
 {
 	equiSkyDefinition.insert("equiSkyGuid", guid);
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) setEquiMap(guid);
+		setEquiMap(guid);
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onReileighChanged(float val)
+void WorldSkyPropertyWidget::onReileighChanged(float val)
 {
 	realisticDefinition.insert("reileigh", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.reileigh = val;
+		scene->skyRealistic.reileigh = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onLuminanceChanged(float val)
+void WorldSkyPropertyWidget::onLuminanceChanged(float val)
 {
 	realisticDefinition.insert("luminance", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.luminance = val;
+		scene->skyRealistic.luminance = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onTurbidityChanged(float val)
+void WorldSkyPropertyWidget::onTurbidityChanged(float val)
 {
 	realisticDefinition.insert("turbidity", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.turbidity = val;
+		scene->skyRealistic.turbidity = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onMieCoeffGChanged(float val)
+void WorldSkyPropertyWidget::onMieCoeffGChanged(float val)
 {
 	realisticDefinition.insert("mieCoefficient", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.mieCoefficient = val;
+		scene->skyRealistic.mieCoefficient = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onMieDireChanged(float val)
+void WorldSkyPropertyWidget::onMieDireChanged(float val)
 {
 	realisticDefinition.insert("mieDirectionalG", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.mieDirectionalG = val;
+		scene->skyRealistic.mieDirectionalG = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onSunPosXChanged(float val)
+void WorldSkyPropertyWidget::onSunPosXChanged(float val)
 {
 	realisticDefinition.insert("sunPosX", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosX = val;
+		scene->skyRealistic.sunPosX = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onSunPosYChanged(float val)
+void WorldSkyPropertyWidget::onSunPosYChanged(float val)
 {
 	realisticDefinition.insert("sunPosY", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosY = val;
+		scene->skyRealistic.sunPosY = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onSunPosZChanged(float val)
+void WorldSkyPropertyWidget::onSunPosZChanged(float val)
 {
 	realisticDefinition.insert("sunPosZ", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosZ = val;
+		scene->skyRealistic.sunPosZ = val;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onGradientTopColorChanged(QColor color)
+void WorldSkyPropertyWidget::onGradientTopColorChanged(QColor color)
 {
 	gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientTop = color;
+		scene->gradientTop = color;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onGradientMidColorChanged(QColor color)
+void WorldSkyPropertyWidget::onGradientMidColorChanged(QColor color)
 {
 	gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientMid = color;
+		scene->gradientMid = color;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onGradientBotColorChanged(QColor color)
+void WorldSkyPropertyWidget::onGradientBotColorChanged(QColor color)
 {
 	gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientBot = color;
+		scene->gradientBot = color;
+		updateAssetAndKeys();
 	}
 }
 
-void SkyPropertyWidget::onGradientOffsetChanged(float offset)
+void WorldSkyPropertyWidget::onGradientOffsetChanged(float offset)
 {
 	gradientDefinition.insert("gradientOffset", offset);
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientOffset = offset;
+		scene->gradientOffset = offset;
+		updateAssetAndKeys();
 	}
 }
-
