@@ -76,12 +76,12 @@
        <widget class="QWidget" name="filterWidget" native="true"/>
       </item>
       <item>
-       <widget class="QCheckBox" name="hideDeps">
+       <widget class="QCheckBox" name="showDeps">
         <property name="text">
-         <string>  Hide dependencies</string>
+         <string>  Show dependencies</string>
         </property>
         <property name="checked">
-         <bool>true</bool>
+         <bool>false</bool>
         </property>
        </widget>
       </item>
