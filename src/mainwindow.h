@@ -486,8 +486,12 @@ private:
     QAction *actionTranslate;
     QAction *actionRotate;
     QAction *actionScale;
-
-    AssetModelPanel *assetModelPanel;
+	QAction* actionGlobalSpace;
+	QAction* actionLocalSpace;
+	QAction* actionFreeCamera;
+	QAction* actionArcballCam;
+    
+	AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
 
 	QPushButton *cameraView;

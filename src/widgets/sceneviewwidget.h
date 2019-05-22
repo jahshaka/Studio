@@ -129,6 +129,7 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	bool initialized;
 public:
 	bool showFps;
+	bool showPerspevtiveLabel;
 
     iris::CameraNodePtr editorCam;
 
@@ -350,7 +351,6 @@ private:
 	AnimationPath* animPath;
 	SettingsManager* settings;
 
-	bool showPerspevtiveLabel;
 	QString cameraView;
 	QString cameraOrientation;
 	QString checkView();

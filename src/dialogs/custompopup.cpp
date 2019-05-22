@@ -9,7 +9,6 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "custompopup.h"
-#include "../misc/stylesheet.h"
 #include <QPainter>
 #include <QGraphicsDropShadowEffect>
 #include <QDebug>

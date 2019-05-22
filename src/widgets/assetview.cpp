@@ -46,7 +46,10 @@ For more information see the LICENSE file
 #include <QDropEvent>
 #include <QMimeData>
 #include <QDesktopServices>
+#include <QShortcut>
 #include <QTemporaryDir>
+
+#include "src/dialogs/infowidget.h"
 
 #include "../globals.h"
 #include "../constants.h"
@@ -255,6 +258,11 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 	sourceGroup->addButton(onlineAssetsButton);
 
 	assetSource = AssetSource::LOCAL;
+
+	auto shortcut = new QShortcut(QKeySequence("v"), this);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		auto dia = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+	});
 
 	connect(sourceGroup,
 			static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),

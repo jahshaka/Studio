@@ -54,12 +54,18 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/materialreader.hpp"
 #include "dialogs/customdialog.h"
-#include "misc/stylesheet.h"
+#include "dialogs/infowidget.h"
+
+#include <QShortcut>
 
 ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
     db = handle;
+	auto shortcut = new QShortcut(QKeySequence("v"), this);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		auto dia = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+		});
 
 #ifdef Q_OS_WIN32
 	// setAttribute(Qt::WA_PaintOnScreen, true);

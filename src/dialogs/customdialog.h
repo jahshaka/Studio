@@ -7,7 +7,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QWidget>
-
+#include "../misc/stylesheet.h"
 class CustomDialog : public QDialog
 {
 public:
