@@ -112,7 +112,7 @@ private:
 	QJsonObject materialDefinition;
 	QJsonObject realisticDefinition;
 
-	CubeMapWidget *skyMapWidget;
+	class CubeMapWidget *skyMapWidget;
 };
 
 #endif // SKYPROPERTYWIDGET_H

@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
 
+#include "src/widgets/propertywidgets/cubemapwidget.h"
+
 #include "globals.h"
 #include "core/database/database.h"
 #include "core/subscriber.h"
@@ -161,37 +163,11 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::CUBEMAP: {
-			cubemapFront = this->addTexturePicker("Front");
-			cubemapBack = this->addTexturePicker("Back");
-			cubemapLeft = this->addTexturePicker("Left");
-			cubemapRight = this->addTexturePicker("Right");
-			cubemapTop = this->addTexturePicker("Top");
-			cubemapBottom = this->addTexturePicker("Bottom");
+			cubeMapWidget = this->addCubeMapWidget();
 
-			// remember the image on the tiles... TODO
-			connect(cubemapFront, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 0);
-			});
-
-			connect(cubemapBack, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 1);
-			});
-
-			connect(cubemapLeft, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 2);
-			});
-
-			connect(cubemapRight, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 3);
-			});
-
-			connect(cubemapTop, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 4);
-			});
-
-			connect(cubemapBottom, &TexturePickerWidget::valuesChanged, this, [this](QString value, QString guid) {
-				onSlotChanged(value, guid, 5);
-			});
+			connect(cubeMapWidget, &CubeMapWidget::valuesChanged, [=](QString value, QString guid, CubeMapPosition pos) {
+				onSlotChanged(value, guid, static_cast<int>(pos));
+				});
 
 			setSkyMap(skyDefinition);
 
@@ -378,12 +354,7 @@ void WorldSkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 	cubeMapDefinition.insert("top", skyDataDefinition["top"].toString());
 	cubeMapDefinition.insert("bottom", skyDataDefinition["bottom"].toString());
 
-	cubemapFront->setTexture(front);
-	cubemapBack->setTexture(back);
-	cubemapTop->setTexture(top);
-	cubemapBottom->setTexture(bottom);
-	cubemapLeft->setTexture(left);
-	cubemapRight->setTexture(right);
+	cubeMapWidget->addCubeMapImages(top, bottom, left, front, right, back);
 
 	// We need at least one valid image to get some metadata from
 	QImage *info;

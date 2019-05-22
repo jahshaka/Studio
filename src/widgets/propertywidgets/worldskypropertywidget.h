@@ -105,12 +105,7 @@ private:
 	QJsonObject materialDefinition;
 	QJsonObject realisticDefinition;
 
-	TexturePickerWidget* cubemapFront;
-	TexturePickerWidget* cubemapBack;
-	TexturePickerWidget* cubemapLeft;
-	TexturePickerWidget* cubemapRight;
-	TexturePickerWidget* cubemapTop;
-	TexturePickerWidget* cubemapBottom;
+	class CubeMapWidget *cubeMapWidget;
 };
 
 #endif // WORLDSKYPROPERTYWIDGET_H
