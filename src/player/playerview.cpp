@@ -46,7 +46,7 @@ PlayerView::PlayerView(QWidget* parent) :
 	setMouseTracking(true);
 
 	// needed in order to get key events http://stackoverflow.com/a/7879484/991834
-	setFocusPolicy(Qt::ClickFocus);
+    setFocusPolicy(Qt::ClickFocus);
 }                                                       
 void PlayerView::initializeGL()
 {

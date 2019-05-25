@@ -62,9 +62,9 @@ void PlayerWidget::createUI()
 	stopBtn->setIconSize(QSize(16, 16));
 	*/
 
-	playerControlsLayout->setSpacing(12);
-	playerControlsLayout->setMargin(6);
-	playerControlsLayout->addStretch();
+    playerControlsLayout->setSpacing(12);
+    playerControlsLayout->setMargin(6);
+    playerControlsLayout->addStretch();
 	//playerControlsLayout->addWidget(restartBtn);
 	playerControlsLayout->addWidget(playBtn);
 	//playerControlsLayout->addWidget(stopBtn);
@@ -76,18 +76,10 @@ void PlayerWidget::createUI()
 		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
 		//UiManager::restartScene();
 	});
-	*/
+    */
 
 	connect(playBtn, &QPushButton::pressed, [this]() {
-		if (playerView->isScenePlaying()) {
-			playerView->stopScene();
-			playBtn->setIcon(playIcon);
-		}
-		else {
-			playerView->playScene();
-			playBtn->setIcon(stopIcon);
-			playerView->setFocus();
-		}
+        onPlayScene();
 	});
 	/*
 	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
@@ -99,6 +91,8 @@ void PlayerWidget::createUI()
 	playerView = new PlayerView(this);
 
 	auto mainLayout = new QVBoxLayout();
+    mainLayout->setMargin(0);
+    mainLayout->setSpacing(0);
 	mainLayout->addWidget(playerView, 1);
 	mainLayout->addWidget(playerControls, 0);
 
@@ -121,5 +115,18 @@ void PlayerWidget::end()
 	if (playerView->isScenePlaying()) {
 		playerView->stopScene();
 		playBtn->setIcon(playIcon);
-	}
+    }
+}
+
+void PlayerWidget::onPlayScene()
+{
+    if (playerView->isScenePlaying()) {
+        playerView->stopScene();
+        playBtn->setIcon(playIcon);
+    }
+    else {
+        playerView->playScene();
+        playBtn->setIcon(stopIcon);
+        playerView->setFocus();
+    }
 }

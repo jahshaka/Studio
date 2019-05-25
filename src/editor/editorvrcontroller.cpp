@@ -120,7 +120,7 @@ EditorVrController::EditorVrController(iris::ContentManagerPtr content)
 
 	fresnelMat = QSharedPointer<FresnelMaterial>(new FresnelMaterial());
 
-	turnSpeed = 4.0f;
+	turnSpeed = 2.0f;
 }
 
 void EditorVrController::setScene(iris::ScenePtr scene)

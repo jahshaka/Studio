@@ -102,6 +102,8 @@ public:
 
     QTreeWidget *getWidget();
 
+	void selectNode(QString nodeId);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 

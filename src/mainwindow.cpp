@@ -630,8 +630,11 @@ void MainWindow::switchSpace(WindowSpaces space)
 	case WindowSpaces::EDITOR:
 		sceneView->end();
 		break;
+    default:
+        break;
 	}
 
+    previousSpace = currentSpace;
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
 			if (UiManager::isSceneOpen) {
@@ -853,6 +856,10 @@ void MainWindow::openProject(bool playMode)
 	undoStackCount = 0;
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
+
+	// highlight root node
+	sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
+	sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
 }
 
 void MainWindow::closeProject()
@@ -2856,6 +2863,51 @@ void MainWindow::setupShortcuts()
 	connect(shortcut, &QShortcut::activated, [=]() {
 		emit projectionChangeRequested(true);
 	});
+
+
+    // TAB SHORTCUTS
+    shortcut = new QShortcut(QKeySequence("ctrl+1"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        this->switchSpace(WindowSpaces::DESKTOP);
+    });
+
+    shortcut = new QShortcut(QKeySequence("ctrl+2"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        if (UiManager::isSceneOpen)
+            this->switchSpace(WindowSpaces::PLAYER);
+    });
+
+    shortcut = new QShortcut(QKeySequence("ctrl+3"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        if (UiManager::isSceneOpen)
+            this->switchSpace(WindowSpaces::EDITOR);
+    });
+
+    shortcut = new QShortcut(QKeySequence("ctrl+4"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        this->switchSpace(WindowSpaces::EFFECT);
+    });
+
+    shortcut = new QShortcut(QKeySequence("ctrl+5"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        this->switchSpace(WindowSpaces::ASSETS);
+    });
+
+    shortcut = new QShortcut(QKeySequence("ctrl+tab"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) && !UiManager::isSceneOpen)
+            return;
+
+        this->switchSpace(previousSpace);
+    });
+
+    shortcut = new QShortcut(QKeySequence("space"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        if (currentSpace == WindowSpaces::EDITOR)
+            onPlaySceneButton();
+        else if (currentSpace == WindowSpaces::PLAYER)
+            playerView->onPlayScene();
+    });
 }
 
 void MainWindow::toggleDockWidgets()
