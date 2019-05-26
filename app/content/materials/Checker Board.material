@@ -1,9 +1,9 @@
 {
     "diffuseColor": "#FFF",
-    "diffuseTexture": "../../shadergraph/grass.jpg",
-    "icon": "../../shadergraph/grassThumb.png",
+    "diffuseTexture": "../../shadergraph/checker.jpg",
+    "icon": "../../shadergraph/checkerThumb.png",
     "material_type": "Default",
-    "name": "Grass",
+    "name": "Checker Board",
     "normalTexture": "",
     "shaderGuid": "",
     "shininess": 84,
