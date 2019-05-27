@@ -543,7 +543,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
 	// show assets
 	int i = 0;
-	foreach(const AssetRecord &record, db->fetchAssets()) {
+	foreach(const AssetRecord &record, db->fetchAssetsForAssetView()) {
 		QJsonObject object;
 		object["icon_url"] = "";
 		object["guid"] = record.guid;

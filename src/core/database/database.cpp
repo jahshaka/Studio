@@ -948,7 +948,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
     return AssetRecord();
 }
 
-QVector<AssetRecord> Database::fetchAssets()
+QVector<AssetRecord> Database::fetchAssetsForAssetView()
 {
     QSqlQuery query;
     query.prepare(
@@ -957,15 +957,9 @@ QVector<AssetRecord> Database::fetchAssets()
         "FROM assets A "
         "INNER JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.view_filter = :view_filter "
-        "AND (A.type = :m OR A.type = :o OR A.type = :t OR A.type = :s OR A.type = :sk OR A.type = :p) "
+        "AND A.guid NOT IN (SELECT dependee from dependencies) "
         "ORDER BY A.name DESC"
     );
-    query.bindValue(":m", static_cast<int>(ModelTypes::Object));
-    query.bindValue(":o", static_cast<int>(ModelTypes::Material));
-    query.bindValue(":t", static_cast<int>(ModelTypes::Texture));
-    query.bindValue(":s", static_cast<int>(ModelTypes::Shader));
-    query.bindValue(":sk", static_cast<int>(ModelTypes::Sky));
-    query.bindValue(":p", static_cast<int>(ModelTypes::ParticleSystem));
     query.bindValue(":view_filter", AssetViewFilter::AssetsView);
     executeAndCheckQuery(query, "FetchAssets");
 
@@ -2812,7 +2806,7 @@ QString Database::importAsset(
 	QSqlQuery selectAssetQuery(importConnection);
 	selectAssetQuery.prepare(
 		"SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, "
-		"author, license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
+		"author, license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
 	);
 	executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
 
@@ -2869,7 +2863,7 @@ QString Database::importAsset(
 			data.properties = record.value(14).toByteArray();
 			data.asset = record.value(15).toByteArray();
 			data.thumbnail = record.value(16).toByteArray();
-			data.view_filter = record.value(17).toInt();
+			data.view_filter = view_filter_to;
 		}
 
 		assetsToImport.push_back(data);
