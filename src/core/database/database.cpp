@@ -2571,7 +2571,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     QSqlQuery selectAssetQuery(dbe);
     selectAssetQuery.prepare(
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
-        "license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets"
+        "license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
     );
     executeAndCheckQuery(selectAssetQuery, "selectAssetQuery");
 
@@ -2605,6 +2605,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         data.properties = selectAssetQuery.value(14).toByteArray();
         data.asset = selectAssetQuery.value(15).toByteArray();
         data.thumbnail = selectAssetQuery.value(16).toByteArray();
+		data.view_filter = AssetViewFilter::Editor;
         assetList.push_back(data);
     }
 
