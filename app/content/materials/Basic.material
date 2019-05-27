@@ -1,9 +1,9 @@
 {
-    "diffuseColor": "#FFF",
-    "diffuseTexture": "../../shadergraph/grass.jpg",
-    "icon": "../../shadergraph/grassThumb.png",
+    "diffuseColor": "#0F0",
+    "diffuseTexture": "",
+    "icon": "../../shadergraph/basic.png",
     "material_type": "Default",
-    "name": "Grass",
+    "name": "Basic",
     "normalTexture": "",
     "shaderGuid": "",
     "shininess": 84,

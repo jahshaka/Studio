@@ -93,28 +93,6 @@ void AssetMaterialPanel::addDefaultItems()
         listView->addItem(item);
     }
 
-	for (auto presets : CreateNewDialog::getPresetList()) {
-		auto item = new QListWidgetItem;
-		item->setData(Qt::DisplayRole, presets.name);
-		item->setData(Qt::UserRole, presets.name);
-		item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
-		item->setIcon(QIcon(MaterialHelper::assetPath(presets.iconPath)));
-		i++;
-		item->setData(0x32, i); // used to get item index
-		listView->addItem(item);
-
-	}
-	for (auto presets : CreateNewDialog::getStarterList()) {
-		auto item = new QListWidgetItem;
-		item->setData(Qt::DisplayRole, presets.name);
-		item->setData(Qt::UserRole, presets.name);
-		item->setData(MODEL_TYPE_ROLE, static_cast<int>(ModelTypes::Shader));
-		item->setIcon(QIcon(MaterialHelper::assetPath(presets.iconPath)));
-		i++;
-		item->setData(0x32, i); // used to get item index
-		listView->addItem(item);
-
-	}
 }
 
 void AssetMaterialPanel::addNewItem(QListWidgetItem *itemInc)

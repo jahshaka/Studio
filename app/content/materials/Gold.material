@@ -1,9 +1,9 @@
 {
-    "diffuseColor": "#FFF",
-    "diffuseTexture": "../../shadergraph/grass.jpg",
-    "icon": "../../shadergraph/grassThumb.png",
+    "diffuseColor": "#FFD700",
+    "diffuseTexture": "",
+    "icon": "../../shadergraph/goldThumb.png",
     "material_type": "Default",
-    "name": "Grass",
+    "name": "Gold",
     "normalTexture": "",
     "shaderGuid": "",
     "shininess": 84,
