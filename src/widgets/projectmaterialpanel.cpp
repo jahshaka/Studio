@@ -40,21 +40,26 @@ ProjectMaterialPanel::ProjectMaterialPanel(Database* handle, QWidget * parent) :
 	auto layout = new QVBoxLayout;
 	setLayout(layout);
 	layout->addWidget(listWidget);
+	layout->setContentsMargins(0, 0, 0, 0);
 
-	listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+	listWidget->setViewMode(QListWidget::IconMode);
 	listWidget->setResizeMode(QListWidget::Adjust);
 	listWidget->setMovement(QListView::Static);
 	listWidget->setSelectionBehavior(QAbstractItemView::SelectItems);
-	listWidget->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	listWidget->setSelectionRectVisible(false);
+	listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+	listWidget->setSpacing(14);
 	listWidget->setDragEnabled(true);
 	listWidget->setDragDropMode(QAbstractItemView::DragDrop);
-	listWidget->setItemDelegate(new ListViewDelegate());
 	listWidget->setTextElideMode(Qt::ElideRight);
-	listWidget->setGridSize({ 120,120 });
+	//listWidget->setItemDelegate(new FMListViewDelegate);
+
+	listWidget->setAttribute(Qt::WA_MacShowFocusRect, false);
+	listWidget->setAttribute(Qt::WA_MacShowFocusRect, false);
 
 	listWidget->viewport()->installEventFilter(this);
 	listWidget->setStyleSheet(StyleSheet::QListWidget());
+	listWidget->setIconSize(QSize(84, 84));
+
 }
 
 ProjectMaterialPanel::~ProjectMaterialPanel()
