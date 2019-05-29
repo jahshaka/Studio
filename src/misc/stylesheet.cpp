@@ -115,6 +115,18 @@ const QString StyleSheet::QLabelBlack()
 	);
 }
 
+const QString StyleSheet::QListWidget()
+{
+	return QString(
+		"QListView::item{ border-radius: 2px; border: 1px solid rgba(0,0,0,.31); background: rgba(51,51,51,1); margin: 3px;  }"
+		"QListView::item:selected{ background: rgba(155,155,155,1); border: 1px solid rgba(50,150,250,.1); }"
+		"QListView::item:hover{ background: rgba(95,95,95,1); border: .1px solid rgba(50,150,250,.1); }"
+		"QListView::text{ top : -6; }"
+		"QListView{ border: 0px solid black; }"
+
+	);
+}
+
 const QString StyleSheet::QComboBox() {
     return QString(
 		"QComboBox  {    background-color: #1A1A1A;   border: 0;    outline: none; padding: 3px 10px; color: rgba(255,255,255,.9); }"

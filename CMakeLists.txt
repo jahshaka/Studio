@@ -61,6 +61,7 @@ set(SRCS
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
     src/widgets/assetmaterialpanel.cpp 
+    src/widgets/projectmaterialpanel.cpp 
     src/widgets/accordianbladewidget.cpp 
     src/widgets/transformeditor.cpp 
     src/widgets/scenehierarchywidget.cpp 
@@ -197,6 +198,7 @@ set(HEADERS
     src/widgets/assetpanel.h 
     src/widgets/assetmodelpanel.h 
     src/widgets/assetmaterialpanel.h 
+    src/widgets/projectmaterialpanel.h 
     src/widgets/accordianbladewidget.h 
     src/widgets/transformeditor.h 
     src/widgets/scenehierarchywidget.h 
