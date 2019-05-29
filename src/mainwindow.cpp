@@ -2263,17 +2263,12 @@ void MainWindow::setupDockWidgets()
 	projectMaterialPanel = new ProjectMaterialPanel(db);
 	projectMaterialPanel->setMainWindow(this);
 
-
-
-	materialTabWidget = new QTabWidget;
-	materialTabWidget->addTab(assetMaterialPanel, "Preset Materials");
-	materialTabWidget->addTab(projectMaterialPanel, "Project Materials");
-
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
     presetsTabWidget->addTab(assetModelPanel, "Models");
-    presetsTabWidget->addTab(materialTabWidget, "Materials");
+	presetsTabWidget->addTab(projectMaterialPanel, "Materials");
+	presetsTabWidget->addTab(assetMaterialPanel, "Preset Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 
