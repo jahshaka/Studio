@@ -355,6 +355,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	handGizmoHandler = new HandGizmoHandler();
 
 	playback = new PlayBack();
+	playback->setRestoreCameraTransform(false);
 	initialized = false;
 }
 
@@ -1659,6 +1660,10 @@ void SceneViewWidget::stopPlayingScene()
 		
 		// this sets the appropriate camera controller
 		//this->setCameraController(camController);
+
+		// this updates the current controller's camera
+		// variables used to position and rotate the camera
+		camController->setCamera(editorCam);
 		
 	}
 }

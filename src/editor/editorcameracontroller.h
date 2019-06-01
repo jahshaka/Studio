@@ -40,8 +40,8 @@ class EditorCameraController : public CameraControllerBase
 public:
     EditorCameraController(SceneViewWidget* sceneWidget);
 
-    QSharedPointer<iris::CameraNode>  getCamera();
-    void setCamera(QSharedPointer<iris::CameraNode>  cam) override;
+	iris::CameraNodePtr getCamera();
+    void setCamera(iris::CameraNodePtr cam) override;
 
     QVector3D getPos();
 

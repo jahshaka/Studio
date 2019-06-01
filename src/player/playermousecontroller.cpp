@@ -30,6 +30,10 @@ void PlayerMouseController::start()
     // capture cam transform
     camPos = camera->getLocalPos();
     camRot = camera->getLocalRot();
+
+	// capture yaw and pitch
+	float roll;
+	camera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
 }
 
 void PlayerMouseController::end()
@@ -38,16 +42,23 @@ void PlayerMouseController::end()
 	if (!!viewer)
 		viewer->show();
 
-    // restore cam transform
-    camera->setLocalPos(camPos);
-    camera->setLocalRot(camRot);
-    camera->update(0);
+	if (shouldRestoreCameraTransform) {
+		// restore cam transform
+		camera->setLocalPos(camPos);
+		camera->setLocalRot(camRot);
+	}
+	camera->update(0);
 }
 
 void PlayerMouseController::clearViewer()
 {
     viewer->show();
     viewer.clear();
+}
+
+void PlayerMouseController::setRestoreCameraTransform(bool shouldRestore)
+{
+	this->shouldRestoreCameraTransform = shouldRestore;
 }
 
 void PlayerMouseController::onMouseMove(int dx, int dy)

@@ -32,6 +32,8 @@ class PlayerMouseController : public CameraControllerBase
     QVector3D camPos;
 	bool _isPlaying = false;
 
+	bool shouldRestoreCameraTransform;
+
 public:
 	void setPlayState(bool playState) { _isPlaying = playState; }
 
@@ -49,6 +51,8 @@ public:
     void start() override;
     void end() override;
     void clearViewer();
+
+	void setRestoreCameraTransform(bool shouldRestore);
 };
 
 #endif // VIEWERCONTROLLER_H
