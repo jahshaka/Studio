@@ -2905,6 +2905,8 @@ void MainWindow::setupShortcuts()
 		connect(info, &InfoWidget::perspective, [=]() {
 			emit projectionChangeRequested(true);
 			});
+
+		info->presetWidget();
 	});
 
 	shortcut = new QShortcut(QKeySequence("i"), sceneView);
@@ -2918,6 +2920,7 @@ void MainWindow::setupShortcuts()
 		connect(info, &InfoWidget::togglePerspective, [=]() {
 			sceneView->setShowPerspeciveLabel(!sceneView->showPerspevtiveLabel);
 		});
+		info->presetWidget();
 	});
 
     // Save
@@ -2926,7 +2929,8 @@ void MainWindow::setupShortcuts()
 
 	shortcut = new QShortcut(QKeySequence("v"), sceneView);
 	connect(shortcut, &QShortcut::activated, [=]() {
-		auto dia = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+		auto dialogue = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+		dialogue->presetWidget();
 	});
 	
 }

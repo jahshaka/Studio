@@ -14,6 +14,8 @@ public:
 	InfoWidget(MainWindowMenus menu);
 	~InfoWidget();
 
+	void presetWidget();
+
 private:
 	void editorMenu(QKeyEvent*);
 	void configureEditorMenu();
@@ -28,6 +30,8 @@ private:
 	MainWindowMenus menus;
 protected:
 	void keyPressEvent(QKeyEvent* event) override;
+	virtual void leaveEvent(QEvent* event) override;
+
 
 signals:
 	void translateTool();

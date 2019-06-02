@@ -64,7 +64,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     db = handle;
 	auto shortcut = new QShortcut(QKeySequence("v"), this);
 	connect(shortcut, &QShortcut::activated, [=]() {
-		auto dia = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+		auto dialogue = new InfoWidget(MainWindowMenus::WorkspaceMenu);
+		dialogue->presetWidget();
 		});
 
 #ifdef Q_OS_WIN32

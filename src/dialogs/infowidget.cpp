@@ -7,6 +7,7 @@ InfoWidget::InfoWidget(MainWindowMenus menu) : CustomDialog()
 	setAttribute(Qt::WA_NoSystemBackground, true);
 	setAttribute(Qt::WA_DeleteOnClose);
 	setAttribute(Qt::WA_TranslucentBackground, true);
+	setWindowFlag(Qt::SubWindow);
 
 	menus = menu;
 	if (menus == MainWindowMenus::Editormenu) configureEditorMenu();
@@ -17,6 +18,15 @@ InfoWidget::InfoWidget(MainWindowMenus menu) : CustomDialog()
 
 InfoWidget::~InfoWidget()
 {
+}
+
+void InfoWidget::presetWidget()
+{
+	show(); // shows the widget to set the geometry
+	auto offset = 30;
+	setGeometry(QCursor::pos().x()-offset, QCursor::pos().y()-offset, width(), height());
+	hide();
+	exec();
 }
 
 void InfoWidget::editorMenu(QKeyEvent *event)
@@ -75,7 +85,6 @@ void InfoWidget::configureEditorMenu()
 
 	insertWidget(wid);
 	setStyleSheet(StyleSheet::QLabelWhite());
-	exec();
 }
 
 void InfoWidget::dataMenu(QKeyEvent*event)
@@ -102,7 +111,6 @@ void InfoWidget::configureDataMenu()
 
 	insertWidget(wid);
 	setStyleSheet(StyleSheet::QLabelWhite());
-	exec();
 }
 
 void InfoWidget::workspaceMenu(QKeyEvent* event)
@@ -145,7 +153,6 @@ void InfoWidget::configureWorkspaceMenu()
 
 	insertWidget(wid);
 	setStyleSheet(StyleSheet::QLabelWhite());
-	exec();
 }
 
 void InfoWidget::keyPressEvent(QKeyEvent* event)
@@ -154,5 +161,10 @@ void InfoWidget::keyPressEvent(QKeyEvent* event)
 	if (menus == MainWindowMenus::Datamenu) dataMenu(event);
 	if (menus == MainWindowMenus::WorkspaceMenu) workspaceMenu(event);
 
+	close();
+}
+
+void InfoWidget::leaveEvent(QEvent* event)
+{
 	close();
 }
