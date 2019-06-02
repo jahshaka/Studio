@@ -38,6 +38,8 @@ class PlayBack
 	PlayerVrController* vrController;
 	PlayerMouseController* mouseController;
 
+	bool shouldRestoreCameraTransform;
+
 	iris::ForwardRendererPtr renderer;
 	iris::ScenePtr scene;
 
@@ -55,6 +57,8 @@ public:
 
 	void setScene(iris::ScenePtr scene);
 	void setController(CameraControllerBase* controller);
+
+	void setRestoreCameraTransform(bool shouldRestore);
 
 	void renderScene(iris::Viewport& viewport, float dt);
 

@@ -18,6 +18,7 @@ PlayBack::PlayBack()
 	camController = nullptr;
 	vrController = new PlayerVrController();
 	mouseController = new PlayerMouseController();
+	this->setRestoreCameraTransform(true);
 }
 
 void PlayBack::init(iris::ForwardRendererPtr renderer)
@@ -54,6 +55,12 @@ void PlayBack::setController(CameraControllerBase * controller)
 
 		camController = controller;
 	}
+}
+
+void PlayBack::setRestoreCameraTransform(bool shouldRestore)
+{
+	this->shouldRestoreCameraTransform = shouldRestore;
+	this->mouseController->setRestoreCameraTransform(shouldRestore);
 }
 
 void PlayBack::renderScene(iris::Viewport& viewport, float dt)
@@ -159,6 +166,10 @@ void PlayBack::playScene()
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
 	scene->getPhysicsEnvironment()->simulatePhysics();
+
+	if (camController != nullptr) {
+		camController->start();
+	}
 }
 
 
