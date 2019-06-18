@@ -310,6 +310,14 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
 
+	{
+		QJsonObject actionEvents = nodeObj["actionEvents"].toObject();
+		sceneNode->actionTriggeredEvent.trigger = static_cast<iris::ActionTrigger>(actionEvents["actionTrigger"].toInt());
+		sceneNode->actionTriggeredEvent.payload = actionEvents["actionTriggerPayload"].toString();
+		sceneNode->actionReceivedEvent.receiver = static_cast<iris::ActionReceiver>(actionEvents["actionReceiver"].toInt());
+		sceneNode->actionReceivedEvent.payload = actionEvents["actionReceiverPayload"].toString();
+	}
+
 	if (sceneNode->isPhysicsBody) {
 		QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
 		sceneNode->physicsProperty.centerOfMass = readVector3(physicsDef["centerOfMass"].toObject());
@@ -464,6 +472,8 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 	if (!source.startsWith(":")) {
         source = IrisUtils::join(assetDirectory, asset.name);
 	}
+
+	qDebug() << "src " << source;
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
     QString meshGUID = nodeObj["guid"].toString();
@@ -736,15 +746,15 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
         
-        if (useAlternativeLocation) {
+        //if (useAlternativeLocation) {
 		    iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
-        }
+    /*    }
         else {
             iris::GraphicsHelper::loadAllMeshesAndAnimationsFromStore<Asset*>(AssetManager::getAssets(),
                 filePath,
                 meshList,
                 animationss);
-        }
+        }*/
 
         meshes.insert(filePath, meshList);
         assimpScenes.insert(filePath);

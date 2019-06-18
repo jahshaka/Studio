@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "irisgl/src/irisglfwd.h"
 #include "../accordianbladewidget.h"
 
+class Database;
 class SceneViewWidget;
 class btRigidBody;
 
@@ -29,10 +30,15 @@ public:
     PhysicsPropertyWidget();
     ~PhysicsPropertyWidget();
 
+	void setDatabase(Database*);
+
     void setSceneNode(iris::SceneNodePtr sceneNode);
     void setSceneView(SceneViewWidget *sceneView);
 
 protected slots:
+    void onActionTriggerChanged(int);
+    void onActionReceiverChanged(int);
+	void onOpenSceneSelectorChanged(int);
     void onPhysicsTypeChanged(int);
     void onPhysicsShapeChanged(int);
     void onVisibilityChanged(bool);
@@ -56,6 +62,14 @@ private:
 
     QMap<int, QString> physicsTypes;
     QMap<int, QString> physicsShapes;
+    QMap<int, QString> actionTypes;
+    QMap<int, QString> receiverTypes;
+
+	ComboBoxWidget *actionTriggerTypeSelector;
+	ComboBoxWidget *actionReceiverTypeSelector;
+	ComboBoxWidget *openScenesTypeSelector;
+
+	Database *db;
 };
 
 #endif // PHYSICSPROPERTYWIDGET_HPP

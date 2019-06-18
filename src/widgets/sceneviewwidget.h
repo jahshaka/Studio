@@ -127,6 +127,8 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 
 	PlayBack* playback;
 	bool initialized;
+	bool intersectionHappened = false;
+
 public:
 	bool showFps;
 
@@ -276,7 +278,6 @@ private slots:
     void resizeGL(int width, int height);
 	void onAnimationKeyChanged(iris::FloatKey* key);
 
-
 private:
     void doLightPicking(const QVector3D& segStart,
                         const QVector3D& segEnd,
@@ -365,6 +366,7 @@ signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 	void updateToolbarButton();
 	void changeSkyFromAssetWidget(int index);
+	void enterPreloadedScene(const QString &guid);
 
 };
 

@@ -128,7 +128,7 @@ public:
     QVector<AssetRecord> fetchThumbnails();
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
-    QVector<ProjectTileData> fetchProjects();
+    QVector<ProjectTileData> fetchProjects(bool includeSelf = true);
     ProjectTileData fetchProject(const QString &guid);
     QVector<FolderRecord> fetchChildFolders(const QString &parent);
     QVector<FolderRecord> fetchCrumbTrail(const QString &parent);
@@ -189,6 +189,7 @@ public:
     QString getVersion();
 
     QByteArray getSceneBlobGlobal() const;
+    QByteArray getSceneBlobFromGuid(const QString &guid) const;
 	void updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
 	void updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
 

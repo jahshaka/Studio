@@ -120,6 +120,7 @@ enum class Widget
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/texture2d.h"
 
+class EditorData;
 class Database;
 class MainWindow : public QMainWindow
 {
@@ -338,6 +339,8 @@ public slots:
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
+	void enterPreloadedScene(const QString &guid);
+	void loadBaseScene();
     void closeProject();
 
     void toggleWidgets(bool toggle);
@@ -390,6 +393,12 @@ private:
     EditorCameraController* camControl;
 
     QSharedPointer<iris::Scene> scene;
+
+	EditorData *initialEditorData;
+    QSharedPointer<iris::Scene> initialScene;
+
+    QMap<QString, QPair<EditorData*, iris::ScenePtr>> preloadedScenes;
+	QMap <QString, QPair<QString, QString>> preloadedSceneInfo;
     QSharedPointer<iris::SceneNode> activeSceneNode;
 
     QTimer* timer;

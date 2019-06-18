@@ -59,7 +59,6 @@ public:
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
 	void cleanupOnClose();
-	void openProjectFromGuid(const QString &guid);
 
 	ModelData loadAiSceneFromModel(const QPair<QString, QString> asset);
 	MainWindow *mainWindow;

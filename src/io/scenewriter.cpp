@@ -194,6 +194,15 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
 
 	sceneNodeObj["physicsObject"] = sceneNode->isPhysicsBody;
 
+	{
+		QJsonObject actionProperties;
+		actionProperties.insert("actionTrigger", static_cast<int>(sceneNode->actionTriggeredEvent.trigger));
+		actionProperties.insert("actionTriggerPayload", sceneNode->actionTriggeredEvent.payload.toString());
+		actionProperties.insert("actionReceiver", static_cast<int>(sceneNode->actionReceivedEvent.receiver));
+		actionProperties.insert("actionReceiverPayload", sceneNode->actionReceivedEvent.payload.toString());
+		sceneNodeObj["actionEvents"] = actionProperties;
+	}
+
 	if (sceneNode->isPhysicsBody) {
 		QJsonObject physicsProperties;
 

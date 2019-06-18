@@ -27,6 +27,7 @@ public:
     static float animFrameTime;//maybe this needs to go
     static QString appWorkingDir;
     static Project* project;
+    static QMap<QString, Project*> projects;
 	static Database* db;
     static SceneViewWidget* sceneViewWidget;
     static QMap<QString, QString> assetNames;

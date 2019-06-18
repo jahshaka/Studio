@@ -804,8 +804,10 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
-	if(!!scene)
-        removeScene();
+	if (!!scene) removeScene();
+
+	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
     makeLoadingGLContextCurrent();
     std::unique_ptr<SceneReader> reader(new SceneReader);
@@ -822,11 +824,64 @@ void MainWindow::openProject(bool playMode)
                                    db->getSceneBlobGlobal(),
                                    postMan,
                                    &editorData);
+	bool loadThem = true;
+	bool testLoad = false;
+	QStringList guids;
+
+	auto projects = db->fetchProjects(false);
+	for (auto project : projects) {
+		guids.append(project.guid);
+	}
+
+	if (loadThem) {
+		// magic
+
+		auto mainProjectPath = Globals::project->getProjectFolder();
+		auto mainProjectName = Globals::project->getProjectName();
+		auto mainProjectGuid = Globals::project->getProjectGuid();
+
+		preloadedScenes.clear();
+
+		for (const auto &guid : guids) {
+
+			qDebug() << "Preloading " << db->fetchProject(guid).name;
+
+			Globals::project->setProjectPath(
+				QDir(QDir(projectFolder).filePath("Projects")).filePath(guid),
+				db->fetchProject(guid).name
+			);
+
+			Globals::project->setProjectGuid(guid);
+
+			preloadedSceneInfo.insert(Globals::project->getProjectGuid(),
+				qMakePair(Globals::project->getProjectFolder(), Globals::project->getProjectName()));
+
+			reader->setBaseDirectory(Globals::project->getProjectFolder());
+
+			EditorData *editorData = Q_NULLPTR;
+			auto postMan = iris::PostProcessManagerPtr();
+			auto scene = reader->readScene(Globals::project->getProjectFolder(),
+				db->getSceneBlobGlobal(),
+				postMan,
+				&editorData);
+
+			preloadedScenes.insert(guid, qMakePair(editorData, scene));
+		}
+
+		// set back to normal
+		Globals::project->setProjectPath(mainProjectPath, mainProjectName);
+		Globals::project->setProjectGuid(mainProjectGuid);
+
+		// end magic
+	}
 
     UiManager::playMode = playMode;
     UiManager::isSceneOpen = true;
     ui->actionClose->setDisabled(false);
+
     setScene(scene);
+
+	initialScene = scene;
 
     // use new post process that has fxaa by default
     // TODO: remember to find a better replacement (Nick)
@@ -834,6 +889,9 @@ void MainWindow::openProject(bool playMode)
     this->sceneView->doneCurrent();
 
     if (editorData != Q_NULLPTR) {
+		// temp for original value
+		initialEditorData = editorData;
+
         sceneView->setEditorData(editorData);
 		// needs to be done so controllers can have the correct
 		// camera
@@ -851,8 +909,6 @@ void MainWindow::openProject(bool playMode)
         //onPlaySceneButton();
     }
 
-    
-
 	undoStackCount = 0;
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
@@ -864,6 +920,38 @@ void MainWindow::openProject(bool playMode)
 	// autoplay scene on load
 	if (playMode) {
 		this->playerView->onPlayScene();
+	}
+}
+
+void MainWindow::loadBaseScene()
+{
+	auto editorData = initialEditorData;
+
+	setScene(initialScene);
+
+	if (scene != Q_NULLPTR) {
+		if (editorData != Q_NULLPTR) {
+			sceneView->setEditorData(editorData);
+			// needs to be done so controllers can have the correct
+			// camera
+			playerView->setScene(scene);
+			wireCheckAction->setChecked(editorData->showLightWires);
+			physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
+		}
+	}
+}
+
+void MainWindow::enterPreloadedScene(const QString &guid)
+{
+	auto scene = preloadedScenes.value(guid);
+	auto sceneInfo = preloadedSceneInfo.value(guid);
+
+	/*	Globals::project->setProjectGuid(guids.last());
+		Globals::project->setProjectPath(sceneInfo.first, sceneInfo.second);*/
+
+	setScene(scene.second);
+	if (scene.first != Q_NULLPTR) {
+		sceneView->setEditorData(scene.first);
 	}
 }
 
@@ -907,10 +995,6 @@ void MainWindow::closeProject()
 
     UiManager::mainWindow->setWindowTitle(originalTitle);
 
-	if (sceneView->isInitialized())
-		sceneView->end();
-	playerView->end();
-
     scene->cleanup();
     scene.clear();
 
@@ -923,7 +1007,9 @@ void MainWindow::closeProject()
 
     switchSpace(WindowSpaces::DESKTOP);
 
-
+	if (sceneView->isInitialized())
+		sceneView->end();
+	playerView->end();
 }
 
 /// TODO - this needs to be fixed after the objects are added back to the uniforms array/obj
@@ -2628,6 +2714,8 @@ void MainWindow::setupViewPort()
     layout->setMargin(0);
     sceneContainer->setLayout(layout);
 
+	connect(sceneView, &SceneViewWidget::enterPreloadedScene, this, &MainWindow::enterPreloadedScene);
+
     connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
         addMaterialMesh(path, v, pos, guid, name);
     });
@@ -2916,6 +3004,12 @@ void MainWindow::setupShortcuts()
         else if (currentSpace == WindowSpaces::PLAYER)
             playerView->onPlayScene();
     });
+
+	shortcut = new QShortcut(QKeySequence("esc"), this);
+	connect(shortcut, &QShortcut::activated, [=]() {
+		if (preloadedScenes.count()) loadBaseScene();
+		else qDebug() << "No preloaded scenes";
+	});
 }
 
 void MainWindow::toggleDockWidgets()

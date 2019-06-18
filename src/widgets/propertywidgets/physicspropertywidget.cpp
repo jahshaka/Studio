@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../checkboxwidget.h"
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
+#include "core/database/database.h"
 
 #include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
 #include "bullet3/src/BulletCollision/CollisionShapes/btConvexHullShape.h"
@@ -45,6 +46,31 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::ConvexHull), "Convex Hull");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::TriangleMesh), "Triangle Mesh");
 
+	actionTypes.insert(static_cast<int>(ActionTrigger::None), "None");
+	actionTypes.insert(static_cast<int>(ActionTrigger::Intersector), "Intersector");
+	actionTypes.insert(static_cast<int>(ActionTrigger::IntersectionEnter), "Intersection Enter");
+	// actionTypes.insert(static_cast<int>(ActionTrigger::IntersectionLeave), "Intersection Leave");
+	// actionTypes.insert(static_cast<int>(ActionTrigger::Remove), "Remove");
+	// actionTypes.insert(static_cast<int>(ActionTrigger::Spawn), "Spawn");
+
+	receiverTypes.insert(static_cast<int>(ActionReceiver::None), "None");
+	receiverTypes.insert(static_cast<int>(ActionReceiver::OpenScene), "Open Scene");
+
+	actionTriggerTypeSelector = this->addComboBox("Action Trigger");
+	QMap<int, QString>::const_iterator atIter;
+	for (atIter = actionTypes.constBegin(); atIter != actionTypes.constEnd(); ++atIter) {
+		actionTriggerTypeSelector->addItem(atIter.value(), atIter.key());
+	}
+
+	actionReceiverTypeSelector = this->addComboBox("Action Receiver");
+	QMap<int, QString>::const_iterator rtIter;
+	for (rtIter = receiverTypes.constBegin(); rtIter != receiverTypes.constEnd(); ++rtIter) {
+		actionReceiverTypeSelector->addItem(rtIter.value(), rtIter.key());
+	}
+
+	openScenesTypeSelector = this->addComboBox("Scenes");
+	openScenesTypeSelector->hide();
+
     physicsTypeSelector = this->addComboBox("Physics Type");
     QMap<int, QString>::const_iterator ptIter;
     for (ptIter = physicsTypes.constBegin(); ptIter != physicsTypes.constEnd(); ++ptIter) {
@@ -68,6 +94,12 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
     connect(marginValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMarginChanged);
     connect(frictionValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onFrictionChanged);
     connect(bouncinessValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onBouncinessChanged);
+	connect(actionTriggerTypeSelector, static_cast<void (ComboBoxWidget:: *)(int)>(&ComboBoxWidget::currentIndexChanged),
+		this, &PhysicsPropertyWidget::onActionTriggerChanged);
+	connect(actionReceiverTypeSelector, static_cast<void (ComboBoxWidget:: *)(int)>(&ComboBoxWidget::currentIndexChanged),
+		this, &PhysicsPropertyWidget::onActionReceiverChanged);
+	connect(openScenesTypeSelector, static_cast<void (ComboBoxWidget:: *)(int)>(&ComboBoxWidget::currentIndexChanged),
+		this, &PhysicsPropertyWidget::onOpenSceneSelectorChanged);
     connect(physicsShapeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
         this, &PhysicsPropertyWidget::onPhysicsShapeChanged);
     connect(physicsTypeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
@@ -77,6 +109,11 @@ PhysicsPropertyWidget::PhysicsPropertyWidget()
 PhysicsPropertyWidget::~PhysicsPropertyWidget()
 {
 
+}
+
+void PhysicsPropertyWidget::setDatabase(Database *db)
+{
+	this->db = db;
 }
 
 void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
@@ -108,6 +145,13 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         physicsShapeSelector->setCurrentText(physicsShapes.value(static_cast<int>(sceneNode->physicsProperty.shape)));
         physicsTypeSelector->setCurrentText(physicsTypes.value(static_cast<int>(sceneNode->physicsProperty.type)));
 
+		qDebug() << actionTypes.value(static_cast<int>(sceneNode->actionTriggeredEvent.trigger));
+
+		actionTriggerTypeSelector->setCurrentText(actionTypes.value(static_cast<int>(sceneNode->actionTriggeredEvent.trigger)));
+		actionReceiverTypeSelector->setCurrentText(receiverTypes.value(static_cast<int>(sceneNode->actionReceivedEvent.receiver)));
+
+		openScenesTypeSelector->setCurrentItemData(sceneNode->actionReceivedEvent.payload.toString());
+
     } else {
         this->sceneNode.clear();
     }
@@ -116,6 +160,36 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 void PhysicsPropertyWidget::setSceneView(SceneViewWidget *sceneView)
 {
     this->sceneView = sceneView;
+}
+
+void PhysicsPropertyWidget::onActionTriggerChanged(int index)
+{
+	auto actionTrigger = static_cast<ActionTrigger>(actionTriggerTypeSelector->getItemData(index).toInt());
+	this->sceneNode->actionTriggeredEvent.trigger = actionTrigger;
+}
+
+void PhysicsPropertyWidget::onActionReceiverChanged(int index)
+{
+	auto actionReceiver = static_cast<ActionReceiver>(actionReceiverTypeSelector->getItemData(index).toInt());
+	//this->sceneNode->actionReceiver = actionReceiver;
+	sceneNode->actionReceivedEvent.receiver = actionReceiver;
+
+	if (actionReceiver == ActionReceiver::OpenScene) {
+		openScenesTypeSelector->clear();
+		openScenesTypeSelector->show();
+		for (auto project : db->fetchProjects(false /* includeSelf */)) {
+			openScenesTypeSelector->addItem(project.name, project.guid);
+		}
+	}
+	else {
+		openScenesTypeSelector->hide();
+	}
+}
+
+void PhysicsPropertyWidget::onOpenSceneSelectorChanged(int index)
+{
+	QString guid = openScenesTypeSelector->getItemData(index).toString();
+	sceneNode->actionReceivedEvent.payload = QVariant::fromValue(guid);
 }
 
 void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)

@@ -1506,10 +1506,14 @@ QVector<CollectionRecord> Database::fetchCollections()
     return tileData;
 }
 
-QVector<ProjectTileData> Database::fetchProjects()
+QVector<ProjectTileData> Database::fetchProjects(bool includeSelf)
 {
+	QString queryString = "SELECT name, thumbnail, guid FROM projects ";
+	if (!includeSelf) queryString += "WHERE guid <> '" + Globals::project->getProjectGuid() + "'";
+	queryString += " ORDER BY last_written DESC";
+
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid FROM projects ORDER BY last_written DESC");
+    query.prepare(queryString);
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
@@ -1566,6 +1570,24 @@ QByteArray Database::getSceneBlobGlobal() const
     }
 
     return QByteArray();
+}
+
+QByteArray Database::getSceneBlobFromGuid(const QString &guid) const
+{
+	QSqlQuery query;
+	query.prepare("SELECT scene FROM projects WHERE guid = ?");
+	query.addBindValue(guid);
+
+	if (query.exec()) {
+		if (query.first()) {
+			return query.value(0).toByteArray();
+		}
+	}
+	else {
+		irisLog("There was an error getting the scene blob! " + query.lastError().text());
+	}
+
+	return QByteArray();
 }
 
 QByteArray Database::fetchCachedThumbnail(const QString &name) const
