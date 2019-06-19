@@ -80,7 +80,6 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 
 	if (camController->getCamera() != scene->camera)
 		irisLog("Controller mismatch!");
-	qDebug() << scene->camera->getLocalRot();
 
 	scene->update(dt);
 
