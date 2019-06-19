@@ -47,6 +47,7 @@ public:
     void onMouseWheel(int delta) override;
 
     void updateCameraTransform();
+	void captureYawPitchRollFromCamera();
     void setViewer(iris::ViewerNodePtr &value);
     void start() override;
     void end() override;

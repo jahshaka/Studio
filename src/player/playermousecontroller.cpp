@@ -90,6 +90,13 @@ void PlayerMouseController::updateCameraTransform()
     camera->update(0);
 }
 
+void PlayerMouseController::captureYawPitchRollFromCamera()
+{
+	// capture yaw and pitch
+	float roll; // roll not used
+	camera->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+}
+
 PlayerMouseController::PlayerMouseController()
 {
     yaw = 0;
@@ -104,7 +111,7 @@ void PlayerMouseController::setCamera(iris::CameraNodePtr cam)
 void PlayerMouseController::setScene(iris::ScenePtr scene)
 {
 	this->scene = scene;
-	viewer = scene->getActiveVrViewer();
+	this->setViewer(scene->getActiveVrViewer());
 }
 
 void PlayerMouseController::update(float dt)
