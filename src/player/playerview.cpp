@@ -82,6 +82,11 @@ void PlayerView::start()
 
 	renderer->regenerateSwapChain();
 	savedCameraMatrix = scene->getCamera()->getLocalTransform();
+
+	// force camera update to prevent jumping when switching from
+	// the editor to the player
+	playback->getMouseController()->captureYawPitchRollFromCamera();
+	playback->getMouseController()->updateCameraTransform();
 }
 
 void PlayerView::end()

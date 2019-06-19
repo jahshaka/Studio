@@ -70,7 +70,8 @@ public:
 	void stopScene();
 
 	iris::ForwardRendererPtr getRenderer() { return renderer; }
-
+	PlayerMouseController* getMouseController() const;
+	PlayerVrController* getVrController() const;
 
 	// callbacks from ui
 	void mousePressEvent(QMouseEvent* evt);

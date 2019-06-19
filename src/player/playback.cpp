@@ -183,6 +183,16 @@ void PlayBack::stopScene()
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
 }
 
+PlayerMouseController * PlayBack::getMouseController() const
+{
+	return mouseController;
+}
+
+PlayerVrController * PlayBack::getVrController() const
+{
+	return vrController;
+}
+
 
 void PlayBack::keyPressEvent(QKeyEvent *event)
 {
