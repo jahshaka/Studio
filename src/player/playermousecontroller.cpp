@@ -24,6 +24,10 @@ void PlayerMouseController::setViewer(iris::ViewerNodePtr &value)
 
 void PlayerMouseController::start()
 {
+	// reset viewer since a new one could be added since scene
+	// was set and playing
+	this->setViewer(scene->getActiveVrViewer());
+
 	if (!!viewer)
 		viewer->hide();
 
