@@ -129,7 +129,9 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	bool initialized;
 	bool intersectionHappened = false;
 
+
 public:
+	void setPlaybackScene(iris::ScenePtr scene);
 	bool showFps;
 
     iris::CameraNodePtr editorCam;

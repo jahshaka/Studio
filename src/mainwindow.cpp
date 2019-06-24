@@ -951,6 +951,7 @@ void MainWindow::enterPreloadedScene(const QString &guid)
 
 	setScene(scene.second);
 	if (scene.first != Q_NULLPTR) {
+		sceneView->setPlaybackScene(scene.second);
 		sceneView->setEditorData(scene.first);
 	}
 }

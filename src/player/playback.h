@@ -47,6 +47,7 @@ class PlayBack
 	QElapsedTimer* fpsTimer;
 	QPointF prevMousePos;
 
+	bool intersectionHappened = false;
 	bool _isPlaying = false;
 	QMap<QString, QMatrix4x4> nodeTransforms;
 public:

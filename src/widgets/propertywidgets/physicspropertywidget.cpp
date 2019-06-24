@@ -145,7 +145,7 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         physicsShapeSelector->setCurrentText(physicsShapes.value(static_cast<int>(sceneNode->physicsProperty.shape)));
         physicsTypeSelector->setCurrentText(physicsTypes.value(static_cast<int>(sceneNode->physicsProperty.type)));
 
-		qDebug() << actionTypes.value(static_cast<int>(sceneNode->actionTriggeredEvent.trigger));
+		//qDebug() << actionTypes.value(static_cast<int>(sceneNode->actionTriggeredEvent.trigger));
 
 		actionTriggerTypeSelector->setCurrentText(actionTypes.value(static_cast<int>(sceneNode->actionTriggeredEvent.trigger)));
 		actionReceiverTypeSelector->setCurrentText(receiverTypes.value(static_cast<int>(sceneNode->actionReceivedEvent.receiver)));

@@ -745,7 +745,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
     if (!assimpScenes.contains(filePath)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
-        
+
         //if (useAlternativeLocation) {
 		    iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
     /*    }

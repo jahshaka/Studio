@@ -727,6 +727,11 @@ void SceneViewWidget::paintGL()
 
 }
 
+void SceneViewWidget::setPlaybackScene(iris::ScenePtr scene)
+{
+	playback->setScene(scene);
+}
+
 void SceneViewWidget::renderScene()
 {
 	float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
@@ -760,6 +765,16 @@ void SceneViewWidget::renderScene()
 
 		// For every object we add a trigger to just pop it into this here list
 		// There are multiple types of triggers so we will get all eligible meshes then iterate
+		for (auto mesh : scene->viewers.values()) {
+			for (auto child : mesh->children) {
+				if (child->sceneNodeType == iris::SceneNodeType::Mesh) {
+					if (child->actionTriggeredEvent.trigger != iris::ActionTrigger::None) {
+						triggers.push_back(child.staticCast<iris::MeshNode>());
+					}
+				}
+			}
+		}
+
 		for (auto mesh : scene->meshes.values()) {
 			if (mesh->actionTriggeredEvent.trigger != iris::ActionTrigger::None) {
 				triggers.push_back(mesh);
