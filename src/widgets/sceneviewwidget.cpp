@@ -730,6 +730,8 @@ void SceneViewWidget::paintGL()
 void SceneViewWidget::setPlaybackScene(iris::ScenePtr scene)
 {
 	playback->setScene(scene);
+	playback->stopScene();
+	playback->playScene();
 }
 
 void SceneViewWidget::renderScene()
