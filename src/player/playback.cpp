@@ -145,7 +145,6 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 							}
 
 							intersectionHappened = true;
-							_isPlaying = false;
 							break;
 						}
 					}
