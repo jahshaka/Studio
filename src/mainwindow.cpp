@@ -860,6 +860,11 @@ void MainWindow::openProject(bool playMode)
 	// highlight root node
 	sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
 	sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
+
+	// autoplay scene on load
+	if (playMode) {
+		this->playerView->onPlayScene();
+	}
 }
 
 void MainWindow::closeProject()
