@@ -736,6 +736,11 @@ void SceneViewWidget::paintGL()
 
 }
 
+void SceneViewWidget::setPlaybackScene(iris::ScenePtr scene)
+{
+	playback->setScene(scene);
+}
+
 void SceneViewWidget::renderScene()
 {
 	float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
@@ -763,6 +768,76 @@ void SceneViewWidget::renderScene()
 
 		scene->update(dt);
 		//animPath->submit(scene->geometryRenderList);
+
+        // reset each time
+		QVector<iris::MeshNodePtr> triggers;
+
+		// For every object we add a trigger to just pop it into this here list
+		// There are multiple types of triggers so we will get all eligible meshes then iterate
+		for (auto mesh : scene->viewers.values()) {
+			for (auto child : mesh->children) {
+				if (child->sceneNodeType == iris::SceneNodeType::Mesh) {
+					if (child->actionTriggeredEvent.trigger != iris::ActionTrigger::None) {
+						triggers.push_back(child.staticCast<iris::MeshNode>());
+					}
+				}
+			}
+		}
+
+		for (auto mesh : scene->meshes.values()) {
+			if (mesh->actionTriggeredEvent.trigger != iris::ActionTrigger::None) {
+				triggers.push_back(mesh);
+			}
+		}
+
+		if (!intersectionHappened) {
+			// For every eligible mesh in the scene with a trigger we then find what action was called on it
+			for (const auto &trigger : triggers) {
+				switch (trigger->actionTriggeredEvent.trigger) {
+					// Intersectors look for collisions with other objects
+					// Events are only called when we encounter another object and then we call its receiver event
+					case iris::ActionTrigger::Intersector: {
+						const auto meshGuid = trigger->getGUID();
+						auto meshAABB = trigger->getMesh()->getAABB();
+						meshAABB.offset(trigger->getGlobalPosition());
+						meshAABB.scale(trigger->getMeshRadius() - 1);
+
+						qDebug() << "trigger is " << trigger->getMeshRadius();
+
+						// Find which object(s) we intersect with, the first one with a valid action will be called
+						for (const auto &target : triggers) {
+							if (target->getGUID() != meshGuid && target->actionTriggeredEvent.trigger == iris::ActionTrigger::IntersectionEnter) {
+								auto otherMeshAABB = target->getMesh()->getAABB();
+								otherMeshAABB.offset(target->getGlobalPosition());
+								otherMeshAABB.scale(target->getMeshRadius() - 1);
+
+								if (meshAABB.intersects(otherMeshAABB)) {
+									// ONESHOT ------ stop after intersection and call some event
+									qDebug() << trigger->name << " intersects with " << target->name;
+
+									qDebug() << "target is " << target->getMeshRadius();
+
+									// perform intersection event right here for now
+									if (target->actionReceivedEvent.receiver == iris::ActionReceiver::OpenScene) {
+										QString guid = target->actionReceivedEvent.payload.toString();
+										emit enterPreloadedScene(guid);
+									}
+
+									intersectionHappened = true;
+									break;
+								}
+							}
+						}
+
+						break;
+					}
+
+					case iris::ActionTrigger::Remove: {
+						break;
+					}
+				}
+			}
+		}
 
 		if (UiManager::isSimulationRunning) {
 			for (auto node : scene->rootNode->children) {

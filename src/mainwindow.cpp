@@ -867,6 +867,39 @@ void MainWindow::openProject(bool playMode)
 	}
 }
 
+void MainWindow::loadBaseScene()
+{
+	auto editorData = initialEditorData;
+
+	setScene(initialScene);
+
+	if (scene != Q_NULLPTR) {
+		if (editorData != Q_NULLPTR) {
+			sceneView->setEditorData(editorData);
+			// needs to be done so controllers can have the correct
+			// camera
+			playerView->setScene(scene);
+			wireCheckAction->setChecked(editorData->showLightWires);
+			physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
+		}
+	}
+}
+
+void MainWindow::enterPreloadedScene(const QString &guid)
+{
+	auto scene = preloadedScenes.value(guid);
+	auto sceneInfo = preloadedSceneInfo.value(guid);
+
+	/*	Globals::project->setProjectGuid(guids.last());
+		Globals::project->setProjectPath(sceneInfo.first, sceneInfo.second);*/
+
+	setScene(scene.second);
+	if (scene.first != Q_NULLPTR) {
+		sceneView->setPlaybackScene(scene.second);
+		sceneView->setEditorData(scene.first);
+	}
+}
+
 void MainWindow::closeProject()
 {
     {
