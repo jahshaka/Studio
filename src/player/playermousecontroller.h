@@ -48,7 +48,7 @@ public:
 
     void updateCameraTransform();
 	void captureYawPitchRollFromCamera();
-    void setViewer(iris::ViewerNodePtr &value);
+    void setViewer(const iris::ViewerNodePtr &value);
     void start() override;
     void end() override;
     void clearViewer();

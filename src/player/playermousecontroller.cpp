@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <irisgl/Physics.h>
 
 
-void PlayerMouseController::setViewer(iris::ViewerNodePtr &value)
+void PlayerMouseController::setViewer(const iris::ViewerNodePtr &value)
 {
     viewer = value;
 }
