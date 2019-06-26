@@ -28,8 +28,12 @@ void PlayerMouseController::start()
 	// was set and playing
 	this->setViewer(scene->getActiveVrViewer());
 
-	if (!!viewer)
+    if (!!viewer) {
 		viewer->hide();
+
+        // set rot to viewer's default transform
+        camera->setLocalTransform(viewer->getGlobalTransform());
+    }
 
     // capture cam transform
     camPos = camera->getLocalPos();
@@ -81,7 +85,7 @@ void PlayerMouseController::onMouseWheel(int delta)
 
 void PlayerMouseController::updateCameraTransform()
 {
-	if (!!viewer) {
+    if (!!viewer && _isPlaying) {
 		camera->setLocalPos(viewer->getGlobalPosition());
 		auto viewMat = viewer->getGlobalTransform().normalMatrix();
 		QQuaternion rot = QQuaternion::fromRotationMatrix(viewMat);
@@ -120,10 +124,11 @@ void PlayerMouseController::setScene(iris::ScenePtr scene)
 
 void PlayerMouseController::update(float dt)
 {
-	auto linearSpeed = 10 * dt;
-	if (!_isPlaying)
+    auto linearSpeed = 15 * dt;
+    if (!_isPlaying) {
+        this->doGodMode(dt);
 		return;
-
+    }
 	const QVector3D upVector(0, 1, 0);
 	auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
 	auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
@@ -188,7 +193,38 @@ void PlayerMouseController::update(float dt)
 
 		auto newDir = rot.rotatedVector(QVector3D(dirX, 0, dirY)) * 10;
 		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
-	}
+    }
+}
+
+void PlayerMouseController::doGodMode(float dt)
+{
+    auto linearSpeed = 10 * dt;
+    auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
+    auto sideVector = camera->getLocalRot().rotatedVector(QVector3D(1, 0, 0));
+    //auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
+    //auto z = QVector3D::crossProduct(upVector,x).normalized();
+
+    auto x = sideVector;
+    auto z = forwardVector;
+
+    auto camPos = camera->getLocalPos();
+    // left
+    if(KeyboardState::isKeyDown(Qt::Key_Left))
+        camPos -= x * linearSpeed;
+
+    // right
+    if(KeyboardState::isKeyDown(Qt::Key_Right))
+        camPos += x * linearSpeed;
+
+    // up
+    if(KeyboardState::isKeyDown(Qt::Key_Up))
+        camPos += z * linearSpeed;
+
+    // down
+    if(KeyboardState::isKeyDown(Qt::Key_Down))
+        camPos -= z * linearSpeed;
+
+    camera->setLocalPos(camPos);
 }
 
 void PlayerMouseController::postUpdate(float dt)

@@ -42,6 +42,7 @@ public:
 	void setScene(iris::ScenePtr scene);
 
 	void update(float dt) override;
+    void doGodMode(float dt);
 	void postUpdate(float dt) override;
     void onMouseMove(int dx,int dy) override;
     void onMouseWheel(int delta) override;
