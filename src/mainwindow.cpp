@@ -1516,7 +1516,7 @@ void MainWindow::addViewer()
 {
     this->sceneView->makeCurrent();
     auto node = iris::ViewerNode::create();
-    node->setName("Viewer");
+    node->setName("Avatar");
     addNodeToScene(node);
 
 	// Set all other controllers to false

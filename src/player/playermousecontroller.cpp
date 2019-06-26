@@ -225,6 +225,7 @@ void PlayerMouseController::doGodMode(float dt)
         camPos -= z * linearSpeed;
 
     camera->setLocalPos(camPos);
+    updateCameraTransform();
 }
 
 void PlayerMouseController::postUpdate(float dt)
