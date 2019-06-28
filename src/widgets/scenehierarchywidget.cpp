@@ -164,7 +164,7 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addEmpty()));
 
-    action = new QAction("Viewer", this);
+    action = new QAction("Avatar", this);
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addViewer()));
 
