@@ -7,38 +7,38 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "planks",
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "041fc457-5212-4f7e-aa33-d1463cad0dfd",
-                "leftNodeId": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
+                "id": "108824b1-eb45-4925-b9dc-4a2d025bed6f",
+                "leftNodeId": "d13bbcd1-bf5a-4722-bebc-ffda8fb87ad0",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 2
             },
             {
-                "id": "0e2e4e1b-1044-4959-ab60-4e3bfe380c12",
-                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "id": "514ef47a-0fbd-48c3-9e14-8a57b275bacf",
+                "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 3
+                "rightNodeSocketIndex": 0
             },
             {
-                "id": "51d203ff-943f-46aa-8641-6a7838301d65",
+                "id": "83c849d8-54f9-4960-a7ab-e0ff2b681b11",
                 "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 1
             },
             {
-                "id": "73f6a37c-99cd-4719-a744-c90cd8d0e462",
-                "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
+                "id": "c89eb5d6-000f-4551-9c7f-f28ad54b2770",
+                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 0
+                "rightNodeSocketIndex": 3
             }
         ],
         "masternode": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
@@ -66,18 +66,18 @@
                 "y": 15
             },
             {
-                "id": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "type": "float",
-                "value": 1,
-                "x": -198.5,
-                "y": 340.5
-            },
-            {
                 "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "type": "property",
                 "value": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
                 "x": -51.5,
                 "y": 18
+            },
+            {
+                "id": "d13bbcd1-bf5a-4722-bebc-ffda8fb87ad0",
+                "type": "property",
+                "value": "b4532b50-1a6d-401a-9498-64ec2709a73c",
+                "x": -166.5,
+                "y": 281
             }
         ],
         "properties": [
@@ -87,7 +87,7 @@
                 "name": "property0",
                 "type": "texture",
                 "uniform": "input_property0",
-                "value": "eca7110b-2ed7-404b-8430-db2c4fcc3869"
+                "value": "ea76117c-64bf-4977-9d08-d8a021c1603d"
             },
             {
                 "displayName": "Texture Property",
@@ -95,7 +95,7 @@
                 "name": "property1",
                 "type": "texture",
                 "uniform": "input_property1",
-                "value": "cf1e6c48-7281-4c58-bc3f-15736cc41085"
+                "value": "4bbdc0c3-f095-46e9-908b-5b107515f808"
             },
             {
                 "displayName": "Texture Property",
@@ -103,7 +103,17 @@
                 "name": "property2",
                 "type": "texture",
                 "uniform": "input_property2",
-                "value": "efd4315e-467b-4feb-a5b2-f35a4e3bff3f"
+                "value": "12ad1f07-5d0e-41d4-9554-36ebf5059657"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "b4532b50-1a6d-401a-9498-64ec2709a73c",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
             }
         ],
         "settings": {
@@ -113,7 +123,7 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "planks",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
@@ -121,6 +131,15 @@
     },
     "type": "shadergraph",
     "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
     ],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true

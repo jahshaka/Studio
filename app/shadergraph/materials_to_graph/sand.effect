@@ -7,12 +7,13 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "sand",
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
+<<<<<<< dev
 <<<<<<< dev
                 "id": "10894348-b612-4913-af25-42519de6ebb6",
                 "leftNodeId": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
@@ -82,26 +83,30 @@
 =======
                 "id": "041fc457-5212-4f7e-aa33-d1463cad0dfd",
                 "leftNodeId": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 2
-            },
-            {
-                "id": "0e2e4e1b-1044-4959-ab60-4e3bfe380c12",
-                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
-                "leftNodeSocketIndex": 1,
-                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 3
-            },
-            {
-                "id": "51d203ff-943f-46aa-8641-6a7838301d65",
+=======
+                "id": "3666ca9f-3a3e-4105-86b7-216b37f160fe",
                 "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 1
             },
             {
-                "id": "73f6a37c-99cd-4719-a744-c90cd8d0e462",
+                "id": "a53c5c79-6498-46ad-813d-b8b4f0e302e7",
+                "leftNodeId": "40e1f37e-9dab-4892-8aec-b1be12c7ff57",
+>>>>>>> Updated effects
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "acf92ee1-b4f7-4281-9feb-0242a5406ab6",
+                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "afeffdf6-a787-4b37-a2c7-44d815a9d884",
                 "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
@@ -119,6 +124,13 @@
                 "y": 250
             },
             {
+                "id": "40e1f37e-9dab-4892-8aec-b1be12c7ff57",
+                "type": "property",
+                "value": "6d4cb8dc-278a-486f-841e-fc504379503f",
+                "x": -176.5,
+                "y": 286
+            },
+            {
                 "id": "45434c79-69db-4e2c-9b31-7014bbea85c1",
                 "type": "property",
                 "value": "aa9ef6ee-270a-4678-bd0d-5686ed245ed3",
@@ -131,13 +143,6 @@
                 "value": "",
                 "x": 329,
                 "y": 15
-            },
-            {
-                "id": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "type": "float",
-                "value": 1,
-                "x": -198.5,
-                "y": 340.5
             },
             {
                 "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
@@ -189,7 +194,7 @@
                 "name": "property0",
                 "type": "texture",
                 "uniform": "input_property0",
-                "value": "05458cfa-b1fc-42f2-bf33-dbef09ecdf0e"
+                "value": "a667d588-7a37-47b4-a5d6-08c70269c4f2"
             },
             {
                 "displayName": "Texture Property",
@@ -197,7 +202,7 @@
                 "name": "property1",
                 "type": "texture",
                 "uniform": "input_property1",
-                "value": "a5cbb668-6c02-42a1-b6ca-72d77c8ff970"
+                "value": "bb868abc-5b1c-421e-bd72-7ab375ae12b6"
             },
             {
                 "displayName": "Texture Property",
@@ -205,8 +210,22 @@
                 "name": "property2",
                 "type": "texture",
                 "uniform": "input_property2",
+<<<<<<< dev
                 "value": "79c7382c-1819-45a9-8224-f99f0f128480"
 >>>>>>> Changed materials to shader graph files
+=======
+                "value": "c099414b-a5f1-4ceb-b25d-d2ed3f99b26c"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "6d4cb8dc-278a-486f-841e-fc504379503f",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
+>>>>>>> Updated effects
             }
         ],
         "settings": {
@@ -216,7 +235,7 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "sand",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
@@ -225,6 +244,9 @@
     "type": "shadergraph",
     "uniforms": [
 <<<<<<< dev
+<<<<<<< dev
+=======
+>>>>>>> Updated effects
         {
             "displayName": "Float Property",
             "max": 1,
@@ -234,8 +256,11 @@
             "uniform": "input_property3",
             "value": 1
         }
+<<<<<<< dev
 =======
 >>>>>>> Changed materials to shader graph files
+=======
+>>>>>>> Updated effects
     ],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true

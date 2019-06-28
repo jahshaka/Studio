@@ -7,38 +7,38 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "pirate coin",
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "041fc457-5212-4f7e-aa33-d1463cad0dfd",
-                "leftNodeId": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
+                "id": "05e3b27e-db8c-456c-987e-4c49d5037ff9",
+                "leftNodeId": "55340d42-cf6d-4129-a7c5-80fa02d5d62d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 2
             },
             {
-                "id": "0e2e4e1b-1044-4959-ab60-4e3bfe380c12",
-                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "id": "4df34a47-bc5b-47c7-b937-269f126630d8",
+                "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 3
+                "rightNodeSocketIndex": 0
             },
             {
-                "id": "51d203ff-943f-46aa-8641-6a7838301d65",
+                "id": "76e9f038-4a84-4299-97c2-5b64675ef1e8",
                 "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 1
             },
             {
-                "id": "73f6a37c-99cd-4719-a744-c90cd8d0e462",
-                "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
+                "id": "a6660136-81f9-4f8b-bab7-95f369fbf1b2",
+                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 0
+                "rightNodeSocketIndex": 3
             }
         ],
         "masternode": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
@@ -59,18 +59,18 @@
                 "y": 432
             },
             {
+                "id": "55340d42-cf6d-4129-a7c5-80fa02d5d62d",
+                "type": "property",
+                "value": "0746bb0a-e6e3-4caa-b6fe-bc2a3da9049c",
+                "x": -176.5,
+                "y": 275
+            },
+            {
                 "id": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "type": "Material",
                 "value": "",
                 "x": 329,
                 "y": 15
-            },
-            {
-                "id": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "type": "float",
-                "value": 1,
-                "x": -198.5,
-                "y": 340.5
             },
             {
                 "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
@@ -87,7 +87,7 @@
                 "name": "property0",
                 "type": "texture",
                 "uniform": "input_property0",
-                "value": "6b50eb6a-8a07-4634-9870-3184d177a3a6"
+                "value": "22d4be5c-50f2-45d8-91bc-eac7432862e1"
             },
             {
                 "displayName": "Texture Property",
@@ -95,7 +95,7 @@
                 "name": "property1",
                 "type": "texture",
                 "uniform": "input_property1",
-                "value": "ec16f2c0-165e-4411-81b5-f88bbf7aa906"
+                "value": "f9fc248a-27d9-4e33-995f-12aa0eb5de07"
             },
             {
                 "displayName": "Texture Property",
@@ -103,7 +103,17 @@
                 "name": "property2",
                 "type": "texture",
                 "uniform": "input_property2",
-                "value": "ff9fa6f1-eb90-419f-af78-db7447ace0d0"
+                "value": "977bf4b6-0748-4f17-bab3-5f60a8f52f4d"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "0746bb0a-e6e3-4caa-b6fe-bc2a3da9049c",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
             }
         ],
         "settings": {
@@ -113,7 +123,7 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "pirate coin",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
@@ -121,6 +131,15 @@
     },
     "type": "shadergraph",
     "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
     ],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true
