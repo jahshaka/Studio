@@ -109,6 +109,7 @@ PlayerMouseController::PlayerMouseController()
 {
     yaw = 0;
     pitch = 0;
+    movementSpeed = 25;
 }
 
 void PlayerMouseController::setCamera(iris::CameraNodePtr cam)
@@ -198,7 +199,7 @@ void PlayerMouseController::update(float dt)
 
 void PlayerMouseController::doGodMode(float dt)
 {
-    auto linearSpeed = 10 * dt;
+    auto linearSpeed = movementSpeed * dt;
     auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
     auto sideVector = camera->getLocalRot().rotatedVector(QVector3D(1, 0, 0));
     //auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();

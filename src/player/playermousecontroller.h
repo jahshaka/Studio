@@ -23,6 +23,8 @@ class PlayerMouseController : public CameraControllerBase
 	//iris::CameraNodePtr camera;
 	iris::ViewerNodePtr viewer;
 
+    float movementSpeed = 25;
+
     float pitch;
     float yaw;
 
