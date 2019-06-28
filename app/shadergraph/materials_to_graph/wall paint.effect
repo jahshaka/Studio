@@ -7,34 +7,34 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "wall paint",
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "041fc457-5212-4f7e-aa33-d1463cad0dfd",
-                "leftNodeId": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 2
-            },
-            {
-                "id": "0e2e4e1b-1044-4959-ab60-4e3bfe380c12",
+                "id": "6d98d57c-e7f2-4400-8802-0ca2221ae981",
                 "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 3
             },
             {
-                "id": "51d203ff-943f-46aa-8641-6a7838301d65",
+                "id": "7972a68d-6712-41d0-9489-ba9eb470e1a7",
+                "leftNodeId": "df7d3fad-ef84-4ef0-bba6-e18525bbde00",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "bce371a9-a5ec-42ae-bb2d-1ebce60ecec7",
                 "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 1
             },
             {
-                "id": "73f6a37c-99cd-4719-a744-c90cd8d0e462",
+                "id": "ca18948a-5bf8-45cd-b192-2c7b8d0c6510",
                 "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
@@ -66,18 +66,18 @@
                 "y": 15
             },
             {
-                "id": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "type": "float",
-                "value": 1,
-                "x": -198.5,
-                "y": 340.5
-            },
-            {
                 "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "type": "property",
                 "value": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
                 "x": -51.5,
                 "y": 18
+            },
+            {
+                "id": "df7d3fad-ef84-4ef0-bba6-e18525bbde00",
+                "type": "property",
+                "value": "1f2b7e73-d320-43e2-8f78-d063e1365ed3",
+                "x": -250.5,
+                "y": 276
             }
         ],
         "properties": [
@@ -87,7 +87,7 @@
                 "name": "property0",
                 "type": "texture",
                 "uniform": "input_property0",
-                "value": "bb64ae51-c644-4e56-bd3e-32db7ca30ac4"
+                "value": "cc0605cc-f67d-4243-8913-d7b6c9c4da41"
             },
             {
                 "displayName": "Texture Property",
@@ -95,7 +95,7 @@
                 "name": "property1",
                 "type": "texture",
                 "uniform": "input_property1",
-                "value": "0323a978-8176-4337-ae38-3201579efd80"
+                "value": "e6edd74c-b92a-42e4-9e1b-a722f840f485"
             },
             {
                 "displayName": "Texture Property",
@@ -103,7 +103,17 @@
                 "name": "property2",
                 "type": "texture",
                 "uniform": "input_property2",
-                "value": "f25c121f-c095-41c5-95d6-2a57af5972f6"
+                "value": "5719ced0-58f4-4175-848b-8017ca7302e3"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "1f2b7e73-d320-43e2-8f78-d063e1365ed3",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
             }
         ],
         "settings": {
@@ -113,7 +123,7 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "wall paint",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
@@ -121,6 +131,15 @@
     },
     "type": "shadergraph",
     "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
     ],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true

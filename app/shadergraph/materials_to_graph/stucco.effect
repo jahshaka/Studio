@@ -7,34 +7,34 @@
     "fog": true,
     "fragment_shader": "shader.frag",
     "lighting": true,
-    "name": "",
+    "name": "stucco",
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "041fc457-5212-4f7e-aa33-d1463cad0dfd",
-                "leftNodeId": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 2
-            },
-            {
-                "id": "0e2e4e1b-1044-4959-ab60-4e3bfe380c12",
-                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
-                "leftNodeSocketIndex": 1,
-                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
-                "rightNodeSocketIndex": 3
-            },
-            {
-                "id": "51d203ff-943f-46aa-8641-6a7838301d65",
+                "id": "152967fb-1f79-4542-8115-9709b79eebc0",
                 "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
                 "rightNodeSocketIndex": 1
             },
             {
-                "id": "73f6a37c-99cd-4719-a744-c90cd8d0e462",
+                "id": "979c61ad-9e8c-4194-96dd-984d490a2c2d",
+                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "c32c5535-5aa0-42c0-8731-47e473542428",
+                "leftNodeId": "1ad0c697-116d-4699-a63b-deaffe18d359",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "edd287ec-e405-4891-af09-74361a7707f3",
                 "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "leftNodeSocketIndex": 1,
                 "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
@@ -44,6 +44,13 @@
         "masternode": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
         "materialGuid": "",
         "nodes": [
+            {
+                "id": "1ad0c697-116d-4699-a63b-deaffe18d359",
+                "type": "property",
+                "value": "787764b2-e4db-45df-bf18-0c57064940d9",
+                "x": -285.5,
+                "y": 287
+            },
             {
                 "id": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
                 "type": "property",
@@ -66,13 +73,6 @@
                 "y": 15
             },
             {
-                "id": "6be60772-1f5c-47b2-ae02-b1cc8f174157",
-                "type": "float",
-                "value": 1,
-                "x": -198.5,
-                "y": 340.5
-            },
-            {
                 "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
                 "type": "property",
                 "value": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
@@ -87,7 +87,7 @@
                 "name": "property0",
                 "type": "texture",
                 "uniform": "input_property0",
-                "value": "af73aef6-00ac-4e08-8ed4-800bf7f38c04"
+                "value": "04a648c1-44d8-4fe4-87f1-82f8b12c0997"
             },
             {
                 "displayName": "Texture Property",
@@ -95,7 +95,7 @@
                 "name": "property1",
                 "type": "texture",
                 "uniform": "input_property1",
-                "value": "a8339152-655d-458e-b224-8f6d79c4ee9f"
+                "value": "2df51383-19eb-4156-a11e-df2b282abf36"
             },
             {
                 "displayName": "Texture Property",
@@ -103,7 +103,17 @@
                 "name": "property2",
                 "type": "texture",
                 "uniform": "input_property2",
-                "value": "642af801-a595-4d8e-b636-7a5b7d9488df"
+                "value": "543fc410-54d6-4f6c-955a-88ecf07db67e"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "787764b2-e4db-45df-bf18-0c57064940d9",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
             }
         ],
         "settings": {
@@ -113,7 +123,7 @@
             "cullMode": "Back",
             "depthTest": true,
             "fog": true,
-            "name": "",
+            "name": "stucco",
             "receiveShadow": true,
             "renderLayer": "Opaque",
             "zWrite": true
@@ -121,6 +131,15 @@
     },
     "type": "shadergraph",
     "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
     ],
     "vertex_shader": ":assets/shaders/surface.vert",
     "zWrite": true
