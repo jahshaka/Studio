@@ -106,11 +106,11 @@ void PlayerView::renderScene()
 {
 	float dt = fpsTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 	fpsTimer->restart();
-
-	auto vp = iris::Viewport();
-	vp.width = width() * devicePixelRatioF();
-	vp.height = height() * devicePixelRatioF();
 	
+    auto vp = iris::Viewport();
+    vp.width = static_cast<int>(width() * devicePixelRatioF());
+    vp.height = static_cast<int>(height() * devicePixelRatioF());
+
 	playback->renderScene(vp, dt);
 }
 
@@ -177,5 +177,17 @@ void PlayerView::keyReleaseEvent(QKeyEvent *event)
 
 void PlayerView::focusOutEvent(QFocusEvent * event)
 {
-	KeyboardState::reset();
+    Q_UNUSED(event);
+
+    KeyboardState::reset();
+}
+
+void PlayerView::resizeEvent(QResizeEvent *event)
+{
+    Q_UNUSED(event);
+
+    auto vp = iris::Viewport();
+    vp.width = static_cast<int>(width() * devicePixelRatioF());
+    vp.height = static_cast<int>(height() * devicePixelRatioF());
+    playback->getMouseController()->setViewport(vp);
 }

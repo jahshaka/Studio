@@ -25,26 +25,27 @@ class SettingsManager;
 class CameraControllerBase
 {
 public:
-	CameraControllerBase();
+    CameraControllerBase();
 
-	virtual void setCamera(iris::CameraNodePtr  cam);
-	iris::CameraNodePtr getCamera() { return camera; }
+    virtual void setCamera(iris::CameraNodePtr  cam);
+    iris::CameraNodePtr getCamera() { return camera; }
 
     virtual void onMouseDown(Qt::MouseButton button);
     virtual void onMouseUp(Qt::MouseButton button);
     virtual void onMouseMove(int x,int y);
     virtual void onMouseWheel(int val);
-	virtual void onKeyPressed(Qt::Key key);
-	virtual void onKeyReleased(Qt::Key key);
-	virtual void keyReleaseEvent(QKeyEvent *event);
+    virtual void onKeyPressed(Qt::Key key);
+    virtual void onKeyReleased(Qt::Key key);
+    virtual void keyReleaseEvent(QKeyEvent *event);
+    virtual void setMousePos(int x, int y);
 
     virtual void start();
     virtual void update(float dt);
     virtual void end();
 
-	virtual void postUpdate(float dt){}
+    virtual void postUpdate(float dt){}
 
-	virtual void renderUi(iris::GraphicsDevicePtr device, iris::SpriteBatchPtr batch) {}
+    virtual void renderUi(iris::GraphicsDevicePtr device, iris::SpriteBatchPtr batch) {}
 
     void resetMouseStates();
 
@@ -57,6 +58,8 @@ protected:
     bool leftMouseDown;
     bool middleMouseDown;
     bool rightMouseDown;
+    int mouseX;
+    int mouseY;
 };
 
 #endif // ICAMERACONTROLLER_H
