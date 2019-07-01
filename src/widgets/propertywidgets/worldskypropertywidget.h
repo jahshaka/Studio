@@ -43,7 +43,7 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
 
-protected slots:
+public slots:
     void setEquiMap(const QString &guid);
     void setSkyMap(const QJsonObject& definition);
     void setSkyFromCustomMaterial(const QJsonObject& definition);
