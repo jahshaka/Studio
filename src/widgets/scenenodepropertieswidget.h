@@ -69,6 +69,11 @@ public:
 
     void setDatabase(Database*);
 
+	WorldSkyPropertyWidget *worldSkyPropView;
+
+public slots:
+	void acceptCubemapTexturesFromSkyPresets(QStringList guids);
+
 private:
     void clearLayout(QLayout*);
 
@@ -85,7 +90,6 @@ private:
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
 	SkyPropertyWidget *skyPropView;
-	WorldSkyPropertyWidget *worldSkyPropView;
 	MeshPropertyWidget* meshPropView;
 	HandPropertyWidget* handPropView;
     PhysicsPropertyWidget *physicsPropView;
