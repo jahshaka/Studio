@@ -23,6 +23,8 @@ class PlayerMouseController : public CameraControllerBase
 	//iris::CameraNodePtr camera;
 	iris::ViewerNodePtr viewer;
 
+    float movementSpeed = 25;
+
     float pitch;
     float yaw;
 
@@ -42,13 +44,14 @@ public:
 	void setScene(iris::ScenePtr scene);
 
 	void update(float dt) override;
+    void doGodMode(float dt);
 	void postUpdate(float dt) override;
     void onMouseMove(int dx,int dy) override;
     void onMouseWheel(int delta) override;
 
     void updateCameraTransform();
 	void captureYawPitchRollFromCamera();
-    void setViewer(iris::ViewerNodePtr &value);
+    void setViewer(const iris::ViewerNodePtr &value);
     void start() override;
     void end() override;
     void clearViewer();
