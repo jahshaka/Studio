@@ -12,9 +12,12 @@ For more information see the LICENSE file
 #include "playermousecontroller.h"
 #include "../editor/animationpath.h"
 #include "../core/keyboardstate.h"
+#include "../widgets/sceneviewwidget.h"
 #include <irisgl/SceneGraph.h>
 #include <irisgl/Vr.h>
 #include <irisgl/Physics.h>
+#include <irisgl/Graphics.h>
+#include "irisgl/src/geometry/trimesh.h"
 
 
 void PlayerMouseController::setViewer(const iris::ViewerNodePtr &value)
@@ -71,16 +74,177 @@ void PlayerMouseController::setRestoreCameraTransform(bool shouldRestore)
 
 void PlayerMouseController::onMouseMove(int dx, int dy)
 {
-    if(rightMouseDown) {
-        this->yaw += dx/10.0f;
-        this->pitch += dy/10.0f;
+    if (!!pickedNode && _isPlaying) {
+        // update picking constraint
+        if (leftMouseDown && !!pickedNode) {
+            if (pickedNode->isPhysicsBody) {
+                scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
+                                                                        iris::PhysicsHelper::btVector3FromQVector3D(this->camera->getGlobalPosition()));
+            }
+        }
+    } else {
+        if(rightMouseDown) {
+            this->yaw += dx/10.0f;
+            this->pitch += dy/10.0f;
+        }
     }
     updateCameraTransform();
+}
+
+QVector3D PlayerMouseController::calculateMouseRay(const QPointF& pos)
+{
+    float x = pos.x();
+    float y = pos.y();
+
+    // viewport -> NDC
+    float mousex = (2.0f * x) / this->viewport.width - 1.0f;
+    float mousey = (2.0f * y) / this->viewport.height - 1.0f;
+    QVector2D NDC = QVector2D(mousex, -mousey);
+
+    // NDC -> HCC
+    QVector4D HCC = QVector4D(NDC, -1.0f, 1.0f);
+
+    // HCC -> View Space
+    QMatrix4x4 projection_matrix_inverse = this->camera->projMatrix.inverted();
+    QVector4D eye_coords = projection_matrix_inverse * HCC;
+    QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), -1.0f, 0.0f);
+
+    // View Space -> World Space
+    QMatrix4x4 view_matrix_inverse = this->camera->viewMatrix.inverted();
+    QVector4D world_coords = view_matrix_inverse * ray_eye;
+    QVector3D final_ray_coords = QVector3D(world_coords);
+
+    return final_ray_coords.normalized();
 }
 
 void PlayerMouseController::onMouseWheel(int delta)
 {
 
+}
+
+void PlayerMouseController::onMouseDown(Qt::MouseButton button)
+{
+    CameraControllerBase::onMouseDown(button);
+    if (button == Qt::LeftButton) {
+        this->doObjectPicking(QPointF(this->mouseX, this->mouseY));
+    }
+}
+
+void PlayerMouseController::onMouseUp(Qt::MouseButton button)
+{
+    CameraControllerBase::onMouseUp(button);
+    if (button == Qt::LeftButton) {
+        //scene->getPhysicsEnvironment()->removeConstraintFromWorld()
+        this->pickedNode.clear();
+        scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::MouseButton);
+    }
+}
+
+void PlayerMouseController::doObjectPicking(
+    const QPointF& point)
+{
+    camera->updateCameraMatrices();
+
+    auto segStart = screenSpaceToWoldSpace(point, -1.0f);
+    auto segEnd = screenSpaceToWoldSpace(point, 1.0f);
+
+    QList<PickingResult> hitList;
+    doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
+
+    // sort by distance to camera then return the closest hit node
+    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+        return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
+    });
+
+    if (hitList.size() == 0) {
+        this->pickedNode.clear();
+        return;
+    }
+    auto pickedNode = hitList.last().hitNode;
+    iris::SceneNodePtr lastSelectedRoot;
+
+    auto pickedRoot = hitList.last().hitNode;
+    while (pickedRoot->isAttached())
+        pickedRoot = pickedRoot->parent;
+
+    if (pickedNode->isPhysicsBody) {
+        scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,
+                                                                pickedNode->getGUID(),
+                                                                iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint),
+                                                                segStart,
+                                                                segEnd);
+        this->pickedNode = pickedNode;
+    }
+}
+
+void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+                                     const QVector3D& segStart,
+                                     const QVector3D& segEnd,
+                                     QList<PickingResult>& hitList)
+{
+    if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
+         sceneNode->isPickable())
+    {
+        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto mesh = meshNode->getMesh();
+        if (mesh != nullptr) {
+            auto triMesh = meshNode->getMesh()->getTriMesh();
+
+            // transform segment to local space
+            auto invTransform = meshNode->globalTransform.inverted();
+            auto a = invTransform * segStart;
+            auto b = invTransform * segEnd;
+
+            QList<iris::TriangleIntersectionResult> results;
+            if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
+                for (auto triResult : results) {
+                    // convert hit to world space
+                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+
+                    PickingResult pick;
+                    pick.hitNode = sceneNode;
+                    pick.hitPoint = hitPoint;
+                    pick.distanceFromCameraSqrd = (hitPoint - camera->getGlobalPosition()).lengthSquared();
+
+                    hitList.append(pick);
+                }
+            }
+        }
+    }
+
+    for (auto child : sceneNode->children) {
+        doScenePicking(child, segStart, segEnd, hitList);
+    }
+}
+
+QVector3D PlayerMouseController::screenSpaceToWoldSpace(const QPointF& pos, float depth)
+{
+    float x = pos.x();
+    float y = pos.y();
+    // viewport -> NDC
+    float mousex = (2.0f * x) / this->viewport.width - 1.0f;
+    float mousey = (2.0f * y) / this->viewport.height - 1.0f;
+    QVector2D NDC = QVector2D(mousex, -mousey);
+
+    // NDC -> HCC
+    QVector4D HCC = QVector4D(NDC, depth, 1.0f);
+
+    // HCC -> View Space
+    QMatrix4x4 projection_matrix_inverse = this->camera->projMatrix.inverted();
+    QVector4D eye_coords = projection_matrix_inverse * HCC;
+    //QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
+
+    // View Space -> World Space
+    QMatrix4x4 view_matrix_inverse = this->camera->viewMatrix.inverted();
+    QVector4D world_coords = view_matrix_inverse * eye_coords;
+
+
+    return world_coords.toVector3D() / world_coords.w();
+}
+
+void PlayerMouseController::setViewport(const iris::Viewport &viewport)
+{
+    this->viewport = viewport;
 }
 
 void PlayerMouseController::updateCameraTransform()
@@ -194,6 +358,11 @@ void PlayerMouseController::update(float dt)
 
 		auto newDir = rot.rotatedVector(QVector3D(dirX, 0, dirY)) * 10;
 		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
+    }
+
+    if (!!pickedNode && pickedNode->isPhysicsBody) {
+        scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
+                                                                iris::PhysicsHelper::btVector3FromQVector3D(this->camera->getGlobalPosition()));
     }
 }
 

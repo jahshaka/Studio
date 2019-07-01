@@ -73,6 +73,8 @@ public:
 
 	void focusOutEvent(QFocusEvent *event);
 
+    void resizeEvent(QResizeEvent* event);
+
 	~PlayerView();
 
 	bool isScenePlaying();

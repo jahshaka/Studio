@@ -65,6 +65,10 @@ void PlayBack::setRestoreCameraTransform(bool shouldRestore)
 
 void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 {
+    // must update the mouse controller's viewport
+    // needed for picking
+    this->mouseController->setViewport(viewport);
+
 	auto vrDevice = renderer->getVrDevice();
 	if (vrDevice->isHeadMounted()) {
 		setController(vrController);
@@ -132,7 +136,8 @@ void PlayBack::mouseMoveEvent(QMouseEvent * evt)
 	QPointF localPos = evt->localPos();
 	QPointF dir = localPos - prevMousePos;
 
-	if (camController != nullptr) {
+    if (camController != nullptr) {
+        camController->setMousePos(static_cast<int>(localPos.x()), static_cast<int>(localPos.y()));
 		camController->onMouseMove(-dir.x(), -dir.y());
 	}
 

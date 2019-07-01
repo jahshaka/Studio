@@ -94,7 +94,13 @@ void CameraControllerBase::onKeyReleased(Qt::Key key)
 
 void CameraControllerBase::keyReleaseEvent(QKeyEvent * event)
 {
-	onKeyReleased((Qt::Key)event->key());
+    onKeyReleased((Qt::Key)event->key());
+}
+
+void CameraControllerBase::setMousePos(int x, int y)
+{
+    this->mouseX = x;
+    this->mouseY = y;
 }
 
 void CameraControllerBase::start()
