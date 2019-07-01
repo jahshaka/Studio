@@ -158,8 +158,6 @@ void CubeMapButton::setImage(QString path)
 	}
 	this->path = path;
 
-	qDebug() << "The path is " << path;
-
 	if (shouldEmit) {
 		emit parent->valueChanged(path, position);
 		emit parent->valuesChanged(path, textureGuid, position);

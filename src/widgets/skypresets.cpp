@@ -18,6 +18,11 @@ For more information see the LICENSE file
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/graphics/texture2d.h"
 
+#include "core/database/database.h"
+
+#include "globals.h"
+#include "core/guidmanager.h"
+
 #include <QResource>
 
 SkyPresets::SkyPresets(QWidget *parent) :
@@ -87,6 +92,8 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     auto path = fInfo.path();
     auto ext = fInfo.suffix();
 
+	QString skyName = item->data(Qt::DisplayRole).toString().toLower();
+
     auto x1 = path + "/left." + ext;
     auto x2 = path + "/right." + ext;
     auto y1 = path + "/top." + ext;
@@ -94,18 +101,52 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     auto z1 = path + "/front." + ext;
     auto z2 = path + "/back." + ext;
 
-    mainWindow->getScene()->skyBoxTextures[0] = z1;
-    mainWindow->getScene()->skyBoxTextures[1] = z2;
-    mainWindow->getScene()->skyBoxTextures[2] = y1;
-    mainWindow->getScene()->skyBoxTextures[3] = y2;
-    mainWindow->getScene()->skyBoxTextures[4] = x1;
-    mainWindow->getScene()->skyBoxTextures[5] = x2;
+	QStringList fileNames = { z1, z2, x1, x2, y1, y2 };
 
-    auto img = new QImage(z1);
+	// On clicking, set the scene sky type to cubemap
+	// Copy over the requisite images OR just use qrc
+	// Set...
 
-    mainWindow->getScene()->setSkyTexture(iris::Texture2D::createCubeMap(z1, z2, y1, y2, x1, x2, img));
-    mainWindow->getScene()->setSkyTextureSource(z1);
-    mainWindow->getScene()->setSkyColor(QColor(255, 255, 255));
+	// Check if assets already exist with the same name and don't do anything, just set sky
+
+	QStringList newNames;
+	QStringList guids;
+
+	bool importAssetsFirst = false;
+
+	for (const auto &file : fileNames) {
+		QFileInfo fileInfo(file);
+		QString newFileName = skyName + "_" + fileInfo.fileName();
+		newNames.append(newFileName);
+
+		if (db->checkIfRecordExists("name", newFileName, "assets")) {
+			importAssetsFirst = true;
+			guids.append(db->fetchAssetGUIDByName(newFileName));
+		}
+	}
+
+	if (importAssetsFirst) {
+		emit changeSceneCubemap(guids);
+		return;
+	}
+
+	for (const auto &file : fileNames) {
+		QFileInfo fileInfo(file);
+		QString newFileName = skyName + "_" + fileInfo.fileName();
+
+		QString fileToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), newFileName);
+
+		bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
+
+		const QString guid = db->createAssetEntry(GUIDManager::generateGUID(),
+								newFileName,
+								static_cast<int>(ModelTypes::Texture),
+								Globals::project->getProjectGuid());
+
+		guids.append(guid);
+	}
+
+	emit changeSceneCubemap(guids);
 }
 
 void SkyPresets::applySky(QListWidgetItem* item)
