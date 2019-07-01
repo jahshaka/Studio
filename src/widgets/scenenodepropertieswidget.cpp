@@ -237,6 +237,22 @@ void SceneNodePropertiesWidget::setDatabase(Database *db)
     this->db = db;
 }
 
+void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList guids)
+{
+	QStringList fileNames;
+
+	for (auto guid : guids) {
+		fileNames.append(db->fetchAsset(guid).name);
+	}
+
+	db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
+
+	worldSkyPropView->skyTypeChanged(static_cast<int>(iris::SkyType::CUBEMAP));
+	for (int i = 0; i < 6; i++) {
+		worldSkyPropView->onSlotChanged(fileNames[i], guids[i], i);
+	}
+}
+
 /**
  * clears layout and child layouts and deletes child widget
  * @param layout

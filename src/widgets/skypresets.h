@@ -20,6 +20,7 @@ class SkyPresets;
 
 class QListWidgetItem;
 class MainWindow;
+class Database;
 
 class SkyPresets : public QWidget
 {
@@ -37,9 +38,18 @@ public:
         this->mainWindow = mainWindow;
     }
 
+	Database *db;
+	void setDatabase(Database *db)
+	{
+		this->db = db;
+	}
+
 protected slots:
     void applySky(QListWidgetItem* item);
     void applyCubeSky(QListWidgetItem* item);
+
+signals:
+	void changeSceneCubemap(QStringList guids);
 
 private:
     Ui::SkyPresets *ui;
