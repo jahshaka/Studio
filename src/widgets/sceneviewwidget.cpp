@@ -731,7 +731,7 @@ void SceneViewWidget::renderScene()
 	float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
 	elapsedTimer->restart();
 
-	if (playScene) {
+    if (playScene) {
 		playback->renderScene(*viewport, dt);
 		return;
 	}
