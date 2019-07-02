@@ -31,11 +31,7 @@ if(APPLE)
 
 	add_custom_command(
 		TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-		COMMAND Sips -i ${BUNDLE_ICON})
-
-	add_custom_command(
-		TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-		COMMAND DeRez -only icns ${BUNDLE_ICON} > $rsrc)
+                COMMAND fileicon set $rsrc ${BUNDLE_ICON})
 
 	add_custom_command(
 		TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
