@@ -205,7 +205,7 @@ public:
 							   const QString &thumbnail_guid);
     bool hasCachedThumbnail(const QString& name);
 
-	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table);
+	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, bool perProject = false);
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     QSqlDatabase getDb() { return db; }
