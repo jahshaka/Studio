@@ -148,6 +148,7 @@ public:
     void dragMoveEvent(QDragMoveEvent*);
     void dropEvent(QDropEvent*);
     void dragEnterEvent(QDragEnterEvent*);
+	void dragLeaveEvent(QDragLeaveEvent*);
 
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
@@ -219,7 +220,9 @@ public:
     QVector3D dragScenePos;
     iris::SceneNodePtr activeDragNode;
     bool updateRPI(QVector3D pos, QVector3D r);
-    iris::SceneNodePtr doActiveObjectPicking(const QPointF& point);
+
+	// forcePickable - allows picking of non isPickable() objects
+    iris::SceneNodePtr doActiveObjectPicking(const QPointF& point, bool forcePickable = false);
     void doObjectPicking(
 		const QPointF& point,
 		iris::SceneNodePtr lastSelectedNode,
@@ -287,10 +290,13 @@ private:
                         QList<PickingResult>& hitList);
 
     // @TODO: use one picking function and pick by mesh type
+	// @forcePickable - if the scenenode has isPickable() set to false, it will
+	// still be picked
     void doScenePicking(const iris::SceneNodePtr& sceneNode,
                         const QVector3D& segStart,
                         const QVector3D& segEnd,
-                        QList<PickingResult>& hitList);
+                        QList<PickingResult>& hitList,
+						bool forcePickable = false);
 
     void doMeshPicking(const iris::SceneNodePtr& widgetHandles,
                        const QVector3D& segStart,
