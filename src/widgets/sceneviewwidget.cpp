@@ -1054,7 +1054,7 @@ void SceneViewWidget::mouseDoubleClickEvent(QMouseEvent * e)
 		if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
 			if (selectedNode.isNull()) {
 				// double-click to select object
-				if (settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka") {
+				if (settings->getValue("mouse_controls", "default").toString() == "jahshaka") {
 					this->doObjectPicking(e->localPos(), lastSelected);
 				}
 			}
@@ -1090,13 +1090,13 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
             // if we don't have a selected node, prioritize object picking
             if (selectedNode.isNull()) {
-				if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+				if (settings->getValue("mouse_controls", "default").toString() == "default") {
 					this->doObjectPicking(e->localPos(), lastSelected);
 				}
             }
         }
         else if (UiManager::sceneMode == SceneMode::PlayMode) {
-            if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+            if (settings->getValue("mouse_controls", "default").toString() == "default") {
                 this->doObjectPicking(e->localPos(), lastSelected);
             }
         }
