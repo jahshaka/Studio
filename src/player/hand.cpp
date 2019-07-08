@@ -33,7 +33,45 @@ For more information see the LICENSE file
 #include "../uimanager.h"
 #include "irisgl/extras/Materials.h"
 #include <QtMath>
+#include <QSharedPointer>
 #include "hand.h"
+
+class FresnelHandMaterial : public iris::Material
+{
+
+public:
+	QColor color;
+	float fresnelPow;
+
+	FresnelHandMaterial()
+	{
+		auto shader = iris::Shader::load(
+			":assets/shaders/default_material.vert",
+			IrisUtils::getAbsoluteAssetPath("app/shaders/fresnelhand.frag"));
+		this->setShader(shader);
+
+		this->renderLayer = (int)iris::RenderLayer::Transparent;
+		this->renderStates.blendState = iris::BlendState::createAlphaBlend();
+		//this->renderStates.rasterState.depthBias = 1;// this ensures it's always on top
+		//this->renderStates.rasterState.depthScaleBias = 1;// this ensures it's always on top
+		this->renderStates.depthState = iris::DepthState(true, false);// no depth write
+
+		this->enableFlag("SKINNING_ENABLED");
+
+		color = QColor(41, 128, 185);
+		fresnelPow = 5;
+	}
+
+	void begin(iris::GraphicsDevicePtr device, iris::ScenePtr scene) override
+	{
+		iris::Material::begin(device, scene);
+
+		device->setShaderUniform("u_color", color);
+		device->setShaderUniform("u_fresnelPow", fresnelPow);
+		device->setShaderUniform("u_baseAlpha", 0.5f);
+	}
+};
+
 
 void LeftHand::updateMovement(float dt)
 {
@@ -231,11 +269,23 @@ void LeftHand::loadAssets(iris::ContentManagerPtr content)
 {
 	//handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/LeftHand_anims.fbx"));
 	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/left_hand_anims.fbx"));
-	auto mat = iris::DefaultMaterial::create();
-	mat->setDiffuseColor(Qt::white);
-	mat->enableFlag("SKINNING_ENABLED");
-	handMaterial = mat;
+	auto handMat = QSharedPointer<FresnelHandMaterial>(new FresnelHandMaterial());
+	handMaterial = handMat;
 
+	// offset depth material
+	auto mat = iris::DefaultMaterial::create();
+	mat->enableFlag("SKINNING_ENABLED");
+	// set renderstates to render depth only with polygon offset
+	iris::RasterizerState raster;
+	raster.cullMode = iris::CullMode::None;
+	raster.depthBias = 1;
+	raster.depthScaleBias = 1;
+	mat->setRasterizerState(raster);
+
+	iris::BlendState blend = iris::BlendState::createOpaque();
+	//blend.colorMask = 0; // disable writing color
+	mat->setBlendState(blend);
+	handDepthMaterial = mat;
 
 	beamMesh = content->loadMesh(
 		IrisUtils::getAbsoluteAssetPath("app/content/models/beam.obj"));
@@ -254,6 +304,7 @@ void LeftHand::submitItemsToScene()
 	scale.rotate(180, 0.0, 1.0, 0.0);
 	scale.rotate(-90, 0.0, 0.0, 1.0);
 	scale.scale(QVector3D(0.001f, 0.001f, 0.001f) * camera->getVrViewScale());
+	scene->geometryRenderList->submitModel(handModel, handDepthMaterial, rightHandMatrix * scale);
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
 #ifdef Q_DEBUG
@@ -427,10 +478,23 @@ void RightHand::update(float dt)
 void RightHand::loadAssets(iris::ContentManagerPtr content)
 {
 	handModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
+	auto handMat = QSharedPointer<FresnelHandMaterial>(new FresnelHandMaterial());
+	handMaterial = handMat;
+
+	// offset depth material
 	auto mat = iris::DefaultMaterial::create();
-	mat->setDiffuseColor(Qt::white);
 	mat->enableFlag("SKINNING_ENABLED");
-	handMaterial = mat;
+	// set renderstates to render depth only with polygon offset
+	iris::RasterizerState raster;
+	raster.cullMode = iris::CullMode::None;
+	raster.depthBias = 1;
+	raster.depthScaleBias = 1;
+	mat->setRasterizerState(raster);
+
+	iris::BlendState blend = iris::BlendState::createOpaque();
+	//blend.colorMask = 0; // disable writing color
+	mat->setBlendState(blend);
+	handDepthMaterial = mat;
 
 
 	beamMesh = content->loadMesh(
@@ -454,6 +518,7 @@ void RightHand::submitItemsToScene()
 	scale.rotate(180, 0.0, 1.0, 0.0);
 	scale.rotate(90, 0.0, 0.0, 1.0);
 	scale.scale(QVector3D(0.1f, 0.1f, 0.1f) * camera->getVrViewScale());
+	scene->geometryRenderList->submitModel(handModel, handDepthMaterial, rightHandMatrix * scale);
 	scene->geometryRenderList->submitModel(handModel, handMaterial, rightHandMatrix * scale);
 
 #ifdef Q_DEBUG
