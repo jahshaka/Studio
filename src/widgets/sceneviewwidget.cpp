@@ -1326,6 +1326,7 @@ void SceneViewWidget::setCameraController(CameraControllerBase *controller)
     prevCamController = camController;
 
     camController = controller;
+	//camController->setScene
     camController->resetMouseStates();
     camController->setCamera(editorCam);
     camController->start();
@@ -1520,6 +1521,7 @@ void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
     // switch cam to vr mode
     if (viewportMode == ViewportMode::VR) {
         prevCamController = camController;
+		vrCam->setScene(scene);
         camController = vrCam;
         camController->setCamera(editorCam);
         camController->resetMouseStates();
