@@ -1,0 +1,146 @@
+{
+    "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
+    "cullMode": "Back",
+    "depthTest": true,
+    "fog": true,
+    "fragment_shader": "shader.frag",
+    "lighting": true,
+    "name": "",
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "10894348-b612-4913-af25-42519de6ebb6",
+                "leftNodeId": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "e05cfa2b-8b88-4497-9d4f-4ac60786f3f8",
+                "leftNodeId": "bf009387-a076-40e6-ae94-af38afb78fef",
+                "leftNodeSocketIndex": 2,
+                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "e066fd0d-73ce-4c66-b2a4-1ce3c7b74f18",
+                "leftNodeId": "d36eae76-9268-4943-9fde-9ecfa2aa0a59",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "ee7a1e49-c668-4a84-b5f3-4c08d486e376",
+                "leftNodeId": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "fc0e39bd-23b5-4946-8d46-89505509486d",
+                "rightNodeSocketIndex": 1
+            }
+        ],
+        "masternode": "fc0e39bd-23b5-4946-8d46-89505509486d",
+        "materialGuid": "",
+        "nodes": [
+            {
+                "id": "3ee7a476-2476-4850-b3fa-55698ba4ab5d",
+                "type": "property",
+                "value": "efce0c85-632f-4887-bda4-cb9211bb210e",
+                "x": -417.5,
+                "y": 147
+            },
+            {
+                "id": "bf009387-a076-40e6-ae94-af38afb78fef",
+                "type": "property",
+                "value": "38e38e92-d31a-4710-bb88-7b96bc5ea897",
+                "x": -423.5,
+                "y": 324
+            },
+            {
+                "id": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
+                "type": "property",
+                "value": "9a929cd7-021a-450e-8e97-94ad8321726c",
+                "x": -599.5,
+                "y": 71
+            },
+            {
+                "id": "d36eae76-9268-4943-9fde-9ecfa2aa0a59",
+                "type": "property",
+                "value": "dc04114f-b7bc-4d33-9250-bbca32683a6e",
+                "x": -350.5,
+                "y": -73
+            },
+            {
+                "id": "fc0e39bd-23b5-4946-8d46-89505509486d",
+                "type": "Material",
+                "value": "",
+                "x": 0,
+                "y": 0
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Diffuse",
+                "id": "dc04114f-b7bc-4d33-9250-bbca32683a6e",
+                "name": "property0",
+                "type": "texture",
+                "uniform": "input_property0",
+                "value": "8c79e31f-c244-4bd5-ad6c-06e3b899abe7"
+            },
+            {
+                "displayName": "Specular",
+                "id": "efce0c85-632f-4887-bda4-cb9211bb210e",
+                "name": "property1",
+                "type": "texture",
+                "uniform": "input_property1",
+                "value": "c3fc4205-e579-40a4-b653-85696dc6ce6c"
+            },
+            {
+                "displayName": "normal",
+                "id": "38e38e92-d31a-4710-bb88-7b96bc5ea897",
+                "name": "property2",
+                "type": "texture",
+                "uniform": "input_property2",
+                "value": "4b80aa62-7f15-4cdb-9ba5-53e9a7e51b21"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "9a929cd7-021a-450e-8e97-94ad8321726c",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "shadergraph",
+    "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
+}
