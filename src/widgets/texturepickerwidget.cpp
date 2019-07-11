@@ -32,7 +32,7 @@ TexturePickerWidget::TexturePickerWidget(QWidget* parent) :
     type = WidgetType::TextureWidget;
 
     connect(ui->clear, &QPushButton::pressed, this, &TexturePickerWidget::clear);
-    connect(ui->load, &QPushButton::pressed, this, &TexturePickerWidget::changeTextureMap);
+    connect(ui->load, &QPushButton::pressed, this, &TexturePickerWidget::pickTextureMap);
 	ui->load->hide(); // hide this till new widget
 
     ui->clear->setIcon(QIcon(":/icons/icons8-synchronize-26.png"));
@@ -50,14 +50,8 @@ QString TexturePickerWidget::getTexturePath()
     return filePath;
 }
 
-QString TexturePickerWidget::getTextureGuidFromItem(QListWidgetItem*)
-{
-	return QString();
-}
-
 void TexturePickerWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-//    const QString mimeType = "application/x-qabstractitemmodeldatalist";
 	if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
 		event->acceptProposedAction();
     } else {
@@ -73,7 +67,6 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 	QMap<int, QVariant> roleDataMap;
 	while (!stream.atEnd()) stream >> roleDataMap;
 
-    // extend getting guid to filepicker dialog...
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
         textureGuid = roleDataMap.value(3).toString();
         changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
@@ -82,28 +75,12 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
 }
 
-void TexturePickerWidget::changeTextureMap()
-{
-    auto file = loadTexture();
-    if (file.isEmpty() || file.isNull()) return;
-    this->setLabelImage(ui->texture, file);
-}
-
 void TexturePickerWidget::pickTextureMap()
 {
     auto widget = new AssetPickerWidget(ModelTypes::Texture);
-    //connect(widget, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(changeMap(QListWidgetItem*)));
-	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem * item) {
-		textureGuid = getTextureGuidFromItem(item);
-		changeMap(textureGuid);
+	connect(widget, &AssetPickerWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
+		changeMap(item);
 	});
-}
-
-QString TexturePickerWidget::loadTexture()
-{
-    QString dir = QApplication::applicationDirPath();
-    return QFileDialog::getOpenFileName(this, "Open Texture File",
-                                        dir, "Image Files (*.png *.jpg *.bmp)");
 }
 
 void TexturePickerWidget::setLabelImage(QLabel* label, QString file, bool emitSignal)
@@ -140,7 +117,7 @@ void TexturePickerWidget::clear()
 
 void TexturePickerWidget::changeMap(QListWidgetItem *item)
 {
-	textureGuid = textureGuid = item->data(MODEL_GUID_ROLE).toString();
+	textureGuid = item->data(MODEL_GUID_ROLE).toString();
     setLabelImage(ui->texture, item->data(Qt::UserRole).toString());
 }
 

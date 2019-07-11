@@ -26,7 +26,6 @@ class TexturePickerWidget : public BaseWidget
     Q_OBJECT
 
 private slots:
-    void changeTextureMap();
     void pickTextureMap();
     void clear();
 
@@ -46,7 +45,6 @@ public:
     bool eventFilter(QObject *object, QEvent *ev);
     void setTexture(QString path);
     QString getTexturePath();
-	QString getTextureGuidFromItem(QListWidgetItem*);
 
     void dragEnterEvent(QDragEnterEvent*);
     void dropEvent(QDropEvent*);
@@ -54,9 +52,6 @@ public:
 signals:
     void valueChanged(QString value);
     void valuesChanged(QString value, QString guid);
-
-private:
-    QString loadTexture();
 };
 
 #endif // TEXTUREPICKERWIDGET_H
