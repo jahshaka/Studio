@@ -186,9 +186,7 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
 
     textureWidget->index = prop->id;
 
-	auto guid = prop->getValue().toString();
-	auto asset = Globals::db->fetchAsset(guid).name;
-	auto texturePath = QDir(Globals::project->getProjectFolder()).filePath(asset);
+	auto texturePath = prop->getValue().toString();
 
     textureWidget->setTexture(texturePath);
     ui->contentpane->layout()->addWidget(textureWidget);
