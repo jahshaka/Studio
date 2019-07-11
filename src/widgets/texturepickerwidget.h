@@ -18,45 +18,40 @@ For more information see the LICENSE file
 #include <QListWidgetItem>
 
 namespace Ui {
-    class TexturePickerWidget;
+	class TexturePickerWidget;
 }
 
 class TexturePickerWidget : public BaseWidget
 {
-    Q_OBJECT
+	Q_OBJECT
 
 private slots:
-    void changeTextureMap();
-    void pickTextureMap();
-    void clear();
+	void pickTextureMap();
+	void clear();
 
-    void changeMap(QListWidgetItem*);
-    void changeMap(const QString&);
+	void changeMap(QListWidgetItem *);
+	void changeMap(const QString &);
 
 public:
-    int index;
-    QString filename, filePath, textureGuid;
+	int index;
+	QString filename, filePath, textureGuid;
 
-    explicit TexturePickerWidget(QWidget *parent = 0);
-    ~TexturePickerWidget();
+	explicit TexturePickerWidget(QWidget *parent = 0);
+	~TexturePickerWidget();
 
-    Ui::TexturePickerWidget *ui;
+	Ui::TexturePickerWidget *ui;
 
-    void setLabelImage(QLabel* label, QString file, bool emitSignal = true);
-    bool eventFilter(QObject *object, QEvent *ev);
-    void setTexture(QString path);
-    QString getTexturePath();
-	QString getTextureGuidFromItem(QListWidgetItem*);
+	void setLabelImage(QLabel *label, QString file, bool emitSignal = true);
+	bool eventFilter(QObject *object, QEvent *ev);
+	void setTexture(QString path);
+	QString getTexturePath();
 
-    void dragEnterEvent(QDragEnterEvent*);
-    void dropEvent(QDropEvent*);
+	void dragEnterEvent(QDragEnterEvent *);
+	void dropEvent(QDropEvent *);
 
 signals:
-    void valueChanged(QString value);
-    void valuesChanged(QString value, QString guid);
-
-private:
-    QString loadTexture();
+	void valueChanged(QString value);
+	void valuesChanged(QString value, QString guid);
 };
 
 #endif // TEXTUREPICKERWIDGET_H
