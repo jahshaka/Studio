@@ -418,7 +418,7 @@ void WorldSettingsWidget::configureEditor()
 	list << "Jahshaka" << "Default";
 	mouseCon->addItems(list);
 
-	auto mode = settings->getValue("mouse_controls", "jahshaka").toString();
+	auto mode = settings->getValue("mouse_controls", "default").toString();
 	if (mode == "jahshaka")		mouseCon->setCurrentIndex(0);
 	else						mouseCon->setCurrentIndex(1);
 

@@ -2155,11 +2155,15 @@ void Database::createExportScene(const QString &outTempFilePath)
     dbe.close();
 }
 
-bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString &table)
+bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString &table, bool perProject)
 {
 	QSqlQuery query;
-	query.prepare(QString("SELECT EXISTS (SELECT 1 FROM %1 WHERE %2 = ? LIMIT 1)").arg(table).arg(record));
+	QString queryString = "SELECT EXISTS (SELECT 1 FROM %1 WHERE %2 = ? ";
+	if (!perProject) queryString.append("AND project_guid = ? ");
+	queryString.append("LIMIT 1)");
+	query.prepare(queryString.arg(table).arg(record));
 	query.addBindValue(value);
+	if (!perProject) query.addBindValue(Globals::project->getProjectGuid());
 
 	if (query.exec()) {
 		if (query.first()) return query.value(0).toBool();

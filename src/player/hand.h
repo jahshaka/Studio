@@ -66,6 +66,7 @@ public:
 	iris::MeshPtr handMesh;
 	iris::ModelPtr handModel;
 	iris::MaterialPtr handMaterial;
+	iris::MaterialPtr handDepthMaterial;
 	iris::SceneNodePtr hoveredNode;
 	iris::SceneNodePtr grabbedNode;
 };
@@ -92,6 +93,7 @@ public:
 	iris::MeshPtr handMesh;
 	iris::ModelPtr handModel;
 	iris::MaterialPtr handMaterial;
+	iris::MaterialPtr handDepthMaterial;
 	iris::SceneNodePtr hoveredNode;
 	iris::SceneNodePtr grabbedNode;
 };

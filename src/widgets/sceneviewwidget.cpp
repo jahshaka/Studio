@@ -131,7 +131,7 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     while (!stream.atEnd()) stream >> roleDataMap;
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
-		auto node = doActiveObjectPicking(event->posF());
+		auto node = doActiveObjectPicking(event->posF(), true);
 
         // This is to handle overlapping meshes or those close to each other, if we pass
         // over another node while still dragging, switch materials
@@ -289,6 +289,16 @@ void SceneViewWidget::dragEnterEvent(QDragEnterEvent *event)
 	
     if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
         event->acceptProposedAction();
+	}
+}
+
+void SceneViewWidget::dragLeaveEvent(QDragLeaveEvent *)
+{
+	if (!!savedActiveNode) {
+		savedActiveNode.staticCast<iris::MeshNode>()->setMaterial(originalMaterial);
+		savedActiveNode.reset();
+		originalMaterial.reset();
+		wasHit = false;
 	}
 }
 
@@ -982,7 +992,8 @@ bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
     return false;
 }
 
-iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point)
+iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point,
+														  bool forcePickable)
 {
     editorCam->updateCameraMatrices();
 
@@ -991,7 +1002,7 @@ iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point)
     auto segEnd = segStart + rayDir;
 
     QList<PickingResult> hitList;
-    doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
+    doScenePicking(scene->getRootNode(), segStart, segEnd, hitList, forcePickable);
 
     if (hitList.size() == 0) return iris::SceneNodePtr();
     if (hitList.size() == 1) return hitList.last().hitNode;
@@ -1054,7 +1065,7 @@ void SceneViewWidget::mouseDoubleClickEvent(QMouseEvent * e)
 		if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
 			if (selectedNode.isNull()) {
 				// double-click to select object
-				if (settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka") {
+				if (settings->getValue("mouse_controls", "default").toString() == "jahshaka") {
 					this->doObjectPicking(e->localPos(), lastSelected);
 				}
 			}
@@ -1090,13 +1101,13 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
             // if we don't have a selected node, prioritize object picking
             if (selectedNode.isNull()) {
-				if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+				if (settings->getValue("mouse_controls", "default").toString() == "default") {
 					this->doObjectPicking(e->localPos(), lastSelected);
 				}
             }
         }
         else if (UiManager::sceneMode == SceneMode::PlayMode) {
-            if (settings->getValue("mouse_controls", "jahshaka").toString() == "default") {
+            if (settings->getValue("mouse_controls", "default").toString() == "default") {
                 this->doObjectPicking(e->localPos(), lastSelected);
             }
         }
@@ -1315,6 +1326,7 @@ void SceneViewWidget::setCameraController(CameraControllerBase *controller)
     prevCamController = camController;
 
     camController = controller;
+	//camController->setScene
     camController->resetMouseStates();
     camController->setCamera(editorCam);
     camController->start();
@@ -1347,13 +1359,14 @@ void SceneViewWidget::getMousePosAndRay(const QPointF& point, QVector3D &rayPos,
     //rayDir = this->calculateMouseRay(point).normalized();// * 1024;
 }
 
-void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+void SceneViewWidget::doScenePicking(const iris::SceneNodePtr& sceneNode,
                                      const QVector3D& segStart,
                                      const QVector3D& segEnd,
-                                     QList<PickingResult>& hitList)
+                                     QList<PickingResult>& hitList,
+									 bool forcePickable)
 {
     if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
-         sceneNode->isPickable())
+         (sceneNode->isPickable() || forcePickable))
     {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         auto mesh = meshNode->getMesh();
@@ -1383,7 +1396,7 @@ void SceneViewWidget::doScenePicking(const QSharedPointer<iris::SceneNode>& scen
     }
 
     for (auto child : sceneNode->children) {
-        doScenePicking(child, segStart, segEnd, hitList);
+        doScenePicking(child, segStart, segEnd, hitList, forcePickable);
     }
 }
 
@@ -1508,6 +1521,7 @@ void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
     // switch cam to vr mode
     if (viewportMode == ViewportMode::VR) {
         prevCamController = camController;
+		vrCam->setScene(scene);
         camController = vrCam;
         camController->setCamera(editorCam);
         camController->resetMouseStates();

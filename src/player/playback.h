@@ -45,6 +45,7 @@ class PlayBack
 
 	QTimer* updateTimer;
 	QElapsedTimer* fpsTimer;
+	float animTime;
 	QPointF prevMousePos;
 
 	bool _isPlaying = false;

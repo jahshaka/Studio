@@ -2254,6 +2254,10 @@ void MainWindow::setupDockWidgets()
     presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
+	skyPresets->setDatabase(db);
+
+	connect(skyPresets, &SkyPresets::changeSceneCubemap,
+			sceneNodePropertiesWidget, &SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets);
 
     assetModelPanel = new AssetModelPanel;
     assetModelPanel->setMainWindow(this);

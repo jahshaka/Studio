@@ -28,6 +28,8 @@ void PlayBack::init(iris::ForwardRendererPtr renderer)
 
 	auto content = iris::ContentManager::create(renderer->getGraphicsDevice());
 	vrController->loadAssets(content);
+
+	animTime = 0;
 }
 
 void PlayBack::setScene(iris::ScenePtr scene)
@@ -85,6 +87,8 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 	if (camController->getCamera() != scene->camera)
 		irisLog("Controller mismatch!");
 
+	animTime += dt;
+	scene->updateSceneAnimation(animTime);
 	scene->update(dt);
 
 	auto activeViewer = scene->getActiveVrViewer();
@@ -174,6 +178,8 @@ void PlayBack::playScene()
 	if (camController != nullptr) {
 		camController->start();
 	}
+
+	animTime = 0;
 }
 
 
@@ -186,6 +192,8 @@ void PlayBack::stopScene()
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
+
+	animTime = 0;
 }
 
 PlayerMouseController * PlayBack::getMouseController() const

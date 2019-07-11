@@ -119,7 +119,7 @@ bool OrbitalCameraController::canLeftMouseDrag()
 	}
 
 	return (leftMouseDown && // left mouse must be down
-		settings->getValue("mouse_controls", "jahshaka").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
+		settings->getValue("mouse_controls", "default").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
 		!gizmoDragging); // cant pan while dragging gizmo
 }
 
