@@ -13,10 +13,12 @@ For more information see the LICENSE file
 #define NEWPROJECTDIALOG_H
 
 #include <QDialog>
+#include <QLabel>
+#include <QPushButton>
+#include <QLayout>
+#include <QLineEdit>
 
-namespace Ui {
-    class NewProjectDialog;
-}
+
 
 struct ProjectInfo {
     QString projectName;
@@ -41,11 +43,17 @@ protected slots:
     void confirmProjectCreation();
 
 private:
-    Ui::NewProjectDialog *ui;
     QString projectName,
             projectPath;
     SettingsManager *settingsManager;
     QString lastValue;
+
+	QLabel* scene;
+	QLabel* path;
+	QLineEdit* projectPathEdit;
+	QLineEdit* projectNameEdit;
+	QPushButton* cancel;
+	QPushButton* create;
 };
 
 #endif // NEWPROJECTDIALOG_H
