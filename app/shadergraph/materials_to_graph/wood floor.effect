@@ -1,0 +1,146 @@
+{
+    "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
+    "cullMode": "Back",
+    "depthTest": true,
+    "fog": true,
+    "fragment_shader": "shader.frag",
+    "lighting": true,
+    "name": "wood floor 2",
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "3a566f10-fbb5-47fc-8210-e07e5b7a352b",
+                "leftNodeId": "ff6714e6-f7b0-4651-b6d3-6eaba395b7bd",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "60d97b06-e998-4fa4-ad8e-8b3c8ea5328f",
+                "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "a18b4c83-29f5-4cb2-8fa0-d909f48d7484",
+                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "e33281e6-0c95-4c29-bb0b-dd28de1e7f62",
+                "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 0
+            }
+        ],
+        "masternode": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+        "materialGuid": "",
+        "nodes": [
+            {
+                "id": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
+                "type": "property",
+                "value": "c3335e2a-7787-4667-b3c0-26e249311705",
+                "x": -31.5,
+                "y": 250
+            },
+            {
+                "id": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "type": "property",
+                "value": "aa9ef6ee-270a-4678-bd0d-5686ed245ed3",
+                "x": 147.5,
+                "y": 432
+            },
+            {
+                "id": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "type": "Material",
+                "value": "",
+                "x": 329,
+                "y": 15
+            },
+            {
+                "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
+                "type": "property",
+                "value": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
+                "x": -51.5,
+                "y": 18
+            },
+            {
+                "id": "ff6714e6-f7b0-4651-b6d3-6eaba395b7bd",
+                "type": "property",
+                "value": "d817d9b3-1ce7-46a9-94de-c14e15577c6c",
+                "x": -235.5,
+                "y": 273
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Texture Property",
+                "id": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
+                "name": "property0",
+                "type": "texture",
+                "uniform": "input_property0",
+                "value": "6f4bc5f7-bfa6-41b7-972d-3739d35408bc"
+            },
+            {
+                "displayName": "Texture Property",
+                "id": "c3335e2a-7787-4667-b3c0-26e249311705",
+                "name": "property1",
+                "type": "texture",
+                "uniform": "input_property1",
+                "value": "fc3b7017-e569-4271-b3ce-27e9496498b9"
+            },
+            {
+                "displayName": "Texture Property",
+                "id": "aa9ef6ee-270a-4678-bd0d-5686ed245ed3",
+                "name": "property2",
+                "type": "texture",
+                "uniform": "input_property2",
+                "value": "443f1ba0-4078-4883-a046-0d548d4e7567"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "d817d9b3-1ce7-46a9-94de-c14e15577c6c",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "wood floor 2",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "shadergraph",
+    "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
+}

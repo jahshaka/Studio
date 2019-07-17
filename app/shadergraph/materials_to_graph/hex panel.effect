@@ -1,0 +1,146 @@
+{
+    "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
+    "cullMode": "Back",
+    "depthTest": true,
+    "fog": true,
+    "fragment_shader": "shader.frag",
+    "lighting": true,
+    "name": "hex panel",
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
+    "shadergraph": {
+        "connections": [
+            {
+                "id": "07369097-d071-4313-99a2-ba28cab2ee71",
+                "leftNodeId": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 3
+            },
+            {
+                "id": "25e141e4-f3be-4afc-8003-4a641353b3c2",
+                "leftNodeId": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "77225666-6e92-4017-b34b-b1bd527838c1",
+                "leftNodeId": "b82e0470-5cc5-402f-929f-7e46525a26c1",
+                "leftNodeSocketIndex": 1,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "a765ee4e-3fda-45d4-b836-09d6950d4942",
+                "leftNodeId": "abcc7fd7-3f19-4d5c-b4be-ed0af21072bb",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "rightNodeSocketIndex": 2
+            }
+        ],
+        "masternode": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+        "materialGuid": "",
+        "nodes": [
+            {
+                "id": "1df3b187-3e0d-42c9-a174-4da9b5f066d0",
+                "type": "property",
+                "value": "c3335e2a-7787-4667-b3c0-26e249311705",
+                "x": -31.5,
+                "y": 250
+            },
+            {
+                "id": "45434c79-69db-4e2c-9b31-7014bbea85c1",
+                "type": "property",
+                "value": "aa9ef6ee-270a-4678-bd0d-5686ed245ed3",
+                "x": 147.5,
+                "y": 432
+            },
+            {
+                "id": "5967cd47-5659-4ac2-b59d-1acdc9443cd6",
+                "type": "Material",
+                "value": "",
+                "x": 329,
+                "y": 15
+            },
+            {
+                "id": "abcc7fd7-3f19-4d5c-b4be-ed0af21072bb",
+                "type": "property",
+                "value": "7e641170-f824-42a8-8b36-b83da80434db",
+                "x": -95.5,
+                "y": 236
+            },
+            {
+                "id": "b82e0470-5cc5-402f-929f-7e46525a26c1",
+                "type": "property",
+                "value": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
+                "x": -51.5,
+                "y": 18
+            }
+        ],
+        "properties": [
+            {
+                "displayName": "Texture Property",
+                "id": "c81f9e20-edd5-4053-a69f-e725a1b229ac",
+                "name": "property0",
+                "type": "texture",
+                "uniform": "input_property0",
+                "value": "fc73216f-0eb8-490f-989f-f80153a3de8c"
+            },
+            {
+                "displayName": "Texture Property",
+                "id": "c3335e2a-7787-4667-b3c0-26e249311705",
+                "name": "property1",
+                "type": "texture",
+                "uniform": "input_property1",
+                "value": "c78260d5-0ea6-4d7c-a564-c00321a4b51a"
+            },
+            {
+                "displayName": "Texture Property",
+                "id": "aa9ef6ee-270a-4678-bd0d-5686ed245ed3",
+                "name": "property2",
+                "type": "texture",
+                "uniform": "input_property2",
+                "value": "b72862cd-2284-49ff-9c9c-89fe97da1958"
+            },
+            {
+                "displayName": "Float Property",
+                "id": "7e641170-f824-42a8-8b36-b83da80434db",
+                "maxValue": 1,
+                "minValue": 0,
+                "name": "property3",
+                "type": "float",
+                "uniform": "input_property3",
+                "value": 1
+            }
+        ],
+        "settings": {
+            "acceptLighting": true,
+            "blendMode": "Opaque",
+            "castShadow": true,
+            "cullMode": "Back",
+            "depthTest": true,
+            "fog": true,
+            "name": "hex panel",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
+            "zWrite": true
+        }
+    },
+    "type": "shadergraph",
+    "uniforms": [
+        {
+            "displayName": "Float Property",
+            "max": 1,
+            "min": 0,
+            "name": "input_property3",
+            "type": "float",
+            "uniform": "input_property3",
+            "value": 1
+        }
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
+}
