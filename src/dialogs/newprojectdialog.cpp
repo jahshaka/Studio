@@ -34,7 +34,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
 	path = new QLabel("Location");
 	projectPathEdit = new QLineEdit();
 	projectNameEdit = new QLineEdit();
-	cancel = new QPushButton("Cencel");
+	cancel = new QPushButton("Cancel");
 	create = new QPushButton("Create World");
 
 	create->setAutoDefault(true);
