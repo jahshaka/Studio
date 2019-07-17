@@ -865,6 +865,9 @@ void MainWindow::openProject(bool playMode)
 	//if (playMode) {
 	//	this->playerView->onPlayScene();
 	//}
+	
+	// force a refresh
+	this->update();
 }
 
 void MainWindow::closeProject()
