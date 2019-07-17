@@ -862,9 +862,9 @@ void MainWindow::openProject(bool playMode)
 	sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
 
 	// autoplay scene on load
-	if (playMode) {
-		this->playerView->onPlayScene();
-	}
+	//if (playMode) {
+	//	this->playerView->onPlayScene();
+	//}
 }
 
 void MainWindow::closeProject()
