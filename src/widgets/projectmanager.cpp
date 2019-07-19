@@ -566,14 +566,43 @@ void ProjectManager::openSampleBrowser()
         sampleList->addItem(item);
     }
 
-    connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
+	
 
     auto instructions = new QLabel("Double click on a sample scene to import it in the editor");
     instructions->setObjectName("instructions");
     instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; color: white; " \
                                 "padding: 10px; font-size: 12px }");
+
+	auto cancel = new QPushButton("Cancel");
+	auto select = new QPushButton("Open");
+	select->setDisabled(true);
+	auto wid = new QWidget;
+	auto layout1 = new QHBoxLayout;
+	wid->setLayout(layout1);
+	layout1->addStretch();
+	layout1->addWidget(cancel);
+	layout1->addWidget(select);
+	cancel->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
+	select->setStyleSheet(StyleSheet::QPushButtonBlueBig());
+	wid->setStyleSheet("background: #1e1e1e; padding: 10px;");
+
+	connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
+	connect(sampleList, &QListWidget::itemClicked, [=](QListWidgetItem *item) {
+		select->setDisabled(false);
+		});
+
+
+	connect(cancel, &QPushButton::clicked, [=]() {
+		sampleDialog.close();
+		});
+	connect(select, &QPushButton::clicked, [=]() {
+		openSampleProject(sampleList->currentItem());
+	});
+
+
     layout->addWidget(instructions);
     layout->addWidget(sampleList);
+    layout->addWidget(wid);
     layout->setMargin(0);
     layout->setSpacing(0);
 
