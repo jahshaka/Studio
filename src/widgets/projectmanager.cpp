@@ -574,7 +574,7 @@ void ProjectManager::openSampleBrowser()
                                 "padding: 10px; font-size: 12px }");
 
 	auto cancel = new QPushButton("Cancel");
-	auto select = new QPushButton("Select");
+	auto select = new QPushButton("Open");
 	select->setDisabled(true);
 	auto wid = new QWidget;
 	auto layout1 = new QHBoxLayout;
@@ -589,13 +589,12 @@ void ProjectManager::openSampleBrowser()
 	connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
 	connect(sampleList, &QListWidget::itemClicked, [=](QListWidgetItem *item) {
 		select->setDisabled(false);
-		select->setText("Open " + item->data(Qt::DisplayRole).toString());
 		});
 
 
 	connect(cancel, &QPushButton::clicked, [=]() {
-		close();
-	});
+		sampleDialog.close();
+		});
 	connect(select, &QPushButton::clicked, [=]() {
 		openSampleProject(sampleList->currentItem());
 	});

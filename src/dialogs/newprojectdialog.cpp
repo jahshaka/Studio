@@ -30,12 +30,12 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
 	setAttribute(Qt::WA_MacShowFocusRect, false);
 	setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint);
 
-	scene = new QLabel("Scene Name");
+	scene = new QLabel("Name");
 	path = new QLabel("Location");
 	projectPathEdit = new QLineEdit();
 	projectNameEdit = new QLineEdit();
 	cancel = new QPushButton("Cancel");
-	create = new QPushButton("Create World");
+	create = new QPushButton("Create");
 
 	create->setAutoDefault(true);
 	create->setDefault(true);
@@ -54,26 +54,36 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
 
 	projectPathEdit->setText(projectPathText);
 
-	auto grid = new QGridLayout;
+	auto title = new QLabel("Create Scene");
+	title->setAlignment(Qt::AlignCenter);
+	title->setStyleSheet(StyleSheet::QLabelWhite());
+	//projectNameEdit->setPlaceholderText("Scene Name");
+	//projectPathEdit->setPlaceholderText("Location");
+
+	auto grid = new QVBoxLayout;
 	this->setLayout(grid);
 
-	grid->addWidget(scene, 0, 0);
-	grid->addWidget(projectNameEdit, 0, 1);
-	grid->addWidget(path, 1, 0);
-	grid->addWidget(projectPathEdit, 1, 1);
+	grid->addWidget(title);
+	grid->addSpacing(4);
+
+	grid->addWidget(scene);
+	grid->addWidget(projectNameEdit);
+	grid->addWidget(path);
+	grid->addWidget(projectPathEdit);
 
 	auto wid = new QWidget;
 	auto layout = new QHBoxLayout;
 	wid->setLayout(layout);
+	layout->addStretch();
 	layout->addWidget(cancel);
 	layout->addWidget(create);
 	layout->setContentsMargins(0, 0, 0, 0);
 
+	grid->addSpacing(20);
+	grid->addWidget(wid);
 
-	grid->addWidget(wid, 2, 0, 1, 2);
 
-
-	setMinimumWidth(460);
+	setMinimumWidth(410);
 	setStyleSheet(StyleSheet::QWidgetDark());
 
 	projectNameEdit->setStyleSheet(StyleSheet::QLineEdit());
