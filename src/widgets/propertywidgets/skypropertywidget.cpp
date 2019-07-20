@@ -214,6 +214,8 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	if (skyDefinition.isEmpty()) {
 		updateAssetAndKeys();
 	}
+
+	scene->queueSkyCapture();
 }
 
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
@@ -343,6 +345,7 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
         equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
         scene->setSkyTexture(iris::Texture2D::load(image, false));
     }
+	scene->queueSkyCapture();
 }
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
@@ -375,6 +378,8 @@ void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 		}
 	}
 
+	scene->queueSkyCapture();
+
 	//if (useTex) {
 	//	scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
 	//}
@@ -389,6 +394,7 @@ void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
 	auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
 
 	//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
+	scene->queueSkyCapture();
 }
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
@@ -396,7 +402,10 @@ void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)
 	singleColorDefinition.insert("skyColor", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyColor = color;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyColor = color;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -432,7 +441,10 @@ void SkyPropertyWidget::onReileighChanged(float val)
 {
 	realisticDefinition.insert("reileigh", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.reileigh = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.reileigh = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -440,7 +452,10 @@ void SkyPropertyWidget::onLuminanceChanged(float val)
 {
 	realisticDefinition.insert("luminance", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.luminance = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.luminance = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -448,7 +463,10 @@ void SkyPropertyWidget::onTurbidityChanged(float val)
 {
 	realisticDefinition.insert("turbidity", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.turbidity = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.turbidity = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -456,7 +474,10 @@ void SkyPropertyWidget::onMieCoeffGChanged(float val)
 {
 	realisticDefinition.insert("mieCoefficient", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.mieCoefficient = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.mieCoefficient = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -464,7 +485,10 @@ void SkyPropertyWidget::onMieDireChanged(float val)
 {
 	realisticDefinition.insert("mieDirectionalG", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.mieDirectionalG = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.mieDirectionalG = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -472,7 +496,10 @@ void SkyPropertyWidget::onSunPosXChanged(float val)
 {
 	realisticDefinition.insert("sunPosX", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosX = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.sunPosX = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -480,7 +507,10 @@ void SkyPropertyWidget::onSunPosYChanged(float val)
 {
 	realisticDefinition.insert("sunPosY", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosY = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.sunPosY = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -488,7 +518,10 @@ void SkyPropertyWidget::onSunPosZChanged(float val)
 {
 	realisticDefinition.insert("sunPosZ", val);
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->skyRealistic.sunPosZ = val;
+		if (scene->skyGuid == skyGuid) {
+			scene->skyRealistic.sunPosZ = val;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -497,7 +530,10 @@ void SkyPropertyWidget::onGradientTopColorChanged(QColor color)
 	gradientDefinition.insert("gradientTop", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientTop = color;
+		if (scene->skyGuid == skyGuid) {
+			scene->gradientTop = color;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -506,7 +542,10 @@ void SkyPropertyWidget::onGradientMidColorChanged(QColor color)
 	gradientDefinition.insert("gradientMid", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientMid = color;
+		if (scene->skyGuid == skyGuid) {
+			scene->gradientMid = color;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -515,7 +554,10 @@ void SkyPropertyWidget::onGradientBotColorChanged(QColor color)
 	gradientDefinition.insert("gradientBot", SceneWriter::jsonColor(color));
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientBot = color;
+		if (scene->skyGuid == skyGuid) {
+			scene->gradientBot = color;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
@@ -524,7 +566,10 @@ void SkyPropertyWidget::onGradientOffsetChanged(float offset)
 	gradientDefinition.insert("gradientOffset", offset);
 
 	if (!!scene) {
-		if (scene->skyGuid == skyGuid) scene->gradientOffset = offset;
+		if (scene->skyGuid == skyGuid) {
+			scene->gradientOffset = offset;
+			scene->queueSkyCapture();
+		}
 	}
 }
 
