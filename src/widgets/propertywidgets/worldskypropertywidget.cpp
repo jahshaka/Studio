@@ -227,6 +227,7 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 	}
 
 	scene->switchSkyTexture(scene->skyType);
+	scene->queueSkyCapture();
 }
 
 void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
@@ -255,7 +256,10 @@ void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int inde
 		default: break;
 	}
 
-	if (!!scene) setSkyMap(cubeMapDefinition);
+	if (!!scene) { 
+		setSkyMap(cubeMapDefinition); 
+		scene->queueSkyCapture(); 
+	}
 }
 
 void WorldSkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -325,6 +329,8 @@ void WorldSkyPropertyWidget::updateAssetAndKeys()
 		break;
 	}
 	}
+
+	scene->queueSkyCapture();
 }
 
 void WorldSkyPropertyWidget::setEquiMap(const QString &guid)
@@ -335,6 +341,8 @@ void WorldSkyPropertyWidget::setEquiMap(const QString &guid)
         equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
         scene->setSkyTexture(iris::Texture2D::load(image, false));
 		updateAssetAndKeys();
+
+		scene->queueSkyCapture();
     }
 }
 
@@ -372,6 +380,8 @@ void WorldSkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 		scene->setSkyTexture(iris::Texture2D::createCubeMap(front, back, top, bottom, left, right, info));
 		updateAssetAndKeys();
 	}
+
+	scene->queueSkyCapture();
 }
 
 void WorldSkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)

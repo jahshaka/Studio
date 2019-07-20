@@ -3,7 +3,7 @@
     "guid"      : "00000000-0000-0000-0000-000000000005",
     "preview"   : false,
 
-    "blendMode"     : "alphablend",
+    "blendMode"     : "blend",
     "renderLayer"   : "transparent",
 
     "uniforms": [
@@ -31,13 +31,6 @@
             "min"           : 0,
             "max"           : 1,
             "uniform"       : "u_alpha"
-        }, {
-            "displayName"   : "Sky Texture",
-            "name"          : "texture",
-            "type"          : "texture",
-            "value"         : "",
-            "uniform"       : "u_skyTexture",
-            "toggle"        : "u_useSkyTexture"
         }
     ],
     "builtin": false,
