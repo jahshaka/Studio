@@ -31,13 +31,6 @@
             "min"           : 0,
             "max"           : 1,
             "uniform"       : "u_alpha"
-        }, {
-            "displayName"   : "Sky Texture",
-            "name"          : "texture",
-            "type"          : "texture",
-            "value"         : "",
-            "uniform"       : "u_skyTexture",
-            "toggle"        : "u_useSkyTexture"
         }
     ],
     "builtin": false,
