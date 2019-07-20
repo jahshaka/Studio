@@ -42,5 +42,5 @@ void main()
 	surface(vertexOffset, vertexExtrusion);
 
     v_worldPos = (u_worldMatrix*vec4(a_pos + vertexOffset + vertexExtrusion * v_localNormal,1.0)).xyz;
-    gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(v_worldPos,1.0);
+    gl_Position = u_projMatrix*u_viewMatrix*u_worldMatrix*vec4(a_pos + vertexOffset + vertexExtrusion * v_localNormal,1.0);
 }
