@@ -3,7 +3,7 @@
     "guid"      : "00000000-0000-0000-0000-000000000005",
     "preview"   : false,
 
-    "blendMode"     : "alphablend",
+    "blendMode"     : "blend",
     "renderLayer"   : "transparent",
 
     "uniforms": [
