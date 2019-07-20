@@ -49,10 +49,10 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
     connect(create, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
     connect(cancel, SIGNAL(pressed()), SLOT(close()));
 
-    auto pathe = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
-    auto projectPathText = settingsManager->getValue("default_directory", pathe).toString();
+    auto pathText = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
+	projectPath = settingsManager->getValue("default_directory", pathText).toString();
 
-	projectPathEdit->setText(projectPathText);
+	projectPathEdit->setText(projectPath);
 
 	auto title = new QLabel("Create Scene");
 	title->setAlignment(Qt::AlignCenter);
