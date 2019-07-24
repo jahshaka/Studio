@@ -34,6 +34,11 @@ TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 	this->axis = axis;
 
 	switch (axis) {
+	//case GizmoAxis::Center:
+	//	handleExtent = QVector3D(0, 0, 0);
+	//	planes.append(QVector3D(0, 1, 0)); // this will change based on the view direction
+	//	setHandleColor(QColor(255, 255, 255));
+	//	break;
 	case GizmoAxis::X:
 		handleExtent = QVector3D(1, 0, 0);
 		planes.append(QVector3D(0, 1, 0));
@@ -76,7 +81,7 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
     return false;
 }
 
-QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
+QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
 	bool hit = false;
 	QVector3D finalHitPos;
@@ -106,7 +111,7 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 
 			// this isnt the first hit, but if it's the closest one then use it
 			if (hit) {
-				if (rayPos.distanceToPoint(hitResult) < closestDist) {
+				if (rayPos.distanceToPoint(hitResult) < closestDist) { 
 					finalHitPos = hitResult;
 					closestDist = rayPos.distanceToPoint(hitResult);
 				}
@@ -135,6 +140,7 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
 TranslationGizmo::TranslationGizmo() :
 	Gizmo()
 {
+	//handles[0] = new TranslationHandle(this, GizmoAxis::Center);
 	handles[0] = new TranslationHandle(this, GizmoAxis::X);
 	handles[1] = new TranslationHandle(this, GizmoAxis::Y);
 	handles[2] = new TranslationHandle(this, GizmoAxis::Z);
@@ -147,6 +153,7 @@ TranslationGizmo::TranslationGizmo() :
 
 void TranslationGizmo::loadAssets()
 {
+	//handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_sphere.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_x.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_z.obj")));
@@ -190,9 +197,9 @@ bool TranslationGizmo::isDragging()
 	return dragging;
 }
 
-void TranslationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
+void TranslationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
-	draggedHandle = getHitHandle(rayPos, rayDir, hitPos);
+	draggedHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 	if (draggedHandle == nullptr) {
 		dragging = false; // end dragging if no handle was actually hit
 		return;
@@ -212,13 +219,13 @@ void TranslationGizmo::endDragging()
 	createUndoAction();
 }
 
-void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
+void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
 	if (draggedHandle == nullptr) {
 		return;
 	}
 
-	auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir);
+	auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir, viewDir);
 
 	// move node along line
 	// do snapping here as well
@@ -256,7 +263,7 @@ bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 }
 
 // returns hit position of the hit handle
-TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D& hitPos)
+TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos)
 {
 	TranslationHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
@@ -264,7 +271,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 	for (auto i = 0; i<3; i++)
 	{
 		if (handles[i]->isHit(rayPos, rayDir)) {
-			auto hit = handles[i]->getHitPos(rayPos, rayDir);// bad, move hitPos to ref variable
+			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);// bad, move hitPos to ref variable
 			auto dist = hitPos.distanceToPoint(rayPos);
 			if (dist < closestDistance) {
 				closestHandle = handles[i];
@@ -277,7 +284,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 	return closestHandle;
 }
 
-void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	auto gl = device->getGL();
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
@@ -303,7 +310,7 @@ void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, 
 	}
 	else {
 		QVector3D hitPos;
-		auto hitHandle = getHitHandle(rayPos, rayDir, hitPos);
+		auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 
 		for (int i = 0; i < 3; i++) {
 			for (int i = 0; i < 3; i++) {

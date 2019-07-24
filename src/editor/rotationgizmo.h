@@ -63,15 +63,15 @@ public:
 	void loadAssets();
 
 	virtual bool isDragging();
-	virtual void startDragging(QVector3D rayPos, QVector3D rayDir);
+	virtual void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 	virtual void endDragging();
-	virtual void drag(QVector3D rayPos, QVector3D rayDir);
+	virtual void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 
 	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
 
 	// hitPos is the hit position of the hit handle
 	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
-	virtual void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+	virtual void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 
 	QMatrix4x4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;

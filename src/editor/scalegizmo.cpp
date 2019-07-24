@@ -78,7 +78,7 @@ bool ScaleHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 	return false;
 }
 
-QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir)
+QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
 	bool hit = false;
 	QVector3D finalHitPos;
@@ -167,9 +167,9 @@ bool ScaleGizmo::isDragging()
 	return dragging;
 }
 
-void ScaleGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
+void ScaleGizmo::startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
-	draggedHandle = getHitHandle(rayPos, rayDir, hitPos);
+	draggedHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 	if (draggedHandle == nullptr) {
 		dragging = false; // end dragging if no handle was actually hit
 		return;
@@ -192,13 +192,13 @@ void ScaleGizmo::endDragging()
 	createUndoAction();
 }
 
-void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir)
+void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
 	if (draggedHandle == nullptr) {
 		return;
 	}
 
-	auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir);
+	auto slidingPos = draggedHandle->getHitPos(rayPos, rayDir, viewDir);
 
 	// move node along line
 	// do snapping here as well
@@ -243,7 +243,7 @@ bool ScaleGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 }
 
 // returns hit position of the hit handle
-ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D& hitPos)
+ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos)
 {
 	ScaleHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
@@ -251,7 +251,7 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 	for (auto i = 0; i<3; i++)
 	{
 		if (handles[i]->isHit(rayPos, rayDir)) {
-			auto hit = handles[i]->getHitPos(rayPos, rayDir);// bad, move hitPos to ref variable
+			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);// bad, move hitPos to ref variable
 			auto dist = hitPos.distanceToPoint(rayPos);
 			if (dist < closestDistance) {
 				closestHandle = handles[i];
@@ -264,7 +264,7 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 	return closestHandle;
 }
 
-void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	auto gl = device->getGL();
 	gl->glClear(GL_DEPTH_BUFFER_BIT);
@@ -288,7 +288,7 @@ void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVecto
 	}
 	else {
 		QVector3D hitPos;
-		auto hitHandle = getHitHandle(rayPos, rayDir, hitPos);
+		auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 
 		for (int i = 0; i < 3; i++) {
 			auto transform = this->getTransform();
