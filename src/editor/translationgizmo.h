@@ -34,7 +34,10 @@ class TranslationHandle : public GizmoHandle
 
 	TranslationHandle(Gizmo* gizmo, GizmoAxis axis);
 
+	// check if an actual hit is made
     bool isHit(QVector3D rayPos, QVector3D rayDir);
+
+	// assumes hit was already confirmed
     QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 };
 
@@ -48,7 +51,7 @@ class TranslationGizmo : public Gizmo
     QOpenGLShaderProgram* shader;
 	iris::ShaderPtr lineShader;
 
-    TranslationHandle* handles[4];
+    QVector<TranslationHandle*> handles;
 
     // initial hit position
     QVector3D hitPos;
