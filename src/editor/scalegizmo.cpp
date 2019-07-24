@@ -28,7 +28,8 @@ For more information see the LICENSE file
 #include "../widgets/scenenodepropertieswidget.h"
 #include "../widgets/propertywidgets/transformpropertywidget.h"
 
-#define DEFAULT_SNAP_LENGTH 1.0f
+#define DEFAULT_SNAP_LENGTH (1.0f)
+#define CENTER_CIRCLE_RADIUS (0.015f)
 
 ScaleHandle::ScaleHandle(Gizmo* gizmo, GizmoAxis axis)
 {
@@ -36,6 +37,11 @@ ScaleHandle::ScaleHandle(Gizmo* gizmo, GizmoAxis axis)
 	this->axis = axis;
 
 	switch (axis) {
+	case GizmoAxis::Center:
+		handleExtent = QVector3D(0, 0, 0);
+		//planes.append(QVector3D(0, 1, 0)); // this will change based on the view direction
+		setHandleColor(QColor(255, 255, 255));
+		break;
 	case GizmoAxis::X:
 		handleExtent = QVector3D(1, 0, 0);
 		planes.append(QVector3D(0, 1, 0));
@@ -61,21 +67,30 @@ bool ScaleHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 {
 	auto gizmoTrans = gizmo->getTransform();
 
-	// calculate world space position of the segment representing the handle
-	auto p1 = gizmoTrans * QVector3D(0, 0, 0);
-	auto q1 = gizmoTrans * (handleExtent * handleLength * gizmo->getGizmoScale() * handleScale);
-
-	auto p2 = rayPos;
-	auto q2 = rayPos + rayDir * 100000;
-
-	float s, t;
-	QVector3D c1, c2;
-	auto dist = iris::MathHelper::closestPointBetweenSegments(p1, q1, p2, q2, s, t, c1, c2);
-	if (dist < handleScale * gizmo->getGizmoScale() * handleScale) {
-		return true;
+	if (this->axis == GizmoAxis::Center) {
+		// sphere center intersection
+		float t;
+		QVector3D hitPoint;
+		return iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, gizmoTrans * QVector3D(0, 0, 0), gizmo->getGizmoScale() * CENTER_CIRCLE_RADIUS, t, hitPoint);
 	}
+	else {
 
-	return false;
+		// calculate world space position of the segment representing the handle
+		auto p1 = gizmoTrans * QVector3D(0, 0, 0);
+		auto q1 = gizmoTrans * (handleExtent * handleLength * gizmo->getGizmoScale() * handleScale);
+
+		auto p2 = rayPos;
+		auto q2 = rayPos + rayDir * 100000;
+
+		float s, t;
+		QVector3D c1, c2;
+		auto dist = iris::MathHelper::closestPointBetweenSegments(p1, q1, p2, q2, s, t, c1, c2);
+		if (dist < handleScale * gizmo->getGizmoScale() * handleScale) {
+			return true;
+		}
+
+		return false;
+	}
 }
 
 QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
@@ -90,36 +105,50 @@ QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D v
 	rayPos = worldToGizmo * rayPos;
 	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(rayDir);
 
-	// loop through planes
-	for (auto normal : planes) {
+	if (this->axis == GizmoAxis::Center) {
+		// sphere center intersection
 		float t;
-		QVector3D hitPos;
+		QVector3D hitPoint;
+		//iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, QVector3D(0, 0, 0), 1, t, hitPoint);
 
-		// flip normal so its facing the ray source
-		if (QVector3D::dotProduct(normal, rayPos) < 0)
-			normal = -normal;
+		//return gizmoTransform * hitPoint;
+		auto normal = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(-viewDir);
+		iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPoint);
 
-		if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPos)) {
-			// ignore planes at grazing angles
-			if (qAbs(QVector3D::dotProduct(rayDir, normal)) < 0.1f)
-				continue;
+		return gizmoTransform * hitPoint;
+	}
+	else {
+		// loop through planes
+		for (auto normal : planes) {
+			float t;
+			QVector3D hitPos;
 
-			auto hitResult = handleExtent * hitPos;
+			// flip normal so its facing the ray source
+			if (QVector3D::dotProduct(normal, rayPos) < 0)
+				normal = -normal;
 
-			// this isnt the first hit, but if it's the closest one then use it
-			if (hit) {
-				if (rayPos.distanceToPoint(hitResult) < closestDist) {
+			if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPos)) {
+				// ignore planes at grazing angles
+				if (qAbs(QVector3D::dotProduct(rayDir, normal)) < 0.1f)
+					continue;
+
+				auto hitResult = handleExtent * hitPos;
+
+				// this isnt the first hit, but if it's the closest one then use it
+				if (hit) {
+					if (rayPos.distanceToPoint(hitResult) < closestDist) {
+						finalHitPos = hitResult;
+						closestDist = rayPos.distanceToPoint(hitResult);
+					}
+				}
+				else {
+					// first hit, just assign it
 					finalHitPos = hitResult;
 					closestDist = rayPos.distanceToPoint(hitResult);
 				}
-			}
-			else {
-				// first hit, just assign it
-				finalHitPos = hitResult;
-				closestDist = rayPos.distanceToPoint(hitResult);
-			}
 
-			hit = true;
+				hit = true;
+			}
 		}
 	}
 
@@ -138,9 +167,10 @@ QVector3D ScaleHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D v
 ScaleGizmo::ScaleGizmo() :
 	Gizmo()
 {
-	handles[0] = new ScaleHandle(this, GizmoAxis::X);
-	handles[1] = new ScaleHandle(this, GizmoAxis::Y);
-	handles[2] = new ScaleHandle(this, GizmoAxis::Z);
+	handles.append(new ScaleHandle(this, GizmoAxis::Center));
+	handles.append(new ScaleHandle(this, GizmoAxis::X));
+	handles.append(new ScaleHandle(this, GizmoAxis::Y));
+	handles.append(new ScaleHandle(this, GizmoAxis::Z));
 
 	loadAssets();
 
@@ -151,6 +181,7 @@ ScaleGizmo::ScaleGizmo() :
 
 void ScaleGizmo::loadAssets()
 {
+	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_cube.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_x.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_z.obj")));
@@ -179,6 +210,7 @@ void ScaleGizmo::startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D vie
 	nodeStartPos = selectedNode->getGlobalPosition();
 	dragging = true;
 	startScale = selectedNode->getLocalScale();
+	hitDir = (hitPos - nodeStartPos).normalized();
 	setInitialTransform();
 }
 
@@ -212,6 +244,20 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 
 	switch (draggedHandle->axis)
 	{
+	case GizmoAxis::Center: {
+		float length = diff.length();
+
+		// determine whether or not to invert scale
+		//QVector3D curDir = (slidingPos - nodeStartPos).normalized();
+		//length = QVector3D::dotProduct(curDir, hitDir) > 0 ? length : -length;
+
+		diff = QVector3D(length, length, length);
+		handleVisualScale = QVector3D(
+			qAbs(qBound(-2.0f, 1.0f + length *0.1f, 2.0f)),
+			qAbs(qBound(-2.0f, 1.0f + length *0.1f, 2.0f)),
+			qAbs(qBound(-2.0f, 1.0f + length *0.1f, 2.0f)));
+		break;
+	}
 	case GizmoAxis::X:
 		diff = QVector3D(diff.x(), 0, 0);
 		handleVisualScale = QVector3D(qAbs(qBound(-2.0f, 1.0f + diff.x()*0.1f, 2.0f)), 1, 1);
@@ -232,7 +278,7 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 
 bool ScaleGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 {
-	for (auto i = 0; i< 3; i++) {
+	for (auto i = 0; i< handles.size(); i++) {
 		if (handles[i]->isHit(rayPos, rayDir))
 		{
 			return true;
@@ -248,7 +294,7 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 	ScaleHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
 
-	for (auto i = 0; i<3; i++)
+	for (auto i = 0; i< handles.size(); i++)
 	{
 		if (handles[i]->isHit(rayPos, rayDir)) {
 			auto hit = handles[i]->getHitPos(rayPos, rayDir, viewDir);// bad, move hitPos to ref variable
@@ -257,6 +303,10 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 				closestHandle = handles[i];
 				closestDistance = dist;
 				hitPos = hit;
+
+				// center takes precedence over all
+				if (closestHandle->axis == GizmoAxis::Center)
+					break;
 			}
 		}
 	}
@@ -275,7 +325,7 @@ void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVecto
 	shader->setUniformValue("showHalf", false);
 
 	if (dragging) {
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < handles.size(); i++) {
 			if (handles[i] == draggedHandle) {
 				auto transform = this->getTransform();
 				transform.scale(getGizmoScale() * handles[i]->handleScale * handleVisualScale);
@@ -290,7 +340,7 @@ void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVecto
 		QVector3D hitPos;
 		auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < handles.size(); i++) {
 			auto transform = this->getTransform();
 			transform.scale(getGizmoScale() * handles[i]->handleScale * handleVisualScale);
 			shader->setUniformValue("u_worldMatrix", transform);
@@ -302,8 +352,8 @@ void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVecto
 			handleMeshes[i]->draw(device);
 		}
 
-		shader->setUniformValue("color", QColor(255, 255, 255));
-		centerMesh->draw(device);
+		//shader->setUniformValue("color", QColor(255, 255, 255));
+		//centerMesh->draw(device);
 	}
 
 	shader->release();

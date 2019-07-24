@@ -347,7 +347,7 @@ void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, 
 				auto transform = this->getTransform();
 				//transform.scale(getGizmoScale() * handles[i]->handleRadius);
 				transform.scale(getGizmoScale() * handles[i]->handleScale);
-				shader->setUniformValue("color", handles[i]->getHandleColor());
+				//shader->setUniformValue("color", handles[i]->getHandleColor());
 				shader->setUniformValue("u_worldMatrix", transform);
 
 				if (handles[i] == hitHandle)

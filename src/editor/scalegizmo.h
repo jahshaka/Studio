@@ -40,11 +40,16 @@ class ScaleGizmo : public Gizmo
 
 	QOpenGLShaderProgram* shader;
 
-	ScaleHandle* handles[3];
+	QVector<ScaleHandle*> handles;
 
 	// initial hit position
 	QVector3D hitPos;
 	QVector3D nodeStartPos;
+
+	// need to keep track of this to know whether or not
+	// to invert the scale on uniform scaling
+	// it's (hitPos - nodeStartPos).normalized();
+	QVector3D hitDir;
 	ScaleHandle* draggedHandle;
 	int draggedHandleIndex;
 	QVector3D startScale;
