@@ -203,7 +203,7 @@ bool RotationGizmo::isDragging()
 	return dragging;
 }
 
-void RotationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir)
+void RotationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
 	trans = Gizmo::getTransform();
 	//qDebug() << "drag starting";
@@ -230,7 +230,7 @@ void RotationGizmo::endDragging()
 	createUndoAction();
 }
 
-void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir)
+void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
 	//qDebug() << "dragging";
 	if (draggedHandle == nullptr) {
@@ -310,7 +310,7 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 	return closestHandle;
 }
 
-void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
+void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
 	auto gl = device->getGL();
 	gl->glClear(GL_DEPTH_BUFFER_BIT);

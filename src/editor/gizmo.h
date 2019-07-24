@@ -23,6 +23,8 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class GizmoAxis
 {
+
+	Center,
 	X,
 	Y,
 	Z
@@ -30,7 +32,8 @@ enum class GizmoAxis
 
 enum class AxisHandle
 {
-    X = 0,
+	Center = 0,
+    X,
     Y,
     Z
 };
@@ -51,6 +54,7 @@ enum class GizmoTransformSpace
 enum class GizmoTransformAxis
 {
     NONE,
+	Center,
     X,
     Y,
     Z,
@@ -139,11 +143,11 @@ public:
 	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
 
 	virtual bool isDragging() = 0;
-	virtual void startDragging(QVector3D rayPos, QVector3D rayDir) = 0;
+	virtual void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
 	virtual void endDragging() = 0;
-	virtual void drag(QVector3D rayPos, QVector3D rayDir) = 0;
+	virtual void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
 
-	virtual void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) = 0;
+	virtual void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) = 0;
 };
 
 #endif // GIZMOHANDLE_H

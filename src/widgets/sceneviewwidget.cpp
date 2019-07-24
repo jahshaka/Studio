@@ -610,9 +610,11 @@ void SceneViewWidget::renderGizmos(bool once)
 	if (!!selectedNode && !UiManager::isSimulationRunning) {
 		gizmo->updateSize(editorCam);
 
+		QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
+
 		QVector3D rayPos, rayDir;
 		this->getMousePosAndRay(this->prevMousePos, rayPos, rayDir);
-		gizmo->render(renderer->getGraphicsDevice(), rayPos, rayDir, editorCam->viewMatrix, editorCam->projMatrix);
+		gizmo->render(renderer->getGraphicsDevice(), rayPos, rayDir, viewDir, editorCam->viewMatrix, editorCam->projMatrix);
 	}
 }
 
@@ -1030,9 +1032,11 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(localPos) * 1024),
 																	iris::PhysicsHelper::btVector3FromQVector3D(editorCam->getGlobalPosition()));
         } else if (gizmo->isDragging()) {
+			QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
+
 			QVector3D rayPos, rayDir;
 			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
-			gizmo->drag(rayPos, rayDir);
+			gizmo->drag(rayPos, rayDir, viewDir);
 
 			// If we're dragging viewers, send the transform to the environment so we can manipulate the body
 			if (selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
@@ -1089,6 +1093,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
+		QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
 
         if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
             this->doGizmoPicking(e->localPos());
@@ -1096,7 +1101,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
             if (!!selectedNode) {
                 QVector3D rayPos, rayDir;
                 this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
-                gizmo->startDragging(rayPos, rayDir);
+                gizmo->startDragging(rayPos, rayDir, viewDir);
             }
 
             // if we don't have a selected node, prioritize object picking

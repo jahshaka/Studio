@@ -34,8 +34,11 @@ class TranslationHandle : public GizmoHandle
 
 	TranslationHandle(Gizmo* gizmo, GizmoAxis axis);
 
+	// check if an actual hit is made
     bool isHit(QVector3D rayPos, QVector3D rayDir);
-    QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir);
+
+	// assumes hit was already confirmed
+    QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 };
 
 class TranslationGizmo : public Gizmo
@@ -48,7 +51,7 @@ class TranslationGizmo : public Gizmo
     QOpenGLShaderProgram* shader;
 	iris::ShaderPtr lineShader;
 
-    TranslationHandle* handles[3];
+    QVector<TranslationHandle*> handles;
 
     // initial hit position
     QVector3D hitPos;
@@ -64,15 +67,15 @@ public:
 	void loadAssets();
 
 	bool isDragging();
-	void startDragging(QVector3D rayPos, QVector3D rayDir);
+	void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 	void endDragging();
-	void drag(QVector3D rayPos, QVector3D rayDir);
+	void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 
 	bool isHit(QVector3D rayPos, QVector3D rayDir);
 
 	// hitPos is the hit position of the hit handle
-	TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D& hitPos);
-	void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+	TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos);
+	void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 };
 
 

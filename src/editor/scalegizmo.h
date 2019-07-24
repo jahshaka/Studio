@@ -29,7 +29,7 @@ public:
 	ScaleHandle(Gizmo* gizmo, GizmoAxis axis);
 
 	bool isHit(QVector3D rayPos, QVector3D rayDir);
-	QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir);
+	QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 };
 
 class ScaleGizmo : public Gizmo
@@ -40,11 +40,16 @@ class ScaleGizmo : public Gizmo
 
 	QOpenGLShaderProgram* shader;
 
-	ScaleHandle* handles[3];
+	QVector<ScaleHandle*> handles;
 
 	// initial hit position
 	QVector3D hitPos;
 	QVector3D nodeStartPos;
+
+	// need to keep track of this to know whether or not
+	// to invert the scale on uniform scaling
+	// it's (hitPos - nodeStartPos).normalized();
+	QVector3D hitDir;
 	ScaleHandle* draggedHandle;
 	int draggedHandleIndex;
 	QVector3D startScale;
@@ -61,15 +66,15 @@ public:
 	void loadAssets();
 
 	bool isDragging();
-	void startDragging(QVector3D rayPos, QVector3D rayDir);
+	void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 	void endDragging();
-	void drag(QVector3D rayPos, QVector3D rayDir);
+	void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
 
 	bool isHit(QVector3D rayPos, QVector3D rayDir);
 
 	// hitPos is the hit position of the hit handle
-	ScaleHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D& hitPos);
-	void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
+	ScaleHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos);
+	void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 };
 
 #endif // SCALEGIZMO_H
