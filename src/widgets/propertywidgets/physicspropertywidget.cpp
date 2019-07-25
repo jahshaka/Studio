@@ -33,16 +33,16 @@ using namespace iris;
 PhysicsPropertyWidget::PhysicsPropertyWidget()
 {
     physicsTypes.insert(static_cast<int>(PhysicsType::None), "None");
-    physicsTypes.insert(static_cast<int>(PhysicsType::Static), "Static");
-    physicsTypes.insert(static_cast<int>(PhysicsType::RigidBody), "Rigid Body");
-    physicsTypes.insert(static_cast<int>(PhysicsType::SoftBody), "Soft Body");
+    physicsTypes.insert(static_cast<int>(PhysicsType::Static), "Static (Inanimate)");
+    physicsTypes.insert(static_cast<int>(PhysicsType::RigidBody), "Rigid Body (Dynamic)");
+    //physicsTypes.insert(static_cast<int>(PhysicsType::SoftBody), "Soft Body");
 
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::None), "None");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Compound), "Compound");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Plane), "Plane");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Sphere), "Sphere");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Cube), "Cube");
-    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::ConvexHull), "Convex Hull");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::ConvexHull), "Convex Hull (Recommended)");
     physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::TriangleMesh), "Triangle Mesh");
 
     physicsTypeSelector = this->addComboBox("Physics Type");
