@@ -163,7 +163,7 @@ void PlayerMouseController::onMouseWheel(int delta)
 void PlayerMouseController::onMouseDown(Qt::MouseButton button)
 {
     CameraControllerBase::onMouseDown(button);
-    if (button == Qt::LeftButton) {
+    if (button == Qt::LeftButton && _isPlaying) {
         this->doObjectPicking(QPointF(this->mouseX, this->mouseY));
     }
 }
@@ -171,7 +171,7 @@ void PlayerMouseController::onMouseDown(Qt::MouseButton button)
 void PlayerMouseController::onMouseUp(Qt::MouseButton button)
 {
     CameraControllerBase::onMouseUp(button);
-    if (button == Qt::LeftButton) {
+    if (button == Qt::LeftButton && _isPlaying) {
         //scene->getPhysicsEnvironment()->removeConstraintFromWorld()
         this->pickedNode.clear();
         scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::MouseButton);
