@@ -55,18 +55,14 @@ void PlayerMouseController::start()
 			}
 
 			// todo: should limit snapping distance?
-			//5.75
-			//activeViewer->setGlobalPos(closestPoint + QVector3D(0, 1.73736, 0));
-			//viewer->setGlobalPos(closestPoint + QVector3D(0, 5.75f * 0.5f, 0));
-			irisDebug() << closestPoint;
-			viewer->setLocalPos(closestPoint + QVector3D(0, 0, 0));
+			if (closestDist < 1000) {
+				viewer->setLocalPos(closestPoint + QVector3D(0, 5.75f * 0.5f, 0));
+			}
 			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(viewer->getGUID());
 			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(viewer);
-			//scene->getPhysicsEnvironment()->updateCharacterTransformFromSceneNode(viewer);
 
 			// set rot to viewer's default transform
 			camera->setLocalTransform(viewer->getGlobalTransform());
-			irisDebug() << camera->getLocalPos();
 
 		}
 		else {
