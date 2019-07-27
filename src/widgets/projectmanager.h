@@ -56,6 +56,7 @@ public:
     ~ProjectManager();
 
 	void updateTile(const QString &id, const QByteArray &arr);
+	void addImportedTileToDesktop(const QString &guid);
     void populateDesktop(bool reset = false);
     bool checkForEmptyState();
     void cleanupOnClose();

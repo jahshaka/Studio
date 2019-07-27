@@ -330,7 +330,7 @@ void ProjectManager::importProjectFromFile(const QString& file)
     }
 
     QString worldName;
-    auto open = db->importProject(
+    auto canOpen = db->importProject(
         QDir(temporaryDir.path()).filePath(projectBlobGuid),
         importGuid,
         worldName,
@@ -339,11 +339,18 @@ void ProjectManager::importProjectFromFile(const QString& file)
 
     // Update files that reference guids
 
-    if (open) {
+	bool shouldOpen = false;
+
+    if (shouldOpen) {
         Globals::project->setProjectPath(pDir, worldName);
         Globals::project->setProjectGuid(importGuid);
         loadProjectAssets();
-    }
+	}
+	else {
+		// This is in the else since any other time the user would get redirected
+		// and this function of similar would get delegated...
+		addImportedTileToDesktop(importGuid);
+	}
 
     temporaryDir.remove();
 }
@@ -424,6 +431,20 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 void ProjectManager::searchProjects()
 {
     dynamicGrid->searchTiles(ui->lineEdit->text());
+}
+
+void ProjectManager::addImportedTileToDesktop(const QString &guid)
+{
+	int i = 0;
+	ProjectTileData importedScene;
+	foreach(const ProjectTileData &record, db->fetchProjects()) {
+		if (record.guid == guid) importedScene = record;
+		i++;
+	}
+
+	dynamicGrid->addToGridView(importedScene, i - 1);
+
+	checkForEmptyState();
 }
 
 void ProjectManager::populateDesktop(bool reset)
