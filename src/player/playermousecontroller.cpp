@@ -34,8 +34,46 @@ void PlayerMouseController::start()
     if (!!viewer) {
 		viewer->hide();
 
-        // set rot to viewer's default transform
-        camera->setLocalTransform(viewer->getGlobalTransform());
+		// plant viewer to any surface below it
+		auto rayStart = viewer->getGlobalPosition();
+		auto rayEnd = rayStart + QVector3D(0, -1000, 0);
+		QList<iris::PickingResult> results;
+		scene->rayCast(rayStart, rayEnd, results, 0, true);
+
+		// closest point
+		QVector3D closestPoint = rayEnd;
+		float closestDist = 1000;
+		if (results.size() > 0) {
+			// find closest one
+			for (const auto result : results) {
+				auto dist = result.hitPoint.distanceToPoint(closestPoint);
+				if (dist < closestDist)
+				{
+					closestDist = dist;
+					closestPoint = result.hitPoint;
+				}
+			}
+
+			// todo: should limit snapping distance?
+			//5.75
+			//activeViewer->setGlobalPos(closestPoint + QVector3D(0, 1.73736, 0));
+			//viewer->setGlobalPos(closestPoint + QVector3D(0, 5.75f * 0.5f, 0));
+			irisDebug() << closestPoint;
+			viewer->setLocalPos(closestPoint + QVector3D(0, 0, 0));
+			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(viewer->getGUID());
+			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(viewer);
+			//scene->getPhysicsEnvironment()->updateCharacterTransformFromSceneNode(viewer);
+
+			// set rot to viewer's default transform
+			camera->setLocalTransform(viewer->getGlobalTransform());
+			irisDebug() << camera->getLocalPos();
+
+		}
+		else {
+			// set rot to viewer's default transform
+			camera->setLocalTransform(viewer->getGlobalTransform());
+		}
+        
     }
 
     // capture cam transform
