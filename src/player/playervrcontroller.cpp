@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/scenegraph/meshnode.h"
 #include "../irisgl/src/scenegraph/grabnode.h"
+#include "../irisgl/src/scenegraph/viewernode.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/math/mathhelper.h"
 #include "../irisgl/src/scenegraph/cameranode.h"
@@ -148,6 +149,33 @@ void PlayerVrController::start()
 	auto activeViewer = scene->getActiveVrViewer();
 	this->leftHand->init(scene, scene->camera, activeViewer);
 	this->rightHand->init(scene, scene->camera, activeViewer);
+
+	// plant viewer to any surface below it
+	auto rayStart = activeViewer->getGlobalPosition();
+	auto rayEnd = rayStart + QVector3D(0, -1000, 0);
+	QList<iris::PickingResult> results;
+	scene->rayCast(rayStart, rayEnd, results, 0, true);
+
+	// closest point
+	QVector3D closestPoint = rayEnd;
+	float closestDist = 1000;
+	if (results.size() > 0) {
+		// find closest one
+		for (const auto result : results) {
+			auto dist = result.hitPoint.distanceToPoint(closestPoint);
+			if (dist < closestDist)
+			{
+				closestDist = dist;
+				closestPoint = result.hitPoint;
+			}
+		}
+
+		// todo: should limit snapping distance?
+		//5.75
+		//activeViewer->setGlobalPos(closestPoint + QVector3D(0, 1.73736, 0));
+		activeViewer->setGlobalPos(closestPoint + QVector3D(0, 5.75f * 0.5f,0));
+		
+	}
 }
 
 void PlayerVrController::update(float dt)
