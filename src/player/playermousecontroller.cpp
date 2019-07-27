@@ -34,8 +34,42 @@ void PlayerMouseController::start()
     if (!!viewer) {
 		viewer->hide();
 
-        // set rot to viewer's default transform
-        camera->setLocalTransform(viewer->getGlobalTransform());
+		// plant viewer to any surface below it
+		auto rayStart = viewer->getGlobalPosition();
+		auto rayEnd = rayStart + QVector3D(0, -1000, 0);
+		QList<iris::PickingResult> results;
+		scene->rayCast(rayStart, rayEnd, results, 0, true);
+
+		// closest point
+		QVector3D closestPoint = rayEnd;
+		float closestDist = 1000;
+		if (results.size() > 0) {
+			// find closest one
+			for (const auto result : results) {
+				auto dist = result.hitPoint.distanceToPoint(closestPoint);
+				if (dist < closestDist)
+				{
+					closestDist = dist;
+					closestPoint = result.hitPoint;
+				}
+			}
+
+			// todo: should limit snapping distance?
+			if (closestDist < 1000) {
+				viewer->setLocalPos(closestPoint + QVector3D(0, 5.75f * 0.5f, 0));
+			}
+			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(viewer->getGUID());
+			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(viewer);
+
+			// set rot to viewer's default transform
+			camera->setLocalTransform(viewer->getGlobalTransform());
+
+		}
+		else {
+			// set rot to viewer's default transform
+			camera->setLocalTransform(viewer->getGlobalTransform());
+		}
+        
     }
 
     // capture cam transform
@@ -125,7 +159,7 @@ void PlayerMouseController::onMouseWheel(int delta)
 void PlayerMouseController::onMouseDown(Qt::MouseButton button)
 {
     CameraControllerBase::onMouseDown(button);
-    if (button == Qt::LeftButton) {
+    if (button == Qt::LeftButton && _isPlaying) {
         this->doObjectPicking(QPointF(this->mouseX, this->mouseY));
     }
 }
@@ -133,7 +167,7 @@ void PlayerMouseController::onMouseDown(Qt::MouseButton button)
 void PlayerMouseController::onMouseUp(Qt::MouseButton button)
 {
     CameraControllerBase::onMouseUp(button);
-    if (button == Qt::LeftButton) {
+    if (button == Qt::LeftButton && _isPlaying) {
         //scene->getPhysicsEnvironment()->removeConstraintFromWorld()
         this->pickedNode.clear();
         scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::MouseButton);

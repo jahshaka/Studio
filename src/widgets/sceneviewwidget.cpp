@@ -131,7 +131,7 @@ void SceneViewWidget::dragMoveEvent(QDragMoveEvent *event)
     while (!stream.atEnd()) stream >> roleDataMap;
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Material)) {
-		auto node = doActiveObjectPicking(event->posF(), true);
+		auto node = doActiveObjectPicking(event->posF(), false);
 
         // This is to handle overlapping meshes or those close to each other, if we pass
         // over another node while still dragging, switch materials

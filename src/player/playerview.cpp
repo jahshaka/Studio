@@ -108,8 +108,9 @@ void PlayerView::renderScene()
 	fpsTimer->restart();
 	
     auto vp = iris::Viewport();
-    vp.width = static_cast<int>(width() * devicePixelRatioF());
-    vp.height = static_cast<int>(height() * devicePixelRatioF());
+    vp.width = static_cast<int>(width());
+    vp.height = static_cast<int>(height());
+	vp.pixelRatioScale = devicePixelRatio();
 
 	playback->renderScene(vp, dt);
 }
@@ -187,7 +188,10 @@ void PlayerView::resizeEvent(QResizeEvent *event)
     Q_UNUSED(event);
 
     auto vp = iris::Viewport();
-    vp.width = static_cast<int>(width() * devicePixelRatioF());
-    vp.height = static_cast<int>(height() * devicePixelRatioF());
+    vp.width = static_cast<int>(width());
+    vp.height = static_cast<int>(height());
+	vp.pixelRatioScale = devicePixelRatio();
     playback->getMouseController()->setViewport(vp);
+
+	QOpenGLWidget::resizeEvent(event);
 }
