@@ -115,14 +115,19 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 void PlayBack::saveNodeTransforms()
 {
 	for (auto node : scene->nodes) {
-		nodeTransforms.insert(node->guid, node->getLocalTransform());
+		//nodeTransforms.insert(node->guid, node->getLocalTransform());
+		nodeTransforms.insert(node->guid, PlayBackNodeTransform(node->getLocalPos(), node->getLocalRot(), node->getLocalScale()));
 	}
 }
 
 void PlayBack::restoreNodeTransforms()
 {
 	for (auto node : scene->nodes) {
-		node->setLocalTransform(nodeTransforms[node->guid]);
+		//node->setLocalTransform(nodeTransforms[node->guid]);
+		const auto trans = nodeTransforms[node->guid];
+		node->setLocalPos(trans.pos);
+		node->setLocalRot(trans.rot);
+		node->setLocalScale(trans.scale);
 	}
 }
 
@@ -187,11 +192,11 @@ void PlayBack::pause() {}
 void PlayBack::stopScene()
 {
 	_isPlaying = false;
-	restoreNodeTransforms();
 	vrController->setPlayState(_isPlaying);
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
+	restoreNodeTransforms();// it's important that this is here after physics restore
 
 	animTime = 0;
 }

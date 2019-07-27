@@ -31,6 +31,23 @@ class PlayerMouseController;
 class QElapsedTimer;
 class QTimer;
 
+struct PlayBackNodeTransform
+{
+	QVector3D pos, scale;
+	QQuaternion rot;
+
+	PlayBackNodeTransform()
+	{
+
+	}
+
+	PlayBackNodeTransform(QVector3D pos, QQuaternion rot, QVector3D scale):
+		pos(pos), rot(rot), scale(scale)
+	{
+
+	}
+};
+
 class PlayBack
 {
 	QMatrix4x4 savedCameraMatrix;
@@ -49,7 +66,7 @@ class PlayBack
 	QPointF prevMousePos;
 
 	bool _isPlaying = false;
-	QMap<QString, QMatrix4x4> nodeTransforms;
+	QMap<QString, PlayBackNodeTransform> nodeTransforms;
 public:
 	bool isScenePlaying() { return _isPlaying; }
 
