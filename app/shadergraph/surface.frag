@@ -98,7 +98,8 @@ void main()
 
     surface(material);
 
-	if (material.alpha <= material.alphaCutoff)
+    // hlsl's clip function
+	if (material.alpha - material.alphaCutoff < 0)
 		discard;
 
     // ambient is scaled to the scene's ambient
