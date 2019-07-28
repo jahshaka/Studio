@@ -264,7 +264,7 @@ int on_extract_entry(const char *filename, void *arg) {
     return 0;
 }
 
-void ProjectManager::importProjectFromFile(const QString& file)
+void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
 {
     QString fileName;
     if (file.isEmpty()) {
@@ -338,8 +338,6 @@ void ProjectManager::importProjectFromFile(const QString& file)
     );
 
     // Update files that reference guids
-
-	bool shouldOpen = false;
 
     if (shouldOpen) {
         Globals::project->setProjectPath(pDir, worldName);
@@ -479,7 +477,7 @@ void ProjectManager::cleanupOnClose()
 void ProjectManager::openSampleProject(QListWidgetItem *item)
 {
     sampleDialog.close();
-    importProjectFromFile(item->data(Qt::UserRole).toString());
+    importProjectFromFile(item->data(Qt::UserRole).toString(), true);
 }
 
 void ProjectManager::newProject()

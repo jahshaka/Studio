@@ -67,7 +67,7 @@ public:
 protected slots:
     void openSampleProject(QListWidgetItem*);
     void newProject();
-    void importProjectFromFile(const QString& file = QString());
+    void importProjectFromFile(const QString& file = QString(), bool shouldOpen = false);
 
     void changePreviewSize(QString);
 
