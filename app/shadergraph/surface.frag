@@ -180,7 +180,7 @@ void main()
     vec3 finalColor = material.emission + ((material.ambient * u_sceneAmbient) + (
                       (diffuse + (material.specular * specular)))) * col;
 
-    fragColor = vec4(finalColor, 0.65);
+    fragColor = vec4(finalColor, material.alpha);
     //fragColor = vec4(vec3(1,0,0), 0.65);
     //fragColor = vec4(u_lights[0].color);
     //fragColor = vec4(v_normal, 1);
