@@ -91,14 +91,21 @@ void SceneViewWidget::setShowFps(bool value)
 
 void SceneViewWidget::cleanup()
 {
-	scene.reset();
-	selectedNode.reset();
-	translationGizmo->clearSelectedNode();
-	rotationGizmo->clearSelectedNode();
-	scaleGizmo->clearSelectedNode();
+	if (initialized) {
+		scene.reset();
+		selectedNode.reset();
+		if (translationGizmo!=nullptr)
+			translationGizmo->clearSelectedNode();
+		if (rotationGizmo != nullptr)
+			rotationGizmo->clearSelectedNode();
+		if (scaleGizmo != nullptr)
+			scaleGizmo->clearSelectedNode();
 
-	renderer->setScene(iris::ScenePtr());
-	renderer->setSelectedSceneNode(iris::SceneNodePtr());
+		if (!!renderer) {
+			renderer->setScene(iris::ScenePtr());
+			renderer->setSelectedSceneNode(iris::SceneNodePtr());
+		}
+	}
 }
 
 void SceneViewWidget::setShowPerspeciveLabel(bool val)
