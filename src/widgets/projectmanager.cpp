@@ -206,7 +206,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
     });
 
 	connect(ui->downloadWorlds, &QPushButton::pressed, []() {
-		QDesktopServices::openUrl(QUrl("https://www.jahfx.com/downloads/scenes/"));
+		QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/get/scenes/"));
 	});
 
     populateDesktop();
