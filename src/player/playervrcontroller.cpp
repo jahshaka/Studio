@@ -150,31 +150,33 @@ void PlayerVrController::start()
 	this->leftHand->init(scene, scene->camera, activeViewer);
 	this->rightHand->init(scene, scene->camera, activeViewer);
 
-	// plant viewer to any surface below it
-	auto rayStart = activeViewer->getGlobalPosition();
-	auto rayEnd = rayStart + QVector3D(0, -1000, 0);
-	QList<iris::PickingResult> results;
-	scene->rayCast(rayStart, rayEnd, results, 0, true);
+	if (!!activeViewer) {
+		// plant viewer to any surface below it
+		auto rayStart = activeViewer->getGlobalPosition();
+		auto rayEnd = rayStart + QVector3D(0, -1000, 0);
+		QList<iris::PickingResult> results;
+		scene->rayCast(rayStart, rayEnd, results, 0, true);
 
-	// closest point
-	QVector3D closestPoint = rayEnd;
-	float closestDist = 1000;
-	if (results.size() > 0) {
-		// find closest one
-		for (const auto result : results) {
-			auto dist = result.hitPoint.distanceToPoint(closestPoint);
-			if (dist < closestDist)
-			{
-				closestDist = dist;
-				closestPoint = result.hitPoint;
+		// closest point
+		QVector3D closestPoint = rayEnd;
+		float closestDist = 1000;
+		if (results.size() > 0) {
+			// find closest one
+			for (const auto result : results) {
+				auto dist = result.hitPoint.distanceToPoint(closestPoint);
+				if (dist < closestDist)
+				{
+					closestDist = dist;
+					closestPoint = result.hitPoint;
+				}
 			}
-		}
 
-		// todo: should limit snapping distance?
-		//5.75
-		//activeViewer->setGlobalPos(closestPoint + QVector3D(0, 1.73736, 0));
-		activeViewer->setGlobalPos(closestPoint + QVector3D(0, 5.75f * 0.5f,0));
-		
+			// todo: should limit snapping distance?
+			//5.75
+			//activeViewer->setGlobalPos(closestPoint + QVector3D(0, 1.73736, 0));
+			activeViewer->setGlobalPos(closestPoint + QVector3D(0, 5.75f * 0.5f, 0));
+
+		}
 	}
 }
 
