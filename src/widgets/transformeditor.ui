@@ -166,10 +166,10 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
           <number>2</number>
          </property>
          <property name="minimum">
-          <double>-1024.000000000000000</double>
+          <double>-9999.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>1024.000000000000000</double>
+          <double>9999.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -220,10 +220,10 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
           <number>2</number>
          </property>
          <property name="minimum">
-          <double>-1024.000000000000000</double>
+          <double>-9999.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>1024.000000000000000</double>
+          <double>9999.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -271,10 +271,10 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
           <number>2</number>
          </property>
          <property name="minimum">
-          <double>-1024.000000000000000</double>
+          <double>-9999.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>1024.000000000000000</double>
+          <double>9999.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -498,10 +498,10 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
           <number>2</number>
          </property>
          <property name="minimum">
-          <double>-1024.000000000000000</double>
+          <double>-9999.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>1024.000000000000000</double>
+          <double>9999.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -552,10 +552,10 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
           <number>2</number>
          </property>
          <property name="minimum">
-          <double>-1024.000000000000000</double>
+          <double>-9999.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>1024.000000000000000</double>
+          <double>9999.000000000000000</double>
          </property>
         </widget>
        </item>
@@ -603,10 +603,10 @@ QPushButton:pressed#resetBtn { background-color: #444; }</string>
           <number>2</number>
          </property>
          <property name="minimum">
-          <double>-1024.000000000000000</double>
+          <double>-9999.000000000000000</double>
          </property>
          <property name="maximum">
-          <double>1024.000000000000000</double>
+          <double>9999.000000000000000</double>
          </property>
         </widget>
        </item>
