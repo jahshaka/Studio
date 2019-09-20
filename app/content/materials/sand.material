@@ -4,6 +4,7 @@
     "icon"              : "../../materials/sand.png",
     "diffuseTexture"    : "presets/sand/Ground10_1_COLOR.png",
     "normalTexture"     : "presets/sand/Ground10_1_NRM.png",
+    "normalIntensity"   : 1,
     "specularTexture"   : "presets/sand/Ground10_1_SPEC.png",
     "textureScale"      : 4,
     "diffuseColor"      : "#FFF",

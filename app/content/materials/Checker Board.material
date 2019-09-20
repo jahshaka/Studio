@@ -5,6 +5,7 @@
     "material_type": "Default",
     "name": "Checker Board",
     "normalTexture": "",
+    "normalIntensity"   : 0.5,
     "shaderGuid": "",
     "shininess": 84,
     "specularColor": "#444",

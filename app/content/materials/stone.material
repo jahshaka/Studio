@@ -5,6 +5,7 @@
     "diffuseTexture"    : "presets/stone/Stone_04_UV_H_CM_1_COLOR.png",
     "normalTexture"     : "presets/stone/Stone_04_UV_H_CM_1_NRM.png",
     "specularTexture"   : "presets/stone/Stone_04_UV_H_CM_1_SPEC.png",
+    "normalIntensity"   : 1,
     "textureScale"      : 4,
     "diffuseColor"      : "#FFF",
     "specularColor"     : "#FFF",

@@ -1,9 +1,10 @@
 {
-    "name"              : "Board",
+    "name"              : "Wood",
     "material_type"     : "Default",
     "icon"              : "../../materials/wood.png",
     "diffuseTexture"    : "presets/wood/wood_planks_03_1_COLOR.png",
     "normalTexture"     : "presets/wood/wood_planks_03_1_NRM.png",
+    "normalIntensity"   : 1,
     "specularTexture"   : "presets/wood/wood_planks_03_1_SPEC.png",
     "textureScale"      : 4,
     "diffuseColor"      : "#FFF",

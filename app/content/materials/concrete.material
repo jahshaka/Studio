@@ -4,6 +4,7 @@
     "icon"              : "../../materials/old_painted_metal.png",
     "diffuseTexture"    : "presets/concrete/Old_Painted_UV_H_CM_1_COLOR.png",
     "normalTexture"     : "presets/concrete/Old_Painted_UV_H_CM_1_NRM.png",
+    "normalIntensity"   : 0.5,
     "specularTexture"   : "presets/concrete/Old_Painted_UV_H_CM_1_SPEC.png",
     "textureScale"      : 4,
     "diffuseColor"      : "#FFF",

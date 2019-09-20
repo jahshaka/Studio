@@ -4,6 +4,7 @@
     "icon"              : "../../materials/patchy_grass.png",
     "diffuseTexture"    : "presets/patchy_grass/patchygrass_1_COLOR.png",
     "normalTexture"     : "presets/patchy_grass/patchygrass_1_NRM.png",
+    "normalIntensity"   : 0.5,
     "specularTexture"   : "presets/patchy_grass/patchygrass_1_SPEC.png",
     "textureScale"      : 3,
     "diffuseColor"      : "#FFF",

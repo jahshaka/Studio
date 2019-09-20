@@ -5,6 +5,7 @@
     "diffuseTexture"    : "presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
     "normalTexture"     : "presets/leather/Leather_02_UV_H_CM_1_NRM.png",
     "specularTexture"   : "presets/leather/Leather_02_UV_H_CM_1_SPEC.png",
+    "normalIntensity"   : 0.5,
     "textureScale"      : 2,
     "diffuseColor"      : "#FFF",
     "specularColor"     : "#444",

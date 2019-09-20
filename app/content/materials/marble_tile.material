@@ -4,6 +4,7 @@
     "icon"              : "../../materials/marble_tile.png",
     "diffuseTexture"    : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
     "normalTexture"     : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_NRM.png",
+    "normalIntensity"   : 1,
     "specularTexture"   : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_SPEC.png",
     "textureScale"      : 4,
     "diffuseColor"      : "#FFF",

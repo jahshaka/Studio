@@ -4,6 +4,7 @@
     "icon"              : "../../materials/brick_ground.png",
     "diffuseTexture"    : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_COLOR.png",
     "normalTexture"     : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_NRM.png",
+    "normalIntensity"   : 1.0,
     "specularTexture"   : "presets/brick_ground/Brick_Ground_01_UV_H_CM_1_SPEC.png",
     "textureScale"      : 4,
     "ambientColor"      : "#FFF",
