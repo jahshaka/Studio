@@ -123,7 +123,7 @@ void InfoDialog::visitWebsite()
 
 void InfoDialog::visitTutorials()
 {
-    QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/category/blog/"));
+    QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn/resources/"));
 }
 
 void InfoDialog::openRecentProject()
