@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.28)
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
     if(POLICY ${p})
@@ -12,7 +12,7 @@ set(APP_OUTPUT_NAME "Jahshaka")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia)
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
@@ -355,7 +355,7 @@ set(WIDGETS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network Qt5::Multimedia IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)
