@@ -32,7 +32,7 @@ public:
                   QStyleHintReturn* returnData = 0) const
     {
         if (hint == QStyle::SH_Slider_AbsoluteSetButtons) {
-            return (Qt::LeftButton | Qt::MidButton | Qt::RightButton);
+            return (Qt::LeftButton | Qt::MiddleButton | Qt::RightButton);
         }
 
         return QProxyStyle::styleHint(hint, option, widget, returnData);

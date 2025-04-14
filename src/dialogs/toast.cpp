@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "toast.h"
 
 #include <QApplication>
-#include <QDesktopWidget>
 #include <QGraphicsDropShadowEffect>
 #include <QStyle>
 #include <QTimer>

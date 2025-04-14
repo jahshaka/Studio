@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "assetwidget.h"
 #include "ui_assetwidget.h"
 
+#include <iostream>
 #include <QDate>
 #include <QAbstractItemModel>
 #include <QBuffer>
@@ -210,7 +211,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->switcher->setObjectName("Switcher");
 
     filterGroupLayout = new QHBoxLayout;
-    filterGroupLayout->setMargin(0);
+    filterGroupLayout->setContentsMargins(0, 0, 0, 0);
     filterGroupLayout->setSpacing(0);
     ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
     ui->filterWidget->setLayout(filterGroupLayout);
@@ -339,7 +340,7 @@ void AssetWidget::trigger()
 	for (auto &asset : AssetManager::getAssets()) {
 		if (asset->type == ModelTypes::Object) {
 			auto material = db->fetchAssetData(asset->assetGuid);
-			auto materialObj = QJsonDocument::fromBinaryData(material);
+            auto materialObj = QJsonDocument::fromJson(material);
 
 			auto node = iris::MeshNode::loadAsSceneFragment(QString(), asset->getValue().value<AssimpObject*>()->getSceneData(),
 				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
@@ -439,7 +440,7 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 	QStringList &textureList,
 	QJsonObject &mat)
 {
-	QJsonDocument doc = QJsonDocument::fromBinaryData(blob);
+    QJsonDocument doc = QJsonDocument::fromJson(blob);
 	const QJsonObject materialDefinition = doc.object();
 	auto shaderName = Constants::SHADER_DEFS + materialDefinition["name"].toString() + ".shader";
 
@@ -541,7 +542,7 @@ void AssetWidget::addItem(const FolderRecord &folderData)
 
 void AssetWidget::addItem(const AssetRecord &assetData)
 {
-    auto prop = QJsonDocument::fromBinaryData(assetData.properties).object();
+    auto prop = QJsonDocument::fromJson(assetData.properties).object();
     if (!prop["type"].toString().isEmpty()) {
         // No need to check further, this is a builtin asset
         return;
@@ -1171,7 +1172,7 @@ void AssetWidget::exportTexture()
     manifest.close();
 
     QStringList fullFileList = db->fetchAssetAndDependencies(guid);
-    auto shaderGuid = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object()["guid"].toString();
+    auto shaderGuid = QJsonDocument::fromJson(db->fetchAssetData(guid)).object()["guid"].toString();
     bool exportCustomShader = false;
     QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
     while (it.hasNext()) {
@@ -1269,7 +1270,7 @@ void AssetWidget::exportMaterial()
 	manifest.close();
 
     QStringList fullFileList = db->fetchAssetAndDependencies(guid);
-    auto shaderGuid = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object()["guid"].toString();
+    auto shaderGuid = QJsonDocument::fromJson(db->fetchAssetData(guid)).object()["guid"].toString();
     bool exportCustomShader = false;
     QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
     while (it.hasNext()) {
@@ -1339,7 +1340,7 @@ void AssetWidget::exportMaterial()
 void AssetWidget::exportMaterialPreview()
 {
     auto assetGuid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-    auto materialDef = QJsonDocument::fromBinaryData(db->fetchAssetData(assetGuid)).object();
+    auto materialDef = QJsonDocument::fromJson(db->fetchAssetData(assetGuid)).object();
 
     QString jsonMaterialString = QJsonDocument(materialDef).toJson();
 
@@ -1462,7 +1463,7 @@ void AssetWidget::exportAssetPack()
     auto filePath = QFileDialog::getSaveFileName(
         this,
         "Choose export path",
-        QString("AssetBundle_%1").arg(QString::number(currentDateTime.toTime_t())),
+        QString("AssetBundle_%1").arg(QString::number(currentDateTime.toSecsSinceEpoch())),
         "Supported Export Formats (*.jaf)"
     );
 
@@ -1486,8 +1487,8 @@ void AssetWidget::exportAssetPack()
     QFile manifest(QDir(writePath).filePath(".manifest"));
     if (manifest.open(QIODevice::ReadWrite)) {
         QTextStream stream(&manifest);
-        stream << "bundle" << endl;
-        for (const auto &item : assetGuids) stream << item << endl;
+        stream << "bundle\n";
+        for (const auto &item : assetGuids) stream << item << "\n";
     }
     manifest.close();
 
@@ -1864,7 +1865,7 @@ void AssetWidget::createShader()
     //jsonFile.open(QFile::WriteOnly);
     //jsonFile.write(QJsonDocument(shaderDefinition).toJson());
 
-    db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toBinaryData());
+    db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
 
     AssetManager::addAsset(assetShader);
 }
@@ -1903,9 +1904,9 @@ void AssetWidget::createSky()
 		QString(),
 		QString(),
 		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
-		QJsonDocument(properties).toBinaryData(),
+        QJsonDocument(properties).toJson(),
 		QByteArray(),
-		QJsonDocument(skyDescription).toBinaryData()
+        QJsonDocument(skyDescription).toJson()
 	);
 
     item->setText("Sky");
@@ -2190,7 +2191,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             }
 
             if (jafType == ModelTypes::Shader) {
-                QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+                QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guidReturned));
                 QJsonObject shaderDefinition = matDoc.object();
 
                 auto assetShader = new AssetShader;
@@ -2202,7 +2203,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             else {
                 for (const auto &asset : oldAssetRecords) {
                     if (asset.type == static_cast<int>(ModelTypes::Shader)) {
-                        QJsonDocument matDoc = QJsonDocument::fromBinaryData(asset.asset);
+                        QJsonDocument matDoc = QJsonDocument::fromJson(asset.asset);
                         QJsonObject shaderDefinition = matDoc.object();
 
                         auto assetShader = new AssetShader;
@@ -2219,7 +2220,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             }
 
             if (jafType == ModelTypes::Material) {
-                QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+                QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guidReturned));
                 QJsonObject matObject = matDoc.object();
 
 				MaterialReader reader;
@@ -2285,7 +2286,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
             }
 
             if (jafType == ModelTypes::ParticleSystem) {
-                QJsonDocument particleDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guidReturned));
+                QJsonDocument particleDoc = QJsonDocument::fromJson(db->fetchAssetData(guidReturned));
                 QJsonObject particleObject = particleDoc.object();
 
                 auto assetPS = new AssetParticleSystem;
@@ -2300,7 +2301,7 @@ void AssetWidget::importJafAssets(const QList<directory_tuple> &fileNames)
                         asset->assetGuid = guidReturned;
                         auto node = asset->getValue().value<iris::SceneNodePtr>();
                         
-                        auto materialObj = QJsonDocument::fromBinaryData(db->fetchAssetData(asset->assetGuid));
+                        auto materialObj = QJsonDocument::fromJson(db->fetchAssetData(asset->assetGuid));
                         QJsonObject matObject = materialObj.object();
                         
                         //node.staticCast<iris::MeshNode>()->setMaterial(material);
@@ -2419,7 +2420,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
                     shaderDefinition["name"] = QFileInfo(asset->fileName).baseName();
                     shaderDefinition["guid"] = assetGuid;
 
-                    db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toBinaryData());
+                    db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
 
                     auto assetShader = new AssetShader;
                     assetShader->assetGuid = assetGuid;
@@ -2447,7 +2448,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 					}
 
 					QJsonDocument jsonMaterialGuids = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
-					db->updateAssetAsset(assetGuid, jsonMaterialGuids.toBinaryData());
+                    db->updateAssetAsset(assetGuid, jsonMaterialGuids.toJson());
 
 					// Create dependencies to the object for the textures used
 					for (const auto &image : imagesInUse) {
@@ -2459,7 +2460,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 						}
 					}
 
-					QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(assetGuid));
+                    QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(assetGuid));
 					QJsonObject matObject = matDoc.object();
 					iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 					material->generate(IrisUtils::join(
@@ -2544,7 +2545,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tuple> &fileNames)
 																	QByteArray(),
 																	QByteArray(),
 																	QByteArray(),
-																	QJsonDocument(nodeWithGUIDs).toBinaryData());
+                                                                    QJsonDocument(nodeWithGUIDs).toJson());
 
                     ThumbnailGenerator::getSingleton()->requestThumbnail(
                         ThumbnailRequestType::Mesh, asset->path, objectGuid
@@ -2595,7 +2596,8 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	std::function<void(QStringList, QString guid, QList<directory_tuple>&)> getImportManifest =
 		[&](QStringList files, QString guid, QList<directory_tuple> &items) -> void
 	{
-		foreach(const QFileInfo &file, files) {
+        foreach(const QString &filePath, files){
+            QFileInfo file(filePath);
 			directory_tuple item;
 			item.path = file.absoluteFilePath();
 			item.parent_guid = guid;

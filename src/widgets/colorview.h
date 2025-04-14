@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include <QApplication>
-#include <QDesktopWidget>
+#include <QGuiApplication>
 #include <QDialog>
 #include <QComboBox>
 #include <QGraphicsEffect>
@@ -25,7 +25,9 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QLinearGradient>
 #include <QProxyStyle>
+#ifdef Q_OS_WIN
 #include <qwindowdefs_win.h>
+#endif
 #include "../misc/stylesheet.h"
 
 
@@ -39,7 +41,7 @@ public:
 		const QWidget* widget = 0,
 		QStyleHintReturn* returnData = 0) const
 	{
-		if (hint == QStyle::SH_Slider_AbsoluteSetButtons) 	return (Qt::LeftButton | Qt::MidButton | Qt::RightButton);
+        if (hint == QStyle::SH_Slider_AbsoluteSetButtons) 	return (Qt::LeftButton | Qt::MiddleButton | Qt::RightButton);
 		return QProxyStyle::styleHint(hint, option, widget, returnData);
 	}
 };
@@ -246,7 +248,7 @@ public slots:
     
 protected:
     void leaveEvent(QEvent *) override;
-	void enterEvent(QEvent *) override;
+    void enterEvent(QEvent *);
     void mousePressEvent(QMouseEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;

@@ -79,7 +79,7 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
 
     //qDebug() << projectObj;
 
-    return QJsonDocument(projectObj).toBinaryData();
+    return QJsonDocument(projectObj).toJson();
 }
 
 void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)

@@ -95,7 +95,8 @@ void RenderThread::run()
 
 void RenderThread::initScene()
 {
-    auto gl = context->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    auto gl = new QOpenGLFunctions_3_2_Core();
+    gl->initializeOpenGLFunctions();
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
 
@@ -156,7 +157,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
     auto guid = request.id;
 
     if (request.type == ThumbnailRequestType::ImportedMesh) {
-        QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+        QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
         QJsonObject objectHierarchy = document.object();
 
         SceneReader *reader = new SceneReader;

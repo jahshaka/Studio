@@ -11,7 +11,13 @@ For more information see the LICENSE file
 
 #include "upgrader.h"
 
-#include <QDesktopWidget>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+#include <QGuiApplication>
+#include <QScreen>
+#include <QRect>
+#include <QPoint>
 #include <QDialog>
 #include <QDir>
 #include <QHBoxLayout>
@@ -30,7 +36,7 @@ For more information see the LICENSE file
 void Upgrader::checkIfDeprecatedVersion()
 {
 	const QString path = IrisUtils::join(
-		QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::JAH_DATABASE
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
 	);
 
     if (!QFile(path).exists()) return;
@@ -93,7 +99,9 @@ void Upgrader::checkIfDeprecatedVersion()
 				dialog.adjustSize();
 
 				QRect position = dialog.frameGeometry();
-				position.moveCenter(QDesktopWidget().availableGeometry().center());
+                QRect screenGeometry = QGuiApplication::primaryScreen()->availableGeometry();
+                QPoint center = screenGeometry.center();
+                position.moveCenter(center);
 				dialog.move(position.topLeft());
 			});
 
@@ -106,10 +114,12 @@ void Upgrader::checkIfDeprecatedVersion()
 			if (proceed) {
 				db.wipeDatabase();
 
-				QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), "AssetStore"));
+                QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore"));
 				if (!storeDir.removeRecursively()) {
 #ifdef Q_OS_WIN
-					RemoveDirectory(storeDir.absolutePath().toStdString().c_str());
+                    QString storeDirAbsolutePath = storeDir.absolutePath();
+                    std::wstring widePath = storeDirAbsolutePath.toStdWString();
+                    RemoveDirectory(widePath.c_str());
 #endif // Q_OS_WIN
 				}
 
@@ -121,7 +131,9 @@ void Upgrader::checkIfDeprecatedVersion()
 				QDir projectDir(defaultProjectDirectory);
 				if (!projectDir.removeRecursively()) {
 #ifdef Q_OS_WIN
-					RemoveDirectory(projectDir.absolutePath().toStdString().c_str());
+                    QString projectDirAbsolutePath = projectDir.absolutePath();
+                    std::wstring widePath = projectDirAbsolutePath.toStdWString();
+                    RemoveDirectory(widePath.c_str());
 #endif // Q_OS_WIN
 				}
 
@@ -136,7 +148,7 @@ void Upgrader::checkIfDeprecatedVersion()
 void Upgrader::checkIfSchemaNeedsUpdating()
 {
 	const QString path = IrisUtils::join(
-		QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::JAH_DATABASE
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
 	);
 
 	if (!QFile(path).exists()) return;

@@ -9,6 +9,7 @@ project(downloader)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+find_package(OpenGL REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)

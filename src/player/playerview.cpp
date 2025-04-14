@@ -28,7 +28,7 @@ PlayerView::PlayerView(QWidget* parent) :
 	QOpenGLWidget(parent)
 {
 	QSurfaceFormat format;
-	format.setDepthBufferSize(32);
+    format.setDepthBufferSize(32);
 	format.setMajorVersion(3);
 	format.setMinorVersion(2);
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
@@ -52,7 +52,7 @@ void PlayerView::initializeGL()
 {
 	QOpenGLWidget::initializeGL();
 	makeCurrent();
-	initializeOpenGLFunctions();
+    initializeOpenGLFunctions();
 
 	renderer = iris::ForwardRenderer::create(true, true);
 	renderer->setScene(scene);

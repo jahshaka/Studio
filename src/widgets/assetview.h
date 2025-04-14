@@ -108,6 +108,7 @@ signals:
     void refreshCollections();
 
 private:
+    bool m_layoutInitialized = false;
 	Database *db;
 	QSplitter *_splitter;
 	QWidget *_filterBar;

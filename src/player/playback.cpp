@@ -100,8 +100,8 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 
 	camController->postUpdate(dt);
 
-	glClearColor(.1f, .1f, .1f, .4f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(.1f, .1f, .1f, .4f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	if (vrDevice->isHeadMounted()) {
 		renderer->renderSceneVr(dt, &viewport, false);
@@ -167,7 +167,7 @@ void PlayBack::mouseReleaseEvent(QMouseEvent *e)
 void PlayBack::wheelEvent(QWheelEvent *event)
 {
 	if (camController != nullptr) {
-		camController->onMouseWheel(event->delta());
+        camController->onMouseWheel(event->angleDelta().y());
 	}
 }
 

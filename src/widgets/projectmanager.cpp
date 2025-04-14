@@ -117,7 +117,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		progressDialog->setValue(60);
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
-            QJsonDocument shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
             QJsonObject shaderObject = shaderDefinition.object();
 
             auto assetShader = new AssetShader;
@@ -130,7 +130,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		progressDialog->setValue(70);
 
         for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
-            QJsonDocument particleDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
             QJsonObject particleObject = particleDefinition.object();
 
             auto assetPS = new AssetParticleSystem;
@@ -146,7 +146,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		for (const auto &asset :
 			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
 		{
-			QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
+            QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 			QJsonObject matObject = matDoc.object();
 
 			MaterialReader reader;
@@ -213,7 +213,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
     QGridLayout *layout = new QGridLayout();
     layout->addWidget(dynamicGrid);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     ui->pmContainer->setStyleSheet(
 		"border: none;"
@@ -384,7 +384,7 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 {
     Q_UNUSED(widget);
     emit closeProject();
-    Globals::project->setProjectGuid(QString::null);
+    Globals::project->setProjectGuid(QString());
 }
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
@@ -622,7 +622,7 @@ void ProjectManager::openSampleBrowser()
     layout->addWidget(instructions);
     layout->addWidget(sampleList);
     layout->addWidget(wid);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
     sampleDialog.setLayout(layout);

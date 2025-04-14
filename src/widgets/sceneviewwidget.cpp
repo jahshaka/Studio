@@ -275,8 +275,8 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 	else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Sky)) {
 		auto skyGuid = roleDataMap.value(3).toString();
 
-		const QJsonObject skyDefinition = QJsonDocument::fromBinaryData(database->fetchAssetData(skyGuid)).object();
-		const QJsonObject skyProperties = QJsonDocument::fromBinaryData(database->fetchAsset(skyGuid).properties).object();
+        const QJsonObject skyDefinition = QJsonDocument::fromJson(database->fetchAssetData(skyGuid)).object();
+        const QJsonObject skyProperties = QJsonDocument::fromJson(database->fetchAsset(skyGuid).properties).object();
 
 		int skyTypeIndex = skyProperties.value("sky").toObject().value("type").toInt();
 
@@ -611,8 +611,10 @@ void SceneViewWidget::renderGizmos(bool once)
 {
 	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
 		return;
-	
-    auto gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+
+    auto gl = new QOpenGLFunctions_3_2_Core();
+    gl->initializeOpenGLFunctions();
+
 	//if (!!selectedNode && !selectedNode->isPhysicsBody) {
 	if (!!selectedNode && !UiManager::isSimulationRunning) {
 		gizmo->updateSize(editorCam);
@@ -824,7 +826,9 @@ void SceneViewWidget::renderScene()
         // dont show thumbnail in play mode
         if (!playScene) {
             if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-                QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
+                auto gl = new QOpenGLFunctions_3_2_Core();
+                gl->initializeOpenGLFunctions();
+                glClear(GL_DEPTH_BUFFER_BIT);
                 QMatrix4x4 mat;
                 mat.setToIdentity();
                 mat.translate(0.75, -0.75, 0);
@@ -1016,7 +1020,7 @@ iris::SceneNodePtr SceneViewWidget::doActiveObjectPicking(const QPointF &point,
     if (hitList.size() == 0) return iris::SceneNodePtr();
     if (hitList.size() == 1) return hitList.last().hitNode;
 
-    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+    std::sort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 
@@ -1162,7 +1166,7 @@ void SceneViewWidget::wheelEvent(QWheelEvent *event)
 	}
 
     if (camController != nullptr) {
-        camController->onMouseWheel(event->delta());
+        camController->onMouseWheel(event->angleDelta().y());
     }
 
 	gizmo->updateSize(editorCam);
@@ -1246,7 +1250,7 @@ void SceneViewWidget::doObjectPicking(
     }
 
     // sort by distance to camera then return the closest hit node
-    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+    std::sort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 

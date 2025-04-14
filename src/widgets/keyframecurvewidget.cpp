@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <vector>
+#include <QPainterPath>
 //#include "../scenegraph/scenenodes.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/animation/keyframeset.h"

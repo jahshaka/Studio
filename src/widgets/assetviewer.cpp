@@ -31,21 +31,34 @@ For more information see the LICENSE file
 
 #include <QPointer>
 
+#include <QOpenGLDebugLogger>     // Add include
+#include <QOpenGLDebugMessage>
+
 AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
 {
-    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-    format.setVersion(3, 2);
-    format.setSamples(4);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    format.setRenderableType(QSurfaceFormat::OpenGL);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSwapInterval(0);
-    setFormat(format);
-    
-    //QTimer *timer = new QTimer(this);
-    //connect(timer, SIGNAL(timeout()), this, SLOT(update()));
-    //timer->start(1000.f / 60.f);
-    //connect(this, SIGNAL(frameSwapped()), this, SLOT(update()));
+    // QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+    // format.setVersion(3, 2);
+    // format.setSamples(4);
+    // format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
+    // format.setRenderableType(QSurfaceFormat::OpenGL);
+    // format.setProfile(QSurfaceFormat::CoreProfile);
+    // format.setSwapInterval(0);
+    // setFormat(format);
+
+    // In main.cpp (before QApplication) OR AssetViewer constructor
+    QSurfaceFormat format;
+    // Keep other settings that seemed necessary (like depth buffer)
+    format.setDepthBufferSize(24);
+    format.setVersion(3, 2); // Keep if needed
+    format.setProfile(QSurfaceFormat::CoreProfile); // Keep if needed
+
+    // *** ADD THIS LINE ***
+    format.setOption(QSurfaceFormat::DebugContext);
+    // *********************
+
+    // Apply the format
+    // QSurfaceFormat::setDefaultFormat(format); // If doing globally
+    setFormat(format); // If doing in AssetViewer constructor
 
     viewport = new iris::Viewport();
     render = false;
@@ -74,9 +87,101 @@ void AssetViewer::paintGL()
         scene->update(dt);
         renderer->renderScene(dt, viewport);
     }
+    // --- FBO Check ---
+    GLint currentFBO = 0;
+    // Get the correct FBO ID provided by QOpenGLWidget
+    GLuint defaultFboId = defaultFramebufferObject();
+    if (gl && context() && context()->isValid()) {
+        gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFBO);
+        qDebug() << "FBO Check: Bound FBO =" << currentFBO
+                 << "| QOpenGLWidget Default FBO =" << defaultFboId;
 
+        // Explicitly check if they match (cast needed for comparison)
+        if (GLuint(currentFBO) != defaultFboId) {
+            qWarning() << "!!! MISMATCH: Default FBO is NOT bound at end of paintGL! Rebinding...";
+            // *** THE FIX: Uncomment or add this line ***
+            gl->glBindFramebuffer(GL_FRAMEBUFFER, defaultFboId);
+            // ******************************************
+        } else {
+            qDebug() << "   FBO binding matches QOpenGLWidget default.";
+        }
+    } else {
+        qWarning() << "Cannot check/rebind FBO, gl pointer or context is invalid!";
+    }
+    // --- End FBO Check ---
+
+    // ... then the glGetError loop ...
+    GLenum errPaint;
+    while ((errPaint = gl->glGetError()) != GL_NO_ERROR) { /* ... */ }
+    qDebug() << "OpenGL error check complete before doneCurrent().";
     doneCurrent();
 }
+
+// void AssetViewer::paintGL()
+// {
+//     qDebug() << "[[[ paintGL START ]]]";
+//     makeCurrent();
+//     // Check 1: Is context valid immediately after makeCurrent?
+//     if (!context() || !context()->isValid()) {
+//         qWarning() << "!!! Context INVALID immediately after makeCurrent()!";
+//         return; // Cannot proceed
+//     } else {
+//         // qDebug() << "   Context valid after makeCurrent."; // Optional: reduce noise
+//     }
+
+//     float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+//     elapsedTimer.restart();
+
+//     if (!!renderer && !!scene) {
+//         // Optional: Temporarily comment out updates to isolate rendering
+//         // camController->update(dt);
+//         // scene->update(dt);
+
+//         // Check 2: Is context valid just before rendering?
+//         if (!context() || !context()->isValid()) { qWarning() << "!!! Context INVALID before iris::renderScene!"; }
+//         else { qDebug() << "   Context valid before iris::renderScene."; }
+
+//         qDebug() << "   Calling iris::renderScene...";
+//         renderer->renderScene(dt, viewport); // << The main suspect call
+//         qDebug() << "   ...returned from iris::renderScene.";
+
+//         // Check 3: Is context valid IMMEDIATELY after rendering?
+//         if (!context() || !context()->isValid()) { qWarning() << "!!! Context INVALID immediately after iris::renderScene!"; }
+//         else { qDebug() << "   Context still valid immediately after iris::renderScene."; }
+//     }
+
+//     // FBO Check and Rebind
+//     GLint currentFBO = 0;
+//     GLuint defaultFboId = defaultFramebufferObject();
+//     if (gl && context() && context()->isValid()) { // Check context again
+//         gl->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFBO);
+//         if (GLuint(currentFBO) != defaultFboId) {
+//             qWarning() << "!!! MISMATCH: FBO " << currentFBO << " bound. Rebinding default FBO " << defaultFboId;
+//             gl->glBindFramebuffer(GL_FRAMEBUFFER, defaultFboId);
+//             // Check 4: Is context valid AFTER FBO rebind (if it happened)?
+//             if (!context() || !context()->isValid()) { qWarning() << "!!! Context INVALID after FBO rebind!"; }
+//             else { qDebug() << "   Context still valid after FBO rebind."; }
+//         } else {
+//             // Context was already valid before this block, and FBO matched.
+//             qDebug() << "   Context valid and FBO binding (" << currentFBO << ") was correct.";
+//         }
+//     } else {
+//         qWarning() << "!!! Context INVALID before FBO check/rebind attempt!"; // Check 5
+//     }
+
+//     // Final Error Check
+//     GLenum errPaint;
+//     while ((errPaint = gl->glGetError()) != GL_NO_ERROR) { qWarning() << "OpenGL Error during paintGL():" << errPaint; }
+
+//     // Check 6: Is context valid right before doneCurrent?
+//     if (!context() || !context()->isValid()) { qWarning() << "!!! Context INVALID right before doneCurrent()!"; }
+//     else { qDebug() << "   Context valid before doneCurrent()."; }
+
+//     qDebug() << "   Calling doneCurrent()...";
+//     doneCurrent();
+//     // Note: Cannot reliably check context validity *after* doneCurrent().
+//     qDebug() << "[[[ paintGL END ]]]";
+// }
 
 void AssetViewer::updateScene()
 {
@@ -85,10 +190,40 @@ void AssetViewer::updateScene()
 
 void AssetViewer::initializeGL()
 {
-    QOpenGLWidget::initializeGL();
+    gl = new QOpenGLFunctions_3_2_Core();
+    gl->initializeOpenGLFunctions();
 
-    initializeOpenGLFunctions();
-    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    qDebug() << "Checking for KHR_debug extension...";
+    if (context()->hasExtension(QByteArrayLiteral("GL_KHR_debug"))) {
+        qDebug() << "KHR_debug extension found. Initializing QOpenGLDebugLogger...";
+        QOpenGLDebugLogger *logger = new QOpenGLDebugLogger(this); // 'this' is the QObject parent
+        if (logger->initialize()) {
+            qDebug() << "QOpenGLDebugLogger initialized successfully.";
+            // Connect the logger's messages to a lambda function that prints them
+            connect(logger, &QOpenGLDebugLogger::messageLogged, this, [](const QOpenGLDebugMessage &debugMessage){
+                // Print warnings and errors from the driver
+                if (debugMessage.severity() >= QOpenGLDebugMessage::HighSeverity ||
+                    debugMessage.type() == QOpenGLDebugMessage::ErrorType ||
+                    debugMessage.type() == QOpenGLDebugMessage::DeprecatedBehaviorType ||
+                    debugMessage.type() == QOpenGLDebugMessage::UndefinedBehaviorType)
+                {
+                    qWarning() << "[OpenGL Debug]" << debugMessage.id() << debugMessage.type() << debugMessage.severity() << ":" << debugMessage.message();
+                } else {
+                    // Optional: Print lower severity messages too if needed
+                    // qDebug() << "[OpenGL Debug Info]" << debugMessage.message();
+                }
+            });
+            logger->startLogging(QOpenGLDebugLogger::SynchronousLogging); // Log messages immediately
+            logger->enableMessages(); // Log all messages initially
+            qDebug() << "OpenGL Debug Logging started.";
+        } else {
+            qWarning() << "Failed to initialize QOpenGLDebugLogger!";
+            delete logger; // Clean up if init fails
+        }
+    } else {
+        qDebug() << "KHR_debug extension not available. Cannot use QOpenGLDebugLogger.";
+    }
+
 
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
@@ -176,7 +311,7 @@ void AssetViewer::initializeGL()
 void AssetViewer::wheelEvent(QWheelEvent *event)
 {
     if (camController != nullptr) {
-        camController->onMouseWheel(event->delta());
+        camController->onMouseWheel(event->angleDelta().y());
     }
 }
 
@@ -342,11 +477,11 @@ void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guid
 	scene->setSkyColor(QColor(25, 25, 25));
 
     QString assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
         Constants::ASSET_FOLDER, guid
     );
     
-    auto shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
+    auto shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
 
     auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
     auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
@@ -380,11 +515,11 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 {
 	scene->setSkyColor(QColor(25, 25, 25));
 
-    QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guid));
     QJsonObject matObject = matDoc.object();
     //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
-	auto matFolder = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
+    auto matFolder = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::ASSET_FOLDER, guid);
 	MaterialReader reader(TextureSource::GlobalAssets, matFolder);
 	matDoc.toJson(QJsonDocument::Indented);
 	auto material = reader.parseMaterial(matObject, db);
@@ -464,14 +599,14 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 void AssetViewer::addJafSky(const QString& guid, bool firstAdd, bool cache)
 {
 	scene->skyGuid = guid;
-	QJsonDocument skyProperties = QJsonDocument::fromBinaryData(db->fetchAsset(scene->skyGuid).properties);
-	QJsonDocument skyData = QJsonDocument::fromBinaryData(db->fetchAssetData(scene->skyGuid));
+    QJsonDocument skyProperties = QJsonDocument::fromJson(db->fetchAsset(scene->skyGuid).properties);
+    QJsonDocument skyData = QJsonDocument::fromJson(db->fetchAssetData(scene->skyGuid));
 	QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
 	QJsonObject skyDataDefinition = skyData.object();
 	scene->skyType = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
 
 	QString assetPath = IrisUtils::join(
-		QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
 		Constants::ASSET_FOLDER, guid
 	);
 
@@ -552,12 +687,12 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
 {
 	scene->setSkyColor(QColor(25, 25, 25));
 
-    QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
     QJsonObject objectHierarchy = document.object();
 
     SceneReader *reader = new SceneReader;
     reader->setBaseDirectory(IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
         Constants::ASSET_FOLDER, guid)
     );
 

@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QUndoCommand>
 #include <QMatrix4x4>
+#include <QVariant>
 #include "../irisgl/src/irisglfwd.h"
 
 class ChangeMaterialPropertyCommand : public QUndoCommand

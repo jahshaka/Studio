@@ -42,7 +42,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 	// and the index differ it is a new sky. Wipe the properties and start over.
 	// If it's the same, do nothing but if it's new, reset to defaults
 	const QJsonObject skyDefinition = currentSky == static_cast<iris::SkyType>(index)
-										? QJsonDocument::fromBinaryData(db->fetchAssetData(skyGuid)).object()
+                                        ? QJsonDocument::fromJson(db->fetchAssetData(skyGuid)).object()
 										: QJsonObject();
 	currentSky = static_cast<iris::SkyType>(index);
 
@@ -331,8 +331,8 @@ void SkyPropertyWidget::updateAssetAndKeys()
 	}
 	}
 
-	db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toBinaryData());
-	db->updateAssetProperties(skyGuid, QJsonDocument(properties).toBinaryData());
+    db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toJson());
+    db->updateAssetProperties(skyGuid, QJsonDocument(properties).toJson());
 	// Not really used but keep around for now, the intent is clear (iKlsR)
 	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 }
@@ -413,7 +413,7 @@ void SkyPropertyWidget::onMaterialChanged(int index)
 {
 	Q_UNUSED(index)
 
-	QJsonDocument shaderData = QJsonDocument::fromBinaryData(db->fetchAssetData(shaderSelector->getCurrentItemData()));
+    QJsonDocument shaderData = QJsonDocument::fromJson(db->fetchAssetData(shaderSelector->getCurrentItemData()));
 	QJsonObject shaderDataDefinition = shaderData.object();
 
 	auto vert = shaderDataDefinition.value("vertex_shader").toString();

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include <qdialog.h>
 #include <qcombobox.h>
+#include <QBrush>
 
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
@@ -607,10 +608,10 @@ void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 {
 	auto rootNode = node->scene->getRootNode();
 	auto treeNode = treeItemList[node->getNodeId()];
-	treeNode->setTextColor(0, QColor(255, 255, 255, 255));
+    treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
 	if (node->isAttached() &&
 		node->parent != rootNode) {
-		treeNode->setTextColor(0, QColor(255, 255, 255, 150));
+        treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
 	}
 
 	for (int i = 0; i < treeNode->childCount(); i++) {
@@ -695,7 +696,7 @@ void SceneHierarchyWidget::selectNode(QString nodeId)
 		for (int i = 0; i < treeItem->childCount(); i++) {
 			auto item = treeItem->child(i);
 			if (item->data(0, Qt::UserRole) == nodeId) {
-				ui->sceneTree->setItemSelected(item, true);
+                ui->sceneTree->setCurrentItem(item);
 				return;
 			}
 
