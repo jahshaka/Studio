@@ -58,6 +58,11 @@ Jahshaka brings you the future of immersive digital content creation with the le
 - A C++ compiler with support for C++11 or later (choose a compiler for your OS when installing the Qt SDK. G++, MSVC and clang are all supported). If building on Windows, choose the default mingw compiler `MinGW 5.3.0 32 bit` as well as `msvc2017 64-bit` so you can build with Visual Studio as well which is what we recommend.
 - Qt Creator (also comes with the Qt SDK, latest version recommended) *AND OR* Microsoft Visual Studio 2017 Community Edition
 
+### Qt 6 Build steps
+- Checkout **qt6-master** branch using `git clone -b qt6-master git@github.com:jahshaka/Studio.git`
+- Fetch submodules using  branch using `git submodule update --init --recursive` 
+- Continue by followiung Qt Creator or MSVC instructions below
+
 ### Build steps
 Stable (usually months old releases are available by default), for up to date code (might include bugs), checkout the [`dev` branch](https://github.com/jahshaka/VR/tree/dev) instead of `master`
 
