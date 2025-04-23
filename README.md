@@ -59,8 +59,13 @@ Jahshaka brings you the future of immersive digital content creation with the le
 - Qt Creator (also comes with the Qt SDK, latest version recommended) *AND OR* Microsoft Visual Studio 2017 Community Edition
 
 ### Qt 6 Build steps
-- Checkout **qt6-master** branch using `git clone -b qt6-master git@github.com:jahshaka/Studio.git`
-- Fetch submodules using  branch using `git submodule update --init --recursive` 
+- Clone Studio project **qt6-master** branch
+- - `git clone -b qt6-master git@github.com:jahshaka/Studio.git`
+- Navigate to Studio directory and  Fetch submodules
+- - `cd Studio && git submodule update --init --recursive`
+- Clone irisgl project and fetch submodules
+- - `git clone -b qt6-master git@github.com:jahshaka/IrisGL.git irisgl`
+- - `cd irigisl && git submodule update --init --recursive`
 - Continue by followiung Qt Creator or MSVC instructions below
 
 ### Build steps
