@@ -60,12 +60,12 @@ Jahshaka brings you the future of immersive digital content creation with the le
 
 ### Qt 6 Build steps
 - Clone Studio project **qt6-master** branch
-- - `git clone -b qt6-master git@github.com:jahshaka/Studio.git`
+  - `git clone -b qt6-master git@github.com:jahshaka/Studio.git`
 - Navigate to Studio directory and  Fetch submodules
-- - `cd Studio && git submodule update --init --recursive`
+  - `cd Studio && git submodule update --init --recursive`
 - Clone irisgl project and fetch submodules
-- - `git clone -b qt6-master git@github.com:jahshaka/IrisGL.git irisgl`
-- - `cd irigisl && git submodule update --init --recursive`
+  - `git clone -b qt6-master git@github.com:jahshaka/IrisGL.git irisgl`
+  - `cd irigisl && git submodule update --init --recursive`
 - Continue by followiung Qt Creator or MSVC instructions below
 
 ### Build steps
