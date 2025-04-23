@@ -12,7 +12,7 @@ set(APP_OUTPUT_NAME "Jahshaka")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia OpenGL OpenGLWidgets Core Core5Compat)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia OpenGL OpenGLWidgets Core)
 message(STATUS "Qt6_VERSION: ${Qt6_VERSION}")
 message(STATUS "Qt6_INSTALL_PREFIX: ${Qt6_INSTALL_PREFIX}")
 
@@ -358,7 +358,7 @@ set(WIDGETS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::OpenGLWidgets Qt6::Core Qt6::Core5Compat IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::OpenGLWidgets Qt6::Core IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)
