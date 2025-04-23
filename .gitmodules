@@ -7,3 +7,4 @@
 [submodule "irisgl"]
 	path = irisgl
 	url = https://github.com/jahshaka/IrisGL.git
+	branch = qt6-master
