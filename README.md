@@ -65,7 +65,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
   - `cd Studio && git submodule update --init --recursive`
 - Clone irisgl project and fetch submodules
   - `git clone -b qt6-master git@github.com:jahshaka/IrisGL.git irisgl`
-  - `cd irigisl && git submodule update --init --recursive`
+  - `cd irisgl && git submodule update --init --recursive`
 - Continue by followiung Qt Creator or MSVC instructions below
 
 ### Build steps
