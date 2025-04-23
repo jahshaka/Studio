@@ -59,6 +59,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
 - Qt Creator (also comes with the Qt SDK, latest version recommended) *AND OR* Microsoft Visual Studio 2017 Community Edition
 
 ### Qt 6 Build steps
+- Install Qt version 6 ensure all Addtional Libraries selected 
 - Clone Studio project **qt6-master** branch
   - `git clone -b qt6-master git@github.com:jahshaka/Studio.git`
 - Navigate to Studio directory and  Fetch submodules
