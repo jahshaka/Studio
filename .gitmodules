@@ -4,7 +4,3 @@
 [submodule "src/shadergraph"]
 	path = src/shadergraph
 	url = https://github.com/jahshaka/Effects.git
-[submodule "irisgl"]
-	path = irisgl
-	url = https://github.com/jahshaka/IrisGL.git
-	branch = qt6-master
