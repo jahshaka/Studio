@@ -10,7 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "tooltip.h"
 #include <QApplication>
-#include <QDesktopWidget>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QRect>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
+#include <QPoint>
+#include <QCursor>
 #include <QGraphicsOpacityEffect>
 #include <QLabel>
 #include <QLayout>
@@ -118,34 +124,46 @@ QWidget *ToolTip::getSender()
 	return senderObj;
 }
 
-void ToolTip::setLocation()
-{
-	QPoint globalCursorPos = QCursor::pos();
-	int mouseScreen = QApplication::desktop()->screenNumber(globalCursorPos);
-	QRect mouseScreenGeometry = QApplication::desktop()->screen(mouseScreen)->geometry();
-	auto location = globalCursorPos - mouseScreenGeometry.topLeft();
+void ToolTip::setLocation() {
+    QPoint globalCursorPos = QCursor::pos();
+    QScreen* screen = QGuiApplication::screenAt(globalCursorPos);
 
-	int x;
-	int y;
-	int offset = 5;
-	if (location.x() + instance->width() + offset >= QApplication::desktop()->screenGeometry().width())	x = location.x() - instance->width() - offset;
-	else	x = location.x() + offset;
-	if (location.y() + instance->height() + offset > QApplication::desktop()->screenGeometry().height())	y = location.y() - instance->height() - offset;
-	else	y = location.y() + offset;
+    if (screen) {
+        QRect mouseScreenGeometry = screen->geometry();
+        auto location = globalCursorPos - mouseScreenGeometry.topLeft();
 
-	if (morphing) {
-		auto anim = new QPropertyAnimation(instance, "pos");
-		anim->setDuration(100);
-		anim->setStartValue(instance->pos());
-		anim->setEndValue(QPoint(x, y));
-		anim->setEasingCurve(QEasingCurve::BezierSpline);
-		anim->start(QPropertyAnimation::DeleteWhenStopped);
-		connect(anim, &QPropertyAnimation::finished, [=]() {
-		});
-	}
-	else
-		instance->move(x, y);
-	emit instance->locationChanged(instance->pos());
+        int x;
+        int y;
+        int offset = 5;
+
+        QRect screenGeometry = screen->geometry(); // Get screen geometry
+
+        if (location.x() + instance->width() + offset >= screenGeometry.width()) {
+            x = location.x() - instance->width() - offset;
+        } else {
+            x = location.x() + offset;
+        }
+
+        if (location.y() + instance->height() + offset >= screenGeometry.height()) {
+            y = location.y() - instance->height() - offset;
+        } else {
+            y = location.y() + offset;
+        }
+
+        if (morphing) {
+            auto anim = new QPropertyAnimation(instance, "pos");
+            anim->setDuration(100);
+            anim->setStartValue(instance->pos());
+            anim->setEndValue(QPoint(x, y));
+            anim->setEasingCurve(QEasingCurve::BezierSpline);
+            anim->start(QPropertyAnimation::DeleteWhenStopped);
+            connect(anim, &QPropertyAnimation::finished, [=]() {
+            });
+        } else {
+            instance->move(x, y);
+        }
+        emit instance->locationChanged(instance->pos());
+    }
 }
 
 void ToolTip::hideImmediately()

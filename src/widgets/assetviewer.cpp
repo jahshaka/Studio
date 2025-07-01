@@ -64,7 +64,7 @@ AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
 
 void AssetViewer::paintGL()
 {
-    makeCurrent();
+//    makeCurrent();
 
     float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
     elapsedTimer.restart();
@@ -75,7 +75,7 @@ void AssetViewer::paintGL()
         renderer->renderScene(dt, viewport);
     }
 
-    doneCurrent();
+//    doneCurrent();
 }
 
 void AssetViewer::updateScene()
@@ -86,12 +86,17 @@ void AssetViewer::updateScene()
 void AssetViewer::initializeGL()
 {
     QOpenGLWidget::initializeGL();
+    makeCurrent();
 
-    initializeOpenGLFunctions();
-    gl = QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    QOpenGLContext* context = QOpenGLContext::currentContext();
+    gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context);
+
+//    gl = new QOpenGLFunctions_3_2_Core();
+    gl->initializeOpenGLFunctions();
 
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
+    gl->glEnable(GL_FRAMEBUFFER_SRGB);
 
     renderer = iris::ForwardRenderer::create(false);
     scene = iris::Scene::create();
@@ -176,7 +181,7 @@ void AssetViewer::initializeGL()
 void AssetViewer::wheelEvent(QWheelEvent *event)
 {
     if (camController != nullptr) {
-        camController->onMouseWheel(event->delta());
+        camController->onMouseWheel(event->angleDelta().y());
     }
 }
 
@@ -307,7 +312,11 @@ void AssetViewer::loadJafSky(QString guid, bool firstAdd, bool cache, bool first
 	pdialog->close();
 }
 
-void AssetViewer::loadModel(QString str, bool firstAdd, bool cache, bool firstLoad) {
+void AssetViewer::loadModel(QString str, QString guid, bool firstAdd, bool cache, bool firstLoad) {
+    loadJafModel(str, guid, firstAdd, cache, firstLoad);
+    return;
+
+
     pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
     QApplication::processEvents();
@@ -342,11 +351,11 @@ void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guid
 	scene->setSkyColor(QColor(25, 25, 25));
 
     QString assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
         Constants::ASSET_FOLDER, guid
     );
     
-    auto shaderDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
+    auto shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
 
     auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
     auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
@@ -380,11 +389,11 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 {
 	scene->setSkyColor(QColor(25, 25, 25));
 
-    QJsonDocument matDoc = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guid));
     QJsonObject matObject = matDoc.object();
     //iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
 
-	auto matFolder = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, guid);
+    auto matFolder = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::ASSET_FOLDER, guid);
 	MaterialReader reader(TextureSource::GlobalAssets, matFolder);
 	matDoc.toJson(QJsonDocument::Indented);
 	auto material = reader.parseMaterial(matObject, db);
@@ -464,14 +473,14 @@ void AssetViewer::addJafMaterial(const QString &guid, bool firstAdd, bool cache,
 void AssetViewer::addJafSky(const QString& guid, bool firstAdd, bool cache)
 {
 	scene->skyGuid = guid;
-	QJsonDocument skyProperties = QJsonDocument::fromBinaryData(db->fetchAsset(scene->skyGuid).properties);
-	QJsonDocument skyData = QJsonDocument::fromBinaryData(db->fetchAssetData(scene->skyGuid));
+    QJsonDocument skyProperties = QJsonDocument::fromJson(db->fetchAsset(scene->skyGuid).properties);
+    QJsonDocument skyData = QJsonDocument::fromJson(db->fetchAssetData(scene->skyGuid));
 	QJsonObject skyPropertiesDefinition = skyProperties.object().value("sky").toObject();
 	QJsonObject skyDataDefinition = skyData.object();
 	scene->skyType = static_cast<iris::SkyType>(skyPropertiesDefinition.value("type").toInt());
 
 	QString assetPath = IrisUtils::join(
-		QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
 		Constants::ASSET_FOLDER, guid
 	);
 
@@ -552,12 +561,12 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
 {
 	scene->setSkyColor(QColor(25, 25, 25));
 
-    QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+    QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
     QJsonObject objectHierarchy = document.object();
 
     SceneReader *reader = new SceneReader;
     reader->setBaseDirectory(IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::DataLocation),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
         Constants::ASSET_FOLDER, guid)
     );
 
@@ -619,12 +628,16 @@ void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVecto
 		auto mat = reader.createMaterialFromShaderFile(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"), db);
 
 		if (firstAdd) {
-			mat->setValue("diffuseColor",	data.diffuseColor);
-			mat->setValue("specularColor",	data.specularColor);
-			mat->setValue("ambientColor",	QColor(130, 130, 130));
-			mat->setValue("emissionColor",	data.emissionColor);
-			mat->setValue("shininess",		data.shininess);
-			mat->setValue("useAlpha",		true);
+            if (data.hasEmbeddedDiffTexture && !data.diffuseTexture.isEmpty()) {
+                data.diffuseColor = QColor(255, 255, 255);
+            }
+
+            mat->setValue("diffuseColor",	data.diffuseColor);
+            mat->setValue("specularColor",	data.specularColor);
+            mat->setValue("ambientColor",	QColor(130, 130, 130));
+            mat->setValue("emissionColor",	data.emissionColor);
+            mat->setValue("shininess",		data.shininess);
+            mat->setValue("useAlpha",		true);
 
 			if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
 				mat->setValue("diffuseTexture", data.diffuseTexture);

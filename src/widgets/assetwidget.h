@@ -42,6 +42,13 @@ struct AssetItem {
     // add one for assetView maybe...
 };
 
+typedef struct directory_tupleA
+{
+    QString path;
+    QString guid;
+    QString parent_guid;
+};
+
 #include <QApplication>
 #include <QStyledItemDelegate>
 #include <QPainter>
@@ -196,12 +203,12 @@ struct find_asset_thumbnail
 	}
 };
 
-typedef struct directory_tuple
-{
-	QString path;
-	QString guid;
-	QString parent_guid;
-};
+// typedef struct directory_tuple
+// {
+// 	QString path;
+// 	QString guid;
+// 	QString parent_guid;
+// };
 
 class AssetWidget : public QWidget
 {
@@ -294,8 +301,8 @@ protected slots:
     void createFolder();
     void importAssetB();
     void importAsset(const QStringList &path);
-    void importRegularAssets(const QList<directory_tuple>&);
-    void importJafAssets(const QList<directory_tuple>&);
+    void importRegularAssets(const QList<directory_tupleA>&);
+    void importJafAssets(const QList<directory_tupleA>&);
 
     void onThumbnailResult(ThumbnailResult* result);
 

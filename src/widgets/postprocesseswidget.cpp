@@ -74,7 +74,7 @@ void PostProcessesWidget::clear()
     }
 
     auto layout = new QVBoxLayout();
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->addStretch();
     ui->content->setLayout(layout);
 }

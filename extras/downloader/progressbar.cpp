@@ -6,7 +6,7 @@
 #include <QShortcut>
 #include <QTime>
 #include <QScreen>
-#include <QDesktopWidget>
+#include <QGuiApplication>
 #include <QWindow>
 #include <QDebug>
 
@@ -98,7 +98,7 @@ void ProgressBar::configureUI()
 	title->move(0, 0);
 	QFont font = title->font();
 	font.setStyleStrategy(QFont::PreferAntialias);
-	font.setWeight(60);
+    font.setWeight(QFont::DemiBold);
 	font.setPixelSize(15);
 	title->setFont(font);
 
@@ -169,7 +169,7 @@ void ProgressBar::configureConnection()
 
 	auto shorty = new QShortcut(QKeySequence("s"), this);
 	connect(shorty, &QShortcut::activated, [=]() {
-		qsrand(static_cast<quint64>(QTime::currentTime().msecsSinceStartOfDay()));
+        srand(static_cast<quint64>(QTime::currentTime().msecsSinceStartOfDay()));
 	//	setValue(qrand() % 100);
 	});
 

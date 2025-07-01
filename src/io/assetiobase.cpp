@@ -53,7 +53,7 @@ QString AssetIOBase::getAbsolutePath(QString filename)
     auto absPath = dir.absoluteFilePath(filename);
 
     //file should exist, else return null string
-    if (!QFile(absPath).exists()) return QString::null;
+    if (!QFile(absPath).exists()) return QString();
 
     return absPath;
 }

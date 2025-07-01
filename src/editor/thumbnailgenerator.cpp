@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QMutex>
 #include <QMutexLocker>
 #include <QOpenGLFunctions_3_2_Core>
+#include <QOpenGLVersionFunctionsFactory>
 #include <QtMath>
 #include <QStandardPaths>
 
@@ -95,7 +96,9 @@ void RenderThread::run()
 
 void RenderThread::initScene()
 {
-    auto gl = context->versionFunctions<QOpenGLFunctions_3_2_Core>();
+//    auto gl = context->versionFunctions<QOpenGLFunctions_3_2_Core>();
+    QOpenGLContext* context = QOpenGLContext::currentContext();
+    auto gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context);
     gl->glEnable(GL_DEPTH_TEST);
     gl->glEnable(GL_CULL_FACE);
 
@@ -156,7 +159,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
     auto guid = request.id;
 
     if (request.type == ThumbnailRequestType::ImportedMesh) {
-        QJsonDocument document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid));
+        QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
         QJsonObject objectHierarchy = document.object();
 
         SceneReader *reader = new SceneReader;

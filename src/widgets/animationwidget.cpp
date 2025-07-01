@@ -67,7 +67,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
     ui->timeline->setAnimWidgetData(animWidgetData);
 
     auto gridLayout = new QGridLayout();
-    gridLayout->setMargin(0);
+    gridLayout->setContentsMargins(0, 0, 0, 0);
     gridLayout->setSpacing(0);
     gridLayout->addWidget(keyFrameWidget);
     gridLayout->addWidget(curveWidget);

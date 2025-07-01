@@ -186,7 +186,7 @@ void PlayerMouseController::doObjectPicking(
     doScenePicking(scene->getRootNode(), segStart, segEnd, hitList);
 
     // sort by distance to camera then return the closest hit node
-    qSort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
+    std::sort(hitList.begin(), hitList.end(), [](const PickingResult& a, const PickingResult& b) {
         return a.distanceFromCameraSqrd > b.distanceFromCameraSqrd;
     });
 

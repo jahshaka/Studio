@@ -40,7 +40,7 @@ For more information see the LICENSE file
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
     widgetPropertyLayout = new QVBoxLayout(this);
-    widgetPropertyLayout->setMargin(0);
+    widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
 
     fogPropView = new FogPropertyWidget();
     fogPropView->setPanelTitle("Fog");
@@ -111,7 +111,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
     if (!!sceneNode) {
         this->sceneNode = sceneNode;
 
-        widgetPropertyLayout->setMargin(0);
+        widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
         clearLayout(this->layout());
 
         if (sceneNode->isRootNode()) {

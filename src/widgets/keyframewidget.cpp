@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QDebug>
 #include <QPainter>
+#include <QPainterPath>
 #include <QMouseEvent>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
@@ -373,13 +374,13 @@ void KeyFrameWidget::mouseMoveEvent(QMouseEvent* evt)
 
 void KeyFrameWidget::wheelEvent(QWheelEvent* evt)
 {
-    auto delta = evt->delta();
+    auto delta = evt->angleDelta().y();
     float sign = delta<0?-1:1;
 
     //0.2f here is the zoom speed
     float scale = 1.0f-sign*0.2f;
 
-    float timeSpacePivot = posToTime(evt->x());
+    float timeSpacePivot = posToTime(evt->position().x());
     animWidgetData->rangeStart = timeSpacePivot+(animWidgetData->rangeStart-timeSpacePivot) * scale;
     animWidgetData->rangeEnd = timeSpacePivot+(animWidgetData->rangeEnd-timeSpacePivot) * scale;
 

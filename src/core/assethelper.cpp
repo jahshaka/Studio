@@ -163,7 +163,7 @@ ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
     else if (fileSuffix == Constants::SHADER_EXT) {
         return ModelTypes::Shader;
     }
-    else if (fileSuffix == Constants::MATERIAL_EXT) {
+    else if (Constants::MATERIAL_EXTS.contains(fileSuffix)) {
         return ModelTypes::Material;
     }
     else if (Constants::WHITELIST.contains(fileSuffix)) {
@@ -176,7 +176,9 @@ ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
 
 iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     const QString &filePath,
-    QStringList &textureList)
+    QStringList &textureList,
+    QStringList &texturesFullPath,
+    bool& hasEmbeddedTexture)
 {
     auto ssource = new iris::SceneSource();
     // load mesh as scene
@@ -186,12 +188,17 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
 
         mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
 
-        mat->setValue("diffuseColor", data.diffuseColor);
-        mat->setValue("specularColor", data.specularColor);
-        mat->setValue("ambientColor", data.ambientColor);
-        mat->setValue("emissionColor", data.emissionColor);
-        mat->setValue("shininess", data.shininess);
-        mat->setValue("useAlpha", true);
+        if (data.hasEmbeddedDiffTexture && !data.diffuseTexture.isEmpty()) {
+            hasEmbeddedTexture = true;
+            data.diffuseColor = QColor(255, 255, 255);
+        }
+
+        mat->setValue("diffuseColor",	data.diffuseColor);
+        mat->setValue("specularColor",	data.specularColor);
+        mat->setValue("ambientColor",	QColor(130, 130, 130));
+        mat->setValue("emissionColor",	data.emissionColor);
+        mat->setValue("shininess",		data.shininess);
+        mat->setValue("useAlpha",		true);
 
         if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
             mat->setValue("diffuseTexture", data.diffuseTexture);
@@ -199,42 +206,49 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
             mat->setValue("specularTexture", data.specularTexture);
 
-        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
+        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile()) {
             mat->setValue("normalTexture", data.normalTexture);
+            mat->setValue("normalIntensity", 1.f);
+        }
 
         return mat;
     }, ssource);
 
     const aiScene *scene = ssource->importer.GetScene();
-
     QStringList texturesToCopy;
 
-    for (int i = 0; i < scene->mNumMeshes; i++) {
-        auto mesh = scene->mMeshes[i];
-        auto material = scene->mMaterials[mesh->mMaterialIndex];
 
-        aiString textureName;
 
-        if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
-            texturesToCopy.append(textureName.C_Str());
+    std::function<void(iris::SceneNodePtr&)> getUsedTexture = [&](iris::SceneNodePtr &node) -> void {
+        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            auto n = node.staticCast<iris::MeshNode>();
+            auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
+            for (auto prop : mat->properties) {
+                if (prop->type != iris::PropertyType::Texture) {
+                    continue;
+                }
+
+                QString path = prop->getValue().toString();
+                if (path.isEmpty()) {
+                    continue;
+                }
+
+                QFileInfo fileinfo(path);
+                if (QFile(path).exists() && fileinfo.isFile()) {
+                    texturesFullPath.append(path);
+                    texturesToCopy.append(fileinfo.fileName());
+                }
+            }
         }
 
-        if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
-            material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
-            texturesToCopy.append(textureName.C_Str());
+        if (node->hasChildren()) {
+            for (auto &child : node->children) {
+                getUsedTexture(child);
+            }
         }
+    };
 
-        if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
-            material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
-            texturesToCopy.append(textureName.C_Str());
-        }
-
-        if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
-            material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
-            texturesToCopy.append(textureName.C_Str());
-        }
-    }
+    getUsedTexture(node);
 
     textureList = texturesToCopy;
     // SceneWriter::writeSceneNode(QJsonObject(), node, false);

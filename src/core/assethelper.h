@@ -29,7 +29,9 @@ public:
     static QStringList getChildGuids(const iris::SceneNodePtr &node);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
-                                                                 QStringList &textureList);
+                                                                 QStringList &textureList,
+                                                                 QStringList &texturesFullPath,
+                                                                 bool& hasEmbeddedTexture);
 };
 
 #endif

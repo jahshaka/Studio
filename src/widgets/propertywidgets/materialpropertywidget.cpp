@@ -140,7 +140,7 @@ void MaterialPropertyWidget::materialChanged(int index)
     QJsonObject node;
     SceneWriter::writeSceneNode(node, meshNode, false);
 
-    db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toBinaryData());
+    db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
     db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
 
     bool usesDefaultShader = false;

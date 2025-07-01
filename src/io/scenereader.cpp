@@ -59,7 +59,7 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
 {
     dir = projectPath;
 	useAlternativeLocation = false;
-    auto doc = QJsonDocument::fromBinaryData(sceneBlob);
+    auto doc = QJsonDocument::fromJson(sceneBlob);
     auto projectObj = doc.object();
 
     auto scene = readScene(projectObj);

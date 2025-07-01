@@ -465,7 +465,7 @@ bool EditorVrController::rayCastToScene(QMatrix4x4 handMatrix, iris::PickingResu
     if(hits.size() == 0)
         return false;
 
-    qSort(hits.begin(), hits.end(), [](const iris::PickingResult& a, const iris::PickingResult& b){
+    std::sort(hits.begin(), hits.end(), [](const iris::PickingResult& a, const iris::PickingResult& b){
         return a.distanceFromStartSqrd < b.distanceFromStartSqrd;
     });
 

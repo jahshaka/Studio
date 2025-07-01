@@ -24,7 +24,7 @@ QSharedPointer<Thumbnail> ThumbnailManager::createThumbnail(QString filename, in
     // assumes file exist for now
     QFileInfo fileInfo(filename);
     auto lastModified = fileInfo.lastModified();
-    auto hash = filename + lastModified.toMSecsSinceEpoch() + QString("-") + width + QString("-") + height;
+    auto hash = filename + QString::number(lastModified.toMSecsSinceEpoch()) + QString("-") + QString::number(width) + QString("-") + QString::number(height);
 
     if (ThumbnailManager::thumbnails.contains(hash)) {
         return ThumbnailManager::thumbnails[hash];

@@ -167,7 +167,7 @@ void PlayBack::mouseReleaseEvent(QMouseEvent *e)
 void PlayBack::wheelEvent(QWheelEvent *event)
 {
 	if (camController != nullptr) {
-		camController->onMouseWheel(event->delta());
+        camController->onMouseWheel(event->angleDelta().y());
 	}
 }
 

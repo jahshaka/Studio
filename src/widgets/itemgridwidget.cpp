@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QGraphicsDropShadowEffect>
 #include <QLineEdit>
 #include <QMenu>
+#include <QEnterEvent>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QApplication>
@@ -99,7 +100,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     QVBoxLayout *vlayout = new QVBoxLayout();
 
     QHBoxLayout *olayout = new QHBoxLayout();
-    olayout->setMargin(0);
+    olayout->setContentsMargins(0, 0, 0, 0);
     olayout->setSpacing(0);
 
     playButton = new QPushButton();
@@ -140,7 +141,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     playContainer = new QWidget;
     auto l = new QVBoxLayout;
     l->setSpacing(0);
-    l->setMargin(0);
+    l->setContentsMargins(0, 0, 0, 0);
     playText = new QLabel("PLAY");
     playText->setAlignment(Qt::AlignHCenter);
     l->addWidget(playButton);
@@ -151,7 +152,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     editContainer = new QWidget;
     l = new QVBoxLayout;
     l->setSpacing(0);
-    l->setMargin(0);
+    l->setContentsMargins(0, 0, 0, 0);
     editText = new QLabel("EDIT");
     editText->setAlignment(Qt::AlignHCenter);
     l->addWidget(editButton);
@@ -162,7 +163,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     closeContainer = new QWidget;
     l = new QVBoxLayout;
     l->setSpacing(0);
-    l->setMargin(0);
+    l->setContentsMargins(0, 0, 0, 0);
     closeText = new QLabel("CLOSE");
     closeText->setAlignment(Qt::AlignHCenter);
     l->addWidget(closeButton);
@@ -388,7 +389,7 @@ void ItemGridWidget::closeProject()
 
 void ItemGridWidget::enterEvent(QEvent *event)
 {
-    QWidget::enterEvent(event);
+    QWidget::enterEvent(static_cast<QEnterEvent*>(event));
     emit hovered();
 }
 

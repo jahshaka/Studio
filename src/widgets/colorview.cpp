@@ -10,6 +10,10 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "colorview.h"
 
+#include <QGuiApplication>
+#include <QScreen>
+#include <QRect>
+#include <QCursor>
 #include <QLabel>
 #include <QPainter>
 #include <QVBoxLayout>
@@ -184,11 +188,11 @@ void ColorView::configureView()
 
 	setMaximumWidth(circle->squareSize);
 
-    layout->addWidget(hWidget, 0, 0);
-    layout->addWidget(hFormat, 1, 0);
-    layout->addWidget(stackWidget, 2,0);
-    layout->addWidget(aWidget, 3, 0);
-    layout->addWidget(hButton, 4, 0);
+    layout->addWidget(hWidget, 0);
+    layout->addWidget(hFormat, 1);
+    layout->addWidget(stackWidget, 2);
+    layout->addWidget(aWidget, 3);
+    layout->addWidget(hButton, 4);
     layout->setSpacing(0);
 
 
@@ -446,7 +450,8 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	initialColor = color;
 	inputCircle->setInitialColor(color);
 
-	int mouseScreen = qApp->desktop()->screenNumber(QCursor::pos());
+    QScreen* qscreen = QGuiApplication::screenAt(QCursor::pos());
+    int mouseScreen = QGuiApplication::screens().indexOf(qscreen);
 	auto screen = QGuiApplication::screens().at(mouseScreen);
 	auto geom = screen->geometry();
 	
@@ -457,7 +462,7 @@ void ColorView::showAtPosition(QMouseEvent *event, QColor color)
 	int screenX = event->screenPos().x();
 	int screenY = event->screenPos().y();
 	y = screenY - 40;
-	if (screenX + width() + offset >= QApplication::desktop()->screenGeometry().width())	x = screenX - width() - offset* factor;
+    if (screenX + width() + offset >= screen->geometry().width())	x = screenX - width() - offset* factor;
 	else	x = (screenX + offset * factor);
 	if (screenY + height() + offset > geom.height())	y = screenY - height() - offset* factor;
 	if (geometry().y() < 0) y = 10;
@@ -506,11 +511,12 @@ void ColorView::sliderUpdatesSpinboxWithoutSignal(QSpinBox *box, int value) {
 
 void ColorView::createOverlay() {
     picking = true;
-    int num = QApplication::desktop()->screenCount();
+    int num = QGuiApplication::screens().count();
     list = new QList<Overlay*>;
     
+    QList<QScreen*> screens = QGuiApplication::screens();
     for (int i =0 ; i< num; i++){
-        auto geo =  QApplication::desktop()->screenGeometry(i);
+        auto geo =  screens.at(i)->geometry();
         auto overlay = new Overlay(geo, i);
         list->append(overlay);
         
@@ -539,7 +545,7 @@ void ColorView::leaveEvent(QEvent *) {
 	}
 }
 
-void ColorView::enterEvent(QEvent *)
+void ColorView::enterEvent(QEnterEvent *)
 {
 	picking = false;
 }
@@ -629,7 +635,7 @@ void ColorCircle::paintEvent(QPaintEvent *event) {
     QWidget::paintEvent( event);
 
     QPainter painter(this);
-    painter.setRenderHints(QPainter::HighQualityAntialiasing);
+    painter.setRenderHints(QPainter::Antialiasing);
 
     painter.drawImage(offset , offset, *image);
 
@@ -874,8 +880,9 @@ Overlay::Overlay(QRect sg, int screenNumber, QWidget *parent) : QWidget(parent) 
 	screenNum = screenNumber;
 	auto screen = QGuiApplication::screens().at(screenNum);
 	auto geom = screen->geometry();
-	pixmap = screen->grabWindow(QApplication::desktop()->winId(), geom.x(), geom.y(), geom.width(), geom.height());
-
+    if (screen) {
+        pixmap = screen->grabWindow(0, geom.x(), geom.y(), geom.width(), geom.height());
+    }
 	show();
 	repaint();
 }
@@ -889,7 +896,9 @@ void Overlay::mouseMoveEvent(QMouseEvent *eve) {
 
 	auto screen = QGuiApplication::screens().at(screenNum);
 	auto geom = screen->geometry();
-	pixmap = screen->grabWindow(QApplication::desktop()->winId(), geom.x(), geom.y(), geom.width(), geom.height());
+    if (screen) {
+        pixmap = screen->grabWindow(0, geom.x(), geom.y(), geom.width(), geom.height());
+    }
 
 	auto colo = pixmap.toImage().pixelColor(mapFromGlobal(QCursor::pos()));
     emit color(colo);

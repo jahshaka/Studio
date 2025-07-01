@@ -57,18 +57,18 @@ void MainWindow::doDownload(QString url)
 		progressBar->setValue(bytesReceived);
     });
 
-    connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),[&](QNetworkReply::NetworkError error)
-    {
-		progressBar->setTitle("Error downloading update");
-		progressBar->setConfirmationText("there was an error downloading this update");
-		progressBar->setConfirmationButtons("ok", "", true, false);
-		progressBar->showConfirmationDialog();
-		progressBar->clearButtonConnection();
-		connect(progressBar->confirmButton(), &QPushButton::clicked, [=]() {
-			progressBar->close();
-		});
-		hasError = true;
-    });
+    // connect(reply, QOverload<QNetworkReply::NetworkError>::of(&QNetworkReply::error),[&](QNetworkReply::NetworkError error)
+    // {
+    //     progressBar->setTitle("Error downloading update");
+    //     progressBar->setConfirmationText("there was an error downloading this update");
+    //     progressBar->setConfirmationButtons("ok", "", true, false);
+    //     progressBar->showConfirmationDialog();
+    //     progressBar->clearButtonConnection();
+    //     connect(progressBar->confirmButton(), &QPushButton::clicked, [=]() {
+    //         progressBar->close();
+    //     });
+    //     hasError = true;
+    // });
 
 	connect(reply, &QNetworkReply::finished, [&, filePath, reply]()
 	{

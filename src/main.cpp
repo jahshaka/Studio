@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSurfaceFormat>
 #include <QFontDatabase>
 #include <QtConcurrent>
+#include <QStandardPaths>
 
 // needs to be included near the top before
 // anything includes inttypes before it
@@ -88,11 +89,11 @@ int main(int argc, char *argv[])
 
     app.setWindowIcon(QIcon(":/images/icon.ico"));
 
-    auto dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
+    auto dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
 
-    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + Constants::ASSET_FOLDER;
+    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + Constants::ASSET_FOLDER;
     QDir assetDir(assetPath);
     if (!assetDir.exists()) assetDir.mkpath(assetPath);
 

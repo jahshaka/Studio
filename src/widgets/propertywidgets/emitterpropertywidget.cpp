@@ -95,7 +95,7 @@ void EmitterPropertyWidget::onBillboardImageChanged(QString image)
         if (!textureGuid.isEmpty()) {
             particleDef["texture"] = textureGuid;
 
-            db->updateAssetAsset(ps->getGUID(), QJsonDocument(particleDef).toBinaryData());
+            db->updateAssetAsset(ps->getGUID(), QJsonDocument(particleDef).toJson());
             db->removeDependenciesByType(ps->getGUID(), ModelTypes::Texture);
             db->createDependency(
                 static_cast<int>(ModelTypes::ParticleSystem),

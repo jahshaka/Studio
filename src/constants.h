@@ -57,7 +57,7 @@ namespace Constants
     extern QList<QString> MODEL_EXTS;
     extern QList<QString> WHITELIST;
 	extern QString SHADER_EXT;
-	extern QString MATERIAL_EXT;
+    extern QList<QString> MATERIAL_EXTS;
 	extern QString ASSET_EXT;
 
     extern QString UPDATE_CHECK_URL;

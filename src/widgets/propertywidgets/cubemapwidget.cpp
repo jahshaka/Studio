@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QGraphicsEffect>
 #include <QAction>
 #include <QMenu>
+#include <QTransform>
 
 CubeMapWidget::CubeMapWidget(QWidget *parent) : QWidget(parent)
 {
@@ -195,7 +196,7 @@ void CubeMapButton::configureUi()
 	positionLabel->setAlignment(Qt::AlignCenter);
 
 	QFont f = positionLabel->font();
-	f.setWeight(65);
+    f.setWeight(QFont::Bold);
 	positionLabel->setFont(f);
 
 	layout->setContentsMargins(0, 0, 0, 0);
@@ -211,7 +212,7 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 	if (!image.isNull()) {
 		//rotate image and then draw it 
 		QPoint center = image.rect().center();
-		QMatrix matrix;
+        QTransform  matrix;
 		matrix.translate(center.x(), center.y());
 		matrix.rotate((int)this->rotation);
 		auto intermedaryImage = image.transformed(matrix);
@@ -234,7 +235,7 @@ void CubeMapButton::paintEvent(QPaintEvent* event)
 
 void CubeMapButton::enterEvent(QEvent* event)
 {
-	QPushButton::enterEvent(event);
+    QPushButton::enterEvent(static_cast<QEnterEvent*>(event));
 	container->setVisible(true);
 }
 

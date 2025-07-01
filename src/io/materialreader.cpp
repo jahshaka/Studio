@@ -183,7 +183,7 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* 
 		// Stop using asset manager... (iKlsR)
 		// TODO remove all usage of such
 		auto shader = db->fetchAssetData(shaderGuid);
-		QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
+        QJsonObject shaderDefinition = QJsonDocument::fromJson(shader).object();
 
 		if (textureSource == TextureSource::Project) globalSourceFolder = Globals::project->getProjectFolder();
 
@@ -254,7 +254,7 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 
 	if (textureSource == TextureSource::GlobalAssets) {
 		QString assetPath = IrisUtils::join(
-			QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::ASSET_FOLDER, globalSourceFolder
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::ASSET_FOLDER, globalSourceFolder
 		);
 
 		auto vAsset = db->fetchAsset(vertexShader);

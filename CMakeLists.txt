@@ -12,7 +12,7 @@ set(APP_OUTPUT_NAME "Jahshaka")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt5 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia)
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
@@ -104,6 +104,7 @@ set(SRCS
     src/widgets/propertywidgets/handpropertywidget.cpp 
     src/widgets/propertywidget.cpp 
     src/widgets/propertywidgets/postprocesspropertywidget.cpp 
+    src/widgets/propertywidgets/scenepropertywidget.cpp
     src/widgets/postprocesseswidget.cpp 
     src/dialogs/newprojectdialog.cpp 
     src/widgets/assetwidget.cpp 
@@ -355,7 +356,7 @@ set(WIDGETS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt5::Concurrent Qt5::Sql Qt5::Svg Qt5::Widgets Qt5::Network Qt5::Multimedia IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)

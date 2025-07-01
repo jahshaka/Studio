@@ -98,7 +98,7 @@ TransformEditor* AccordianBladeWidget::addTransformControls()
     minimum_height += height;
 
     ui->contentpane->layout()->addWidget(transformEditor);
-    ui->contentpane->layout()->setMargin(0);
+    ui->contentpane->layout()->setContentsMargins(0, 0, 0,0);
 
     return transformEditor;
 }

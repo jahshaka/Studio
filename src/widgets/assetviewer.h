@@ -75,7 +75,7 @@ public:
     void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
     void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
-    void loadModel(QString str, bool firstAdd = true, bool cache = false, bool firstLoad = true);
+    void loadModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
 
     void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *e);

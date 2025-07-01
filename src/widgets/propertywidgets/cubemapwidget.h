@@ -69,7 +69,7 @@ private:
 	void configureUi();
 protected:
 	void paintEvent(QPaintEvent* event) override;
-	virtual void enterEvent(QEvent* event) override;
+    virtual void enterEvent(QEvent* event);
 	virtual void leaveEvent(QEvent* event) override;
 	void dragEnterEvent(QDragEnterEvent* event) override;
 	void dropEvent(QDropEvent* event) override;

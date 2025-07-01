@@ -76,7 +76,7 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
                         Globals::project->getProjectGuid()
                     );
 
-                    db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toBinaryData());
+                    db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toJson());
                 }
 
                 if (!fragmentShader.startsWith(":")) {
@@ -88,7 +88,7 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
                         Globals::project->getProjectGuid()
                     );
 
-                    db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toBinaryData());
+                    db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toJson());
                 }
             }
         }

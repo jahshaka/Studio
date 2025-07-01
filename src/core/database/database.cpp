@@ -1667,7 +1667,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         {
             QJsonObject assetJson;
             SceneWriter::writeSceneNode(assetJson, node);
-            insertExportAssetQuery.bindValue(":asset", QJsonDocument(assetJson).toBinaryData());
+            insertExportAssetQuery.bindValue(":asset", QJsonDocument(assetJson).toJson());
         }
         else {
             insertExportAssetQuery.bindValue(":asset", asset.asset);
@@ -2620,7 +2620,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         "VALUES (:name, :scene, :thumbnail, :version, :last_written, :last_accessed, :guid)"
     );
 
-    auto doc = QJsonDocument::fromBinaryData(sceneBlob);
+    auto doc = QJsonDocument::fromJson(sceneBlob);
     QString docToString = doc.toJson(QJsonDocument::Compact);
 
     QMapIterator<QString, QString> i(assetGuids);
@@ -2630,7 +2630,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     }
 
     QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-    sceneBlob = updatedDoc.toBinaryData();
+    sceneBlob = updatedDoc.toJson();
 
     query3.bindValue(":name", sceneName);
     query3.bindValue(":scene", sceneBlob);
@@ -2677,7 +2677,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             asset.type == static_cast<int>(ModelTypes::Shader) ||
             asset.type == static_cast<int>(ModelTypes::Material))
         {
-            auto doc = QJsonDocument::fromBinaryData(asset.asset);
+            auto doc = QJsonDocument::fromJson(asset.asset);
             QString docToString = doc.toJson(QJsonDocument::Compact);
 
             QMapIterator<QString, QString> i(assetGuids);
@@ -2687,7 +2687,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             }
 
             QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toBinaryData();
+            asset.asset = updatedDoc.toJson();
             insertImportAssetQuery.bindValue(":asset", asset.asset);
         }
         else {
@@ -2880,7 +2880,7 @@ QString Database::importAsset(
             asset.type == static_cast<int>(ModelTypes::Sky) ||
             asset.type == static_cast<int>(ModelTypes::Object))
         {
-            auto doc = QJsonDocument::fromBinaryData(asset.asset);
+            auto doc = QJsonDocument::fromJson(asset.asset);
             QString docToString = doc.toJson(QJsonDocument::Compact);
 
             QMapIterator<QString, QString> i(assetGuids);
@@ -2890,7 +2890,7 @@ QString Database::importAsset(
             }
 
             QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toBinaryData();
+            asset.asset = updatedDoc.toJson();
         }
     }
 
@@ -3061,7 +3061,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             asset.type == static_cast<int>(ModelTypes::Material) ||
             asset.type == static_cast<int>(ModelTypes::Object))
         {
-            auto doc = QJsonDocument::fromBinaryData(asset.asset);
+            auto doc = QJsonDocument::fromJson(asset.asset);
             QString docToString = doc.toJson(QJsonDocument::Compact);
 
             QMapIterator<QString, QString> i(assetGuids);
@@ -3071,7 +3071,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
             }
 
             QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toBinaryData();
+            asset.asset = updatedDoc.toJson();
         }
     }
 
@@ -3228,7 +3228,7 @@ QString Database::copyAsset(
 			asset.type == static_cast<int>(ModelTypes::Material) ||
 			asset.type == static_cast<int>(ModelTypes::Shader))
         {
-            auto doc = QJsonDocument::fromBinaryData(asset.asset);
+            auto doc = QJsonDocument::fromJson(asset.asset);
             QString docToString = doc.toJson(QJsonDocument::Compact);
 
             QMapIterator<QString, QString> i(assetGuids);
@@ -3238,7 +3238,7 @@ QString Database::copyAsset(
             }
 
             QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toBinaryData();
+            asset.asset = updatedDoc.toJson();
         }
     }
 

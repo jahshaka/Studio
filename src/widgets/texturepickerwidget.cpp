@@ -113,7 +113,7 @@ void TexturePickerWidget::clear()
 	ui->texture->clear();
 	filePath.clear();
 	textureGuid.clear();
-	emit valueChanged(QString::null);
+    emit valueChanged(QString());
 	emit valuesChanged(QString(), QString());
 }
 

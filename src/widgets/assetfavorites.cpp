@@ -51,7 +51,7 @@ AssetFavorites::AssetFavorites(QWidget *parent) : QWidget(parent)
 
     QVBoxLayout *layout = new QVBoxLayout;
     layout->addWidget(listView);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     listView->setItemDelegate(new FListViewDelegate);
 

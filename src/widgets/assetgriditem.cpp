@@ -21,7 +21,7 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	url = details["icon_url"].toString();
 	selected = false;
 	auto layout = new QGridLayout;
-	layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
 	pixmap = QPixmap::fromImage(image);
 	gridImageLabel = new QLabel;
@@ -93,7 +93,7 @@ void AssetGridItem::setTile(QPixmap pix) {
 }
 
 void AssetGridItem::enterEvent(QEvent *event) {
-	QWidget::enterEvent(event);
+    QWidget::enterEvent(static_cast<QEnterEvent*>(event));
 	emit hovered();
 }
 

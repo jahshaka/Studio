@@ -17,7 +17,7 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	this->parent = parent;
 	gridWidget = new QWidget(this);
 	_layout = new QGridLayout;
-	_layout->setMargin(0);
+    _layout->setContentsMargins(0, 0, 0, 0);
 	_layout->setSpacing(12);
 	gridCounter = 0;
 	gridWidget->setLayout(_layout);

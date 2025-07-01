@@ -58,7 +58,7 @@ For more information see the LICENSE file
 #include <QUndoStack>
 
 #include <QApplication>
-#include <QDesktopWidget>
+#include <QGuiApplication>
 #include <QHash>
 #include <QHashIterator>
 #include <QBuffer>
@@ -305,7 +305,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -560,7 +560,7 @@ void MainWindow::makeLoadingGLContextCurrent()
 void MainWindow::setupProjectDB()
 {
     const QString path = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::DataLocation), Constants::JAH_DATABASE
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
     );
 
     db = new Database();
@@ -997,7 +997,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset preset)
         QString(),
         QByteArray(),
         QByteArray(),
-        QJsonDocument(material).toBinaryData()
+        QJsonDocument(material).toJson()
     );
 
     ThumbnailGenerator::getSingleton()->requestThumbnail(
@@ -1166,7 +1166,7 @@ void MainWindow::addPlane()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1191,7 +1191,7 @@ void MainWindow::addGround()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1216,7 +1216,7 @@ void MainWindow::addCone()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1241,7 +1241,7 @@ void MainWindow::addCapsule()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1266,7 +1266,7 @@ void MainWindow::addCube()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1291,7 +1291,7 @@ void MainWindow::addTorus()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1316,7 +1316,7 @@ void MainWindow::addSphere()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1341,7 +1341,7 @@ void MainWindow::addCylinder()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1366,7 +1366,7 @@ void MainWindow::addPyramid()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1391,7 +1391,7 @@ void MainWindow::addSponge()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1416,7 +1416,7 @@ void MainWindow::addTeapot()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1441,7 +1441,7 @@ void MainWindow::addSteps()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1466,7 +1466,7 @@ void MainWindow::addGear()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1562,7 +1562,7 @@ void MainWindow::addParticleSystem()
         QString(),
         QString(),
         QByteArray(),
-        QJsonDocument(props).toBinaryData(),
+        QJsonDocument(props).toJson(),
         QByteArray(),
         QByteArray()
     );
@@ -1682,7 +1682,7 @@ void MainWindow::addPrimitiveObject(const QString &text)
 
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
-    auto document = QJsonDocument::fromBinaryData(db->fetchAssetData(guid)).object();
+    auto document = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
 
     auto reader = new SceneReader;
     reader->setBaseDirectory(Globals::project->getProjectFolder());
@@ -1884,7 +1884,7 @@ void MainWindow::createMaterial()
 
 		// WRITE TO DATABASE
 		const QString assetGuid = GUIDManager::generateGUID();
-		QByteArray binaryMat = QJsonDocument(materialDefOriginal).toBinaryData();
+        QByteArray binaryMat = QJsonDocument(materialDefOriginal).toJson();
 		db->createAssetEntry(
             assetGuid,
 			QFileInfo(fileName).fileName(),
@@ -1960,7 +1960,7 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
     auto filePath = QFileDialog::getSaveFileName(
         this,
         "Choose export path",
-        QString("%1_%2").arg(node->getName(), QString::number(currentDateTime.toTime_t())),
+        QString("%1_%2").arg(node->getName(), QString::number(static_cast<time_t>(currentDateTime.toSecsSinceEpoch()))),
         "Supported Export Formats (*.jaf)"
     );
 
@@ -2357,7 +2357,7 @@ void MainWindow::setupViewPort()
 	assets_panel = new QWidget;
 
 	auto hl = new QHBoxLayout;
-	hl->setMargin(0);
+    hl->setContentsMargins(0,0,0,0);
 	hl->setSpacing(12);
     hl->addWidget(worlds_menu);
     hl->addWidget(player_menu);
@@ -2377,7 +2377,9 @@ void MainWindow::setupViewPort()
 
 	help = new QPushButton;
 	help->setObjectName("helpButton");
-	help->setText(QChar(fa::questioncircle));
+    // for adapting Qt6.9.0
+    help->setText(QChar(static_cast<ushort>(fa::questioncircle)));
+    //help->setText(QChar(fa::questioncircle));
 	help->setFont(fontIcons->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
@@ -2398,7 +2400,9 @@ void MainWindow::setupViewPort()
 	prefs = new QPushButton;
 	prefs->setObjectName("prefsButton");
 
-	prefs->setText(QChar(fa::cog));
+    //prefs->setText(QChar(fa::cog));
+    // for adapting Qt6.9.0
+    help->setText(QChar(static_cast<ushort>(fa::cog)));
 	prefs->setFont(fontIcons->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
@@ -2540,7 +2544,7 @@ void MainWindow::setupViewPort()
     stopBtn->setIconSize(QSize(16, 16));
 
     playerControlsLayout->setSpacing(12);
-    playerControlsLayout->setMargin(6);
+    playerControlsLayout->setContentsMargins(6, 6, 6, 6);
     playerControlsLayout->addStretch();
     playerControlsLayout->addWidget(restartBtn);
     playerControlsLayout->addWidget(playBtn);
@@ -2603,7 +2607,7 @@ void MainWindow::setupViewPort()
     playerControls->setLayout(playerControlsLayout);
 
     containerLayout->setSpacing(0);
-    containerLayout->setMargin(0);
+    containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->addWidget(controlBar);
     containerLayout->addWidget(sceneContainer);
     containerLayout->addWidget(playerControls);
@@ -2630,7 +2634,7 @@ void MainWindow::setupViewPort()
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     sceneContainer->setLayout(layout);
 
     connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
@@ -2998,7 +3002,7 @@ void MainWindow::toggleDockWidgets()
 
 	QWidget *cw = new QWidget;
 	QHBoxLayout *cl = new QHBoxLayout;
-	cl->setMargin(0);
+    cl->setContentsMargins(0, 0, 0, 0);
 	cw->setLayout(cl);
 	cl->addWidget(closeAll);
 	cl->addWidget(restoreAll);

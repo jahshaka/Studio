@@ -94,7 +94,7 @@ void CustomDialog::addTitle(QString title)
 	label->setAlignment(Qt::AlignCenter);
 	//label->setIndent(10);
 	QFont f = label->font();
-	f.setWeight(65);
+    f.setWeight(QFont::DemiBold);
 	f.setPixelSize(20);
 	label->setFont(f);
 	index++;
