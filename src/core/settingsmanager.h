@@ -48,11 +48,11 @@ public:
 #endif
 
 #else
-#ifdef BUILD_AS_LIB 
-		loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+#ifdef BUILD_AS_LIB
+        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
 			.filePath(fileName));
 #else
-		loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::DataLocation))
+        loadSettings(QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
 			.filePath(fileName));
 #endif
 #endif
