@@ -448,3 +448,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
 include(CopyResources)
 include(CopyDependencies)
+
+if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
+    include(${CMAKE_SOURCE_DIR}/deploy/installer/config.cmake)
+endif()
