@@ -450,5 +450,8 @@ include(CopyResources)
 include(CopyDependencies)
 
 if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL Release)
+    string(TIMESTAMP CURRENT_DATE "%Y-%m-%d")
+    set(RELEASE_DATE "${CURRENT_DATE}") 
+    set(CMAKE_PROJECT_VERSION "0.9.0")
     include(${CMAKE_SOURCE_DIR}/deploy/installer/config.cmake)
 endif()

@@ -4,11 +4,6 @@ function appName()
     return installer.value("Name")
 }
 
-function serviceName()
-{
-    return (appName() + "-service")
-}
-
 function appExecutableFileName()
 {
     if (runningOnWindows()) {
@@ -81,21 +76,21 @@ Component.prototype.createOperations = function()
 			}
 
         } else {
-            console.log("Microsoft Visual C++ 2017 Redistributable already installed");
+            console.log("Microsoft Visual C++ 2022 Redistributable already installed");
         }
 
-        let pu_path = installer.value("TargetDir").replace(/\//g, '\\') + "\\"
-        component.addElevatedOperation("Execute",
-                                       ["sc", "create", serviceName(), "binpath=", pu_path + serviceName() + ".exe",
-                                        "start=", "auto", "depend=", "BFE/nsi"],
-                                        "UNDOEXECUTE", "cmd", "/c", pu_path + "post_uninstall.cmd");
-										
-        component.addElevatedOperation("Execute", "cmd", "/c", pu_path + "post_install.cmd");
-    } else if (runningOnMacOS()) {
-        component.addElevatedOperation("Execute", "@TargetDir@/post_install.sh", "UNDOEXECUTE", "@TargetDir@/post_uninstall.sh");
-    } else if (runningOnLinux()) {
-        component.addElevatedOperation("Execute", "bash", "@TargetDir@/post_install.sh", "UNDOEXECUTE", "bash", "@TargetDir@/post_uninstall.sh");
-    }
+		// let pu_path = installer.value("TargetDir").replace(/\//g, '\\') + "\\";
+		// let uninstallCmd = `"${pu_path}post_uninstall.cmd"`;
+		// let installCmd = `"${pu_path}post_install.cmd"`;
+
+		// component.addElevatedOperation("Execute", "cmd", "/c", uninstallCmd);
+
+		// component.addElevatedOperation("Execute", "cmd", "/c", installCmd);
+	} else if (runningOnMacOS()) {
+		component.addElevatedOperation("Execute", "@TargetDir@/post_install.sh", "UNDOEXECUTE", "@TargetDir@/post_uninstall.sh");
+	} else if (runningOnLinux()) {
+			component.addElevatedOperation("Execute", "bash", "@TargetDir@/post_install.sh", "UNDOEXECUTE", "bash", "@TargetDir@/post_uninstall.sh");
+	}
 }
 
 Component.prototype.installationFinished = function()
@@ -113,11 +108,6 @@ Component.prototype.installationFinished = function()
         if (runningOnWindows()) {
             command = "@TargetDir@/" + appExecutableFileName()
 
-            var status1 = installer.execute("net", ["start", serviceName()])
-            console.log(("%1 started with status: %2 ").arg(serviceName()).arg(status1))
-
-            var status2 = installer.execute("sc", ["failure", serviceName(), "reset=", "100", "actions=", "restart/2000/restart/2000/restart/2000"])
-            console.log(("Changed settings for %1 with status: %2 ").arg(serviceName()).arg(status2))
 
         } else if (runningOnMacOS()) {
             command = "/Applications/" + appName() + ".app/Contents/MacOS/" + appName();
