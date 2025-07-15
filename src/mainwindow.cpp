@@ -2394,7 +2394,7 @@ void MainWindow::setupViewPort()
 	);
 
 	connect(help, &QPushButton::pressed, [this]() {
-		QDesktopServices::openUrl(QUrl("http://www.jahshaka.com/tutorials/"));
+        QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn"));
 	});
 
 	prefs = new QPushButton;
@@ -2402,7 +2402,7 @@ void MainWindow::setupViewPort()
 
     //prefs->setText(QChar(fa::cog));
     // for adapting Qt6.9.0
-    help->setText(QChar(static_cast<ushort>(fa::cog)));
+    prefs->setText(QChar(static_cast<ushort>(fa::cog)));
 	prefs->setFont(fontIcons->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
