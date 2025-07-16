@@ -306,6 +306,10 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         }
     }
 
+    if (!db->checkIfProjectVersionSupported(QDir(temporaryDir.path()).filePath(projectBlobGuid))) {
+        allowLoading = false;
+    }
+
     if (!allowLoading) {
         QMessageBox::warning(
             this,

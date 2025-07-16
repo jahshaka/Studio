@@ -208,9 +208,12 @@ public:
 	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, bool perProject = false);
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
+    bool checkIfProjectVersionSupported(const QString& pathToDb);
     QSqlDatabase getDb() { return db; }
 
 private:
+    bool checkIfVersionSupported(const QString& pathToDb, const QString& table_name);
+
     QString projectsTableSchema;
     QString thumbnailsTableSchema;
     QString collectionsTableSchema;

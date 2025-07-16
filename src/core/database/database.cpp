@@ -2190,6 +2190,11 @@ bool Database::checkIfDependencyExists(const QString& depender, const QString& d
 	return false;
 }
 
+bool Database::checkIfProjectVersionSupported(const QString &pathToDb)
+{
+    return checkIfVersionSupported(pathToDb, "projects");
+}
+
 QStringList Database::fetchFolderNameByParent(const QString &guid)
 {
 	QSqlQuery query;
@@ -3299,3 +3304,38 @@ QString Database::copyAsset(
 
     return guidToReturn;
 }
+
+bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &table_name)
+{
+    bool result = false;
+
+    QSqlDatabase importConnection = QSqlDatabase();
+    importConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeImportConnection");
+    importConnection.setDatabaseName(pathToDb);
+
+    if (importConnection.isValid()) {
+        if (!importConnection.open()) {
+            irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
+            return result;
+        }
+    }  else {
+        irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
+        return result;
+    }
+
+    QSqlQuery selectAssetQuery(importConnection);
+    selectAssetQuery.prepare(QString("SELECT  version FROM 1% LIMIT 1").arg(table_name));
+    if (!selectAssetQuery.exec()) {
+        return result;
+    }
+
+    if (selectAssetQuery.first()) {
+        QString version = selectAssetQuery.value(0).toString();
+        if (Constants::CONTENT_VERSION.compare(version) == 0) {
+            result = true;
+        }
+    }
+
+    return result;
+}
+

@@ -2393,7 +2393,7 @@ void MainWindow::setupViewPort()
 		
 	);
 
-	connect(help, &QPushButton::pressed, [this]() {
+    connect(help, &QPushButton::pressed, []() {
         QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn"));
 	});
 
