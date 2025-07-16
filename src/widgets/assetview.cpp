@@ -1055,16 +1055,24 @@ void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
             Q_NULLPTR, Q_NULLPTR
         );
 
+        bool supported = true;
         QFile f(QDir(temporaryDir.path()).filePath(".manifest"));
-
         if (!f.exists()) {
+            supported = false;
+        }
+
+        if (!db->checkIfJafModelVersionSupported(QDir(temporaryDir.path()).filePath("asset.db"))) {
+            supported = false;
+        }
+
+        if (!supported) {
             QMessageBox::warning(
                 this,
                 "Incompatible Asset format",
                 "This asset was made with a deprecated version of Jahshaka\n"
                 "You can extract the contents manually and try importing as regular assets.",
                 QMessageBox::Ok
-            );
+                );
 
             return;
         }

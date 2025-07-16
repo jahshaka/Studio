@@ -209,6 +209,7 @@ public:
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     bool checkIfProjectVersionSupported(const QString& pathToDb);
+    bool checkIfJafModelVersionSupported(const QString& pathToDb);
     QSqlDatabase getDb() { return db; }
 
 private:

@@ -2195,6 +2195,11 @@ bool Database::checkIfProjectVersionSupported(const QString &pathToDb)
     return checkIfVersionSupported(pathToDb, "projects");
 }
 
+bool Database::checkIfJafModelVersionSupported(const QString &pathToDb)
+{
+    return checkIfVersionSupported(pathToDb, "assets");
+}
+
 QStringList Database::fetchFolderNameByParent(const QString &guid)
 {
 	QSqlQuery query;
