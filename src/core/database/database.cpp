@@ -3329,8 +3329,9 @@ bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &t
     }
 
     QSqlQuery selectAssetQuery(importConnection);
-    selectAssetQuery.prepare(QString("SELECT  version FROM 1% LIMIT 1").arg(table_name));
+    selectAssetQuery.prepare(QString("SELECT  version FROM %1 LIMIT 1").arg(table_name));
     if (!selectAssetQuery.exec()) {
+        importConnection.close();
         return result;
     }
 
@@ -3341,6 +3342,7 @@ bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &t
         }
     }
 
+    importConnection.close();
     return result;
 }
 

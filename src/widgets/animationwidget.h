@@ -101,7 +101,7 @@ public:
     void clearPropertyKeys(QString propertyName);
 
 signals:
-	void animationChanged(iris::SceneNodePtr ptr, iris::AnimationPtr anim);
+    void animationChanged(iris::SceneNodePtr ptr, iris::AnimationPtr anim);
 
 private:
     iris::PropertyAnim* createPropertyAnim(iris::Property* prop);
@@ -130,7 +130,7 @@ private slots:
     void showCreateAnimWidget();
     void updateCreationWidgetMessage(iris::SceneNodePtr node);
 
-    void animationChanged(QString name);
+    void OnAnimationChanged(QString name);
 
 private:
     //float timeAtCursor;

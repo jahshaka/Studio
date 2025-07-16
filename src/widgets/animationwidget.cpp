@@ -44,7 +44,7 @@ AnimationWidget::AnimationWidget(QWidget *parent) :
 
     connect(ui->addAnimBtn,SIGNAL(clicked(bool)), this, SLOT(addAnimation()));
     connect(ui->deleteAnimBtn,SIGNAL(clicked(bool)), this, SLOT(deleteAnimation()));
-    connect(ui->animList,SIGNAL(currentTextChanged(QString)), this, SLOT(animationChanged(QString)));
+    connect(ui->animList,SIGNAL(currentTextChanged(QString)), this, SLOT(OnAnimationChanged(QString)));
     connect(ui->loopCheckBox,SIGNAL(clicked(bool)), this, SLOT(setLooping(bool)));
 
     animWidgetData = new AnimationWidgetData();
@@ -514,7 +514,7 @@ void AnimationWidget::updateCreationWidgetMessage(iris::SceneNodePtr node)
     }
 }
 
-void AnimationWidget::animationChanged(QString name)
+void AnimationWidget::OnAnimationChanged(QString name)
 {
     auto animList = node->getAnimations();
     for (auto anim : animList)
