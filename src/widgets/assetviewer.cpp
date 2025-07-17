@@ -339,11 +339,10 @@ void AssetViewer::update() {
 
 void AssetViewer::resizeGL(int width, int height)
 {
-    // we do an explicit call to glViewport(...) in forwardrenderer
-    // with the "good DPI" values so it is not needed here initially (iKlsR)
-    viewport->pixelRatioScale = devicePixelRatio();
-    viewport->width = width;
-    viewport->height = height;
+    const qreal dpr = devicePixelRatioF();
+    QSize pixelSize = size() * dpr;
+    viewport->width = pixelSize.width();
+    viewport->height = pixelSize.height();
 }
 
 void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guidCompareMap, bool firstAdd, bool cache, QVector3D position)
