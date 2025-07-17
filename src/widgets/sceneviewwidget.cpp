@@ -623,7 +623,7 @@ void SceneViewWidget::renderGizmos(bool once)
 		QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
 
 		QVector3D rayPos, rayDir;
-		this->getMousePosAndRay(this->prevMousePos, rayPos, rayDir);
+        this->getMousePosAndRay(this->prevMousePos * this->devicePixelRatioF(), rayPos, rayDir);
 		gizmo->render(renderer->getGraphicsDevice(), rayPos, rayDir, viewDir, editorCam->viewMatrix, editorCam->projMatrix);
 	}
 }
@@ -970,28 +970,28 @@ QVector3D SceneViewWidget::calculateMouseRay(const QPointF& pos)
 
 QVector3D SceneViewWidget::screenSpaceToWoldSpace(const QPointF& pos, float depth)
 {
-	float x = pos.x();
-	float y = pos.y();
+    float x = pos.x();
+    float y = pos.y();
 
-	// viewport -> NDC
-	float mousex = (2.0f * x) / this->viewport->width - 1.0f;
-	float mousey = (2.0f * y) / this->viewport->height - 1.0f;
-	QVector2D NDC = QVector2D(mousex, -mousey);
+    // viewport -> NDC
+    float mousex = (2.0f * x) / this->viewport->width - 1.0f;
+    float mousey = (2.0f * y) / this->viewport->height - 1.0f;
+    QVector2D NDC = QVector2D(mousex, -mousey);
 
-	// NDC -> HCC
-	QVector4D HCC = QVector4D(NDC, depth, 1.0f);
+    // NDC -> HCC
+    QVector4D HCC = QVector4D(NDC, depth, 1.0f);
 
-	// HCC -> View Space
-	QMatrix4x4 projection_matrix_inverse = this->editorCam->projMatrix.inverted();
-	QVector4D eye_coords = projection_matrix_inverse * HCC;
-	//QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
+    // HCC -> View Space
+    QMatrix4x4 projection_matrix_inverse = this->editorCam->projMatrix.inverted();
+    QVector4D eye_coords = projection_matrix_inverse * HCC;
+    //QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
 
-	// View Space -> World Space
-	QMatrix4x4 view_matrix_inverse = this->editorCam->viewMatrix.inverted();
-	QVector4D world_coords = view_matrix_inverse * eye_coords;
-	
+    // View Space -> World Space
+    QMatrix4x4 view_matrix_inverse = this->editorCam->viewMatrix.inverted();
+    QVector4D world_coords = view_matrix_inverse * eye_coords;
 
-	return world_coords.toVector3D() / world_coords.w();
+
+    return world_coords.toVector3D() / world_coords.w();
 }
 
 bool SceneViewWidget::updateRPI(QVector3D pos, QVector3D r) {
@@ -1047,7 +1047,7 @@ void SceneViewWidget::mouseMoveEvent(QMouseEvent *e)
 			QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
 
 			QVector3D rayPos, rayDir;
-			this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+            this->getMousePosAndRay(e->localPos() * devicePixelRatioF(), rayPos, rayDir);
 			gizmo->drag(rayPos, rayDir, viewDir);
 
 			// If we're dragging viewers, send the transform to the environment so we can manipulate the body
@@ -1105,27 +1105,23 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
     if (e->button() == Qt::LeftButton) {
         editorCam->updateCameraMatrices();
-		QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
+        QVector3D viewDir = editorCam->getGlobalRotation() * QVector3D(0, 0, -1);
+
+        QPointF physicalPos = e->localPos() * this->devicePixelRatioF();
 
         if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
-            this->doGizmoPicking(e->localPos());
+            this->doGizmoPicking(physicalPos);
 
             if (!!selectedNode) {
                 QVector3D rayPos, rayDir;
-                this->getMousePosAndRay(e->localPos(), rayPos, rayDir);
+                this->getMousePosAndRay(physicalPos, rayPos, rayDir);
                 gizmo->startDragging(rayPos, rayDir, viewDir);
             }
 
-            // if we don't have a selected node, prioritize object picking
             if (selectedNode.isNull()) {
-				if (settings->getValue("mouse_controls", "default").toString() == "default") {
-					this->doObjectPicking(e->localPos(), lastSelected);
-				}
-            }
-        }
-        else if (UiManager::sceneMode == SceneMode::PlayMode) {
-            if (settings->getValue("mouse_controls", "default").toString() == "default") {
-                this->doObjectPicking(e->localPos(), lastSelected);
+                if (settings->getValue("mouse_controls", "default").toString() == "default") {
+                    this->doObjectPicking(physicalPos, lastSelected);
+                }
             }
         }
     }
