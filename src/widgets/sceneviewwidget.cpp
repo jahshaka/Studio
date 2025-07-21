@@ -750,13 +750,13 @@ void SceneViewWidget::paintGL()
 
 void SceneViewWidget::renderScene()
 {
-	float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
-	elapsedTimer->restart();
+    float dt = elapsedTimer->nsecsElapsed() / (1000.0f * 1000.0f);
+    elapsedTimer->restart();
 
     if (playScene) {
-		playback->renderScene(*viewport, dt);
-		return;
-	}
+        playback->renderScene(*viewport, dt);
+        return;
+    }
 
     glClearColor(.1f, .1f, .1f, .4f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

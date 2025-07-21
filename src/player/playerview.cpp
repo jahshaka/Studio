@@ -104,13 +104,17 @@ void PlayerView::paintGL()
 
 void PlayerView::renderScene()
 {
-	float dt = fpsTimer->nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+    float elapsedNs = fpsTimer->nsecsElapsed();
 	fpsTimer->restart();
-	
-    auto vp = iris::Viewport();
-    vp.width = static_cast<int>(width());
-    vp.height = static_cast<int>(height());
-	vp.pixelRatioScale = devicePixelRatio();
+
+    float dt = std::max(0.001f, static_cast<float>(elapsedNs) / (1000.0f * 1000.0f));
+
+    float pixelRatio = devicePixelRatioF();
+
+    iris::Viewport vp;
+    vp.width = static_cast<int>(width() * pixelRatio);
+    vp.height = static_cast<int>(height() * pixelRatio);
+    vp.pixelRatioScale = pixelRatio;
 
 	playback->renderScene(vp, dt);
 }

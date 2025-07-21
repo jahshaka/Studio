@@ -89,7 +89,7 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 
 	animTime += dt;
 	scene->updateSceneAnimation(animTime);
-	scene->update(dt);
+    scene->update(dt);
 
 	auto activeViewer = scene->getActiveVrViewer();
 	if (_isPlaying) {
