@@ -387,9 +387,9 @@ void ItemGridWidget::closeProject()
     emit closeFromWidget(this);
 }
 
-void ItemGridWidget::enterEvent(QEvent *event)
+void ItemGridWidget::enterEvent(QEnterEvent *event)
 {
-    QWidget::enterEvent(static_cast<QEnterEvent*>(event));
+    QWidget::enterEvent(event);
     emit hovered();
 }
 

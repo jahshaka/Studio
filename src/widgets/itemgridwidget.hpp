@@ -73,7 +73,7 @@ protected slots:
 
 protected:
 //    void keyPressEvent(QKeyEvent* event);
-    void enterEvent(QEvent*);
+    void enterEvent(QEnterEvent*);
     void leaveEvent(QEvent*);
     void mousePressEvent(QMouseEvent*);
     void mouseDoubleClickEvent(QMouseEvent*);
