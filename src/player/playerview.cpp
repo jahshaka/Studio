@@ -107,7 +107,7 @@ void PlayerView::renderScene()
     float elapsedNs = fpsTimer->nsecsElapsed();
 	fpsTimer->restart();
 
-    float dt = std::max(0.001f, static_cast<float>(elapsedNs) / (1000.0f * 1000.0f));
+    float dt = std::max(0.001f, static_cast<float>(elapsedNs) / (1000.0f * 1000.0f * 1000.0f));
 
     float pixelRatio = devicePixelRatioF();
 
