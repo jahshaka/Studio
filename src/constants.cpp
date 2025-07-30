@@ -31,6 +31,7 @@ namespace Contants
     QString DEF_EXPORT_FILE   = "export.zip";
     QSize   TILE_SIZE         = QSize(460, 215);
     int     UI_FONT_SIZE      = 10;
+    int     MIN_JAF_VERSION   = 9;
 
     QString DB_DRIVER         = "QSQLITE";
     QString DB_ROOT_TABLE     = "JAH_PROJECT";

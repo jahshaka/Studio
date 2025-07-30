@@ -43,6 +43,7 @@ namespace Constants
     extern QString DEF_EXPORT_FILE;
     extern QSize   TILE_SIZE;
     extern int     UI_FONT_SIZE;
+    extern int     MIN_JAF_VERSION;
 
     extern QString DB_DRIVER;
     extern QString DB_ROOT_TABLE;

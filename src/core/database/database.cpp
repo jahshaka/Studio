@@ -3337,9 +3337,21 @@ bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &t
 
     if (selectAssetQuery.first()) {
         QString version = selectAssetQuery.value(0).toString();
-        if (Constants::CONTENT_VERSION.compare(version) == 0) {
-            result = true;
+        bool version_ok(false);
+        QString import_version = version.mid(0, 3);
+        int version_int = import_version.toFloat(&version_ok) * 10;
+
+        qDebug() << version_ok << version_int;
+
+        if (version_ok) {
+            if (version_int >= Constants::MIN_JAF_VERSION) {
+                result = true;
+            }
         }
+
+        // if (Constants::CONTENT_VERSION.compare(version) == 0) {
+        //     result = true;
+        // }
     }
 
     importConnection.close();
