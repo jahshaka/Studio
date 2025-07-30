@@ -5,7 +5,7 @@
     <Title>Jahshaka</Title>
     <Publisher>Jahshaka</Publisher>
     <StartMenuDir>Jahshaka</StartMenuDir>
-    <TargetDir>@RootDir@/Program Files/Jahshaka</TargetDir>
+    <TargetDir>@RootDir@/Program Files/Jahshaka-dev</TargetDir>
     <WizardStyle>Modern</WizardStyle>
     <RemoveTargetDir>true</RemoveTargetDir>
     <AllowSpaceInPath>true</AllowSpaceInPath>
