@@ -1354,7 +1354,17 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
 
     QList<directory_tuple> fileNameList;
-    getImportManifest(fileName, main_guid, fileNameList);
+
+    if (fileName.endsWith(".obj")) {
+           getImportManifest(fileName, main_guid, fileNameList);
+    } else {
+        directory_tuple fileItem;
+        fileItem.path = fileName;
+        fileItem.guid = GUIDManager::generateGUID();
+        fileItem.parent_guid = main_guid;
+        fileNameList.append(fileItem);
+    }
+
 
     // Sort filenames by type, we want to import and create db entries in dependent order
     // 0. Folders
