@@ -212,7 +212,8 @@ QDockWidget {
 
 QDockWidget::close-button, QDockWidget::float-button {
     padding: 0px;
-    icon-size: 11px; /* maximum icon size */
+	border: 0px;
+    icon-size: 14px;
 }
 
 QDockWidget::close-button {
@@ -220,20 +221,20 @@ QDockWidget::close-button {
     subcontrol-origin: margin;
     position: absolute;
     top: 0px; right: 0px; bottom: 0px;
-    width: 11px;
+    width: 14px;
 }
 
 QDockWidget::float-button {
     subcontrol-position: top right;
     subcontrol-origin: margin;
     position: absolute;
-    top: 0px; right: 12px; bottom: 0px;
-    width: 11px;
+    top: 0px; right: 14px; bottom: 0px;
+    width: 14px;
 }
 
 QDockWidget::close-button:hover, QDockWidget::float-button:hover {
 	background: transparent;
-	icon-size: 11px;
+    icon-size: 14px;
 	border: 0;
 }
 
