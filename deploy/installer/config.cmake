@@ -2,6 +2,8 @@
 
 message(STATUS "[Installer] Generating Installer Framework configuration files...")
 
+set(INSTALLER_DATA_DIR "${CMAKE_BINARY_DIR}/installer/packages/org.jahshaka.package/data")
+
 if(WIN32)
     set(RootDir "@RootDir@")
     configure_file(
@@ -9,6 +11,15 @@ if(WIN32)
         ${CMAKE_BINARY_DIR}/installer/config/windows.xml
     )
     include(${CMAKE_CURRENT_LIST_DIR}/WindowsBinaryCreator.cmake)
+    set(PLATFORM_DATA_DIR "${CMAKE_CURRENT_LIST_DIR}/../data/windows")
+elseif(LINUX)
+    set(ApplicationsDir "@ApplicationsDir@")
+    configure_file(
+        ${CMAKE_CURRENT_LIST_DIR}/config/linux.xml.in
+        ${CMAKE_BINARY_DIR}/installer/config/linux.xml
+    )
+    include(${CMAKE_CURRENT_LIST_DIR}/LinuxBinaryCreator.cmake)
+    set(PLATFORM_DATA_DIR "${CMAKE_CURRENT_LIST_DIR}/../data/linux")
 endif()
 
 configure_file(
@@ -18,23 +29,19 @@ configure_file(
 
 file(COPY
     ${CMAKE_CURRENT_LIST_DIR}/packages/org.jahshaka.package/meta/componentscript.js
-    DESTINATION
-    ${CMAKE_BINARY_DIR}/installer/packages/org.jahshaka.package/meta/
+    DESTINATION ${CMAKE_BINARY_DIR}/installer/packages/org.jahshaka.package/meta/
 )
 
 file(COPY
     ${CMAKE_CURRENT_LIST_DIR}/config/controlscript.js
-    DESTINATION
-    ${CMAKE_BINARY_DIR}/installer/config/
+    DESTINATION ${CMAKE_BINARY_DIR}/installer/config/
 )
-
-set(INSTALLER_DATA_DIR "${CMAKE_BINARY_DIR}/installer/packages/org.jahshaka.package/data")
 
 add_custom_command(
     OUTPUT "${INSTALLER_DATA_DIR}/.copied"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-            "${INSTALLER_DATA_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${INSTALLER_DATA_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLATFORM_DATA_DIR}" "${INSTALLER_DATA_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}" "${INSTALLER_DATA_DIR}"
     COMMAND ${CMAKE_COMMAND} -E touch "${INSTALLER_DATA_DIR}/.copied"
     DEPENDS "${DEPLOY_STAMP}"
     COMMENT "[Installer] Copying deployed files to installer data directory..."
@@ -43,4 +50,3 @@ add_custom_command(
 add_custom_target(copy_deploy_to_installer_data ALL
     DEPENDS "${INSTALLER_DATA_DIR}/.copied"
 )
-
