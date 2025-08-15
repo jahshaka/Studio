@@ -20,3 +20,24 @@ if (WIN32)
     add_custom_target(deploy_app ALL DEPENDS "${DEPLOY_STAMP}")
 endif()
 
+if (UNIX)
+    set(DEPLOY_STAMP "${CMAKE_BINARY_DIR}/deploy.stamp")
+    get_filename_component(QT6_BASE_DIR "${Qt6Core_DIR}/../../../" ABSOLUTE)
+    message(STATUS "---------------------------Qt6 base path: ${QT6_BASE_DIR} ${CMAKE_SOURCE_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    # Add a custom target that depends on the executable
+    add_custom_command(
+        OUTPUT "${DEPLOY_STAMP}"
+        COMMAND ${CMAKE_COMMAND} -E echo "Deploying Jahshaka and dependencies..."
+        COMMAND bash "${CMAKE_SOURCE_DIR}/deploy/data/linux/copy_linux_deps.sh"
+                "$<TARGET_FILE:Jahshaka>"          # executable
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}" # destination
+                "${QT6_BASE_DIR}"                  # Qt6 base
+        COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"
+        DEPENDS ${CMAKE_PROJECT_NAME}
+        COMMENT "Copying all runtime dependencies after build"
+    )
+
+    add_custom_target(deploy_app ALL DEPENDS "${DEPLOY_STAMP}")
+endif()
+
+
