@@ -1,7 +1,7 @@
 #!/bin/bash
 # =====================================================
 # Script to copy an executable and all its dependent libraries
-# including only the necessary Qt6 plugins
+# including necessary Qt6 plugins, without forcing any Qt libs
 # Usage: ./copy_linux_deps.sh /path/to/executable /destination/dir /path/to/Qt6
 # =====================================================
 
@@ -19,14 +19,15 @@ PLUGIN_DIR="$DEST_DIR/plugins"
 
 mkdir -p "$LIB_DIR" "$PLUGIN_DIR"
 
-export LD_LIBRARY_PATH="$LIB_DIR:$LD_LIBRARY_PATH"
+# Add Qt lib path so ldd can detect Qt libraries
+export LD_LIBRARY_PATH="$QT_BASE/lib:$LIB_DIR:$LD_LIBRARY_PATH"
 export QT_PLUGIN_PATH="$PLUGIN_DIR"
 
 # Array to track copied libraries to avoid duplicates
 declare -A COPIED_LIBS
 
 # -----------------------------------------------------
-# Function to copy a library and its dependencies recursively
+# Function: Recursively copy a library and its dependencies
 # Arguments: library_path
 # -----------------------------------------------------
 copy_lib_recursive() {
@@ -35,7 +36,7 @@ copy_lib_recursive() {
         return
     fi
 
-    # Skip the main executable
+    # Skip main executable
     if [ "$lib" -ef "$EXECUTABLE" ]; then
         return
     fi
@@ -52,9 +53,10 @@ copy_lib_recursive() {
     fi
     COPIED_LIBS[$lib]=1
 
+    echo "Copying: $lib"
     cp -u "$lib" "$LIB_DIR/"
 
-    # Recursively copy dependencies
+    # Recursively copy dependencies of this library
     local deps
     deps=$(ldd "$lib" 2>/dev/null | awk '/=>/ && $3 ~ /^\// {print $3}')
     for dep in $deps; do
@@ -63,28 +65,35 @@ copy_lib_recursive() {
 }
 
 # -----------------------------------------------------
-# 1. Copy main executable (already在DEST_DIR下)
+# 1. Copy main executable
 # -----------------------------------------------------
 cp "$EXECUTABLE" "$DEST_DIR/"
 
-# 2. Copy dependencies
+# -----------------------------------------------------
+# 2. Copy all non-system dependencies recursively
+# -----------------------------------------------------
 copy_lib_recursive "$EXECUTABLE"
 
 # -----------------------------------------------------
-# 3. Copy only the necessary Qt6 plugins
+# 3. Copy all Qt6 libraries detected by ldd
 # -----------------------------------------------------
-QT_PLUGIN_DIR="$QT_BASE/plugins"
-NEEDED_PLUGINS=("platforms" "imageformats" "sqldrivers" "mediaservice")
+ldd "$EXECUTABLE" | awk '/Qt6/ && $3 ~ /^\// {print $3}' | while read qtlib; do
+    copy_lib_recursive "$qtlib"
+done
 
+# -----------------------------------------------------
+# 4. Copy only the necessary Qt6 plugins
+# -----------------------------------------------------
+NEEDED_PLUGINS=("platforms" "imageformats" "sqldrivers" "mediaservice")
 for sub in "${NEEDED_PLUGINS[@]}"; do
-    if [ -d "$QT_PLUGIN_DIR/$sub" ]; then
+    if [ -d "$QT_BASE/plugins/$sub" ]; then
         mkdir -p "$PLUGIN_DIR/$sub"
-        find "$QT_PLUGIN_DIR/$sub" -type f -name "*.so" | while IFS= read -r plugin; do
+        find "$QT_BASE/plugins/$sub" -type f -name "*.so" | while IFS= read -r plugin; do
             cp -u "$plugin" "$PLUGIN_DIR/$sub/"
             copy_lib_recursive "$plugin"
         done
     fi
 done
 
-echo "All dependencies copied to $LIB_DIR, executable in $DEST_DIR, and plugins to $PLUGIN_DIR"
+echo ">>> Done. Executable: $DEST_DIR, Libs: $LIB_DIR, Plugins: $PLUGIN_DIR"
 
