@@ -47,15 +47,16 @@ sudo cp "$APP_PATH/$APP_NAME.png" /usr/share/pixmaps/ >> "$LOG_FILE"
 sudo chmod 555 /usr/share/applications/$APP_NAME.desktop >> "$LOG_FILE"
 echo "user desktop creation loop ended" >> "$LOG_FILE"
 
+# Launch Jahshaka in background and log output
+echo "Launching $APP_NAME..." >> "$LOG_FILE"
+"$APP_PATH/$APP_NAME.sh" >> "$LOG_FILE" 2>&1 &
+
 # Re-enable SteamOS readonly
 if command -v steamos-readonly &> /dev/null; then
     sudo steamos-readonly enable >> "$LOG_FILE"
     echo "steamos-readonly enabled" >> "$LOG_FILE"
 fi
 
-# Launch Jahshaka in background and log output
-echo "Launching $APP_NAME..." >> "$LOG_FILE"
-"$APP_PATH/$APP_NAME.sh" >> "$LOG_FILE" 2>&1 &
 
 date >> "$LOG_FILE"
 echo "Script finished" >> "$LOG_FILE"

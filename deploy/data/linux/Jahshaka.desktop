@@ -2,6 +2,7 @@
 Type=Application
 Exec=Jahshaka %F
 Name=Jahshaka
+Icon=Jahshaka
 GenericName=Jahshaka
 X-KDE-StartupNotify=true
 StartupWMClass=Jahshaka
