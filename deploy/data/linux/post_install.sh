@@ -24,15 +24,8 @@ if command -v steamos-readonly &> /dev/null; then
         echo "steamos-readonly disabled" >> $LOG_FILE
 fi
 
-if sudo systemctl is-active --quiet $APP_NAME; then
-	sudo systemctl stop $APP_NAME >> $LOG_FILE
-	sudo systemctl disable $APP_NAME >> $LOG_FILE
-fi
-
 sudo chmod -R a-w $APP_PATH/
 
-sudo systemctl start $APP_NAME >> $LOG_FILE
-sudo systemctl enable $APP_NAME >> $LOG_FILE
 sudo chmod 555 $APP_PATH/$APP_NAME.sh >> $LOG_FILE
 sudo ln -sf "$APP_PATH/$APP_NAME.sh" /usr/local/sbin/$APP_NAME
 sudo ln -sf "$APP_PATH/$APP_NAME.sh" /usr/local/bin/$APP_NAME

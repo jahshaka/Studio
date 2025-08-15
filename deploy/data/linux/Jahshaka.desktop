@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Exec=Jahshaka %F
+Name=Jahshaka
+GenericName=Jahshaka
+X-KDE-StartupNotify=true
+StartupWMClass=Jahshaka
+Terminal=false
+Categories=Utility;Application;
+Comment=Jahshaka 3D and VR Studio
+StartupNotify=true

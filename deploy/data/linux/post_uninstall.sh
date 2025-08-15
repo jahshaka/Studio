@@ -18,13 +18,6 @@ if command -v steamos-readonly &> /dev/null; then
 	echo "steamos-readonly disabled" >> $LOG_FILE
 fi
 
-if sudo systemctl is-active --quiet $APP_NAME; then
-	sudo systemctl stop $APP_NAME >> $LOG_FILE
-fi
-
-if sudo systemctl is-enabled --quiet $APP_NAME; then
-	sudo systemctl disable $APP_NAME >> $LOG_FILE
-fi
 
 if test -f $APP_PATH; then
         sudo rm -rf $APP_PATH >> $LOG_FILE

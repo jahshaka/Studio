@@ -1,8 +1,5 @@
 #!/bin/sh
 
-# This is default bat run script of The CQtDeployer project.
-# This file contains key word that will replaced after deploy project.
-#
 # ####################################################################
 #
 # LIB_PATH - are relative path to libraries of a deployed distribution.
@@ -17,14 +14,12 @@
 # ####################################################################
 
 BASE_DIR=$(dirname "$(readlink -f "$0")")
-export LD_LIBRARY_PATH="$BASE_DIR"/lib/:"$BASE_DIR":$LD_LIBRARY_PATH
-#export QT_PLUGIN_PATH="$BASE_DIR"/plugins/:$QT_PLUGIN_PATH
-export QTDIR="$BASE_DIR"
-export CQT_PKG_ROOT="$BASE_DIR"
-export CQT_RUN_FILE="$BASE_DIR/Jahshaka.sh"
 
-#export QT_QPA_PLATFORM_PLUGIN_PATH="$BASE_DIR"/plugins//platforms:$QT_QPA_PLATFORM_PLUGIN_PATH
+# Set library and plugin paths
+export LD_LIBRARY_PATH="$BASE_DIR/lib:$LD_LIBRARY_PATH"
+export QT_PLUGIN_PATH="$BASE_DIR/plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="$BASE_DIR/plugins/platforms"
 
+# Run the executable
+"$BASE_DIR/Jahshaka" "$@"
 
-
-"$BASE_DIR/Jahshaka" "$@" 
