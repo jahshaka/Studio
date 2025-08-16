@@ -41,10 +41,14 @@ copy_lib_recursive() {
         return
     fi
 
-    # Skip system libraries
+    # Skip most system libraries, but keep xcb related ones
     case "$lib" in
         /lib/*|/usr/lib/*|/lib64/*|/usr/lib64/*)
-            return
+            if [[ "$lib" == *xcb* ]]; then
+                echo "Keeping xcb dependency: $lib"
+            else
+                return
+            fi
             ;;
     esac
 
@@ -84,11 +88,12 @@ done
 # -----------------------------------------------------
 # 4. Copy only the necessary Qt6 plugins
 # -----------------------------------------------------
-NEEDED_PLUGINS=("platforms" "imageformats" "sqldrivers" "mediaservice")
+NEEDED_PLUGINS=("platforms" "generic" "networkinformation" "platforminputcontexts" "xcbglintegrations" "multimedia" "imageformats" "iconengines" "styles" "sqldrivers")
 for sub in "${NEEDED_PLUGINS[@]}"; do
     if [ -d "$QT_BASE/plugins/$sub" ]; then
         mkdir -p "$PLUGIN_DIR/$sub"
         find "$QT_BASE/plugins/$sub" -type f -name "*.so" | while IFS= read -r plugin; do
+            echo "Copying plugin: $plugin"
             cp -u "$plugin" "$PLUGIN_DIR/$sub/"
             copy_lib_recursive "$plugin"
         done
