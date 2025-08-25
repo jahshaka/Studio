@@ -14,11 +14,15 @@ For more information see the LICENSE file
 
 #include <QApplication>
 
+#include "helpers/dialoghelper.h"
+
 ProgressDialog::ProgressDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
     ui->setupUi(this);
     this->setWindowFlags(Qt::FramelessWindowHint);
 	setWindowModality(Qt::WindowModal);
+
+    DialogHelper::centerDialog(this);
 }
 
 ProgressDialog::~ProgressDialog()

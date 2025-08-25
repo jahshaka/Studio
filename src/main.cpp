@@ -26,13 +26,13 @@ For more information see the LICENSE file
 
 #include "mainwindow.h"
 #include "dialogs/infodialog.h"
-#include "core/settingsmanager.h"
 #include "globals.h"
 #include "constants.h"
 #include "misc/updatechecker.h"
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
 #include "helpers/tooltip.h"
+#include "helpers/dialoghelper.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
@@ -109,6 +109,7 @@ int main(int argc, char *argv[])
 #endif
 
     QSplashScreen splash;
+    DialogHelper::centerDialog(&splash);
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
@@ -130,6 +131,7 @@ int main(int argc, char *argv[])
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
+    DialogHelper::centerDialog(&window);
     //window.setAttribute(Qt::WA_DontShowOnScreen);
     //window.show();
     //window.grabOpenGLContextHack();
@@ -138,7 +140,6 @@ int main(int argc, char *argv[])
     // Make our window render as normal going forward
     //window.setAttribute(Qt::WA_DontShowOnScreen, false);
     window.goToDesktop();
-
     splash.finish(&window);
 
 	UpdateChecker updateChecker;

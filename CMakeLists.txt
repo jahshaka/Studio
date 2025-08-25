@@ -137,31 +137,32 @@ set(SRCS
     src/widgets/assetviewer.cpp
     src/widgets/assetviewgrid.cpp
     src/widgets/assetgriditem.cpp
-	src/editor/outlinerenderer.cpp
-	src/editor/viewermaterial.cpp
-	src/editor/animationpath.cpp
+    src/editor/outlinerenderer.cpp
+    src/editor/viewermaterial.cpp
+    src/editor/animationpath.cpp
     src/constants.cpp
-	src/misc/updatechecker.cpp
-	src/dialogs/softwareupdatedialog.cpp
+    src/misc/updatechecker.cpp
+    src/dialogs/softwareupdatedialog.cpp
     src/core/assethelper.cpp
     src/core/subscriber.cpp
     src/core/scenenodehelper.cpp
     src/misc/upgrader.cpp
     src/misc/QtAwesome.cpp
     src/misc/QtAwesomeAnim.cpp
-	src/misc/stylesheet.cpp
-	src/widgets/colorview.cpp
+    src/misc/stylesheet.cpp
+    src/widgets/colorview.cpp
     src/dialogs/toast.cpp
-	src/helpers/tooltip.cpp
-	src/subclass/switch.cpp
-	src/editor/handgizmo.cpp
-	# player
-	src/player/playerwidget.cpp
-	src/player/playerview.cpp
-	src/player/playervrcontroller.cpp
-	src/player/playermousecontroller.cpp
-	src/player/hand.cpp
-	src/player/playback.cpp
+    src/helpers/tooltip.cpp
+    src/helpers/dialoghelper.cpp
+    src/subclass/switch.cpp
+    src/editor/handgizmo.cpp
+    # player
+    src/player/playerwidget.cpp
+    src/player/playerview.cpp
+    src/player/playervrcontroller.cpp
+    src/player/playermousecontroller.cpp
+    src/player/hand.cpp
+    src/player/playback.cpp
 )
 
 set(HEADERS
@@ -173,8 +174,8 @@ set(HEADERS
     src/dialogs/aboutdialog.h 
     src/dialogs/preferences/worldsettings.h 
     src/dialogs/preferences/worldsettingswidget.h 
-	src/dialogs/customdialog.h
-	src/dialogs/custompopup.h
+    src/dialogs/customdialog.h
+    src/dialogs/custompopup.h
     src/helpers/collisionhelper.h 
     src/dialogs/infodialog.h 
     src/dialogs/loadmeshdialog.h 
@@ -212,7 +213,7 @@ set(HEADERS
     src/widgets/scenenodepropertieswidget.h 
     src/widgets/propertywidgets/worldpropertywidget.h 
     src/widgets/propertywidgets/physicspropertywidget.h 
-	src/widgets/propertywidgets/cubemapwidget.h
+    src/widgets/propertywidgets/cubemapwidget.h
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/widgets/propertywidgets/scenepropertywidget.h 
@@ -245,7 +246,7 @@ set(HEADERS
     src/widgets/filepickerwidget.h 
     src/widgets/propertywidgets/meshpropertywidget.h 
     src/widgets/propertywidgets/shaderpropertywidget.h 
-	src/widgets/propertywidgets/handpropertywidget.h 
+    src/widgets/propertywidgets/handpropertywidget.h
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
     src/widgets/propertywidgets/postprocesspropertywidget.h 
@@ -283,8 +284,8 @@ set(HEADERS
     src/widgets/assetviewer.h
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
-	src/breakpad/breakpad.h
-	src/materials/jahdefaultmaterial.h
+    src/breakpad/breakpad.h
+    src/materials/jahdefaultmaterial.h
     src/editor/outlinerenderer.h 
     src/editor/viewermaterial.h
     src/editor/animationpath.h
@@ -297,21 +298,22 @@ set(HEADERS
     src/misc/upgrader.h
     src/misc/QtAwesome.h
     src/misc/QtAwesomeAnim.h 
-	src/misc/stylesheet.h
-	src/widgets/colorview.h
+    src/misc/stylesheet.h
+    src/widgets/colorview.h
     src/dialogs/toast.h
-	src/helpers/tooltip.h
-	src/editor/handgizmo.h
+    src/helpers/tooltip.h
+    src/helpers/dialoghelper.h
+    src/editor/handgizmo.h
 
-	# player
-	src/subclass/switch.h
-	src/player/playerwidget.h
-	src/player/playerview.h
-	src/player/sceneplayer.h
-	src/player/playervrcontroller.h
-	src/player/playermousecontroller.h
-	src/player/hand.h
-	src/player/playback.h
+    # player
+    src/subclass/switch.h
+    src/player/playerwidget.h
+    src/player/playerview.h
+    src/player/sceneplayer.h
+    src/player/playervrcontroller.h
+    src/player/playermousecontroller.h
+    src/player/hand.h
+    src/player/playback.h
 )
 
 # Todo - trim these down to nothing eventually
