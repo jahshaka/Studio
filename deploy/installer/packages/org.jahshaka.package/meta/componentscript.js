@@ -79,14 +79,10 @@ Component.prototype.createOperations = function()
             console.log("Microsoft Visual C++ 2022 Redistributable already installed");
         }
 
-        let pu_path = installer.value("TargetDir").replace(/\//g, '\\') + "\\";
-        let uninstallCmd = `"${pu_path}post_uninstall.cmd"`;
-        let installCmd = `"${pu_path}post_install.cmd"`;
-
-        component.addElevatedOperation("Execute", "cmd", "/c", uninstallCmd);
-
-        component.addElevatedOperation("Execute", "cmd", "/c", installCmd);
-	} else if (runningOnMacOS()) {
+        // let pu_path = installer.value("TargetDir").replace(/\//g, '\\') + "\\"
+        // component.addElevatedOperation("Execute", "cmd", "/c", pu_path + "post_uninstall.cmd");
+        // component.addElevatedOperation("Execute", /*"cmd", "/c",*/ pu_path + "post_install.cmd");
+    } else if (runningOnMacOS()) {
 		component.addElevatedOperation("Execute", "@TargetDir@/post_install.sh", "UNDOEXECUTE", "@TargetDir@/post_uninstall.sh");
 	} else if (runningOnLinux()) {
         component.addElevatedOperation("Execute", "bash", "@TargetDir@/post_install.sh", "UNDOEXECUTE", "bash", "@TargetDir@/post_uninstall.sh");
