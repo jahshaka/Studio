@@ -32,7 +32,6 @@ For more information see the LICENSE file
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
 #include "helpers/tooltip.h"
-#include "helpers/dialoghelper.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
@@ -55,6 +54,11 @@ inline void GetGitCommitHash()
 int main(int argc, char *argv[])
 {
     GetGitCommitHash();
+
+#ifdef Q_OS_LINUX
+    qputenv("QT_QPA_PLATFORM", "xcb");
+#endif
+
     // Fixes issue on osx where the SceneView widget shows up blank
     // Causes freezing on linux for some reason (Nick)
 #ifdef Q_OS_MAC
@@ -109,7 +113,6 @@ int main(int argc, char *argv[])
 #endif
 
     QSplashScreen splash;
-    DialogHelper::centerDialog(&splash);
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
@@ -131,7 +134,6 @@ int main(int argc, char *argv[])
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
-    DialogHelper::centerDialog(&window);
     //window.setAttribute(Qt::WA_DontShowOnScreen);
     //window.show();
     //window.grabOpenGLContextHack();
