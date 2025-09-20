@@ -508,9 +508,9 @@ void RightHand::loadAssets(iris::ContentManagerPtr content)
 
 void RightHand::submitItemsToScene()
 {
-	handModel->setActiveAnimation("RightHand_rig.001|handFistMove");
-	auto rightTouch = iris::VrManager::getDefaultDevice()->getTouchController(1);
-	handModel->applyAnimation(rightTouch->getHandTrigger() * 24);
+    // handModel->setActiveAnimation("RightHand_rig.001|handFistMove");
+    // auto rightTouch = iris::VrManager::getDefaultDevice()->getTouchController(1);
+    // handModel->applyAnimation(rightTouch->getHandTrigger() * 24);
 
 	QMatrix4x4 scale;
 	scale.setToIdentity();
