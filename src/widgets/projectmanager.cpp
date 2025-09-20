@@ -276,6 +276,10 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         fileName = file;
     }
 
+    progressDialog->setLabelText("Importing scene....");
+    progressDialog->setValue(0);
+    progressDialog->show();
+
     // get the current project working directory
     auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
                                  Constants::PROJECT_FOLDER);
@@ -291,6 +295,8 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
                     on_extract_entry,
                     Q_NULLPTR);
     }
+
+    progressDialog->setValue(20);
 
     // iterate
     QDirIterator projectDirIterator(temporaryDir.path(), QDir::Files | QDir::Hidden);
@@ -319,6 +325,7 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
             QMessageBox::Ok
         );
 
+        progressDialog->close();
         return;
     }
 
@@ -327,11 +334,15 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(importGuid);
     zip_extract(fileName.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
 
+    progressDialog->setValue(40);
+
     QDir dir;
     if (!dir.remove(QDir(pDir).filePath(projectBlobGuid + ".db"))) {
         // let's try again shall we...
         remove(QDir(pDir).filePath(projectBlobGuid + ".db").toStdString().c_str());
     }
+
+    progressDialog->setValue(80);
 
     QString worldName;
     auto canOpen = db->importProject(
@@ -354,7 +365,9 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
 		addImportedTileToDesktop(importGuid);
 	}
 
+    progressDialog->setValue(100);
     temporaryDir.remove();
+    progressDialog->close();
 }
 
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
@@ -447,6 +460,8 @@ void ProjectManager::addImportedTileToDesktop(const QString &guid)
 	dynamicGrid->addToGridView(importedScene, i - 1);
 
 	checkForEmptyState();
+
+    update();
 }
 
 void ProjectManager::populateDesktop(bool reset)
