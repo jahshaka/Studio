@@ -167,99 +167,99 @@ void LeftHand::update(float dt)
 
 		rightHandMatrix = calculateHandMatrix(device, 0);
 
-		{
-			// Handle picking and movement of picked objects
-			iris::PickingResult pick;
-			auto beamOffset = getBeamOffset(0);
-			if (controller->rayCastToScene(rightHandMatrix * beamOffset, pick)) {
-				auto dist = qSqrt(pick.distanceFromStartSqrd);
-				hoverDist = dist;
+        // {
+        // 	// Handle picking and movement of picked objects
+        // 	iris::PickingResult pick;
+        // 	auto beamOffset = getBeamOffset(0);
+        // 	if (controller->rayCastToScene(rightHandMatrix * beamOffset, pick)) {
+        // 		auto dist = qSqrt(pick.distanceFromStartSqrd);
+        // 		hoverDist = dist;
 
-				hoveredNode = controller->getObjectRoot(pick.hitNode);
-				// Pick a node if the trigger is down
-				if (leftTouch->getHandTrigger() > 0.1f && !grabbedNode)
-				{
-					grabbedNode = hoveredNode;
-					rightPos = grabbedNode->getLocalPos();
-					rightRot = grabbedNode->getLocalRot();
-					rightScale = grabbedNode->getLocalScale();
+        // 		hoveredNode = controller->getObjectRoot(pick.hitNode);
+        // 		// Pick a node if the trigger is down
+        // 		if (leftTouch->getHandTrigger() > 0.1f && !grabbedNode)
+        // 		{
+        // 			grabbedNode = hoveredNode;
+        // 			rightPos = grabbedNode->getLocalPos();
+        // 			rightRot = grabbedNode->getLocalRot();
+        // 			rightScale = grabbedNode->getLocalScale();
 
-					//calculate offset
-					rightNodeOffset = rightHandMatrix.inverted() * grabbedNode->getGlobalTransform();
+        // 			//calculate offset
+        // 			rightNodeOffset = rightHandMatrix.inverted() * grabbedNode->getGlobalTransform();
 
-					auto handleNode = controller->findGrabNode(grabbedNode);
-					if (!!handleNode) {
-						//rightNodeOffset = grabbedNode->getGlobalTransform().inverted() * handleNode->getGlobalTransform();
-						rightNodeOffset = handleNode->getGlobalTransform().inverted() * grabbedNode->getGlobalTransform();
-					}
+        // 			auto handleNode = controller->findGrabNode(grabbedNode);
+        // 			if (!!handleNode) {
+        // 				//rightNodeOffset = grabbedNode->getGlobalTransform().inverted() * handleNode->getGlobalTransform();
+        // 				rightNodeOffset = handleNode->getGlobalTransform().inverted() * grabbedNode->getGlobalTransform();
+        // 			}
 
-					// should accept hit point
-					{
+        // 			// should accept hit point
+        // 			{
 
-						if (grabbedNode->isPhysicsBody) {
-							scene->getPhysicsEnvironment()->createPickingConstraint(
-								iris::PickingHandleType::LeftHand,
-								grabbedNode->getGUID(),
-								iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
-								QVector3D(),
-								QVector3D());
-						}
-					}
-				}
+        // 				if (grabbedNode->isPhysicsBody) {
+        // 					scene->getPhysicsEnvironment()->createPickingConstraint(
+        // 						iris::PickingHandleType::LeftHand,
+        // 						grabbedNode->getGUID(),
+        // 						iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
+        // 						QVector3D(),
+        // 						QVector3D());
+        // 				}
+        // 			}
+        // 		}
 
-			}
-			else
-			{
-				//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
-				hoveredNode.clear();
-			}
+        // 	}
+        // 	else
+        // 	{
+        // 		//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+        // 		hoveredNode.clear();
+        // 	}
 
-			// trigger released
-			if (leftTouch->getHandTrigger() < 0.1f && !!grabbedNode)
-			{
-				// release node
-				grabbedNode->disablePhysicsTransform = false;
-				grabbedNode.clear();
-				rightNodeOffset.setToIdentity(); // why bother?
+        // 	// trigger released
+        // 	if (leftTouch->getHandTrigger() < 0.1f && !!grabbedNode)
+        // 	{
+        // 		// release node
+        // 		grabbedNode->disablePhysicsTransform = false;
+        // 		grabbedNode.clear();
+        // 		rightNodeOffset.setToIdentity(); // why bother?
 
-				scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::LeftHand);
-			}
+        // 		scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::LeftHand);
+        // 	}
 
-			// update picked node
-			if (!!grabbedNode) {
-				// disable physics visual update
-				grabbedNode->disablePhysicsTransform = true;
+        // 	// update picked node
+        // 	if (!!grabbedNode) {
+        // 		// disable physics visual update
+        // 		grabbedNode->disablePhysicsTransform = true;
 
-				// calculate the global position
-				auto nodeGlobal = rightHandMatrix * rightNodeOffset;
+        // 		// calculate the global position
+        // 		auto nodeGlobal = rightHandMatrix * rightNodeOffset;
 
-				// LAZLO's CODE
-				if (grabbedNode->isPhysicsBody) {
-					scene->getPhysicsEnvironment()->updatePickingConstraint(
-						iris::PickingHandleType::LeftHand,
-						nodeGlobal);
-				}
+        // 		// LAZLO's CODE
+        // 		if (grabbedNode->isPhysicsBody) {
+        // 			scene->getPhysicsEnvironment()->updatePickingConstraint(
+        // 				iris::PickingHandleType::LeftHand,
+        // 				nodeGlobal);
+        // 		}
 
 
-				// calculate position relative to parent
-				auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+        // 		// calculate position relative to parent
+        // 		auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
-				QVector3D pos, scale;
-				QQuaternion rot;
-				// decompose matrix to assign pos, rot and scale
-				iris::MathHelper::decomposeMatrix(localTransform,
-					pos,
-					rot,
-					scale);
+        // 		QVector3D pos, scale;
+        // 		QQuaternion rot;
+        // 		// decompose matrix to assign pos, rot and scale
+        // 		iris::MathHelper::decomposeMatrix(localTransform,
+        // 			pos,
+        // 			rot,
+        // 			scale);
 
-				grabbedNode->setLocalPos(pos);
-				rot.normalize();
-				grabbedNode->setLocalRot(rot);
-				grabbedNode->setLocalScale(scale);
+        // 		grabbedNode->setLocalPos(pos);
+        // 		rot.normalize();
+        // 		grabbedNode->setLocalRot(rot);
+        // 		grabbedNode->setLocalScale(scale);
 
-			}
+        // 	}
 
-		}
+        // }
 
 		submitItemsToScene();
 	}
@@ -365,111 +365,111 @@ void RightHand::update(float dt)
 		//rightHandMatrix = camera->getGlobalTransform() * world;
 		rightHandMatrix = calculateHandMatrix(device, 1);
 
-		{
-			// Handle picking and movement of picked objects
-			iris::PickingResult pick;
-			/*
-			QMatrix4x4 beamOffset;
-			beamOffset.setToIdentity();
-			beamOffset.rotate(QQuaternion::fromEulerAngles(-45, 0, 0));
-			beamOffset.translate(0.0, -0.05f, 0.0);
-			*/
-			auto beamOffset = getBeamOffset(0);
-			if (controller->rayCastToScene(rightHandMatrix * beamOffset, pick)) {
-				auto dist = qSqrt(pick.distanceFromStartSqrd);
-				hoverDist = dist;
+        // {
+        // 	// Handle picking and movement of picked objects
+        // 	iris::PickingResult pick;
+        // 	/*
+        // 	QMatrix4x4 beamOffset;
+        // 	beamOffset.setToIdentity();
+        // 	beamOffset.rotate(QQuaternion::fromEulerAngles(-45, 0, 0));
+        // 	beamOffset.translate(0.0, -0.05f, 0.0);
+        // 	*/
+        // 	auto beamOffset = getBeamOffset(0);
+        // 	if (controller->rayCastToScene(rightHandMatrix * beamOffset, pick)) {
+        // 		auto dist = qSqrt(pick.distanceFromStartSqrd);
+        // 		hoverDist = dist;
 
-				//qDebug() << "hit at dist: " << dist;
-				//rightBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));// todo: remove magic 0.55
-				//rightBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
-				hoveredNode = controller->getObjectRoot(pick.hitNode);
-				// Pick a node if the trigger is down
-				if (rightTouch->getHandTrigger() > 0.1f && !grabbedNode)
-				{
-					grabbedNode = hoveredNode;
-					rightPos = grabbedNode->getLocalPos();
-					rightRot = grabbedNode->getLocalRot();
-					rightScale = grabbedNode->getLocalScale();
+        // 		//qDebug() << "hit at dist: " << dist;
+        // 		//rightBeamRenderItem->worldMatrix.scale(1, 1, dist * (1.0f / 0.55f ));// todo: remove magic 0.55
+        // 		//rightBeamRenderItem->worldMatrix.scale(1, 1, dist);// todo: remove magic 0.55
+        // 		hoveredNode = controller->getObjectRoot(pick.hitNode);
+        // 		// Pick a node if the trigger is down
+        // 		if (rightTouch->getHandTrigger() > 0.1f && !grabbedNode)
+        // 		{
+        // 			grabbedNode = hoveredNode;
+        // 			rightPos = grabbedNode->getLocalPos();
+        // 			rightRot = grabbedNode->getLocalRot();
+        // 			rightScale = grabbedNode->getLocalScale();
 
-					//calculate offset
-					rightNodeOffset = rightHandMatrix.inverted() * grabbedNode->getGlobalTransform();
+        // 			//calculate offset
+        // 			rightNodeOffset = rightHandMatrix.inverted() * grabbedNode->getGlobalTransform();
 
-					auto handleNode = controller->findGrabNode(grabbedNode);
-					if (!!handleNode) {
-						//rightNodeOffset = grabbedNode->getGlobalTransform().inverted() * handleNode->getGlobalTransform();
-						rightNodeOffset = handleNode->getGlobalTransform().inverted() * grabbedNode->getGlobalTransform();
-					}
+        // 			auto handleNode = controller->findGrabNode(grabbedNode);
+        // 			if (!!handleNode) {
+        // 				//rightNodeOffset = grabbedNode->getGlobalTransform().inverted() * handleNode->getGlobalTransform();
+        // 				rightNodeOffset = handleNode->getGlobalTransform().inverted() * grabbedNode->getGlobalTransform();
+        // 			}
 
-					// should accept hit point
-					{
+        // 			// should accept hit point
+        // 			{
 
-						if (grabbedNode->isPhysicsBody) {
-							scene->getPhysicsEnvironment()->createPickingConstraint(
-								iris::PickingHandleType::RightHand,
-								grabbedNode->getGUID(),
-								iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
-								QVector3D(),
-								QVector3D());
-						}
-					}
-				}
+        // 				if (grabbedNode->isPhysicsBody) {
+        // 					scene->getPhysicsEnvironment()->createPickingConstraint(
+        // 						iris::PickingHandleType::RightHand,
+        // 						grabbedNode->getGUID(),
+        // 						iris::PhysicsHelper::btVector3FromQVector3D(grabbedNode->getGlobalPosition()),
+        // 						QVector3D(),
+        // 						QVector3D());
+        // 				}
+        // 			}
+        // 		}
 
-			}
-			else
-			{
-				//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
-				hoveredNode.clear();
-			}
+        // 	}
+        // 	else
+        // 	{
+        // 		//rightBeamRenderItem->worldMatrix.scale(1, 1, 100.f * (1.0f / 0.55f));
+        // 		hoveredNode.clear();
+        // 	}
 
-			// trigger released
-			if (rightTouch->getHandTrigger() < 0.1f && !!grabbedNode)
-			{
-				// release node
-				grabbedNode->disablePhysicsTransform = false;
-				grabbedNode.clear();
-				rightNodeOffset.setToIdentity(); // why bother?
+        // 	// trigger released
+        // 	if (rightTouch->getHandTrigger() < 0.1f && !!grabbedNode)
+        // 	{
+        // 		// release node
+        // 		grabbedNode->disablePhysicsTransform = false;
+        // 		grabbedNode.clear();
+        // 		rightNodeOffset.setToIdentity(); // why bother?
 
-				scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::RightHand);
-			}
+        // 		scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::RightHand);
+        // 	}
 
-			// update picked node
-			if (!!grabbedNode) {
-				// disable physics visual update
-				grabbedNode->disablePhysicsTransform = true;
+        // 	// update picked node
+        // 	if (!!grabbedNode) {
+        // 		// disable physics visual update
+        // 		grabbedNode->disablePhysicsTransform = true;
 
-				// calculate the global position
-				auto nodeGlobal = rightHandMatrix * rightNodeOffset;
+        // 		// calculate the global position
+        // 		auto nodeGlobal = rightHandMatrix * rightNodeOffset;
 
-				// LAZLO's CODE
-				if (grabbedNode->isPhysicsBody) {
-					scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::RightHand, nodeGlobal);
-				}
-				//else {
+        // 		// LAZLO's CODE
+        // 		if (grabbedNode->isPhysicsBody) {
+        // 			scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::RightHand, nodeGlobal);
+        // 		}
+        // 		//else {
 					
 
-					// calculate position relative to parent
-					auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
+        // 			// calculate position relative to parent
+        // 			auto localTransform = grabbedNode->parent->getGlobalTransform().inverted() * nodeGlobal;
 
-					QVector3D pos, scale;
-					QQuaternion rot;
-					// decompose matrix to assign pos, rot and scale
-					iris::MathHelper::decomposeMatrix(localTransform,
-						pos,
-						rot,
-						scale);
+        // 			QVector3D pos, scale;
+        // 			QQuaternion rot;
+        // 			// decompose matrix to assign pos, rot and scale
+        // 			iris::MathHelper::decomposeMatrix(localTransform,
+        // 				pos,
+        // 				rot,
+        // 				scale);
 
-					grabbedNode->setLocalPos(pos);
-					rot.normalize();
-					grabbedNode->setLocalRot(rot);
-					grabbedNode->setLocalScale(scale);
+        // 			grabbedNode->setLocalPos(pos);
+        // 			rot.normalize();
+        // 			grabbedNode->setLocalRot(rot);
+        // 			grabbedNode->setLocalScale(scale);
 
-				//}
-			}
+        // 		//}
+        // 	}
 
-			//scene->geometryRenderList->add(rightBeamRenderItem);
-			//scene->geometryRenderList->add(rightHandRenderItem);
-			//scene->geometryRenderList->submitMesh(handMesh, handMaterial, rightHandMatrix);
-		}
+        // 	//scene->geometryRenderList->add(rightBeamRenderItem);
+        // 	//scene->geometryRenderList->add(rightHandRenderItem);
+        // 	//scene->geometryRenderList->submitMesh(handMesh, handMaterial, rightHandMatrix);
+        // }
 
 		submitItemsToScene();
 	}
