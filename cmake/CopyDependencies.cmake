@@ -15,7 +15,8 @@ if (WIN32)
         COMMAND "${QT6_WINDEPLOYQT_EXECUTABLE}"
                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                 --dir "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-                -quick -multimedia
+                -multimedia
+
         COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"
         DEPENDS ${CMAKE_PROJECT_NAME}
         COMMENT "[Deploy] Running windeployqt..."

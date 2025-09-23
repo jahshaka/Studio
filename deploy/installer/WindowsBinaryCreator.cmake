@@ -26,6 +26,7 @@ file(MAKE_DIRECTORY "${INSTALLER_ROOT}/bin")
 
 add_custom_target(create_installer
     COMMAND "${BINARYCREATOR_PATH}"
+            --compression 9
             -c "${INSTALLER_CONFIG_FILE}"
             -p "${INSTALLER_ROOT}/packages"
             "${INSTALLER_OUTPUT}"
