@@ -2368,12 +2368,17 @@ void MainWindow::setupViewPort()
 	assets_panel->setLayout(hl);
 
 	jlogo = new QLabel;
-#ifdef QT_DEBUG
-    jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudiodevheader.png"));
-#else
-	jlogo->setPixmap(IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.png"));
+    jlogo->setMinimumSize(QSize(244, 48));
+    jlogo->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
+    QString header_image_path;
+#ifdef QT_DEBUG
+    header_image_path = IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudiodevheader.png");
+#else
+    header_image_path = IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.svg");
 #endif
+    QString style("image: url(%1);");
+    jlogo->setStyleSheet(style.arg(header_image_path));
 
 	help = new QPushButton;
 	help->setObjectName("helpButton");

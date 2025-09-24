@@ -11,5 +11,6 @@
         <file>images/default_particle.jpg</file>
         <file>images/jahshakastudiodevheader.png</file>
         <file>images/jahshakastudioheader.png</file>
+        <file>images/jahshakastudioheader.svg</file>
     </qresource>
 </RCC>
