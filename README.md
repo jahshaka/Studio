@@ -5,11 +5,13 @@
 <br>
 
 <div align="center">
-  <a href="http://www.jahshakavr.com/">Website</a>
+  <a href="http://www.jahshaka.com/">Website</a>
+  &nbsp;&nbsp;&bull;&nbsp;&nbsp;
+  <a href="https://www.x.com/jahshakafx">X Twitter</a>
   &nbsp;&nbsp;&bull;&nbsp;&nbsp;
   <a href="https://www.reddit.com/r/jahshaka/">Reddit</a>
   &nbsp;&nbsp;&bull;&nbsp;&nbsp;
-  <a href="https://github.com/jahshaka/VR/releases">Releases</a>
+  <a href="https://github.com/jahshaka/Studio/releases">Releases</a>
 </div>
 
 <br>
@@ -19,7 +21,7 @@ Jahshaka brings you the future of immersive digital content creation with the le
 ![](https://i.imgur.com/Z7VZhGy.jpg)
 
 ## Features:
- - View scenes in virtual reality via the Oculus Rift
+ - View scenes in virtual reality via the Oculus Quest/Quest Pro
  - Build and share your scenes with the world
  - Particle System
  - Animation Editor
@@ -29,7 +31,6 @@ Jahshaka brings you the future of immersive digital content creation with the le
  - Asset Manager
  - Supports 4k displays
  - Custom Shaders and more&hellip;
- - Embedded Monero Miner
  - Physics
 
 ## Screenshots
@@ -45,9 +46,6 @@ Jahshaka brings you the future of immersive digital content creation with the le
 
 ### Bullet Physics
 ![](https://giant.gfycat.com/TemptingRingedAsianwaterbuffalo.gif)
-
-#### Monero Miner
-![](https://i.imgur.com/aCY90YE.gif)
 
 ## Building From Source
 
