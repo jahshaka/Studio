@@ -49,6 +49,8 @@ Jahshaka brings you the future of immersive digital content creation with the le
 
 ## Building From Source
 
+We have moved Master and new releases over to Qt 6.9 and are now developing on 6.9 we will update the build instructions shortly.
+
 ### Requirements
 - Git
 - Cmake *(latest version recommended)*
