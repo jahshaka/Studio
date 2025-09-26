@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
 #include "helpers/tooltip.h"
+#include "widgets/versionsplashscreen.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
@@ -112,10 +113,12 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    QSplashScreen splash;
+    VersionSplashScreen splash;
+
     splash.setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     auto pixmap = QPixmap(":/images/splashv3.png");
     splash.setPixmap(pixmap.scaled(900, 506, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+
 //#ifdef QT_DEBUG
 #ifdef GIT_COMMIT_HASH
     if (GIT_COMMIT_HASH != "0000")
@@ -123,6 +126,9 @@ int main(int argc, char *argv[])
                            Qt::AlignBottom | Qt::AlignLeft, QColor(255, 255, 255));
 #endif // GIT_COMMIT_HASH
 //#endif // QT_DEBUG
+
+    splash.updateVersion(Constants::CONTENT_VERSION);
+
     splash.show();
 
     Globals::appWorkingDir = QApplication::applicationDirPath();

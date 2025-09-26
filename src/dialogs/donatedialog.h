@@ -28,6 +28,8 @@ public:
     DonateDialog(QDialog *parent = Q_NULLPTR);
     ~DonateDialog();
 
+    void updateVersion(const QString& version);
+
 public slots:
     void saveAndClose();
 

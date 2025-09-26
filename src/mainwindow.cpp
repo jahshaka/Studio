@@ -514,6 +514,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     if (closing) {
         if (!getSettingsManager()->getValue("ddialog_seen", "false").toBool()) {
             DonateDialog dialog;
+            dialog.updateVersion(Constants::CONTENT_VERSION);
             dialog.exec();
         }
     }

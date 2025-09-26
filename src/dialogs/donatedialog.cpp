@@ -18,7 +18,7 @@ DonateDialog::DonateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::Donate
     ui->setupUi(this);
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint | Qt::FramelessWindowHint);
 
-    connect(ui->checkBox, SIGNAL(pressed()), this, SLOT(saveAndClose()));
+    connect(ui->checkBox, SIGNAL(released()), this, SLOT(saveAndClose()));
     connect(ui->close, SIGNAL(pressed()), this, SLOT(close()));
 
     settingsManager = SettingsManager::getDefaultManager();
@@ -29,7 +29,12 @@ DonateDialog::~DonateDialog()
     delete ui;
 }
 
+void DonateDialog::updateVersion(const QString &version)
+{
+    ui->label->setText(version);
+}
+
 void DonateDialog::saveAndClose()
 {
-    settingsManager->setValue("ddialog_seen", true);
+    settingsManager->setValue("ddialog_seen", ui->checkBox->isChecked());
 }

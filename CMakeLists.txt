@@ -440,7 +440,8 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "R
 # https://stackoverflow.com/a/37211780/996468
 source_group("Resources" FILES ${QRCS} ${WIDGETS} ${BUNDLE_ICON})
 
-add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON})
+add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON}
+    src/widgets/versionsplashscreen.h src/widgets/versionsplashscreen.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
