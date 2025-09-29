@@ -685,6 +685,8 @@ void MainWindow::switchSpace(WindowSpaces space)
             playSceneBtn->hide();
             this->enterPlayMode();
 			playerView->begin();
+            playerView->onPlayScene();
+
             break;
         }
 
@@ -845,15 +847,6 @@ void MainWindow::openProject(bool playMode)
 
     assetWidget->trigger();
 
-    // autoplay scenes immediately
-    if (playMode) {
-        playBtn->setToolTip("Pause the scene");
-        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-        //onPlaySceneButton();
-    }
-
-    
-
 	undoStackCount = 0;
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
@@ -862,11 +855,14 @@ void MainWindow::openProject(bool playMode)
 	sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
 	sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
 
-	// autoplay scene on load
-	//if (playMode) {
-	//	this->playerView->onPlayScene();
-	//}
-	
+    // autoplay scenes immediately
+    if (playMode) {
+        playBtn->setToolTip("Pause the scene");
+        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+        UiManager::playScene();
+        playerView->onPlayScene();
+    }
+
 	// force a refresh
 	this->update();
 }
