@@ -14,6 +14,24 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia)
 
+find_package(VTK
+  COMPONENTS
+    CommonCore
+    GUISupportQt
+    InfovisCore
+    RenderingFreeType
+    ViewsQt)
+if (NOT VTK_FOUND)
+  message("Skipping example: ${VTK_NOT_FOUND_MESSAGE}")
+  return ()
+endif ()
+
+find_package("Qt${VTK_QT_VERSION}" COMPONENTS Widgets Gui)
+if (NOT TARGET "Qt${VTK_QT_VERSION}::Widgets" OR NOT TARGET "Qt${VTK_QT_VERSION}::Gui")
+  message("Skipping example: ${Qt${VTK_QT_VERSION}_NOT_FOUND_MESSAGE}")
+  return ()
+endif ()
+
 include(UseModernCpp)
 include(AddExternalSubdirectories)
 include(BuildType)
@@ -462,7 +480,15 @@ if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
 endif(USE_BREAKPAD)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS} ${VTK_LIBRARIES}
+  "Qt${VTK_QT_VERSION}::Gui"
+  "Qt${VTK_QT_VERSION}::Widgets")
+
+# target_link_libraries(SimpleView
+#   PRIVATE
+#     ${VTK_LIBRARIES}
+#     "Qt${VTK_QT_VERSION}::Gui"
+#     "Qt${VTK_QT_VERSION}::Widgets")
 
 include(CopyResources)
 include(CopyDependencies)

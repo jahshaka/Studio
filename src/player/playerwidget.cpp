@@ -101,7 +101,7 @@ void PlayerWidget::createUI()
 
 void PlayerWidget::setScene(iris::ScenePtr scene)
 {
-	this->playerView->setScene(scene);
+//	this->playerView->setScene(scene);
 }
 
 void PlayerWidget::begin()

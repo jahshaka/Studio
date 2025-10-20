@@ -2926,6 +2926,32 @@ void MainWindow::setupShortcuts()
         else if (currentSpace == WindowSpaces::PLAYER)
             playerView->onPlayScene();
     });
+
+    // left
+    shortcut = new QShortcut(QKeySequence("A"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        qDebug() << "left;";
+    });
+
+    // right
+    shortcut = new QShortcut(QKeySequence("D"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        qDebug() << "right;";
+    });
+
+
+    // back
+    shortcut = new QShortcut(QKeySequence("S"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        qDebug() << "back;";
+    });
+
+
+    // forward
+    shortcut = new QShortcut(QKeySequence("W"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        qDebug() << "forward;";
+    });
 }
 
 void MainWindow::toggleDockWidgets()
