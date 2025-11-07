@@ -16,11 +16,18 @@ find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimed
 
 find_package(VTK
   COMPONENTS
+  RenderingCore
+  RenderingOpenGL2
+  GUISupportQt
+
     CommonCore
     GUISupportQt
     InfovisCore
     RenderingFreeType
-    ViewsQt)
+    ViewsQt
+    IOGeometry
+    InteractionStyle
+  ImagingStatistics   )
 if (NOT VTK_FOUND)
   message("Skipping example: ${VTK_NOT_FOUND_MESSAGE}")
   return ()
@@ -50,6 +57,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/downloader)
 
 set(downloaderProject downloader)
+
+set(VTK_FOUND TRUE CACHE INTERNAL "")
+set(VTK_LIBRARIES ${VTK_LIBRARIES} CACHE INTERNAL "")
+set(VTK_INCLUDE_DIRS ${VTK_INCLUDE_DIRS} CACHE INTERNAL "")
 
 set(SRCS
     src/main.cpp
@@ -459,7 +470,9 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "R
 source_group("Resources" FILES ${QRCS} ${WIDGETS} ${BUNDLE_ICON})
 
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON}
-    src/widgets/versionsplashscreen.h src/widgets/versionsplashscreen.cpp)
+    src/widgets/versionsplashscreen.h src/widgets/versionsplashscreen.cpp
+    src/player/vtkplayerinteractorstyle.h src/player/vtkplayerinteractorstyle.cpp
+    src/player/vtkplaybackmanager.h src/player/vtkplaybackmanager.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
@@ -482,13 +495,12 @@ endif(USE_BREAKPAD)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS} ${VTK_LIBRARIES}
   "Qt${VTK_QT_VERSION}::Gui"
-  "Qt${VTK_QT_VERSION}::Widgets")
-
-# target_link_libraries(SimpleView
-#   PRIVATE
-#     ${VTK_LIBRARIES}
-#     "Qt${VTK_QT_VERSION}::Gui"
-#     "Qt${VTK_QT_VERSION}::Widgets")
+  "Qt${VTK_QT_VERSION}::Widgets"
+  "VTK::CommonCore"
+  "VTK::InteractionStyle"
+  "VTK::ImagingStatistics"
+  "VTK::IOGeometry"
+)
 
 include(CopyResources)
 include(CopyDependencies)
