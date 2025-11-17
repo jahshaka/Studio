@@ -11,6 +11,42 @@ For more information see the LICENSE file
 
 #include "assetviewer.h"
 
+#include <QApplication>
+#include <QFileDialog>
+#include <QStandardPaths>
+
+#include <QPointer>
+
+#include <vtkActor.h>
+#include <vtkRenderer.h>
+#include <vtkCamera.h>
+#include <vtkRenderWindow.h>
+#include <vtkWindowToImageFilter.h>
+#include <vtkPNGWriter.h>
+#include <vtkImageShiftScale.h>
+#include <vtkSmartPointer.h>
+#include <vtkLightKit.h>
+#include <vtkRenderStepsPass.h>
+#include <vtkToneMappingPass.h>
+#include <vtkSmartPointer.h>
+#include <vtkRenderPassCollection.h>
+#include <vtkSequencePass.h>
+#include <vtkCameraPass.h>
+#include <vtkImageAccumulate.h>
+#include <vtkGLTFReader.h>
+#include <vtkPNGReader.h>
+#include <vtkSkybox.h>
+#include <vtkTexture.h>
+#include <vtkImageData.h>
+#include <vtkSmartPointer.h>
+#include <vtkRenderer.h>
+#include <vtkSequencePass.h>
+#include <vtkDepthOfFieldPass.h>
+#include <vtkShadowMapPass.h>
+#include <vtkShadowMapBakerPass.h>
+
+#include "vtkmeta/assetloader.h"
+
 #include "irisgl/src/graphics/rasterizerstate.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h" 
 
@@ -25,30 +61,20 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "io/materialreader.hpp"
 
-#include <QApplication>
-#include <QFileDialog>
-#include <QStandardPaths>
 
-#include <QPointer>
 
-AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
+AssetViewer::AssetViewer(QWidget *parent)
+    : QVTKOpenGLNativeWidget(parent)
 {
-    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-    format.setVersion(3, 2);
-    format.setSamples(4);
-    format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
-    format.setRenderableType(QSurfaceFormat::OpenGL);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setSwapInterval(0);
-    setFormat(format);
-    
+    initializevtk();
+
     //QTimer *timer = new QTimer(this);
     //connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     //timer->start(1000.f / 60.f);
     //connect(this, SIGNAL(frameSwapped()), this, SLOT(update()));
 
-    viewport = new iris::Viewport();
-    render = false;
+    // viewport = new iris::Viewport();
+    // render = false;
 
     pdialog = new ProgressDialog();
     pdialog->setWindowModality(Qt::WindowModal);
@@ -62,127 +88,127 @@ AssetViewer::AssetViewer(QWidget *parent) : QOpenGLWidget(parent)
     setFocusPolicy(Qt::ClickFocus);
 }
 
-void AssetViewer::paintGL()
-{
-//    makeCurrent();
+// void AssetViewer::paintGL()
+// {
+//     return;
+// //    makeCurrent();
 
-    float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
-    elapsedTimer.restart();
+//     float dt = elapsedTimer.nsecsElapsed() / (1000.0f * 1000.0f * 1000.0f);
+//     elapsedTimer.restart();
 
-    if (!!renderer && !!scene) {
-        camController->update(dt);
-        scene->update(dt);
-        renderer->renderScene(dt, viewport);
-    }
+//     if (!!renderer && !!scene) {
+//         camController->update(dt);
+//         scene->update(dt);
+//         renderer->renderScene(dt, viewport);
+//     }
 
-//    doneCurrent();
-}
+// //    doneCurrent();
+// }
 
-void AssetViewer::updateScene()
-{
 
-}
+// void AssetViewer::initializeGL()
+// {
+//     return;
 
-void AssetViewer::initializeGL()
-{
-    QOpenGLWidget::initializeGL();
-    makeCurrent();
+//     QOpenGLWidget::initializeGL();
+//     makeCurrent();
 
-    QOpenGLContext* context = QOpenGLContext::currentContext();
-    gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context);
+//     QOpenGLContext* context = QOpenGLContext::currentContext();
+//     gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context);
 
-//    gl = new QOpenGLFunctions_3_2_Core();
-    gl->initializeOpenGLFunctions();
+// //    gl = new QOpenGLFunctions_3_2_Core();
+//     gl->initializeOpenGLFunctions();
 
-    gl->glEnable(GL_DEPTH_TEST);
-    gl->glEnable(GL_CULL_FACE);
-    gl->glEnable(GL_FRAMEBUFFER_SRGB);
+//     gl->glEnable(GL_DEPTH_TEST);
+//     gl->glEnable(GL_CULL_FACE);
+//     gl->glEnable(GL_FRAMEBUFFER_SRGB);
 
-    renderer = iris::ForwardRenderer::create(false);
-    scene = iris::Scene::create();
-    scene->shadowEnabled = true;
-    renderer->setScene(scene);
+//     renderer = iris::ForwardRenderer::create(false);
+//     scene = iris::Scene::create();
+//     scene->shadowEnabled = true;
+//     renderer->setScene(scene);
 
-	previewRT = iris::RenderTarget::create(640, 480);
-	screenshotTex = iris::Texture2D::create(640, 480);
-	previewRT->addTexture(screenshotTex);
+// 	previewRT = iris::RenderTarget::create(640, 480);
+// 	screenshotTex = iris::Texture2D::create(640, 480);
+// 	previewRT->addTexture(screenshotTex);
 
-    auto dlight = iris::LightNode::create();
-    dlight->setLightType(iris::LightType::Directional);
-    dlight->setName("ae98cx7u");
-	dlight->color = QColor(255, 255, 240);
-	//dlight->setLocalPos(QVector3D(2, 2, 2));
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
-    dlight->intensity = 0.76;
-    dlight->setShadowMapType(iris::ShadowMapType::Soft);
-    scene->rootNode->addChild(dlight);
+//     auto dlight = iris::LightNode::create();
+//     dlight->setLightType(iris::LightType::Directional);
+//     dlight->setName("ae98cx7u");
+// 	dlight->color = QColor(255, 255, 240);
+// 	//dlight->setLocalPos(QVector3D(2, 2, 2));
+//     dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
+//     dlight->intensity = 0.76;
+//     dlight->setShadowMapType(iris::ShadowMapType::Soft);
+//     scene->rootNode->addChild(dlight);
 
-    auto plight = iris::LightNode::create();
-    plight->setLightType(iris::LightType::Point);
-	plight->setName("ae98cx7u");
-    plight->setLocalPos(QVector3D(0, 0, -3));
-    plight->color = QColor(210, 210, 255);
-    plight->intensity = 0.47;
-    plight->setShadowMapType(iris::ShadowMapType::Soft);
-    plight->setShadowMapResolution(2048);
-    scene->rootNode->addChild(plight);
+//     auto plight = iris::LightNode::create();
+//     plight->setLightType(iris::LightType::Point);
+// 	plight->setName("ae98cx7u");
+//     plight->setLocalPos(QVector3D(0, 0, -3));
+//     plight->color = QColor(210, 210, 255);
+//     plight->intensity = 0.47;
+//     plight->setShadowMapType(iris::ShadowMapType::Soft);
+//     plight->setShadowMapResolution(2048);
+//     scene->rootNode->addChild(plight);
 
-    auto node = iris::MeshNode::create();
-    node->setMesh(":/models/ground.obj");
-    node->setLocalPos(QVector3D(0, -5, 0)); // prevent z-fighting with the default plane reset (iKlsR)
-    node->setName("ae98cx7u_floor");
-    node->setPickable(false);
-	node->isBuiltIn = true;
-    node->setFaceCullingMode(iris::FaceCullingMode::None);
-    node->setShadowCastingEnabled(true);
-    scene->rootNode->addChild(node);
+//     auto node = iris::MeshNode::create();
+//     node->setMesh(":/models/ground.obj");
+//     node->setLocalPos(QVector3D(0, -5, 0)); // prevent z-fighting with the default plane reset (iKlsR)
+//     node->setName("ae98cx7u_floor");
+//     node->setPickable(false);
+// 	node->isBuiltIn = true;
+//     node->setFaceCullingMode(iris::FaceCullingMode::None);
+//     node->setShadowCastingEnabled(true);
+//     scene->rootNode->addChild(node);
 
-    auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
-    m->setValue("textureScale", 4.f);
-    node->setMaterial(m);
+//     auto m = iris::CustomMaterial::create();
+//     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+//     m->setValue("diffuseTexture", IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"));
+//     m->setValue("textureScale", 4.f);
+//     node->setMaterial(m);
 
-    defaultCam = new EditorCameraController(nullptr);
-    orbitalCam = new OrbitalCameraController(nullptr);
-	orbitalCam->previewMode = true;
+//     defaultCam = new EditorCameraController(nullptr);
+//     orbitalCam = new OrbitalCameraController(nullptr);
+// 	orbitalCam->previewMode = true;
 
-    camera = iris::CameraNode::create();
-    camera->setLocalPos(QVector3D(5, 6, 12));
-    camera->lookAt(QVector3D(0, 0.5f, 0));
+//     camera = iris::CameraNode::create();
+//     camera->setLocalPos(QVector3D(5, 6, 12));
+//     camera->lookAt(QVector3D(0, 0.5f, 0));
 
-    scene->setCamera(camera);
+//     scene->setCamera(camera);
 
-    scene->setSkyColor(QColor(25, 25, 25));
-    scene->setAmbientColor(QColor(190, 190, 190));
+//     scene->setSkyColor(QColor(25, 25, 25));
+//     scene->setAmbientColor(QColor(190, 190, 190));
 
-    scene->fogColor = QColor(25, 25, 25);
-    scene->fogEnabled = false;
-    scene->shadowEnabled = true;
+//     scene->fogColor = QColor(25, 25, 25);
+//     scene->fogEnabled = false;
+//     scene->shadowEnabled = true;
 
-    camera->update(0);
-    scene->update(0);
+//     camera->update(0);
+//     scene->update(0);
 
-    //camController->end();
-    camController = orbitalCam;
-    camController->setCamera(camera);
-    // has to be set after setCamera
-    orbitalCam->pivot = QVector3D(0, 0, 0);
-    orbitalCam->distFromPivot = 5;
-    orbitalCam->setRotationSpeed(.5f);
-    camController->resetMouseStates();
-    camController->start();
+//     //camController->end();
+//     camController = orbitalCam;
+//     camController->setCamera(camera);
+//     // has to be set after setCamera
+//     orbitalCam->pivot = QVector3D(0, 0, 0);
+//     orbitalCam->distFromPivot = 5;
+//     orbitalCam->setRotationSpeed(.5f);
+//     camController->resetMouseStates();
+//     camController->start();
 
-    auto timer = new QTimer(this);
-    connect(timer, SIGNAL(timeout()), this, SLOT(update()));
-    timer->start(Constants::FPS_60);
-}
+//     auto timer = new QTimer(this);
+//     connect(timer, SIGNAL(timeout()), this, SLOT(update()));
+//     timer->start(Constants::FPS_60);
+// }
 
 void AssetViewer::wheelEvent(QWheelEvent *event)
 {
-    if (camController != nullptr) {
-        camController->onMouseWheel(event->angleDelta().y());
-    }
+    // if (camController != nullptr) {
+    //     camController->onMouseWheel(event->angleDelta().y());
+    // }
+    QVTKOpenGLNativeWidget::wheelEvent(event);
 }
 
 void AssetViewer::renderObject() {
@@ -191,6 +217,9 @@ void AssetViewer::renderObject() {
 
 void AssetViewer::mouseMoveEvent(QMouseEvent *e)
 {
+    QVTKOpenGLNativeWidget::mouseMoveEvent(e);
+    return;
+
     // @ISSUE - only fired when mouse is dragged
     QPointF localPos = e->localPos();
     QPointF dir = localPos - prevMousePos;
@@ -204,6 +233,9 @@ void AssetViewer::mouseMoveEvent(QMouseEvent *e)
 
 void AssetViewer::mousePressEvent(QMouseEvent *e)
 {
+    QVTKOpenGLNativeWidget::mousePressEvent(e);
+    return;
+
     prevMousePos = e->localPos();
 
     if (camController != nullptr) {
@@ -214,35 +246,47 @@ void AssetViewer::mousePressEvent(QMouseEvent *e)
 
 void AssetViewer::mouseReleaseEvent(QMouseEvent *e)
 {
+    QVTKOpenGLNativeWidget::mouseReleaseEvent(e);
+
+    return;
+
     if (camController != nullptr) {
         camController->onMouseUp(e->button());
     }
 }
 
+void AssetViewer::addLoadedMesh(const vtkmeta::LoadedMesh& mesh, const QString& guid)
+{
+    if (!mesh.actor) return;
+
+    addActor(mesh.actor, guid);
+}
+
+void AssetViewer::addActor(vtkSmartPointer<vtkActor> actor, const QString& guid)
+{
+    if (!actor) return;
+
+    {
+        QMutexLocker locker(&actorsMutex_);
+
+        actorToGuid_.insert(actor, guid);
+        if (!guid.isEmpty()) guidToActors_[guid].append(actor);
+    }
+
+    renderer_->AddActor(actor);
+}
+
 void AssetViewer::resetViewerCamera()
 {
-    camera->setLocalPos(localPos);
-	camera->setLocalRot(QQuaternion::fromEulerAngles(localRot));
-    camera->lookAt(lookAt);
-	camera->update(0);
+    if (!renderer_) return;
 
-    camController->setCamera(camera);
-    orbitalCam->pivot = QVector3D(lookAt);
-    orbitalCam->distFromPivot = distanceFromPivot;
-    orbitalCam->setRotationSpeed(.5f);
-    orbitalCam->updateCameraRot();
-    camera->update(0);
+    renderer_->ResetCamera();
+    renderWindow_->Render();
 }
 
 void AssetViewer::resetViewerCameraAfter()
 {
-	camera->setLocalPos(localPos);
-	camera->setLocalRot(QQuaternion::fromEulerAngles(localRot));
-	camera->update(0);
 
-	orbitalCam->distFromPivot = distanceFromPivot;
-	orbitalCam->setCamera(camera);
-	orbitalCam->setRotationSpeed(.5f);
 }
 
 void AssetViewer::loadJafMaterial(QString guid, bool firstAdd, bool cache, bool firstLoad) {
@@ -283,14 +327,14 @@ void AssetViewer::loadJafModel(QString str, QString guid, bool firstAdd, bool ca
     pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
     QApplication::processEvents();
-    makeCurrent();
+//    makeCurrent();
 
     addJafMesh(str, guid, firstAdd, cache);
     if (firstLoad) resetViewerCamera();
     else resetViewerCameraAfter();
     
     renderObject();
-    doneCurrent();
+//    doneCurrent();
 
     pdialog->close();
 }
@@ -333,17 +377,19 @@ void AssetViewer::loadModel(QString str, QString guid, bool firstAdd, bool cache
     pdialog->close();
 }
 
-void AssetViewer::update() {
-	QOpenGLWidget::update();
-}
+// void AssetViewer::update() {
+// 	QOpenGLWidget::update();
+// }
 
-void AssetViewer::resizeGL(int width, int height)
-{
-    const qreal dpr = devicePixelRatioF();
-    QSize pixelSize = size() * dpr;
-    viewport->width = pixelSize.width();
-    viewport->height = pixelSize.height();
-}
+// void AssetViewer::resizeGL(int width, int height)
+// {
+//     return;
+
+//     const qreal dpr = devicePixelRatioF();
+//     QSize pixelSize = size() * dpr;
+//     viewport->width = pixelSize.width();
+//     viewport->height = pixelSize.height();
+// }
 
 void AssetViewer::addJafShader(const QString &guid, QMap<QString, QString> &guidCompareMap, bool firstAdd, bool cache, QVector3D position)
 {
@@ -558,30 +604,53 @@ void AssetViewer::addJafSky(const QString& guid, bool firstAdd, bool cache)
 
 void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firstAdd, bool cache, QVector3D position)
 {
-	scene->setSkyColor(QColor(25, 25, 25));
+//	scene->setSkyColor(QColor(25, 25, 25));
 
-    QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
-    QJsonObject objectHierarchy = document.object();
+    // QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
+    // QJsonObject objectHierarchy = document.object();
 
-    SceneReader *reader = new SceneReader;
-    reader->setBaseDirectory(IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-        Constants::ASSET_FOLDER, guid)
-    );
+    // SceneReader *reader = new SceneReader;
+    // reader->setBaseDirectory(IrisUtils::join(
+    //     QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
+    //     Constants::ASSET_FOLDER, guid)
+    // );
 
-    iris::SceneNodePtr node = reader->readSceneNode(objectHierarchy);
-    delete reader;
+    QFileInfo fi(path);
+    auto meshes = modelLoader_->loadModel(path, fi.absolutePath());
 
-    // rename animation sources to relative paths
-    auto relativePath = QDir(Globals::project->folderPath).relativeFilePath(path);
-    for (auto anim : node->getAnimations()) {
-        if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relativePath;
+    clearAllModels();
+
+    emit progressChanged(0);
+
+    // auto meshes = modelLoader_->loadModel(path, folder, renderer_);
+
+    int total = meshes.size();
+    int idx = 0;
+
+    for (auto &m : meshes)
+    {
+        addLoadedMesh(m, guid);
+
+        ++idx;
+        int perc = (total>0) ? static_cast<int>((idx*100)/total) : 100;
+        emit progressChanged(perc);
     }
 
-    node->setLocalPos(position);
+    resetViewerCamera();
+    emit progressChanged(100);
+//     iris::SceneNodePtr node = reader->readSceneNode(objectHierarchy);
+//     delete reader;
 
-    addNodeToScene(node, QFileInfo(path).baseName(), false, true);
-    lastNode = node->getName();
+//     // rename animation sources to relative paths
+//     auto relativePath = QDir(Globals::project->folderPath).relativeFilePath(path);
+//     for (auto anim : node->getAnimations()) {
+//         if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relativePath;
+//     }
+
+// //    node->setLocalPos(position);
+
+// //    addNodeToScene(node, QFileInfo(path).baseName(), false, true);
+//     lastNode = node->getName();
 }
 
 void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVector3D position)
@@ -830,19 +899,39 @@ iris::AABB AssetViewer::getNodeBoundingBox(iris::SceneNodePtr node)
 
 QImage AssetViewer::takeScreenshot(int width, int height)
 {
-	makeCurrent();
+    if (!renderWindow_) return QImage();
 
-	previewRT->resize(width, height, true);
-    scene->renderSky = false;
-	scene->update(0);
-    scene->renderSky = true;
-	renderer->renderLightBillboards = false;
-	renderer->renderSceneToRenderTarget(previewRT, camera, false, false);
-	renderer->renderLightBillboards = true;
-	auto img = previewRT->toImage();
-	doneCurrent();
+    vtkSmartPointer<vtkWindowToImageFilter> w2i = vtkSmartPointer<vtkWindowToImageFilter>::New();
+    w2i->SetInput(renderWindow_);
+    //    w2i->SetMagnification(1);
+    w2i->Update();
 
-	return img;
+    vtkImageData* img = w2i->GetOutput();
+    if (!img) return QImage();
+
+    int w = img->GetDimensions()[0];
+    int h = img->GetDimensions()[1];
+    int ncomps = img->GetNumberOfScalarComponents();
+
+    QImage qimg(w, h, QImage::Format_ARGB32);
+    unsigned char *ptr = static_cast<unsigned char*>(img->GetScalarPointer());
+
+    for (int y = 0; y < h; ++y) {
+        QRgb *line = reinterpret_cast<QRgb*>(qimg.scanLine(h - 1 - y)); // 翻转 Y
+        unsigned char* rowPtr = ptr + y * w * ncomps;
+        for (int x = 0; x < w; ++x) {
+            unsigned char r = rowPtr[x*ncomps + 0];
+            unsigned char g = rowPtr[x*ncomps + 1];
+            unsigned char b = rowPtr[x*ncomps + 2];
+            unsigned char a = (ncomps==4) ? rowPtr[x*ncomps + 3] : 255;
+            line[x] = qRgba(r,g,b,a);
+        }
+    }
+
+    if (width > 0 && height > 0 && (width != w || height != h)) {
+        return qimg.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    return qimg;
 }
 
 void AssetViewer::changeBackdrop(unsigned int id)
@@ -943,4 +1032,71 @@ QJsonObject AssetViewer::getSceneProperties()
 	properties["camera"] = cameraObj;
 
 	return properties;
+}
+
+void AssetViewer::onUpdateTimer()
+{
+
+}
+
+void AssetViewer::initializevtk()
+{
+    renderer_ = vtkSmartPointer<vtkRenderer>::New();
+
+    renderer_->UseDepthPeelingOff();
+    renderer_->SetMaximumNumberOfPeels(8);
+    renderer_->SetOcclusionRatio(0.1);
+
+    vtkSmartPointer<vtkLight> keyLight = vtkSmartPointer<vtkLight>::New();
+    keyLight->SetLightTypeToHeadlight();
+    keyLight->SetIntensity(3.0);
+    keyLight->SetColor(1.0, 1.0, 1.0);
+    keyLight->SetPosition(10.0, 10.0, 10.0);
+    keyLight->SetFocalPoint(0.0, 0.0, 0.0);
+    renderer_->AddLight(keyLight);
+    renderer_->SetAmbient(04, 04, 0.4);
+
+    renderWindow_ = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
+    renderWindow_->SetAlphaBitPlanes(1);
+    renderWindow_->SetMultiSamples(16);
+    renderWindow_->SetUseSRGBColorSpace(true);
+    renderWindow_->SetRenderBufferTargetDepthSize(24);
+    renderWindow_->SetDesiredUpdateRate(60.0);
+
+    renderWindow_->SetPointSmoothing(1);
+    renderWindow_->SetLineSmoothing(1);
+    renderWindow_->SetPolygonSmoothing(1);
+
+    renderWindow_->AddRenderer(renderer_);
+    setRenderWindow(renderWindow_);
+
+    modelLoader_ = std::make_unique<vtkmeta::AssetLoader>();
+
+    updateTimer_ = new QTimer(this);
+    connect(updateTimer_, &QTimer::timeout, this, &AssetViewer::onUpdateTimer);
+    updateTimer_->start(Constants::FPS_60);
+
+    fpsTimer_.start();
+}
+
+void AssetViewer::clearAllModels()
+{
+    if (!renderer_) return;
+
+    QMutexLocker locker(&actorsMutex_);
+
+    for (auto it = guidToActors_.begin(); it != guidToActors_.end(); ++it) {
+        const QVector<vtkSmartPointer<vtkActor>>& actors = it.value();
+        for (const vtkSmartPointer<vtkActor>& actor : actors) {
+            renderer_->RemoveActor(actor);
+        }
+    }
+
+    guidToActors_.clear();
+    actorToGuid_.clear();
+
+
+    if (renderWindow_) {
+        renderWindow_->Render();
+    }
 }

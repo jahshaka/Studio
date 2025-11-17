@@ -69,6 +69,9 @@ For more information see the LICENSE file
 
 #include "dialogs/toast.h"
 
+#include "vtkmeta/assetimporter.h"
+#include "vtkmeta/assetjsonwriter.h"
+
 void AssetView::focusInEvent(QFocusEvent *event)
 {
 	Q_UNUSED(event);
@@ -1439,6 +1442,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
     QList<directory_tuple> imagesInUse;
     QList<QString> imgaesUsedList;
+    QString new_file = IrisUtils::join(assetFolder, QFileInfo(fileName).fileName());
 
     foreach(const auto &entry, finalImportList) {
         QFileInfo entryInfo(entry.path);
@@ -1590,141 +1594,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                 }
 
                 if (asset->type == ModelTypes::Mesh) {
-                    QStringList texturesToCopy;
-                    viewer->makeCurrent();
-
-                    bool hasEmbeddedTexture(false);
-                    QStringList paths;
-                    auto scene = AssetHelper::extractTexturesAndMaterialFromMesh(asset->path,
-                                                                                 texturesToCopy,
-                                                                                 paths,
-                                                                                 hasEmbeddedTexture);
-
-                    viewer->doneCurrent();
-
-                    if (hasEmbeddedTexture) {
-                        for (const auto &image : imgaesUsedList) {
-                            int index = texturesToCopy.indexOf(image);
-                            if (index >= 0) {
-                                texturesToCopy.remove(index);
-                                paths.remove(index);
-                            }
-                        }
-
-                        int index = 0;
-                        for (const auto &image : texturesToCopy) {
-                            directory_tuple dt;
-                            dt.parent_guid = main_guid;
-                            dt.guid = GUIDManager::generateGUID();
-                            dt.path = image;
-                            imagesInUse.append(dt);
-
-                            auto thumb = ThumbnailManager::createThumbnail(paths[index], 72, 72);
-                            thumbnail = QPixmap::fromImage(*thumb->thumb);
-                            index++;
-
-
-
-                            const QString assetGuid = db->createAssetEntry(dt.guid,
-                                                                           dt.path,
-                                                                           static_cast<int>(ModelTypes::Texture),
-                                                                           main_guid,
-                                                                           QString(),
-                                                                           QString(),
-                                                                           AssetHelper::makeBlobFromPixmap(thumbnail));
-                        }
-                    }
-
-                    // Replace all path references with GUIDs before storing in the database
-                    std::function<void(iris::SceneNodePtr&)> replacePathsWithGUIDs =
-                        [&](iris::SceneNodePtr &node) -> void {
-                        if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                            auto meshNode = node.staticCast<iris::MeshNode>();
-                            if (QFileInfo(meshNode->meshPath).fileName() == entryInfo.fileName()) {
-                                meshNode->meshPath = assetGuid;
-                            }
-
-                            meshNode->setGUID(main_guid);
-
-                            auto material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
-                            for (auto prop : material->properties) {
-                                if (prop->type == iris::PropertyType::Texture) {
-                                    // Cycle through any textures that were selected in the import and use them
-                                    for (const auto &image : imagesInUse) {
-                                        auto fileName = QFileInfo(prop->getValue().toString()).fileName();
-                                        if (texturesToCopy.contains(fileName) && image.path == fileName) {
-                                            material->setValue(prop->name, image.guid);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (node->hasChildren()) {
-                            for (auto &child : node->children) {
-                                replacePathsWithGUIDs(child);
-                            }
-                        }
-                    };
-
-                    replacePathsWithGUIDs(scene);
-
-                    QJsonObject nodeWithGUIDs;
-                    SceneWriter::writeSceneNode(nodeWithGUIDs, scene, false);
-
-
-                    QJsonObject object;
-                    object["icon_url"] = "";
-                    object["name"] = QFileInfo(filename).baseName(); // renameModelField->text();
-
-                    auto assetSnapshot = viewer->takeScreenshot(512, 512);
-
-                    QJsonObject tags;
-                    QJsonArray actualTags;
-                    QJsonDocument tagsDoc(tags);
-
-                    // Create an actual object from a mesh, materials are embedded into objects by default
-                    const QString objectGuid = db->createAssetEntry(main_guid,
-                                                                    QFileInfo(asset->fileName).baseName(),
-                                                                    static_cast<int>(ModelTypes::Object),
-                                                                    QString(),
-                                                                    QString(),
-                                                                    QString(),
-                                                                    AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
-                                                                    QJsonDocument(viewer->getSceneProperties()).toJson(),
-                                                                    tagsDoc.toJson(),
-                                                                    QJsonDocument(nodeWithGUIDs).toJson(),
-                                                                    AssetViewFilter::AssetsView);
-
-                    ThumbnailGenerator::getSingleton()->requestThumbnail(
-                        ThumbnailRequestType::Mesh, asset->path, objectGuid
-                        );
-
-                    QVariant variant = QVariant::fromValue(scene);
-                    auto nodeAsset = new AssetNodeObject;
-                    nodeAsset->assetGuid = objectGuid;
-                    nodeAsset->setValue(variant);
-                    AssetManager::addAsset(nodeAsset);
-
-
-                    // Create dependencies to the object for the textures used
-                    for (const auto &image : imagesInUse) {
-                        if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
-                            db->createDependency(
-                                static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
-                                objectGuid, image.guid
-                                );
-                        }
-                    }
-
-                    // Insert a dependency for the mesh to the object
-                    db->createDependency(
-                        static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
-                        objectGuid, assetGuid
-                        );
-
-                    // Remove the thumbnail from the object asset
-                    db->updateAssetAsset(assetGuid, QByteArray());
+                    importMeshToDb(new_file, assetFolder, imagesInUse, main_guid, assetGuid);
                 }
             }
         }
@@ -1734,9 +1604,10 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
 
     renameModelField->setText(QFileInfo(fileName).baseName());
-    QString new_file = IrisUtils::join(assetFolder, QFileInfo(fileName).fileName());
+
     viewer->loadModel(new_file, main_guid);
-    addToLibrary(main_guid, jfx);
+
+ //   addToLibrary(main_guid, jfx);
 }
 
 void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
@@ -1778,6 +1649,86 @@ void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
     }
 
     SceneWriter::writeSceneNodeMaterial(mat, material, false);
+}
+
+void AssetView::importMeshToDb(const QString &filePath,
+                               const QString &assetFolder,
+                               const QList<directory_tuple>& imagesUsedList,
+                               const QString &main_guid,
+                               const QString &assetGuid)
+{
+    vtkmeta::AssetImporter importer;
+
+    vtkmeta::ImportResult result = importer.importModel(filePath, assetFolder);
+    QVector<vtkmeta::TextureMapResult> textures = result.texture_results_;
+
+    QPixmap thumbnail = QPixmap(":/icons/empty_object.png");
+
+    QStringList existed_texturs;
+    for (auto texture : textures) {
+        if (existed_texturs.contains(texture.filename_)) {
+            continue;
+        }
+
+        auto thumb = ThumbnailManager::createThumbnail(texture.file_path_, 72, 72);
+        thumbnail = QPixmap::fromImage(*thumb->thumb);
+
+        existed_texturs.append(texture.filename_);
+        const QString texGuid = db->createAssetEntry(texture.guid_,
+                                                     texture.filename_,
+                                                     static_cast<int>(ModelTypes::Texture),
+                                                     main_guid,
+                                                     QString(),
+                                                     QString(),
+                                                     AssetHelper::makeBlobFromPixmap(thumbnail));
+    }
+
+    vtkmeta::AssetJsonWriter jwriter;
+    QJsonObject obj = jwriter.generateAssetJson(result, filePath, QFileInfo(filePath).fileName());
+
+    auto assetSnapshot = viewer->takeScreenshot(512, 512);
+
+    QJsonObject tags;
+    QJsonArray actualTags;
+    QJsonDocument tagsDoc(tags);
+
+    // Create an actual object from a mesh, materials are embedded into objects by default
+    const QString objectGuid = db->createAssetEntry(main_guid,
+                                                    QFileInfo(filePath).baseName(),
+                                                    static_cast<int>(ModelTypes::Object),
+                                                    QString(),
+                                                    QString(),
+                                                    QString(),
+                                                    AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
+                                                    QJsonDocument().toJson(),
+                                                    tagsDoc.toJson(),
+                                                    QJsonDocument(obj).toJson(),
+                                                    AssetViewFilter::AssetsView);
+
+    // ThumbnailGenerator::getSingleton()->requestThumbnail(
+    //     ThumbnailRequestType::Mesh, asset->path, objectGuid
+    //     );
+
+
+
+    // Create dependencies to the object for the textures used
+    for (const auto &image : imagesUsedList) {
+        if (!existed_texturs.contains(QFileInfo(image.path).fileName())) {
+            db->createDependency(
+                static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
+                objectGuid, image.guid
+                );
+        }
+    }
+
+    // Insert a dependency for the mesh to the object
+    db->createDependency(
+        static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
+        objectGuid, assetGuid
+        );
+
+    // Remove the thumbnail from the object asset
+    db->updateAssetAsset(assetGuid, QByteArray());
 }
 
 void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool jfx)

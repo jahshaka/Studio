@@ -122,6 +122,12 @@ private:
         QStringList &textureList,
         QJsonObject &mat);
 
+    void importMeshToDb(const QString &filePath,
+                        const QString &assetFolder,
+                        const QList<directory_tuple>& imagesUsedList,
+                        const QString& main_guid,
+                        const QString &assetGuid);
+
 	Database *db;
 	QSplitter *_splitter;
 	QWidget *_filterBar;

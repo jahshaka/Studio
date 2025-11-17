@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkNew.h>
+
 #include <QDebug>
 #include <QMouseEvent>
 

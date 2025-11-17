@@ -25,6 +25,15 @@ For more information see the LICENSE file
 #include <QFocusEvent>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QMutex>
+
+#include <QVTKOpenGLNativeWidget.h>
+#include <vtkSmartPointer.h>
+#include <vtkGenericOpenGLRenderWindow.h>
+#include <vtkRenderer.h>
+#include <vtkToneMappingPass.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkSkybox.h>
 
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -49,23 +58,28 @@ For more information see the LICENSE file
 
 #include "irisgl/src/graphics/shadowmap.h"
 
-class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress
+namespace vtkmeta { struct LoadedMesh; class AssetLoader; }
+
+class AssetViewer : public QVTKOpenGLNativeWidget, protected iris::IModelReadProgress
 {
     Q_OBJECT
 
 public:
     AssetViewer(QWidget *parent = Q_NULLPTR);
 
+    void addLoadedMesh(const vtkmeta::LoadedMesh& mesh, const QString& guid = QString());
+    void addActor(vtkSmartPointer<vtkActor> actor, const QString& guid = QString());
+
     iris::SceneSource *ssource;
 
     void setDatabase(Database *db) { this->db = db;  }
-    void update();
-    void paintGL();
-    void updateScene();
-    void initializeGL();
-    void resizeGL(int width, int height);
+    // void update();
+    // void paintGL();
+    // void updateScene();
+    // void initializeGL();
+    // void resizeGL(int width, int height);
 
-    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
+//    void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
 
     void renderObject();
     void resetViewerCamera();
@@ -185,7 +199,27 @@ public:
 signals:
     void progressChanged(int);
 
+private slots:
+     void onUpdateTimer();
+
 private:
+    void initializevtk();
+    void clearAllModels();
+
+    vtkSmartPointer<vtkGenericOpenGLRenderWindow> renderWindow_;
+    vtkSmartPointer<vtkRenderer> renderer_;
+    vtkSmartPointer<vtkToneMappingPass> toneMappingPass_;
+    vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor_;
+    vtkSmartPointer<vtkSkybox> skyboxActor_;
+
+    QTimer* updateTimer_;
+    QElapsedTimer fpsTimer_;
+
+    // loader
+    std::unique_ptr<vtkmeta::AssetLoader> modelLoader_;
+
+    QMap<vtkActor*, QString> actorToGuid_;
+    QMap<QString, QList<vtkSmartPointer<vtkActor>>> guidToActors_;
 
 	QJsonObject assetMaterial;
     ProgressDialog * pdialog;
@@ -220,4 +254,7 @@ private:
 	int distanceFromPivot;
 
     QString lastNode;
+
+    QMutex actorsMutex_;
+    QPointF lastMousePos_;
 };
