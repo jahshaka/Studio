@@ -2683,7 +2683,7 @@ void AssetWidget::importAsset(const QStringList &fileNames)
                         continue;
 
                     if (entry.isDir()) {
-                        recurseDir(entry.absoluteFilePath(), parentGuid); // 子目录递归，parentGuid 不变
+                        recurseDir(entry.absoluteFilePath(), parentGuid);
                     } else {
                         QString fileAbsPath = entry.absoluteFilePath();
                         if (visitedFiles.contains(fileAbsPath))

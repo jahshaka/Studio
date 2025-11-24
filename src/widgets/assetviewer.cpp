@@ -606,14 +606,26 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
 {
 //	scene->setSkyColor(QColor(25, 25, 25));
 
-    // QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
-    // QJsonObject objectHierarchy = document.object();
+    QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
+    QJsonObject objectHierarchy = document.object();
 
     // SceneReader *reader = new SceneReader;
     // reader->setBaseDirectory(IrisUtils::join(
     //     QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
     //     Constants::ASSET_FOLDER, guid)
     // );
+
+    // clearAllModels();
+
+    // qDebug() << objectHierarchy;
+
+    renderer_->RemoveAllViewProps();
+    modelLoader_->loadModelFromJson(path, objectHierarchy, renderer_);
+    resetViewerCamera();
+    emit progressChanged(100);
+
+    return;
+
 
     QFileInfo fi(path);
     auto meshes = modelLoader_->loadModel(path, fi.absolutePath());
@@ -1003,14 +1015,14 @@ void AssetViewer::createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr ma
 
 void AssetViewer::cacheCurrentModel(QString guid)
 {
-	if (scene->rootNode->hasChildren()) {
-		for (auto child : scene->rootNode->children) {
-			// clear the scene of anything that is not a light for the next asset
-			if (child->sceneNodeType != iris::SceneNodeType::Light) {
-				cachedAssets.insert(guid, child);
-			}
-		}
-	}
+    // if (scene->rootNode->hasChildren()) {
+    // 	for (auto child : scene->rootNode->children) {
+    // 		// clear the scene of anything that is not a light for the next asset
+    // 		if (child->sceneNodeType != iris::SceneNodeType::Light) {
+    // 			cachedAssets.insert(guid, child);
+    // 		}
+    // 	}
+    // }
 }
 
 QJsonObject AssetViewer::getSceneProperties()
@@ -1025,11 +1037,11 @@ QJsonObject AssetViewer::getSceneProperties()
 
 	QJsonObject properties;
 	QJsonObject cameraObj;
-	cameraObj["pos"] = jsonToVec3(camera->getLocalPos());
-	cameraObj["distFromPivot"] = orbitalCam->distFromPivot;
-	cameraObj["rot"] = jsonToVec3(camera->getLocalRot().toEulerAngles());
+    // cameraObj["pos"] = jsonToVec3(camera->getLocalPos());
+    // cameraObj["distFromPivot"] = orbitalCam->distFromPivot;
+    // cameraObj["rot"] = jsonToVec3(camera->getLocalRot().toEulerAngles());
 
-	properties["camera"] = cameraObj;
+    properties["camera"] = cameraObj;
 
 	return properties;
 }

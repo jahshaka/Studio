@@ -124,7 +124,6 @@ private:
 
     void importMeshToDb(const QString &filePath,
                         const QString &assetFolder,
-                        const QList<directory_tuple>& imagesUsedList,
                         const QString& main_guid,
                         const QString &assetGuid);
 
@@ -145,7 +144,7 @@ private:
 
 	QByteArray downloadedImage;
 	QVector<QByteArray> iconList;
-	QString filename;
+    QString filename_;
 
     PreferencesDialog* prefsDialog;
     ProgressDialog* progressDialog;
