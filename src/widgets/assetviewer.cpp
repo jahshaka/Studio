@@ -623,46 +623,6 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
     modelLoader_->loadModelFromJson(path, objectHierarchy, renderer_);
     resetViewerCamera();
     emit progressChanged(100);
-
-    return;
-
-
-    QFileInfo fi(path);
-    auto meshes = modelLoader_->loadModel(path, fi.absolutePath());
-
-    clearAllModels();
-
-    emit progressChanged(0);
-
-    // auto meshes = modelLoader_->loadModel(path, folder, renderer_);
-
-    int total = meshes.size();
-    int idx = 0;
-
-    for (auto &m : meshes)
-    {
-        addLoadedMesh(m, guid);
-
-        ++idx;
-        int perc = (total>0) ? static_cast<int>((idx*100)/total) : 100;
-        emit progressChanged(perc);
-    }
-
-    resetViewerCamera();
-    emit progressChanged(100);
-//     iris::SceneNodePtr node = reader->readSceneNode(objectHierarchy);
-//     delete reader;
-
-//     // rename animation sources to relative paths
-//     auto relativePath = QDir(Globals::project->folderPath).relativeFilePath(path);
-//     for (auto anim : node->getAnimations()) {
-//         if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relativePath;
-//     }
-
-// //    node->setLocalPos(position);
-
-// //    addNodeToScene(node, QFileInfo(path).baseName(), false, true);
-//     lastNode = node->getName();
 }
 
 void AssetViewer::addMesh(const QString &path, bool firstAdd, bool cache, QVector3D position)
