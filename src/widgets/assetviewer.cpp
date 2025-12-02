@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include <vtkShadowMapBakerPass.h>
 
 #include "vtkmeta/assetloader.h"
+#include "vtkmeta/modeldocumentserializer.h"
 
 #include "irisgl/src/graphics/rasterizerstate.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h" 
@@ -327,14 +328,14 @@ void AssetViewer::loadJafModel(QString str, QString guid, bool firstAdd, bool ca
     pdialog->setLabelText(tr("Loading asset preview..."));
     pdialog->show();
     QApplication::processEvents();
-//    makeCurrent();
+    makeCurrent();
 
     addJafMesh(str, guid, firstAdd, cache);
     if (firstLoad) resetViewerCamera();
     else resetViewerCameraAfter();
     
     renderObject();
-//    doneCurrent();
+    doneCurrent();
 
     pdialog->close();
 }
@@ -609,6 +610,8 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
     QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(guid));
     QJsonObject objectHierarchy = document.object();
 
+
+
     // SceneReader *reader = new SceneReader;
     // reader->setBaseDirectory(IrisUtils::join(
     //     QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
@@ -620,7 +623,10 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
     // qDebug() << objectHierarchy;
 
     renderer_->RemoveAllViewProps();
-    modelLoader_->loadModelFromJson(path, objectHierarchy, renderer_);
+
+
+    modelLoader_->loadModelFromDocument(path, document, renderer_);
+    //modelLoader_->loadModelFromJson(path, objectHierarchy, renderer_);
     resetViewerCamera();
     emit progressChanged(100);
 }

@@ -1383,7 +1383,7 @@ void AssetView::importModel(const QString &modelFilePath, bool jfx)
 
     viewer->loadModel(new_file, modelGuid);
 
-    addToLibrary(modelGuid, jfx);
+    addToJahLibrary(new_file, modelGuid);
 }
 
 void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
@@ -1427,10 +1427,10 @@ void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
     SceneWriter::writeSceneNodeMaterial(mat, material, false);
 }
 
-void AssetView::importMeshToDb(const QString &filePath,
-                               const QString &assetFolder,
-                               const QString &main_guid,
-                               const QString &assetGuid)
+QJsonObject AssetView::importMeshToDb(const QString &filePath,
+                                      const QString &assetFolder,
+                                      const QString &main_guid,
+                                      const QString &assetGuid)
 {
     vtkmeta::AssetImporter importer;
 
@@ -1443,6 +1443,8 @@ void AssetView::importMeshToDb(const QString &filePath,
     QVector<vtkmeta::TextureMapResult> importedTexures{};
     QStringList existedTextures{};
     for (auto texture : textures) {
+        qDebug() << texture.guid_ << texture.filename_ << texture.file_path_;
+
         if (existedTextures.contains(texture.filename_) || texture.filename_.isEmpty()) {
             continue;
         }
@@ -1451,6 +1453,7 @@ void AssetView::importMeshToDb(const QString &filePath,
         thumbnail = QPixmap::fromImage(*thumb->thumb);
 
         importedTexures.append(texture);
+        existedTextures.append(texture.filename_);
         const QString texGuid = db->createAssetEntry(texture.guid_,
                                                      texture.filename_,
                                                      static_cast<int>(ModelTypes::Texture),
@@ -1483,11 +1486,7 @@ void AssetView::importMeshToDb(const QString &filePath,
                                                     QJsonDocument(obj).toJson(),
                                                     AssetViewFilter::AssetsView);
 
-    // ThumbnailGenerator::getSingleton()->requestThumbnail(
-    //     ThumbnailRequestType::Mesh, asset->path, objectGuid
-    //     );
-
-
+    qDebug() << "xxxxxxxxxx--------" << objectGuid << main_guid << assetGuid;
 
     // Create dependencies to the object for the textures used
     for (const auto &image : importedTexures) {
@@ -1505,6 +1504,8 @@ void AssetView::importMeshToDb(const QString &filePath,
 
     // Remove the thumbnail from the object asset
     db->updateAssetAsset(assetGuid, QByteArray());
+
+    return obj;
 }
 
 void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool jfx)
@@ -1517,17 +1518,13 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     object["icon_url"] = "";
     object["name"] = QFileInfo(fileName).baseName(); // renameModelField->text();
 
-    //auto thumbnail = viewer->takeScreenshot(512, 512);
-
-    auto bytes = db->fetchAsset(guid).thumbnail;
     QImage thumbnail;
-    if (!thumbnail.loadFromData(bytes, "PNG")) {
-        //thumbnail = viewer->takeScreenshot(512, 512);
-        //db->updateAssetThumbnail(guid, bytes);
+    if (!jfx) {
+        auto bytes = db->fetchAsset(guid).thumbnail;
+        thumbnail = viewer->takeScreenshot(512, 512);
+        db->updateAssetThumbnail(guid, bytes);
     }
 
-
-    //db->updateAssetThumbnail(guid, bytes);
 	db->updateAssetViewFilter(guid, 2);
 
     object["type"] = db->fetchAsset(guid).type;
@@ -1573,95 +1570,6 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     renameWidget->setVisible(true);
     tagWidget->setVisible(true);
     updateAsset->setVisible(true);
-}
-
-void AssetView::addToLibrary(const QString& main_guid, bool jfx)
-{
-	//bool canAdd = db->isAuthorInfoPresent();
-	QJsonObject tags;
-	QJsonArray actualTags;
-
-    QFileInfo fInfo(filename_);
-    QJsonObject object;
-    object["icon_url"] = "";
-    object["name"] = QFileInfo(filename_).baseName(); // renameModelField->text();
-
-    auto assetSnapshot = viewer->takeScreenshot(512, 512);
-
-    QJsonDocument tagsDoc(tags);
-
-    // maybe actually check if Object?
-    QString guid;
-    if (jfx) {
-        guid = db->createAssetEntry(
-            main_guid,
-            QFileInfo(filename_).fileName(),
-            static_cast<int>(ModelTypes::Object),
-            QString(),
-            QString(),
-            "JahFX",
-            AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
-            QJsonDocument(viewer->getSceneProperties()).toJson(),
-            tagsDoc.toJson(),
-            QJsonDocument(viewer->getMaterial()).toJson(),
-            AssetViewFilter::AssetsView
-            );
-    }
-
-    object["guid"] = main_guid;
-    object["type"] = db->fetchAsset(main_guid).type; // model?
-    object["full_filename"] = IrisUtils::buildFileName(main_guid, fInfo.suffix());
-    if (jfx) {
-        object["author"] = "JahFX";// db->getAuthorName();
-    }
-    else {
-        object["author"] = "";// db->getAuthorName();
-    }
-    object["license"] = "CCBY";
-
-    Globals::assetNames.insert(main_guid, object["name"].toString());
-
-
-
-    auto gridItem = new AssetGridItem(object, assetSnapshot, viewer->getSceneProperties(), tags);
-
-    connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
-        addAssetItemToProject(item);
-    });
-
-    connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-        changeAssetCollection(item);
-    });
-
-    connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-        removeAssetFromProject(item);
-    });
-
-    viewer->cacheCurrentModel(main_guid);
-
-		fastGrid->addTo(gridItem, 0, true);
-		QApplication::processEvents();
-		fastGrid->updateGridColumns(fastGrid->lastWidth);
-
-		renameWidget->setVisible(true);
-		tagWidget->setVisible(true);
-		updateAsset->setVisible(true);
-		//addToLibrary->setVisible(false);
-	//}
-	//else {
-	//	auto option = QMessageBox::question(this,
-	//		"No Author!", "There is no author set, would you like to set a name now?\n"
-	//		"Without it you will not be able to import assets.\n\n"
-	//		"Enter a valid name in the Author field and save.",
-	//		QMessageBox::Yes | QMessageBox::No);
-
-	//	if (option == QMessageBox::Yes) {
-	//		prefsDialog->exec();
-	//	}
-	//	else {
-	//		QMessageBox::warning(this, "Failed to add asset!", "Nothing was done.", QMessageBox::Ok);
-	//	}
-	//}
 }
 
 void AssetView::fetchMetadata(AssetGridItem *widget)

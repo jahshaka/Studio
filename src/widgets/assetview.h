@@ -103,7 +103,6 @@ public:
     void checkForEmptyState();
     void toggleFilterPane(bool);
 	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);
-    void addToLibrary(const QString& main_guid, bool jfx = false);
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();
@@ -122,10 +121,10 @@ private:
         QStringList &textureList,
         QJsonObject &mat);
 
-    void importMeshToDb(const QString &filePath,
-                        const QString &assetFolder,
-                        const QString& main_guid,
-                        const QString &assetGuid);
+    QJsonObject importMeshToDb(const QString &filePath,
+                               const QString &assetFolder,
+                               const QString& main_guid,
+                               const QString &assetGuid);
 
 	Database *db;
 	QSplitter *_splitter;
