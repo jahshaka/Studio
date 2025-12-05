@@ -1520,8 +1520,8 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
 
     QImage thumbnail;
     if (!jfx) {
-        auto bytes = db->fetchAsset(guid).thumbnail;
         thumbnail = viewer->takeScreenshot(512, 512);
+        auto bytes = AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(thumbnail));
         db->updateAssetThumbnail(guid, bytes);
     }
 
