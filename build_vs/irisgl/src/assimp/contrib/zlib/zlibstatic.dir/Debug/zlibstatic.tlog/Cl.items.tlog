@@ -1,0 +1,16 @@
+C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic_autogen\mocs_compilation_Debug.cpp;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\mocs_compilation_Debug.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\adler32.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\adler32.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\compress.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\compress.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\crc32.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\crc32.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\deflate.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\deflate.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\gzclose.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\gzclose.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\gzlib.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\gzlib.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\gzread.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\gzread.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\gzwrite.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\gzwrite.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\inflate.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\inflate.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\infback.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\infback.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\inftrees.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\inftrees.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\inffast.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\inffast.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\trees.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\trees.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\uncompr.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\uncompr.obj
+C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib\zutil.c;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.dir\Debug\zutil.obj

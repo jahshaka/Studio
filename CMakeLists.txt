@@ -387,7 +387,7 @@ set(WIDGETS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia)
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)
@@ -435,7 +435,13 @@ add_definitions("-DGIT_COMMIT_DATE=\"${GIT_COMMIT_DATE}\"")
 
 # For convenience, put the shared files built from IrisGL along with the final binary
 # Also note MSVC build path is different from GNU in that it containts the build type
-set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+#set_target_properties(IrisGL PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_target_properties(IrisGL PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/$<CONFIG>"
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/$<CONFIG>"
+)
+
 set_target_properties(assimp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_target_properties(downloader PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -472,7 +478,8 @@ source_group("Resources" FILES ${QRCS} ${WIDGETS} ${BUNDLE_ICON})
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON}
     src/widgets/versionsplashscreen.h src/widgets/versionsplashscreen.cpp
     src/player/vtkplayerinteractorstyle.h src/player/vtkplayerinteractorstyle.cpp
-    src/player/vtkplaybackmanager.h src/player/vtkplaybackmanager.cpp)
+    src/player/vtkplaybackmanager.h src/player/vtkplaybackmanager.cpp
+    src/io/newjsonadapter.h src/io/newjsonadapter.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
@@ -493,14 +500,16 @@ if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
 endif(USE_BREAKPAD)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS} ${VTK_LIBRARIES}
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LIBS} ${VTK_LIBRARIES}
   "Qt${VTK_QT_VERSION}::Gui"
   "Qt${VTK_QT_VERSION}::Widgets"
   "VTK::CommonCore"
   "VTK::InteractionStyle"
   "VTK::ImagingStatistics"
   "VTK::IOGeometry"
+  IrisGL
 )
+
 
 include(CopyResources)
 include(CopyDependencies)

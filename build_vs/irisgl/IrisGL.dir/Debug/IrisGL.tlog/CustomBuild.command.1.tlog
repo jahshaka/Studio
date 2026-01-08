@@ -1,0 +1,24 @@
+^C:\WORK\QT\STUDIO\BUILD_VS\CMAKEFILES\2DF40B152ABBFDD504E5D2AA1D7F27B6\QRC_ASSETS.CPP.RULE
+setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autorcc C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutoRcc_assets_EWIEGA46WW_Info.json Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^C:\WORK\QT\STUDIO\IRISGL\CMAKELISTS.TXT
+setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

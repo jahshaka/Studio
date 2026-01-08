@@ -1,0 +1,11 @@
+﻿  Automatic MOC and UIC for target zip
+  Building Custom Rule C:/work/qt/Studio/irisgl/src/zip/CMakeLists.txt
+  用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.44.35207.1 版
+  版权所有(C) Microsoft Corporation。保留所有权利。
+  cl /c /IC:\work\qt\Studio\build_vs\irisgl\src\zip /IC:\work\qt\Studio\irisgl\src\zip /IC:\work\qt\Studio\build_vs\irisgl\src\zip\zip_autogen\include_Debug /IC:\work\qt\Studio\irisgl\src\zip\src /Zi /W3 /WX- /diagnostics:column /MP /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\"Debug\"" /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /GR /Fo"zip.dir\Debug\\" /Fd"C:\work\qt\Studio\build_vs\lib\Debug\zipd.pdb" /external:W3 /Gd /TP /errorReport:prompt C:\work\qt\Studio\build_vs\irisgl\src\zip\zip_autogen\mocs_compilation_Debug.cpp
+  mocs_compilation_Debug.cpp
+  用于 x64 的 Microsoft (R) C/C++ 优化编译器 19.44.35207.1 版
+  版权所有(C) Microsoft Corporation。保留所有权利。
+  cl /c /IC:\work\qt\Studio\build_vs\irisgl\src\zip /IC:\work\qt\Studio\irisgl\src\zip /IC:\work\qt\Studio\build_vs\irisgl\src\zip\zip_autogen\include_Debug /IC:\work\qt\Studio\irisgl\src\zip\src /Zi /W3 /WX- /diagnostics:column /MP /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D "CMAKE_INTDIR=\"Debug\"" /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /GR /Fo"zip.dir\Debug\\" /Fd"C:\work\qt\Studio\build_vs\lib\Debug\zipd.pdb" /external:W3 /Gd /TC /errorReport:prompt C:\work\qt\Studio\irisgl\src\zip\src\zip.c
+  zip.c
+  zip.vcxproj -> C:\work\qt\Studio\build_vs\lib\Debug\zipd.lib

@@ -1,0 +1,630 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{CB2D2AD9-13F5-314B-9923-D80C1410E54B}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>BulletCollision</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\lib\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">BulletCollision.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">BulletCollisiond</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.lib</TargetExt>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\lib\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">BulletCollision.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">BulletCollision</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.lib</TargetExt>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\lib\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">BulletCollision.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">BulletCollision_MinsizeRel</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.lib</TargetExt>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\lib\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">BulletCollision.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">BulletCollision_RelWithDebugInfo</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.lib</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_Debug;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <StringPooling>true</StringPooling>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR="Debug"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR=\"Debug\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_Debug;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_Debug;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target BulletCollision</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/BulletCollision_autogen.dir/AutogenInfo.json Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_Release;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <StringPooling>true</StringPooling>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;NDEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR="Release"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;NDEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR=\"Release\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_Release;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_Release;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target BulletCollision</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/BulletCollision_autogen.dir/AutogenInfo.json Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_MinSizeRel;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <StringPooling>true</StringPooling>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;NDEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR="MinSizeRel"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;NDEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR=\"MinSizeRel\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_MinSizeRel;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_MinSizeRel;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target BulletCollision</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/BulletCollision_autogen.dir/AutogenInfo.json MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_RelWithDebInfo;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <StringPooling>true</StringPooling>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;NDEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR="RelWithDebInfo"</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;NDEBUG;_WIN64;USE_GRAPHICAL_BENCHMARK;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_SCL_SECURE_NO_WARNINGS;NO_OPENGL3;CMAKE_INTDIR=\"RelWithDebInfo\"</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_RelWithDebInfo;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\include_RelWithDebInfo;C:\work\qt\Studio\irisgl\src\bullet3\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target BulletCollision</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/BulletCollision_autogen.dir/AutogenInfo.json RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Lib>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/bullet3/src/BulletCollision/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/bullet3/src/BulletCollision/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/bullet3/src/BulletCollision/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/bullet3/src/BulletCollision/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/bullet3/src/BulletCollision/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\mocs_compilation_Debug.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btAxisSweep3.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btBroadphaseProxy.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btDbvt.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btDbvtBroadphase.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btDispatcher.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btOverlappingPairCache.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btQuantizedBvh.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btSimpleBroadphase.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btActivatingCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btBoxBoxCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btBox2dBox2dCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btBoxBoxDetector.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionDispatcher.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionDispatcherMt.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionObject.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionWorld.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionWorldImporter.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCompoundCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCompoundCompoundCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvexConcaveCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvexConvexAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvexPlaneCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvex2dConvex2dAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btDefaultCollisionConfiguration.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btEmptyCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btGhostObject.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btHashedSimplePairCache.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btInternalEdgeUtility.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btInternalEdgeUtility.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btManifoldResult.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSimulationIslandManager.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSphereBoxCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSphereSphereCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSphereTriangleCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btUnionFind.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\SphereTriangleDetector.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btBoxShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btBox2dShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btBvhTriangleMeshShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCapsuleShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCollisionShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCompoundShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConcaveShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConeShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexHullShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexInternalShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexPointCloudShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexPolyhedron.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvex2dShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexTriangleMeshShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCylinderShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btEmptyShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btHeightfieldTerrainShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMiniSDF.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMinkowskiSumShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMultimaterialTriangleMeshShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMultiSphereShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btOptimizedBvh.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btPolyhedralConvexShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btScaledBvhTriangleMeshShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btSdfCollisionShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btShapeHull.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btSphereShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btStaticPlaneShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btStridingMeshInterface.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTetrahedronShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleBuffer.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleCallback.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleIndexVertexArray.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleIndexVertexMaterialArray.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleMesh.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleMeshShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btUniformScalingShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btContactProcessing.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGenericPoolAllocator.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactBvh.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactCollisionAlgorithm.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactQuantizedBvh.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactShape.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btTriangleShapeEx.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_box_set.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_contact.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_memory.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_tri_collision.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btContinuousConvexCollision.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btConvexCast.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkConvexCast.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkEpa2.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkEpaPenetrationDepthSolver.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkPairDetector.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btMinkowskiPenetrationDepthSolver.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btPersistentManifold.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btRaycastCallback.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btSubSimplexConvexCast.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btVoronoiSimplexSolver.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btPolyhedralContactClipping.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\btBulletCollisionCommon.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btAxisSweep3Internal.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btAxisSweep3.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btBroadphaseInterface.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btBroadphaseProxy.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btDbvt.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btDbvtBroadphase.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btDispatcher.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btOverlappingPairCache.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btOverlappingPairCallback.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btQuantizedBvh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\BroadphaseCollision\btSimpleBroadphase.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btActivatingCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btBoxBoxCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btBox2dBox2dCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btBoxBoxDetector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionConfiguration.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionCreateFunc.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionDispatcher.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionDispatcherMt.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionObject.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionObjectWrapper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionWorld.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCollisionWorldImporter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCompoundCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btCompoundCompoundCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvexConcaveCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvexConvexAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvex2dConvex2dAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btConvexPlaneCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btDefaultCollisionConfiguration.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btEmptyCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btGhostObject.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btHashedSimplePairCache.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btManifoldResult.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSimulationIslandManager.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSphereBoxCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSphereSphereCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btSphereTriangleCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\btUnionFind.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionDispatch\SphereTriangleDetector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btBoxShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btBox2dShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btBvhTriangleMeshShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCapsuleShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCollisionMargin.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCollisionShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCompoundShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConcaveShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConeShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexHullShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexInternalShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexPointCloudShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexPolyhedron.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvex2dShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btConvexTriangleMeshShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btCylinderShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btEmptyShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btHeightfieldTerrainShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMinkowskiSumShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMultimaterialTriangleMeshShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btMultiSphereShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btOptimizedBvh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btPolyhedralConvexShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btScaledBvhTriangleMeshShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btShapeHull.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btSphereShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btStaticPlaneShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btStridingMeshInterface.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTetrahedronShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleBuffer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleCallback.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleIndexVertexArray.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleIndexVertexMaterialArray.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleInfoMap.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleMesh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleMeshShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btTriangleShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\CollisionShapes\btUniformScalingShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btBoxCollision.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btClipPolygon.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btContactProcessingStructs.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btContactProcessing.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGenericPoolAllocator.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGeometryOperations.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactBvhStructs.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactBvh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactCollisionAlgorithm.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactMassUtil.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactQuantizedBvhStructs.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactQuantizedBvh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btGImpactShape.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btQuantization.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\btTriangleShapeEx.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_array.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_basic_geometry_operations.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_bitset.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_box_collision.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_box_set.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_clip_polygon.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_contact.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_geom_types.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_geometry.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_hash_table.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_linear_math.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_math.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_memory.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_radixsort.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\Gimpact\gim_tri_collision.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btContinuousConvexCollision.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btConvexCast.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btConvexPenetrationDepthSolver.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btDiscreteCollisionDetectorInterface.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkConvexCast.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkEpa2.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkEpaPenetrationDepthSolver.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btGjkPairDetector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btManifoldPoint.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btMinkowskiPenetrationDepthSolver.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btPersistentManifold.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btPointCollector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btRaycastCallback.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btSimplexSolverInterface.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btSubSimplexConvexCast.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btVoronoiSimplexSolver.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\bullet3\src\BulletCollision\NarrowPhaseCollision\btPolyhedralContactClipping.h" />
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\mocs_compilation_Release.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\mocs_compilation_MinSizeRel.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision_autogen\mocs_compilation_RelWithDebInfo.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\ZERO_CHECK.vcxproj">
+      <Project>{3DCC27BC-CAF3-3567-AEA9-5D418DBACBBF}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

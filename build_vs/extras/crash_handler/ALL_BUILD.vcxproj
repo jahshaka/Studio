@@ -1,0 +1,184 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ResolveNugetPackages>false</ResolveNugetPackages>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{02EC0BC2-F176-3E38-8D9E-46A20C9DCDA0}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>ALL_BUILD</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\extras\crash_handler;C:\work\qt\Studio\extras\crash_handler;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\extras\crash_handler;C:\work\qt\Studio\extras\crash_handler;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\extras\crash_handler;C:\work\qt\Studio\extras\crash_handler;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\extras\crash_handler;C:\work\qt\Studio\extras\crash_handler;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\work\qt\Studio\extras\crash_handler\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule C:/work/qt/Studio/extras/crash_handler/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/extras/crash_handler/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\extras\crash_handler\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule C:/work/qt/Studio/extras/crash_handler/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/extras/crash_handler/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\extras\crash_handler\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule C:/work/qt/Studio/extras/crash_handler/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/extras/crash_handler/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\extras\crash_handler\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule C:/work/qt/Studio/extras/crash_handler/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/extras/crash_handler/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\extras\crash_handler\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\ZERO_CHECK.vcxproj">
+      <Project>{3DCC27BC-CAF3-3567-AEA9-5D418DBACBBF}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\extras\crash_handler\crash_handler.vcxproj">
+      <Project>{1D71D2F6-F345-362F-B7CF-59BF6D010E7F}</Project>
+      <Name>crash_handler</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

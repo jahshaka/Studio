@@ -1,0 +1,14 @@
+C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath_autogen\mocs_compilation_Debug.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\mocs_compilation_Debug.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btAlignedAllocator.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btAlignedAllocator.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btConvexHull.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btConvexHull.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btConvexHullComputer.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btConvexHullComputer.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btGeometryUtil.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btGeometryUtil.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btPolarDecomposition.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btPolarDecomposition.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btQuickprof.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btQuickprof.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btSerializer.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btSerializer.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btSerializer64.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btSerializer64.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btThreads.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btThreads.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\btVector3.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btVector3.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\TaskScheduler\btTaskScheduler.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btTaskScheduler.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\TaskScheduler\btThreadSupportPosix.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btThreadSupportPosix.obj
+C:\work\qt\Studio\irisgl\src\bullet3\src\LinearMath\TaskScheduler\btThreadSupportWin32.cpp;C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.dir\Debug\btThreadSupportWin32.obj

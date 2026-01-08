@@ -1,0 +1,6 @@
+# CMake generation dependency list for this directory.
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/BasicConfigVersion-SameMajorVersion.cmake.in
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakePackageConfigHelpers.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/WriteBasicConfigVersionFile.cmake
+C:/work/qt/Studio/irisgl/src/zip/CMakeLists.txt
+C:/work/qt/Studio/irisgl/src/zip/cmake/Config.cmake.in

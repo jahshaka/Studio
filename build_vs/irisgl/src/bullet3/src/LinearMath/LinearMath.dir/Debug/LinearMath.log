@@ -1,0 +1,17 @@
+﻿  Automatic MOC and UIC for target LinearMath
+  Building Custom Rule C:/work/qt/Studio/irisgl/src/bullet3/src/LinearMath/CMakeLists.txt
+  mocs_compilation_Debug.cpp
+  btAlignedAllocator.cpp
+  btConvexHull.cpp
+  btConvexHullComputer.cpp
+  btGeometryUtil.cpp
+  btPolarDecomposition.cpp
+  btQuickprof.cpp
+  btSerializer.cpp
+  btSerializer64.cpp
+  btThreads.cpp
+  btVector3.cpp
+  btTaskScheduler.cpp
+  btThreadSupportPosix.cpp
+  btThreadSupportWin32.cpp
+  LinearMath.vcxproj -> C:\work\qt\Studio\build_vs\lib\Debug\LinearMathd.lib

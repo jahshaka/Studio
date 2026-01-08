@@ -1,0 +1,6 @@
+# CMake generation dependency list for this directory.
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/FindOpenGL.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/FindPackageHandleStandardArgs.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/FindPackageMessage.cmake
+C:/work/qt/Studio/irisgl/src/bullet3/BulletConfig.cmake.in
+C:/work/qt/Studio/irisgl/src/bullet3/CMakeLists.txt

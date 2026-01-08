@@ -1,0 +1,9 @@
+libdir=C:/Program Files/Jahshaka/lib
+includedir=C:/Program Files/Jahshaka/include
+
+Name: Jahshaka
+Description: Import various well-known 3D model formats in an uniform manner.
+Version: 6.0.2
+Libs: -L${libdir} -lassimp
+Libs.private:  
+Cflags: -I${includedir}

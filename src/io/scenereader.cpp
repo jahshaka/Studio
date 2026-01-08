@@ -272,11 +272,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     return scene;
 }
 
-/**
- * Creates scene node from json data
- * @param nodeObj
- * @return
- */
+// --- 替换 SceneReader::readSceneNode 中设置 GUID 的部分为以下实现 ---
+
 iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 {
     iris::SceneNodePtr sceneNode;
@@ -291,9 +288,9 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     } else if (nodeType == "particle system") {
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "grab") {
-		sceneNode = createGrab(nodeObj).staticCast<iris::SceneNode>();
-	}
-	else {
+        sceneNode = createGrab(nodeObj).staticCast<iris::SceneNode>();
+    }
+    else {
         sceneNode = iris::SceneNode::create();
     }
 
@@ -304,37 +301,48 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     //read name
     sceneNode->name = nodeObj["name"].toString("");
-	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
+
+    // --- 兼容 id 和 guid 字段：优先使用 "id"（NewJsonAdapter 使用），否则使用 "guid" ---
+    QString manifestGuid;
+    if (nodeObj.contains("id") && nodeObj["id"].isString()) {
+        manifestGuid = nodeObj["id"].toString();
+    } else if (nodeObj.contains("guid") && nodeObj["guid"].isString()) {
+        manifestGuid = nodeObj["guid"].toString();
+    } else {
+        manifestGuid = GUIDManager::generateGUID();
+    }
+    sceneNode->setGUID(manifestGuid);
+
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
 
-	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
+    sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
 
-	if (sceneNode->isPhysicsBody) {
-		QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
-		sceneNode->physicsProperty.centerOfMass = readVector3(physicsDef["centerOfMass"].toObject());
-		sceneNode->physicsProperty.isStatic = physicsDef["static"].toBool();
-		sceneNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
-		sceneNode->physicsProperty.objectDamping = physicsDef["damping"].toDouble();
-		sceneNode->physicsProperty.objectMass = physicsDef["mass"].toDouble();
-		sceneNode->physicsProperty.objectFriction = physicsDef["friction"].toDouble(.5f);
-		sceneNode->physicsProperty.objectRestitution = physicsDef["bounciness"].toDouble();
-		sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
-		sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
-		sceneNode->physicsProperty.type = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+    if (sceneNode->isPhysicsBody) {
+        QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
+        sceneNode->physicsProperty.centerOfMass = readVector3(physicsDef["centerOfMass"].toObject());
+        sceneNode->physicsProperty.isStatic = physicsDef["static"].toBool();
+        sceneNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
+        sceneNode->physicsProperty.objectDamping = physicsDef["damping"].toDouble();
+        sceneNode->physicsProperty.objectMass = physicsDef["mass"].toDouble();
+        sceneNode->physicsProperty.objectFriction = physicsDef["friction"].toDouble(.5f);
+        sceneNode->physicsProperty.objectRestitution = physicsDef["bounciness"].toDouble();
+        sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
+        sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
+        sceneNode->physicsProperty.type = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
 
-		QJsonArray constraints = physicsDef["constraints"].toArray();
-		for (const auto &constraint : constraints) {
-			QJsonObject constraintObject = constraint.toObject();
+        QJsonArray constraints = physicsDef["constraints"].toArray();
+        for (const auto &constraint : constraints) {
+            QJsonObject constraintObject = constraint.toObject();
 
-			iris::ConstraintProperty constraintProp;
-			constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
-			constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
-			constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
+            iris::ConstraintProperty constraintProp;
+            constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
+            constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
+            constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
 
-			sceneNode->physicsProperty.constraints.append(constraintProp);
-		}
-	}
+            sceneNode->physicsProperty.constraints.append(constraintProp);
+        }
+    }
 
     QJsonArray children = nodeObj["children"].toArray();
     for (auto childObj : children) {
@@ -345,6 +353,185 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     return sceneNode;
 }
+
+// --- 替换 createMesh 中设置 MeshNode GUID 的部分为下面实现 ---
+iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
+{
+    auto meshNode = iris::MeshNode::create();
+
+    auto asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
+
+    QString source = nodeObj["mesh"].toString("");
+    // Keep a special reference to embedded asset primitives for now
+    if (!source.startsWith(":")) {
+        source = IrisUtils::join(assetDirectory, asset.name);
+    }
+
+    int meshIndex = nodeObj["meshIndex"].toInt(0);
+
+    // 兼容 "id" 和 "guid"
+    QString meshNodeGuid;
+    if (nodeObj.contains("id") && nodeObj["id"].isString()) meshNodeGuid = nodeObj["id"].toString();
+    else meshNodeGuid = nodeObj["guid"].toString();
+
+    if (!source.isEmpty()) {
+        auto mesh = getMesh(source, meshIndex);
+
+        if (source.startsWith(":")) {
+            meshNode->setMesh(source);
+            meshNode->meshPath = source;
+        } else {
+            meshNode->setMesh(mesh);
+            meshNode->meshPath = nodeObj["mesh"].toString();
+        }
+
+        meshNode->setGUID(meshNodeGuid);
+        meshNode->setVisible(nodeObj["visible"].toBool(true));
+        meshNode->meshIndex = meshIndex;
+    }
+
+    auto material = readMaterial(nodeObj);
+    meshNode->setMaterial(material);
+
+    QString faceCullingMode = nodeObj["faceCullingMode"].toString("back");
+
+    if (faceCullingMode == "back") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
+    } else if (faceCullingMode == "front") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
+    } else if (faceCullingMode == "material") {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
+    } else {
+        meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+    }
+
+    meshNode->applyDefaultPose();
+
+    return meshNode;
+}
+
+// --- 同样建议在 createParticleSystem 和 createGrab 等处使用 nodeObj["id"] 优先值 ---
+
+iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeObj)
+{
+    auto particleNode = iris::ParticleSystemNode::create();
+
+    // 优先使用 id, 回退到 guid
+    QString nodeGuid = nodeObj.contains("id") && nodeObj["id"].isString() ? nodeObj["id"].toString() : nodeObj["guid"].toString();
+    particleNode->setGUID(nodeGuid);
+
+    particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
+    particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
+    particleNode->setDissipation(nodeObj["dissipate"].toBool());
+    particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
+    particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
+    particleNode->setGravity((float) nodeObj["gravityComplement"].toDouble(1.0f));
+    particleNode->setBlendMode(nodeObj["blendMode"].toBool());
+    particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
+    particleNode->setName(nodeObj["name"].toString());
+    particleNode->setSpeed((float)nodeObj["speed"].toDouble(1.0f));
+
+    QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
+
+    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
+    particleNode->setVisible(nodeObj["visible"].toBool(true));
+
+    return particleNode;
+}
+
+iris::GrabNodePtr SceneReader::createGrab(QJsonObject & nodeObj)
+{
+    iris::HandPoseType poseType;
+    auto poseName = nodeObj["poseType"].toString();
+    if (poseName == "grab")
+        poseType = iris::HandPoseType::Grab;
+    else if (poseName == "pinch")
+        poseType = iris::HandPoseType::Pinch;
+
+    auto grabNode = iris::GrabNode::create();
+
+    // 优先 id 再 guid
+    QString nodeGuid = nodeObj.contains("id") && nodeObj["id"].isString() ? nodeObj["id"].toString() : nodeObj["guid"].toString();
+    grabNode->setGUID(nodeGuid);
+
+    grabNode->setPose(poseType);
+    grabNode->poseFactor = (float)nodeObj["poseFactor"].toDouble();
+
+    return grabNode;
+}
+/**
+ * Creates scene node from json data
+ * @param nodeObj
+ * @return
+ */
+// iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
+// {
+//     iris::SceneNodePtr sceneNode;
+
+//     QString nodeType = nodeObj["type"].toString("empty");
+//     if (nodeType == "mesh") {
+//         sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
+//     } else if (nodeType == "light") {
+//         sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
+//     } else if (nodeType == "viewer") {
+//         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
+//     } else if (nodeType == "particle system") {
+//         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
+//     } else if (nodeType == "grab") {
+// 		sceneNode = createGrab(nodeObj).staticCast<iris::SceneNode>();
+// 	}
+// 	else {
+//         sceneNode = iris::SceneNode::create();
+//     }
+
+//     //read transform
+//     readSceneNodeTransform(nodeObj,sceneNode);
+
+//     readAnimationData(nodeObj,sceneNode);
+
+//     //read name
+//     sceneNode->name = nodeObj["name"].toString("");
+// 	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
+//     sceneNode->setAttached(nodeObj["attached"].toBool());
+//     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
+
+// 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
+
+// 	if (sceneNode->isPhysicsBody) {
+// 		QJsonObject physicsDef = nodeObj["physicsProperties"].toObject();
+// 		sceneNode->physicsProperty.centerOfMass = readVector3(physicsDef["centerOfMass"].toObject());
+// 		sceneNode->physicsProperty.isStatic = physicsDef["static"].toBool();
+// 		sceneNode->physicsProperty.objectCollisionMargin = physicsDef["collisionMargin"].toDouble();
+// 		sceneNode->physicsProperty.objectDamping = physicsDef["damping"].toDouble();
+// 		sceneNode->physicsProperty.objectMass = physicsDef["mass"].toDouble();
+// 		sceneNode->physicsProperty.objectFriction = physicsDef["friction"].toDouble(.5f);
+// 		sceneNode->physicsProperty.objectRestitution = physicsDef["bounciness"].toDouble();
+// 		sceneNode->physicsProperty.pivotPoint = readVector3(physicsDef["pivot"].toObject());
+// 		sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(physicsDef["shape"].toInt());
+// 		sceneNode->physicsProperty.type = static_cast<iris::PhysicsType>(physicsDef["type"].toInt());
+
+// 		QJsonArray constraints = physicsDef["constraints"].toArray();
+// 		for (const auto &constraint : constraints) {
+// 			QJsonObject constraintObject = constraint.toObject();
+
+// 			iris::ConstraintProperty constraintProp;
+// 			constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
+// 			constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
+// 			constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(constraintObject.value("constraintType").toInt());
+
+// 			sceneNode->physicsProperty.constraints.append(constraintProp);
+// 		}
+// 	}
+
+//     QJsonArray children = nodeObj["children"].toArray();
+//     for (auto childObj : children) {
+//         auto sceneNodeObj = childObj.toObject();
+//         auto childNode = readSceneNode(sceneNodeObj);
+//         sceneNode->addChild(childNode, false);
+//     }
+
+//     return sceneNode;
+// }
 
 
 void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr sceneNode)
@@ -453,56 +640,56 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
  * @param nodeObj
  * @return
  */
-iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
-{
-    auto meshNode = iris::MeshNode::create();
+// iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
+// {
+//     auto meshNode = iris::MeshNode::create();
 
-	auto asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
+// 	auto asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
 
-    QString source = nodeObj["mesh"].toString("");
-	// Keep a special reference to embedded asset primitives for now
-	if (!source.startsWith(":")) {
-        source = IrisUtils::join(assetDirectory, asset.name);
-	}
+//     QString source = nodeObj["mesh"].toString("");
+// 	// Keep a special reference to embedded asset primitives for now
+// 	if (!source.startsWith(":")) {
+//         source = IrisUtils::join(assetDirectory, asset.name);
+// 	}
 
-    int meshIndex = nodeObj["meshIndex"].toInt(0);
-    QString meshGUID = nodeObj["guid"].toString();
+//     int meshIndex = nodeObj["meshIndex"].toInt(0);
+//     QString meshGUID = nodeObj["guid"].toString();
 
-    if (!source.isEmpty()) {
-        auto mesh = getMesh(source, meshIndex);
+//     if (!source.isEmpty()) {
+//         auto mesh = getMesh(source, meshIndex);
 
-        if (source.startsWith(":")) {
-            meshNode->setMesh(source);
-			meshNode->meshPath = source;
-        } else {
-            meshNode->setMesh(mesh);
-			meshNode->meshPath = nodeObj["mesh"].toString();
-        }
+//         if (source.startsWith(":")) {
+//             meshNode->setMesh(source);
+// 			meshNode->meshPath = source;
+//         } else {
+//             meshNode->setMesh(mesh);
+// 			meshNode->meshPath = nodeObj["mesh"].toString();
+//         }
 
-        meshNode->setGUID(meshGUID);
-		meshNode->setVisible(nodeObj["visible"].toBool(true));
-        meshNode->meshIndex = meshIndex;
-    }
+//         meshNode->setGUID(meshGUID);
+// 		meshNode->setVisible(nodeObj["visible"].toBool(true));
+//         meshNode->meshIndex = meshIndex;
+//     }
 
-    auto material = readMaterial(nodeObj);
-    meshNode->setMaterial(material);
+//     auto material = readMaterial(nodeObj);
+//     meshNode->setMaterial(material);
 
-    QString faceCullingMode = nodeObj["faceCullingMode"].toString("back");
+//     QString faceCullingMode = nodeObj["faceCullingMode"].toString("back");
 
-    if (faceCullingMode == "back") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
-    } else if (faceCullingMode == "front") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
-    } else if (faceCullingMode == "material") {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
-    } else {
-        meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
-    }
+//     if (faceCullingMode == "back") {
+//         meshNode->setFaceCullingMode(iris::FaceCullingMode::Back);
+//     } else if (faceCullingMode == "front") {
+//         meshNode->setFaceCullingMode(iris::FaceCullingMode::Front);
+//     } else if (faceCullingMode == "material") {
+//         meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
+//     } else {
+//         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+//     }
 
-    meshNode->applyDefaultPose();
+//     meshNode->applyDefaultPose();
 
-    return meshNode;
-}
+//     return meshNode;
+// }
 
 iris::ShadowMapType evalShadowMapType(QString shadowType)
 {
@@ -565,46 +752,46 @@ iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
     return viewerNode;
 }
 
-iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeObj)
-{
-    auto particleNode = iris::ParticleSystemNode::create();
+// iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeObj)
+// {
+//     auto particleNode = iris::ParticleSystemNode::create();
 
-    particleNode->setGUID(nodeObj["guid"].toString());
-    particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
-    particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
-    particleNode->setDissipation(nodeObj["dissipate"].toBool());
-    particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
-    particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
-    particleNode->setGravity((float) nodeObj["gravityComplement"].toDouble(1.0f));
-    particleNode->setBlendMode(nodeObj["blendMode"].toBool());
-    particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
-    particleNode->setName(nodeObj["name"].toString());
-    particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
+//     particleNode->setGUID(nodeObj["guid"].toString());
+//     particleNode->setPPS((float) nodeObj["particlesPerSecond"].toDouble(1.0f));
+//     particleNode->setParticleScale((float) nodeObj["particleScale"].toDouble(1.0f));
+//     particleNode->setDissipation(nodeObj["dissipate"].toBool());
+//     particleNode->setDissipationInv(nodeObj["dissipateInv"].toBool());
+//     particleNode->setRandomRotation(nodeObj["randomRotation"].toBool());
+//     particleNode->setGravity((float) nodeObj["gravityComplement"].toDouble(1.0f));
+//     particleNode->setBlendMode(nodeObj["blendMode"].toBool());
+//     particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
+//     particleNode->setName(nodeObj["name"].toString());
+//     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
 
-    QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
+//     QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
 
-    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
-	particleNode->setVisible(nodeObj["visible"].toBool(true));
+//     particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
+// 	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
-    return particleNode;
-}
+//     return particleNode;
+// }
 
-iris::GrabNodePtr SceneReader::createGrab(QJsonObject & nodeObj)
-{
-	iris::HandPoseType poseType;
-	auto poseName = nodeObj["poseType"].toString();
-	if (poseName == "grab")
-		poseType = iris::HandPoseType::Grab;
-	else if (poseName == "pinch")
-		poseType = iris::HandPoseType::Pinch;
+// iris::GrabNodePtr SceneReader::createGrab(QJsonObject & nodeObj)
+// {
+// 	iris::HandPoseType poseType;
+// 	auto poseName = nodeObj["poseType"].toString();
+// 	if (poseName == "grab")
+// 		poseType = iris::HandPoseType::Grab;
+// 	else if (poseName == "pinch")
+// 		poseType = iris::HandPoseType::Pinch;
 
-	auto grabNode = iris::GrabNode::create();
-	grabNode->setGUID(nodeObj["guid"].toString());
-	grabNode->setPose(poseType);
-	grabNode->poseFactor = (float)nodeObj["poseFactor"].toDouble();
+// 	auto grabNode = iris::GrabNode::create();
+// 	grabNode->setGUID(nodeObj["guid"].toString());
+// 	grabNode->setPose(poseType);
+// 	grabNode->poseFactor = (float)nodeObj["poseFactor"].toDouble();
 
-	return grabNode;
-}
+// 	return grabNode;
+// }
 
 iris::LightType SceneReader::getLightTypeFromName(QString lightType)
 {

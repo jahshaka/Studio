@@ -1,0 +1,795 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{4503B3BE-DDB0-3723-AA7D-DDB6AFB31984}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>IrisGL</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\bin\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">IrisGL.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">IrisGLd</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\bin\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">IrisGL.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">IrisGL</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\bin\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">IrisGL.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">IrisGL_MinsizeRel</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\bin\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">IrisGL.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">IrisGL_RelWithDebugInfo</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_Debug;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/work/vtk_install/include/vtk-9.5" /external:I "C:/work/vtk_install/include/vtk-9.5/token" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkkissfft" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkglad" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL" /external:I "C:/Qt/6.9.0/msvc2022_64/include" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtCore" /external:I "C:/Qt/6.9.0/msvc2022_64/mkspecs/win32-msvc" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtGui" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtWidgets" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkfreetype/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkzlib" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtMultimedia" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtNetwork" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtConcurrent" -Zc:__cplusplus -utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR="Debug";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR=\"Debug\";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_Debug;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_Debug;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target IrisGL</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutogenInfo.json Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>C:\work\vtk_install\lib\vtkViewsQt-9.5d.lib;src\assimp\lib\Debug\assimp-vc143-mtd.lib;..\lib\Debug\zipd.lib;..\lib\Debug\BulletDynamicsd.lib;..\lib\Debug\BulletCollisiond.lib;..\lib\Debug\LinearMathd.lib;..\lib\Debug\Bullet3Commond.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Multimediad.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Networkd.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Concurrentd.lib;C:\work\vtk_install\lib\vtkGUISupportQt-9.5d.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGLWidgetsd.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGLd.lib;C:\work\vtk_install\lib\vtkRenderingOpenGL2-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingHyperTreeGrid-9.5d.lib;C:\work\vtk_install\lib\vtkglad-9.5d.lib;opengl32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Widgetsd.lib;C:\work\vtk_install\lib\vtkViewsInfovis-9.5d.lib;C:\work\vtk_install\lib\vtkViewsCore-9.5d.lib;C:\work\vtk_install\lib\vtkInteractionWidgets-9.5d.lib;C:\work\vtk_install\lib\vtkInteractionStyle-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingUI-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingContext2D-9.5d.lib;C:\work\vtk_install\lib\vtkInfovisCore-9.5d.lib;C:\work\vtk_install\lib\vtkImagingSources-9.5d.lib;C:\work\vtk_install\lib\vtkIOImage-9.5d.lib;C:\work\vtk_install\lib\vtkImagingCore-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingFreeType-9.5d.lib;C:\work\vtk_install\lib\vtkfreetype-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingCore-9.5d.lib;C:\work\vtk_install\lib\vtkCommonColor-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersSources-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersGeneral-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersCore-9.5d.lib;C:\work\vtk_install\lib\vtkCommonExecutionModel-9.5d.lib;C:\work\vtk_install\lib\vtkCommonDataModel-9.5d.lib;C:\work\vtk_install\lib\vtkCommonTransforms-9.5d.lib;C:\work\vtk_install\lib\vtkzlib-9.5d.lib;C:\work\vtk_install\lib\vtkCommonMisc-9.5d.lib;C:\work\vtk_install\lib\vtkCommonMath-9.5d.lib;C:\work\vtk_install\lib\vtkCommonCore-9.5d.lib;C:\work\vtk_install\lib\vtksys-9.5d.lib;dbghelp.lib;psapi.lib;C:\work\vtk_install\lib\vtktoken-9.5d.lib;C:\work\vtk_install\lib\vtkkissfft-9.5d.lib;..\lib\Debug\zlibstaticd.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Guid.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3d12.lib;ws2_32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Cored.lib;mpr.lib;userenv.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/lib/Debug/IrisGLd.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/Debug/IrisGLd.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_Release;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/work/vtk_install/include/vtk-9.5" /external:I "C:/work/vtk_install/include/vtk-9.5/token" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkkissfft" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkglad" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL" /external:I "C:/Qt/6.9.0/msvc2022_64/include" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtCore" /external:I "C:/Qt/6.9.0/msvc2022_64/mkspecs/win32-msvc" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtGui" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtWidgets" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkfreetype/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkzlib" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtMultimedia" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtNetwork" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtConcurrent" -Zc:__cplusplus -utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ConformanceMode>true</ConformanceMode>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;QT_NO_DEBUG;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR="Release";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;QT_NO_DEBUG;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR=\"Release\";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_Release;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_Release;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target IrisGL</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutogenInfo.json Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>C:\work\vtk_install\lib\vtkViewsQt-9.5.lib;src\assimp\lib\Release\assimp-vc143-mt.lib;..\lib\Release\zip.lib;..\lib\Release\BulletDynamics.lib;..\lib\Release\BulletCollision.lib;..\lib\Release\LinearMath.lib;..\lib\Release\Bullet3Common.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Multimedia.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Network.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Concurrent.lib;C:\work\vtk_install\lib\vtkGUISupportQt-9.5.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGLWidgets.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGL.lib;C:\work\vtk_install\lib\vtkRenderingOpenGL2-9.5.lib;C:\work\vtk_install\lib\vtkRenderingHyperTreeGrid-9.5.lib;C:\work\vtk_install\lib\vtkglad-9.5.lib;opengl32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Widgets.lib;C:\work\vtk_install\lib\vtkViewsInfovis-9.5.lib;C:\work\vtk_install\lib\vtkViewsCore-9.5.lib;C:\work\vtk_install\lib\vtkInteractionWidgets-9.5.lib;C:\work\vtk_install\lib\vtkInteractionStyle-9.5.lib;C:\work\vtk_install\lib\vtkRenderingUI-9.5.lib;C:\work\vtk_install\lib\vtkRenderingContext2D-9.5.lib;C:\work\vtk_install\lib\vtkInfovisCore-9.5.lib;C:\work\vtk_install\lib\vtkImagingSources-9.5.lib;C:\work\vtk_install\lib\vtkIOImage-9.5.lib;C:\work\vtk_install\lib\vtkImagingCore-9.5.lib;C:\work\vtk_install\lib\vtkRenderingFreeType-9.5.lib;C:\work\vtk_install\lib\vtkfreetype-9.5.lib;C:\work\vtk_install\lib\vtkRenderingCore-9.5.lib;C:\work\vtk_install\lib\vtkCommonColor-9.5.lib;C:\work\vtk_install\lib\vtkFiltersSources-9.5.lib;C:\work\vtk_install\lib\vtkFiltersGeneral-9.5.lib;C:\work\vtk_install\lib\vtkFiltersCore-9.5.lib;C:\work\vtk_install\lib\vtkCommonExecutionModel-9.5.lib;C:\work\vtk_install\lib\vtkCommonDataModel-9.5.lib;C:\work\vtk_install\lib\vtkCommonTransforms-9.5.lib;C:\work\vtk_install\lib\vtkzlib-9.5.lib;C:\work\vtk_install\lib\vtkCommonMisc-9.5.lib;C:\work\vtk_install\lib\vtkCommonMath-9.5.lib;C:\work\vtk_install\lib\vtkCommonCore-9.5.lib;C:\work\vtk_install\lib\vtksys-9.5.lib;dbghelp.lib;psapi.lib;C:\work\vtk_install\lib\vtktoken-9.5.lib;C:\work\vtk_install\lib\vtkkissfft-9.5.lib;..\lib\Release\zlibstatic.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Gui.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3d12.lib;ws2_32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Core.lib;mpr.lib;userenv.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/lib/Release/IrisGL.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/Release/IrisGL.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_MinSizeRel;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/work/vtk_install/include/vtk-9.5" /external:I "C:/work/vtk_install/include/vtk-9.5/token" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkkissfft" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkglad" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL" /external:I "C:/Qt/6.9.0/msvc2022_64/include" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtCore" /external:I "C:/Qt/6.9.0/msvc2022_64/mkspecs/win32-msvc" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtGui" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtWidgets" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkfreetype/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkzlib" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtMultimedia" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtNetwork" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtConcurrent" -Zc:__cplusplus -utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ConformanceMode>true</ConformanceMode>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;QT_NO_DEBUG;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR="MinSizeRel";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;QT_NO_DEBUG;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR=\"MinSizeRel\";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_MinSizeRel;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_MinSizeRel;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target IrisGL</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutogenInfo.json MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>C:\work\vtk_install\lib\vtkViewsQt-9.5d.lib;src\assimp\lib\MinSizeRel\assimp-vc143-mt.lib;..\lib\MinSizeRel\zip_MinsizeRel.lib;..\lib\MinSizeRel\BulletDynamics_MinsizeRel.lib;..\lib\MinSizeRel\BulletCollision_MinsizeRel.lib;..\lib\MinSizeRel\LinearMath_MinsizeRel.lib;..\lib\MinSizeRel\Bullet3Common_MinsizeRel.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Multimedia.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Network.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Concurrent.lib;C:\work\vtk_install\lib\vtkGUISupportQt-9.5d.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGLWidgets.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGL.lib;C:\work\vtk_install\lib\vtkRenderingOpenGL2-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingHyperTreeGrid-9.5d.lib;C:\work\vtk_install\lib\vtkglad-9.5d.lib;opengl32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Widgets.lib;C:\work\vtk_install\lib\vtkViewsInfovis-9.5d.lib;C:\work\vtk_install\lib\vtkViewsCore-9.5d.lib;C:\work\vtk_install\lib\vtkInteractionWidgets-9.5d.lib;C:\work\vtk_install\lib\vtkInteractionStyle-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingUI-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingContext2D-9.5d.lib;C:\work\vtk_install\lib\vtkInfovisCore-9.5d.lib;C:\work\vtk_install\lib\vtkImagingSources-9.5d.lib;C:\work\vtk_install\lib\vtkIOImage-9.5d.lib;C:\work\vtk_install\lib\vtkImagingCore-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingFreeType-9.5d.lib;C:\work\vtk_install\lib\vtkfreetype-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingCore-9.5d.lib;C:\work\vtk_install\lib\vtkCommonColor-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersSources-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersGeneral-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersCore-9.5d.lib;C:\work\vtk_install\lib\vtkCommonExecutionModel-9.5d.lib;C:\work\vtk_install\lib\vtkCommonDataModel-9.5d.lib;C:\work\vtk_install\lib\vtkCommonTransforms-9.5d.lib;C:\work\vtk_install\lib\vtkzlib-9.5d.lib;C:\work\vtk_install\lib\vtkCommonMisc-9.5d.lib;C:\work\vtk_install\lib\vtkCommonMath-9.5d.lib;C:\work\vtk_install\lib\vtkCommonCore-9.5d.lib;C:\work\vtk_install\lib\vtksys-9.5d.lib;dbghelp.lib;psapi.lib;C:\work\vtk_install\lib\vtktoken-9.5d.lib;C:\work\vtk_install\lib\vtkkissfft-9.5d.lib;..\lib\MinSizeRel\zlibstatic.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Gui.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3d12.lib;ws2_32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Core.lib;mpr.lib;userenv.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/lib/MinSizeRel/IrisGL_MinsizeRel.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/MinSizeRel/IrisGL_MinsizeRel.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_RelWithDebInfo;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/work/vtk_install/include/vtk-9.5" /external:I "C:/work/vtk_install/include/vtk-9.5/token" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtknlohmannjson" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkkissfft" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkglad" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGL" /external:I "C:/Qt/6.9.0/msvc2022_64/include" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtCore" /external:I "C:/Qt/6.9.0/msvc2022_64/mkspecs/win32-msvc" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtGui" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtWidgets" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtOpenGLWidgets" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkfreetype/include" /external:I "C:/work/vtk_install/include/vtk-9.5/vtkzlib" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtMultimedia" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtNetwork" /external:I "C:/Qt/6.9.0/msvc2022_64/include/QtConcurrent" -Zc:__cplusplus -utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;QT_NO_DEBUG;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR="RelWithDebInfo";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;kiss_fft_scalar=double;KISSFFT_DLL_IMPORT=1;GLAD_API_CALL_EXPORT;QT_OPENGL_LIB;QT_CORE_LIB;QT_NO_DEBUG;_ENABLE_EXTENDED_ALIGNED_STORAGE;WIN64;_WIN64;UNICODE;_UNICODE;QT_GUI_LIB;QT_WIDGETS_LIB;QT_OPENGLWIDGETS_LIB;QT_MULTIMEDIA_LIB;QT_NETWORK_LIB;QT_CONCURRENT_LIB;CMAKE_INTDIR=\"RelWithDebInfo\";IrisGL_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_RelWithDebInfo;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl;C:\work\qt\Studio\irisgl;C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\include_RelWithDebInfo;C:\work\qt\Studio\irisgl\src;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\libovr\Include;C:\work\qt\Studio\irisgl\src\bullet3\src;C:\work\qt\Studio\irisgl\src\zip\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\vtk_install\include\vtk-9.5;C:\work\vtk_install\include\vtk-9.5\token;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson\include;C:\work\vtk_install\include\vtk-9.5\vtknlohmannjson;C:\work\vtk_install\include\vtk-9.5\vtkkissfft;C:\work\vtk_install\include\vtk-9.5\vtkglad;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGL;C:\Qt\6.9.0\msvc2022_64\include;C:\Qt\6.9.0\msvc2022_64\include\QtCore;C:\Qt\6.9.0\msvc2022_64\mkspecs\win32-msvc;C:\Qt\6.9.0\msvc2022_64\include\QtGui;C:\Qt\6.9.0\msvc2022_64\include\QtWidgets;C:\Qt\6.9.0\msvc2022_64\include\QtOpenGLWidgets;C:\work\vtk_install\include\vtk-9.5\vtkfreetype\include;C:\work\vtk_install\include\vtk-9.5\vtkzlib;C:\Qt\6.9.0\msvc2022_64\include\QtMultimedia;C:\Qt\6.9.0\msvc2022_64\include\QtNetwork;C:\Qt\6.9.0\msvc2022_64\include\QtConcurrent;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target IrisGL</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutogenInfo.json RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>C:\work\vtk_install\lib\vtkViewsQt-9.5d.lib;src\assimp\lib\RelWithDebInfo\assimp-vc143-mt.lib;..\lib\RelWithDebInfo\zip_RelWithDebugInfo.lib;..\lib\RelWithDebInfo\BulletDynamics_RelWithDebugInfo.lib;..\lib\RelWithDebInfo\BulletCollision_RelWithDebugInfo.lib;..\lib\RelWithDebInfo\LinearMath_RelWithDebugInfo.lib;..\lib\RelWithDebInfo\Bullet3Common_RelWithDebugInfo.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Multimedia.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Network.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Concurrent.lib;C:\work\vtk_install\lib\vtkGUISupportQt-9.5d.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGLWidgets.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6OpenGL.lib;C:\work\vtk_install\lib\vtkRenderingOpenGL2-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingHyperTreeGrid-9.5d.lib;C:\work\vtk_install\lib\vtkglad-9.5d.lib;opengl32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Widgets.lib;C:\work\vtk_install\lib\vtkViewsInfovis-9.5d.lib;C:\work\vtk_install\lib\vtkViewsCore-9.5d.lib;C:\work\vtk_install\lib\vtkInteractionWidgets-9.5d.lib;C:\work\vtk_install\lib\vtkInteractionStyle-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingUI-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingContext2D-9.5d.lib;C:\work\vtk_install\lib\vtkInfovisCore-9.5d.lib;C:\work\vtk_install\lib\vtkImagingSources-9.5d.lib;C:\work\vtk_install\lib\vtkIOImage-9.5d.lib;C:\work\vtk_install\lib\vtkImagingCore-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingFreeType-9.5d.lib;C:\work\vtk_install\lib\vtkfreetype-9.5d.lib;C:\work\vtk_install\lib\vtkRenderingCore-9.5d.lib;C:\work\vtk_install\lib\vtkCommonColor-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersSources-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersGeneral-9.5d.lib;C:\work\vtk_install\lib\vtkFiltersCore-9.5d.lib;C:\work\vtk_install\lib\vtkCommonExecutionModel-9.5d.lib;C:\work\vtk_install\lib\vtkCommonDataModel-9.5d.lib;C:\work\vtk_install\lib\vtkCommonTransforms-9.5d.lib;C:\work\vtk_install\lib\vtkzlib-9.5d.lib;C:\work\vtk_install\lib\vtkCommonMisc-9.5d.lib;C:\work\vtk_install\lib\vtkCommonMath-9.5d.lib;C:\work\vtk_install\lib\vtkCommonCore-9.5d.lib;C:\work\vtk_install\lib\vtksys-9.5d.lib;dbghelp.lib;psapi.lib;C:\work\vtk_install\lib\vtktoken-9.5d.lib;C:\work\vtk_install\lib\vtkkissfft-9.5d.lib;..\lib\RelWithDebInfo\zlibstatic.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Gui.lib;d3d11.lib;dxgi.lib;dxguid.lib;d3d12.lib;ws2_32.lib;C:\Qt\6.9.0\msvc2022_64\lib\Qt6Core.lib;mpr.lib;userenv.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/lib/RelWithDebInfo/IrisGL_RelWithDebugInfo.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/RelWithDebInfo/IrisGL_RelWithDebugInfo.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\work\qt\Studio\build_vs\CMakeFiles\2df40b152abbfdd504e5d2aa1d7f27b6\qrc_assets.cpp.rule">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Automatic RCC for assets.qrc</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autorcc C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutoRcc_assets_EWIEGA46WW_Info.json Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\irisgl\assets.qrc;C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\IrisGL_autogen.dir\AutoRcc_assets_EWIEGA46WW_Info.json;C:\work\qt\Studio\irisgl\assets\models\head.obj;C:\work\qt\Studio\irisgl\assets\models\cube.obj;C:\work\qt\Studio\irisgl\assets\models\head.png;C:\work\qt\Studio\irisgl\assets\models\sky.obj;C:\work\qt\Studio\irisgl\assets\models\head2.obj;C:\work\qt\Studio\irisgl\assets\shaders\billboard.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.vert;C:\work\qt\Studio\irisgl\assets\shaders\billboard.vert;C:\work\qt\Studio\irisgl\assets\shaders\emitter.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.frag;C:\work\qt\Studio\irisgl\assets\shaders\flatsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\skinned_color.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\default_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.vert;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\realisticsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\cubemapsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\emitter.vert;C:\work\qt\Studio\irisgl\assets\shaders\particle.frag;C:\work\qt\Studio\irisgl\assets\shaders\sprite.vert;C:\work\qt\Studio\irisgl\assets\shaders\viewer.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.frag;C:\work\qt\Studio\irisgl\assets\shaders\viewer.frag;C:\work\qt\Studio\irisgl\assets\shaders\default_material.frag;C:\work\qt\Studio\irisgl\assets\shaders\gradientsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.frag;C:\work\qt\Studio\irisgl\assets\shaders\particle.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.frag;C:\work\qt\Studio\irisgl\assets\shaders\equirectangularsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\surface.vert;C:\work\qt\Studio\irisgl\assets\shaders\surface.frag;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.vert;C:\work\qt\Studio\irisgl\assets\shaders\sprite.frag;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\radial_blur.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_combine.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\default.vs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\greyscale.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_threshold.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\aa.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\coloroverlay.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\ssao.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\tonemapping.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\fxaa3_11.h;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_blur.fs;C:\work\qt\Studio\irisgl\assets\textures\default_particle.jpg;C:\work\qt\Studio\irisgl\assets\textures\random_normal.png;C:\Qt\6.9.0\msvc2022_64\bin\rcc.exe;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_Debug\qrc_assets.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Automatic RCC for assets.qrc</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autorcc C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutoRcc_assets_EWIEGA46WW_Info.json Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\irisgl\assets.qrc;C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\IrisGL_autogen.dir\AutoRcc_assets_EWIEGA46WW_Info.json;C:\work\qt\Studio\irisgl\assets\models\head.obj;C:\work\qt\Studio\irisgl\assets\models\cube.obj;C:\work\qt\Studio\irisgl\assets\models\head.png;C:\work\qt\Studio\irisgl\assets\models\sky.obj;C:\work\qt\Studio\irisgl\assets\models\head2.obj;C:\work\qt\Studio\irisgl\assets\shaders\billboard.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.vert;C:\work\qt\Studio\irisgl\assets\shaders\billboard.vert;C:\work\qt\Studio\irisgl\assets\shaders\emitter.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.frag;C:\work\qt\Studio\irisgl\assets\shaders\flatsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\skinned_color.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\default_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.vert;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\realisticsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\cubemapsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\emitter.vert;C:\work\qt\Studio\irisgl\assets\shaders\particle.frag;C:\work\qt\Studio\irisgl\assets\shaders\sprite.vert;C:\work\qt\Studio\irisgl\assets\shaders\viewer.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.frag;C:\work\qt\Studio\irisgl\assets\shaders\viewer.frag;C:\work\qt\Studio\irisgl\assets\shaders\default_material.frag;C:\work\qt\Studio\irisgl\assets\shaders\gradientsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.frag;C:\work\qt\Studio\irisgl\assets\shaders\particle.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.frag;C:\work\qt\Studio\irisgl\assets\shaders\equirectangularsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\surface.vert;C:\work\qt\Studio\irisgl\assets\shaders\surface.frag;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.vert;C:\work\qt\Studio\irisgl\assets\shaders\sprite.frag;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\radial_blur.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_combine.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\default.vs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\greyscale.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_threshold.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\aa.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\coloroverlay.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\ssao.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\tonemapping.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\fxaa3_11.h;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_blur.fs;C:\work\qt\Studio\irisgl\assets\textures\default_particle.jpg;C:\work\qt\Studio\irisgl\assets\textures\random_normal.png;C:\Qt\6.9.0\msvc2022_64\bin\rcc.exe;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_Release\qrc_assets.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Automatic RCC for assets.qrc</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autorcc C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutoRcc_assets_EWIEGA46WW_Info.json MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\irisgl\assets.qrc;C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\IrisGL_autogen.dir\AutoRcc_assets_EWIEGA46WW_Info.json;C:\work\qt\Studio\irisgl\assets\models\head.obj;C:\work\qt\Studio\irisgl\assets\models\cube.obj;C:\work\qt\Studio\irisgl\assets\models\head.png;C:\work\qt\Studio\irisgl\assets\models\sky.obj;C:\work\qt\Studio\irisgl\assets\models\head2.obj;C:\work\qt\Studio\irisgl\assets\shaders\billboard.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.vert;C:\work\qt\Studio\irisgl\assets\shaders\billboard.vert;C:\work\qt\Studio\irisgl\assets\shaders\emitter.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.frag;C:\work\qt\Studio\irisgl\assets\shaders\flatsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\skinned_color.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\default_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.vert;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\realisticsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\cubemapsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\emitter.vert;C:\work\qt\Studio\irisgl\assets\shaders\particle.frag;C:\work\qt\Studio\irisgl\assets\shaders\sprite.vert;C:\work\qt\Studio\irisgl\assets\shaders\viewer.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.frag;C:\work\qt\Studio\irisgl\assets\shaders\viewer.frag;C:\work\qt\Studio\irisgl\assets\shaders\default_material.frag;C:\work\qt\Studio\irisgl\assets\shaders\gradientsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.frag;C:\work\qt\Studio\irisgl\assets\shaders\particle.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.frag;C:\work\qt\Studio\irisgl\assets\shaders\equirectangularsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\surface.vert;C:\work\qt\Studio\irisgl\assets\shaders\surface.frag;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.vert;C:\work\qt\Studio\irisgl\assets\shaders\sprite.frag;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\radial_blur.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_combine.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\default.vs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\greyscale.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_threshold.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\aa.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\coloroverlay.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\ssao.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\tonemapping.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\fxaa3_11.h;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_blur.fs;C:\work\qt\Studio\irisgl\assets\textures\default_particle.jpg;C:\work\qt\Studio\irisgl\assets\textures\random_normal.png;C:\Qt\6.9.0\msvc2022_64\bin\rcc.exe;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_MinSizeRel\qrc_assets.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</BuildInParallel>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Automatic RCC for assets.qrc</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+cd C:\work\qt\Studio\build_vs\irisgl
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autorcc C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/IrisGL_autogen.dir/AutoRcc_assets_EWIEGA46WW_Info.json RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\irisgl\assets.qrc;C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\IrisGL_autogen.dir\AutoRcc_assets_EWIEGA46WW_Info.json;C:\work\qt\Studio\irisgl\assets\models\head.obj;C:\work\qt\Studio\irisgl\assets\models\cube.obj;C:\work\qt\Studio\irisgl\assets\models\head.png;C:\work\qt\Studio\irisgl\assets\models\sky.obj;C:\work\qt\Studio\irisgl\assets\models\head2.obj;C:\work\qt\Studio\irisgl\assets\shaders\billboard.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.vert;C:\work\qt\Studio\irisgl\assets\shaders\billboard.vert;C:\work\qt\Studio\irisgl\assets\shaders\emitter.frag;C:\work\qt\Studio\irisgl\assets\shaders\color.frag;C:\work\qt\Studio\irisgl\assets\shaders\flatsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\skinned_color.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\default_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.vert;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\realisticsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\cubemapsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\emitter.vert;C:\work\qt\Studio\irisgl\assets\shaders\particle.frag;C:\work\qt\Studio\irisgl\assets\shaders\sprite.vert;C:\work\qt\Studio\irisgl\assets\shaders\viewer.vert;C:\work\qt\Studio\irisgl\assets\shaders\linecolor.frag;C:\work\qt\Studio\irisgl\assets\shaders\viewer.frag;C:\work\qt\Studio\irisgl\assets\shaders\default_material.frag;C:\work\qt\Studio\irisgl\assets\shaders\gradientsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.frag;C:\work\qt\Studio\irisgl\assets\shaders\particle.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_shadow_map.vert;C:\work\qt\Studio\irisgl\assets\shaders\skinned_material.vert;C:\work\qt\Studio\irisgl\assets\shaders\fullscreen.vert;C:\work\qt\Studio\irisgl\assets\shaders\shadow_map.frag;C:\work\qt\Studio\irisgl\assets\shaders\equirectangularsky.frag;C:\work\qt\Studio\irisgl\assets\shaders\surface.vert;C:\work\qt\Studio\irisgl\assets\shaders\surface.frag;C:\work\qt\Studio\irisgl\assets\shaders\defaultsky.vert;C:\work\qt\Studio\irisgl\assets\shaders\sprite.frag;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\radial_blur.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_combine.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\default.vs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\greyscale.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_threshold.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\aa.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\coloroverlay.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\ssao.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\tonemapping.fs;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\fxaa3_11.h;C:\work\qt\Studio\irisgl\assets\shaders\postprocesses\bloom_blur.fs;C:\work\qt\Studio\irisgl\assets\textures\default_particle.jpg;C:\work\qt\Studio\irisgl\assets\textures\random_normal.png;C:\Qt\6.9.0\msvc2022_64\bin\rcc.exe;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_RelWithDebInfo\qrc_assets.cpp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\work\qt\Studio\irisgl\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckIncludeFile.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckLibraryExists.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\ExternalData.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageHandleStandardArgs.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageMessage.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindThreads.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\GenerateExportHeader.cmake;C:\work\qt\Studio\irisgl\assets.qrc;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-targets.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-find-packages.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-properties.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config-version.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-prefix.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkCMakeBackports.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkEncodeString.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkHashSource.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkMobileDevices.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModule.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleJson.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleSerialization.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleTesting.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkObjectFactory.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkTopologicalSort.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckIncludeFile.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckLibraryExists.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\ExternalData.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageHandleStandardArgs.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageMessage.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindThreads.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\GenerateExportHeader.cmake;C:\work\qt\Studio\irisgl\assets.qrc;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-targets.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-find-packages.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-properties.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config-version.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-prefix.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkCMakeBackports.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkEncodeString.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkHashSource.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkMobileDevices.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModule.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleJson.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleSerialization.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleTesting.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkObjectFactory.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkTopologicalSort.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckIncludeFile.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckLibraryExists.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\ExternalData.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageHandleStandardArgs.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageMessage.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindThreads.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\GenerateExportHeader.cmake;C:\work\qt\Studio\irisgl\assets.qrc;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-targets.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-find-packages.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-properties.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config-version.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-prefix.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkCMakeBackports.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkEncodeString.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkHashSource.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkMobileDevices.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModule.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleJson.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleSerialization.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleTesting.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkObjectFactory.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkTopologicalSort.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigExtras.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersion.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6ConfigVersionImpl.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Dependencies.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6Targets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\Qt6VersionlessAliasTargets.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeature.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtFeatureCommon.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtInstallPaths.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAndroidHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicAppleHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicCMakeVersionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicDependencyHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicExternalProjectHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFinalizerHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicFindPackageHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicGitHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicPluginHelpers_v2.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomAttributionHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomCpeHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomFileHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomGenerationHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomLicenseHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomOpsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPurlHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomPythonHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomQtEntityHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicSbomSystemDepHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTargetHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicTestHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicToolHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWalkLibsHelpers.cmake;C:\Qt\6.9.0\msvc2022_64\lib\cmake\Qt6\QtPublicWindowsHelpers.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CMakeFindDependencyMacro.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCXXCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckCompilerFlag.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckIncludeFile.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckLibraryExists.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\CheckSourceCompiles.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\ExternalData.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageHandleStandardArgs.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindPackageMessage.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\FindThreads.cmake;C:\Qt\Tools\CMake_64\share\cmake-3.30\Modules\GenerateExportHeader.cmake;C:\work\qt\Studio\irisgl\assets.qrc;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-targets.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-find-packages.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\VTK-vtk-module-properties.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config-version.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-config.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtk-prefix.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkCMakeBackports.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkEncodeString.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkHashSource.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkMobileDevices.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModule.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleJson.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleSerialization.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkModuleTesting.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkObjectFactory.cmake;C:\work\vtk_install\lib\cmake\vtk-9.5\vtkTopologicalSort.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\irisgl\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\mocs_compilation_Debug.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\mesh.cpp">
+      <ObjectFileName>$(IntDir)/src/graphics/mesh.cpp.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\model.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\materials\defaultmaterial.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\meshnode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\forwardrenderer.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\graphicshelper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\utils\billboard.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\cameranode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\texture2d.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\texturecube.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\materials\defaultskymaterial.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\material.cpp">
+      <ObjectFileName>$(IntDir)/src/graphics/material.cpp.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\utils\fullscreenquad.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vr\vrdevice.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\geometry\trimesh.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\vertexlayout.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\shader.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\texture.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\shadowmap.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\animation\animation.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\animation\keyframeset.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\materials\materialhelper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\viewernode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\particlesystemnode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vr\vrmanager.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vr\handpose.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\math\mathhelper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\materials\custommaterial.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\rendertarget.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\postprocessmanager.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\postprocesses\coloroverlaypostprocess.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\postprocesses\radialblurpostprocess.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\postprocesses\bloompostprocess.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\postprocesses\greyscalepostprocess.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\postprocesses\ssaopostprocess.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\animation\propertyanim.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\lightnode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\animation\skeletalanimation.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\skeleton.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\scene.cpp">
+      <ObjectFileName>$(IntDir)/src/scenegraph/scene.cpp.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\scenenode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\geometry\plane.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\geometry\frustum.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\geometry\aabb.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\core\logger.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\renderlist.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\renderitem.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\utils\linemeshbuilder.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\utils\shapehelper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\materials\colormaterial.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\materials\linecolormaterial.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\postprocesses\fxaapostprocess.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\graphicsdevice.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\widgets\renderwidget.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\spritebatch.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\renderstates.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\font.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\blendstate.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\depthstate.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\graphics\rasterizerstate.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\content\contentmanager.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\content\modelloader.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\libovr\Src\OVR_CAPI_Util.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\libovr\Src\OVR_StereoProjection.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\libovr\Src\OVR_CAPIShim.c" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\physics\environment.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\physics\physicshelper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\scenegraph\grabnode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\physics\charactercontroller.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\node.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\mesh.cpp">
+      <ObjectFileName>$(IntDir)/src/vtkmeta/mesh.cpp.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\material.cpp">
+      <ObjectFileName>$(IntDir)/src/vtkmeta/material.cpp.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\scene.cpp">
+      <ObjectFileName>$(IntDir)/src/vtkmeta/scene.cpp.obj</ObjectFileName>
+    </ClCompile>
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\nodekeyframe.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\keyframeanimation.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\lightnode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\texture2d.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\texture.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\texturecube.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\shadowmap.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\mesh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\model.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\material.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\cameranode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\meshnode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\renderdata.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\forwardrenderer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\defaultmaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\vertexlayout.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\viewport.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\billboardmaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\graphicshelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\utils\billboard.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\geometry\trimesh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\defaultskymaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\core\meshmanager.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\utils\fullscreenquad.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vr\vrdevice.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vr\handpose.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\math\mathhelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\irisglfwd.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\shader.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\irisgl.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\math\intersectionhelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\keyframeset.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\math\bezierhelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\animation.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\materialhelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\core\irisutils.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\core\ziphelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\viewernode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\particle.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\particlerender.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\renderitem.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\particlesystemnode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vr\vrmanager.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\iviewsource.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\custommaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\postprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\postprocessmanager.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\rendertexture.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\rendertarget.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\bloompostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\coloroverlaypostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\radialblurpostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\greyscalepostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\ssaopostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\materialpostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\propertyanim.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\animableproperty.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\utils\hashedlist.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\skeleton.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\skeletalanimation.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\animation\floatcurve.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\scene.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\scenenode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\core\property.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\geometry\boundingsphere.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\geometry\plane.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\geometry\frustum.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\geometry\aabb.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\math\transform.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\core\logger.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\core\performancetimer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\renderlist.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\renderstates.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\utils\linemeshbuilder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\utils\shapehelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\colormaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\materials\linecolormaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\postprocesses\fxaapostprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\graphicsdevice.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\widgets\renderwidget.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\spritebatch.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\font.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\blendstate.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\depthstate.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\graphics\rasterizerstate.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\content\contentmanager.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\content\modelloader.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_CAPI.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_CAPI_Audio.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_CAPI_D3D.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_CAPI_GL.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_CAPI_Keys.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_ErrorCode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\OVR_Version.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\Extras\OVR_CAPI_Util.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\Extras\OVR_Math.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Include\Extras\OVR_StereoProjection.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\libovr\Src\OVR_CAPI_Prototypes.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\physics\environment.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\physics\physicshelper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\physics\physicsproperties.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\scenegraph\grabnode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\physics\charactercontroller.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\node.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\mesh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\material.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\scene.h" />
+    <None Include="C:\work\qt\Studio\irisgl\assets.qrc">
+    </None>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetloader.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetloader.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetimporter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetimporter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\importerHelper.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\importerhelper.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assettypes.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assettypes.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetjsonwriter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetjsonwriter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetjsonhelper.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetjsonhelper.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetdatatypes.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetdatatypes.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetvtkimporter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetvtkimporter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetvtkloader.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\assetvtkloader.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\vtkmeta\modeldocumentserializer.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\vtkmeta\modeldocumentserializer.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_Debug\qrc_assets.cpp">
+      <ObjectFileName>$(IntDir)/IrisGL_autogen/EWIEGA46WW_Debug/qrc_assets.cpp.obj</ObjectFileName>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\mocs_compilation_Release.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_Release\qrc_assets.cpp">
+      <ObjectFileName>$(IntDir)/IrisGL_autogen/EWIEGA46WW_Release/qrc_assets.cpp.obj</ObjectFileName>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\mocs_compilation_MinSizeRel.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_MinSizeRel\qrc_assets.cpp">
+      <ObjectFileName>$(IntDir)/IrisGL_autogen/EWIEGA46WW_MinSizeRel/qrc_assets.cpp.obj</ObjectFileName>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\mocs_compilation_RelWithDebInfo.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\IrisGL_autogen\EWIEGA46WW_RelWithDebInfo\qrc_assets.cpp">
+      <ObjectFileName>$(IntDir)/IrisGL_autogen/EWIEGA46WW_RelWithDebInfo/qrc_assets.cpp.obj</ObjectFileName>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\ZERO_CHECK.vcxproj">
+      <Project>{3DCC27BC-CAF3-3567-AEA9-5D418DBACBBF}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\Bullet3Common\Bullet3Common.vcxproj">
+      <Project>{8061C8BE-5E9F-353E-B8D2-50EDBCBC4F12}</Project>
+      <Name>Bullet3Common</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletCollision\BulletCollision.vcxproj">
+      <Project>{CB2D2AD9-13F5-314B-9923-D80C1410E54B}</Project>
+      <Name>BulletCollision</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\BulletDynamics\BulletDynamics.vcxproj">
+      <Project>{111E6B31-879B-36A2-B9F0-FE3B1FE5C96E}</Project>
+      <Name>BulletDynamics</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\bullet3\src\LinearMath\LinearMath.vcxproj">
+      <Project>{0DEE2A04-B465-3A3F-AA25-20B6343C923B}</Project>
+      <Name>LinearMath</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp.vcxproj">
+      <Project>{776A367E-D4F9-3297-889B-2E792311B743}</Project>
+      <Name>assimp</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\zip\zip.vcxproj">
+      <Project>{1EDC5004-E178-3DE3-AD9D-9B03D3FBE146}</Project>
+      <Name>zip</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.vcxproj">
+      <Project>{C84A9712-3B8D-3B16-8E3B-F244D9E5C818}</Project>
+      <Name>zlibstatic</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

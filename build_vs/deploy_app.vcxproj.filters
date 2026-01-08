@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\work\qt\Studio\build_vs\CMakeFiles\fa0fff938337d4eba9928616cf6b528f\deploy.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\work\qt\Studio\build_vs\CMakeFiles\47cbc6df0b833491e6e17b58a8b58479\deploy_app.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\work\qt\Studio\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\work\qt\Studio\build_vs\CMakeFiles\deploy_app" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{AA0323AE-53AD-306A-8E18-1ED49D87EBB7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

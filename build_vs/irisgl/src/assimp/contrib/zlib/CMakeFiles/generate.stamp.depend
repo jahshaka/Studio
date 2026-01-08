@@ -1,0 +1,9 @@
+# CMake generation dependency list for this directory.
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CheckCSourceCompiles.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CheckFunctionExists.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CheckIncludeFile.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CheckIncludeFileCXX.cmake
+C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CheckTypeSize.cmake
+C:/work/qt/Studio/irisgl/src/assimp/contrib/zlib/CMakeLists.txt
+C:/work/qt/Studio/irisgl/src/assimp/contrib/zlib/zconf.h.cmakein
+C:/work/qt/Studio/irisgl/src/assimp/contrib/zlib/zlib.pc.cmakein

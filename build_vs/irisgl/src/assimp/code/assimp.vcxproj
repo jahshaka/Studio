@@ -1,0 +1,786 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{776A367E-D4F9-3297-889B-2E792311B743}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>assimp</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\bin\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">assimp.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">assimp-vc143-mtd</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\bin\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">assimp.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">assimp-vc143-mt</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\bin\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">assimp.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">assimp-vc143-mt</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\bin\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">assimp.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">assimp-vc143-mt</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.dll</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_Debug;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj /source-charset:utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_DEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR="Debug";assimp_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR=\"Debug\";assimp_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_Debug;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_Debug;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target assimp</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\assimp\code
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/assimp_autogen.dir/AutogenInfo.json Debug
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\..\..\lib\Debug\zlibstaticd.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/irisgl/src/assimp/lib/Debug/assimp-vc143-mtd.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/Debug/assimp-vc143-mtd.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_Release;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj /source-charset:utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR="Release";assimp_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR=\"Release\";assimp_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_Release;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_Release;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target assimp</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\assimp\code
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/assimp_autogen.dir/AutogenInfo.json Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\..\..\lib\Release\zlibstatic.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64 /PDBALTPATH:%%_PDB%%</AdditionalOptions>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/irisgl/src/assimp/lib/Release/assimp-vc143-mt.lib</ImportLibrary>
+      <OptimizeReferences>true</OptimizeReferences>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/Release/assimp-vc143-mt.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_MinSizeRel;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj /source-charset:utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR="MinSizeRel";assimp_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR=\"MinSizeRel\";assimp_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_MinSizeRel;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_MinSizeRel;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target assimp</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\assimp\code
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/assimp_autogen.dir/AutogenInfo.json MinSizeRel
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\..\..\lib\MinSizeRel\zlibstatic.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/irisgl/src/assimp/lib/MinSizeRel/assimp-vc143-mt.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/MinSizeRel/assimp-vc143-mt.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_RelWithDebInfo;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj /source-charset:utf-8</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <SupportJustMyCode></SupportJustMyCode>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level4</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR="RelWithDebInfo";assimp_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ASSIMP_BUILD_DLL_EXPORT;ASSIMP_BUILD_NO_M3D_IMPORTER;ASSIMP_BUILD_NO_M3D_EXPORTER;ASSIMP_BUILD_NO_VRML_IMPORTER;WIN32_LEAN_AND_MEAN;UNICODE;_UNICODE;ASSIMP_BUILD_NO_EXPORT;ASSIMP_BUILD_NO_C4D_IMPORTER;ASSIMP_BUILD_NO_AMF_IMPORTER;ASSIMP_BUILD_NO_3DS_IMPORTER;ASSIMP_BUILD_NO_AC_IMPORTER;ASSIMP_BUILD_NO_ASE_IMPORTER;ASSIMP_BUILD_NO_ASSBIN_IMPORTER;ASSIMP_BUILD_NO_B3D_IMPORTER;ASSIMP_BUILD_NO_BVH_IMPORTER;ASSIMP_BUILD_NO_DXF_IMPORTER;ASSIMP_BUILD_NO_CSM_IMPORTER;ASSIMP_BUILD_NO_HMP_IMPORTER;ASSIMP_BUILD_NO_IRRMESH_IMPORTER;ASSIMP_BUILD_NO_IQM_IMPORTER;ASSIMP_BUILD_NO_IRR_IMPORTER;ASSIMP_BUILD_NO_LWO_IMPORTER;ASSIMP_BUILD_NO_LWS_IMPORTER;ASSIMP_BUILD_NO_MD2_IMPORTER;ASSIMP_BUILD_NO_MD3_IMPORTER;ASSIMP_BUILD_NO_MD5_IMPORTER;ASSIMP_BUILD_NO_MDC_IMPORTER;ASSIMP_BUILD_NO_MDL_IMPORTER;ASSIMP_BUILD_NO_NFF_IMPORTER;ASSIMP_BUILD_NO_NDO_IMPORTER;ASSIMP_BUILD_NO_OFF_IMPORTER;ASSIMP_BUILD_NO_OGRE_IMPORTER;ASSIMP_BUILD_NO_OPENGEX_IMPORTER;ASSIMP_BUILD_NO_PLY_IMPORTER;ASSIMP_BUILD_NO_MS3D_IMPORTER;ASSIMP_BUILD_NO_COB_IMPORTER;ASSIMP_BUILD_NO_BLEND_IMPORTER;ASSIMP_BUILD_NO_IFC_IMPORTER;ASSIMP_BUILD_NO_XGL_IMPORTER;ASSIMP_BUILD_NO_Q3D_IMPORTER;ASSIMP_BUILD_NO_Q3BSP_IMPORTER;ASSIMP_BUILD_NO_RAW_IMPORTER;ASSIMP_BUILD_NO_SIB_IMPORTER;ASSIMP_BUILD_NO_SMD_IMPORTER;ASSIMP_BUILD_NO_STL_IMPORTER;ASSIMP_BUILD_NO_TERRAGEN_IMPORTER;ASSIMP_BUILD_NO_3D_IMPORTER;ASSIMP_BUILD_NO_USD_IMPORTER;ASSIMP_BUILD_NO_X_IMPORTER;ASSIMP_BUILD_NO_X3D_IMPORTER;ASSIMP_BUILD_NO_3MF_IMPORTER;ASSIMP_BUILD_NO_MMD_IMPORTER;ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC=1;RAPIDJSON_HAS_STDSTRING=1;RAPIDJSON_NOMEMBERITERATORCLASS;_SCL_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;OPENDDLPARSER_BUILD;CMAKE_INTDIR=\"RelWithDebInfo\";assimp_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_RelWithDebInfo;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>C:\work\qt\Studio\build_vs\irisgl\src\assimp\code;C:\work\qt\Studio\irisgl\src\assimp\code;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\include_RelWithDebInfo;C:\work\qt\Studio\build_vs\irisgl\src\assimp\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp;C:\work\qt\Studio\irisgl\src\assimp\include;C:\work\qt\Studio\irisgl\src\assimp\.;C:\work\qt\Studio\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\pugixml\src;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\utf8cpp\source;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\rapidjson\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\unzip;C:\work\qt\Studio\irisgl\src\assimp\code\..\contrib\openddlparser\include;C:\work\qt\Studio\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\..\include;C:\work\qt\Studio\irisgl\src\assimp\code\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <PreBuildEvent>
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message>Automatic MOC and UIC for target assimp</Message>
+      <Command>setlocal
+cd C:\work\qt\Studio\build_vs\irisgl\src\assimp\code
+if %errorlevel% neq 0 goto :cmEnd
+C:
+if %errorlevel% neq 0 goto :cmEnd
+C:\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/assimp_autogen.dir/AutogenInfo.json RelWithDebInfo
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+    </PreBuildEvent>
+    <Link>
+      <AdditionalDependencies>..\..\..\..\lib\RelWithDebInfo\zlibstatic.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>C:/work/qt/Studio/build_vs/irisgl/src/assimp/lib/RelWithDebInfo/assimp-vc143-mt.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/work/qt/Studio/build_vs/bin/RelWithDebInfo/assimp-vc143-mt.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\work\qt\Studio\irisgl\src\assimp\code\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/assimp/code/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/assimp/code/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/assimp/code/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule C:/work/qt/Studio/irisgl/src/assimp/code/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+C:\Qt\Tools\CMake_64\bin\cmake.exe -SC:/work/qt/Studio -BC:/work/qt/Studio/build_vs --check-stamp-file C:/work/qt/Studio/build_vs/irisgl/src/assimp/code/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\mocs_compilation_Debug.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Assimp.cpp" />
+    <ResourceCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\res\assimp.rc" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\CApi\CInterfaceIOWrapper.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\CApi\CInterfaceIOWrapper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\StbCommon.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Compression.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Compression.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\BaseImporter.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\BaseProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\BaseProcess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Importer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\ScenePrivate.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\PostStepRegistry.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\ImporterRegistry.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\DefaultProgressHandler.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\DefaultIOStream.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\IOSystem.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\DefaultIOSystem.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\ZipArchiveIOSystem.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\PolyTools.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Maybe.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Importer.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\IFF.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\SGSpatialSort.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\VertexTriangleAdjacency.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\VertexTriangleAdjacency.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\SpatialSort.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\SceneCombiner.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\ScenePreprocessor.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\ScenePreprocessor.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\SkeletonMeshBuilder.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\StackAllocator.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\StackAllocator.inl" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\StandardShapes.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\TargetAnimation.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\TargetAnimation.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\RemoveComments.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Subdivision.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\scene.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Bitmap.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Version.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\CreateAnimMesh.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\simd.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\simd.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\material.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\AssertHandler.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Exceptional.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Base64.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Geometry\GeometryUtils.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Geometry\GeometryUtils.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\DefaultLogger.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\LogStream.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Logger.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\NullLogger.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\Win32DebugLogStream.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\DefaultLogger.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\FileLogStream.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Common\StdOStreamLogStream.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\CalcTangentsProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\CalcTangentsProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ComputeUVMappingProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ComputeUVMappingProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ConvertToLHProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ConvertToLHProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\EmbedTexturesProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\EmbedTexturesProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FindDegenerates.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FindDegenerates.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FindInstancesProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FindInstancesProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FindInvalidDataProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FindInvalidDataProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FixNormalsStep.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\FixNormalsStep.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\DropFaceNormalsProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\DropFaceNormalsProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\GenFaceNormalsProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\GenFaceNormalsProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\GenVertexNormalsProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\GenVertexNormalsProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\PretransformVertices.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\PretransformVertices.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ImproveCacheLocality.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ImproveCacheLocality.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\JoinVerticesProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\JoinVerticesProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\LimitBoneWeightsProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\LimitBoneWeightsProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\RemoveRedundantMaterials.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\RemoveRedundantMaterials.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\RemoveVCProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\RemoveVCProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\SortByPTypeProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\SortByPTypeProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\SplitLargeMeshes.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\SplitLargeMeshes.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\TextureTransform.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\TextureTransform.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\TriangulateProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\TriangulateProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ValidateDataStructure.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ValidateDataStructure.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\OptimizeGraph.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\OptimizeGraph.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\OptimizeMeshes.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\OptimizeMeshes.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\DeboneProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\DeboneProcess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ProcessHelper.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ProcessHelper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\MakeVerboseFormat.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\MakeVerboseFormat.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ScaleProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ScaleProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ArmaturePopulate.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\ArmaturePopulate.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\GenBoundingBoxesProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\GenBoundingBoxesProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\SplitByBoneCountProcess.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\PostProcessing\SplitByBoneCountProcess.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\Material\MaterialSystem.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\Material\MaterialSystem.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\STEPParser\STEPFileReader.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\STEPParser\STEPFileReader.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\STEPParser\STEPFileEncoding.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\STEPParser\STEPFileEncoding.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTFCommon\glTFCommon.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTFCommon\glTFCommon.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Collada\ColladaHelper.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Collada\ColladaHelper.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Collada\ColladaLoader.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Collada\ColladaLoader.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Collada\ColladaParser.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Collada\ColladaParser.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileData.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileImporter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileImporter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileMtlImporter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileMtlImporter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileParser.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjFileParser.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\Obj\ObjTools.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXImporter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXCompileConfig.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXImporter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXParser.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXParser.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXTokenizer.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXTokenizer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXImportSettings.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXConverter.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXConverter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXUtil.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXUtil.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXDocument.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXDocument.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXProperties.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXProperties.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXMeshGeometry.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXMeshGeometry.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXMaterial.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXModel.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXAnimation.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXNodeAttribute.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXDeformer.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXBinaryTokenizer.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXDocumentUtil.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\FBX\FBXCommon.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF\glTFAsset.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF\glTFAsset.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF\glTFAssetWriter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF\glTFAssetWriter.inl" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF\glTFImporter.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF\glTFImporter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF2\glTF2Asset.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF2\glTF2Asset.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF2\glTF2AssetWriter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF2\glTF2AssetWriter.inl" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF2\glTF2Importer.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\code\AssetLib\glTF2\glTF2Importer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\unzip\crypt.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\unzip\ioapi.c" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\unzip\ioapi.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\unzip\unzip.c" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\unzip\unzip.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\common\shapes.cc" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\common\shapes.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\common\utils.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\advancing_front.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\advancing_front.cc" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\cdt.cc" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\cdt.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\sweep.cc" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\sweep.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\sweep_context.cc" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\poly2tri\poly2tri\sweep\sweep_context.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\clipper\clipper.hpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\clipper\clipper.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\code\OpenDDLParser.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\code\DDLNode.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\code\OpenDDLCommon.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\code\OpenDDLExport.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\code\Value.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\code\OpenDDLStream.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\OpenDDLParser.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\OpenDDLParserUtils.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\OpenDDLCommon.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\OpenDDLExport.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\OpenDDLStream.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\DDLNode.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\openddlparser\include\openddlparser\Value.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcAdjacencyInfo.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcArithmeticCodec.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcArithmeticCodec.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcBinaryStream.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcCommon.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcDVEncodeParams.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcDynamicVectorDecoder.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcDynamicVectorDecoder.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcDynamicVectorEncoder.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcDynamicVectorEncoder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcDynamicVector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcFIFO.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcIndexedFaceSet.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcIndexedFaceSet.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcSC3DMCDecoder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcSC3DMCDecoder.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcSC3DMCEncodeParams.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcSC3DMCEncoder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcSC3DMCEncoder.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTimer.h" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTools.cpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTriangleFans.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTriangleFans.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTriangleListDecoder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTriangleListDecoder.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTriangleListEncoder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcTriangleListEncoder.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcVector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\Open3DGC\o3dgcVector.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\pugixml\src\pugiconfig.hpp" />
+    <ClCompile Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\pugixml\src\pugixml.cpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\pugixml\src\pugixml.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\contrib\stb\stb_image.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\anim.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\aabb.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ai_assert.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\camera.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\color4.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\color4.inl" />
+    <ClInclude Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\include\assimp\config.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ColladaMetaData.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\commonMetaData.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\defs.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\cfileio.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\light.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\material.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\material.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\matrix3x3.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\matrix3x3.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\matrix4x4.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\matrix4x4.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\mesh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ObjMaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\pbrmaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\GltfMaterial.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\postprocess.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\quaternion.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\quaternion.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\scene.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\metadata.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\texture.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\types.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\vector2.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\vector2.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\vector3.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\vector3.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\version.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\cimport.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\AssertHandler.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\importerdesc.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Importer.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ProgressHandler.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\IOStream.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\IOSystem.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\cexport.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Exporter.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\DefaultIOStream.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\DefaultIOSystem.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ZipArchiveIOSystem.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SceneCombiner.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\fast_atof.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\qnan.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\BaseImporter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Hash.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\MemoryIOWrapper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ParsingUtils.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\StreamReader.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\StreamWriter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\StringComparison.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\StringUtils.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SGSpatialSort.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\GenericProperty.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SpatialSort.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SkeletonMeshBuilder.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SmallVector.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SmoothingGroups.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\SmoothingGroups.inl" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\StandardShapes.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\RemoveComments.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Subdivision.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Vertex.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\LineSplitter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\TinyFormatter.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Profiler.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\LogAux.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Bitmap.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\XMLTools.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\IOStreamBuffer.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\CreateAnimMesh.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\XmlParser.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\BlobIOSystem.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\MathFunctions.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Exceptional.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\ByteSwapper.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Base64.hpp" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Compiler\pushpack1.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Compiler\poppack1.h" />
+    <ClInclude Include="C:\work\qt\Studio\irisgl\src\assimp\include\assimp\Compiler\pstdint.h" />
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\mocs_compilation_Release.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\mocs_compilation_MinSizeRel.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\code\assimp_autogen\mocs_compilation_RelWithDebInfo.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\ZERO_CHECK.vcxproj">
+      <Project>{3DCC27BC-CAF3-3567-AEA9-5D418DBACBBF}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+    <ProjectReference Include="C:\work\qt\Studio\build_vs\irisgl\src\assimp\contrib\zlib\zlibstatic.vcxproj">
+      <Project>{C84A9712-3B8D-3B16-8E3B-F244D9E5C818}</Project>
+      <Name>zlibstatic</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
