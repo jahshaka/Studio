@@ -299,11 +299,13 @@ protected slots:
 
     void onThumbnailResult(ThumbnailResult* result);
 
+protected:
+	Database* db;
+
 private:
     Ui::AssetWidget *ui;
     QPoint startPos;
 
-    Database *db;
 	ProgressDialog *progressDialog;
 
     QString currentPath;

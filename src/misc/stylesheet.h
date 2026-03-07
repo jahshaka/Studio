@@ -30,6 +30,7 @@ public:
     static const QString QWidgetTransparent();
     static const QString QLabelWhite();
     static const QString QLabelBlack();
+	static const QString QListWidget();
     static const QString QComboBox();
 	static const QString QCheckBox();
 	static const QString QSplitter();

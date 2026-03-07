@@ -127,6 +127,7 @@ For more information see the LICENSE file
 
 #include "widgets/assetmodelpanel.h"
 #include "widgets/assetmaterialpanel.h"
+#include "widgets/projectmaterialpanel.h"
 
 #include "../src/widgets/assetview.h"
 #include "dialogs/toast.h"
@@ -668,6 +669,7 @@ void MainWindow::switchSpace(WindowSpaces space)
             UiManager::sceneMode = SceneMode::EditMode;
 
             assetWidget->refresh();
+			projectMaterialPanel->refresh();
 			isSceneOpen = true;
 
 			sceneView->begin();
@@ -2270,11 +2272,15 @@ void MainWindow::setupDockWidgets()
     assetMaterialPanel->setMainWindow(this);
     assetMaterialPanel->setDatabaseHandle(db);
 
+	projectMaterialPanel = new ProjectMaterialPanel(db);
+	projectMaterialPanel->setMainWindow(this);
+
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
     presetsTabWidget->setMinimumWidth(396);
     presetsTabWidget->addTab(assetModelPanel, "Models");
-    presetsTabWidget->addTab(assetMaterialPanel, "Materials");
+	presetsTabWidget->addTab(projectMaterialPanel, "Materials");
+	presetsTabWidget->addTab(assetMaterialPanel, "Preset Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
     presetDockContents->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
 

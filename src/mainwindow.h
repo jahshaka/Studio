@@ -89,6 +89,7 @@ class AssetWidget;
 
 class AssetModelPanel;
 class AssetMaterialPanel;
+class ProjectMaterialPanel;
 
 
 #include "widgets/scenenodepropertieswidget.h"
@@ -451,6 +452,7 @@ private:
 
     QDockWidget *presetsDock;
     QTabWidget *presetsTabWidget;
+    QTabWidget *materialTabWidget;
 
     QDockWidget *assetDock;
     AssetWidget *assetWidget;
@@ -490,6 +492,7 @@ private:
 
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;
+    ProjectMaterialPanel *projectMaterialPanel;
 
 	QPushButton *cameraView;
 	QtAwesome *fontIcons;
