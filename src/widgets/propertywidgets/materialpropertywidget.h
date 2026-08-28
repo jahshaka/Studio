@@ -38,7 +38,21 @@ class MaterialPropertyWidget : public AccordianBladeWidget, iris::PropertyListen
 
 public:
     MaterialPropertyWidget() = default;
+
+    // The shader-graph material, when the mesh carries one. Its panel offers the
+    // shader selector and the generate/purge machinery, none of which exists on
+    // the Material base class.
     QSharedPointer<iris::CustomMaterial> material;
+
+    // Any other Material subclass (PbrMaterial, DefaultMaterial...). These get a
+    // plain parameter list rendered from Material::properties - no shader
+    // selector, since they are not authored by the shader graph.
+    iris::MaterialPtr genericMaterial;
+
+    // Whichever of the two is currently set, as a base pointer.
+    // Defined in the .cpp: CustomMaterial is only forward-declared here, so the
+    // derived-to-base conversion is not visible at this point.
+    iris::MaterialPtr currentMaterial() const;
 
     void setSceneNode(iris::SceneNodePtr sceneNode);
     void forceShaderRefresh(const QString&);

@@ -47,7 +47,10 @@ extern "C"
 
 inline void GetGitCommitHash()
 {
-#ifndef GIT_COMMIT_HASH && GIT_COMMIT_DATE
+// NB: `#ifndef A && B` is not valid conditional logic - #ifndef takes a single
+// identifier and everything after it is ignored, so this only ever tested
+// GIT_COMMIT_HASH. Spelled out with #if !defined(...) || !defined(...).
+#if !defined(GIT_COMMIT_HASH) || !defined(GIT_COMMIT_DATE)
 #define GIT_COMMIT_HASH "0000" // means uninitialized
 #endif
 }
