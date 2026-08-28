@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/Graphics.h"
 #include "irisgl/Animation.h"
 #include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/materials/pbrmaterial.h"
 #include "irisgl/SceneGraph.h"
 
 #include "irisgl/src/graphics/postprocess.h"
@@ -343,7 +344,7 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 
     // todo: check if material actually exists
     QJsonObject matObj;
-    writeSceneNodeMaterial(matObj, meshNode->getMaterial().staticCast<iris::CustomMaterial>(), relative);
+    writeSceneNodeMaterial(matObj, meshNode->getMaterial(), relative);
 	sceneNodeObject["material"] = matObj;
 	//auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
 	//qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
@@ -390,11 +391,29 @@ void SceneWriter::writeGrabNodeData(QJsonObject & sceneNodeObject, iris::GrabNod
 	sceneNodeObject["poseFactor"] = node->poseFactor;
 }
 
-void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative)
+void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat, bool relative)
 {
-    matObj["name"] = mat->getName();
-	//matObj["guid"] = mat->getGuid();
-	matObj["shaderGuid"] = mat->getGuid();
+	if (!mat) return;
+
+	// materialType discriminates which Material subclass to rebuild on load.
+	// Absent in scenes written before PBR existed; the reader treats a missing
+	// key as "custom", so older scenes load unchanged.
+	auto customMat = mat.dynamicCast<iris::CustomMaterial>();
+	if (!!customMat) {
+		matObj["materialType"] = "custom";
+		matObj["name"]         = customMat->getName();
+		matObj["shaderGuid"]   = customMat->getGuid();
+	}
+	else if (!!mat.dynamicCast<iris::PbrMaterial>()) {
+		matObj["materialType"] = "pbr";
+	}
+	else {
+		// Some other Material subclass - record the parameters, but there is no
+		// type tag that would let the reader rebuild it. Better to say so than
+		// to write a tag that lies.
+		matObj["materialType"] = "unknown";
+	}
+
 	matObj["version"] = 2;
 
 	QJsonObject valuesObj;

@@ -41,11 +41,31 @@ For more information see the LICENSE file
 #include "core/database/database.h"
 #include "io/materialreader.hpp"
 
+iris::MaterialPtr MaterialPropertyWidget::currentMaterial() const
+{
+    return !!material ? material.staticCast<iris::Material>() : genericMaterial;
+}
+
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         meshNode = sceneNode.staticCast<iris::MeshNode>();
-        material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+
+        // dynamicCast, not staticCast: a mesh may carry any Material subclass.
+        // A staticCast here would reinterpret e.g. a PbrMaterial at
+        // CustomMaterial's layout, which is undefined behaviour.
+        material = meshNode->getMaterial().dynamicCast<iris::CustomMaterial>();
+        genericMaterial.clear();
+
+        if (!material) {
+            // Not a shader-graph material. Render its parameters generically -
+            // Material::properties is all these types have in common.
+            genericMaterial = meshNode->getMaterial();
+            meshNodeGuid    = meshNode->getGUID();
+            setWidgetProperties();
+            return;
+        }
+
         meshNodeGuid = meshNode->getGUID();
 
         for (auto prop : material->properties) {
@@ -100,6 +120,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     else {
         meshNode.clear();
         material.clear();
+        genericMaterial.clear();
         return;
     }
 }
@@ -113,7 +134,10 @@ void MaterialPropertyWidget::setWidgetProperties()
 {
     materialPropWidget = this->addPropertyWidget();
     materialPropWidget->setListener(this);
-    materialPropWidget->setProperties(material->properties);
+
+    auto mat = currentMaterial();
+    if (!!mat)
+        materialPropWidget->setProperties(mat->properties);
 }
 
 void MaterialPropertyWidget::materialChanged(const QString &text)
@@ -200,9 +224,17 @@ void MaterialPropertyWidget::setupShaderSelector()
 
 void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
 {
-    for (auto property : material->properties) {
+    auto mat = currentMaterial();
+    if (!mat) return;
+
+    for (auto property : mat->properties) {
         if (property->name == prop->name) property->setValue(prop->getValue());
     }
+
+    // Texture handling below is shader-graph specific (setTextureWithUniform and
+    // the asset-dependency bookkeeping live on CustomMaterial). A generic
+    // material has had its property value set above and needs nothing further.
+    if (!material) return;
 
     // special case for textures since we have to generate these
     if (prop->type == iris::PropertyType::Texture) {

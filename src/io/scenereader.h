@@ -113,6 +113,7 @@ public:
      * @return
      */
     iris::MaterialPtr readMaterial(QJsonObject &nodeObj);
+    iris::MaterialPtr readPbrMaterial(const QJsonObject& matObj);
 
     // extracts meshes and animations from model file
     void extractAssetsFromAssimpScene(QString filePath);

@@ -1,0 +1,12 @@
+{
+    "name"              : "Default PBR",
+    "material_type"     : "PBR",
+    "icon"              : "../../shadergraph/default.png",
+    "baseColor"         : "#FFFFFF",
+    "metallic"          : 0.0,
+    "roughness"         : 0.39,
+    "normalFactor"      : 1.0,
+    "occlusionFactor"   : 1.0,
+    "emissiveIntensity" : 0.0,
+    "textureScale"      : 2
+}

@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/grabnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/materials/pbrmaterial.h"
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/graphics/texture2d.h"
@@ -945,8 +946,38 @@ void MainWindow::applyMaterialPreset(MaterialPreset preset)
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
 
-    // TODO - set the TYPE for a preset in the .material file so we can have other preset types
-    // only works for the default material at the moment...
+    // Both branches build into `mat` and then share the registration tail below -
+    // writing matgen.material, creating the asset entry, requesting a thumbnail
+    // and copying textures are all material-type agnostic.
+    iris::MaterialPtr mat;
+
+    // A PBR preset builds a PbrMaterial; anything else takes the legacy
+    // CustomMaterial path, so existing presets behave exactly as before.
+    if (preset.type.compare("PBR", Qt::CaseInsensitive) == 0) {
+        auto pbr = iris::PbrMaterial::create();
+
+        pbr->setValue("baseColor",           preset.baseColor);
+        pbr->setValue("metallic",            preset.metallic);
+        pbr->setValue("roughness",           preset.roughness);
+        pbr->setValue("roughnessLowerBound", preset.roughnessLowerBound);
+        pbr->setValue("roughnessUpperBound", preset.roughnessUpperBound);
+        pbr->setValue("normalFactor",        preset.pbrNormalFactor);
+        pbr->setValue("occlusionFactor",     preset.occlusionFactor);
+        pbr->setValue("emissiveColor",       preset.emissiveColor);
+        pbr->setValue("emissiveIntensity",   preset.emissiveIntensity);
+        pbr->setValue("textureScale",        preset.textureScale);
+
+        pbr->setValue("baseColorMap",  preset.baseColorMap);
+        pbr->setValue("metallicMap",   preset.metallicMap);
+        pbr->setValue("roughnessMap",  preset.roughnessMap);
+        pbr->setValue("normalMap",     preset.pbrNormalMap);
+        pbr->setValue("occlusionMap",  preset.occlusionMap);
+        pbr->setValue("emissiveMap",   preset.emissiveMap);
+
+        mat = pbr;
+    }
+    else {
+
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
 
@@ -964,10 +995,13 @@ void MainWindow::applyMaterialPreset(MaterialPreset preset)
     m->setValue("reflectionInfluence", preset.reflectionInfluence);
     m->setValue("textureScale", preset.textureScale);
 
-    meshNode->setMaterial(m);
+    mat = m;
+    }
+
+    meshNode->setMaterial(mat);
 
     QJsonObject material;
-    SceneWriter::writeSceneNodeMaterial(material, m);
+    SceneWriter::writeSceneNodeMaterial(material, mat);
 
     // Remove previous material dependencies
     //auto objectGuid = db->fetchMeshObject(
@@ -1005,7 +1039,7 @@ void MainWindow::applyMaterialPreset(MaterialPreset preset)
 
     assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
 
-    for (const auto &prop : m->properties) {
+    for (const auto &prop : mat->properties) {
         if (prop->type == iris::PropertyType::Texture) {
             auto file = prop->getValue().toString();
             if (file.isEmpty()) continue;

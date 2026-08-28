@@ -102,6 +102,25 @@ namespace Contants
 			{ "00000000-0000-0000-0000-000000002011", "Texture" },
 			{ "00000000-0000-0000-0000-000000002012", "Basic" },
 			{ "00000000-0000-0000-0000-000000002013", "Default" },
+
+			// PBR siblings of the above. Same stable-identifier convention,
+			// continuing the sequence. Names must match the "name" field in
+			// app/content/materials/*-pbr.material exactly - the panel looks the
+			// GUID up by name, and a miss yields an empty GUID.
+			{ "00000000-0000-0000-0000-000000002014", "Brick PBR" },
+			{ "00000000-0000-0000-0000-000000002015", "Concrete PBR" },
+			{ "00000000-0000-0000-0000-000000002016", "Grass PBR" },
+			{ "00000000-0000-0000-0000-000000002017", "Leather PBR" },
+			{ "00000000-0000-0000-0000-000000002018", "Marble PBR" },
+			{ "00000000-0000-0000-0000-000000002019", "Patchy Grass PBR" },
+			{ "00000000-0000-0000-0000-000000002020", "Sand PBR" },
+			{ "00000000-0000-0000-0000-000000002021", "Stone Wall PBR" },
+			{ "00000000-0000-0000-0000-000000002022", "Board PBR" },
+			{ "00000000-0000-0000-0000-000000002023", "Checker Board PBR" },
+			{ "00000000-0000-0000-0000-000000002024", "Gold PBR" },
+			{ "00000000-0000-0000-0000-000000002025", "Texture PBR" },
+			{ "00000000-0000-0000-0000-000000002026", "Basic PBR" },
+			{ "00000000-0000-0000-0000-000000002027", "Default PBR" },
          };
 
         QString SHADER_DEFAULT = "00000000-0000-0000-0000-000000000001";

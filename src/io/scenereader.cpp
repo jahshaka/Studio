@@ -49,6 +49,7 @@ For more information see the LICENSE file
 
 #include "irisgl/src/physics/physicsproperties.h"
 #include "irisgl/src/physics/physicshelper.h"
+#include "irisgl/src/materials/pbrmaterial.h"
 
 #include "materialreader.hpp"
 #include "../core/guidmanager.h"
@@ -644,6 +645,35 @@ iris::HandleMode SceneReader::getHandleModeFromName(QString handleMode)
  * @param nodeObj
  * @return
  */
+iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
+{
+	auto mat    = iris::PbrMaterial::create();
+	auto values = matObj["values"].toObject();
+
+	// Drive the material through setValue so the field the shader reads and the
+	// Property object the panel shows are both updated from one place.
+	for (auto prop : mat->properties) {
+		if (!values.contains(prop->name)) continue;
+		const auto val = values.value(prop->name);
+
+		switch (prop->type) {
+		case iris::PropertyType::Float:
+			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
+			break;
+		case iris::PropertyType::Color:
+			mat->setValue(prop->name, QColor(val.toString()));
+			break;
+		case iris::PropertyType::Bool:
+			mat->setValue(prop->name, val.toBool());
+			break;
+		default:
+			break;
+		}
+	}
+
+	return mat;
+}
+
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
 	MaterialReader reader;
@@ -651,6 +681,13 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 
 	auto mat = nodeObj["material"].toObject();
+
+	// materialType selects which Material subclass to rebuild. Scenes written
+	// before PBR existed have no such key, so absent means "custom" and they
+	// load exactly as before.
+	const auto materialType = mat["materialType"].toString("custom");
+	if (materialType == "pbr") return readPbrMaterial(mat);
+
 	return reader.parseMaterial(mat, handle, true);
    
 /*
