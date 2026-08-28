@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef NODEKEYFRAME_H
 #define NODEKEYFRAME_H
 
+#include <QQuaternion>
 #include "QVector3D"
 #include "QQuaternion"
 #include "keyframeanimation.h"

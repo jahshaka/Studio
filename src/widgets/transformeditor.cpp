@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "transformeditor.h"
 #include "ui_transformeditor.h"
 

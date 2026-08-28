@@ -464,6 +464,11 @@ endif(USE_BREAKPAD)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 
+# A6: these two warning classes are undefined behaviour, not style - keep them fixed.
+if (NOT MSVC)
+    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Werror=return-type -Werror=delete-incomplete)
+endif()
+
 include(CopyResources)
 include(CopyDependencies)
 

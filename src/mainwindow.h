@@ -142,7 +142,7 @@ public:
 
 	WindowSpaces getWindowSpace();
 	void deselectViewports();
-    void switchSpace(WindowSpaces space);
+    void switchSpace(WindowSpaces space, bool force = false);
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
     bool handleMousePress(QMouseEvent *event);

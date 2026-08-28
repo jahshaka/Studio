@@ -1,6 +1,7 @@
 #ifndef HAND_H
 #define HAND_H
 
+#include <QQuaternion>
 #include "playervrcontroller.h"
 #include "../irisgl/src/irisglfwd.h"
 

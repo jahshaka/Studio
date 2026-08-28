@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef KEYFRAMEANIMATION_H
 #define KEYFRAMEANIMATION_H
 
+#include <QQuaternion>
 #include <vector>
 
 class NodeKeyFrame;

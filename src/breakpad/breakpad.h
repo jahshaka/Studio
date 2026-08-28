@@ -60,6 +60,8 @@ bool DumpCallback(const google_breakpad::MinidumpDescriptor& descriptor,
     QString exePath = QDir::currentPath() + "/crash_handler";
     proc->startDetached(exePath, args);
     delete proc;
+
+    return succeeded;
 }
 #endif
 

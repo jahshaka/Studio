@@ -1,7 +1,9 @@
 set(USE_BREAKPAD FALSE)
 
-# only enable breakpad on windows platforms using msvc for now
-if(WIN32 OR (UNIX AND NOT APPLE))
+# NOTE: the condition below includes Linux, despite what this comment used to claim.
+# Breakpad installs its own crash handler, which swallows crashes and shows its own
+# window instead of producing a backtrace - so it must be switchable off for debugging.
+if((WIN32 OR (UNIX AND NOT APPLE)) AND NOT DISABLE_BREAKPAD)
 	set(USE_BREAKPAD TRUE)
 endif()
 

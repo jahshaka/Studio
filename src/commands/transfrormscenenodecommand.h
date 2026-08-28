@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef TRANSFRORMSCENENODECOMMAND_H
 #define TRANSFRORMSCENENODECOMMAND_H
 
+#include <QQuaternion>
 #include <QUndoCommand>
 #include <QMatrix4x4>
 #include "../irisgl/src/irisglfwd.h"

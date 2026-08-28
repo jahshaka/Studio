@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "transfrormscenenodecommand.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../irisgl/src/math/mathhelper.h"

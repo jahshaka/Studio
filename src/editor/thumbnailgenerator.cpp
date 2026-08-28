@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "thumbnailgenerator.h"
 
 #include <QJsonDocument>
@@ -397,6 +398,7 @@ ThumbnailGenerator::ThumbnailGenerator()
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
+    format.setRenderableType(QSurfaceFormat::OpenGL);
     format.setSamples(1);
 
     auto context = new QOpenGLContext();

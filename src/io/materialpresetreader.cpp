@@ -21,7 +21,8 @@ QJsonObject MaterialPresetReader::getMatPreset(const QString &filename)
     this->setAssetPath(filename);
 
     QFile file(filename);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly))
+        qWarning("MaterialPresetReader::getMatPreset: failed to open %s", qUtf8Printable(filename));
 
     auto data = file.readAll();
     auto doc = QJsonDocument::fromJson(data);
@@ -34,7 +35,8 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
     this->setAssetPath(filename);
 
     QFile file(filename);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly))
+        qWarning("MaterialPresetReader::readMaterialPreset: failed to open %s", qUtf8Printable(filename));
 
     auto data = file.readAll();
     auto doc = QJsonDocument::fromJson(data);

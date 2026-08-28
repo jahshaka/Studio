@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "rotationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
@@ -312,16 +313,13 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 
 void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
-	auto gl = device->getGL();
-	gl->glClear(GL_DEPTH_BUFFER_BIT);
-	//gl->glDisable(GL_DEPTH_TEST);
+	device->clear(GL_DEPTH_BUFFER_BIT);
 	shader->bind();
 
 	shader->setUniformValue("u_viewMatrix", viewMatrix);
 	shader->setUniformValue("u_projMatrix", projMatrix);
 	shader->setUniformValue("showHalf", true);
-	gl->glEnable(GL_BLEND);
-	gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	device->setBlendState(iris::BlendState::AlphaBlend);
 
 	if (dragging) {
 		for (int i = 0; i < 3; i++) {
@@ -372,7 +370,7 @@ void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVe
 	}
 
 	shader->release();
-	gl->glDisable(GL_BLEND);
+	device->setBlendState(iris::BlendState::Opaque);
 }
 
 QMatrix4x4 RotationGizmo::getTransform()

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef PLAYERVRCONTROLLER_H
 #define PLAYERVRCONTROLLER_H
 
+#include <QQuaternion>
 #include <QMatrix4x4>
 #include "../irisgl/src/irisglfwd.h"
 #include "../editor/cameracontrollerbase.h"

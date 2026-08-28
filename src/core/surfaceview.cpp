@@ -37,6 +37,7 @@ SurfaceView::SurfaceView(QScreen* screen):
     if (QOpenGLContext::openGLModuleType() == QOpenGLContext::LibGL) {
         format.setVersion(4, 3);
         format.setProfile(QSurfaceFormat::CoreProfile);
+        format.setRenderableType(QSurfaceFormat::OpenGL);
     }
     format.setDepthBufferSize( 24 );
     //format.setSamples( 4 );

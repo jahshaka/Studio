@@ -100,8 +100,8 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 
 	camController->postUpdate(dt);
 
-	glClearColor(.1f, .1f, .1f, .4f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	renderer->getGraphicsDevice()->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
+	                                     QColor::fromRgbF(.1f, .1f, .1f, .4f));
 
 	if (vrDevice->isHeadMounted()) {
 		renderer->renderSceneVr(dt, &viewport, false);

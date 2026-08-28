@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "scalegizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
@@ -316,8 +317,7 @@ ScaleHandle* ScaleGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVecto
 
 void ScaleGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
-	auto gl = device->getGL();
-	gl->glClear(GL_DEPTH_BUFFER_BIT);
+	device->clear(GL_DEPTH_BUFFER_BIT);
 	shader->bind();
 
 	shader->setUniformValue("u_viewMatrix", viewMatrix);

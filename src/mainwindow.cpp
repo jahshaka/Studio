@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -203,6 +204,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
+    format.setRenderableType(QSurfaceFormat::OpenGL);
 
     loadingContext = new QOpenGLContext();
     loadingContext->setFormat(format);
@@ -223,7 +225,7 @@ void MainWindow::grabOpenGLContextHack()
 void MainWindow::goToDesktop()
 {
     show();
-    switchSpace(WindowSpaces::DESKTOP);
+    switchSpace(WindowSpaces::DESKTOP, true);
 }
 
 void MainWindow::setupVrUi()
@@ -617,9 +619,9 @@ void MainWindow::deselectViewports()
 	player_menu->setCursor(Qt::ArrowCursor);
 }
 
-void MainWindow::switchSpace(WindowSpaces space)
+void MainWindow::switchSpace(WindowSpaces space, bool force)
 {
-	if (currentSpace == space)
+	if (currentSpace == space && !force)
 		return;
 	ListWidget::stopHighlightedNode();
 

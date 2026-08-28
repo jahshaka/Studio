@@ -491,6 +491,8 @@ QString evalShadowTypeName(iris::ShadowMapType shadowType)
     case iris::ShadowMapType::VerySoft:
         return "verysoft";
     }
+
+    return "none";
 }
 
 void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr lightNode)

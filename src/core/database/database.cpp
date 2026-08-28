@@ -320,6 +320,9 @@ bool Database::createCollectionsTable()
         
         return false;
     }
+
+    // table already exists - nothing to do
+    return true;
 }
 
 /*
@@ -369,6 +372,9 @@ bool Database::createMetadataTable()
 
 		return false;
 	}
+
+	// table already exists - nothing to do
+	return true;
 }
 
 bool Database::createFavoritesTable()

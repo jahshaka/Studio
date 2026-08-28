@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QQuaternion>
 #include "assetwidget.h"
 #include "sceneviewwidget.h"
 
@@ -317,6 +318,7 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	format.setMinorVersion(2);
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 	format.setProfile(QSurfaceFormat::CoreProfile);
+	format.setRenderableType(QSurfaceFormat::OpenGL);
 	format.setSamples(1);
 	format.setSwapInterval(0);
 #ifdef QT_DEBUG
@@ -758,8 +760,8 @@ void SceneViewWidget::renderScene()
         return;
     }
 
-    glClearColor(.1f, .1f, .1f, .4f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    renderer->getGraphicsDevice()->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
+                                         QColor::fromRgbF(.1f, .1f, .1f, .4f));
     
 
 	if (!!renderer && !!scene) {
@@ -827,9 +829,7 @@ void SceneViewWidget::renderScene()
         // dont show thumbnail in play mode
         if (!playScene) {
             if (!!selectedNode && selectedNode->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-                QOpenGLContext* context = QOpenGLContext::currentContext();
-                auto gl = QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context);
-                gl->glClear(GL_DEPTH_BUFFER_BIT);
+                renderer->getGraphicsDevice()->clear(GL_DEPTH_BUFFER_BIT);
                 //QOpenGLContext::currentContext()->versionFunctions<QOpenGLFunctions_3_2_Core>()->glClear(GL_DEPTH_BUFFER_BIT);
                 QMatrix4x4 mat;
                 mat.setToIdentity();

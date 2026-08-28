@@ -33,6 +33,7 @@ PlayerView::PlayerView(QWidget* parent) :
 	format.setMinorVersion(2);
 	format.setSwapBehavior(QSurfaceFormat::DoubleBuffer);
 	format.setProfile(QSurfaceFormat::CoreProfile);
+	format.setRenderableType(QSurfaceFormat::OpenGL);
 	format.setSamples(1);
 	format.setSwapInterval(0);
 #ifdef QT_DEBUG

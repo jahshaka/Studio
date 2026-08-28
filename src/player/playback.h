@@ -1,6 +1,7 @@
 #ifndef PLAYBACK_H
 #define PLAYBACK_H
 
+#include <QQuaternion>
 #include <QObject>
 #include <QPointF>
 #include <QOpenGLFunctions>

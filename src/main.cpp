@@ -57,17 +57,31 @@ int main(int argc, char *argv[])
     GetGitCommitHash();
 
 #ifdef Q_OS_LINUX
-    qputenv("QT_QPA_PLATFORM", "xcb");
+    // Only force xcb if the user hasn't chosen a platform, and use EGL rather
+    // than GLX: under GLX, making an offscreen context current on a background
+    // thread (the thumbnail render thread) fails with the NVIDIA driver.
+    // Don't force xcb. On this stack QOpenGLWidget only renders under the
+    // native wayland platform: xcb+GLX fails to make the context current,
+    // and xcb+EGL makes it current but renders nothing.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+        if (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
+            qputenv("QT_QPA_PLATFORM", "wayland");
+        else
+            qputenv("QT_QPA_PLATFORM", "xcb");
+    }
 #endif
 
     // Fixes issue on osx where the SceneView widget shows up blank
     // Causes freezing on linux for some reason (Nick)
-#ifdef Q_OS_MAC
+#if defined(Q_OS_MAC) || defined(Q_OS_LINUX)
     QSurfaceFormat format;
     format.setDepthBufferSize(32);
     format.setMajorVersion(3);
     format.setMinorVersion(2);
     format.setProfile(QSurfaceFormat::CoreProfile);
+    // Without this the EGL paths hand back an OpenGL ES context and the
+    // 3.2 Core function resolver returns null.
+    format.setRenderableType(QSurfaceFormat::OpenGL);
     QSurfaceFormat::setDefaultFormat(format);
 #endif
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);

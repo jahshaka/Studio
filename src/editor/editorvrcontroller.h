@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef EDITORVRCONTROLLER_H
 #define EDITORVRCONTROLLER_H
 
+#include <QQuaternion>
 #include "../irisgl/src/irisglfwd.h"
 #include "cameracontrollerbase.h"
 #include <QMatrix4x4>
