@@ -580,6 +580,9 @@ void SceneMirror::applySky(View *view)
         signature = "equirect:" + mSource->skyTexture->source;
     else if (mSource->skyType == iris::SkyType::CUBEMAP && mSource->skyTexture && mSource->skyTexture->isCubeMap())
         signature = "cubemap:" + QString::number(reinterpret_cast<quintptr>(mSource->skyTexture.data()));
+    else if (mSource->skyType == iris::SkyType::GRADIENT)
+        signature = QString("gradient:%1/%2/%3/%4").arg(mSource->gradientTop.name(), mSource->gradientMid.name(),
+                                                        mSource->gradientBot.name()).arg(mSource->gradientOffset);
     if (signature != mSkySignature) {
         mSkySignature = signature;
         for (TextureId &t : mSkyFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
@@ -597,6 +600,28 @@ void SceneMirror::applySky(View *view)
                 if (!mSkyFaceTextures[i]) ok = false;
             }
             if (ok) mTarget->setSkyCubemap(mSkyFaceTextures); else mTarget->setSky(SkyMode::NoSky, 0);
+        } else if (signature.startsWith("gradient:")) {
+            // Legacy gradientsky.frag is a pure vertical 3-stop ramp: bake it into a
+            // narrow equirect strip (row 0 = zenith) and reuse the equirect sky path.
+            const float middle = qBound(0.01f, mSource->gradientOffset, 0.99f);
+            const QColor top = mSource->gradientTop, mid = mSource->gradientMid, bot = mSource->gradientBot;
+            const int H = 256, W = 4;
+            std::vector<unsigned char> px(size_t(W) * H * 4u);
+            for (int r = 0; r < H; ++r) {
+                const float offset = 1.0f - float(r) / (H - 1);   // 1 at the top row
+                float t; const QColor *c0, *c1;
+                if (offset <= middle) { t = offset / middle;                 c0 = &bot; c1 = &mid; }
+                else                  { t = (offset - middle) / (1 - middle); c0 = &mid; c1 = &top; }
+                const unsigned char rr = (unsigned char)qBound(0.0f, (c0->redF()   + (c1->redF()   - c0->redF())   * t) * 255.0f, 255.0f);
+                const unsigned char gg = (unsigned char)qBound(0.0f, (c0->greenF() + (c1->greenF() - c0->greenF()) * t) * 255.0f, 255.0f);
+                const unsigned char bb = (unsigned char)qBound(0.0f, (c0->blueF()  + (c1->blueF()  - c0->blueF())  * t) * 255.0f, 255.0f);
+                for (int x = 0; x < W; ++x) {
+                    unsigned char *p = &px[(size_t(r) * W + x) * 4u];
+                    p[0] = rr; p[1] = gg; p[2] = bb; p[3] = 255;
+                }
+            }
+            mSkyFaceTextures[0] = mTarget->createTexture(W, H, px.data(), true);
+            mTarget->setSky(mSkyFaceTextures[0] ? SkyMode::Equirectangular : SkyMode::NoSky, mSkyFaceTextures[0]);
         } else {
             mTarget->setSky(SkyMode::NoSky, 0);
         }

@@ -477,6 +477,26 @@ int main(int argc, char **argv)
         QDir().rmdir(dir);
     }
 
+    // ---- gradient sky: baked to an equirect ramp (top colour up, bottom colour down) ----
+    {
+        doc->skyType = iris::SkyType::GRADIENT;
+        doc->gradientTop = QColor(255, 0, 0);
+        doc->gradientMid = QColor(0, 255, 0);
+        doc->gradientBot = QColor(0, 0, 255);
+        doc->gradientOffset = 0.5f;
+        mirror.applySky(view);
+        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), 89.0f));   // look up
+        mirror.applyCamera(cam, view);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("gradient sky zenith", img);
+        CHECK(centre(img).r > 0.7f && centre(img).g < 0.35f, "gradient sky zenith is the top colour");
+        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), -89.0f));  // look down
+        mirror.applyCamera(cam, view);
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("gradient sky nadir", img);
+        CHECK(centre(img).b > 0.7f && centre(img).g < 0.35f, "gradient sky nadir is the bottom colour");
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);
