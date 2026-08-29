@@ -1,0 +1,60 @@
+# Engine abstraction tests — headless, framework-free, link JahshakaEngine ONLY.
+#
+# Runtime requirements (both documented in spikes/headless-vulkan/README.md):
+#  * A reachable X server (DISPLAY=:0, XWayland or Xvfb) even though every test is
+#    offscreen: Ogre's VulkanXcbSupport connects at PLUGIN LOAD and throws if it
+#    cannot. Not fixable from our side.
+#  * A Vulkan driver. For a no-GPU CI box the same tests pass under lavapipe
+#    (~30 s per test):  VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json
+#  * Backend::Null is deliberately untested: the NULL RenderSystem cannot create
+#    the RTT depth buffer and its readback ticket never sets TextureBox::data.
+#
+# The teardown defect this suite guards (a MeshPtr outliving Root) reproduced in
+# only 3 of 9 plain runs, so a single green run proves little:
+#     ctest --repeat until-fail:5 --output-on-failure
+# JAHSHAKA_ASAN=ON adds a second, sanitised build of the suite (test_engine_asan)
+# compiled straight from the backend sources, leaving the app's engine library alone.
+
+function(jahshaka_engine_test target)
+    add_executable(${target} test_engine.cpp ${ARGN})
+    # Never Qt: the root sets CMAKE_AUTOMOC ON globally.
+    set_target_properties(${target} PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        # Ogre's shared libraries live in the install prefix; nothing else puts it on the path.
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(${target} PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    add_dependencies(${target} JahshakaEngineMedia)
+    add_test(NAME ${target} COMMAND ${target}
+             # The backend writes its log to the working directory.
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(${target} PROPERTIES TIMEOUT 600)
+endfunction()
+
+jahshaka_engine_test(test_engine)
+target_link_libraries(test_engine PRIVATE JahshakaEngine)
+
+option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
+if(JAHSHAKA_ASAN)
+    # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
+    add_library(JahshakaEngineAsan STATIC ${CMAKE_SOURCE_DIR}/engine/src/OgreEngine.cpp)
+    target_include_directories(JahshakaEngineAsan
+        PUBLIC ${CMAKE_SOURCE_DIR}/engine/include PRIVATE ${CMAKE_SOURCE_DIR}/engine/src)
+    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})
+    set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+    target_compile_options(JahshakaEngineAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(JahshakaEngineAsan PUBLIC -fsanitize=address)
+
+    jahshaka_engine_test(test_engine_asan)
+    target_link_libraries(test_engine_asan PRIVATE JahshakaEngineAsan)
+    # LeakSanitizer is OFF: the only leaks it finds (6 allocations, ~4 KB) are inside
+    # libdbus-1, reached from the Vulkan loader's Mesa device-select layer — not ours.
+    # Use-after-free / overflow detection is the point here and stays on.
+    set_tests_properties(test_engine_asan PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    target_compile_options(test_engine_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_engine_asan PRIVATE -fsanitize=address)
+endif()

@@ -70,7 +70,8 @@ int main(int argc, char *argv[])
     bool enginePreviewOnly = false;
     for (int i = 1; i < argc; ++i)
         if (qstrcmp(argv[i], "--engine-preview") == 0) enginePreviewOnly = true;
-    if (enginePreviewOnly)
+    // Only force xcb when the user has not chosen a platform themselves.
+    if (enginePreviewOnly && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "xcb");
 
 #ifdef Q_OS_LINUX

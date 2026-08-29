@@ -2530,9 +2530,17 @@ void MainWindow::setupViewPort()
         wireFramesMenu->addSeparator();
         wireFramesMenu->addAction(enginePreviewAction);
         connect(enginePreviewAction, &QAction::triggered, this, [this]() {
-            auto *dlg = new OgrePreviewDialog(this);
-            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            // ONE dialog for the life of the process: it owns the Engine, which is
+            // one-per-process and (with the current Ogre build) cannot be re-created
+            // after destruction. Closing merely hides it; a second trigger raises it.
+            static OgrePreviewDialog *dlg = nullptr;
+            if (!dlg) {
+                dlg = new OgrePreviewDialog(this);
+                connect(dlg, &QObject::destroyed, this, [] { dlg = nullptr; });
+            }
             dlg->show();
+            dlg->raise();
+            dlg->activateWindow();
         });
     }
     // --------------------------------------------------------------------

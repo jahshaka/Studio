@@ -59,6 +59,7 @@ set(SRCS
     src/globals.cpp 
     src/widgets/sceneviewwidget.cpp 
     src/widgets/engineviewwidget.cpp
+    src/widgets/enginerenderdriver.cpp
     src/dialogs/ogrepreviewdialog.cpp
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
@@ -198,6 +199,7 @@ set(HEADERS
     src/globals.h 
     src/widgets/sceneviewwidget.h 
     src/widgets/engineviewwidget.h
+    src/widgets/enginerenderdriver.h
     src/dialogs/ogrepreviewdialog.h
     src/widgets/assetfavorites.h 
     src/widgets/assetpanel.h 
@@ -364,6 +366,14 @@ set(WIDGETS
 
 include(IncludeOgre)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engine)
+
+# Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
+# enable_testing() at top level, which add_test in a subdirectory requires.
+option(JAHSHAKA_BUILD_TESTS "Build the headless engine test suite" ON)
+if(JAHSHAKA_BUILD_TESTS)
+    include(CTest)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+endif()
 
 set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
 

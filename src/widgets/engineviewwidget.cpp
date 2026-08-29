@@ -1,5 +1,4 @@
 #include "engineviewwidget.h"
-#include <QTimer>
 #include <QResizeEvent>
 
 EngineViewWidget::EngineViewWidget(QWidget *parent) : QWidget(parent)
@@ -15,13 +14,13 @@ EngineViewWidget::EngineViewWidget(QWidget *parent) : QWidget(parent)
     setMinimumSize(160, 120);
 }
 
-EngineViewWidget::~EngineViewWidget() { stopRendering(); }
+EngineViewWidget::~EngineViewWidget() { destroyView(); }
 
-bool EngineViewWidget::createView(jahshaka::engine::Engine *engine,
+bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine> &engine,
                                   const QString &name,
                                   const jahshaka::engine::Colour &background)
 {
-    if (!engine) return false;
+    if (!engine || mView) return false;
     mEngine = engine;
     mView = engine->createView(name.toStdString(),
                                static_cast<jahshaka::engine::NativeWindowHandle>(winId()),
@@ -30,27 +29,34 @@ bool EngineViewWidget::createView(jahshaka::engine::Engine *engine,
     if (mView) {
         // From here the engine owns this region entirely; Qt updates would fight it.
         setUpdatesEnabled(false);
+        mView->setEnabled(isVisible());
     }
     return mView != nullptr;
 }
 
-void EngineViewWidget::startRendering(int intervalMs)
+void EngineViewWidget::destroyView()
 {
-    if (!mEngine) return;
-    if (!mTimer) {
-        mTimer = new QTimer(this);
-        connect(mTimer, &QTimer::timeout, this, [this] { mEngine->renderOneFrame(); });
-    }
-    mTimer->start(intervalMs);
-}
-
-void EngineViewWidget::stopRendering()
-{
-    if (mTimer) mTimer->stop();
+    if (!mView) return;
+    // If the Engine is already gone it took the View with it: nothing to release.
+    if (auto engine = mEngine.lock()) engine->destroyView(mView);
+    mView = nullptr;
+    mEngine.reset();
 }
 
 void EngineViewWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     if (mView) mView->resize(static_cast<unsigned>(width()), static_cast<unsigned>(height()));
+}
+
+void EngineViewWidget::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (mView) mView->setEnabled(true);
+}
+
+void EngineViewWidget::hideEvent(QHideEvent *event)
+{
+    QWidget::hideEvent(event);
+    if (mView) mView->setEnabled(false);
 }

@@ -1,15 +1,35 @@
 #include "ogrepreviewdialog.h"
 #include "../widgets/engineviewwidget.h"
+#include "../widgets/enginerenderdriver.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QTimer>
+#include <QDir>
 #include <QCoreApplication>
 #include <QGuiApplication>
-#include <QtGui/QGuiApplication>
 
 using namespace jahshaka::engine;
+
+EngineConfig OgrePreviewDialog::resolveConfig()
+{
+    EngineConfig cfg;
+    cfg.backend = Backend::Vulkan;
+
+    const QByteArray envPlugins = qgetenv("JAHSHAKA_OGRE_PLUGINS");
+    const QByteArray envMedia   = qgetenv("JAHSHAKA_OGRE_MEDIA");
+    const QString appMedia = QCoreApplication::applicationDirPath() + QStringLiteral("/media/");
+
+    if (!envPlugins.isEmpty())                      cfg.pluginDir = envPlugins.toStdString();
+    else                                            cfg.pluginDir = JAHSHAKA_OGRE_PLUGIN_DIR_DEFAULT;
+
+    if (!envMedia.isEmpty())                        cfg.hlmsMediaDir = envMedia.toStdString();
+    else if (QDir(appMedia + "Hlms/Pbs").exists())  cfg.hlmsMediaDir = appMedia.toStdString();
+    else                                            cfg.hlmsMediaDir = JAHSHAKA_OGRE_MEDIA_DIR_DEFAULT;
+
+    cfg.logFile = "jahshaka-ogre.log";
+    return cfg;
+}
 
 OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
 {
@@ -58,18 +78,18 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
         return;
     }
 
+    EngineConfig cfg = resolveConfig();
     // Hand the engine OUR X connection. Opening a second connection to the same
     // windows causes flicker and lets other windows' content bleed into the viewport.
-    NativeDisplayHandle display = 0;
     if (auto *x11 = qApp->nativeInterface<QNativeInterface::QX11Application>())
-        display = reinterpret_cast<NativeDisplayHandle>(x11->display());
-    if (!display) {
+        cfg.display = reinterpret_cast<NativeDisplayHandle>(x11->display());
+    if (!cfg.display) {
         mStatus->setText(tr("Could not obtain the X11 display connection from Qt."));
         return;
     }
 
     std::string error;
-    mEngine = Engine::create(Backend::Vulkan, display, error);
+    mEngine = Engine::create(cfg, error);
     if (!mEngine) {
         mStatus->setText(tr("Engine failed to start: %1").arg(QString::fromStdString(error)));
         return;
@@ -77,12 +97,13 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
 
     // ORDER: views (windows) first, then scenes — the engine's material and buffer
     // systems only start once a render window exists.
-    mEditorView->createView(mEngine.get(), "editor",  Colour(0.10f, 0.11f, 0.14f));
-    mEffectsView->createView(mEngine.get(), "effects", Colour(0.16f, 0.12f, 0.10f));
+    mEditorView->createView(mEngine, "editor",  Colour(0.10f, 0.11f, 0.14f));
+    mEffectsView->createView(mEngine, "effects", Colour(0.16f, 0.12f, 0.10f));
 
     mEditorScene = mEngine->createScene("editor");
     if (!mEditorScene) {
-        mStatus->setText(tr("Scene creation failed — no render window was created."));
+        mStatus->setText(tr("Scene creation failed: %1")
+                             .arg(QString::fromStdString(mEngine->lastError())));
         return;
     }
     mEditorScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
@@ -90,18 +111,19 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     mCube = mEditorScene->addTestCube(Colour(0.85f, 0.35f, 0.15f), 0.85f, 0.25f);
 
     mEffectsScene = mEngine->createScene("effects");
-    mEffectsScene->setAmbient(Colour(0.20f, 0.22f, 0.30f), Colour(0.10f, 0.12f, 0.16f));
-    mEffectsScene->addDirectionalLight(Vec3(0.4f, -0.8f, 0.35f), 3.14159f);
-    mCube2 = mEffectsScene->addTestCube(Colour(0.20f, 0.55f, 0.85f), 0.10f, 0.55f);
-
-    if (auto *v = mEditorView->view())  v->setScene(mEditorScene);
-    if (auto *v = mEffectsView->view()) v->setScene(mEffectsScene);
+    if (mEffectsScene) {
+        mEffectsScene->setAmbient(Colour(0.20f, 0.22f, 0.30f), Colour(0.10f, 0.12f, 0.16f));
+        mEffectsScene->addDirectionalLight(Vec3(0.4f, -0.8f, 0.35f), 3.14159f);
+        mCube2 = mEffectsScene->addTestCube(Colour(0.20f, 0.55f, 0.85f), 0.10f, 0.55f);
+    }
 
     if (auto *v = mEditorView->view()) {
+        v->setScene(mEditorScene);
         v->setCameraPosition(Vec3(2.6f, 1.9f, 3.4f));
         v->lookAt(Vec3(0.0f, 0.0f, 0.0f));
     }
     if (auto *v = mEffectsView->view()) {
+        v->setScene(mEffectsScene);
         v->setCameraPosition(Vec3(-3.0f, 2.6f, -2.2f));
         v->lookAt(Vec3(0.0f, 0.0f, 0.0f));
     }
@@ -109,14 +131,21 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     mStatus->setText(tr("Backend: %1   —   2 windows, 2 independent scenes")
                          .arg(QString::fromStdString(mEngine->backendName())));
 
-    // One timer drives the engine; renderOneFrame() draws every view.
-    auto *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, [this]() {
+    // The ONE render loop. renderOneFrame() draws every enabled view.
+    mDriver = new EngineRenderDriver(mEngine.get(), this);
+    connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() {
         if (mEditorScene)  mEditorScene->rotateNode(mCube,  0.012f, 0.0f, 0.005f);
         if (mEffectsScene) mEffectsScene->rotateNode(mCube2, 0.0f, 0.010f, 0.0f);
-        mEngine->renderOneFrame();
     });
-    timer->start(16);
+    mDriver->start(16);
 }
 
-OgrePreviewDialog::~OgrePreviewDialog() = default;
+OgrePreviewDialog::~OgrePreviewDialog()
+{
+    // Deterministic teardown: stop the loop, release the views while the Engine is
+    // alive, then the Engine (which takes the scenes with it).
+    if (mDriver) mDriver->stop();
+    if (mEditorView)  mEditorView->destroyView();
+    if (mEffectsView) mEffectsView->destroyView();
+    mEngine.reset();
+}

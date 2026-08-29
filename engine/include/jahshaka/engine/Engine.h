@@ -6,6 +6,15 @@
 // backend must not touch a single file under src/.
 //
 // Interface derived from what Studio DOES, not from what any engine offers.
+//
+// THREAD AFFINITY — no exceptions: every call on Engine, Scene and View, including
+// destruction, must happen on the thread that called Engine::create(). The backend
+// owns a single device and is not internally synchronised. Background work
+// (thumbnails, imports) posts to that thread; it never calls in directly.
+//
+// ERRORS: no backend exception ever escapes this boundary. A failing call returns
+// null/false and the reason is available from Engine::lastError() until the next
+// failing call overwrites it.
 #include <memory>
 #include <string>
 #include "Types.h"
@@ -16,55 +25,103 @@ class Scene;
 class View;
 
 /// A renderable scene. Views draw it; several Views may share one, or each may own one.
+/// Owned by the Engine: destroy with Engine::destroyScene().
 class Scene {
 public:
     virtual ~Scene() = default;
+    virtual const std::string &name() const = 0;
     virtual void        setAmbient(const Colour &upper, const Colour &lower) = 0;
     virtual NodeId      addDirectionalLight(const Vec3 &direction, float power) = 0;
-    /// Unit cube with a PBR metallic-roughness material. Placeholder until the
-    /// asset pipeline lands; proves the material path end to end.
+    /// Unit cube with a PBR metallic-roughness material. Proves the material path end to end.
+    // TEMPORARY — replaced by mesh loading in step 3 of VIEWPORT_MIGRATION_PLAN.md
     virtual NodeId      addTestCube(const Colour &albedo, float metalness, float roughness) = 0;
+    /// Removes a node and everything it uniquely owns (mesh, material). Unknown or
+    /// already-removed ids are ignored and return false.
+    virtual bool        removeNode(NodeId) = 0;
     virtual void        setNodePosition(NodeId, const Vec3 &) = 0;
     virtual void        setNodeScale(NodeId, const Vec3 &) = 0;
     virtual void        rotateNode(NodeId, float yawRadians, float pitchRadians, float rollRadians) = 0;
 };
 
-/// A view onto a Scene, rendering into a native window supplied by the host.
+/// A view onto a Scene, rendering into a native window supplied by the host or
+/// into an offscreen texture. Owned by the Engine: destroy with Engine::destroyView().
 class View {
 public:
     virtual ~View() = default;
+    virtual const std::string &name() const = 0;
     /// Binds a Scene to this View. Call after createScene(); a View renders nothing
-    /// until a Scene is attached.
-    virtual void setScene(Scene *) = 0;
+    /// until a Scene is attached. A View holds at most one Scene: binding a second
+    /// while one is attached fails (false, lastError()). Pass null to detach.
+    virtual bool setScene(Scene *) = 0;
+    virtual Scene *scene() const = 0;
     virtual void setCameraPosition(const Vec3 &) = 0;
     virtual void lookAt(const Vec3 &) = 0;
-    virtual void setRenderFlags(const RenderFlags &) = 0;
-    virtual RenderFlags renderFlags() const = 0;
+    /// A disabled View is skipped by renderOneFrame(). Hidden viewports MUST be
+    /// disabled — the backend otherwise keeps drawing them at full cost.
+    virtual void setEnabled(bool) = 0;
+    virtual bool isEnabled() const = 0;
     virtual void resize(unsigned width, unsigned height) = 0;
+    virtual unsigned width() const = 0;
+    virtual unsigned height() const = 0;
+    virtual bool isOffscreen() const = 0;
+    /// Reads this View's rendered pixels back to the CPU. Offscreen Views only —
+    /// returns false for on-screen windows. This is the thumbnail path, and what
+    /// makes the engine testable without a window.
+    virtual bool readPixels(Image &out) = 0;
 };
 
-/// Owns the device and every Scene and View. One per process.
+/// Owns the device and every Scene and View.
+///
+/// ONE PER PROCESS. The backend is a process-wide singleton; create() refuses to
+/// make a second Engine while one is alive (returns null + error). Create it once
+/// and keep it: with the current Ogre-Next build, creating a NEW Engine after the
+/// first is destroyed fails (the Vulkan plugin's static extension list survives
+/// unload — OgreVulkanDevice.cpp:88, upstream-reportable), so treat the Engine as
+/// living until the process exits.
+///
+/// LIFETIME CONTRACT: every View and Scene pointer handed out is owned by the
+/// Engine and dies with it. Hosts that cache a View* (e.g. a widget) must call
+/// destroyView() before the Engine is destroyed, or must check the Engine is still
+/// alive before touching the pointer — see EngineViewWidget for the pattern.
 class Engine {
 public:
     virtual ~Engine() = default;
 
     /// Creates the engine. Returns null on failure and fills `error`.
-    static std::unique_ptr<Engine> create(Backend, NativeDisplayHandle, std::string &error);
+    static std::unique_ptr<Engine> create(const EngineConfig &, std::string &error);
+    /// True while an Engine exists in this process.
+    static bool isAlive();
 
     /// ORDER MATTERS. A View must be created before any Scene: the underlying engine
-    /// only starts its material and buffer systems when the first render window
+    /// only starts its material and buffer systems when the first render target
     /// exists, and creating a Scene before that dereferences null.
     ///   createView(...)  ->  createScene(...)  ->  view->setScene(scene)
+    /// Names must be unique among live Views; a duplicate returns null (lastError()).
     virtual View  *createView(const std::string &name,
                               NativeWindowHandle, unsigned width, unsigned height,
                               const Colour &background) = 0;
-    /// Returns null if called before the first createView().
-    virtual Scene *createScene(const std::string &name) = 0;
+    /// An offscreen View: renders to a texture instead of a window. Needs no native
+    /// handle, so it works headless. Used for thumbnails, asset previews and tests.
+    virtual View  *createOffscreenView(const std::string &name,
+                                       unsigned width, unsigned height,
+                                       const Colour &background) = 0;
+    /// Releases the View's window/texture and camera. Any Scene it showed survives.
+    /// Null or unknown pointers are ignored.
+    virtual void   destroyView(View *) = 0;
 
-    /// Draws every View once. The host owns the loop and calls this.
+    /// Returns null if called before the first createView()/createOffscreenView(),
+    /// or if the name is already in use (lastError()).
+    virtual Scene *createScene(const std::string &name) = 0;
+    /// Destroys the Scene and every node, mesh and material it owns. Views bound to
+    /// it are detached first (they stay alive, showing nothing).
+    virtual void   destroyScene(Scene *) = 0;
+
+    /// Draws every enabled View once. The host owns the loop and calls this.
     virtual void renderOneFrame() = 0;
 
     virtual std::string backendName() const = 0;
+    /// Reason for the most recent failure; empty if none.
+    virtual const std::string &lastError() const = 0;
 };
 
 }}  // namespace jahshaka::engine
