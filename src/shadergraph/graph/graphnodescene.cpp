@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "graphnodescene.h"
+#include "nodestyle.h"
 #include "../nodes/test.h"
 #include "core/project.h"
 
@@ -137,12 +138,7 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 QMenu *GraphNodeScene::createContextMenu(float x, float y)
 {
 	auto menu = new QMenu();
-    menu->setStyleSheet(
-        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-        "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-        "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-        "QMenu::item : disabled { color: #555; }"
-    );
+	menu->setStyleSheet(NodeStyle::menuStyleSheet);
 
 	/*
 	for(auto key : nodeGraph->modelFactories.keys()) {
@@ -183,12 +179,7 @@ QMenu *GraphNodeScene::createContextMenu(float x, float y)
 QMenu * GraphNodeScene::removeConnectionContextMenu(float x, float y)
 {
 	auto menu = new QMenu();
-    menu->setStyleSheet(
-        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-        "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-        "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-        "QMenu::item : disabled { color: #555; }"
-    );
+	menu->setStyleSheet(NodeStyle::menuStyleSheet);
 	auto sock = getSocketAt(x, y);
 
 	auto getAppropriateText = [&](SocketConnection *conn, int i) {

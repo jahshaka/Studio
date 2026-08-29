@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "listwidget.h"
+#include "../graph/nodestyle.h"
 #include <QDrag>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -178,12 +179,7 @@ void ListWidget::customContextMenu(QPoint pos)
     auto guid = index.data(MODEL_GUID_ROLE).toString();
 
     QMenu menu;
-    menu.setStyleSheet(
-        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-        "QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-        "QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-        "QMenu::item : disabled { color: #555; }"
-    );
+    menu.setStyleSheet(NodeStyle::menuStyleSheet);
 
 
     if(shaderContextMenuAllowed){
