@@ -8,6 +8,8 @@
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QIcon>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <cmath>
@@ -17,6 +19,7 @@
 #include "shadergraph/nodes/pbrmasternode.h"
 #include "shadergraph/nodes/test.h" // FloatNodeModel, ColorPickerNode, PropertyNode, SurfaceMasterNode
 #include "shadergraph/models/properties.h"
+#include "shadergraph/models/library.h"
 #include "shadergraph/core/pbrgraphevaluator.h"
 
 #include "irisgl/src/materials/pbrmaterial.h"
@@ -179,6 +182,46 @@ int main(int argc, char** argv)
         auto col = result.values["baseColor"].toObject();
         CHECK(near(col["r"].toDouble(), 0.2) && near(col["g"].toDouble(), 0.4) && near(col["b"].toDouble(), 0.6),
               "graph 4: Diffuse folded to baseColor");
+    }
+
+    // ---- graph 5: the shipped Glass/Silver preset graphs (drawer sync) -------
+    // app/shadergraph/{glass,silver}.effect are the module-side siblings of the
+    // drawer's Glass PBR / Silver PBR materials: they must deserialize through
+    // the real loader path and fold to the drawer's values.
+    {
+        auto lib = new NodeLibrary();
+        lib->addNode("float", "Float", QIcon(), NodeCategory::Constants,
+                     []() -> NodeModel * { return new FloatNodeModel(); });
+        lib->addNode("color", "Color", QIcon(), NodeCategory::Constants,
+                     []() -> NodeModel * { return new ColorPickerNode(); });
+
+        auto loadEffect = [&](const char *name) -> NodeGraph * {
+            QFile f(QString(JAHSHAKA_TEST_APP_DIR) + name);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return nullptr;
+            const QJsonObject obj = QJsonDocument::fromJson(f.readAll()).object();
+            return NodeGraph::deserialize(obj["shadergraph"].toObject(), lib);
+        };
+
+        auto glass = loadEffect("glass.effect");
+        CHECK(glass && glass->getMasterNode(), "glass.effect deserializes with a master node");
+        if (glass) {
+            auto result = PbrGraphEvaluator::evaluate(glass);
+            CHECK(result.hasPbrMaster, "glass: PBR master");
+            auto col = result.values["baseColor"].toObject();
+            CHECK(near(col["r"].toDouble(), 0.933) && near(col["g"].toDouble(), 0.957) && near(col["b"].toDouble(), 0.973),
+                  "glass: base colour matches the drawer's Glass PBR");
+            CHECK(near(result.values["roughness"].toDouble(), 0.05), "glass: roughness 0.05");
+            CHECK(near(result.values["alpha"].toDouble(), 0.3), "glass: alpha 0.3");
+        }
+
+        auto silver = loadEffect("silver.effect");
+        CHECK(silver && silver->getMasterNode(), "silver.effect deserializes with a master node");
+        if (silver) {
+            auto result = PbrGraphEvaluator::evaluate(silver);
+            CHECK(result.hasPbrMaster, "silver: PBR master");
+            CHECK(near(result.values["metallic"].toDouble(), 1.0), "silver: metallic 1.0");
+            CHECK(near(result.values["roughness"].toDouble(), 0.22), "silver: roughness 0.22");
+        }
     }
 
     QFile::remove(texPath);

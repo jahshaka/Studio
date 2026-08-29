@@ -1,0 +1,88 @@
+{
+    "name": "Glass",
+    "type": "shadergraph",
+    "builtin": false,
+    "surfaceType": "pbr",
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "fragment_shader": "shader.frag",
+    "blendMode": "Blend",
+    "cullMode": "Back",
+    "renderLayer": "Transparent",
+    "zWrite": true,
+    "depthTest": true,
+    "fog": true,
+    "castShadows": false,
+    "receiveShadows": true,
+    "lighting": true,
+    "uniforms": [],
+    "shadergraph": {
+        "masternode": "9a1a2c30-0001-4a5e-9c1d-33e01e0000ff",
+        "nodes": [
+            {
+                "id": "9a1a2c30-0001-4a5e-9c1d-33e01e0000ff",
+                "type": "PbrMaterial",
+                "value": "",
+                "x": 260,
+                "y": 20
+            },
+            {
+                "id": "9a1a2c30-0002-4a5e-9c1d-33e01e0000aa",
+                "type": "color",
+                "value": { "r": 0.933, "g": 0.957, "b": 0.973, "a": 1.0 },
+                "x": -140,
+                "y": -60
+            },
+            {
+                "id": "9a1a2c30-0003-4a5e-9c1d-33e01e0000ab",
+                "type": "float",
+                "value": 0.05,
+                "x": -140,
+                "y": 120
+            },
+            {
+                "id": "9a1a2c30-0004-4a5e-9c1d-33e01e0000ac",
+                "type": "float",
+                "value": 0.3,
+                "x": -140,
+                "y": 260
+            }
+        ],
+        "connections": [
+            {
+                "id": "9a1a2c30-1001-4a5e-9c1d-33e01e0000c1",
+                "leftNodeId": "9a1a2c30-0002-4a5e-9c1d-33e01e0000aa",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "9a1a2c30-0001-4a5e-9c1d-33e01e0000ff",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "9a1a2c30-1002-4a5e-9c1d-33e01e0000c2",
+                "leftNodeId": "9a1a2c30-0003-4a5e-9c1d-33e01e0000ab",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "9a1a2c30-0001-4a5e-9c1d-33e01e0000ff",
+                "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "9a1a2c30-1003-4a5e-9c1d-33e01e0000c3",
+                "leftNodeId": "9a1a2c30-0004-4a5e-9c1d-33e01e0000ac",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "9a1a2c30-0001-4a5e-9c1d-33e01e0000ff",
+                "rightNodeSocketIndex": 6
+            }
+        ],
+        "properties": [],
+        "settings": {
+            "name": "Glass",
+            "blendMode": "Blend",
+            "cullMode": "Back",
+            "renderLayer": "Transparent",
+            "acceptLighting": true,
+            "castShadow": false,
+            "receiveShadow": true,
+            "depthTest": true,
+            "fog": true,
+            "zWrite": true
+        },
+        "materialGuid": ""
+    }
+}

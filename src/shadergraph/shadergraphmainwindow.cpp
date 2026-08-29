@@ -850,6 +850,19 @@ void MainWindow::configureAssetsDock()
 		presets->addToListWidget(item);
 	}
 
+	// The starters too: the editor's materials drawer ships Default/Basic/
+	// Texture PBR presets, so the Presets tab offers the same set (preset sync).
+	for (auto tile : CreateNewDialog::getStarterList()) {
+		auto item = new QListWidgetItem;
+		item->setText(tile.name);
+		item->setSizeHint(defaultItemSize);
+		item->setTextAlignment(Qt::AlignBottom);
+		item->setIcon(QIcon(MaterialHelper::assetPath(tile.iconPath)));
+		item->setData(MODEL_TYPE_ROLE, "presets");
+		item->icon().addPixmap(QPixmap(":/icons.shader_overlay.png"));
+		presets->addToListWidget(item);
+	}
+
 	presets->isResizable = true;
 	effects->isResizable = true;
 	
@@ -1449,7 +1462,7 @@ GraphNodeScene *MainWindow::createNewScene()
 	});
 
 	connect(scene, &GraphNodeScene::loadGraphFromPreset, [=](QString name) {
-		for (auto preset : CreateNewDialog::getPresetList()) {
+		for (auto preset : CreateNewDialog::getPresetList() + CreateNewDialog::getStarterList()) {
 			if (name == preset.name) {
 				loadGraphFromTemplate(preset);
 			}
@@ -1770,7 +1783,7 @@ void MainWindow::configureConnections()
     });
 
 	connect(presets, &QListWidget::itemDoubleClicked, [=](QListWidgetItem *item) {
-		for (auto preset : CreateNewDialog::getPresetList()) {
+		for (auto preset : CreateNewDialog::getPresetList() + CreateNewDialog::getStarterList()) {
 			if (item->data(Qt::DisplayRole).toString() == preset.name) {
 				loadGraphFromTemplate(preset);
 			}

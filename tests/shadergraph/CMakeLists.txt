@@ -23,7 +23,8 @@ add_executable(test_pbr_evaluator
 set_target_properties(test_pbr_evaluator PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_definitions(test_pbr_evaluator PRIVATE EFFECT_BUILD_AS_LIB)
+target_compile_definitions(test_pbr_evaluator PRIVATE EFFECT_BUILD_AS_LIB
+    JAHSHAKA_TEST_APP_DIR="${CMAKE_SOURCE_DIR}/app/shadergraph/")
 target_include_directories(test_pbr_evaluator PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src

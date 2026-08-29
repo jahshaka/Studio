@@ -354,6 +354,23 @@ QList<NodeGraphPreset> CreateNewDialog::getPresetList()
 	presetsList.append(graphPreset);
 	graphPreset.list.clear();
 
+	// Preset sync with the editor's materials drawer (which ships Glass PBR and
+	// Silver PBR): simple PBR graphs — colour + metallic/roughness (+ alpha for
+	// glass) into the PbrMaterial master. Thumbnails already ship with the app.
+	graphPreset.name = "Glass";
+	graphPreset.title = "Glass Template";
+	graphPreset.templatePath = "glass.effect";
+	graphPreset.iconPath = "glassThumb.png";
+	presetsList.append(graphPreset);
+	graphPreset.list.clear();
+
+	graphPreset.name = "Silver";
+	graphPreset.title = "Silver Template";
+	graphPreset.templatePath = "silver.effect";
+	graphPreset.iconPath = "silverThumb.png";
+	presetsList.append(graphPreset);
+	graphPreset.list.clear();
+
 	return presetsList;
 }
 

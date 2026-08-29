@@ -121,6 +121,10 @@ namespace Contants
 			{ "00000000-0000-0000-0000-000000002025", "Texture PBR" },
 			{ "00000000-0000-0000-0000-000000002026", "Basic PBR" },
 			{ "00000000-0000-0000-0000-000000002027", "Default PBR" },
+			// PBR-only presets (no legacy sibling). Absent from this table they
+			// got an empty MODEL_GUID_ROLE in the drawer.
+			{ "00000000-0000-0000-0000-000000002028", "Glass PBR" },
+			{ "00000000-0000-0000-0000-000000002029", "Silver PBR" },
          };
 
         QString SHADER_DEFAULT = "00000000-0000-0000-0000-000000000001";
