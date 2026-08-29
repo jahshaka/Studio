@@ -39,6 +39,7 @@ For more information see the LICENSE file
 #include <QtAlgorithms>
 #include <QFile>
 #include <QBuffer>
+#include <functional>
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QTreeWidgetItem>
@@ -203,6 +204,32 @@ void AssetView::closeViewer()
 void AssetView::clearViewer()
 {
 	viewer->clearScene();
+	if (assetNodeTree) assetNodeTree->clear();
+}
+
+void AssetView::populateAssetNodeTree(const QString &guid, int assetType)
+{
+	if (!assetNodeTree) return;
+	assetNodeTree->clear();
+	// Only model assets carry a node-tree blob (SceneWriter JSON).
+	if (guid.isEmpty() || assetType != static_cast<int>(ModelTypes::Object)) return;
+	const QJsonObject root = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
+	if (root.isEmpty()) return;
+
+	std::function<void(const QJsonObject &, QTreeWidgetItem *)> add =
+	    [&](const QJsonObject &nodeObj, QTreeWidgetItem *parent) {
+		auto *item = new QTreeWidgetItem;
+		QString name = nodeObj["name"].toString();
+		if (name.isEmpty()) name = nodeObj["type"].toString("node");
+		item->setText(0, name);
+		item->setToolTip(0, nodeObj["type"].toString());
+		if (parent) parent->addChild(item);
+		else assetNodeTree->addTopLevelItem(item);
+		for (const auto &childVal : nodeObj["children"].toArray())
+			add(childVal.toObject(), item);
+	};
+	add(root, nullptr);
+	assetNodeTree->expandAll();
 }
 
 QString AssetView::getAssetType(int id)
@@ -352,10 +379,27 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
         treeWidget->expandItem(rootItem);
     });
 
+	// The selected asset's own node tree (the model's scene graph, from its
+	// stored node-tree blob). Read-only for now; later: delete parts.
+	assetNodeTree = new QTreeWidget;
+	assetNodeTree->setObjectName(QStringLiteral("AssetNodeTree"));
+	assetNodeTree->setColumnCount(1);
+	assetNodeTree->setHeaderLabel("Asset Contents");
+	assetNodeTree->setAlternatingRowColors(true);
+
+	// Left column split: top half keeps the collections tree (future asset
+	// groups), bottom half shows the selected asset's contents.
+	auto leftSplit = new QSplitter(Qt::Vertical);
+	leftSplit->setHandleWidth(1);
+	leftSplit->addWidget(treeWidget);
+	leftSplit->addWidget(assetNodeTree);
+	leftSplit->setStretchFactor(0, 1);
+	leftSplit->setStretchFactor(1, 1);
+
     navLayout->addWidget(localAssetsButton);
 	navLayout->addWidget(onlineAssetsButton);
 	navLayout->addSpacing(12);
-	navLayout->addWidget(treeWidget);
+	navLayout->addWidget(leftSplit);
 	auto collectionButton = new QPushButton("Create Collection");
 	collectionButton->setStyleSheet("font-size: 12px; padding: 8px;");
 	navLayout->addWidget(collectionButton);
@@ -698,6 +742,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		updateAsset->setVisible(false);
 
 		fetchMetadata(gridItem);
+
+		populateAssetNodeTree(gridItem->metadata["guid"].toString(),
+		                      gridItem->metadata["type"].toInt());
 
 		if (!gridItem->metadata.isEmpty()) {
 

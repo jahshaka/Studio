@@ -160,6 +160,10 @@ private:
 	QComboBox *backdropColor;
 
     QTreeWidget *treeWidget;
+    /// Bottom half of the left column: the selected asset's own node tree
+    /// (the model's scene graph, read from its stored node-tree blob).
+    QTreeWidget *assetNodeTree = nullptr;
+    void populateAssetNodeTree(const QString &guid, int assetType);
 	QTreeWidgetItem *rootItem;
 	QVector<int> collections;
 
