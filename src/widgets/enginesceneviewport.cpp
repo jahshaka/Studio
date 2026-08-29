@@ -1,6 +1,8 @@
 #include "enginesceneviewport.h"
 
 #include <QShowEvent>
+#include <QMouseEvent>
+#include "../editor/scenepicker.h"
 #include <QVector3D>
 #include <QQuaternion>
 
@@ -51,6 +53,25 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
     ensureEngineScene();
+}
+
+iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject)
+{
+    if (!mScene || !mEditorCam) return iris::SceneNodePtr();
+    QVector3D a, b;
+    ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
+    const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition());
+    const ScenePick best = ScenePicker::nearest(hits);
+    return ScenePicker::resolveRootSelection(best.node, mSelectedNode, selectRootObject);
+}
+
+void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
+{
+    EngineViewWidget::mousePressEvent(e);
+    setFocus();
+    if (e->button() != Qt::LeftButton) return;
+    iris::SceneNodePtr picked = pickAt(e->position(), true);
+    if (picked) setSelectedNode(picked); else clearSelectedNode();
 }
 
 void EngineSceneViewport::setScene(iris::ScenePtr scene)

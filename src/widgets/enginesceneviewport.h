@@ -91,8 +91,12 @@ public:
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
     void syncFrame();
 
+    /// Picks the document object under a viewport pixel (legacy selection rule).
+    iris::SceneNodePtr pickAt(const QPointF &point, bool selectRootObject = true);
+
 protected:
     void showEvent(QShowEvent *) override;
+    void mousePressEvent(QMouseEvent *) override;
 
 private:
     bool ensureEngineScene();
