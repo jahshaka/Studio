@@ -16,6 +16,7 @@
 #include "scenegraph/particlesystemnode.h"
 #include "graphics/particle.h"
 #include "graphics/mesh.h"
+#include "graphics/skeleton.h"
 #include "graphics/vertexlayout.h"
 #include "graphics/graphicsdevice.h"   // VertexBuffer / IndexBuffer (CPU copies)
 #include "graphics/material.h"
@@ -58,6 +59,7 @@ void SceneMirror::setSource(iris::ScenePtr scene)
     mHighlightMesh = 0;
     for (MeshId m : mMeshes) mTarget->destroyMesh(m);
     mMeshes.clear();
+    mSkins.clear();
     for (MaterialId m : mMaterials) mTarget->destroyMaterial(m);
     mMaterials.clear();
     for (TextureId t : mTextures) mTarget->destroyTexture(t);
@@ -90,6 +92,7 @@ int SceneMirror::sync()
         visit(child, 0, seen);
     removeMissing(seen);
     reclaimUnused();
+    syncSkinnedMeshes();
     syncHighlight();
     return seen.size();
 }
@@ -453,6 +456,7 @@ void SceneMirror::reclaimUnused()
     if (mHighlightMesh) usedMeshes.insert(mHighlightMesh);
     for (auto it = mMeshes.begin(); it != mMeshes.end();) {
         if (usedMeshes.contains(it.value())) { ++it; continue; }
+        mSkins.remove(it.key());
         mTarget->destroyMesh(it.value()); it = mMeshes.erase(it);
     }
     for (auto it = mMaterials.begin(); it != mMaterials.end();) {
@@ -478,8 +482,23 @@ MeshId SceneMirror::meshFor(iris::Mesh *mesh)
     if (it != mMeshes.constEnd()) return it.value();
     MeshData data;
     if (!toMeshData(mesh, data)) return 0;
+    // A mesh with a skeleton AND bone vertex data is CPU-skinned: the engine mesh
+    // is created updatable and syncSkinnedMeshes pushes posed vertices each time
+    // the document's boneTransforms change. Static meshes keep the immutable path.
+    SkinRec skin;
+    const bool skinned = mesh->hasSkeleton() &&
+                         toSkinData(mesh, skin.boneIndices, skin.boneWeights) &&
+                         skin.boneIndices.size() == data.vertexCount() * 4;
+    data.dynamic = skinned;
     MeshId id = mTarget->createMesh(data);
-    if (id) mMeshes.insert(mesh, id);
+    if (id) {
+        mMeshes.insert(mesh, id);
+        if (skinned) {
+            skin.bindPositions = data.positions;
+            skin.bindNormals   = data.normals;
+            mSkins.insert(mesh, std::move(skin));
+        }
+    }
     return id;
 }
 
@@ -693,6 +712,112 @@ bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
     if (out.normals.size() != out.positions.size()) out.normals.clear();
     if (out.uvs.size() != nv * 2) out.uvs.clear();
     return out.indices.size() >= 3;
+}
+
+// ---- CPU skinning -----------------------------------------------------------------
+// The document already computes per-bone skin matrices (Skeleton::boneTransforms,
+// filled by SceneNode::updateAnimation during play). The legacy GL renderer handed
+// those to a skinning vertex shader; on the engine the mirror applies the identical
+// math on the CPU and pushes the posed vertices through Scene::updateMeshVertices.
+
+bool SceneMirror::toSkinData(iris::Mesh *mesh, std::vector<float> &boneIndices,
+                             std::vector<float> &boneWeights)
+{
+    boneIndices.clear(); boneWeights.clear();
+    if (!mesh) return false;
+    for (const auto &vb : mesh->getVertexBuffers()) {
+        if (!vb || !vb->data) continue;
+        const QList<iris::VertexAttribute> attribs = vb->vertexLayout.getAttribs();
+        if (attribs.isEmpty()) continue;
+        // Both buffers are 4 floats per vertex (mesh.cpp MAX_BONE_INDICES; indices
+        // are stored as floats — the GL shader cast them back with int()).
+        const float *f = reinterpret_cast<const float *>(vb->data);
+        const int floats = vb->dataSize / int(sizeof(float));
+        switch (attribs.first().usage) {
+        case iris::VertexAttribUsage::BoneIndices: boneIndices.assign(f, f + floats); break;
+        case iris::VertexAttribUsage::BoneWeights: boneWeights.assign(f, f + floats); break;
+        default: break;
+        }
+    }
+    return !boneIndices.empty() && boneIndices.size() == boneWeights.size();
+}
+
+void SceneMirror::skinVertices(const QVector<QMatrix4x4> &boneTransforms,
+                               const std::vector<float> &bindPositions,
+                               const std::vector<float> &bindNormals,
+                               const std::vector<float> &boneIndices,
+                               const std::vector<float> &boneWeights,
+                               std::vector<float> &outPositions,
+                               std::vector<float> &outNormals)
+{
+    const size_t nv = bindPositions.size() / 3;
+    const bool haveNormals = bindNormals.size() == bindPositions.size();
+    outPositions = bindPositions;
+    outNormals = haveNormals ? bindNormals : std::vector<float>();
+    if (boneTransforms.isEmpty() || boneIndices.size() < nv * 4 || boneWeights.size() < nv * 4)
+        return;
+    // Flatten each bone's skin matrix to row-major 3x4 (QMatrix4x4 stores
+    // column-major). Row-major keeps the per-vertex loop cache-friendly.
+    const int nb = boneTransforms.size();
+    std::vector<float> mats(size_t(nb) * 12);
+    for (int b = 0; b < nb; ++b) {
+        const float *m = boneTransforms[b].constData();   // column-major
+        float *d = &mats[size_t(b) * 12];
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 4; ++c) d[r * 4 + c] = m[c * 4 + r];
+    }
+    for (size_t v = 0; v < nv; ++v) {
+        const float *bi = &boneIndices[v * 4];
+        const float *bw = &boneWeights[v * 4];
+        const float wsum = bw[0] + bw[1] + bw[2] + bw[3];
+        if (wsum <= 1e-6f) continue;                      // unweighted: stay at bind pose
+        // Weighted sum of bone matrices, then transform — exactly the GL shader
+        // (pbr_material.vert): boneMatrix = sum(u_bones[idx] * weight).
+        float B[12] = { 0 };
+        for (int k = 0; k < 4; ++k) {
+            const int idx = int(bi[k]);
+            if (bw[k] == 0.0f || idx < 0 || idx >= nb) continue;
+            const float w = bw[k];
+            const float *m = &mats[size_t(idx) * 12];
+            for (int j = 0; j < 12; ++j) B[j] += m[j] * w;
+        }
+        const float px = bindPositions[v*3], py = bindPositions[v*3+1], pz = bindPositions[v*3+2];
+        outPositions[v*3]   = B[0]*px + B[1]*py + B[2]*pz  + B[3];
+        outPositions[v*3+1] = B[4]*px + B[5]*py + B[6]*pz  + B[7];
+        outPositions[v*3+2] = B[8]*px + B[9]*py + B[10]*pz + B[11];
+        if (haveNormals) {
+            const float nx = bindNormals[v*3], ny = bindNormals[v*3+1], nz = bindNormals[v*3+2];
+            float ox = B[0]*nx + B[1]*ny + B[2]*nz;
+            float oy = B[4]*nx + B[5]*ny + B[6]*nz;
+            float oz = B[8]*nx + B[9]*ny + B[10]*nz;
+            const float len = std::sqrt(ox*ox + oy*oy + oz*oz);
+            if (len > 1e-8f) { ox /= len; oy /= len; oz /= len; }
+            outNormals[v*3] = ox; outNormals[v*3+1] = oy; outNormals[v*3+2] = oz;
+        }
+    }
+}
+
+void SceneMirror::syncSkinnedMeshes()
+{
+    for (auto it = mSkins.begin(); it != mSkins.end();) {
+        iris::Mesh *mesh = it.key();
+        const auto midIt = mMeshes.constFind(mesh);
+        if (midIt == mMeshes.constEnd()) { it = mSkins.erase(it); continue; }
+        iris::SkeletonPtr skel = mesh->getSkeleton();
+        if (skel) {
+            const QVector<QMatrix4x4> &pose = skel->boneTransforms;
+            // Only push when the pose actually changed (paused/edit-mode scenes
+            // pay nothing after the first frame).
+            if (pose != it->lastPose) {
+                std::vector<float> positions, normals;
+                skinVertices(pose, it->bindPositions, it->bindNormals,
+                             it->boneIndices, it->boneWeights, positions, normals);
+                if (mTarget->updateMeshVertices(midIt.value(), positions, normals))
+                    it->lastPose = pose;
+            }
+        }
+        ++it;
+    }
 }
 
 void SceneMirror::applyEnvironment(View *view, Engine *engine)

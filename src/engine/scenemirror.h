@@ -57,6 +57,21 @@ public:
     /// Converts a document mesh to engine MeshData. Public so importers and tests
     /// can use the same conversion. Returns false if the mesh has no geometry.
     static bool toMeshData(iris::Mesh *mesh, jahshaka::engine::MeshData &out);
+    /// Extracts the mesh's per-vertex bone data (4 float indices + 4 float weights
+    /// per vertex, the layout the legacy GL skinning shader consumed). False when
+    /// the mesh carries no bone buffers. Public for tests.
+    static bool toSkinData(iris::Mesh *mesh, std::vector<float> &boneIndices,
+                           std::vector<float> &boneWeights);
+    /// CPU-skins bind-pose vertices with the skeleton's live boneTransforms —
+    /// exactly the legacy GL shader's math (weighted sum of bone matrices).
+    /// bindNormals/outNormals may be empty. Static and public for tests.
+    static void skinVertices(const QVector<QMatrix4x4> &boneTransforms,
+                             const std::vector<float> &bindPositions,
+                             const std::vector<float> &bindNormals,
+                             const std::vector<float> &boneIndices,
+                             const std::vector<float> &boneWeights,
+                             std::vector<float> &outPositions,
+                             std::vector<float> &outNormals);
     /// Pushes a world matrix onto an engine node as TRS (used by overlays too).
     static void pushTransform(jahshaka::engine::Scene *scene, jahshaka::engine::NodeId node, const QMatrix4x4 &world);
     /// The engine mesh already created for a document mesh, or 0.
@@ -103,6 +118,11 @@ private:
     /// Frees engine meshes/materials no live entry references (asset browsing would
     /// otherwise grow them for the life of the process; pointer keys could alias).
     void reclaimUnused();
+    /// Per-frame CPU skinning: for every mirrored mesh with a skeleton, when the
+    /// document's boneTransforms changed since the last push, recompute skinned
+    /// positions/normals and upload them via Scene::updateMeshVertices. Meshes
+    /// without a skeleton never enter this path (they stay immutable).
+    void syncSkinnedMeshes();
     jahshaka::engine::MeshId     meshFor(iris::Mesh *mesh);
     jahshaka::engine::MaterialId materialFor(iris::Material *material);
     void syncTextures(Entry &e, iris::Material *material);
@@ -117,6 +137,14 @@ private:
     iris::ScenePtr           mSource;
     QHash<long, Entry>       mEntries;         // keyed by iris SceneNode::nodeId
     QHash<iris::Mesh *, jahshaka::engine::MeshId> mMeshes;
+    /// CPU-skinning state per skinned document mesh (bind-pose copies + bone data,
+    /// captured once at mesh creation; lastPose skips redundant uploads).
+    struct SkinRec {
+        std::vector<float> bindPositions, bindNormals;
+        std::vector<float> boneIndices, boneWeights;   // 4 of each per vertex
+        QVector<QMatrix4x4> lastPose;
+    };
+    QHash<iris::Mesh *, SkinRec> mSkins;
     QHash<iris::Material *, jahshaka::engine::MaterialId> mMaterials;
     QHash<QString, jahshaka::engine::TextureId> mTextures;
     QHash<QString, jahshaka::engine::TextureId> mIconTextures;   // light icon glyphs (Qt resources)
