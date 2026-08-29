@@ -12,7 +12,7 @@ target_include_directories(test_scene_mirror PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/src/assimp/include ${CMAKE_BINARY_DIR}/irisgl/src/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/src/bullet3/src)
 target_compile_definitions(test_scene_mirror PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}" JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_scene_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_scene_mirror JahshakaEngineMedia)
 add_test(NAME mirror.document_to_engine COMMAND test_scene_mirror WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

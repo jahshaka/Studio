@@ -100,19 +100,19 @@ void EnginePlayerView::resizeEvent(QResizeEvent *e)
 
 void EnginePlayerView::mousePressEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mousePressEvent(e);
+    e->accept();   // never let the press propagate to a container filter
     mScene->playback()->mousePressEvent(e);
 }
 
 void EnginePlayerView::mouseMoveEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mouseMoveEvent(e);
+    e->accept();   // never let the press propagate to a container filter
     mScene->playback()->mouseMoveEvent(e);
 }
 
 void EnginePlayerView::mouseReleaseEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mouseReleaseEvent(e);
+    e->accept();   // never let the press propagate to a container filter
     mScene->playback()->mouseReleaseEvent(e);
 }
 

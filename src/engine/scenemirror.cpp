@@ -19,6 +19,8 @@
 #include "graphics/material.h"
 #include "materials/pbrmaterial.h"
 #include "materials/defaultmaterial.h"
+#include "materials/custommaterial.h"
+#include "core/property.h"
 #include "graphics/texture2d.h"
 #include "graphics/shadowmap.h"
 #include <QFileInfo>
@@ -81,6 +83,7 @@ int SceneMirror::sync()
     for (auto &child : mSource->getRootNode()->children)
         visit(child, 0, seen);
     removeMissing(seen);
+    reclaimUnused();
     syncHighlight();
     return seen.size();
 }
@@ -226,7 +229,7 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
             MeshId m = meshFor(mesh);
             MaterialId mat = materialFor(material);
             if (m && mat && mTarget->attachMesh(e.node, m, mat)) {
-                e.hasMesh = true; e.material = mat; e.materialPtr = material;
+                e.hasMesh = true; e.material = mat; e.materialPtr = material; e.mesh = m; e.meshPtr = mesh;
                 e.textureSignature.clear();
                 syncTextures(e, material);
             }
@@ -245,8 +248,26 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
         syncLightWires(e, light.data());
     }
 
+    // `e` is a reference into a QHash: the recursion inserts entries and QHash does not
+    // keep value references stable across inserts (use-after-free under ASan). Copy first.
+    const NodeId self = e.node;
     for (auto &child : node->children)
-        visit(child, e.node, seen);
+        visit(child, self, seen);
+}
+
+void SceneMirror::reclaimUnused()
+{
+    QSet<MeshId> usedMeshes; QSet<MaterialId> usedMaterials;
+    for (const Entry &e : mEntries) { if (e.mesh) usedMeshes.insert(e.mesh); if (e.material) usedMaterials.insert(e.material); }
+    if (mHighlightMesh) usedMeshes.insert(mHighlightMesh);
+    for (auto it = mMeshes.begin(); it != mMeshes.end();) {
+        if (usedMeshes.contains(it.value())) { ++it; continue; }
+        mTarget->destroyMesh(it.value()); it = mMeshes.erase(it);
+    }
+    for (auto it = mMaterials.begin(); it != mMaterials.end();) {
+        if (usedMaterials.contains(it.value())) { ++it; continue; }
+        mTarget->destroyMaterial(it.value()); it = mMaterials.erase(it);
+    }
 }
 
 void SceneMirror::removeMissing(const QSet<long> &seen)
@@ -311,19 +332,37 @@ void SceneMirror::syncTextures(Entry &e, iris::Material *material)
         { "u_metallicMap",   PbrTextureSlot::Metalness, false }, { "u_roughnessMap",   PbrTextureSlot::Roughness, false },
         { "u_emissiveMap",   PbrTextureSlot::Emissive,  true  },
     };
-    QString signature;
+    // Resolve every candidate path first: the textures map (Texture2D::source), then
+    // shader-graph texture properties (a file path in the property value).
+    struct Bind { PbrTextureSlot slot; QString path; bool srgb; };
+    QVector<Bind> binds;
     for (const Slot &sl : kSlots) {
         auto it = material->textures.constFind(sl.name);
-        if (it != material->textures.constEnd() && it.value()) signature += QString(sl.name) + '=' + it.value()->source + ';';
+        if (it != material->textures.constEnd() && it.value() && !it.value()->source.isEmpty())
+            binds.append({ sl.slot, it.value()->source, sl.srgb });
     }
+    if (auto *custom = dynamic_cast<iris::CustomMaterial *>(material)) {
+        for (iris::Property *prop : custom->properties) {
+            if (!prop || prop->type != iris::PropertyType::Texture) continue;
+            const QString path = prop->getValue().toString();
+            if (path.isEmpty()) continue;
+            if (prop->name == "diffuseTexture" || prop->name == "baseColorMap" || prop->name == "albedoMap")
+                binds.append({ PbrTextureSlot::Albedo, path, true });
+            else if (prop->name == "normalTexture" || prop->name == "normalMap")
+                binds.append({ PbrTextureSlot::Normal, path, false });
+            else if (prop->name == "emissiveMap")
+                binds.append({ PbrTextureSlot::Emissive, path, true });
+        }
+    }
+    QString signature;
+    for (const Bind &b : binds) signature += QString::number(int(b.slot)) + '=' + b.path + ';';
     if (signature == e.textureSignature) return;
     e.textureSignature = signature;
     bool bound[5] = { false, false, false, false, false };
-    for (const Slot &sl : kSlots) {
-        auto it = material->textures.constFind(sl.name);
-        if (it == material->textures.constEnd() || !it.value()) continue;
-        TextureId t = textureFor(it.value()->source, sl.srgb);
-        if (t && mTarget->setPbrTexture(e.material, sl.slot, t)) bound[int(sl.slot)] = true;
+    for (const Bind &b : binds) {
+        if (bound[int(b.slot)]) continue;
+        TextureId t = textureFor(b.path, b.srgb);
+        if (t && mTarget->setPbrTexture(e.material, b.slot, t)) bound[int(b.slot)] = true;
     }
     for (int i = 0; i < 5; ++i) if (!bound[i]) mTarget->setPbrTexture(e.material, PbrTextureSlot(i), 0);
 }
@@ -340,6 +379,32 @@ bool SceneMirror::toPbrParams(iris::Material *material, PbrParams &out)
         const QColor e = pbr->emissiveColor;
         out.emissive  = Colour(e.redF() * pbr->emissiveIntensity, e.greenF() * pbr->emissiveIntensity,
                                e.blueF() * pbr->emissiveIntensity, 1.0f);
+        return true;
+    }
+    if (auto *custom = dynamic_cast<iris::CustomMaterial *>(material)) {
+        // Effects-module materials (Default/Flat/... .shader): read the properties the
+        // shader graph exposes. Colour → albedo, shininess → roughness. Textures are
+        // bound by syncTextures() from the texture properties.
+        bool haveColour = false; float shininess = 20.0f;
+        out.albedo = Colour(0.8f, 0.8f, 0.8f); out.metalness = 0.0f; out.emissive = Colour(0, 0, 0);
+        for (iris::Property *prop : custom->properties) {
+            if (!prop) continue;
+            const QVariant v = prop->getValue();
+            if (prop->type == iris::PropertyType::Color &&
+                (prop->name == "diffuseColor" || prop->name == "color" || prop->name == "albedo" || prop->name == "baseColor")) {
+                const QColor c = v.value<QColor>();
+                out.albedo = Colour(c.redF(), c.greenF(), c.blueF(), 1.0f); haveColour = true;
+            } else if (prop->type == iris::PropertyType::Float && prop->name == "shininess") {
+                shininess = v.toFloat();
+            } else if (prop->type == iris::PropertyType::Float && (prop->name == "roughness" || prop->name == "roughnessFactor")) {
+                out.roughness = v.toFloat();
+            } else if (prop->type == iris::PropertyType::Float && (prop->name == "metallic" || prop->name == "metalness")) {
+                out.metalness = v.toFloat();
+            }
+        }
+        const float shin = std::max(0.0f, std::min(shininess, 128.0f));
+        out.roughness = 1.0f - std::sqrt(shin / 128.0f) * 0.9f;
+        (void)haveColour;
         return true;
     }
     if (auto *def = dynamic_cast<iris::DefaultMaterial *>(material)) {

@@ -320,6 +320,13 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
     if (mCamController) mCamController->onMouseUp(e->button());
 }
 
+void EngineSceneViewport::mouseDoubleClickEvent(QMouseEvent *e)
+{
+    // QWidget's default forwards to mousePressEvent (a second pick + panel rebuild).
+    e->accept();
+    if (mPlaying && mPlayback) mPlayback->mouseDoubleClickEvent(e);
+}
+
 void EngineSceneViewport::wheelEvent(QWheelEvent *e)
 {
     e->accept();

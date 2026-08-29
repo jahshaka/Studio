@@ -95,14 +95,14 @@ void EngineAssetViewer::syncFrame()
 
 void EngineAssetViewer::mousePressEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mousePressEvent(e);
+    e->accept();   // never let the press propagate to a container filter
     mPrevMousePos = e->position();
     mScene->mouseDown(e->button());
 }
 
 void EngineAssetViewer::mouseMoveEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mouseMoveEvent(e);
+    e->accept();   // never let the press propagate to a container filter
     const QPointF pos = e->position();
     const QPointF dir = pos - mPrevMousePos;
     mScene->mouseMove(int(-dir.x()), int(-dir.y()));
@@ -111,7 +111,7 @@ void EngineAssetViewer::mouseMoveEvent(QMouseEvent *e)
 
 void EngineAssetViewer::mouseReleaseEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mouseReleaseEvent(e);
+    e->accept();   // never let the press propagate to a container filter
     mScene->mouseUp(e->button());
 }
 

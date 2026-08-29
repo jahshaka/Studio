@@ -494,27 +494,33 @@ void ThumbnailGenerator::shutdown()
 void ThumbnailGenerator::processOneEngineRequest()
 {
     if (pending.isEmpty()) { if (tick) tick->stop(); return; }
-
+    // Re-entrancy guard: a result handler may open a modal dialog (material preview
+    // export), whose nested event loop would tick us again mid-render.
+    static bool inFlight = false;
+    if (inFlight) return;
+    struct Guard { Guard() { inFlight = true; } ~Guard() { inFlight = false; } } guard;
     auto engine = EngineHost::instance().engine();
     if (!engine) {
-        // Engine not started yet (or the app fell back to legacy on xcb, where no
-        // thumbnail can be drawn). Wait; cap the backlog so it cannot grow forever.
+        // Engine not started yet, or the app fell back to the legacy viewport (no
+        // engine will ever come): drop the backlog and stop ticking for good.
+        if (!EngineHost::instance().isRunning()) { pending.clear(); if (tick) tick->stop(); return; }
         while (pending.size() > 256) pending.removeFirst();
         return;
     }
     if (!engineRenderer) engineRenderer.reset(new EngineThumbnailRenderer(engine));
-
     // One request per tick: never block the UI for a batch.
     const EngineRequest job = pending.takeFirst();
     QImage img = renderEngineRequest(job.request, job.size);
-
     auto result = new ThumbnailResult;
-    result->id			= job.request.id;
-    result->type		= job.request.type;
-    result->path		= job.request.path;
+    result->id          = job.request.id;
+    result->type        = job.request.type;
+    result->path        = job.request.path;
     result->preview     = job.request.preview;
-    result->thumbnail	= img;
-    emit renderThread->thumbnailComplete(result);
+    result->thumbnail   = img;
+    // Deliver from the event loop, not from inside this tick: receivers may block
+    // (a save dialog) and must never re-enter the renderer.
+    QMetaObject::invokeMethod(renderThread, [rt = renderThread, result] { emit rt->thumbnailComplete(result); },
+                              Qt::QueuedConnection);
 }
 
 iris::MaterialPtr ThumbnailGenerator::previewMaterialFor(iris::MaterialPtr material)

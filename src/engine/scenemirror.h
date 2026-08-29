@@ -65,6 +65,8 @@ private:
         bool hasLight = false;
         jahshaka::engine::MaterialId material = 0;   // per document material instance
         iris::Material *materialPtr = nullptr;
+        jahshaka::engine::MeshId mesh = 0;           // shared engine mesh this entry uses
+        iris::Mesh *meshPtr = nullptr;
         QString textureSignature;                    // which files are bound; re-sync on change
         jahshaka::engine::NodeId wireNode = 0;       // light wire shape, child of `node`
         jahshaka::engine::MaterialId wireMaterial = 0;
@@ -75,6 +77,9 @@ private:
     jahshaka::engine::MeshId wireMeshFor(int kind);
     void visit(iris::SceneNodePtr node, jahshaka::engine::NodeId parent, QSet<long> &seen);
     void removeMissing(const QSet<long> &seen);
+    /// Frees engine meshes/materials no live entry references (asset browsing would
+    /// otherwise grow them for the life of the process; pointer keys could alias).
+    void reclaimUnused();
     jahshaka::engine::MeshId     meshFor(iris::Mesh *mesh);
     jahshaka::engine::MaterialId materialFor(iris::Material *material);
     void syncTextures(Entry &e, iris::Material *material);

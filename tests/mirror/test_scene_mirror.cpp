@@ -21,6 +21,8 @@
 #include "graphics/mesh.h"
 #include "materials/defaultmaterial.h"
 #include "materials/pbrmaterial.h"
+#include "materials/custommaterial.h"
+#include "core/property.h"
 #include "scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
 #include "engine/scenemirror.h"
@@ -193,6 +195,30 @@ int main(int argc, char **argv)
         view->readPixels(img); show("texture removed", img);
         CHECK(isMaterial(centre(img)), "removing the texture goes back to the material colour");
         QFile::remove(pngPath);
+    }
+
+    // ---- Effects-module CustomMaterial (Default.shader): colour + diffuse texture property ----
+    {
+        const QString shaderDef = QString(JAHSHAKA_SOURCE_DIR) + "/app/shader_defs/Default.shader";
+        auto custom = iris::CustomMaterial::create();
+        custom->generate(shaderDef);
+        int props = 0; for (auto *p : custom->properties) if (p) ++props;
+        std::printf("    Default.shader exposes %d properties\n", props);
+        CHECK(props > 5, "CustomMaterial generated its properties from Default.shader without GL");
+        custom->setValue("diffuseColor", QColor(230, 40, 20));
+        meshNode2->setMaterial(custom);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("CustomMaterial diffuseColor", img);
+        CHECK(isMaterial(centre(img)), "CustomMaterial's diffuseColor reaches the engine");
+        const QString pngPath = QDir::temp().filePath("jahshaka_mirror_custom_green.png");
+        QImage tex(16, 16, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
+        custom->setValue("diffuseColor", QColor(255, 255, 255));
+        custom->setValue("diffuseTexture", pngPath);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("CustomMaterial diffuseTexture", img);
+        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "CustomMaterial's diffuseTexture property reaches the engine");
+        QFile::remove(pngPath);
+        meshNode2->setMaterial(legacy);
     }
 
     // ---- step 5: a POINT light on a document node lights the side it is on ----
