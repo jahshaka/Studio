@@ -107,6 +107,18 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["shadowEnabled"] = scene->shadowEnabled;
+
+    // Global illumination (world panel). Mode/quality are written as stable
+    // strings — the enum ints must stay free to be reordered.
+    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
+    static const char *giQualityNames[] = { "low", "medium", "high" };
+    sceneObj["giMode"] = giModeNames[qBound(0, static_cast<int>(scene->giMode), 3)];
+    sceneObj["giQuality"] = giQualityNames[qBound(0, static_cast<int>(scene->giQuality), 2)];
+    sceneObj["giBoundsMin"] = jsonVector3(scene->giBoundsMin);
+    sceneObj["giBoundsMax"] = jsonVector3(scene->giBoundsMax);
+    sceneObj["giLight"] = scene->giLightGuid;
+    sceneObj["giNumBounces"] = scene->giNumBounces;
+    sceneObj["giAutoRefresh"] = scene->giAutoRefresh;
 	
     QJsonObject rootNodeObj;
     writeSceneNode(rootNodeObj,scene->getRootNode());

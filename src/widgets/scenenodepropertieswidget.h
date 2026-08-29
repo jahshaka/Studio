@@ -40,6 +40,7 @@ class Database;
 class ShaderPropertyWidget;
 class SkyPropertyWidget;
 class WorldSkyPropertyWidget;
+class WorldGiPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -70,6 +71,7 @@ public:
     void setDatabase(Database*);
 
 	WorldSkyPropertyWidget *worldSkyPropView;
+	WorldGiPropertyWidget *worldGiPropView;
 
 public slots:
 	void acceptCubemapTexturesFromSkyPresets(QStringList guids);

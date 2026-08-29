@@ -842,6 +842,65 @@ void SceneMirror::applyEnvironment(View *view, Engine *engine)
     const QColor f = mSource->fogColor;
     mTarget->setFog(mSource->fogEnabled, Colour(f.redF(), f.greenF(), f.blueF(), 1.0f),
                     mSource->fogStart, mSource->fogEnd);
+    // Global Illumination panel. setGlobalIllumination re-traces, so unlike fog it
+    // is NOT free: push only when the document state changed (the per-frame compare
+    // is the debounce), and re-trace when the driving light itself moved — Instant
+    // Radiosity solves in milliseconds at editor quality, per GI_SPEC.md.
+    {
+        GiParams gi;
+        switch (mSource->giMode) {
+        case iris::GiMode::INSTANT_RADIOSITY: gi.mode = GiMode::InstantRadiosity; break;
+        case iris::GiMode::VCT:               gi.mode = GiMode::Vct; break;
+        case iris::GiMode::VCT_PCC_HYBRID:    gi.mode = GiMode::VctPccHybrid; break;
+        case iris::GiMode::OFF: default:      gi.mode = GiMode::Off; break;
+        }
+        switch (mSource->giQuality) {
+        case iris::GiQuality::LOW:             gi.quality = GiQuality::Low; break;
+        case iris::GiQuality::HIGH:            gi.quality = GiQuality::High; break;
+        case iris::GiQuality::MEDIUM: default: gi.quality = GiQuality::Medium; break;
+        }
+        gi.boundsMin = toVec3(mSource->giBoundsMin);
+        gi.boundsMax = toVec3(mSource->giBoundsMax);
+        gi.numBounces = mSource->giNumBounces;
+        iris::LightNode *driver = gi.mode == GiMode::InstantRadiosity ? resolveGiLight() : nullptr;
+        gi.irLight = driver ? engineNode(driver) : 0;
+        const auto same = [](const GiParams &a, const GiParams &b) {
+            return a.mode == b.mode && a.quality == b.quality && a.irLight == b.irLight &&
+                   a.numBounces == b.numBounces &&
+                   a.boundsMin.x == b.boundsMin.x && a.boundsMin.y == b.boundsMin.y &&
+                   a.boundsMin.z == b.boundsMin.z && a.boundsMax.x == b.boundsMax.x &&
+                   a.boundsMax.y == b.boundsMax.y && a.boundsMax.z == b.boundsMax.z;
+        };
+        const QMatrix4x4 lightWorld = driver ? driver->globalTransform : QMatrix4x4();
+        if (!mGiPushed || !same(gi, mLastGi)) {
+            mTarget->setGlobalIllumination(gi);
+            mLastGi = gi;
+            mGiLightWorld = lightWorld;
+            mGiPushed = true;
+        } else if (gi.mode == GiMode::InstantRadiosity && mSource->giAutoRefresh &&
+                   lightWorld != mGiLightWorld) {
+            mGiLightWorld = lightWorld;
+            mTarget->refreshGlobalIllumination();
+        }
+    }
+}
+
+iris::LightNode *SceneMirror::resolveGiLight() const
+{
+    if (!mSource) return nullptr;
+    if (!mSource->giLightGuid.isEmpty()) {
+        auto it = mSource->lights.constFind(mSource->giLightGuid);
+        if (it != mSource->lights.constEnd() && !it.value().isNull()) return it.value().data();
+    }
+    // QHash order is arbitrary: pick deterministically by creation order (nodeId).
+    iris::LightNode *directional = nullptr, *any = nullptr;
+    for (const auto &l : mSource->lights) {
+        if (l.isNull()) continue;
+        if (l->lightType == iris::LightType::Directional &&
+            (!directional || l->nodeId < directional->nodeId)) directional = l.data();
+        if (!any || l->nodeId < any->nodeId) any = l.data();
+    }
+    return directional ? directional : any;
 }
 
 void SceneMirror::applySky(View *view)

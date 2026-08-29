@@ -54,6 +54,12 @@ public:
     void applyEnvironment(jahshaka::engine::View *view,
                           jahshaka::engine::Engine *engine = nullptr);
 
+    /// The document light node driving Instant Radiosity: the scene's giLightGuid
+    /// when it names a live light, else the first directional light (by creation
+    /// order), else any light. Null when the scene has no lights. Public so the
+    /// world panel can show which light "Automatic" resolves to.
+    iris::LightNode *resolveGiLight() const;
+
     /// Converts a document mesh to engine MeshData. Public so importers and tests
     /// can use the same conversion. Returns false if the mesh has no geometry.
     static bool toMeshData(iris::Mesh *mesh, jahshaka::engine::MeshData &out);
@@ -165,6 +171,11 @@ private:
     // sync(); pushed engine-wide by applyEnvironment (see comment there).
     jahshaka::engine::ShadowFilter mShadowFilter = jahshaka::engine::ShadowFilter::Hard;
     bool mAnyShadowCaster = false;
+    // Global illumination: last pushed state + the driving light's transform, so
+    // applyEnvironment only re-pushes on change and re-traces on light movement.
+    jahshaka::engine::GiParams mLastGi;
+    bool mGiPushed = false;
+    QMatrix4x4 mGiLightWorld;
 };
 
 #endif // SCENEMIRROR_H

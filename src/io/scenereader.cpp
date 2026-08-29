@@ -263,6 +263,24 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogStart = sceneObj["fogStart"].toDouble(100);
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+
+    // Global illumination: absent (older scenes) or unknown values mean OFF.
+    {
+        const QString giMode = sceneObj["giMode"].toString("off");
+        if (giMode == "instant_radiosity") scene->giMode = iris::GiMode::INSTANT_RADIOSITY;
+        else if (giMode == "vct") scene->giMode = iris::GiMode::VCT;
+        else if (giMode == "vct_pcc_hybrid") scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
+        else scene->giMode = iris::GiMode::OFF;
+        const QString giQuality = sceneObj["giQuality"].toString("medium");
+        if (giQuality == "low") scene->giQuality = iris::GiQuality::LOW;
+        else if (giQuality == "high") scene->giQuality = iris::GiQuality::HIGH;
+        else scene->giQuality = iris::GiQuality::MEDIUM;
+        scene->giBoundsMin = readVector3(sceneObj["giBoundsMin"].toObject());
+        scene->giBoundsMax = readVector3(sceneObj["giBoundsMax"].toObject());
+        scene->giLightGuid = sceneObj["giLight"].toString();
+        scene->giNumBounces = qBound(1, sceneObj["giNumBounces"].toInt(1), 4);
+        scene->giAutoRefresh = sceneObj["giAutoRefresh"].toBool(true);
+    }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
 	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));
 
