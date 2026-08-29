@@ -12,6 +12,24 @@
 #include "../editor/orbitalcameracontroller.h"
 #include <QWheelEvent>
 #include <QKeyEvent>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QDataStream>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QDir>
+#include "../constants.h"
+#include "../mainwindow.h"
+#include "../uimanager.h"
+#include "../globals.h"
+#include "../core/project.h"
+#include "../core/database/database.h"
+#include "../io/assetmanager.h"
+#include "scenehierarchywidget.h"
+#include "../irisgl/src/materials/custommaterial.h"
+#include "../irisgl/src/math/intersectionhelper.h"
 #include <QVector3D>
 #include <QQuaternion>
 
@@ -125,14 +143,129 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
     ensureEngineScene();
 }
 
-iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject)
+iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
+                                                QVector3D *hitPoint, bool forcePickable)
 {
     if (!mScene || !mEditorCam) return iris::SceneNodePtr();
     QVector3D a, b;
     ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
-    const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition());
+    const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(), forcePickable);
     const ScenePick best = ScenePicker::nearest(hits);
+    if (hitPoint && best.node) *hitPoint = best.hitPoint;
     return ScenePicker::resolveRootSelection(best.node, mSelectedNode, selectRootObject);
+}
+
+QVector3D EngineSceneViewport::dropPositionAt(const QPointF &point)
+{
+    QVector3D hit;
+    if (pickAt(point, false, &hit, true)) return hit;
+    // Ground plane (y = 0), like the legacy viewport's sceneFloor.
+    if (!mEditorCam) return QVector3D();
+    QVector3D a, b;
+    ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
+    const iris::Plane floor = iris::IntersectionHelper::computePlaneND(QVector3D(100, 0, 100), QVector3D(-100, 0, 100), QVector3D(-100, 0, -100));
+    float t; QVector3D q;
+    if (iris::IntersectionHelper::intersectSegmentPlane(a, a + (b - a).normalized() * 1024.0f, floor, t, q)) return q;
+    return QVector3D();
+}
+
+// ---- drag and drop from the asset panel: ported from SceneViewWidget ----------------
+
+static QMap<int, QVariant> dragRoleData(const QMimeData *mime)
+{
+    QByteArray encoded = mime->data("application/x-qabstractitemmodeldatalist");
+    QDataStream stream(&encoded, QIODevice::ReadOnly);
+    QMap<int, QVariant> roleDataMap;
+    while (!stream.atEnd()) stream >> roleDataMap;
+    return roleDataMap;
+}
+
+void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (UiManager::sceneHierarchyWidget && event->source() == UiManager::sceneHierarchyWidget->getWidget()) {
+        event->ignore();
+        return;
+    }
+    if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist"))
+        event->acceptProposedAction();
+}
+
+void EngineSceneViewport::dragLeaveEvent(QDragLeaveEvent *)
+{
+    if (mDragPreviewNode) {
+        mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
+        mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+    }
+}
+
+void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
+{
+    const QMap<int, QVariant> role = dragRoleData(event->mimeData());
+    const int type = role.value(0).toInt();
+    if (type == static_cast<int>(ModelTypes::Material)) {
+        // Hover preview: temporarily apply the dragged material to the mesh under the pointer.
+        iris::SceneNodePtr node = pickAt(event->position(), false);
+        if (node && node->getSceneNodeType() != iris::SceneNodeType::Mesh) node.reset();
+        if (mDragPreviewNode && mDragPreviewNode != node) {
+            mDragPreviewNode.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
+            mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+        }
+        if (node && !mDragWasHit) {
+            mDragWasHit = true;
+            mDragPreviewNode = node;
+            auto meshNode = node.staticCast<iris::MeshNode>();
+            mDragOriginalMaterial = meshNode->getMaterial();
+            for (Asset *asset : AssetManager::getAssets()) {
+                if (asset->assetGuid == role.value(3).toString()) {
+                    auto material = asset->getValue().value<iris::CustomMaterialPtr>();
+                    if (material) meshNode->setMaterial(material);
+                }
+            }
+        }
+    } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)) {
+        mDragScenePos = dropPositionAt(event->position());
+    }
+    event->acceptProposedAction();
+}
+
+void EngineSceneViewport::dropEvent(QDropEvent *event)
+{
+    const QMap<int, QVariant> role = dragRoleData(event->mimeData());
+    const int type = role.value(0).toInt();
+    if (type == static_cast<int>(ModelTypes::ParticleSystem)) {
+        emit mEvents.addDroppedParticleSystem(true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
+    } else if (type == static_cast<int>(ModelTypes::Object)) {
+        if (Constants::Reserved::DefaultPrimitives.contains(role.value(3).toString())) {
+            emit mEvents.addPrimitive(Constants::Reserved::DefaultPrimitives.value(role.value(3).toString()));
+            return;
+        }
+        emit mEvents.addDroppedMesh(QDir(Globals::project->getProjectFolder()).filePath(role.value(2).toString()),
+                                    true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
+    } else if (type == static_cast<int>(ModelTypes::Material)) {
+        if (mDragPreviewNode && mMainWindow) {
+            mMainWindow->applyMaterialPreset(role.value(3).toString());
+            mMainWindow->sceneNodeSelected(mDragPreviewNode);
+        }
+        mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
+    } else if (type == static_cast<int>(ModelTypes::Texture)) {
+        iris::SceneNodePtr node = pickAt(event->position(), false);
+        if (node && node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            auto mat = node.staticCast<iris::MeshNode>()->getMaterial().dynamicCast<iris::CustomMaterial>();
+            if (mat && !mat->firstTextureSlot().isEmpty()) {
+                mat->setValue(mat->firstTextureSlot(), QDir(Globals::project->getProjectFolder()).filePath(role.value(1).toString()));
+                if (mMainWindow) mMainWindow->sceneNodeSelected(node);
+            }
+        }
+    } else if (type == static_cast<int>(ModelTypes::Sky)) {
+        if (!mScene || !mDatabase) return;
+        const QString skyGuid = role.value(3).toString();
+        const QJsonObject skyDefinition = QJsonDocument::fromJson(mDatabase->fetchAssetData(skyGuid)).object();
+        const QJsonObject skyProperties = QJsonDocument::fromJson(mDatabase->fetchAsset(skyGuid).properties).object();
+        const int skyTypeIndex = skyProperties.value("sky").toObject().value("type").toInt();
+        mScene->skyData.insert(mScene->skyTypeToStr[skyTypeIndex], skyDefinition);
+        mScene->skyType = static_cast<iris::SkyType>(skyTypeIndex);
+        emit mEvents.changeSkyFromAssetWidget(skyTypeIndex);
+    }
 }
 
 void EngineSceneViewport::mousePressEvent(QMouseEvent *e)

@@ -103,7 +103,11 @@ public:
     void syncFrame();
 
     /// Picks the document object under a viewport pixel (legacy selection rule).
-    iris::SceneNodePtr pickAt(const QPointF &point, bool selectRootObject = true);
+    /// `hitPoint` receives the world-space hit when a node is returned.
+    iris::SceneNodePtr pickAt(const QPointF &point, bool selectRootObject = true,
+                              QVector3D *hitPoint = nullptr, bool forcePickable = false);
+    /// Where a dragged asset would land: the picked surface, else the ground plane.
+    QVector3D dropPositionAt(const QPointF &point);
 
 protected:
     void showEvent(QShowEvent *) override;
@@ -111,6 +115,10 @@ protected:
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
     void wheelEvent(QWheelEvent *) override;
+    void dragEnterEvent(QDragEnterEvent *) override;
+    void dragMoveEvent(QDragMoveEvent *) override;
+    void dragLeaveEvent(QDragLeaveEvent *) override;
+    void dropEvent(QDropEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
 
@@ -131,6 +139,11 @@ private:
     CameraControllerBase    *mCamController = nullptr;
     QPointF mMousePos, mPrevMousePos;
     bool mHaveMouse = false;
+    // drag-and-drop state (material hover preview), as in SceneViewWidget
+    iris::SceneNodePtr mDragPreviewNode;
+    iris::MaterialPtr mDragOriginalMaterial;
+    bool mDragWasHit = false;
+    QVector3D mDragScenePos;
     QElapsedTimer mFrameTimer;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
