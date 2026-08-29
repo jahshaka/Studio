@@ -146,6 +146,8 @@ set(SRCS
     src/widgets/assetviewer.cpp
     src/widgets/engineassetscene.cpp
     src/widgets/engineassetviewer.cpp
+    src/widgets/enginematerialpreviewscene.cpp
+    src/widgets/enginematerialpreview.cpp
     src/widgets/assetviewgrid.cpp
     src/widgets/assetgriditem.cpp
     src/editor/outlinerenderer.cpp
@@ -307,6 +309,8 @@ set(HEADERS
     src/widgets/iassetviewer.h
     src/widgets/engineassetscene.h
     src/widgets/engineassetviewer.h
+    src/widgets/enginematerialpreviewscene.h
+    src/widgets/enginematerialpreview.h
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
     src/breakpad/breakpad.h

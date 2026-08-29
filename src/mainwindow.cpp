@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "dialogs/ogrepreviewdialog.h"
 #include "engine/enginehost.h"
 #include "widgets/enginerenderdriver.h"
+#include "widgets/enginematerialpreview.h"
 #include "widgets/sceneviewwidget.h"
 #include "dialogs/donatedialog.h"
 #include "dialogs/custompopup.h"
@@ -2828,6 +2829,12 @@ void MainWindow::setupDesktop()
 	//ui->stackedWidget->addWidget(new QWidget(this));
 	shaderGraph = new shadergraph::MainWindow(this,db);
 	shaderGraph->setAssetView(_assetView);
+	// Engine mode: the Display dock gets an engine-rendered preview (its own
+	// engine Scene + preview document); the GL SceneWidget is never realized.
+	if (EngineHost::viewportBackend() == ViewportBackend::Engine && EngineHost::instance().isRunning()) {
+		auto &host = EngineHost::instance();
+		shaderGraph->setEnginePreview(new EngineMaterialPreview(host.engine(), host.driver(), shaderGraph));
+	}
 	ui->stackedWidget->addWidget(shaderGraph);
 	ui->stackedWidget->addWidget(playerView);
 
