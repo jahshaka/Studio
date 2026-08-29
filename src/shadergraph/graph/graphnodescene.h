@@ -46,6 +46,9 @@ class GraphNodeScene : public QGraphicsScene
 		// only used when dragging
 		SocketConnection* con;
 
+	// socket the live-drag loose end is currently over (for highlight)
+	Socket* dragHoverSocket = nullptr;
+
 	QGraphicsItemGroup *conGroup;
 public:
 	GraphNodeScene(QWidget* parent);
@@ -118,6 +121,7 @@ public:
 
 	void deleteSelectedNodes();
 	void deleteNode(GraphNode* node);
+	void clearDragHighlight();
 
 	bool areSocketsComptible(Socket* sock1, Socket* sock2);
 

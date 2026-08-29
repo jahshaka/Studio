@@ -2,6 +2,8 @@
 
 #include <QGraphicsPathItem>
 
+#include "socket.h"
+
 enum class SocketConnectionStatus
 {
 	Started,
@@ -25,8 +27,9 @@ public:
 	QPointF pos2;
 
 	SocketConnectionStatus status;
-	QPainterPath* p;
-    double lineThickness = 5.0;
+
+	// live-drag feedback: what the loose end is currently over
+	SocketDragHighlight liveTarget = SocketDragHighlight::None;
 
 	SocketConnection();
 
@@ -36,6 +39,13 @@ public:
 	void updatePosFromSockets();
 	void updatePath();
 	virtual int type() const override;
+	QPainterPath shape() const override;
 	void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = Q_NULLPTR) override;
 
+protected:
+	void hoverEnterEvent(QGraphicsSceneHoverEvent *event) override;
+	void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
+
+private:
+	bool hovered = false;
 };

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "../nodes/test.h"
 #include "core/project.h"
 
+#include <QKeyEvent>
 #include <QMimeData>
 #include <QListWidgetItem>
 #include <QJsonArray>
@@ -293,18 +294,31 @@ void GraphNodeScene::deleteSelectedNodes()
 				nodes.append(node);
 		}
 	}
+
+	// gather selected pipes whose endpoints survive (DeleteNodeCommand
+	// already takes a deleted node's connections with it)
+	QList<SocketConnection*> conns;
+	for (auto item : items) {
+		if (item->type() == (int)GraphicsItemType::Connection) {
+			auto conn = static_cast<SocketConnection*>(item);
+			if (conn->status != SocketConnectionStatus::Finished)
+				continue;
+			if (nodes.contains(conn->socket1->node) || nodes.contains(conn->socket2->node))
+				continue;
+			conns.append(conn);
+		}
+	}
+
+	if (nodes.length() + conns.length() == 0)
+		return;
+
+	const bool macro = (conns.length() > 0 && nodes.length() > 0) || conns.length() > 1;
+	if (macro) stack->beginMacro(QObject::tr("Delete selection"));
+	for (auto conn : conns)
+		stack->push(new DeleteConnectionCommand(conn, this));
 	if (nodes.length() > 0)
-	{
-		auto deleteCommand = new DeleteNodeCommand(nodes, this);
-		stack->push(deleteCommand);
-	}
-	
-	// remove each node's connections then remove the nodes
-	for (auto node : nodes) {
-	//	deleteNode(node);
-	}
-
-
+		stack->push(new DeleteNodeCommand(nodes, this));
+	if (macro) stack->endMacro();
 
 	emit graphInvalidated();
 }
@@ -347,6 +361,14 @@ bool GraphNodeScene::areSocketsComptible(Socket* sock1, Socket* sock2)
 void GraphNodeScene::emitGraphInvalidated()
 {
 	emit graphInvalidated();
+}
+
+void GraphNodeScene::clearDragHighlight()
+{
+	if (dragHoverSocket != nullptr) {
+		dragHoverSocket->setDragHighlight(SocketDragHighlight::None);
+		dragHoverSocket = nullptr;
+	}
 }
 
 void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
@@ -578,10 +600,41 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 			con->pos2 = me->scenePos();
 			con->updatePath();
 
+			// light up the socket under the loose end and tint the live
+			// pipe by whether the pair would actually connect
 			auto sock = getSocketAt(me->scenePos().x(), me->scenePos().y());
-			if (sock != nullptr && con->socket1 != sock) {
-				//"connection entered";
+			Socket* hoverSock = (sock != nullptr && sock != con->socket1) ? sock : nullptr;
+			if (hoverSock != dragHoverSocket) {
+				if (dragHoverSocket != nullptr)
+					dragHoverSocket->setDragHighlight(SocketDragHighlight::None);
+				dragHoverSocket = hoverSock;
 			}
+			if (dragHoverSocket != nullptr) {
+				bool ok = canSocketConnect(con->socket1, dragHoverSocket);
+				dragHoverSocket->setDragHighlight(ok ? SocketDragHighlight::Valid
+				                                     : SocketDragHighlight::Invalid);
+				con->liveTarget = ok ? SocketDragHighlight::Valid
+				                     : SocketDragHighlight::Invalid;
+			}
+			else {
+				con->liveTarget = SocketDragHighlight::None;
+			}
+			con->update();
+			return true;
+		}
+	}
+	break;
+	case QEvent::KeyPress:
+	{
+		// Esc cancels a live connection drag
+		auto ke = static_cast<QKeyEvent*>(e);
+		if (con != nullptr && ke->key() == Qt::Key_Escape) {
+			clearDragHighlight();
+			this->removeItem(con);
+			delete con;
+			con = nullptr;
+			if (!views().isEmpty())
+				views().at(0)->setDragMode(QGraphicsView::RubberBandDrag);
 			return true;
 		}
 	}
@@ -607,6 +660,9 @@ bool GraphNodeScene::eventFilter(QObject *o, QEvent *e)
 
 
 		if (con) {
+			clearDragHighlight();
+			con->liveTarget = SocketDragHighlight::None;
+
 			// make it an official connection
 			auto sock = getSocketAt(me->scenePos().x(), me->scenePos().y());
 
