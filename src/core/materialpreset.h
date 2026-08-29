@@ -54,6 +54,9 @@ struct MaterialPreset
     QColor  emissiveColor;
     float   emissiveIntensity;
     QString emissiveMap;
+    int     alphaMode;      // 0 opaque, 1 cutout, 2 blend (glass)
+    float   alpha;
+    float   alphaCutoff;
 };
 
 #endif // MATERIALPRESET_H

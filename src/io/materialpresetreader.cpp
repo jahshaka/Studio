@@ -112,6 +112,9 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
     material.pbrNormalFactor     = static_cast<float>(matObj["normalFactor"].toDouble(1.0));
     material.occlusionFactor     = static_cast<float>(matObj["occlusionFactor"].toDouble(1.0));
     material.emissiveIntensity   = static_cast<float>(matObj["emissiveIntensity"].toDouble(0.0));
+    material.alphaMode           = matObj["alphaMode"].toInt(0);
+    material.alpha               = static_cast<float>(matObj["alpha"].toDouble(1.0));
+    material.alphaCutoff         = static_cast<float>(matObj["alphaCutoff"].toDouble(0.5));
 
     return material;
 }

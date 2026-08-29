@@ -987,6 +987,9 @@ void MainWindow::applyMaterialPreset(MaterialPreset preset)
         pbr->setValue("emissiveColor",       preset.emissiveColor);
         pbr->setValue("emissiveIntensity",   preset.emissiveIntensity);
         pbr->setValue("textureScale",        preset.textureScale);
+        pbr->setValue("alphaMode",           preset.alphaMode);
+        pbr->setValue("alpha",               preset.alpha);
+        pbr->setValue("alphaCutoff",         preset.alphaCutoff);
 
         pbr->setValue("baseColorMap",  preset.baseColorMap);
         pbr->setValue("metallicMap",   preset.metallicMap);

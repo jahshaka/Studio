@@ -193,9 +193,35 @@ public:
                 mSkyNode->attachObject(item);
                 mSkyFaces.push_back({ item, mesh, meshName, dbName });
             }
+            // Environment reflections: the same six faces become a mipped cubemap on
+            // every PBR datablock's reflection slot, so metals and glass mirror the
+            // sky the way the legacy matcap/refraction shaders faked it.
+            if (tex[0]->getWidth() == tex[1]->getWidth()) {
+                const Ogre::uint32 w = tex[0]->getWidth(), h = tex[0]->getHeight();
+                Ogre::TextureGpuManager *tm = mRoot->getRenderSystem()->getTextureGpuManager();
+                Ogre::TextureGpu *cube = tm->createTexture(
+                    processUniqueName("skyrefl"), Ogre::GpuPageOutStrategy::Discard,
+                    Ogre::TextureFlags::RenderToTexture | Ogre::TextureFlags::AllowAutomipmaps,
+                    Ogre::TextureTypes::TypeCube);
+                cube->setResolution(w, h, 6u);
+                cube->setPixelFormat(tex[0]->getPixelFormat());
+                cube->setNumMipmaps(Ogre::PixelFormatGpuUtils::getMaxMipmapCount(w, h));
+                cube->scheduleTransitionTo(Ogre::GpuResidency::Resident);
+                for (int i = 0; i < 6; ++i) {
+                    Ogre::TextureBox dst = cube->getEmptyBox(0); dst.sliceStart = Ogre::uint32(i); dst.numSlices = 1u;
+                    tex[i]->copyTo(cube, dst, 0, tex[i]->getEmptyBox(0), 0);
+                }
+                cube->_autogenerateMipmaps();
+                mReflectionTex = cube;
+                applyReflectionToAll();
+            }
             return true;
         } JAH_CATCH(mError, false);
     }
+    /// Binds (or clears, when mReflectionTex is null) the scene's sky reflection
+    /// cubemap on every PBR material's datablock. (Body in complete-class context,
+    /// so it may call the private impl declared further down.)
+    void applyReflectionToAll() { applyReflectionToAllImpl(); }
     /// Called by the engine before rendering: keep the sky centred on the camera and
     /// inside its far plane.
     void followCamera(const Ogre::Vector3 &camPos, float farClip) {
@@ -206,7 +232,15 @@ public:
     }
     struct SkyFace { Ogre::Item *item; Ogre::MeshPtr mesh; std::string meshName, dbName; };
     std::vector<SkyFace> mSkyFaces;
+    Ogre::TextureGpu *mReflectionTex = nullptr;   // sky cubemap on PBSM_REFLECTION
     void destroySky() {
+        if (mReflectionTex) {
+            // Unbind from every datablock before the texture goes away.
+            Ogre::TextureGpu *tex = mReflectionTex;
+            mReflectionTex = nullptr;
+            applyReflectionToAll();
+            mRoot->getRenderSystem()->getTextureGpuManager()->destroyTexture(tex);
+        }
         for (SkyFace &f : mSkyFaces) {
             if (f.item) { f.item->detachFromParent(); mSceneMgr->destroyItem(f.item); }
             auto *hlmsUnlit = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT);
@@ -353,6 +387,7 @@ public:
                 Ogre::HlmsMacroblock(), Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
             db->setWorkflow(Ogre::HlmsPbsDatablock::MetallicWorkflow);
             applyPbr(db, p);
+            if (mReflectionTex) db->setTexture(Ogre::PBSM_REFLECTION, mReflectionTex);
             mMaterials[++mNextMaterialId] = rec;
             return mNextMaterialId;
         } JAH_CATCH(mError, 0);
@@ -668,6 +703,7 @@ public:
     void destroy() {
         if (!mSceneMgr) return;
         JAH_TRY {
+            destroySky();   // also unbinds + destroys the reflection cubemap
             for (auto &kv : mNodes) releaseNode(kv.second);
             mNodes.clear();
             for (auto &kv : mMaterials) {
@@ -709,6 +745,15 @@ private:
     struct MeshRec { Ogre::MeshPtr mesh; std::string name; };
     struct MaterialRec { std::string datablockName; bool unlit = false; bool onTop = false; };
     struct TextureRec { Ogre::TextureGpu *texture = nullptr; std::string path; };
+
+    void applyReflectionToAllImpl() {
+        auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
+        for (auto &kv : mMaterials) {
+            if (kv.second.unlit) continue;
+            auto *db = static_cast<Ogre::HlmsPbsDatablock *>(hlmsPbs->getDatablock(Ogre::IdString(kv.second.datablockName)));
+            if (db) db->setTexture(Ogre::PBSM_REFLECTION, mReflectionTex);
+        }
+    }
 
     Ogre::Hlms *hlmsFor(const MaterialRec &m) const {
         return mRoot->getHlmsManager()->getHlms(m.unlit ? Ogre::HLMS_UNLIT : Ogre::HLMS_PBS);

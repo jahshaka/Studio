@@ -1,0 +1,14 @@
+{
+    "name"              : "Glass PBR",
+    "material_type"     : "PBR",
+    "icon"              : "../../shadergraph/glassThumb.png",
+    "baseColor"         : "#EEF4F8",
+    "metallic"          : 0.0,
+    "roughness"         : 0.05,
+    "alphaMode"         : 2,
+    "alpha"             : 0.3,
+    "normalFactor"      : 1.0,
+    "occlusionFactor"   : 1.0,
+    "emissiveIntensity" : 0.0,
+    "textureScale"      : 1
+}

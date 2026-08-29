@@ -187,6 +187,12 @@ int main(int argc, char *argv[])
     // The engine viewport creates no Qt GL context; the legacy one needs the shared
     // context for its loading/thumbnail contexts.
     if (!engineViewport) QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    // Engine mode embeds a native render window (WA_NativeWindow). Without this
+    // attribute Qt silently promotes EVERY sibling widget to a native X window, and
+    // on xcb the page-switch mapping of those windows desyncs: QStackedWidget said
+    // index 3 / shadergraph visible, while at X level the editor page stayed mapped
+    // and the Materials page never appeared (verified with xwininfo map states).
+    if (engineViewport) QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
 

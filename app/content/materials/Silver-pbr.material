@@ -1,0 +1,12 @@
+{
+    "name"              : "Silver PBR",
+    "material_type"     : "PBR",
+    "icon"              : "../../shadergraph/silverThumb.png",
+    "baseColor"         : "#F5F5F7",
+    "metallic"          : 1.0,
+    "roughness"         : 0.22,
+    "normalFactor"      : 1.0,
+    "occlusionFactor"   : 1.0,
+    "emissiveIntensity" : 0.0,
+    "textureScale"      : 1
+}
