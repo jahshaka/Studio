@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QtMath>
 #include <QVector3D>
 #include <QColor>
+#include <QVector>
 #include <QQuaternion>
 #include <QMatrix4x4>
 #include "irisgl/src/irisglfwd.h"
@@ -111,6 +112,16 @@ public:
     }
 };
 
+/// What a gizmo would draw this frame, as data: a mesh, its world transform and a
+/// flat colour. The legacy viewport still calls render(); the engine viewport
+/// turns these into on-top overlay items (VIEWPORT_MIGRATION_PLAN.md step 8).
+struct GizmoDrawItem
+{
+    iris::MeshPtr mesh;
+    QMatrix4x4 transform;
+    QColor colour;
+};
+
 class Gizmo
 {
 protected:
@@ -148,6 +159,8 @@ public:
 	virtual void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
 
 	virtual void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix) = 0;
+	/// Renderer-independent description of render(). Empty when nothing is selected.
+	virtual QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
 };
 
 #endif // GIZMOHANDLE_H

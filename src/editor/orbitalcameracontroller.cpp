@@ -29,7 +29,7 @@ float lerp(float a, float b, float t)
 	return a * (1 - t) + b * t;
 }
 
-OrbitalCameraController::OrbitalCameraController(SceneViewWidget* sceneWidget)
+OrbitalCameraController::OrbitalCameraController(IEditorViewport* sceneWidget)
 {
     distFromPivot = 15;
     rotationSpeed = 1.f / 10.f;
@@ -111,8 +111,9 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 bool OrbitalCameraController::canLeftMouseDrag()
 {
 	bool gizmoDragging = false;
-	if (sceneWidget != nullptr) {
-		auto gizmo = sceneWidget->getActiveGizmo();
+	// Gizmos are drawn by the legacy viewport only (IrisGL); the engine viewport has none yet.
+	if (auto legacy = dynamic_cast<SceneViewWidget*>(sceneWidget)) {
+		auto gizmo = legacy->getActiveGizmo();
 		if (gizmo != nullptr) {
 			if (gizmo->isDragging())
 				gizmoDragging = true;

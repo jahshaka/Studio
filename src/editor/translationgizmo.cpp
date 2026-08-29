@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "translationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
+#include <QOpenGLContext>
 #include <QApplication>
 
 #include "irisgl/src/math/intersectionhelper.h"
@@ -186,7 +187,8 @@ void TranslationGizmo::loadAssets()
 
 	centerMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_sphere.obj"));
 
-	shader = iris::GraphicsHelper::loadShader(
+	// No GL context (engine viewport, tests): the legacy render() path is never used.
+	shader = !QOpenGLContext::currentContext() ? nullptr : iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
 
@@ -317,6 +319,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 
 void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
+	if (!shader) return;
 	device->clear(GL_DEPTH_BUFFER_BIT);
 
 	shader->bind();
@@ -380,4 +383,28 @@ void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, 
 	}
 
 	shader->release();
+}
+
+QVector<GizmoDrawItem> TranslationGizmo::drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+{
+	QVector<GizmoDrawItem> items;
+	if (!selectedNode) return items;
+	const QColor highlight(255, 255, 0);
+	if (dragging) {
+		for (int i = 0; i < handles.size(); i++) {
+			if (handles[i] != draggedHandle) continue;
+			auto transform = this->getTransform();
+			transform.scale(getGizmoScale() * handles[i]->handleScale);
+			items.append({ handleMeshes[i], transform, highlight });
+		}
+		return items;
+	}
+	QVector3D hitPos;
+	auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
+	for (int i = 0; i < handles.size(); i++) {
+		auto transform = this->getTransform();
+		transform.scale(getGizmoScale() * handles[i]->handleScale);
+		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
+	}
+	return items;
 }

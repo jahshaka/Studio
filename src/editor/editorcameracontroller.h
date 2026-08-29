@@ -22,7 +22,7 @@ namespace iris
     class CameraNode;
 }
 
-class SceneViewWidget;
+class IEditorViewport;
 class EditorCameraController : public CameraControllerBase
 {
     QSharedPointer<iris::CameraNode> camera;
@@ -35,10 +35,10 @@ class EditorCameraController : public CameraControllerBase
 
 	float orthoZoom;
 
-	SceneViewWidget* sceneWidget;
+	IEditorViewport* sceneWidget;
 
 public:
-    EditorCameraController(SceneViewWidget* sceneWidget);
+    EditorCameraController(IEditorViewport* sceneWidget);
 
 	iris::CameraNodePtr getCamera();
     void setCamera(iris::CameraNodePtr cam) override;

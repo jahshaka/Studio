@@ -61,8 +61,11 @@ set(SRCS
     src/widgets/engineviewwidget.cpp
     src/engine/scenemirror.cpp
     src/widgets/enginesceneviewport.cpp
+    src/editor/scenepicker.cpp
+    src/editor/gizmooverlay.cpp
     src/widgets/enginerenderdriver.cpp
     src/dialogs/ogrepreviewdialog.cpp
+    src/engine/enginehost.cpp
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
     src/widgets/assetmaterialpanel.cpp 
@@ -204,8 +207,11 @@ set(HEADERS
     src/engine/scenemirror.h
     src/widgets/enginesceneviewport.h
     src/editor/ieditorviewport.h
+    src/editor/scenepicker.h
+    src/editor/gizmooverlay.h
     src/widgets/enginerenderdriver.h
     src/dialogs/ogrepreviewdialog.h
+    src/engine/enginehost.h
     src/widgets/assetfavorites.h 
     src/widgets/assetpanel.h 
     src/widgets/assetmodelpanel.h 
@@ -374,6 +380,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engine)
 
 # Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
 # enable_testing() at top level, which add_test in a subdirectory requires.
+# Which editor viewport starts by default. Overridable at runtime with
+# --viewport=engine|legacy or env JAHSHAKA_VIEWPORT (see src/engine/enginehost.h).
+option(JAHSHAKA_ENGINE_VIEWPORT "Default to the engine viewport" OFF)
+
 option(JAHSHAKA_BUILD_TESTS "Build the headless engine test suite" ON)
 if(JAHSHAKA_BUILD_TESTS)
     include(CTest)
@@ -485,6 +495,11 @@ if(USE_BREAKPAD)
 endif(USE_BREAKPAD)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
+if(JAHSHAKA_ENGINE_VIEWPORT)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_ENGINE_VIEWPORT_DEFAULT=1)
+else()
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_ENGINE_VIEWPORT_DEFAULT=0)
+endif()
 
 # A6: these two warning classes are undefined behaviour, not style - keep them fixed.
 if (NOT MSVC)

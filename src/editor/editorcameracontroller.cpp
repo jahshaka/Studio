@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include <QDebug>
 using namespace iris;
 
-EditorCameraController::EditorCameraController(SceneViewWidget* sceneWidget):
+EditorCameraController::EditorCameraController(IEditorViewport* sceneWidget):
 	CameraControllerBase()
 {
     lookSpeed = 200;
@@ -160,10 +160,13 @@ bool EditorCameraController::canLeftMouseDrag()
 {
 	
 	bool gizmoDragging = false;
-	auto gizmo = sceneWidget->getActiveGizmo();
-	if (gizmo != nullptr) {
-		if (gizmo->isDragging())
-			gizmoDragging = true;
+	// Gizmos are drawn by the legacy viewport only (IrisGL); the engine viewport has none yet.
+	if (auto legacy = dynamic_cast<SceneViewWidget*>(sceneWidget)) {
+		auto gizmo = legacy->getActiveGizmo();
+		if (gizmo != nullptr) {
+			if (gizmo->isDragging())
+				gizmoDragging = true;
+		}
 	}
 
 	return (leftMouseDown && // left mouse must be down

@@ -47,7 +47,25 @@ void RenderThread::requestThumbnail(const ThumbnailRequest &request)
 void RenderThread::run()
 {
     this->setPriority(QThread::LowestPriority);
-    context->makeCurrent(surface);
+    shutdown = false;
+
+    // Engine viewport (xcb): there is no usable Qt GL context on this thread —
+    // makeCurrent() fails and the 3.2 Core functions resolve to null (SIGSEGV in
+    // initScene). Stay alive and drain requests without rendering so callers that
+    // hold this thread's signals keep working; thumbnails simply do not arrive.
+    if (!context->makeCurrent(surface) ||
+        !QOpenGLVersionFunctionsFactory::get<QOpenGLFunctions_3_2_Core>(context)) {
+        qWarning("ThumbnailGenerator: no usable OpenGL context on the render thread; thumbnails disabled");
+        while (!shutdown) {
+            requestsAvailable.acquire();
+            QMutexLocker locker(&requestMutex);
+            requests.clear();
+        }
+        auto mainThread = qApp->instance()->thread();
+        context->moveToThread(mainThread);
+        surface->moveToThread(mainThread);
+        return;
+    }
     initScene();
 
     renderTarget = iris::RenderTarget::create(512, 512);

@@ -27,7 +27,7 @@ namespace iris
     class CameraNode;
 }
 
-class SceneViewWidget;
+class IEditorViewport;
 class OrbitalCameraController:public CameraControllerBase
 {
 public:
@@ -45,14 +45,14 @@ public:
 
     float rotationSpeed;
 
-	SceneViewWidget* sceneWidget;
+	IEditorViewport* sceneWidget;
 
     QVector3D pivot;
     float distFromPivot;
 
 	iris::CameraNodePtr camera;
 
-    OrbitalCameraController(SceneViewWidget* sceneWidget);
+    OrbitalCameraController(IEditorViewport* sceneWidget);
 
     iris::CameraNodePtr  getCamera();
     void setRotationSpeed(float rotationSpeed);

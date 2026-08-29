@@ -77,6 +77,8 @@ public:
 	QMatrix4x4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;
 	void setSelectedNode(iris::SceneNodePtr node) override;
+public:
+	QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) override;
 };
 
 #endif // ROTATIONGIZMO_H

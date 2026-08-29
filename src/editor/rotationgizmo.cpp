@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "rotationgizmo.h"
 #include <QOpenGLFunctions_3_2_Core>
 #include <QOpenGLShaderProgram>
+#include <QOpenGLContext>
 #include <QApplication>
 
 #include "irisgl/src/math/intersectionhelper.h"
@@ -166,7 +167,8 @@ void RotationGizmo::loadAssets()
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_y.obj")));
 	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_z.obj")));
 
-	shader = iris::GraphicsHelper::loadShader(
+	// No GL context (engine viewport, tests): the legacy render() path is never used.
+	shader = !QOpenGLContext::currentContext() ? nullptr : iris::GraphicsHelper::loadShader(
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
 		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
 
@@ -313,6 +315,7 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 
 void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
 {
+	if (!shader) return;
 	device->clear(GL_DEPTH_BUFFER_BIT);
 	shader->bind();
 
@@ -389,4 +392,29 @@ void RotationGizmo::setSelectedNode(iris::SceneNodePtr node)
 {
 	selectedNode = node;
 	trans = Gizmo::getTransform();
+}
+
+QVector<GizmoDrawItem> RotationGizmo::drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+{
+	Q_UNUSED(viewDir);
+	QVector<GizmoDrawItem> items;
+	if (!selectedNode) return items;
+	const QColor highlight(255, 255, 0);
+	if (dragging) {
+		for (int i = 0; i < 3; i++) {
+			if (handles[i] != draggedHandle) continue;
+			auto transform = Gizmo::getTransform();
+			transform.scale(getGizmoScale() * handles[i]->handleScale);
+			items.append({ handleMeshes[i], transform, highlight });
+		}
+		return items;
+	}
+	float hitAngle = 0.0f;
+	auto hitHandle = getHitHandle(rayPos, rayDir, hitAngle);
+	for (int i = 0; i < 3; i++) {
+		auto transform = Gizmo::getTransform();
+		transform.scale(getGizmoScale() * handles[i]->handleScale);
+		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
+	}
+	return items;
 }
