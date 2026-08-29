@@ -162,17 +162,18 @@ MeshId SceneMirror::wireMeshFor(int kind)
     };
     if (kind == 1) {                       // point: three rings
         circle(0, 0.5f); circle(1, 0.5f); circle(2, 0.5f);
-    } else {                               // directional / spot: an arrow down -Z (+ a cone for spot)
-        pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(0, 0, -1.5f));
+    } else {                               // directional / spot: an arrow down -Y (+ a cone for spot),
+                                           // matching the light direction convention (document -Y)
+        pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(0, -1.5f, 0));
         for (int i = 0; i < 4; ++i) {
             const float a = float(i) / 4 * 6.2831853f;
-            pts.push_back(Vec3(0, 0, -1.5f)); pts.push_back(Vec3(std::cos(a) * 0.15f, std::sin(a) * 0.15f, -1.2f));
+            pts.push_back(Vec3(0, -1.5f, 0)); pts.push_back(Vec3(std::cos(a) * 0.15f, -1.2f, std::sin(a) * 0.15f));
         }
         if (kind == 2) { const float r = 0.6f;   // spot cone
             for (int i = 0; i < 8; ++i) {
                 const float a0 = float(i) / 8 * 6.2831853f, a1 = float(i + 1) / 8 * 6.2831853f;
-                pts.push_back(Vec3(std::cos(a0) * r, std::sin(a0) * r, -1.5f)); pts.push_back(Vec3(std::cos(a1) * r, std::sin(a1) * r, -1.5f));
-                if (i % 2 == 0) { pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(std::cos(a0) * r, std::sin(a0) * r, -1.5f)); }
+                pts.push_back(Vec3(std::cos(a0) * r, -1.5f, std::sin(a0) * r)); pts.push_back(Vec3(std::cos(a1) * r, -1.5f, std::sin(a1) * r));
+                if (i % 2 == 0) { pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(std::cos(a0) * r, -1.5f, std::sin(a0) * r)); }
             }
         }
     }

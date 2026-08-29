@@ -403,8 +403,9 @@ void shadows_darken_the_ground() {
     NodeId sun = s->createNode();
     LightDesc d; d.type = LightType::Directional; d.intensity = 3.0f; d.castShadows = true;   // bright sun: contrast is what we test
     CHECK(s->setLight(sun, d));
-    // Light shining straight down: the shadow lands directly under the cube.
-    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(-0.7071068f, 0, 0, 0.7071068f), Vec3(1,1,1));
+    // Light shining straight down (lights point down node -Y: identity = down):
+    // the shadow lands directly under the cube.
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(), Vec3(1,1,1));
     // Camera looking down from above: cube in the middle, ground all around.
     CameraDesc c; c.position = Vec3(0, 6, 0.01f); c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f); c.fovDegrees = 50;
     v->setCamera(c);
@@ -420,7 +421,7 @@ void shadows_darken_the_ground() {
     std::printf("    ground beside cube: shadows off %d, on %d; far ground on %d\n", besideOff, besideOn, farOn);
     // With the light straight above, the ground right beside the cube is NOT shadowed;
     // what shadows change is the region under the cube, hidden here. So tilt the sun.
-    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(-0.5f, 0.5f, 0, 0.7071068f), Vec3(1,1,1));
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(0, 0, 0.3826834f, 0.9238795f), Vec3(1,1,1));   // roll 45: sun tilts toward +X
     render(fx.e, 4); REQUIRE(v->readPixels(img));
     // Find the darkest and brightest ground pixels along a row beside the cube.
     int darkest = 255, brightest = 0;

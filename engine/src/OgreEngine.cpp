@@ -561,7 +561,16 @@ public:
         if (it == mNodes.end()) { mError = "setLight: unknown node"; return false; }
         JAH_TRY {
             Node &n = it->second;
-            if (!n.light) { n.light = mSceneMgr->createLight(); n.node->attachObject(n.light); }
+            if (!n.light) {
+                // The document's convention (IrisGL LightNode::getLightDir): lights shine
+                // down their node's -Y. Ogre lights shine down -Z, so the light rides an
+                // internal child node pitched -90 about X. Getting this wrong leaves every
+                // scene lit near-horizontally: dark viewports and shadows nobody can see.
+                n.lightNode = n.node->createChildSceneNode();
+                n.lightNode->setOrientation(Ogre::Quaternion(Ogre::Radian(-Ogre::Math::HALF_PI), Ogre::Vector3::UNIT_X));
+                n.light = mSceneMgr->createLight();
+                n.lightNode->attachObject(n.light);
+            }
             Ogre::Light *L = n.light;
             switch (d.type) {
             case LightType::Directional: L->setType(Ogre::Light::LT_DIRECTIONAL); break;
@@ -571,9 +580,11 @@ public:
             L->setDiffuseColour(toOgre(d.colour));
             L->setSpecularColour(toOgre(d.colour));
             L->setCastShadows(d.castShadows);
-            // Calibrated against IrisGL's default shader, where `intensity` multiplies the
-            // light colour directly (no pi): the same document values give similar exposure.
-            L->setPowerScale(d.intensity);
+            // HlmsPbs divides diffuse by pi (Lambert BRDF); IrisGL's default shader does
+            // not, so matching legacy exposure needs powerScale = intensity * pi. (An
+            // earlier 'calibration' removed this while the light DIRECTION mapping was
+            // broken — the overexposure it fixed was side-lit faces, not the scale.)
+            L->setPowerScale(d.intensity * Ogre::Math::PI);
             if (d.type != LightType::Directional)
                 L->setAttenuationBasedOnRadius(std::max(d.range, 0.01f), 0.01f);
             if (d.type == LightType::Spot) {
@@ -581,7 +592,7 @@ public:
                 const float inner = outer * (1.0f - std::min(std::max(d.spotSoftness, 0.0f), 0.99f));
                 L->setSpotlightRange(Ogre::Degree(inner), Ogre::Degree(outer), 1.0f);
             }
-            // Ogre lights shine down their node's -Z once attached (default direction).
+            // Lights shine down their node's -Y once attached (document convention).
             return true;
         } JAH_CATCH(mError, false);
     }
@@ -592,6 +603,7 @@ public:
             it->second.light->detachFromParent();
             mSceneMgr->destroyLight(it->second.light);
             it->second.light = nullptr;
+            if (it->second.lightNode) { mSceneMgr->destroySceneNode(it->second.lightNode); it->second.lightNode = nullptr; }
             return true;
         } JAH_CATCH(mError, false);
     }
@@ -634,6 +646,7 @@ private:
         Ogre::SceneNode *node  = nullptr;
         Ogre::Item      *item  = nullptr;
         Ogre::Light     *light = nullptr;
+        Ogre::SceneNode *lightNode = nullptr;   // internal child: -Y (document) -> -Z (Ogre)
         Ogre::MeshPtr    mesh;              // uniquely owned (addTestCube); MUST be dropped before Root
         std::string      meshName;
         std::string      datablockName;     // uniquely owned (addTestCube)
@@ -831,6 +844,9 @@ private:
         // mesh ref) -> datablock -> node -> our mesh ref -> the mesh itself.
         if (n.item)  { n.item->detachFromParent();  mSceneMgr->destroyItem(n.item);   n.item = nullptr; }
         n.meshRef = 0; n.materialRef = 0;
+        // The internal light child must go before the reparent loop below would leak it to root.
+        if (n.light) { n.light->detachFromParent(); mSceneMgr->destroyLight(n.light); n.light = nullptr; }
+        if (n.lightNode) { mSceneMgr->destroySceneNode(n.lightNode); n.lightNode = nullptr; }
         if (n.node) {   // children survive: re-parent them to the root
             Ogre::SceneNode *root = mSceneMgr->getRootSceneNode(Ogre::SCENE_DYNAMIC);
             while (n.node->numChildren() > 0) {
@@ -838,7 +854,6 @@ private:
                 n.node->removeChild(c); root->addChild(c);
             }
         }
-        if (n.light) { n.light->detachFromParent(); mSceneMgr->destroyLight(n.light); n.light = nullptr; }
         if (!n.datablockName.empty()) {
             auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
             if (hlmsPbs->getDatablock(Ogre::IdString(n.datablockName)))

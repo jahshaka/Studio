@@ -93,7 +93,8 @@ public:
     /// Attach with attachMesh like any mesh. One pixel wide.
     virtual MeshId      createLineMesh(const std::vector<Vec3> &points, bool strip) = 0;
 
-    // ---- Lights (step 5): a node may carry one light ----
+    // ---- Lights (step 5): a node may carry one light. Directional and spot lights
+    // shine down the node's -Y (the document's convention: identity = straight down).
     virtual bool        setLight(NodeId, const LightDesc &) = 0;   // creates or updates
     virtual bool        removeLight(NodeId) = 0;
 };
