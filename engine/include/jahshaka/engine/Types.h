@@ -90,6 +90,11 @@ struct BillboardInstance {
 
 enum class LightType { Directional, Point, Spot };
 
+/// Shadow-map filter quality. GLOBAL to the engine, not per light — the backend's
+/// material system has exactly one filter for every shadowed light (see
+/// Engine::setShadowFilter). Ordered from cheapest/sharpest to softest.
+enum class ShadowFilter { Hard, Soft, VerySoft };
+
 /// A light attached to a node. Direction comes from the node's orientation
 /// (lights shine down the node's -Z), position from the node's transform.
 struct LightDesc {

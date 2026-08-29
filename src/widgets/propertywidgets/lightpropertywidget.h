@@ -95,6 +95,8 @@ private:
 
 	ColorValueWidget* shadowColor;
 	HFloatSliderWidget* shadowAlpha;
+	// False in engine mode: no per-light shadow tint exists there (controls hidden).
+	bool mShadowTintSupported = true;
 
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;

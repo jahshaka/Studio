@@ -12,6 +12,7 @@
 // document's CPU vertex buffers and cached per iris::Mesh.
 //
 // Studio-side code: includes iris (Qt) and the engine abstraction. Never Ogre.
+#include <QColor>
 #include <QHash>
 #include <QMatrix4x4>
 #include <QSet>
@@ -45,8 +46,13 @@ public:
     void applySky(jahshaka::engine::View *view);
 
     /// Pushes the document's world settings the sky doesn't cover: ambient colour
-    /// (flat, like the legacy uniform) and the scene's shadowEnabled toggle.
-    void applyEnvironment(jahshaka::engine::View *view);
+    /// (flat, like the legacy uniform), the scene's shadowEnabled toggle, fog, and
+    /// — when `engine` is given — the shadow filter quality. The engine's filter is
+    /// GLOBAL (one per process, Engine::setShadowFilter) while the document stores
+    /// a per-light ShadowMapType, so the policy is: push the strongest (softest)
+    /// quality requested by any shadow-casting light, computed by the last sync().
+    void applyEnvironment(jahshaka::engine::View *view,
+                          jahshaka::engine::Engine *engine = nullptr);
 
     /// Converts a document mesh to engine MeshData. Public so importers and tests
     /// can use the same conversion. Returns false if the mesh has no geometry.
@@ -120,6 +126,11 @@ private:
     jahshaka::engine::MeshId mHighlightMesh = 0;
     bool mHighlightWireframe = false;
     bool mHighlightWireframeApplied = false;
+    QColor mHighlightColourApplied;                        // what the materials show now
+    // Strongest shadow quality any shadow-casting light asked for, from the last
+    // sync(); pushed engine-wide by applyEnvironment (see comment there).
+    jahshaka::engine::ShadowFilter mShadowFilter = jahshaka::engine::ShadowFilter::Hard;
+    bool mAnyShadowCaster = false;
 };
 
 #endif // SCENEMIRROR_H

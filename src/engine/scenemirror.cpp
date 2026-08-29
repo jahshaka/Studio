@@ -82,6 +82,8 @@ int SceneMirror::sync()
     mSource->getRootNode()->update(0.0f);
 
     QSet<long> seen;
+    mAnyShadowCaster = false;
+    mShadowFilter = ShadowFilter::Hard;
     for (auto &child : mSource->getRootNode()->children)
         visit(child, 0, seen);
     removeMissing(seen);
@@ -134,7 +136,14 @@ void SceneMirror::syncHighlight()
         mHighlightMesh = 0;
         return;
     }
-    const Colour kSelection(1.0f, 0.85f, 0.1f);
+    // The user's outline colour preference lives on the document
+    // (scene->outlineColor, filled from Preferences by MainWindow::
+    // updateSceneSettings — legacy reads it the same way). Fall back to the
+    // historical selection yellow when the document never got one.
+    const QColor pref = mSource ? mSource->outlineColor : QColor();
+    const Colour kSelection = pref.isValid()
+        ? Colour(float(pref.redF()), float(pref.greenF()), float(pref.blueF()))
+        : Colour(1.0f, 0.85f, 0.1f);
     MaterialId mat;
     if (mHighlightWireframe) {
         if (!mHighlightMaterial)
@@ -144,6 +153,13 @@ void SceneMirror::syncHighlight()
         if (!mOutlineMaterial)
             mOutlineMaterial = mTarget->createOutlineMaterial(kSelection);
         mat = mOutlineMaterial;
+    }
+    // Live colour changes (preference edited with a selection active): both
+    // highlight materials are unlit, so one setter updates each in place.
+    if (pref != mHighlightColourApplied) {
+        mHighlightColourApplied = pref;
+        if (mHighlightMaterial) mTarget->setUnlitMaterial(mHighlightMaterial, kSelection);
+        if (mOutlineMaterial)   mTarget->setUnlitMaterial(mOutlineMaterial, kSelection);
     }
     if (!mHighlightNode) mHighlightNode = mTarget->createNode();
     if (!mHighlightNode || !mat) return;
@@ -272,6 +288,16 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
         // The light rides on the mirrored node: position and direction follow the document.
         auto light = node.staticCast<iris::LightNode>();
         if (mTarget->setLight(e.node, toLightDesc(light.data()))) e.hasLight = true;
+        // The document's per-light shadow type (Hard/Soft/VerySoft) has no per-light
+        // engine equivalent — the filter is global. Accumulate the strongest request;
+        // applyEnvironment pushes it (iris::ShadowMapType orders None<Hard<Soft<VerySoft).
+        if (light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None) {
+            ShadowFilter f = ShadowFilter::Hard;
+            if (light->shadowMap->shadowType == iris::ShadowMapType::Soft)          f = ShadowFilter::Soft;
+            else if (light->shadowMap->shadowType == iris::ShadowMapType::VerySoft) f = ShadowFilter::VerySoft;
+            if (!mAnyShadowCaster || int(f) > int(mShadowFilter)) mShadowFilter = f;
+            mAnyShadowCaster = true;
+        }
         syncLightWires(e, light.data());
     }
 
@@ -554,9 +580,15 @@ bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
     return out.indices.size() >= 3;
 }
 
-void SceneMirror::applyEnvironment(View *view)
+void SceneMirror::applyEnvironment(View *view, Engine *engine)
 {
     if (!mSource || !view) return;
+    // Shadow filter: the engine has ONE global filter (Engine.h), the document a
+    // per-light ShadowMapType. Policy: the strongest (softest) quality any
+    // shadow-casting light asked for wins, as accumulated by the last sync().
+    // Nothing casting shadows leaves the engine's current filter untouched.
+    if (engine && mAnyShadowCaster && engine->shadowFilter() != mShadowFilter)
+        engine->setShadowFilter(mShadowFilter);
     // World-panel Ambient Color: flat, exactly like the legacy uniform (the
     // engine viewport used to hardcode the hemisphere — the panel no-op'd).
     const QColor a = mSource->ambientColor;

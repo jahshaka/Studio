@@ -32,6 +32,24 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "editor/ieditorviewport.h"
 
+namespace {
+// The "Material" sky was broken even in the legacy renderer (its handlers are
+// commented out below, marked BROKEN!), so it is gone from the UI. Old scenes
+// that still reference it fall back to a single-colour sky (SceneReader does the
+// same). The combo row -> iris::SkyType mapping is this table — the enum values
+// are NOT the row indices any more.
+const iris::SkyType kSkyRows[] = {
+    iris::SkyType::SINGLE_COLOR, iris::SkyType::CUBEMAP, iris::SkyType::EQUIRECTANGULAR,
+    iris::SkyType::GRADIENT,     iris::SkyType::REALISTIC,
+};
+const int kSkyRowCount = int(sizeof(kSkyRows) / sizeof(kSkyRows[0]));
+int skyRowFor(iris::SkyType t) {
+    for (int i = 0; i < kSkyRowCount; ++i)
+        if (kSkyRows[i] == t) return i;
+    return 0;
+}
+}
+
 WorldSkyPropertyWidget::WorldSkyPropertyWidget()
 {
 	connect(Globals::sceneViewWidget->events(), &EditorViewportEvents::changeSkyFromAssetWidget, this, [this](int index) {
@@ -41,6 +59,9 @@ WorldSkyPropertyWidget::WorldSkyPropertyWidget()
 
 void WorldSkyPropertyWidget::skyTypeChanged(int index)
 {
+	// MATERIAL is no longer offered; scenes saved with it get a single colour.
+	if (static_cast<iris::SkyType>(index) == iris::SkyType::MATERIAL)
+		index = static_cast<int>(iris::SkyType::SINGLE_COLOR);
 	scene->skyType = static_cast<iris::SkyType>(index);
 
 	clearPanel(this->layout());
@@ -70,11 +91,14 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 	skySelector->addItem("Cubemap");
 	skySelector->addItem("Equirectangular");
 	skySelector->addItem("Gradient");
-	skySelector->addItem("Material");
 	skySelector->addItem("Realistic");
-	skySelector->setCurrentIndex(index);
+	skySelector->setCurrentIndex(skyRowFor(static_cast<iris::SkyType>(index)));
 
-	connect(skySelector, SIGNAL(currentIndexChanged(int)), this, SLOT(skyTypeChanged(int)));
+	// Combo rows are NOT SkyType values (MATERIAL is gone): translate via the table.
+	connect(skySelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this, [this](int row) {
+		if (row >= 0 && row < kSkyRowCount)
+			skyTypeChanged(static_cast<int>(kSkyRows[row]));
+	});
 
 	switch (scene->skyType) {
 		case iris::SkyType::SINGLE_COLOR: {
@@ -175,27 +199,9 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 			break;
 		}
 
-		case iris::SkyType::MATERIAL: {
-			shaderSelector = this->addComboBox("Material");
-
-			//auto materialsAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader));
-			//shaderSelector->getWidget()->blockSignals(true);	// don't register initial signals
-			//shaderSelector->clear();
-			//for (const auto shader : materialsAvailableFromDatabase) {
-			//	shaderSelector->addItem(QFileInfo(shader.name).baseName(), shader.guid);
-			//}
-			//shaderSelector->getWidget()->blockSignals(false);
-			////If we only have one shader, we need to trigger the update function
-			//if (materialsAvailableFromDatabase.count() == 1) onMaterialChanged(0);
-
-			// BROKEN!
-			//shaderSelector->setCurrentItemData(skyDefinition.value("materialGuid").toString());
-			//setSkyFromCustomMaterial(skyDefinition);
-
-			//connect(shaderSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(onMaterialChanged(int)));
-
+		case iris::SkyType::MATERIAL:
+			// Unreachable (coerced to SINGLE_COLOR above); kept for -Wswitch.
 			break;
-		}
 
 		case iris::SkyType::GRADIENT: {
 			colorTop = this->addColorPicker("Top Color");

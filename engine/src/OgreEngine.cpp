@@ -1636,6 +1636,17 @@ public:
     std::string backendName() const override { return mBackendName; }
     const std::string &lastError() const override { return mLastError; }
 
+    /// GLOBAL by construction: HlmsPbs keeps ONE ShadowFilter for every shadowed
+    /// light in every scene (HlmsPbs::mShadowFilter). The filter properties are
+    /// evaluated in preparePassHash each pass, so changing it at runtime takes
+    /// effect next frame — no datablock or workspace rebuild.
+    void setShadowFilter(ShadowFilter f) override {
+        mShadowFilter = f;
+        if (mHlmsRegistered) applyShadowFilter();
+        // else: applied by ensureHlms() once the Hlms exists.
+    }
+    ShadowFilter shadowFilter() const override { return mShadowFilter; }
+
     ~OgreEngine() override {
         // Dependency order, all BEFORE Root: views (workspaces, cameras, windows,
         // textures) -> scenes (items, datablocks, our MeshPtrs, scene managers)
@@ -1698,6 +1709,7 @@ private:
         if (const char *dbg = std::getenv("JAHSHAKA_HLMS_DEBUG_DIR"))
             mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS)->setDebugOutputPath(true, true, dbg);
         mHlmsRegistered = true;
+        applyShadowFilter();   // replaces Ogre's PCF_3x3 default with ours (Soft = 4x4)
         registerCommonMaterials();
         createShadowNode();
     }
@@ -1755,10 +1767,30 @@ private:
             cm, mRoot->getRenderSystem()->getCapabilities(), OgreView::kShadowNodeName, params, false);
     }
 
+    /// Maps the neutral enum onto HlmsPbs. PCF only: ExponentialShadowMaps is
+    /// deliberately NOT used for VerySoft — ESM needs an ESM-compatible shadow
+    /// node (colour shadow-map target plus blur passes) which our fixed
+    /// depth-atlas shadow node (createShadowNode) is not, and
+    /// setShadowSettings(ESM) also flips the global ShadowCameraSetup ESM flag.
+    void applyShadowFilter() {
+        JAH_TRY {
+            auto *pbs = static_cast<Ogre::HlmsPbs *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS));
+            if (!pbs) return;
+            Ogre::HlmsPbs::ShadowFilter f = Ogre::HlmsPbs::PCF_4x4;
+            switch (mShadowFilter) {
+            case ShadowFilter::Hard:     f = Ogre::HlmsPbs::PCF_2x2; break;
+            case ShadowFilter::Soft:     f = Ogre::HlmsPbs::PCF_4x4; break;
+            case ShadowFilter::VerySoft: f = Ogre::HlmsPbs::PCF_6x6; break;
+            }
+            pbs->setShadowSettings(f);
+        } JAH_CATCH(mLastError, );
+    }
+
     Ogre::Root     *mRoot = nullptr;
     Ogre::Window   *mNullWindow = nullptr;
     Display        *mDisplay = nullptr;
     bool            mHlmsRegistered = false;
+    ShadowFilter    mShadowFilter = ShadowFilter::Soft;
     Ogre::AbiCookie mAbiCookie{};
     std::string     mBackendName, mMediaDir, mLastError;
     std::vector<std::unique_ptr<OgreScene>> mScenes;

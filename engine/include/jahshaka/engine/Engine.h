@@ -207,6 +207,14 @@ public:
     /// Draws every enabled View once. The host owns the loop and calls this.
     virtual void renderOneFrame() = 0;
 
+    /// Shadow filter quality for EVERY shadowed light in EVERY scene — the
+    /// backend's PBR pipeline has one global filter, not a per-light one
+    /// (Hard = PCF 2x2, Soft = PCF 4x4, VerySoft = PCF 6x6). Callers with
+    /// per-light document settings push the strongest requested quality.
+    /// Cheap: takes effect next frame, no material rebuild. Default: Soft.
+    virtual void setShadowFilter(ShadowFilter) = 0;
+    virtual ShadowFilter shadowFilter() const = 0;
+
     virtual std::string backendName() const = 0;
     /// Reason for the most recent failure; empty if none.
     virtual const std::string &lastError() const = 0;

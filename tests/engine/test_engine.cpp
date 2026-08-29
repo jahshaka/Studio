@@ -438,6 +438,71 @@ void shadows_darken_the_ground() {
     CHECK_MSG(brightest2 - darkest2 < (brightest - darkest), "without shadows the ground row is flatter");
 }
 
+void shadow_filter_quality_is_settable() {
+    // Engine::setShadowFilter is GLOBAL (one HlmsPbs filter for every shadowed
+    // light). Every quality must be acceptable at runtime and keep shadows
+    // rendering; Hard (PCF 2x2) vs VerySoft (PCF 6x6) should differ at the
+    // shadow's edge (penumbra), which we count rather than pin to exact pixels.
+    Fixture fx;
+    View *v = fx.view("filter-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("filter-scene");              REQUIRE(s);
+    v->setScene(s);
+    CHECK(fx.e->shadowFilter() == ShadowFilter::Soft);   // documented default
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.1f, 0.1f, 0.1f));
+    MeshId cubeMesh = s->createMesh(unitCubeData());
+    PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 0.9f;
+    MaterialId mat = s->createPbrMaterial(white);
+    NodeId ground = s->createNode();
+    CHECK(s->attachMesh(ground, cubeMesh, mat));
+    s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+    NodeId cube = s->createNode();
+    CHECK(s->attachMesh(cube, cubeMesh, mat));
+    s->setNodeTransform(cube, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+    NodeId sun = s->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 3.0f; d.castShadows = true;
+    CHECK(s->setLight(sun, d));
+    // Tilted sun (roll 45 toward +X): the cast shadow lands beside the cube.
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(0, 0, 0.3826834f, 0.9238795f), Vec3(1, 1, 1));
+    v->setShadows(true);
+    CameraDesc c; c.position = Vec3(0, 6, 0.01f); c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f); c.fovDegrees = 50;
+    v->setCamera(c);
+    auto lum = [](const Image &img, unsigned x, unsigned y) {
+        const Colour q = img.at(x, y);
+        return int(std::lround((q.r + q.g + q.b) / 3.0f * 255.0f));
+    };
+    auto groundContrast = [&](const Image &img) {
+        int darkest = 255, brightest = 0;
+        for (unsigned x = 2; x < img.width - 2; ++x) {
+            const int l = lum(img, x, 64);
+            darkest = std::min(darkest, l); brightest = std::max(brightest, l);
+        }
+        return brightest - darkest;
+    };
+    Image hard, soft, verySoft;
+    const struct { ShadowFilter f; const char *name; Image *img; } runs[] = {
+        { ShadowFilter::Hard,     "Hard",     &hard },
+        { ShadowFilter::Soft,     "Soft",     &soft },
+        { ShadowFilter::VerySoft, "VerySoft", &verySoft },
+    };
+    for (const auto &run : runs) {
+        fx.e->setShadowFilter(run.f);
+        CHECK(fx.e->shadowFilter() == run.f);
+        render(fx.e, 4);
+        REQUIRE(v->readPixels(*run.img));
+        const int contrast = groundContrast(*run.img);
+        std::printf("    filter %-8s: ground row contrast %d\n", run.name, contrast);
+        CHECK_MSG(contrast > 40, "shadows must keep rendering under filter %s: contrast %d", run.name, contrast);
+    }
+    // The kernels differ, so the penumbra should: count pixels that changed.
+    int changed = 0;
+    for (unsigned y = 0; y < hard.height; ++y)
+        for (unsigned x = 0; x < hard.width; ++x)
+            if (std::abs(lum(hard, x, y) - lum(verySoft, x, y)) > 6) ++changed;
+    std::printf("    Hard vs VerySoft: %d pixel(s) differ\n", changed);
+    CHECK_MSG(changed > 0, "PCF 2x2 and 6x6 should not produce identical images");
+    fx.e->setShadowFilter(ShadowFilter::Soft);   // restore the default for later tests
+}
+
 void equirect_sky_fills_the_background() {
     Fixture fx;
     View *v = fx.view("sky-view", 48, 48, kBlue); REQUIRE(v);
@@ -898,6 +963,7 @@ int main(int argc, char **argv) {
         { "resize_offscreen",                       resize_offscreen },
         { "background_changes_at_runtime",          background_changes_at_runtime },
         { "shadows_darken_the_ground",              shadows_darken_the_ground },
+        { "shadow_filter_quality_is_settable",      shadow_filter_quality_is_settable },
         { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
         { "cubemap_sky_faces_match_directions",     cubemap_sky_faces_match_directions },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },

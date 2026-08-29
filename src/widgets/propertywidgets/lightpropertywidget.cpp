@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "../../irisgl/src/scenegraph/scenenode.h"
 #include "../../irisgl/src/scenegraph/lightnode.h"
 
+#include "../../engine/enginehost.h"
+
 
 LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     AccordianBladeWidget(parent)
@@ -48,6 +50,15 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 
 	shadowAlpha = this->addFloatValueSlider("Shadow Transparency", 0, 1.f);
 	shadowColor = this->addColorPicker("Shadow Color");
+
+	// Per-light shadow colour/transparency have no engine equivalent (Ogre-Next's
+	// PBR pipeline has no per-light shadow tint — and legacy's own PBR shader
+	// ignored the colour too). Hide the controls in engine mode; legacy keeps them.
+	mShadowTintSupported = EngineHost::viewportBackend() != ViewportBackend::Engine;
+	if (!mShadowTintSupported) {
+		shadowAlpha->hide();
+		shadowColor->hide();
+	}
 
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));
@@ -105,8 +116,10 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         } else {
             shadowSize->show();
             shadowType->show();
-			shadowColor->show();
-			shadowAlpha->show();
+			if (mShadowTintSupported) {
+				shadowColor->show();
+				shadowAlpha->show();
+			}
             //shadowBias->show();
         }
     }

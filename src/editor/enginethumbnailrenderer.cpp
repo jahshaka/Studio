@@ -184,6 +184,10 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     document->update(0);
     mMirror->setSource(document);
     mMirror->sync();
+    // Background from the document's sky (buildPreviewScene's 25,25,25 for asset
+    // previews; a real scene's sky colour matches the viewport). Ambient stays the
+    // renderer's own studio lighting — deliberately not applyEnvironment.
+    mMirror->applySky(mView);
     mMirror->applyCamera(camera, mView);
 
     mView->setEnabled(true);

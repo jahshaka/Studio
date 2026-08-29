@@ -476,7 +476,7 @@ void EngineSceneViewport::syncFrame()
         mOverlay->update(mSelectedNode ? mGizmo : nullptr, rayPos, rayDir, viewDir);
     }
     if (mMirror) mMirror->applySky(view());
-    if (mMirror) mMirror->applyEnvironment(view());
+    if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
     if (mMirror && mEditorCam) mMirror->applyCamera(mEditorCam, view());
 }
 
@@ -494,7 +494,15 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height)
                                              Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
     shot->setScene(mEngineScene);
-    if (mMirror) { mMirror->sync(); if (mEditorCam) mMirror->applyCamera(mEditorCam, shot); }
+    if (mMirror) {
+        mMirror->sync();
+        // The shot view starts with a hardcoded background; give it the document
+        // sky (flat colour) and world settings (shadows toggle) like the live view.
+        // Textured skies are scene geometry and show up regardless.
+        mMirror->applySky(shot);
+        mMirror->applyEnvironment(shot);
+        if (mEditorCam) mMirror->applyCamera(mEditorCam, shot);
+    }
     for (int i = 0; i < 2; ++i) mEngine->renderOneFrame();
     Image img;
     QImage result;

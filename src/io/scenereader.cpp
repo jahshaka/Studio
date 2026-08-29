@@ -246,7 +246,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		}
 
         case iris::SkyType::MATERIAL: {
-			scene->skyType = iris::SkyType::MATERIAL;
+			// The Material sky type was removed from the UI (it never worked, even
+			// in the legacy renderer). Old scenes fall back to a single-colour sky.
+			scene->skyType = iris::SkyType::SINGLE_COLOR;
+			if (scene->skyData.contains("SingleColor"))
+				scene->skyColor = readColor(scene->skyData.value("SingleColor").value("skyColor").toObject());
 			break;
 		}
 

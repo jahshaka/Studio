@@ -419,6 +419,23 @@ int main(int argc, char **argv)
     std::printf("    highlight on (wireframe): %d yellow pixels\n", yellowWire);
     CHECK(yellowWire > 10, "the wireframe style still highlights when toggled on");
     mirror.setHighlightWireframe(false);
+
+    // ---- the outline colour follows the document's preference ----
+    // MainWindow pushes the Preferences outline colour onto scene->outlineColor;
+    // the mirror reads it (fallback: the legacy yellow when never set).
+    auto countRed = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g < 0.3f && c.b < 0.3f) ++n; } return n; };
+    doc->setOutlineColor(QColor(255, 0, 0));
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    const int redOutline = countRed(img);
+    std::printf("    outline colour preference: %d red pixels, %d yellow\n", redOutline, countYellow(img));
+    CHECK(redOutline > 10, "outline uses the document's outlineColor preference");
+    CHECK(countYellow(img) == 0, "the default yellow is replaced by the preference");
+    doc->setOutlineColor(QColor());   // invalid = preference never set
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    CHECK(countYellow(img) > 10, "an unset preference falls back to the legacy yellow");
+
     mirror.setHighlightedNode(nullptr);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
