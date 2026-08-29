@@ -1567,6 +1567,21 @@ void MainWindow::addDirectionalLight()
     addNodeToScene(node);
 }
 
+void MainWindow::addAreaLight()
+{
+    // Engine viewport only (the menu entry is hidden in legacy mode): Ogre-Next's
+    // rectangular area lights. No bundled icon glyph — SceneMirror draws one.
+    this->sceneView->beginResourceLoad();
+    auto node = iris::LightNode::create();
+    node->setLightType(iris::LightType::Area);
+    node->setName("Area Light");
+    node->intensity = 1.0f;
+    node->distance = 10.0f;
+    node->rectWidth = 1.0f;
+    node->rectHeight = 1.0f;
+    addNodeToScene(node);
+}
+
 void MainWindow::addEmpty()
 {
     this->sceneView->beginResourceLoad();

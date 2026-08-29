@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include "graphics/texture2d.h"
 #include <QVector3D>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -574,6 +575,86 @@ int main(int argc, char **argv)
         CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=Soft casts shadows");
         point->shadowMap->shadowType = iris::ShadowMapType::None;
         CHECK(!SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=None stops casting");
+    }
+
+    // ---- area light: serialised fields flow through toLightDesc and light the scene ----
+    {
+        // The io round-trip: SceneWriter::writeLightData emits exactly these keys and
+        // SceneReader::createLight reads them back with these defaults (linking the
+        // real io stack drags the whole app in, so the suite replicates the keys —
+        // the same precedent as the material serialisation block above).
+        QJsonObject j;
+        j["lightType"] = "area"; j["rectWidth"] = 2.0; j["rectHeight"] = 0.5;
+        j["doubleSided"] = true; j["accurate"] = true;
+        auto fromJson = iris::LightNode::create();
+        fromJson->setLightType(j["lightType"].toString() == "area" ? iris::LightType::Area
+                                                                   : iris::LightType::Point);
+        fromJson->rectWidth = (float)j["rectWidth"].toDouble(1.0f);
+        fromJson->rectHeight = (float)j["rectHeight"].toDouble(1.0f);
+        fromJson->doubleSided = j["doubleSided"].toBool(false);
+        fromJson->accurate = j["accurate"].toBool(false);
+        fromJson->shadowMap->shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
+        const LightDesc ad = SceneMirror::toLightDesc(fromJson.data());
+        CHECK(ad.type == LightType::Area, "document area light maps to LightType::Area");
+        CHECK(std::abs(ad.rectWidth - 2.0f) < 1e-5f && std::abs(ad.rectHeight - 0.5f) < 1e-5f,
+              "rect size flows through toLightDesc");
+        CHECK(ad.doubleSided && ad.accurate, "doubleSided + accurate flow through toLightDesc");
+        CHECK(!ad.castShadows, "area lights never cast shadows, whatever Shadow Type says");
+        auto dup = fromJson->createDuplicate().staticCast<iris::LightNode>();
+        CHECK(dup->rectWidth == fromJson->rectWidth && dup->doubleSided && dup->accurate,
+              "duplicate keeps the area-light fields");
+
+        // Pixel proof: a document area light above the cube lights it through the mirror.
+        doc->getRootNode()->removeChild(point);
+        doc->getRootNode()->addChild(meshNode2);
+        target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        // The light shines straight down: only the cube's TOP face is lit, and the
+        // frame centre is its dark front face. The cube is green and the background
+        // blue, so the brightest green pixel anywhere tracks the lit top face.
+        auto maxGreen = [&]() { float m = 0; for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) m = std::max(m, img.at(x, y).g); return m; };
+        const float unlit = maxGreen();
+        auto area = iris::LightNode::create();
+        area->lightType = iris::LightType::Area;          // default orientation: emits down -Y
+        area->intensity = 4.0f;
+        area->distance = 20.0f;
+        area->rectWidth = 2.0f; area->rectHeight = 2.0f;
+        area->color = QColor(255, 255, 255);
+        area->setLocalPos(QVector3D(0.0f, 1.2f, 0.0f));   // just above the cube, facing down
+        doc->getRootNode()->addChild(area);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const float litApprox = maxGreen();
+        area->accurate = true;                             // LT_AREA_LTC
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const float litLtc = maxGreen();
+        std::printf("    area light: unlit %.2f  approx %.2f  ltc %.2f\n", unlit, litApprox, litLtc);
+        CHECK(litApprox > unlit + 0.1f, "document area light (approx) lights the cube");
+        CHECK(litLtc > unlit + 0.1f, "accurate (LTC) area light lights the cube too");
+
+        // The helper wire is the emitting rectangle (wire kind 3) + icon billboard.
+        area->color = QColor(255, 0, 255);                 // magenta wires
+        mirror.setLightWires(true);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        int magenta = 0, white = 0;
+        for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) ++magenta;
+            if (c.r > 0.85f && c.g > 0.85f && c.b > 0.85f) ++white;
+        }
+        std::printf("    area helper: %d magenta wire px, %d white icon px\n", magenta, white);
+        CHECK(magenta > 10, "area light draws its rectangle outline");
+        CHECK(white > 5, "area light shows the procedural rounded-rect icon");
+        mirror.setLightWires(false);
+
+        // Leave the scene as the sky tests below expect it: empty, bright ambient.
+        doc->getRootNode()->removeChild(area);
+        doc->getRootNode()->removeChild(meshNode2);
+        target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
     // ---- flat sky colour from the document becomes the background ----

@@ -538,6 +538,10 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
     lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
+    lightNode->rectWidth = (float)nodeObj["rectWidth"].toDouble(1.0f);
+    lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(1.0f);
+    lightNode->doubleSided = nodeObj["doubleSided"].toBool(false);
+    lightNode->accurate = nodeObj["accurate"].toBool(false);
     lightNode->color = readColor(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(true));
 
@@ -557,6 +561,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
         lightNode->icon = iris::Texture2D::load(":/icons/light.png");      // the sun glyph
     } else if (lightNode->lightType == iris::LightType::Spot) {
         lightNode->icon = iris::Texture2D::load(":/icons/spotlight.png");
+    } else if (lightNode->lightType == iris::LightType::Area) {
+        // No bundled glyph: SceneMirror::syncLightIcon draws a procedural
+        // rounded-rect billboard for area lights when icon is unset.
     } else {
         lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
     }
@@ -623,6 +630,7 @@ iris::LightType SceneReader::getLightTypeFromName(QString lightType)
     if (lightType == "point")       return iris::LightType::Point;
     if (lightType == "directional") return iris::LightType::Directional;
     if (lightType == "spot")        return iris::LightType::Spot;
+    if (lightType == "area")        return iris::LightType::Area;
 
     return iris::LightType::Point;
 }

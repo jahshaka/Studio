@@ -535,6 +535,10 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["intensity"] = lightNode->intensity;
     sceneNodeObject["distance"] = lightNode->distance;
     sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
+    sceneNodeObject["rectWidth"] = lightNode->rectWidth;
+    sceneNodeObject["rectHeight"] = lightNode->rectHeight;
+    sceneNodeObject["doubleSided"] = lightNode->doubleSided;
+    sceneNodeObject["accurate"] = lightNode->accurate;
 	sceneNodeObject["color"] = jsonColor(lightNode->color);
 
 	sceneNodeObject["shadowAlpha"] = lightNode->shadowAlpha;
@@ -577,6 +581,8 @@ QString SceneWriter::getLightNodeTypeName(iris::LightType lightType)
             return "directional";
         case iris::LightType::Spot:
             return "spot";
+        case iris::LightType::Area:
+            return "area";
         default:
             return "none";
     }

@@ -723,6 +723,63 @@ void light_on_node_and_camera_desc() {
     CHECK(!near(centre(img), kBlue));
 }
 
+void area_light_lights_the_wall() {
+    // A rectangular area light in front of a wall: both variants (fast approx and
+    // accurate LTC) must produce a lit region, and single-sided lights must go
+    // dark when turned away — double-sided ones must not.
+    Fixture fx;
+    View *v = fx.view("area-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("area-scene");            REQUIRE(s);
+    v->setScene(s);
+    v->setCameraPosition(Vec3(0, 0, 5));
+    v->lookAt(Vec3(0, 0, 0));
+    s->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = Colour(0.9f, 0.9f, 0.9f); p.roughness = 0.8f;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId wall = s->createNode();
+    CHECK(s->attachMesh(wall, mesh, mat));
+    s->setNodeTransform(wall, Vec3(0, 0, 0), Quat(), Vec3(3.0f, 3.0f, 0.2f));
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    auto lum = [&](void) { const Colour c = img.at(img.width / 2, img.height / 2); return c.r + c.g + c.b; };
+    const float unlit = lum();
+
+    // Lights shine down their node's -Y; rotate +90 deg about X so -Y becomes -Z:
+    // the rectangle faces the wall from z=1.5.
+    const float h = 0.70710678f;                       // sin/cos of 45 deg
+    NodeId lightNode = s->createNode();
+    s->setNodeTransform(lightNode, Vec3(0, 0, 1.5f), Quat(h, 0, 0, h), Vec3(1, 1, 1));
+    LightDesc d; d.type = LightType::Area; d.intensity = 2.0f; d.range = 20.0f;
+    d.rectWidth = 2.0f; d.rectHeight = 2.0f;
+    CHECK(s->setLight(lightNode, d));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const float approx = lum();
+    d.accurate = true;                                 // LT_AREA_LTC
+    CHECK(s->setLight(lightNode, d));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const float ltc = lum();
+    std::printf("    wall centre: unlit %.2f  approx %.2f  ltc %.2f\n", unlit, approx, ltc);
+    CHECK(approx > unlit + 0.15f);
+    CHECK(ltc > unlit + 0.15f);
+
+    // Face the light AWAY from the wall (-Y becomes +Z): a single-sided rect
+    // leaves the wall dark; double-sided lights it again.
+    s->setNodeTransform(lightNode, Vec3(0, 0, 1.5f), Quat(-h, 0, 0, h), Vec3(1, 1, 1));
+    d.accurate = false;
+    CHECK(s->setLight(lightNode, d));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const float away = lum();
+    d.doubleSided = true;
+    CHECK(s->setLight(lightNode, d));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const float both = lum();
+    std::printf("    turned away: single-sided %.2f  double-sided %.2f\n", away, both);
+    CHECK(away < approx - 0.1f);
+    CHECK(both > away + 0.1f);
+    CHECK(s->removeLight(lightNode));
+}
+
 void overlay_lines_draw_on_top() {
     Fixture fx;
     View *v = fx.view("overlay-view", 96, 96, kBlue); REQUIRE(v);
@@ -970,6 +1027,7 @@ int main(int argc, char **argv) {
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
         { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
+        { "area_light_lights_the_wall",             area_light_lights_the_wall },
         { "overlay_lines_draw_on_top",              overlay_lines_draw_on_top },
         { "pbr_alpha_blend_mixes_with_background",  pbr_alpha_blend_mixes_with_background },
         { "pbr_alpha_cutout_discards_below_cutoff", pbr_alpha_cutout_discards_below_cutoff },

@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "../colorpickerwidget.h"
 #include "../colorvaluewidget.h"
 #include "../comboboxwidget.h"
+#include "../checkboxwidget.h"
 
 #include "../../irisgl/src/scenegraph/scene.h"
 #include "../../irisgl/src/scenegraph/scenenode.h"
@@ -34,6 +35,12 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     distance = this->addFloatValueSlider("Distance", 0, 100.f);
     spotCutOff = this->addFloatValueSlider("Spotlight CutOff", 0, 90.f);
     spotCutOffSoftness = this->addFloatValueSlider("Spotlight Softness", .1f, 90.f);
+
+    // Area lights only (engine viewport): the emitting rectangle and its modes.
+    rectWidth = this->addFloatValueSlider("Rect Width", 0.05f, 20.f);
+    rectHeight = this->addFloatValueSlider("Rect Height", 0.05f, 20.f);
+    doubleSided = this->addCheckBox("Double Sided");
+    accurate = this->addCheckBox("Accurate (LTC)");
 
     shadowType = this->addComboBox("Shadow Type");
     shadowType->addItem("None");
@@ -72,6 +79,11 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     connect(spotCutOff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffChanged(float)));
     connect(spotCutOffSoftness,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffSoftnessChanged(float)));
 
+    connect(rectWidth,SIGNAL(valueChanged(float)),this,SLOT(lightRectWidthChanged(float)));
+    connect(rectHeight,SIGNAL(valueChanged(float)),this,SLOT(lightRectHeightChanged(float)));
+    connect(doubleSided,SIGNAL(valueChanged(bool)),this,SLOT(lightDoubleSidedChanged(bool)));
+    connect(accurate,SIGNAL(valueChanged(bool)),this,SLOT(lightAccurateChanged(bool)));
+
 	connect(shadowAlpha, SIGNAL(valueChanged(float)), this, SLOT(shadowAlphaChanged(float)));
 	connect(shadowColor->getPicker(), SIGNAL(onColorChanged(QColor)), this, SLOT(shadowColorChanged(QColor)));
 	connect(shadowColor->getPicker(), SIGNAL(onSetColor(QColor)), this, SLOT(shadowColorChanged(QColor)));
@@ -106,13 +118,36 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
             spotCutOffSoftness->hide();
         }
 
+        // Area lights: the emitting rectangle replaces the cone controls.
+        if (lightNode->getLightType()==iris::LightType::Area) {
+            rectWidth->setValue(lightNode->rectWidth);
+            rectHeight->setValue(lightNode->rectHeight);
+            doubleSided->setValue(lightNode->doubleSided);
+            accurate->setValue(lightNode->accurate);
+            rectWidth->show();
+            rectHeight->show();
+            doubleSided->show();
+            accurate->show();
+        } else {
+            rectWidth->hide();
+            rectHeight->hide();
+            doubleSided->hide();
+            accurate->hide();
+        }
+
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap->resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
         //shadowBias->setValue(lightNode->shadowMap->bias);
 
         // Point lights: legacy never shadowed them (controls hidden); the engine
         // does, so engine mode keeps Shadow Type/Size. Tint stays per-backend.
-        if (lightNode->getLightType()==iris::LightType::Point) {
+        if (lightNode->getLightType()==iris::LightType::Area) {
+            // Ogre-Next cannot shadow area lights: hide every shadow control.
+            shadowSize->hide();
+            shadowType->hide();
+            shadowColor->hide();
+            shadowAlpha->hide();
+        } else if (lightNode->getLightType()==iris::LightType::Point) {
             if (mPointShadowsSupported) {
                 shadowSize->show();
                 shadowType->show();
@@ -167,6 +202,30 @@ void LightPropertyWidget::lightSpotCutoffSoftnessChanged(float spotCutOffSoftnes
 {
     if(!!lightNode)
         lightNode->spotCutOffSoftness = spotCutOffSoftness;
+}
+
+void LightPropertyWidget::lightRectWidthChanged(float width)
+{
+    if(!!lightNode)
+        lightNode->rectWidth = width;
+}
+
+void LightPropertyWidget::lightRectHeightChanged(float height)
+{
+    if(!!lightNode)
+        lightNode->rectHeight = height;
+}
+
+void LightPropertyWidget::lightDoubleSidedChanged(bool doubleSided)
+{
+    if(!!lightNode)
+        lightNode->doubleSided = doubleSided;
+}
+
+void LightPropertyWidget::lightAccurateChanged(bool accurate)
+{
+    if(!!lightNode)
+        lightNode->accurate = accurate;
 }
 
 void LightPropertyWidget::shadowTypeChanged(QString name)

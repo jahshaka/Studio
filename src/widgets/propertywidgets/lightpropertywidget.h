@@ -71,6 +71,11 @@ protected slots:
 
     void lightSpotCutoffSoftnessChanged(float spotCutOffSoftness);
 
+    void lightRectWidthChanged(float width);
+    void lightRectHeightChanged(float height);
+    void lightDoubleSidedChanged(bool doubleSided);
+    void lightAccurateChanged(bool accurate);
+
     void shadowTypeChanged(QString name);
     void shadowSizeChanged(QString size);
 	void shadowBiasChanged(float bias);
@@ -91,6 +96,11 @@ private:
     HFloatSliderWidget* spotCutOff;
     HFloatSliderWidget* spotCutOffSoftness;
     HFloatSliderWidget* intensity;
+    // Area lights (engine viewport): rectangle size, emission sides, LTC toggle.
+    HFloatSliderWidget* rectWidth;
+    HFloatSliderWidget* rectHeight;
+    CheckBoxWidget* doubleSided;
+    CheckBoxWidget* accurate;
     //EnumPicker* lightTypePicker;
 
 	ColorValueWidget* shadowColor;

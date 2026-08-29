@@ -188,7 +188,7 @@ void SceneMirror::setLightWires(bool on)
 
 MeshId SceneMirror::wireMeshFor(int kind)
 {
-    if (kind < 0 || kind > 2) return 0;
+    if (kind < 0 || kind > 3) return 0;
     if (mWireMeshes[kind]) return mWireMeshes[kind];
     std::vector<Vec3> pts;
     auto circle = [&](int axis, float r) {
@@ -203,6 +203,14 @@ MeshId SceneMirror::wireMeshFor(int kind)
     };
     if (kind == 1) {                       // point: three rings
         circle(0, 0.5f); circle(1, 0.5f); circle(2, 0.5f);
+    } else if (kind == 3) {                // area: unit rectangle in XZ + a short normal tick
+                                           // down -Y (the emit direction, like the arrow)
+        const Vec3 c0(-0.5f, 0, -0.5f), c1(0.5f, 0, -0.5f), c2(0.5f, 0, 0.5f), c3(-0.5f, 0, 0.5f);
+        pts.push_back(c0); pts.push_back(c1);
+        pts.push_back(c1); pts.push_back(c2);
+        pts.push_back(c2); pts.push_back(c3);
+        pts.push_back(c3); pts.push_back(c0);
+        pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(0, -0.4f, 0));
     } else {                               // directional / spot: an arrow down -Y (+ a cone for spot),
                                            // matching the light direction convention (document -Y)
         pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(0, -1.5f, 0));
@@ -233,6 +241,7 @@ void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
     int kind = 1;
     if (light->lightType == iris::LightType::Directional) kind = 0;
     else if (light->lightType == iris::LightType::Spot) kind = 2;
+    else if (light->lightType == iris::LightType::Area) kind = 3;
     MeshId m = wireMeshFor(kind);
     if (!m) return;
     if (!e.wireNode) e.wireNode = mTarget->createNode(e.node);
@@ -253,6 +262,9 @@ void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
         ry = range / 1.5f;                         // cone reaches down to range
         const float half = qDegreesToRadians(std::min(std::max(light->spotCutOff, 1.0f), 89.0f));
         rx = rz = range * std::tan(half) / 0.6f;   // base radius = range * tan(cutoff)
+    } else if (kind == 3) {
+        rx = std::max(light->rectWidth, 0.01f);    // unit rect scaled to the emitting rectangle
+        rz = std::max(light->rectHeight, 0.01f);   // (width = local X, height = local Z; tick stays)
     }
     const QVector3D s = light->getLocalScale();
     mTarget->setNodeTransform(e.wireNode, Vec3(), Quat(),
@@ -278,6 +290,9 @@ void SceneMirror::syncLightIcon(Entry &e, iris::LightNode *light)
         switch (light->lightType) {
         case iris::LightType::Directional: path = QStringLiteral(":/icons/light.png"); break;    // the sun glyph
         case iris::LightType::Spot:        path = QStringLiteral(":/icons/spotlight.png"); break;
+        // No bundled area glyph: a sentinel key makes iconTextureFor draw a
+        // procedural rounded-rect panel (the Unreal-style rect-light sprite).
+        case iris::LightType::Area:        path = QStringLiteral("jah://area-light-glyph"); break;
         default:                           path = QStringLiteral(":/icons/bulb.png"); break;
         }
     }
@@ -302,7 +317,21 @@ TextureId SceneMirror::iconTextureFor(const QString &path)
     // pixels ourselves. Icons are forced to white glyphs (alpha kept) so every
     // icon reads the same regardless of the source image's colour.
     QImage img(path);
-    if (img.isNull()) {
+    if (path == QStringLiteral("jah://area-light-glyph")) {
+        // Procedural white rounded-rect panel for area lights (no bundled glyph).
+        img = QImage(32, 32, QImage::Format_RGBA8888);
+        img.fill(Qt::transparent);
+        const float r = 5.0f;                    // corner radius
+        const float x0 = 4, x1 = 27, y0 = 7, y1 = 24;  // wider than tall: a panel
+        for (int y = 0; y < 32; ++y)
+            for (int x = 0; x < 32; ++x) {
+                if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+                const float cx = std::min(std::max(float(x), x0 + r), x1 - r);
+                const float cy = std::min(std::max(float(y), y0 + r), y1 - r);
+                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r)
+                    img.setPixelColor(x, y, QColor(255, 255, 255, 255));
+            }
+    } else if (img.isNull()) {
         // No image (e.g. resources absent in tests): a plain white disc.
         img = QImage(32, 32, QImage::Format_RGBA8888);
         img.fill(Qt::transparent);
@@ -367,7 +396,8 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
         // The document's per-light shadow type (Hard/Soft/VerySoft) has no per-light
         // engine equivalent — the filter is global. Accumulate the strongest request;
         // applyEnvironment pushes it (iris::ShadowMapType orders None<Hard<Soft<VerySoft).
-        if (light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None) {
+        if (light->lightType != iris::LightType::Area &&   // area lights cannot shadow
+            light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None) {
             ShadowFilter f = ShadowFilter::Hard;
             if (light->shadowMap->shadowType == iris::ShadowMapType::Soft)          f = ShadowFilter::Soft;
             else if (light->shadowMap->shadowType == iris::ShadowMapType::VerySoft) f = ShadowFilter::VerySoft;
@@ -606,6 +636,7 @@ LightDesc SceneMirror::toLightDesc(iris::LightNode *light)
     switch (light->lightType) {
     case iris::LightType::Directional: d.type = LightType::Directional; break;
     case iris::LightType::Spot:        d.type = LightType::Spot; break;
+    case iris::LightType::Area:        d.type = LightType::Area; break;
     case iris::LightType::Point: default: d.type = LightType::Point; break;
     }
     d.colour = Colour(light->color.redF(), light->color.greenF(), light->color.blueF(), 1.0f);
@@ -613,7 +644,14 @@ LightDesc SceneMirror::toLightDesc(iris::LightNode *light)
     d.range = light->distance;
     d.spotAngleDegrees = light->spotCutOff;
     d.spotSoftness = light->spotCutOffSoftness;
-    d.castShadows = light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None;
+    d.rectWidth = light->rectWidth;
+    d.rectHeight = light->rectHeight;
+    d.doubleSided = light->doubleSided;
+    d.accurate = light->accurate;
+    // Area lights never cast shadows (Ogre-Next limitation; the engine enforces
+    // it too — this keeps the mirror's shadow-filter bookkeeping honest).
+    d.castShadows = light->lightType != iris::LightType::Area &&
+                    light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None;
     return d;
 }
 

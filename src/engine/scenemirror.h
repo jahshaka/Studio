@@ -124,7 +124,7 @@ private:
     bool mLightWires = true;
     QString mSkySignature;
     jahshaka::engine::TextureId mSkyFaceTextures[6] = { 0, 0, 0, 0, 0, 0 };
-    jahshaka::engine::MeshId mWireMeshes[3] = { 0, 0, 0 };   // directional, point, spot
+    jahshaka::engine::MeshId mWireMeshes[4] = { 0, 0, 0, 0 };   // directional, point, spot, area
     iris::SceneNodePtr mHighlighted;
     jahshaka::engine::NodeId mHighlightNode = 0;
     jahshaka::engine::MaterialId mHighlightMaterial = 0;   // wireframe (on top)

@@ -843,10 +843,35 @@ public:
             case LightType::Directional: L->setType(Ogre::Light::LT_DIRECTIONAL); break;
             case LightType::Point:       L->setType(Ogre::Light::LT_POINT); break;
             case LightType::Spot:        L->setType(Ogre::Light::LT_SPOTLIGHT); break;
+            // Area lights emit down the light's -Z, exactly like spot/directional,
+            // so the -Y child-node convention below already orients them.
+            case LightType::Area:
+                L->setType(d.accurate ? Ogre::Light::LT_AREA_LTC : Ogre::Light::LT_AREA_APPROX);
+                break;
             }
             L->setDiffuseColour(toOgre(d.colour));
             L->setSpecularColour(toOgre(d.colour));
-            L->setCastShadows(d.castShadows);
+            // Ogre-Next cannot render shadows for area lights (and our shadow node
+            // only lists directional/point/spot); never mark them casters.
+            L->setCastShadows(d.type == LightType::Area ? false : d.castShadows);
+            if (d.type == LightType::Area) {
+                L->setRectSize(Ogre::Vector2(std::max(d.rectWidth, 0.01f), std::max(d.rectHeight, 0.01f)));
+                L->setDoubleSided(d.doubleSided);
+                // HlmsPbs only pays for area lights in scenes that contain one
+                // (the LightsAreaApprox/Ltc shader properties are gated on the
+                // live light list), but the LTC/BRDF lookup textures must be
+                // resident before an area light is drawn. Loading them reserves
+                // a texture slot in every pass, so do it lazily, once, here —
+                // never for scenes without area lights. The .dds files ship with
+                // the staged Common material scripts (registerCommonResources).
+                static bool sLtcLoaded = false;
+                if (!sLtcLoaded) {
+                    sLtcLoaded = true;   // even a failed attempt: don't retry every frame
+                    auto *pbs = static_cast<Ogre::HlmsPbs *>(
+                        Ogre::Root::getSingleton().getHlmsManager()->getHlms(Ogre::HLMS_PBS));
+                    if (pbs) pbs->loadLtcMatrix();
+                }
+            }
             // HlmsPbs divides diffuse by pi (Lambert BRDF); IrisGL's default shader does
             // not, so matching legacy exposure needs powerScale = intensity * pi. (An
             // earlier 'calibration' removed this while the light DIRECTION mapping was

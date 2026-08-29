@@ -325,6 +325,7 @@ public slots:
     void addPointLight();
     void addSpotLight();
     void addDirectionalLight();
+    void addAreaLight();
 
     void addParticleSystem();
 

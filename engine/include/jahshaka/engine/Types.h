@@ -91,7 +91,7 @@ struct BillboardInstance {
     Colour colour = Colour(1.0f, 1.0f, 1.0f, 1.0f);   ///< multiplies the texture
 };
 
-enum class LightType { Directional, Point, Spot };
+enum class LightType { Directional, Point, Spot, Area };
 
 /// Shadow-map filter quality. GLOBAL to the engine, not per light — the backend's
 /// material system has exactly one filter for every shadowed light (see
@@ -107,7 +107,13 @@ struct LightDesc {
     float     range = 10.0f;           // point/spot falloff distance
     float     spotAngleDegrees = 30.0f;    // outer cone
     float     spotSoftness = 0.1f;         // 0..1, inner = outer * (1 - softness)
-    bool      castShadows = true;
+    bool      castShadows = true;          // ignored for Area (backend cannot shadow them)
+    // Area lights only: a rectangle spanning the node's local X (width) and
+    // Z (height), emitting down -Y like every other light type here.
+    float     rectWidth = 1.0f;
+    float     rectHeight = 1.0f;
+    bool      doubleSided = false;         // emit from both faces
+    bool      accurate = false;            // physically accurate (LTC) instead of fast approx
 };
 
 /// A View's camera. Position/orientation are absolute (the document composes them).
