@@ -74,6 +74,7 @@ set(SRCS
     src/widgets/scenehierarchywidget.cpp 
     src/editor/cameracontrollerbase.cpp 
     src/editor/gizmo.cpp 
+    src/editor/gizmomeshes.cpp 
     src/editor/translationgizmo.cpp 
     src/editor/scalegizmo.cpp 
     src/editor/rotationgizmo.cpp 
@@ -253,6 +254,7 @@ set(HEADERS
     src/widgets/keyframelabeltreewidget.h 
     src/io/materialpresetreader.h 
     src/editor/gizmo.h 
+    src/editor/gizmomeshes.h 
     src/editor/translationgizmo.h 
     src/editor/rotationgizmo.h 
     src/editor/scalegizmo.h 

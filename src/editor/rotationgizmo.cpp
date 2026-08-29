@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "irisgl/src/math/mathhelper.h"
 #include "uimanager.h"
 #include "../widgets/scenenodepropertieswidget.h"
+#include "gizmomeshes.h"
 
 #define DEFAULT_SNAP_LENGTH 10
 
@@ -41,17 +42,17 @@ RotationHandle::RotationHandle(Gizmo* gizmo, GizmoAxis axis)
 	case GizmoAxis::X:
 		handleExtent = QVector3D(1, 0, 0);
 		plane = QVector3D(1, 0, 0);
-		setHandleColor(QColor(255, 0, 0));
+		setHandleColor(QColor(237, 66, 66));
 		break;
 	case GizmoAxis::Y:
 		handleExtent = QVector3D(0, 1, 0);
 		plane = QVector3D(0, 1, 0);
-		setHandleColor(QColor(0, 255, 0));
+		setHandleColor(QColor(122, 204, 44));
 		break;
 	case GizmoAxis::Z:
 		handleExtent = QVector3D(0, 0, 1);
 		plane = QVector3D(0, 0, 1);
-		setHandleColor(QColor(0, 0, 255));
+		setHandleColor(QColor(58, 122, 240));
 		break;
 	}
 }
@@ -163,9 +164,13 @@ RotationGizmo::RotationGizmo() :
 
 void RotationGizmo::loadAssets()
 {
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_x.obj")));
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_y.obj")));
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/rot_z.obj")));
+	// Procedural rings (gizmomeshes.cpp): one thin circle per axis instead of
+	// the old fat bands, plus a screen-facing outer ring added in drawItems.
+	// Radius 1 like the old OBJs, so the analytic hit-testing is untouched.
+	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::X));
+	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Y));
+	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Z));
+	screenRingMesh = GizmoMeshes::screenRing();
 
 	// No GL context (engine viewport, tests): the legacy render() path is never used.
 	shader = !QOpenGLContext::currentContext() ? nullptr : iris::GraphicsHelper::loadShader(
@@ -396,7 +401,6 @@ void RotationGizmo::setSelectedNode(iris::SceneNodePtr node)
 
 QVector<GizmoDrawItem> RotationGizmo::drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 {
-	Q_UNUSED(viewDir);
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
 	const QColor highlight(255, 255, 0);
@@ -415,6 +419,16 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(QVector3D rayPos, QVector3D rayD
 		auto transform = Gizmo::getTransform();
 		transform.scale(getGizmoScale() * handles[i]->handleScale);
 		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
+	}
+	// Screen-facing outer circle framing the three axis rings — visual only
+	// (there is no fourth handle behind it), always oriented at the camera.
+	if (screenRingMesh) {
+		QMatrix4x4 t;
+		t.translate(Gizmo::getTransform().column(3).toVector3D());
+		if (!viewDir.isNull())
+			t.rotate(QQuaternion::rotationTo(QVector3D(0, 0, 1), -viewDir.normalized()));
+		t.scale(getGizmoScale() * handles[0]->handleScale);
+		items.append({ screenRingMesh, t, QColor(205, 205, 205) });
 	}
 	return items;
 }

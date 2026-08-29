@@ -42,6 +42,7 @@ class RotationGizmo : public Gizmo
 {
 	iris::MeshPtr handleMesh;
 	iris::MeshPtr circleMesh;
+	iris::MeshPtr screenRingMesh;   // camera-facing outer ring (visual only)
 	QVector<iris::MeshPtr> handleMeshes;
 
 	QOpenGLShaderProgram* shader;

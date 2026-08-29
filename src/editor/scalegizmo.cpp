@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/graphicsdevice.h"
 #include "irisgl/src/graphics/graphicshelper.h"
 #include "uimanager.h"
+#include "gizmomeshes.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
 #include "../widgets/scenenodepropertieswidget.h"
@@ -48,19 +49,19 @@ ScaleHandle::ScaleHandle(Gizmo* gizmo, GizmoAxis axis)
 		handleExtent = QVector3D(1, 0, 0);
 		planes.append(QVector3D(0, 1, 0));
 		planes.append(QVector3D(0, 0, 1));
-		setHandleColor(QColor(255, 0, 0));
+		setHandleColor(QColor(237, 66, 66));
 		break;
 	case GizmoAxis::Y:
 		handleExtent = QVector3D(0, 1, 0);
 		planes.append(QVector3D(1, 0, 0));
 		planes.append(QVector3D(0, 0, 1));
-		setHandleColor(QColor(0, 255, 0));
+		setHandleColor(QColor(122, 204, 44));
 		break;
 	case GizmoAxis::Z:
 		handleExtent = QVector3D(0, 0, 1);
 		planes.append(QVector3D(1, 0, 0));
 		planes.append(QVector3D(0, 1, 0));
-		setHandleColor(QColor(0, 0, 255));
+		setHandleColor(QColor(58, 122, 240));
 		break;
 	}
 }
@@ -183,12 +184,15 @@ ScaleGizmo::ScaleGizmo() :
 
 void ScaleGizmo::loadAssets()
 {
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_cube.obj")));
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_x.obj")));
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_y.obj")));
-	handleMeshes.append(iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/scale_z.obj")));
+	// Procedural handles (gizmomeshes.cpp): thin axis lines ending in small
+	// cubes, small cube at the core. Same local reach as the old OBJs, so the
+	// analytic hit-testing is untouched.
+	handleMeshes.append(GizmoMeshes::centerCube());
+	handleMeshes.append(GizmoMeshes::scaleHandle(GizmoAxis::X));
+	handleMeshes.append(GizmoMeshes::scaleHandle(GizmoAxis::Y));
+	handleMeshes.append(GizmoMeshes::scaleHandle(GizmoAxis::Z));
 
-	centerMesh = iris::Mesh::loadMesh(IrisUtils::getAbsoluteAssetPath("app/models/axis_cube.obj"));
+	centerMesh = GizmoMeshes::centerCube();
 
 	// No GL context (engine viewport, tests): the legacy render() path is never used.
 	shader = !QOpenGLContext::currentContext() ? nullptr : iris::GraphicsHelper::loadShader(

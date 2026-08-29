@@ -80,8 +80,8 @@ int main(int argc, char **argv)
     const int drawn = countNonBg(img);
     std::printf("    pixels drawn by the gizmo: %d\n", drawn);
     CHECK(drawn > 5, "the gizmo is visible in the frame (handles are thin at this distance)");
-    CHECK(hasColour(img, 1, 0, 0), "X handle is red");
-    CHECK(hasColour(img, 0, 1, 0), "Y handle is green");
+    CHECK(hasColour(img, 237/255.f, 66/255.f, 66/255.f), "X handle is red");
+    CHECK(hasColour(img, 122/255.f, 204/255.f, 44/255.f), "Y handle is green");
 
     // Highlight: aim the ray at the X handle's colour spot -> it turns yellow.
     // (Hit-testing is the gizmo's own; here we only prove colour changes flow through.)
@@ -93,7 +93,7 @@ int main(int argc, char **argv)
 
     // Rotation and scale gizmos describe their handles too.
     RotationGizmo rot; rot.setSelectedNode(node); rot.updateSize(cam);
-    CHECK(rot.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 3, "rotation gizmo: 3 rings");
+    CHECK(rot.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 4, "rotation gizmo: 3 axis rings + screen-facing outer ring");
     ScaleGizmo scl; scl.setSelectedNode(node); scl.updateSize(cam);
     CHECK(scl.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 4, "scale gizmo: 4 handles");
     {
@@ -117,7 +117,7 @@ int main(int argc, char **argv)
     std::printf("    rotation pixels drawn (fresh overlay):  %d\n", countNonBg(img));
     overlay2.clear();
     CHECK(countNonBg(img) > 5, "rotation gizmo is visible");
-    CHECK(hasColour(img, 1, 0, 0) || hasColour(img, 0, 1, 0) || hasColour(img, 0, 0, 1), "rotation rings carry axis colours");
+    CHECK(hasColour(img, 237/255.f, 66/255.f, 66/255.f) || hasColour(img, 122/255.f, 204/255.f, 44/255.f) || hasColour(img, 58/255.f, 122/255.f, 240/255.f), "rotation rings carry axis colours");
 
     mirror.setSource(nullptr);
     engine->destroyView(view); engine->destroyScene(target); engine.reset();

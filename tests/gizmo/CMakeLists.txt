@@ -3,7 +3,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_gizmo_overlay test_gizmo_overlay.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/gizmooverlay.cpp ${CMAKE_SOURCE_DIR}/src/engine/scenemirror.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/editor/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/editor/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/editor/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/editor/translationgizmo.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/editor/scalegizmo.cpp)
 set_target_properties(test_gizmo_overlay PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
