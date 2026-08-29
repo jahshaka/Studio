@@ -71,6 +71,7 @@ set(SRCS
     src/widgets/assetmaterialpanel.cpp 
     src/widgets/accordianbladewidget.cpp 
     src/widgets/transformeditor.cpp 
+    src/widgets/dragspinbox.cpp 
     src/widgets/scenehierarchywidget.cpp 
     src/editor/cameracontrollerbase.cpp 
     src/editor/gizmo.cpp 
@@ -223,6 +224,7 @@ set(HEADERS
     src/widgets/assetmaterialpanel.h 
     src/widgets/accordianbladewidget.h 
     src/widgets/transformeditor.h 
+    src/widgets/dragspinbox.h 
     src/widgets/scenehierarchywidget.h 
     src/editor/orbitalcameracontroller.h 
     src/editor/cameracontrollerbase.h 
@@ -357,7 +359,6 @@ set(WIDGETS
     src/widgets/animationwidget.ui 
     src/widgets/maintimelinewidget.ui 
     src/widgets/accordianbladewidget.ui 
-    src/widgets/transformeditor.ui 
     src/widgets/scenehierarchywidget.ui 
     src/widgets/skypresets.ui 
     src/widgets/keyframelabelwidget.ui 

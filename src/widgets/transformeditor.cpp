@@ -9,36 +9,112 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <QGridLayout>
+#include <QLabel>
+#include <QPushButton>
 #include <QQuaternion>
+
 #include "transformeditor.h"
-#include "ui_transformeditor.h"
+#include "dragspinbox.h"
 
 #include "../irisgl/src/scenegraph/scenenode.h"
+#include "../uimanager.h"
+#include "../commands/transfrormscenenodecommand.h"
 
-TransformEditor::TransformEditor(QWidget* parent) :
-    QWidget(parent),
-    ui(new Ui::TransformEditor)
-{
-    ui->setupUi(this);
-
-    connect(ui->xpos,   SIGNAL(valueChanged(double)),   SLOT(xPosChanged(double)));
-    connect(ui->ypos,   SIGNAL(valueChanged(double)),   SLOT(yPosChanged(double)));
-    connect(ui->zpos,   SIGNAL(valueChanged(double)),   SLOT(zPosChanged(double)));
-
-    connect(ui->xrot,   SIGNAL(valueChanged(double)),   SLOT(xRotChanged(double)));
-    connect(ui->yrot,   SIGNAL(valueChanged(double)),   SLOT(yRotChanged(double)));
-    connect(ui->zrot,   SIGNAL(valueChanged(double)),   SLOT(zRotChanged(double)));
-
-    connect(ui->xscale, SIGNAL(valueChanged(double)),   SLOT(xScaleChanged(double)));
-    connect(ui->yscale, SIGNAL(valueChanged(double)),   SLOT(yScaleChanged(double)));
-    connect(ui->zscale, SIGNAL(valueChanged(double)),   SLOT(zScaleChanged(double)));
-
-    connect(ui->resetBtn, SIGNAL(clicked(bool)),        SLOT(onResetBtnClicked()));
+namespace {
+// per-pixel scrub sensitivity
+const double kPosScaleStepPerPx = 0.02;
+const double kRotStepPerPx = 0.5; // degrees
+const int kTitleWidth = 56;
 }
 
-TransformEditor::~TransformEditor()
+TransformEditor::TransformEditor(QWidget* parent) :
+    QWidget(parent)
 {
-    delete ui;
+    setObjectName("TransformEditor");
+    setStyleSheet(
+        "QWidget#TransformEditor { border: none; }"
+        "QLabel { color: #DEDEDE; background: transparent; }"
+        "QDoubleSpinBox {"
+        "    border-radius: 1px; padding: 3px; background: #292929; color: #DEDEDE;"
+        "    selection-background-color: #3498db;"
+        "}"
+        // axis identity moved from the old X/Y/Z chips to a colored edge per field
+        "DragSpinBox#xpos, DragSpinBox#xrot, DragSpinBox#xscale { border-left: 3px solid #c0392b; }"
+        "DragSpinBox#ypos, DragSpinBox#yrot, DragSpinBox#yscale { border-left: 3px solid #27ae60; }"
+        "DragSpinBox#zpos, DragSpinBox#zrot, DragSpinBox#zscale { border-left: 3px solid #2980b9; }"
+        "QPushButton#resetBtn { background-color: #333; color: #DEDEDE; border: 0;"
+        "                       padding: 4px 16px; border-radius: 1px; }"
+        "QPushButton#resetBtn:hover { background-color: #555; }"
+        "QPushButton#resetBtn:pressed { background-color: #444; }");
+
+    auto grid = new QGridLayout(this);
+    grid->setContentsMargins(14, 4, 14, 6);
+    grid->setHorizontalSpacing(4);
+    grid->setVerticalSpacing(4);
+
+    // three horizontal rows: title on the left, X/Y/Z side by side
+    addRow(grid, 0, "Position", xpos, ypos, zpos, kPosScaleStepPerPx);
+    addRow(grid, 1, "Rotation", xrot, yrot, zrot, kRotStepPerPx);
+    addRow(grid, 2, "Scale",    xscale, yscale, zscale, kPosScaleStepPerPx);
+
+    resetBtn = new QPushButton("Reset", this);
+    resetBtn->setObjectName("resetBtn");
+    grid->addWidget(resetBtn, 3, 1, 1, 3);
+
+    adjustSize(); // AccordianBladeWidget sizes the blade from height()
+
+    connect(xpos,   SIGNAL(valueChanged(double)),   SLOT(xPosChanged(double)));
+    connect(ypos,   SIGNAL(valueChanged(double)),   SLOT(yPosChanged(double)));
+    connect(zpos,   SIGNAL(valueChanged(double)),   SLOT(zPosChanged(double)));
+
+    connect(xrot,   SIGNAL(valueChanged(double)),   SLOT(xRotChanged(double)));
+    connect(yrot,   SIGNAL(valueChanged(double)),   SLOT(yRotChanged(double)));
+    connect(zrot,   SIGNAL(valueChanged(double)),   SLOT(zRotChanged(double)));
+
+    connect(xscale, SIGNAL(valueChanged(double)),   SLOT(xScaleChanged(double)));
+    connect(yscale, SIGNAL(valueChanged(double)),   SLOT(yScaleChanged(double)));
+    connect(zscale, SIGNAL(valueChanged(double)),   SLOT(zScaleChanged(double)));
+
+    connect(resetBtn, SIGNAL(clicked(bool)),        SLOT(onResetBtnClicked()));
+
+    for (auto box : { xpos, ypos, zpos, xrot, yrot, zrot, xscale, yscale, zscale }) {
+        connect(box, &DragSpinBox::scrubStarted,  this, &TransformEditor::onScrubStarted);
+        connect(box, &DragSpinBox::scrubFinished, this, &TransformEditor::onScrubFinished);
+    }
+}
+
+void TransformEditor::addRow(QGridLayout* grid, int row, const QString& title,
+                             DragSpinBox*& x, DragSpinBox*& y, DragSpinBox*& z,
+                             double perPixelStep)
+{
+    auto label = new QLabel(title, this);
+    label->setFixedWidth(kTitleWidth);
+    label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    grid->addWidget(label, row, 0);
+
+    const char* suffix = (row == 0) ? "pos" : (row == 1) ? "rot" : "scale";
+    x = createField(QString("x") + suffix, perPixelStep);
+    y = createField(QString("y") + suffix, perPixelStep);
+    z = createField(QString("z") + suffix, perPixelStep);
+
+    grid->addWidget(x, row, 1);
+    grid->addWidget(y, row, 2);
+    grid->addWidget(z, row, 3);
+    grid->setColumnStretch(1, 1);
+    grid->setColumnStretch(2, 1);
+    grid->setColumnStretch(3, 1);
+}
+
+DragSpinBox* TransformEditor::createField(const QString& objectName, double perPixelStep)
+{
+    auto box = new DragSpinBox(this);
+    box->setObjectName(objectName);
+    box->setDecimals(2);
+    box->setRange(-1024.0, 1024.0);
+    box->setPerPixelStep(perPixelStep);
+    box->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    return box;
 }
 
 void TransformEditor::onResetBtnClicked()
@@ -58,17 +134,17 @@ void TransformEditor::onResetBtnClicked()
         yScaleChanged(scale.y());
         zScaleChanged(scale.z());
 
-        ui->xpos->setValue(0);
-        ui->ypos->setValue(0);
-        ui->zpos->setValue(0);
+        xpos->setValue(0);
+        ypos->setValue(0);
+        zpos->setValue(0);
 
-        ui->xrot->setValue(0);
-        ui->yrot->setValue(0);
-        ui->zrot->setValue(0);
+        xrot->setValue(0);
+        yrot->setValue(0);
+        zrot->setValue(0);
 
-        ui->xscale->setValue(scale.x());
-        ui->yscale->setValue(scale.y());
-        ui->zscale->setValue(scale.z());
+        xscale->setValue(scale.x());
+        yscale->setValue(scale.y());
+        zscale->setValue(scale.z());
     }
 }
 
@@ -86,20 +162,57 @@ void TransformEditor::refreshUi()
 	// ui might have a null node
 	if (!!sceneNode) {
 		auto pos = sceneNode->getLocalPos();
-		ui->xpos->setValue(pos.x());
-		ui->ypos->setValue(pos.y());
-		ui->zpos->setValue(pos.z());
+		xpos->setValue(pos.x());
+		ypos->setValue(pos.y());
+		zpos->setValue(pos.z());
 
 		auto rot = sceneNode->getLocalRot().toEulerAngles();
-		ui->xrot->setValue(rot.x());
-		ui->yrot->setValue(rot.y());
-		ui->zrot->setValue(rot.z());
+		xrot->setValue(rot.x());
+		yrot->setValue(rot.y());
+		zrot->setValue(rot.z());
 
 		auto scale = sceneNode->getLocalScale();
-		ui->xscale->setValue(scale.x());
-		ui->yscale->setValue(scale.y());
-		ui->zscale->setValue(scale.z());
+		xscale->setValue(scale.x());
+		yscale->setValue(scale.y());
+		zscale->setValue(scale.z());
 	}
+}
+
+void TransformEditor::onScrubStarted()
+{
+    if (!!sceneNode) {
+        scrubStartPos = sceneNode->getLocalPos();
+        scrubStartRot = sceneNode->getLocalRot();
+        scrubStartScale = sceneNode->getLocalScale();
+    }
+}
+
+void TransformEditor::onScrubFinished(bool cancelled)
+{
+    if (!sceneNode) return;
+
+    if (cancelled) {
+        // DragSpinBox restored its own value; restore the node to match
+        sceneNode->setLocalPos(scrubStartPos);
+        sceneNode->setLocalRot(scrubStartRot);
+        sceneNode->setLocalScale(scrubStartScale);
+        refreshUi();
+        return;
+    }
+
+    auto newPos = sceneNode->getLocalPos();
+    auto newRot = sceneNode->getLocalRot();
+    auto newScale = sceneNode->getLocalScale();
+
+    if (newPos == scrubStartPos && newRot == scrubStartRot && newScale == scrubStartScale)
+        return;
+
+    // same pattern as Gizmo::createUndoAction — rewind to the drag-start
+    // transform, then push; the command's redo() applies the new transform
+    sceneNode->setLocalPos(scrubStartPos);
+    sceneNode->setLocalRot(scrubStartRot);
+    sceneNode->setLocalScale(scrubStartScale);
+    UiManager::pushUndoStack(new TransformSceneNodeCommand(sceneNode, newPos, newRot, newScale));
 }
 
 void TransformEditor::xPosChanged(double value)
@@ -188,4 +301,3 @@ void TransformEditor::zScaleChanged(double value)
         sceneNode->setLocalScale(scale);
     }
 }
-
