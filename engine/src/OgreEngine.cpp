@@ -570,7 +570,9 @@ public:
             L->setDiffuseColour(toOgre(d.colour));
             L->setSpecularColour(toOgre(d.colour));
             L->setCastShadows(d.castShadows);
-            L->setPowerScale(d.intensity * Ogre::Math::PI);
+            // Calibrated against IrisGL's default shader, where `intensity` multiplies the
+            // light colour directly (no pi): the same document values give similar exposure.
+            L->setPowerScale(d.intensity);
             if (d.type != LightType::Directional)
                 L->setAttenuationBasedOnRadius(std::max(d.range, 0.01f), 0.01f);
             if (d.type == LightType::Spot) {

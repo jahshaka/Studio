@@ -401,7 +401,7 @@ void shadows_darken_the_ground() {
     CHECK(s->attachMesh(cube, cubeMesh, mat));
     s->setNodeTransform(cube, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
     NodeId sun = s->createNode();
-    LightDesc d; d.type = LightType::Directional; d.intensity = 1.0f; d.castShadows = true;
+    LightDesc d; d.type = LightType::Directional; d.intensity = 3.0f; d.castShadows = true;   // bright sun: contrast is what we test
     CHECK(s->setLight(sun, d));
     // Light shining straight down: the shadow lands directly under the cube.
     s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(-0.7071068f, 0, 0, 0.7071068f), Vec3(1,1,1));
