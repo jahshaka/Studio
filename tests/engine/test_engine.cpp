@@ -521,6 +521,51 @@ void light_on_node_and_camera_desc() {
     CHECK(!near(centre(img), kBlue));
 }
 
+void overlay_lines_draw_on_top() {
+    Fixture fx;
+    View *v = fx.view("overlay-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("overlay-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId cubeMesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange;
+    MaterialId pbr = s->createPbrMaterial(p);
+    NodeId cube = s->createNode();
+    CHECK(s->attachMesh(cube, cubeMesh, pbr));
+    s->setNodeTransform(cube, Vec3(0,0,0), Quat(), Vec3(1.2f,1.2f,1.2f));
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);
+
+    // A dense green line fan INSIDE the cube (hidden by its faces with depth test).
+    std::vector<Vec3> pts;
+    for (int i = -10; i <= 10; ++i) { pts.push_back(Vec3(-0.4f, i * 0.02f, 0.f)); pts.push_back(Vec3(0.4f, i * 0.02f, 0.f)); }
+    for (int i = -10; i <= 10; ++i) { pts.push_back(Vec3(i * 0.02f, -0.4f, 0.f)); pts.push_back(Vec3(i * 0.02f, 0.4f, 0.f)); }
+    MeshId lines = s->createLineMesh(pts, false);
+    CHECK_MSG(lines != 0, "%s", fx.e->lastError().c_str());
+    MaterialId tested = s->createUnlitMaterial(kGreen, true);    // depth-tested: hidden inside the cube
+    NodeId lineNode = s->createNode();
+    CHECK(s->attachMesh(lineNode, lines, tested));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px hidden = centre(img);
+    CHECK_MSG(hidden.r > hidden.g, "depth-tested lines inside the cube must stay hidden: %d %d %d", hidden.r, hidden.g, hidden.b);
+
+    MaterialId onTop = s->createUnlitMaterial(kGreen, false);    // on top: visible through the cube
+    CHECK(s->attachMesh(lineNode, lines, onTop));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px shown = centre(img);
+    std::printf("    overlay centre: depth-tested %d %d %d | on-top %d %d %d\n", hidden.r, hidden.g, hidden.b, shown.r, shown.g, shown.b);
+    CHECK_MSG(shown.g > 150 && shown.g > shown.r, "on-top lines must win at the centre: %d %d %d", shown.r, shown.g, shown.b);
+    CHECK(s->setUnlitMaterial(onTop, Colour(1, 0, 1)));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).b > 150 && centre(img).r > 150);
+    CHECK(!s->setPbrMaterial(onTop, p));           // wrong kind, refused
+    CHECK(s->destroyMaterial(onTop));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);                     // cube again
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -537,6 +582,7 @@ int main(int argc, char **argv) {
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
         { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
+        { "overlay_lines_draw_on_top",              overlay_lines_draw_on_top },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

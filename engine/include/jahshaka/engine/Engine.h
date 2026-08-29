@@ -67,6 +67,15 @@ public:
     virtual bool        attachMesh(NodeId, MeshId, MaterialId) = 0;
     virtual bool        detachMesh(NodeId) = 0;
 
+    // ---- Overlay primitives (step 8): gizmos, light wires, animation paths ----
+    /// Flat colour, unlit. With depthTest=false it draws on top of everything —
+    /// what gizmo handles need. Alpha < 1 blends.
+    virtual MaterialId  createUnlitMaterial(const Colour &, bool depthTest) = 0;
+    virtual bool        setUnlitMaterial(MaterialId, const Colour &) = 0;
+    /// A line list (pairs of points) or, with `strip`, a connected polyline.
+    /// Attach with attachMesh like any mesh. One pixel wide.
+    virtual MeshId      createLineMesh(const std::vector<Vec3> &points, bool strip) = 0;
+
     // ---- Lights (step 5): a node may carry one light ----
     virtual bool        setLight(NodeId, const LightDesc &) = 0;   // creates or updates
     virtual bool        removeLight(NodeId) = 0;

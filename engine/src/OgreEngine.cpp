@@ -29,6 +29,7 @@
 #include <OgreHlmsPbs.h>
 #include <OgreHlmsUnlit.h>
 #include <OgreHlmsPbsDatablock.h>
+#include <OgreHlmsUnlitDatablock.h>
 #include <OgreTextureGpuManager.h>
 #include <OgreTextureGpu.h>
 #include <OgreAsyncTextureTicket.h>
@@ -229,6 +230,7 @@ public:
     bool setPbrMaterial(MaterialId id, const PbrParams &p) override {
         auto it = mMaterials.find(id);
         if (it == mMaterials.end()) return false;
+        if (it->second.unlit) { mError = "setPbrMaterial: material is unlit"; return false; }
         JAH_TRY {
             auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
             auto *db = static_cast<Ogre::HlmsPbsDatablock *>(hlmsPbs->getDatablock(Ogre::IdString(it->second.datablockName)));
@@ -242,9 +244,9 @@ public:
         if (it == mMaterials.end()) return false;
         JAH_TRY {
             for (auto &kv : mNodes) if (kv.second.materialRef == id) detachItem(kv.second);
-            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
-            if (hlmsPbs->getDatablock(Ogre::IdString(it->second.datablockName)))
-                hlmsPbs->destroyDatablock(Ogre::IdString(it->second.datablockName));
+            Ogre::Hlms *hlms = hlmsFor(it->second);
+            if (hlms->getDatablock(Ogre::IdString(it->second.datablockName)))
+                hlms->destroyDatablock(Ogre::IdString(it->second.datablockName));
             mMaterials.erase(it);
             return true;
         } JAH_CATCH(mError, false);
@@ -258,8 +260,10 @@ public:
             Node &n = nit->second;
             detachItem(n);
             n.item = mSceneMgr->createItem(mit->second.mesh, Ogre::SCENE_DYNAMIC);
-            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
-            n.item->setDatablock(hlmsPbs->getDatablock(Ogre::IdString(tit->second.datablockName)));
+            n.item->setDatablock(hlmsFor(tit->second)->getDatablock(Ogre::IdString(tit->second.datablockName)));
+            // On-top overlays render after everything else (all RQ groups default to
+            // v2 FAST mode, so a high group id is enough); depth test is off in the material.
+            if (tit->second.onTop) n.item->setRenderQueueGroup(200);
             n.node->attachObject(n.item);
             n.meshRef = meshId; n.materialRef = matId;
             return true;
@@ -269,6 +273,68 @@ public:
         auto it = mNodes.find(id);
         if (it == mNodes.end()) return false;
         JAH_TRY { detachItem(it->second); return true; } JAH_CATCH(mError, false);
+    }
+
+    // ---- Overlay primitives ----
+    MaterialId createUnlitMaterial(const Colour &c, bool depthTest) override {
+        JAH_TRY {
+            MaterialRec rec; rec.datablockName = processUniqueName("unlit"); rec.unlit = true; rec.onTop = !depthTest;
+            auto *hlmsUnlit = static_cast<Ogre::HlmsUnlit *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT));
+            Ogre::HlmsMacroblock macro;
+            macro.mDepthCheck = depthTest;
+            macro.mDepthWrite = depthTest;
+            macro.mCullMode = Ogre::CULL_NONE;
+            Ogre::HlmsBlendblock blend;
+            if (c.a < 0.999f) blend.setBlendType(Ogre::SBT_TRANSPARENT_ALPHA);
+            auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->createDatablock(
+                Ogre::IdString(rec.datablockName), rec.datablockName, macro, blend, Ogre::HlmsParamVec()));
+            db->setUseColour(true);
+            db->setColour(toOgre(c));
+            mMaterials[++mNextMaterialId] = rec;
+            return mNextMaterialId;
+        } JAH_CATCH(mError, 0);
+    }
+    bool setUnlitMaterial(MaterialId id, const Colour &c) override {
+        auto it = mMaterials.find(id);
+        if (it == mMaterials.end() || !it->second.unlit) return false;
+        JAH_TRY {
+            auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsFor(it->second)->getDatablock(Ogre::IdString(it->second.datablockName)));
+            if (!db) return false;
+            db->setColour(toOgre(c));
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    MeshId createLineMesh(const std::vector<Vec3> &points, bool strip) override {
+        if (points.size() < 2) { mError = "createLineMesh: need at least 2 points"; return 0; }
+        JAH_TRY {
+            MeshRec rec; rec.name = processUniqueName("lines");
+            const size_t nv = points.size();
+            struct V { float px, py, pz, nx, ny, nz, u, v; };
+            V *verts = reinterpret_cast<V *>(OGRE_MALLOC_SIMD(sizeof(V) * nv, Ogre::MEMCATEGORY_GEOMETRY));
+            Ogre::Vector3 mn(1e30f, 1e30f, 1e30f), mx(-1e30f, -1e30f, -1e30f);
+            for (size_t i = 0; i < nv; ++i) {
+                verts[i] = { points[i].x, points[i].y, points[i].z, 0, 1, 0, 0, 0 };
+                mn.makeFloor(toOgre(points[i])); mx.makeCeil(toOgre(points[i]));
+            }
+            Ogre::VaoManager *vaoMgr = mRoot->getRenderSystem()->getVaoManager();
+            Ogre::VertexElement2Vec decl;
+            decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT3, Ogre::VES_POSITION));
+            decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT3, Ogre::VES_NORMAL));
+            decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT2, Ogre::VES_TEXTURE_COORDINATES));
+            Ogre::VertexBufferPacked *vbuf = vaoMgr->createVertexBuffer(decl, Ogre::uint32(nv), Ogre::BT_IMMUTABLE, verts, true);
+            Ogre::VertexBufferPackedVec vbufs; vbufs.push_back(vbuf);
+            Ogre::VertexArrayObject *vao = vaoMgr->createVertexArrayObject(
+                vbufs, nullptr, strip ? Ogre::OT_LINE_STRIP : Ogre::OT_LINE_LIST);
+            rec.mesh = Ogre::MeshManager::getSingleton().createManual(rec.name, Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+            Ogre::SubMesh *sub = rec.mesh->createSubMesh();
+            sub->mVao[Ogre::VpNormal].push_back(vao);
+            sub->mVao[Ogre::VpShadow].push_back(vao);
+            const Ogre::Aabb aabb = Ogre::Aabb::newFromExtents(mn, mx);
+            rec.mesh->_setBounds(aabb, false);
+            rec.mesh->_setBoundingSphereRadius(std::max(aabb.getRadius(), 0.001f));
+            mMeshes[++mNextMeshId] = rec;
+            return mNextMeshId;
+        } JAH_CATCH(mError, 0);
     }
 
     // ---- Lights ----
@@ -318,10 +384,11 @@ public:
         JAH_TRY {
             for (auto &kv : mNodes) releaseNode(kv.second);
             mNodes.clear();
-            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
-            for (auto &kv : mMaterials)
-                if (hlmsPbs->getDatablock(Ogre::IdString(kv.second.datablockName)))
-                    hlmsPbs->destroyDatablock(Ogre::IdString(kv.second.datablockName));
+            for (auto &kv : mMaterials) {
+                Ogre::Hlms *hlms = hlmsFor(kv.second);
+                if (hlms->getDatablock(Ogre::IdString(kv.second.datablockName)))
+                    hlms->destroyDatablock(Ogre::IdString(kv.second.datablockName));
+            }
             mMaterials.clear();
             Ogre::MeshManager &mm = Ogre::MeshManager::getSingleton();
             for (auto &kv : mMeshes) {
@@ -348,8 +415,11 @@ private:
         MaterialId       materialRef = 0;   // shared, owned by mMaterials
     };
     struct MeshRec { Ogre::MeshPtr mesh; std::string name; };
-    struct MaterialRec { std::string datablockName; };
+    struct MaterialRec { std::string datablockName; bool unlit = false; bool onTop = false; };
 
+    Ogre::Hlms *hlmsFor(const MaterialRec &m) const {
+        return mRoot->getHlmsManager()->getHlms(m.unlit ? Ogre::HLMS_UNLIT : Ogre::HLMS_PBS);
+    }
     /// Removes the renderable from a node that references a SHARED mesh/material.
     void detachItem(Node &n) {
         if (n.item && n.meshRef) {
