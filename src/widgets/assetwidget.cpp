@@ -123,7 +123,10 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	connect(ui->importBtn, SIGNAL(pressed()), SLOT(importAssetB()));
     ui->importBtn->setVisible(false);
 
-	// The signal will be emitted from another thread (Nick)
+	// The signal will be emitted from another thread (Nick) — or, on the engine
+	// viewport, from the main thread. Either way the generator needs the database
+	// for asset/material lookups (the legacy viewport also sets it, later).
+	ThumbnailGenerator::getSingleton()->setDatabase(db);
 	connect(ThumbnailGenerator::getSingleton()->renderThread,   SIGNAL(thumbnailComplete(ThumbnailResult*)),
 		    this,                                               SLOT(onThumbnailResult(ThumbnailResult*)));
 

@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QOpenGLVersionFunctionsFactory>
 #include <QtMath>
 #include <QStandardPaths>
+#include <QTimer>
 
 #include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/mesh.h"
@@ -33,6 +34,10 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/scenereader.h"
 #include "io/materialreader.hpp"
+#include "engine/enginehost.h"
+#include "enginethumbnailrenderer.h"
+#include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/src/materials/pbrmaterial.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 
@@ -408,6 +413,17 @@ ThumbnailGenerator::ThumbnailGenerator()
     renderThread = new RenderThread();
     renderThread->setDatabase(db);
 
+    if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
+        // Engine viewport: no Qt GL context anywhere, so no render thread. Requests
+        // are drained one per tick on the main thread once the Engine is up
+        // (EngineHost starts it after this singleton may already exist).
+        engineMode = true;
+        tick = new QTimer();
+        tick->setInterval(16);
+        QObject::connect(tick, &QTimer::timeout, [this] { processOneEngineRequest(); });
+        return;
+    }
+
     auto curCtx = QOpenGLContext::currentContext();
     if (curCtx != Q_NULLPTR) curCtx->doneCurrent();
 
@@ -440,19 +456,125 @@ ThumbnailGenerator *ThumbnailGenerator::getSingleton()
     return instance;
 }
 
-void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id, bool preview)
+void ThumbnailGenerator::requestThumbnail(ThumbnailRequestType type, QString path, QString id, bool preview,
+                                          QSize size)
 {
     ThumbnailRequest req;
     req.type	= type;
     req.path	= path;
     req.id		= id;
     req.preview = preview;
+    if (engineMode) {
+        pending.append({req, size});
+        if (tick && !tick->isActive()) tick->start();
+        return;
+    }
     renderThread->requestThumbnail(req);
 }
 
 void ThumbnailGenerator::shutdown()
 {
+    if (engineMode) {
+        // Must run while the Engine is alive (EngineHost::shutdown() comes after
+        // the main window is gone); the renderer checks anyway.
+        if (tick) tick->stop();
+        pending.clear();
+        engineRenderer.reset();
+        return;
+    }
     renderThread->shutdown = true;
     renderThread->requestsAvailable.release();// release 1 so the thread's main loop continues;
     renderThread->wait();
+}
+
+// ---------------------------------------------------------------------------
+// Engine path (main thread)
+// ---------------------------------------------------------------------------
+
+void ThumbnailGenerator::processOneEngineRequest()
+{
+    if (pending.isEmpty()) { if (tick) tick->stop(); return; }
+
+    auto engine = EngineHost::instance().engine();
+    if (!engine) {
+        // Engine not started yet (or the app fell back to legacy on xcb, where no
+        // thumbnail can be drawn). Wait; cap the backlog so it cannot grow forever.
+        while (pending.size() > 256) pending.removeFirst();
+        return;
+    }
+    if (!engineRenderer) engineRenderer.reset(new EngineThumbnailRenderer(engine));
+
+    // One request per tick: never block the UI for a batch.
+    const EngineRequest job = pending.takeFirst();
+    QImage img = renderEngineRequest(job.request, job.size);
+
+    auto result = new ThumbnailResult;
+    result->id			= job.request.id;
+    result->type		= job.request.type;
+    result->path		= job.request.path;
+    result->preview     = job.request.preview;
+    result->thumbnail	= img;
+    emit renderThread->thumbnailComplete(result);
+}
+
+iris::MaterialPtr ThumbnailGenerator::previewMaterialFor(iris::MaterialPtr material)
+{
+    // The engine mirror understands PbrMaterial and DefaultMaterial. Anything else
+    // (shader-graph CustomMaterial) contributes its diffuse/base colour if it has one.
+    if (!material) return iris::DefaultMaterial::create().staticCast<iris::Material>();
+    if (dynamic_cast<iris::PbrMaterial *>(material.data()) ||
+        dynamic_cast<iris::DefaultMaterial *>(material.data()))
+        return material;
+
+    auto def = iris::DefaultMaterial::create();
+    for (auto prop : material->properties) {
+        if (!prop || prop->type != iris::PropertyType::Color) continue;
+        if (prop->name == "diffuseColor" || prop->name == "color" || prop->name == "albedo" ||
+            prop->name == "baseColor") {
+            def->setDiffuseColor(prop->getValue().value<QColor>());
+            break;
+        }
+    }
+    return def.staticCast<iris::Material>();
+}
+
+QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
+{
+    if (request.type == ThumbnailRequestType::ImportedMesh) {
+        if (!db || !Globals::project) return QImage();
+        QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(request.id));
+        SceneReader reader;
+        reader.setBaseDirectory(IrisUtils::join(Globals::project->getProjectFolder()));
+        QJsonObject objectHierarchy = document.object();
+        auto node = reader.readSceneNode(objectHierarchy);
+        if (!node) return QImage();
+        return engineRenderer->renderNode(node, size);
+    }
+
+    if (request.type == ThumbnailRequestType::Mesh) {
+        iris::SceneSource source;   // owns the assimp importer for the load's duration
+        auto node = iris::MeshNode::loadAsSceneFragment(request.path,
+            [](iris::MeshPtr, iris::MeshMaterialData &data)
+        {
+            // Textures are not yet in the engine material model (materials v0).
+            auto mat = iris::DefaultMaterial::create();
+            mat->setDiffuseColor(data.diffuseColor.isValid() ? data.diffuseColor : QColor(200, 200, 200));
+            mat->setSpecularColor(data.specularColor.isValid() ? data.specularColor : QColor(255, 255, 255));
+            mat->setAmbientColor(QColor(110, 110, 110));
+            mat->setShininess(data.shininess);
+            return mat.staticCast<iris::Material>();
+        }, &source);
+        if (!node) return QImage();
+        return engineRenderer->renderNode(node, size);
+    }
+
+    if (request.type == ThumbnailRequestType::Material) {
+        QFile file(request.path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        MaterialReader reader;
+        auto material = reader.parseMaterial(doc.object(), db);
+        return engineRenderer->renderMaterial(previewMaterialFor(material.staticCast<iris::Material>()), size);
+    }
+    return QImage();
 }

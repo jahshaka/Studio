@@ -25,8 +25,14 @@ For more information see the LICENSE file
 #include <QSemaphore>
 #include <QImage>
 #include <QJsonObject>
+#include <QList>
+#include <QSize>
+#include <memory>
 
 #include "core/database/database.h"
+
+class QTimer;
+class EngineThumbnailRenderer;
 
 enum class ThumbnailRequestType
 {
@@ -101,12 +107,21 @@ private:
 };
 
 // http://doc.qt.io/qt-5/qtquick-scenegraph-textureinthread-threadrenderer-cpp.html
+//
+// Two backends behind one contract (requestThumbnail() in, RenderThread's
+// thumbnailComplete() out, so no caller changes):
+//  - legacy viewport: the RenderThread above, its own GL context on a worker thread;
+//  - engine viewport (EngineHost): rendered on the MAIN thread through an offscreen
+//    engine View (EngineThumbnailRenderer), at most one request per timer tick so
+//    the UI never blocks. The RenderThread object still exists as the signal source
+//    but is never started.
 class ThumbnailGenerator
 {
 public:
     RenderThread* renderThread;
     static ThumbnailGenerator* getSingleton();
-    void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "", bool preview = false);
+    void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "", bool preview = false,
+                          QSize size = QSize(512, 512));
 
     // must be called to properly shutdown ui components
     void shutdown();
@@ -116,9 +131,25 @@ public:
         this->db = db;
     }
 
+    /// True when thumbnails are rendered through the engine on the main thread.
+    bool usesEngine() const { return engineMode; }
+    /// Engine mode only: requests still waiting for a tick.
+    int pendingCount() const { return pending.size(); }
+
 private:
 	static ThumbnailGenerator* instance;
 	ThumbnailGenerator();
+
+    // ---- engine path ----
+    struct EngineRequest { ThumbnailRequest request; QSize size; };
+    void processOneEngineRequest();
+    QImage renderEngineRequest(const ThumbnailRequest &request, QSize size);
+    iris::MaterialPtr previewMaterialFor(iris::MaterialPtr material);
+
+    bool engineMode = false;
+    QList<EngineRequest> pending;
+    QTimer *tick = nullptr;
+    std::unique_ptr<EngineThumbnailRenderer> engineRenderer;
 };
 
 #endif // THUMBNAILGENERATOR_H

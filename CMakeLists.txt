@@ -137,6 +137,7 @@ set(SRCS
     src/widgets/itemgridwidget.cpp 
     src/dialogs/renameprojectdialog.cpp 
     src/editor/thumbnailgenerator.cpp 
+    src/editor/enginethumbnailrenderer.cpp 
     src/widgets/mainwindowviewport.cpp 
     src/editor/viewercontroller.cpp 
     src/dialogs/donatedialog.cpp
