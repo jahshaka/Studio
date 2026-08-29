@@ -60,6 +60,7 @@ set(SRCS
     src/widgets/sceneviewwidget.cpp 
     src/widgets/engineviewwidget.cpp
     src/engine/scenemirror.cpp
+    src/widgets/enginesceneviewport.cpp
     src/widgets/enginerenderdriver.cpp
     src/dialogs/ogrepreviewdialog.cpp
     src/widgets/assetfavorites.cpp 
@@ -201,6 +202,8 @@ set(HEADERS
     src/widgets/sceneviewwidget.h 
     src/widgets/engineviewwidget.h
     src/engine/scenemirror.h
+    src/widgets/enginesceneviewport.h
+    src/editor/ieditorviewport.h
     src/widgets/enginerenderdriver.h
     src/dialogs/ogrepreviewdialog.h
     src/widgets/assetfavorites.h 

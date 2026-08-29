@@ -47,6 +47,7 @@ namespace iris
 class CameraControllerBase;
 class EditorCameraController;
 class EditorData;
+#include "../editor/ieditorviewport.h"
 class EditorVrController;
 class Gizmo;
 class OrbitalCameraController;
@@ -68,12 +69,6 @@ class btRigidBody;
 class HandGizmoHandler;
 
 class PlayBack;
-
-enum class ViewportMode
-{
-    Editor,
-    VR
-};
 
 struct PickingResult
 {

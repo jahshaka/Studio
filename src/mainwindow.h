@@ -97,7 +97,7 @@ class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
-enum WindowSpaces {
+enum WindowSpaces : int {
     DESKTOP,
     PLAYER,
     EDITOR,
