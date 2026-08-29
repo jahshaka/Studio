@@ -737,6 +737,14 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			break;
 		}
 
+		case WindowSpaces::PUBLISH: {
+			ui->stackedWidget->setCurrentIndex(5);
+			toggleWidgets(false);
+			toolBar->setVisible(false);
+			if (UiManager::isSceneOpen) playSceneBtn->hide();
+			break;
+		}
+
         default: break;
     }
 
@@ -762,6 +770,9 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 
 	effect_menu->setStyleSheet(activeSpace == WindowSpaces::EFFECT ? selectedMenu : unselectedMenu);
 	effect_menu->setCursor(Qt::PointingHandCursor);
+
+	publish_menu->setStyleSheet(activeSpace == WindowSpaces::PUBLISH ? selectedMenu : unselectedMenu);
+	publish_menu->setCursor(Qt::PointingHandCursor);
 
 	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
 	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
@@ -2442,6 +2453,9 @@ void MainWindow::setupViewPort()
 	assets_menu = new QPushButton("Assets");
 	assets_menu->setObjectName("assets_menu");
 	assets_menu->setCursor(Qt::PointingHandCursor);
+	publish_menu = new QPushButton("Publish");
+	publish_menu->setObjectName("publish_menu");
+	publish_menu->setCursor(Qt::PointingHandCursor);
 
 	assets_panel = new QWidget;
 
@@ -2453,6 +2467,7 @@ void MainWindow::setupViewPort()
 	hl->addWidget(editor_menu);
 	hl->addWidget(effect_menu);
 	hl->addWidget(assets_menu);
+	hl->addWidget(publish_menu);
 
 	assets_panel->setLayout(hl);
 
@@ -2529,6 +2544,7 @@ void MainWindow::setupViewPort()
     connect(editor_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EDITOR); });
 	connect(assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
 	connect(effect_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EFFECT); });
+	connect(publish_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PUBLISH); });
 
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
@@ -2857,6 +2873,26 @@ void MainWindow::setupDesktop()
 	}
 	ui->stackedWidget->addWidget(shaderGraph);
 	ui->stackedWidget->addWidget(playerView);
+
+	// Publish space (page 5): a stub for future scene publishing targets.
+	publishView = new QWidget(this);
+	publishView->setObjectName("publishView");
+	publishView->setStyleSheet("#publishView { background: #1e1e1e; }");
+	{
+		auto vl = new QVBoxLayout(publishView);
+		auto title = new QLabel("Publish");
+		title->setAlignment(Qt::AlignCenter);
+		title->setStyleSheet("font-size: 32px; font-weight: 500; color: rgba(255, 255, 255, 0.92); background: transparent;");
+		auto subtitle = new QLabel("Coming soon: publish your scene to the web, Unreal, and more.");
+		subtitle->setAlignment(Qt::AlignCenter);
+		subtitle->setStyleSheet("font-size: 15px; color: rgba(255, 255, 255, 0.55); background: transparent;");
+		vl->addStretch();
+		vl->addWidget(title);
+		vl->addSpacing(8);
+		vl->addWidget(subtitle);
+		vl->addStretch();
+	}
+	ui->stackedWidget->addWidget(publishView);
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));

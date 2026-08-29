@@ -103,7 +103,8 @@ enum WindowSpaces : int {
     PLAYER,
     EDITOR,
 	EFFECT,
-    ASSETS
+    ASSETS,
+    PUBLISH
 };
 
 enum class Widget
@@ -447,6 +448,8 @@ private:
 	QPushButton *editor_menu;
 	QPushButton *effect_menu;
 	QPushButton *assets_menu;
+	QPushButton *publish_menu;
+	QWidget *publishView = nullptr;   // stacked page 5: publishing stub
 	QWidget *assets_panel;
 	QLabel *jlogo;
 	QPushButton *help;
