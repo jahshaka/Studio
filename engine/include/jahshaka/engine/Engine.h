@@ -35,6 +35,8 @@ public:
     /// Textured sky behind everything: an equirectangular (lat-long) image, or a
     /// cubemap texture. SkyMode::NoSky removes it (the View's background shows).
     virtual bool        setSky(SkyMode, TextureId) = 0;
+    /// Cubemap sky from six face textures, in the order +X, -X, +Y, -Y, +Z, -Z.
+    virtual bool        setSkyCubemap(const TextureId faces[6]) = 0;
     /// Unit cube with a PBR metallic-roughness material. Proves the material path end to end.
     // TEMPORARY — replaced by mesh loading in step 3 of VIEWPORT_MIGRATION_PLAN.md
     virtual NodeId      addTestCube(const Colour &albedo, float metalness, float roughness) = 0;
@@ -75,6 +77,8 @@ public:
     /// emissive); false for data maps (normal, roughness, metalness). The same path
     /// loaded twice returns the same id. 0 on failure (lastError()).
     virtual TextureId   loadTexture(const std::string &path, bool srgb) = 0;
+    /// A texture from RGBA8 pixels in memory (top-left origin, width*height*4 bytes).
+    virtual TextureId   createTexture(unsigned width, unsigned height, const unsigned char *rgba, bool srgb) = 0;
     virtual bool        destroyTexture(TextureId) = 0;
     /// Binds (or, with 0, clears) a texture slot on a PBR material.
     virtual bool        setPbrTexture(MaterialId, PbrTextureSlot, TextureId) = 0;

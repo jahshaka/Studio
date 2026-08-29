@@ -275,6 +275,36 @@ int main(int argc, char **argv)
     view->readPixels(img); show("document sky colour", img);
     CHECK(corner(img).r > 0.6f && corner(img).b > 0.6f && corner(img).g < 0.3f, "document sky colour is the clear colour");
 
+    // ---- cubemap sky from six document face images (createCubeMap keeps the faces) ----
+    {
+        const QString dir = QDir::temp().filePath("jahshaka_mirror_cube");
+        QDir().mkpath(dir);
+        const QColor faceCols[6] = { QColor(255,0,0), QColor(0,255,0), QColor(0,0,255), QColor(255,255,0), QColor(255,0,255), QColor(0,255,255) };
+        const char *names[6] = { "posx", "negx", "posy", "negy", "posz", "negz" };
+        QString paths[6];
+        for (int i = 0; i < 6; ++i) { QImage f(8, 8, QImage::Format_RGBA8888); f.fill(faceCols[i]); paths[i] = dir + "/" + names[i] + ".png"; f.save(paths[i]); }
+        // createCubeMap(negZ, posZ, posY, negY, negX, posX) — the scene reader's order
+        doc->setSkyTexture(iris::Texture2D::createCubeMap(paths[5], paths[4], paths[2], paths[3], paths[1], paths[0]));
+        doc->skyType = iris::SkyType::CUBEMAP;
+        CHECK(doc->skyTexture && doc->skyTexture->isCubeMap(), "document cubemap keeps its six faces without GL");
+        mirror.applySky(view);
+        // Look straight down +X with a narrow FOV: the +X face is red.
+        cam->setLocalPos(QVector3D(0, 0, 0));
+        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(0, 1, 0), -90.0f));
+        cam->angle = 20.0f;
+        mirror.applyCamera(cam, view);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("cubemap sky +X", img);
+        CHECK(centre(img).r > 0.8f && centre(img).g < 0.2f && centre(img).b < 0.2f, "+X face of the document cubemap is red");
+        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(0, 1, 0), 90.0f));
+        mirror.applyCamera(cam, view);
+        for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("cubemap sky -X", img);
+        CHECK(centre(img).g > 0.8f && centre(img).r < 0.2f && centre(img).b < 0.2f, "-X face is green");
+        for (int i = 0; i < 6; ++i) QFile::remove(paths[i]);
+        QDir().rmdir(dir);
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);

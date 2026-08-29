@@ -94,6 +94,7 @@ private:
     jahshaka::engine::MaterialId mDefaultMaterial = 0;
     bool mLightWires = true;
     QString mSkySignature;
+    jahshaka::engine::TextureId mSkyFaceTextures[6] = { 0, 0, 0, 0, 0, 0 };
     jahshaka::engine::MeshId mWireMeshes[3] = { 0, 0, 0 };   // directional, point, spot
     iris::SceneNodePtr mHighlighted;
     jahshaka::engine::NodeId mHighlightNode = 0;

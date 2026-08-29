@@ -58,6 +58,9 @@ void SceneMirror::setSource(iris::ScenePtr scene)
     mMaterials.clear();
     for (TextureId t : mTextures) mTarget->destroyTexture(t);
     mTextures.clear();
+    mTarget->setSky(SkyMode::NoSky, 0);
+    for (TextureId &t : mSkyFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
+    mSkySignature.clear();
     mSource = scene;
 }
 

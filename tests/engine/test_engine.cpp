@@ -462,6 +462,44 @@ void equirect_sky_fills_the_background() {
     std::remove(path.c_str());
 }
 
+void cubemap_sky_faces_match_directions() {
+    Fixture fx;
+    View *v = fx.view("cube-sky-view", 32, 32, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("cube-sky-scene");           REQUIRE(s);
+    v->setScene(s);
+    // Six solid faces from pixels: +X red, -X green, +Y blue, -Y yellow, +Z magenta, -Z cyan.
+    const unsigned char cols[6][3] = {{255,0,0},{0,255,0},{0,0,255},{255,255,0},{255,0,255},{0,255,255}};
+    TextureId faces[6];
+    for (int i = 0; i < 6; ++i) {
+        std::vector<unsigned char> px(8 * 8 * 4);
+        for (int p = 0; p < 64; ++p) { px[p*4] = cols[i][0]; px[p*4+1] = cols[i][1]; px[p*4+2] = cols[i][2]; px[p*4+3] = 255; }
+        faces[i] = s->createTexture(8, 8, px.data(), true);
+        CHECK_MSG(faces[i] != 0, "%s", fx.e->lastError().c_str());
+    }
+    CHECK(s->setSkyCubemap(faces));
+    // Look down each axis with a narrow FOV; the centre pixel must be that face's colour.
+    struct Look { Quat q; int face; const char *name; } looks[] = {
+        { Quat(0, -0.7071068f, 0, 0.7071068f), 0, "+X" },   // yaw -90: camera -Z -> +X
+        { Quat(0,  0.7071068f, 0, 0.7071068f), 1, "-X" },
+        { Quat(0.7071068f, 0, 0, 0.7071068f),  2, "+Y" },   // pitch +90: -Z -> +Y
+        { Quat(-0.7071068f, 0, 0, 0.7071068f), 3, "-Y" },
+        { Quat(0, 1, 0, 0),                    4, "+Z" },   // yaw 180
+        { Quat(),                              5, "-Z" },
+    };
+    for (const Look &l : looks) {
+        CameraDesc c; c.position = Vec3(0, 0, 0); c.orientation = l.q; c.fovDegrees = 20; c.nearClip = 0.05f; c.farClip = 100;
+        v->setCamera(c);
+        render(fx.e, 2); Image img; REQUIRE(v->readPixels(img));
+        const Px k = centre(img);
+        const Colour want(cols[l.face][0] / 255.0f, cols[l.face][1] / 255.0f, cols[l.face][2] / 255.0f);
+        std::printf("    looking %s: centre %d %d %d\n", l.name, k.r, k.g, k.b);
+        CHECK_MSG(near(k, want, 40), "face %s should show its colour", l.name);
+    }
+    CHECK(s->setSky(SkyMode::NoSky, 0));
+    render(fx.e, 2); Image img; REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kBlue));
+}
+
 void mesh_from_buffers_renders() {
     Fixture fx;
     View *v = fx.view("mesh-view", 96, 96, kBlue); REQUIRE(v);
@@ -698,6 +736,7 @@ int main(int argc, char **argv) {
         { "background_changes_at_runtime",          background_changes_at_runtime },
         { "shadows_darken_the_ground",              shadows_darken_the_ground },
         { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
+        { "cubemap_sky_faces_match_directions",     cubemap_sky_faces_match_directions },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },

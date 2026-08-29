@@ -32,6 +32,8 @@
 #include <OgreHlmsUnlitDatablock.h>
 #include <OgreTextureGpuManager.h>
 #include <OgreTextureFilters.h>
+#include <OgreStagingTexture.h>
+#include <OgrePixelFormatGpuUtils.h>
 #include <OgreTextureGpu.h>
 #include <OgreAsyncTextureTicket.h>
 #include <OgreLogManager.h>
@@ -144,6 +146,54 @@ public:
             return true;
         } JAH_CATCH(mError, false);
     }
+    bool setSkyCubemap(const TextureId faces[6]) override {
+        JAH_TRY {
+            Ogre::TextureGpu *tex[6];
+            for (int i = 0; i < 6; ++i) {
+                auto it = mTextures.find(faces[i]);
+                if (it == mTextures.end()) { mError = "setSkyCubemap: unknown face texture"; return false; }
+                tex[i] = it->second.texture;
+            }
+            destroySky();
+            mSkyNode = mSceneMgr->getRootSceneNode(Ogre::SCENE_DYNAMIC)->createChildSceneNode(Ogre::SCENE_DYNAMIC);
+            auto *hlmsUnlit = static_cast<Ogre::HlmsUnlit *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT));
+            // Each face: a unit quad at distance 1 along its axis, facing inward. Order +X,-X,+Y,-Y,+Z,-Z.
+            // (right, up) vectors chosen so an image's top stays up and left stays left when viewed from inside.
+            const float ax[6][3] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+            const float rt[6][3] = {{0,0,-1},{0,0,1},{1,0,0},{1,0,0},{1,0,0},{-1,0,0}};
+            const float up[6][3] = {{0,1,0},{0,1,0},{0,0,-1},{0,0,1},{0,1,0},{0,1,0}};
+            for (int f = 0; f < 6; ++f) {
+                MeshData d;
+                const float *a = ax[f], *r = rt[f], *u = up[f];
+                const float corners[4][2] = {{-1,-1},{1,-1},{1,1},{-1,1}};   // (right, up) multipliers
+                for (int c = 0; c < 4; ++c) {
+                    for (int k = 0; k < 3; ++k) d.positions.push_back(a[k] + r[k] * corners[c][0] + u[k] * corners[c][1]);
+                    for (int k = 0; k < 3; ++k) d.normals.push_back(-a[k]);
+                    d.uvs.push_back(corners[c][0] > 0 ? 1.0f : 0.0f);
+                    d.uvs.push_back(corners[c][1] > 0 ? 0.0f : 1.0f);   // image row 0 at the top
+                }
+                for (unsigned i : { 0u, 2u, 1u, 0u, 3u, 2u }) d.indices.push_back(i);   // inward winding
+                const std::string meshName = processUniqueName("skyface");
+                Ogre::MeshPtr mesh = buildMeshV2(meshName, d);
+                const std::string dbName = processUniqueName("skyface");
+                Ogre::HlmsMacroblock macro;
+                macro.mDepthCheck = false; macro.mDepthWrite = false; macro.mCullMode = Ogre::CULL_NONE;
+                auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->createDatablock(
+                    Ogre::IdString(dbName), dbName, macro, Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
+                db->setUseColour(true); db->setColour(Ogre::ColourValue::White);
+                Ogre::HlmsSamplerblock sampler;
+                sampler.mU = Ogre::TAM_CLAMP; sampler.mV = Ogre::TAM_CLAMP; sampler.mMipFilter = Ogre::FO_LINEAR;
+                db->setTexture(0, tex[f], &sampler);
+                Ogre::Item *item = mSceneMgr->createItem(mesh, Ogre::SCENE_DYNAMIC);
+                item->setDatablock(db);
+                item->setRenderQueueGroup(0);
+                item->setCastShadows(false);
+                mSkyNode->attachObject(item);
+                mSkyFaces.push_back({ item, mesh, meshName, dbName });
+            }
+            return true;
+        } JAH_CATCH(mError, false);
+    }
     /// Called by the engine before rendering: keep the sky centred on the camera and
     /// inside its far plane.
     void followCamera(const Ogre::Vector3 &camPos, float farClip) {
@@ -152,7 +202,18 @@ public:
         const float r = std::max(1.0f, farClip * 0.5f);
         mSkyNode->setScale(r, r, r);
     }
+    struct SkyFace { Ogre::Item *item; Ogre::MeshPtr mesh; std::string meshName, dbName; };
+    std::vector<SkyFace> mSkyFaces;
     void destroySky() {
+        for (SkyFace &f : mSkyFaces) {
+            if (f.item) { f.item->detachFromParent(); mSceneMgr->destroyItem(f.item); }
+            auto *hlmsUnlit = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT);
+            if (hlmsUnlit->getDatablock(Ogre::IdString(f.dbName))) hlmsUnlit->destroyDatablock(Ogre::IdString(f.dbName));
+            f.mesh.reset();
+            Ogre::MeshManager &mm = Ogre::MeshManager::getSingleton();
+            if (mm.resourceExists(f.meshName)) mm.remove(f.meshName);
+        }
+        mSkyFaces.clear();
         if (mSkyItem) { mSkyItem->detachFromParent(); mSceneMgr->destroyItem(mSkyItem); mSkyItem = nullptr; }
         if (mSkyNode) { mSceneMgr->destroySceneNode(mSkyNode); mSkyNode = nullptr; }
         if (!mSkyDatablockName.empty()) {
@@ -368,6 +429,30 @@ public:
             tex->scheduleTransitionTo(Ogre::GpuResidency::Resident);
             tex->waitForData();
             TextureRec rec; rec.texture = tex; rec.path = path;
+            mTextures[++mNextTextureId] = rec;
+            return mNextTextureId;
+        } JAH_CATCH(mError, 0);
+    }
+    TextureId createTexture(unsigned w, unsigned h, const unsigned char *rgba, bool srgb) override {
+        if (!w || !h || !rgba) { mError = "createTexture: empty image"; return 0; }
+        JAH_TRY {
+            Ogre::TextureGpuManager *tm = mRoot->getRenderSystem()->getTextureGpuManager();
+            const std::string name = processUniqueName("pixels");
+            Ogre::TextureGpu *tex = tm->createTexture(name, Ogre::GpuPageOutStrategy::Discard,
+                                                      Ogre::TextureFlags::ManualTexture, Ogre::TextureTypes::Type2D);
+            tex->setResolution(w, h);
+            tex->setNumMipmaps(1u);
+            tex->setPixelFormat(srgb ? Ogre::PFG_RGBA8_UNORM_SRGB : Ogre::PFG_RGBA8_UNORM);
+            tex->scheduleTransitionTo(Ogre::GpuResidency::Resident);
+            Ogre::StagingTexture *staging = tm->getStagingTexture(w, h, 1u, 1u, tex->getPixelFormat());
+            staging->startMapRegion();
+            Ogre::TextureBox box = staging->mapRegion(w, h, 1u, 1u, tex->getPixelFormat());
+            for (unsigned y = 0; y < h; ++y) std::memcpy(box.at(0, y, 0), rgba + size_t(y) * w * 4u, size_t(w) * 4u);
+            staging->stopMapRegion();
+            staging->upload(box, tex, 0, nullptr, nullptr, true);
+            tm->removeStagingTexture(staging);
+            tex->notifyDataIsReady();
+            TextureRec rec; rec.texture = tex; rec.path = "";
             mTextures[++mNextTextureId] = rec;
             return mNextTextureId;
         } JAH_CATCH(mError, 0);
