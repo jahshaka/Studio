@@ -108,6 +108,12 @@ public:
     // ---- overlays / output ----
     virtual bool getShowLightWires() const = 0;
     virtual void setShowLightWires(bool value) = 0;
+
+    /// Selection highlight style: false (default) = silhouette outline, true = the
+    /// polygon wireframe. Only the engine viewport implements it; the legacy
+    /// viewport keeps its own single style.
+    virtual bool getSelectionWireframe() const { return false; }
+    virtual void setSelectionWireframe(bool) {}
     virtual bool getShowDebugDrawFlags() const = 0;
     virtual void setShowDebugDrawFlags(bool value) = 0;
     virtual void setShowFps(bool value) = 0;

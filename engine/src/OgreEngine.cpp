@@ -512,6 +512,24 @@ public:
             return mNextMaterialId;
         } JAH_CATCH(mError, 0);
     }
+    MaterialId createOutlineMaterial(const Colour &c) override {
+        JAH_TRY {
+            MaterialRec rec; rec.datablockName = processUniqueName("outline"); rec.unlit = true;
+            auto *hlmsUnlit = static_cast<Ogre::HlmsUnlit *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT));
+            Ogre::HlmsMacroblock macro;
+            // Inverted hull: cull FRONT faces so only the shell's far side shows,
+            // forming a silhouette band around the (slightly smaller) original.
+            macro.mCullMode = Ogre::CULL_ANTICLOCKWISE;
+            macro.mDepthCheck = true;
+            macro.mDepthWrite = false;
+            auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->createDatablock(
+                Ogre::IdString(rec.datablockName), rec.datablockName, macro, Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
+            db->setUseColour(true);
+            db->setColour(toOgre(c));
+            mMaterials[++mNextMaterialId] = rec;
+            return mNextMaterialId;
+        } JAH_CATCH(mError, 0);
+    }
     bool setUnlitMaterial(MaterialId id, const Colour &c) override {
         auto it = mMaterials.find(id);
         if (it == mMaterials.end() || !it->second.unlit) return false;

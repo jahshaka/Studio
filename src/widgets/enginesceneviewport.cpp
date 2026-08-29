@@ -456,6 +456,7 @@ void EngineSceneViewport::syncFrame()
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
     if (mMirror) {
         mMirror->setLightWires(mShowLightWires);
+        mMirror->setHighlightWireframe(mSelectionWireframe);
         mMirror->setHighlightedNode(mSelectedNode);
         mMirror->sync();
     }

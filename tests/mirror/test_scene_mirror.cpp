@@ -389,8 +389,15 @@ int main(int argc, char **argv)
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     const int yellowOn = countYellow(img);
-    std::printf("    highlight on: %d yellow wireframe pixels\n", yellowOn);
-    CHECK(yellowOn > 10, "selected mesh gets a yellow wireframe highlight");
+    std::printf("    highlight on (outline): %d yellow pixels\n", yellowOn);
+    CHECK(yellowOn > 10, "selected mesh gets a yellow silhouette outline");
+    mirror.setHighlightWireframe(true);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    const int yellowWire = countYellow(img);
+    std::printf("    highlight on (wireframe): %d yellow pixels\n", yellowWire);
+    CHECK(yellowWire > 10, "the wireframe style still highlights when toggled on");
+    mirror.setHighlightWireframe(false);
     mirror.setHighlightedNode(nullptr);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);

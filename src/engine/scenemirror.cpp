@@ -116,6 +116,11 @@ void SceneMirror::setHighlightedNode(iris::SceneNodePtr node)
     mHighlighted = node;
 }
 
+void SceneMirror::setHighlightWireframe(bool on)
+{
+    mHighlightWireframe = on;
+}
+
 void SceneMirror::syncHighlight()
 {
     iris::MeshNode *meshNode = (mHighlighted && mHighlighted->getSceneNodeType() == iris::SceneNodeType::Mesh)
@@ -127,14 +132,30 @@ void SceneMirror::syncHighlight()
         mHighlightMesh = 0;
         return;
     }
-    if (!mHighlightMaterial)
-        mHighlightMaterial = mTarget->createUnlitMaterial(Colour(1.0f, 0.85f, 0.1f), false, true);   // on top, wireframe
-    if (!mHighlightNode) mHighlightNode = mTarget->createNode();
-    if (!mHighlightNode || !mHighlightMaterial) return;
-    if (mHighlightMesh != m) {
-        if (mTarget->attachMesh(mHighlightNode, m, mHighlightMaterial)) mHighlightMesh = m;
+    const Colour kSelection(1.0f, 0.85f, 0.1f);
+    MaterialId mat;
+    if (mHighlightWireframe) {
+        if (!mHighlightMaterial)
+            mHighlightMaterial = mTarget->createUnlitMaterial(kSelection, false, true);   // on top, wireframe
+        mat = mHighlightMaterial;
+    } else {
+        if (!mOutlineMaterial)
+            mOutlineMaterial = mTarget->createOutlineMaterial(kSelection);
+        mat = mOutlineMaterial;
     }
-    pushTransform(mTarget, mHighlightNode, meshNode->globalTransform);
+    if (!mHighlightNode) mHighlightNode = mTarget->createNode();
+    if (!mHighlightNode || !mat) return;
+    if (mHighlightMesh != m || mHighlightWireframeApplied != mHighlightWireframe) {
+        if (mTarget->attachMesh(mHighlightNode, m, mat)) {
+            mHighlightMesh = m;
+            mHighlightWireframeApplied = mHighlightWireframe;
+        }
+    }
+    // The outline is the same mesh scaled up slightly around the node's pivot:
+    // only the band where the shell pokes out past the original is visible.
+    QMatrix4x4 t = meshNode->globalTransform;
+    if (!mHighlightWireframe) t.scale(1.04f);
+    pushTransform(mTarget, mHighlightNode, t);
     mTarget->setNodeVisible(mHighlightNode, true);
 }
 

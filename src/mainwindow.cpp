@@ -2533,6 +2533,15 @@ void MainWindow::setupViewPort()
     connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
     wireFramesMenu->addAction(physicsCheckAction);
 
+    // Selection highlight: silhouette outline by default; this shows the polygon
+    // wireframe instead (engine viewport only — legacy keeps its single style).
+    auto selectionWireAction = new QAction(QIcon(), "Selection Wireframe");
+    selectionWireAction->setCheckable(true);
+    connect(selectionWireAction, &QAction::toggled, this, [this](bool on) {
+        if (sceneView) sceneView->setSelectionWireframe(on);
+    });
+    wireFramesMenu->addAction(selectionWireAction);
+
     // --- Engine preview (Ogre-Next) -------------------------------------
     // Scaffolding for the engine migration: opens a window driven entirely
     // through the engine abstraction. Removed once the editor viewport moves over.

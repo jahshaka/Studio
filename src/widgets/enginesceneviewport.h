@@ -85,6 +85,8 @@ public:
 
     bool getShowLightWires() const override { return mShowLightWires; }
     void setShowLightWires(bool value) override { mShowLightWires = value; }
+    bool getSelectionWireframe() const override { return mSelectionWireframe; }
+    void setSelectionWireframe(bool value) override { mSelectionWireframe = value; }
     bool getShowDebugDrawFlags() const override { return mShowDebugDraw; }
     void setShowDebugDrawFlags(bool value) override { mShowDebugDraw = value; }
     void setShowFps(bool) override {}
@@ -164,6 +166,7 @@ private:
     EditorData *mEditorData = nullptr;
     ViewportMode mViewportMode = ViewportMode::Editor;
     bool mShowLightWires = true;
+    bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;
     bool mActive = false;
     unsigned mViewSerial = 0;

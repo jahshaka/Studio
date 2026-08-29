@@ -89,6 +89,10 @@ public:
     /// `wireframe` draws only the triangle edges — the selection outline uses it.
     virtual MaterialId  createUnlitMaterial(const Colour &, bool depthTest, bool wireframe = false) = 0;
     virtual bool        setUnlitMaterial(MaterialId, const Colour &) = 0;
+    /// Selection silhouette: unlit colour drawn on BACK faces only, so a copy of the
+    /// mesh scaled up slightly (~4%) renders as a clean outline band around the
+    /// original (inverted hull). Depth-tested, so occluders still hide it.
+    virtual MaterialId  createOutlineMaterial(const Colour &) = 0;
     /// A line list (pairs of points) or, with `strip`, a connected polyline.
     /// Attach with attachMesh like any mesh. One pixel wide.
     virtual MeshId      createLineMesh(const std::vector<Vec3> &points, bool strip) = 0;

@@ -54,6 +54,11 @@ public:
 
     /// Selection highlight: the node's mesh drawn again as an on-top wireframe.
     void setHighlightedNode(iris::SceneNodePtr node);
+
+    /// Selection highlight look: false (default) = silhouette outline (inverted
+    /// hull); true = the on-top polygon wireframe.
+    void setHighlightWireframe(bool on);
+    bool highlightWireframe() const { return mHighlightWireframe; }
     /// Light wires: a small shape at every document light (colour = the light's).
     void setLightWires(bool on);
     bool lightWires() const { return mLightWires; }
@@ -103,8 +108,11 @@ private:
     jahshaka::engine::MeshId mWireMeshes[3] = { 0, 0, 0 };   // directional, point, spot
     iris::SceneNodePtr mHighlighted;
     jahshaka::engine::NodeId mHighlightNode = 0;
-    jahshaka::engine::MaterialId mHighlightMaterial = 0;
+    jahshaka::engine::MaterialId mHighlightMaterial = 0;   // wireframe (on top)
+    jahshaka::engine::MaterialId mOutlineMaterial = 0;     // inverted hull
     jahshaka::engine::MeshId mHighlightMesh = 0;
+    bool mHighlightWireframe = false;
+    bool mHighlightWireframeApplied = false;
 };
 
 #endif // SCENEMIRROR_H
