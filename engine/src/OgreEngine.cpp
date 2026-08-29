@@ -51,6 +51,7 @@
 
 #include <X11/Xlib.h>
 #include <atomic>
+#include <functional>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -956,12 +957,18 @@ public:
     unsigned height() const override { return mHeight; }
     bool isOffscreen() const override { return mTexture != nullptr; }
 
+    /// Set by the engine for on-screen views: creates a fresh Ogre window on the same
+    /// native handle at the given size.
+    std::function<Ogre::Window *(unsigned, unsigned)> mCreateWindow;
+    unsigned mPendingW = 0, mPendingH = 0;
+
+    /// On-screen resize is applied at frame time (applyPendingResize): by then Qt has
+    /// resized the native window, and doing it once per frame coalesces layout bursts.
     void resize(unsigned w, unsigned h) override {
         if (!w || !h) return;
         JAH_TRY {
             if (mWindow) {
-                mWindow->requestResolution(w, h);
-                mWindow->windowMovedOrResized();
+                mPendingW = w; mPendingH = h;
             } else {
                 // An RTT cannot be resized in place: rebuild it and re-add the workspace.
                 Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
@@ -997,6 +1004,27 @@ public:
         } JAH_CATCH(mError, false);
     }
 
+    /// Ogre's Vulkan window does not reallocate its depth buffer on resize (the
+    /// swapchain follows the surface, the depth texture keeps its old size, and the
+    /// mismatched framebuffer faults the GPU — Vulkan validation VUID 04533/04534).
+    /// So a size change recreates the render window on the same native handle.
+    void applyPendingResize() {
+        if (!mWindow || !mPendingW || !mPendingH || !mCreateWindow) return;
+        const unsigned w = mPendingW, h = mPendingH;
+        mPendingW = mPendingH = 0;
+        if (w == mWidth && h == mHeight) return;
+        JAH_TRY {
+            Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
+            const bool hadWorkspace = mWorkspace != nullptr;
+            if (mWorkspace) { cm->removeWorkspace(mWorkspace); mWorkspace = nullptr; }
+            mRoot->getRenderSystem()->destroyRenderWindow(mWindow);
+            mWindow = nullptr;
+            mWindow = mCreateWindow(w, h);
+            mWidth = w; mHeight = h;
+            if (hadWorkspace && mScene && mCamera)
+                mWorkspace = cm->addWorkspace(mScene->sceneManager(), target(), mCamera, mWorkspaceDef, mEnabled);
+        } JAH_CATCH(mError, );
+    }
     /// Keeps the scene's sky sphere centred on this view's camera.
     void updateSky() {
         if (mEnabled && mScene && mCamera) mScene->followCamera(mCamera->getPosition(), mCamera->getFarClipDistance());
@@ -1136,7 +1164,21 @@ public:
             ensureHlms();
             mViews.emplace_back(new OgreView(mRoot, window, nullptr, name, width, height,
                                              background, mLastError));
-            return mViews.back().get();
+            OgreView *view = mViews.back().get();
+            const bool vulkan = mBackendName.find("Vulkan") != std::string::npos;
+            Display *display = mDisplay;
+            Ogre::Root *root = mRoot;
+            view->mCreateWindow = [root, vulkan, display, handle, name](unsigned w, unsigned h) -> Ogre::Window * {
+                Ogre::NameValuePairList p;
+                X11Handle x11{ display, (::Window)handle };
+                if (vulkan) p["SDL2x11"] = Ogre::StringConverter::toString((unsigned long)&x11);
+                else { p["parentWindowHandle"] = Ogre::StringConverter::toString((unsigned long)handle); p["gamma"] = "true"; }
+                p["vsync"] = "true"; p["vsyncInterval"] = "1";
+                Ogre::Window *win = root->createRenderWindow(name + "/" + processUniqueName("resize"), w, h, false, &p);
+                win->setVSync(true, 1);
+                return win;
+            };
+            return view;
         } JAH_CATCH(mLastError, nullptr);
     }
 
@@ -1174,7 +1216,7 @@ public:
 
     void renderOneFrame() override {
         JAH_TRY {
-            for (auto &v : mViews) v->updateSky();
+            for (auto &v : mViews) { v->applyPendingResize(); v->updateSky(); }
             if (mRoot) mRoot->renderOneFrame();
         } JAH_CATCH(mLastError, );
     }

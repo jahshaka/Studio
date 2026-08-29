@@ -84,7 +84,11 @@ static int runEngineSelftest(MainWindow &window, QApplication &app, const QStrin
     // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
     QElapsedTimer clock;
     clock.start();
-    for (int frame = 0; frame < 30; ++frame) {
+    // Resize twice on the way (the layout does this to the viewport in real use):
+    // the engine must survive a swapchain rebuild without a stale depth buffer.
+    for (int frame = 0; frame < 40; ++frame) {
+        if (frame == 10) window.resize(1100, 760);
+        if (frame == 25) window.resize(700, 520);
         app.processEvents(QEventLoop::AllEvents, 50);
         QThread::msleep(16);
     }
