@@ -275,7 +275,10 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
 
 void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mousePressEvent(e);
+    // Accept explicitly: an ignored press propagates to sceneContainer, whose
+    // MainWindow::eventFilter re-sends it here — an infinite loop (each round
+    // re-picked and rebuilt the property panel). The legacy widget accepts too.
+    e->accept();
     setFocus();
     if (mPlaying && mPlayback) { mPlayback->mousePressEvent(e); return; }
     mMousePos = mPrevMousePos = e->position(); mHaveMouse = true;
@@ -296,7 +299,7 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
 
 void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mouseMoveEvent(e);
+    e->accept();
     if (mPlaying && mPlayback) { mPlayback->mouseMoveEvent(e); return; }
     mMousePos = e->position(); mHaveMouse = true;
     const QPointF dir = mMousePos - mPrevMousePos;
@@ -311,7 +314,7 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
 
 void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
 {
-    EngineViewWidget::mouseReleaseEvent(e);
+    e->accept();
     if (mPlaying && mPlayback) { mPlayback->mouseReleaseEvent(e); return; }
     if (e->button() == Qt::LeftButton && mGizmo && mGizmo->isDragging()) mGizmo->endDragging();
     if (mCamController) mCamController->onMouseUp(e->button());
@@ -319,6 +322,7 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
 
 void EngineSceneViewport::wheelEvent(QWheelEvent *e)
 {
+    e->accept();
     if (mPlaying && mPlayback) { mPlayback->wheelEvent(e); return; }
     if (mCamController) mCamController->onMouseWheel(e->angleDelta().y());
 }
