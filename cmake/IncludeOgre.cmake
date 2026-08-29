@@ -7,19 +7,28 @@
 # (single mGlobalVao, OgreGL3PlusRenderSystem.cpp:840) — see OGRE_MIGRATION_SPEC.md §11.
 
 set(OGRE_NEXT_PREFIX "$ENV{HOME}/Developer/engines/ogre-next-install"
-    CACHE PATH "Ogre-Next install prefix")
-set(OGRE_NEXT_SOURCE "$ENV{HOME}/Developer/engines/ogre-next"
+    CACHE PATH "Ogre-Next install prefix (written by irisgl/scripts/build-ogre.sh)")
+# The source tree ships as an irisgl submodule (pinned upstream + our patches,
+# applied by the build script). The old external-checkout path is the fallback.
+if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/CMakeLists.txt")
+    set(_ogre_src_default "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next")
+else()
+    set(_ogre_src_default "$ENV{HOME}/Developer/engines/ogre-next")
+endif()
+set(OGRE_NEXT_SOURCE "${_ogre_src_default}"
     CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)")
 
 if(NOT EXISTS "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Ogre.h")
     message(FATAL_ERROR
         "Ogre-Next not found at ${OGRE_NEXT_PREFIX}.\n"
-        "Build it per OGRE_PLATFORM_DEPS.md, or set -DOGRE_NEXT_PREFIX=<prefix>.")
+        "One-time setup: git submodule update --init irisgl/thirdparty/ogre-next && "
+        "irisgl/scripts/build-ogre.sh   (details: irisgl/docs/OGRE_BUILD.md)\n"
+        "Or point -DOGRE_NEXT_PREFIX=<prefix> at an existing install.")
 endif()
 if(NOT EXISTS "${OGRE_NEXT_SOURCE}/Samples/Media/Hlms/Pbs")
     message(FATAL_ERROR
         "Ogre-Next Hlms templates not found at ${OGRE_NEXT_SOURCE}/Samples/Media/Hlms.\n"
-        "Set -DOGRE_NEXT_SOURCE=<source tree>.")
+        "Run: git submodule update --init irisgl/thirdparty/ogre-next, or set -DOGRE_NEXT_SOURCE=<source tree>.")
 endif()
 
 add_library(OgreNext INTERFACE)
