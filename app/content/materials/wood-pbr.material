@@ -1,0 +1,17 @@
+{
+    "name"                : "Board PBR",
+    "material_type"       : "PBR",
+    "icon"                : "../../materials/wood.png",
+    "baseColor"           : "#FFFFFF",
+    "baseColorMap"        : "presets/wood/wood_planks_03_1_COLOR.png",
+    "metallic"            : 0.0,
+    "roughness"           : 1.0,
+    "roughnessLowerBound" : 0.8,
+    "roughnessUpperBound" : 0.45,
+    "roughnessMap"        : "presets/wood/wood_planks_03_1_SPEC.png",
+    "normalMap"           : "presets/wood/wood_planks_03_1_NRM.png",
+    "normalFactor"        : 1.0,
+    "occlusionFactor"     : 1.0,
+    "emissiveIntensity"   : 0.0,
+    "textureScale"        : 4
+}

@@ -1,0 +1,13 @@
+{
+    "name"              : "Checker Board PBR",
+    "material_type"     : "PBR",
+    "icon"              : "../../shadergraph/checkerThumb.png",
+    "baseColor"         : "#FFFFFF",
+    "baseColorMap"      : "../../shadergraph/checker.jpg",
+    "metallic"          : 0.0,
+    "roughness"         : 0.39,
+    "normalFactor"      : 1.0,
+    "occlusionFactor"   : 1.0,
+    "emissiveIntensity" : 0.0,
+    "textureScale"      : 2
+}

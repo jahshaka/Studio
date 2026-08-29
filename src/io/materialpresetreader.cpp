@@ -82,5 +82,36 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
 
     material.textureScale = (float)matObj["textureScale"].toDouble(1.0f);
 
+    // --- PBR fields, read when material_type is "PBR" ---
+    // Absent on every legacy preset, so the defaults below leave them inert.
+    {
+        QColor c;
+        c.setNamedColor(matObj["baseColor"].toString("#FFFFFF"));
+        material.baseColor = c;
+        c.setNamedColor(matObj["emissiveColor"].toString("#000000"));
+        material.emissiveColor = c;
+    }
+
+    auto pbrTex = [&](const char* key) -> QString {
+        auto v = matObj[key].toString("");
+        return v.isEmpty() ? QString() : getAbsolutePath(v);
+    };
+
+    material.baseColorMap        = pbrTex("baseColorMap");
+    material.metallicMap         = pbrTex("metallicMap");
+    material.roughnessMap        = pbrTex("roughnessMap");
+    material.pbrNormalMap        = pbrTex("normalMap");
+    material.occlusionMap        = pbrTex("occlusionMap");
+    material.emissiveMap         = pbrTex("emissiveMap");
+
+    material.metallic            = static_cast<float>(matObj["metallic"].toDouble(0.0));
+    material.roughness           = static_cast<float>(matObj["roughness"].toDouble(0.5));
+    // NOTE: lower > upper is intentional and inverts a legacy spec/gloss map.
+    material.roughnessLowerBound = static_cast<float>(matObj["roughnessLowerBound"].toDouble(0.0));
+    material.roughnessUpperBound = static_cast<float>(matObj["roughnessUpperBound"].toDouble(1.0));
+    material.pbrNormalFactor     = static_cast<float>(matObj["normalFactor"].toDouble(1.0));
+    material.occlusionFactor     = static_cast<float>(matObj["occlusionFactor"].toDouble(1.0));
+    material.emissiveIntensity   = static_cast<float>(matObj["emissiveIntensity"].toDouble(0.0));
+
     return material;
 }

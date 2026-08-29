@@ -1,0 +1,13 @@
+{
+    "name"              : "Grass PBR",
+    "material_type"     : "PBR",
+    "icon"              : "../../shadergraph/grassThumb.png",
+    "baseColor"         : "#FFFFFF",
+    "baseColorMap"      : "../../shadergraph/grass.jpg",
+    "metallic"          : 0.0,
+    "roughness"         : 0.7,
+    "normalFactor"      : 1.0,
+    "occlusionFactor"   : 1.0,
+    "emissiveIntensity" : 0.0,
+    "textureScale"      : 2
+}

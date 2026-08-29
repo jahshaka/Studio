@@ -1,0 +1,17 @@
+{
+    "name"                : "Marble PBR",
+    "material_type"       : "PBR",
+    "icon"                : "../../materials/marble_tile.png",
+    "baseColor"           : "#FFFFFF",
+    "baseColorMap"        : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_COLOR.png",
+    "metallic"            : 0.0,
+    "roughness"           : 1.0,
+    "roughnessLowerBound" : 0.55,
+    "roughnessUpperBound" : 0.15,
+    "roughnessMap"        : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_SPEC.png",
+    "normalMap"           : "presets/marble_tile/Marble_Tiles_01_UV_H_CM_1_NRM.png",
+    "normalFactor"        : 1.0,
+    "occlusionFactor"     : 1.0,
+    "emissiveIntensity"   : 0.0,
+    "textureScale"        : 4
+}

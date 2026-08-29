@@ -1,0 +1,17 @@
+{
+    "name"                : "Leather PBR",
+    "material_type"       : "PBR",
+    "icon"                : "../../materials/leather.png",
+    "baseColor"           : "#FFFFFF",
+    "baseColorMap"        : "presets/leather/Leather_02_UV_H_CM_1_COLOR.png",
+    "metallic"            : 0.0,
+    "roughness"           : 1.0,
+    "roughnessLowerBound" : 0.58,
+    "roughnessUpperBound" : 0.24,
+    "roughnessMap"        : "presets/leather/Leather_02_UV_H_CM_1_SPEC.png",
+    "normalMap"           : "presets/leather/Leather_02_UV_H_CM_1_NRM.png",
+    "normalFactor"        : 1.0,
+    "occlusionFactor"     : 1.0,
+    "emissiveIntensity"   : 0.0,
+    "textureScale"        : 2
+}

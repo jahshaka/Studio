@@ -51,7 +51,7 @@ public:
 	static void writeViewerData(QJsonObject& sceneNodeObject, iris::ViewerNodePtr node);
 	static void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
 	static void writeGrabNodeData(QJsonObject& sceneNodeObject, iris::GrabNodePtr node);
-	static void writeSceneNodeMaterial(QJsonObject& matObj, iris::CustomMaterialPtr mat, bool relative = true);
+	static void writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat, bool relative = true);
     static void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
 
 	static QJsonObject jsonColor(QColor color);

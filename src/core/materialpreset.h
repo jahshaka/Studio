@@ -37,6 +37,23 @@ struct MaterialPreset
     float reflectionInfluence;
 
     float textureScale;
+
+    // --- PBR (material_type: "PBR") ---
+    QColor  baseColor;
+    QString baseColorMap;
+    float   metallic;
+    QString metallicMap;
+    float   roughness;
+    QString roughnessMap;
+    float   roughnessLowerBound;
+    float   roughnessUpperBound;
+    QString pbrNormalMap;
+    float   pbrNormalFactor;
+    QString occlusionMap;
+    float   occlusionFactor;
+    QColor  emissiveColor;
+    float   emissiveIntensity;
+    QString emissiveMap;
 };
 
 #endif // MATERIALPRESET_H
