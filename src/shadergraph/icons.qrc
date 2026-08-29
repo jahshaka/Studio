@@ -1,0 +1,26 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/check-checked.png</file>
+        <file>icons/check-disabled.png</file>
+        <file>icons/check-unchecked.png</file>
+        <file>icons/down_arrow_check.png</file>
+        <file>icons/down_arrow_check_disabled.png</file>
+        <file>icons/down-arrow.svg</file>
+        <file>icons/dropdown.png</file>
+        <file>icons/drop-down-arrow.svg</file>
+        <file>icons/contract.png</file>
+        <file>icons/expand.png</file>
+        <file>icons/add.png</file>
+        <file>icons/down.png</file>
+        <file>icons/up.png</file>
+        <file>icons/icon.ico</file>
+        <file>icons/icon.png</file>
+        <file>icons/input.png</file>
+        <file>icons/math.png</file>
+        <file>icons/properties.png</file>
+        <file>icons/math.svg</file>
+        <file>icons/checked.png</file>
+        <file>icons/checked.svg</file>
+        <file>icons/close.png</file>
+    </qresource>
+</RCC>

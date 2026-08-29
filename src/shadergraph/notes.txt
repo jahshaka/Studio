@@ -1,0 +1,47 @@
+Nodes To Implement:
+
+Lerp
+Mask
+Invert
+Multiply
+
+Vector Multiply/ Add/ Divide/ Subtract
+Floor
+Ceil
+Matrix Mult
+Distance
+Power
+Clamp
+Distance
+Dot
+Step
+Smooth Step
+Log
+Mod
+Exponent
+Min
+Max
+Abs
+Sign
+Trunc
+Frac
+Blend
+
+Fresnel
+
+Sin, Cos, Tan
+
+Time (Seconds, Milliseconds)
+
+World Normal, View Normal
+
+# UTILITY
+Split Vector
+Panner
+Rotator
+Normal Blend
+
+Sources:
+http://acegikmo.com/shaderforge/nodes/
+https://github.com/Unity-Technologies/ShaderGraph/wiki/Node-Library
+

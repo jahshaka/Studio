@@ -1,9 +1,6 @@
 [submodule "thirdparty/breakpad/breakpad"]
 	path = thirdparty/breakpad/breakpad
 	url = https://github.com/jahshaka/breakpad.git
-[submodule "src/shadergraph"]
-	path = src/shadergraph
-	url = https://github.com/jahshaka/Effects.git
 [submodule "irisgl"]
 	path = irisgl
 	url = https://github.com/jahshaka/IrisGL.git
