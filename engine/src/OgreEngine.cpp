@@ -1165,7 +1165,7 @@ private:
         }
     }
     /// One shadow node for the process: PSSM (3 splits) for the first directional
-    /// light (point/spot shadow maps pending — see below).
+    /// light and focused maps for the next two point/spot lights, in one atlas.
     /// Mirrors Ogre's ShadowMapFromCode sample. Views opt in with setShadows(true).
     void createShadowNode() {
         Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
@@ -1183,9 +1183,17 @@ private:
         p.supportedLightTypes = 0u;
         p.addLightType(Ogre::Light::LT_DIRECTIONAL);
         params.push_back(p);
-        // Point/spot shadow maps need Ogre's 'Ogre/DPSM/CubeToDpsm' material from
-        // Samples/Media/2.0/scripts/materials/Common, which is not shipped yet.
-        // Directional (PSSM) only until that media is staged.
+        // Two focused maps for point/spot lights (dual-paraboloid for point). Needs
+        // the 'Ogre/DPSM/CubeToDpsm' material from the staged common scripts.
+        p.technique = Ogre::SHADOWMAP_FOCUSED;
+        p.resolution[0].x = 2048u; p.resolution[0].y = 2048u;
+        p.atlasStart[0].x = 0u; p.atlasStart[0].y = 2048u + 1024u;
+        p.supportedLightTypes = 0u;
+        p.addLightType(Ogre::Light::LT_POINT);
+        p.addLightType(Ogre::Light::LT_SPOTLIGHT);
+        params.push_back(p);
+        p.atlasStart[0].y = 2048u + 1024u + 2048u;
+        params.push_back(p);
         Ogre::ShadowNodeHelper::createShadowNodeWithSettings(
             cm, mRoot->getRenderSystem()->getCapabilities(), OgreView::kShadowNodeName, params, false);
     }
