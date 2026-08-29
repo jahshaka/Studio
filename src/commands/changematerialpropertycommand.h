@@ -17,16 +17,20 @@ For more information see the LICENSE file
 #include <QVariant>
 #include "../irisgl/src/irisglfwd.h"
 
+// Widened from CustomMaterialPtr to MaterialPtr (SCRIPTING_SPEC §1.4): PbrMaterial
+// edits — the engine viewport's authoring model — are undoable through the same
+// command. CustomMaterial keeps its property-list/texture-uniform path; every
+// other material goes through the virtual Material::setValue bridge.
 class ChangeMaterialPropertyCommand : public QUndoCommand
 {
-    iris::CustomMaterialPtr material;
+    iris::MaterialPtr material;
     QString propName;
     QVariant oldValue;
     QVariant newValue;
 
 
 public:
-    ChangeMaterialPropertyCommand(iris::CustomMaterialPtr material, QString name, QVariant oldValue, QVariant newValue);
+    ChangeMaterialPropertyCommand(iris::MaterialPtr material, QString name, QVariant oldValue, QVariant newValue);
 
     void undo() override;
     void redo() override;

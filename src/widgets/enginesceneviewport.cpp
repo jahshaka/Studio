@@ -517,6 +517,18 @@ QImage EngineSceneViewport::takeScreenshot(QSize dimension)
     return takeScreenshot(dimension.width(), dimension.height());
 }
 
+void EngineSceneViewport::renderFrames(int n)
+{
+    // editor.frame(n): the deterministic document→engine sync + render pattern of
+    // the headless suites, synchronously — scripts step exact frames instead of
+    // sleeping against the driver timer.
+    if (!mEngine) return;
+    for (int i = 0; i < n; ++i) {
+        syncFrame();
+        mEngine->renderOneFrame();
+    }
+}
+
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
     // Offscreen render of the same engine scene at the requested size, then readback.

@@ -168,6 +168,27 @@ public:
 
     iris::ScenePtr getScene();
 
+    /// Selection read-back for the scripting API (SCRIPTING_SPEC §1.2): the
+    /// single accessor to the otherwise-private activeSceneNode.
+    iris::SceneNodePtr selectedSceneNode() const { return activeSceneNode; }
+
+    /// Blob-only save (SCRIPTING_SPEC §1.6.2): writes the scene into the
+    /// project row — with a viewport thumbnail when one is available — and
+    /// NEVER silently no-ops the way saveScene() does when the viewport is
+    /// uninitialized (headless scripts must be able to save). False when no
+    /// scene/project is open.
+    bool saveProjectBlob();
+
+    /// Parameterised node verbs for the scripting API: same behaviour as the
+    /// deleteNode()/duplicateNode() context-menu slots but on an explicit node
+    /// (and duplication is undoable via AddSceneNodeCommand).
+    bool deleteSceneNode(iris::SceneNodePtr node);
+    iris::SceneNodePtr duplicateSceneNode(iris::SceneNodePtr node);
+
+    /// The scripting engine (created in the ctor; modules see the world through
+    /// ScriptHost). Null only before the ctor finishes.
+    class ScriptEngine *scripting() { return scriptEngine; }
+
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**
@@ -371,14 +392,18 @@ public slots:
 signals:
 	void projectionChangeRequested(bool val);
 
+public slots:
+    // public for the scripting API (editor.play()/stop() set the mode
+    // explicitly instead of toggling the play button)
+    void enterEditMode();
+    void enterPlayMode();
+
 private slots:
     void translateGizmo();
     void rotateGizmo();
     void scaleGizmo();
 
     void onPlaySceneButton();
-    void enterEditMode();
-    void enterPlayMode();
 
 	void changeProjection(bool val);
 
@@ -505,6 +530,12 @@ private:
 
 	bool isSceneOpen = false;
 	shadergraph::MainWindow *shaderGraph;
+
+    // scripting (SCRIPTING_SPEC §2): the host struct must outlive the engine
+    struct ScriptHost *scriptHost = nullptr;
+    class ScriptEngine *scriptEngine = nullptr;
+    QDockWidget *scriptConsoleDock = nullptr;
+    class ScriptConsole *scriptConsole = nullptr;
 };
 
 #endif // MAINWINDOW_H

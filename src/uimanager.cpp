@@ -26,6 +26,7 @@ SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
 SceneNodePropertiesWidget *UiManager::propertyWidget = Q_NULLPTR;
 
 QUndoStack *UiManager::undoStack = Q_NULLPTR;
+bool UiManager::scriptMacroOpen = false;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
 bool UiManager::isSceneOpen = false;
@@ -135,6 +136,10 @@ bool UiManager::getUndoStackCount()
 
 void UiManager::clearUndoStack()
 {
+    // Clearing inside an open macro corrupts QUndoStack's macro accounting
+    // ("endMacro(): no matching beginMacro()"); a script run stays one undo
+    // step instead, which is the scripting contract anyway.
+    if (scriptMacroOpen) return;
     UiManager::undoStack->clear();
 }
 

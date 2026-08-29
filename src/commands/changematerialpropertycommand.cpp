@@ -11,10 +11,11 @@ For more information see the LICENSE file
 
 #include "changematerialpropertycommand.h"
 #include "../irisgl/src/core/property.h"
+#include "../irisgl/src/graphics/material.h"
 #include "../irisgl/src/materials/custommaterial.h"
 
 
-ChangeMaterialPropertyCommand::ChangeMaterialPropertyCommand(iris::CustomMaterialPtr material, QString name, QVariant oldValue, QVariant newValue)
+ChangeMaterialPropertyCommand::ChangeMaterialPropertyCommand(iris::MaterialPtr material, QString name, QVariant oldValue, QVariant newValue)
 {
     this->material = material;
     propName = name;
@@ -34,18 +35,27 @@ void ChangeMaterialPropertyCommand::redo()
 
 void ChangeMaterialPropertyCommand::setMaterialProperty(QString name, QVariant value)
 {
-    iris::Property* prop = nullptr;
-    for (auto property : material->properties) {
-        if (property->name == name)
-            prop = property;
+    // CustomMaterial keeps its historical path: textures resolve through the
+    // uniform table, everything else lands on the Property object.
+    if (auto custom = material.dynamicCast<iris::CustomMaterial>()) {
+        iris::Property* prop = nullptr;
+        for (auto property : custom->properties) {
+            if (property->name == name)
+                prop = property;
+        }
+
+        Q_ASSERT(prop);
+
+        // special case for textures since we have to generate these
+        if (prop->type == iris::PropertyType::Texture) {
+            custom->setTextureWithUniform(prop->uniform, value.toString());
+        } else {
+            prop->setValue(value);
+        }
+        return;
     }
 
-    Q_ASSERT(prop);
-
-    // special case for textures since we have to generate these
-    if (prop->type == iris::PropertyType::Texture) {
-        material->setTextureWithUniform(prop->uniform, value.toString());
-    } else {
-        prop->setValue(value);
-    }
+    // PbrMaterial (and any future material) bridges by name — its setValue
+    // carries the value onto the real fields the shader reads, textures as paths.
+    material->setValue(name, value);
 }

@@ -68,6 +68,16 @@ public:
 
     int getCurrentDesktop() const { return currentDesktop; }
 
+    /// Synchronous, dialog-free version of loadProjectAssets() for the scripting
+    /// API (project.open): same DB sweeps and AssetManager registrations as the
+    /// concurrent path, sequentially on the caller's thread, no modal progress
+    /// dialog, no fileToOpen signal — the caller decides what happens next.
+    void loadProjectAssetsSync();
+
+public slots:
+    // public for the scripting API (app.desktop(n))
+    void switchDesktop(int desktop);
+
 protected slots:
     void openSampleProject(QListWidgetItem*);
     void newProject();
@@ -88,7 +98,6 @@ protected slots:
 
     // desktops (DESKTOPS_SPEC.md)
     void moveProjectToDesktop(ItemGridWidget*, int desktop);
-    void switchDesktop(int desktop);
     void projectTilePositionChanged(ItemGridWidget*);
 
     void searchProjects();

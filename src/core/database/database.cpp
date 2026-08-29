@@ -808,14 +808,21 @@ QString Database::getAuthorName()
 
 bool Database::deleteProject()
 {
+    return deleteProject(Globals::project->getProjectGuid());
+}
+
+// Guid-parameterised (SCRIPTING_SPEC §1.1/§1.6.1): callers no longer have to
+// MUTATE Globals::project to delete a project that is not the open one.
+bool Database::deleteProject(const QString &guid)
+{
     QSqlQuery query;
     query.prepare("DELETE FROM projects WHERE guid = ?");
-    query.addBindValue(Globals::project->getProjectGuid());
+    query.addBindValue(guid);
     bool q = executeAndCheckQuery(query, "DeleteProject");
 
     QSqlQuery dquery;
     dquery.prepare("DELETE FROM dependencies WHERE project_guid = ?");
-    dquery.addBindValue(Globals::project->getProjectGuid());
+    dquery.addBindValue(guid);
     bool d = executeAndCheckQuery(dquery, "DeleteDependencies");
 
     return d && q;
@@ -948,6 +955,17 @@ bool Database::updateProject(const QByteArray &sceneBlob, const QByteArray &thum
     query.addBindValue(thumbnail);
     query.addBindValue(Globals::project->getProjectGuid());
     return executeAndCheckQuery(query, "UpdateProject");
+}
+
+// Blob-only update: keeps the existing thumbnail (headless saves have no
+// viewport to screenshot and must not clear the tile image).
+bool Database::updateProjectBlob(const QByteArray &sceneBlob)
+{
+    QSqlQuery query;
+    query.prepare("UPDATE projects SET scene = ?, last_written = datetime() WHERE guid = ?");
+    query.addBindValue(sceneBlob);
+    query.addBindValue(Globals::project->getProjectGuid());
+    return executeAndCheckQuery(query, "UpdateProjectBlob");
 }
 
 bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail)

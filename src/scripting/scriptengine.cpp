@@ -101,14 +101,18 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     result.fileName = fileName;
 
     const bool useMacro = wrapUndoMacro && mHost.undoStack != nullptr;
-    if (useMacro)
+    if (useMacro) {
         mHost.undoStack->beginMacro(QStringLiteral("script: %1").arg(QFileInfo(fileName).fileName()));
+        if (mHost.macroOpenChanged) mHost.macroOpenChanged(true);
+    }
 
     QStringList stackTrace;
     QJSValue value = mJs.evaluate(source, fileName, 1, &stackTrace);
 
-    if (useMacro)
+    if (useMacro) {
+        if (mHost.macroOpenChanged) mHost.macroOpenChanged(false);
         mHost.undoStack->endMacro();
+    }
 
     if (value.isError() || !stackTrace.isEmpty()) {
         result.ok = false;

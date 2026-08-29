@@ -148,6 +148,11 @@ For more information see the LICENSE file
 #include "../src/player/playerwidget.h"
 #include "../src/player/iplayerview.h"
 
+#include "scripting/scripthost.h"
+#include "scripting/scriptengine.h"
+#include "scripting/scriptconsole.h"
+#include "scripting/modules/studiomodules.h"
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
@@ -190,6 +195,33 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupDockWidgets();
     setupShortcuts();
 	setupUndoRedo();
+
+	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
+	// dock starts hidden — Ctrl+` toggles it in the editor space.
+	scriptHost = new ScriptHost;
+	scriptHost->mainWindow = this;
+	scriptHost->db = db;
+	scriptHost->viewport = sceneView;
+	scriptHost->projectManager = pmContainer;
+	scriptHost->undoStack = undoStack;
+	scriptHost->projectOpen = []() {
+		return UiManager::isSceneOpen && !Globals::project->getProjectGuid().isEmpty();
+	};
+	scriptHost->engineReady = [this]() {
+		return EngineHost::viewportBackend() == ViewportBackend::Engine
+			&& EngineHost::instance().isRunning() && sceneView->isInitialized();
+	};
+	scriptHost->macroOpenChanged = [](bool open) { UiManager::scriptMacroOpen = open; };
+	scriptEngine = new ScriptEngine(*scriptHost, this);
+	registerStudioModules(*scriptEngine);
+
+	scriptConsole = new ScriptConsole(scriptEngine);
+	scriptConsoleDock = new QDockWidget("Script Console", viewPort);
+	scriptConsoleDock->setObjectName(QStringLiteral("scriptConsoleDock"));
+	scriptConsoleDock->setWidget(scriptConsole);
+	viewPort->addDockWidget(Qt::BottomDockWidgetArea, scriptConsoleDock);
+	scriptConsoleDock->hide();
+
 	updateTopMenuStates(currentSpace);
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
@@ -741,17 +773,53 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 	auto sceneObject = writer.getSceneObject(projectPath,
 											 this->scene,
 											 renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
-											 sceneView->getEditorData());
+											 sceneView->isInitialized() ? sceneView->getEditorData() : nullptr);
 
-	auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+	// Headless (scripted project.create): the viewport never initialized — the
+	// legacy widget's takeScreenshot would touch a GL context that isn't there.
 	QByteArray thumb;
-	QBuffer buffer(&thumb);
-	buffer.open(QIODevice::WriteOnly);
-	img.save(&buffer, "PNG");
+	if (sceneView->isInitialized()) {
+		auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+		QBuffer buffer(&thumb);
+		buffer.open(QIODevice::WriteOnly);
+		img.save(&buffer, "PNG");
+	}
 
 	db->updateProject(sceneObject, thumb);
 
 	undoStackCount = UiManager::getUndoStackCount();
+}
+
+bool MainWindow::saveProjectBlob()
+{
+	// The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveScene() this NEVER
+	// silently no-ops: the scene lives only in the DB projects table, and a
+	// scripted or headless save must actually write it. The thumbnail is
+	// refreshed only when a viewport can render one (and kept otherwise).
+	if (!scene || Globals::project->getProjectGuid().isEmpty()) return false;
+
+	SceneWriter writer;
+	auto renderer = sceneView ? sceneView->getRenderer() : iris::ForwardRendererPtr();
+	auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
+									  scene,
+									  renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
+									  (sceneView && sceneView->isInitialized()) ? sceneView->getEditorData() : nullptr);
+
+	bool ok;
+	if (sceneView && sceneView->isInitialized()) {
+		auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
+		QByteArray thumb;
+		QBuffer buffer(&thumb);
+		buffer.open(QIODevice::WriteOnly);
+		img.save(&buffer, "PNG");
+		ok = db->updateProject(blob, thumb);
+		pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
+	} else {
+		ok = db->updateProjectBlob(blob);
+	}
+
+	undoStackCount = UiManager::getUndoStackCount();
+	return ok;
 }
 
 void MainWindow::saveScene()
@@ -1860,16 +1928,22 @@ void MainWindow::repopulateSceneTree()
 
 void MainWindow::duplicateNode()
 {
-    if (!scene) return;
-    if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
+    duplicateSceneNode(activeSceneNode);
+}
+
+iris::SceneNodePtr MainWindow::duplicateSceneNode(iris::SceneNodePtr source)
+{
+    if (!scene) return iris::SceneNodePtr();
+    if (!source || !source->isDuplicable()) return iris::SceneNodePtr();
 
 	sceneView->beginResourceLoad();
-    auto node = activeSceneNode->duplicate();
-    activeSceneNode->parent->addChild(node, false);
-
-    this->sceneHierarchyWidget->repopulateTree();
-    sceneNodeSelected(node);
+    auto node = source->duplicate();
+    // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
+    // refreshes the hierarchy and selects it — the manual addChild+repopulate
+    // this slot used to do, minus the missing undo entry.
+    UiManager::pushUndoStack(new AddSceneNodeCommand(source->parent, node));
 	sceneView->endResourceLoad();
+    return node;
 }
 
 void MainWindow::createMaterial()
@@ -2085,19 +2159,27 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
 void MainWindow::deleteNode()
 {
-    if (!!activeSceneNode) {
-        // TODO - do a deps check here as well
-        // TODO - gray/disable delete button if a node isn't removable
-        if (activeSceneNode->isRootNode() || !activeSceneNode->isRemovable()) return;
-        if (activeSceneNode->isBuiltIn) db->deleteAsset(activeSceneNode->getGUID());
+    deleteSceneNode(activeSceneNode);
+}
 
-		if (activeSceneNode->sceneNodeType == iris::SceneNodeType::Viewer) {
-			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(activeSceneNode->getGUID());
-		}
+bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
+{
+    if (!node) return false;
+    // TODO - do a deps check here as well
+    // TODO - gray/disable delete button if a node isn't removable
+    if (node->isRootNode() || !node->isRemovable()) return false;
 
-        auto cmd = new DeleteSceneNodeCommand(activeSceneNode->parent, activeSceneNode);
-        UiManager::pushUndoStack(cmd);
+    if (node->sceneNodeType == iris::SceneNodeType::Viewer) {
+        scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(node->getGUID());
     }
+
+    // The command owns the asset-row cleanup: the row is deleted only when the
+    // delete becomes permanent, so undo no longer resurrects a node whose DB
+    // asset is gone (SCRIPTING_SPEC §1.2).
+    auto cmd = new DeleteSceneNodeCommand(node->parent, node,
+                                          node->isBuiltIn ? db : nullptr, node->getGUID());
+    UiManager::pushUndoStack(cmd);
+    return true;
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -3011,6 +3093,12 @@ void MainWindow::setupShortcuts()
 		emit projectionChangeRequested(true);
 	});
 
+
+    // Script console (editor space): Ctrl+` toggles the dock
+    shortcut = new QShortcut(QKeySequence("ctrl+`"), this);
+    connect(shortcut, &QShortcut::activated, [=]() {
+        if (scriptConsoleDock) scriptConsoleDock->setVisible(!scriptConsoleDock->isVisible());
+    });
 
     // TAB SHORTCUTS
     shortcut = new QShortcut(QKeySequence("ctrl+1"), this);

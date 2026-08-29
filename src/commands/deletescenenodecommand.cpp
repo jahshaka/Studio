@@ -10,28 +10,44 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "deletescenenodecommand.h"
+#include "../core/database/database.h"
 #include "../uimanager.h"
 #include "../irisgl/src/scenegraph/scenenode.h"
 #include "../mainwindow.h"
 #include "../widgets/scenehierarchywidget.h"
 
-DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)
+DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode,
+                                               Database *db, const QString &assetGuid)
 {
     this->parentNode = parentNode;
     this->sceneNode = sceneNode;
     this->position = parentNode->children.indexOf(sceneNode);
+    this->db = db;
+    this->assetGuid = assetGuid;
 }
 
+DeleteSceneNodeCommand::~DeleteSceneNodeCommand()
+{
+    // The delete became permanent (no undo can reach it any more): now the
+    // asset row can go too.
+    if (nodeDeleted && db && !assetGuid.isEmpty())
+        db->deleteAsset(assetGuid);
+}
+
+// The UiManager statics are null-checked (like ReparentSceneNodeCommand, the
+// headless-safe template): scripts push these commands with no UI docks built.
 void DeleteSceneNodeCommand::undo()
 {
+    nodeDeleted = false;
     parentNode->insertChild(position, sceneNode, false);
-    UiManager::sceneHierarchyWidget->insertChild(sceneNode);
-    UiManager::mainWindow->sceneNodeSelected(sceneNode);
+    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->insertChild(sceneNode);
+    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(sceneNode);
 }
 
 void DeleteSceneNodeCommand::redo()
 {
-    UiManager::sceneHierarchyWidget->removeChild(sceneNode);
+    nodeDeleted = true;
+    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->removeChild(sceneNode);
     sceneNode->removeFromParent();// important that this is done after!
-    UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
+    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
 }

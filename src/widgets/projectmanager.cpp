@@ -819,6 +819,82 @@ void ProjectManager::loadProjectAssets()
     futureWatcher->waitForFinished();
 }
 
+void ProjectManager::loadProjectAssetsSync()
+{
+	// Mirrors loadProjectAssets() + its futureWatcher-finished lambda exactly —
+	// same DB sweeps, same AssetManager registrations, same order — minus the
+	// QtConcurrent map, the modal progress dialog and the fileToOpen signal.
+	AssetManager::clearAssetList();
+
+	mainWindow->makeLoadingGLContextCurrent();
+
+	// Meshes
+	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
+		auto item = loadAiSceneFromModel(
+			AssetList(QDir(Globals::project->getProjectFolder()).filePath(asset.name),
+			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh))));
+		AssetObject *model = new AssetObject(
+			new AssimpObject(item.data, item.path), item.path, QFileInfo(item.path).fileName()
+		);
+		model->assetGuid = item.guid;
+		AssetManager::addAsset(model);
+	}
+
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
+		auto assetFile = new AssetFile;
+		assetFile->fileName = asset.name;
+		assetFile->assetGuid = asset.guid;
+		assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+		AssetManager::addAsset(assetFile);
+	}
+
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
+		auto assetTexture = new AssetTexture;
+		assetTexture->fileName = asset.name;
+		assetTexture->assetGuid = asset.guid;
+		assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+		AssetManager::addAsset(assetTexture);
+	}
+
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
+		QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
+		QJsonObject shaderObject = shaderDefinition.object();
+
+		auto assetShader = new AssetShader;
+		assetShader->assetGuid = asset.guid;
+		assetShader->fileName = QFileInfo(asset.name).baseName();
+		assetShader->setValue(QVariant::fromValue(shaderObject));
+		AssetManager::addAsset(assetShader);
+	}
+
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
+		QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
+		QJsonObject particleObject = particleDefinition.object();
+
+		auto assetPS = new AssetParticleSystem;
+		assetPS->assetGuid = asset.guid;
+		assetPS->fileName = QFileInfo(asset.name).baseName();
+		assetPS->setValue(QVariant::fromValue(particleObject));
+		AssetManager::addAsset(assetPS);
+	}
+
+	// Materials
+	for (const auto &asset :
+		db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
+	{
+		QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
+		QJsonObject matObject = matDoc.object();
+
+		MaterialReader reader;
+		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
+
+		auto assetMat = new AssetMaterial;
+		assetMat->assetGuid = asset.guid;
+		assetMat->setValue(QVariant::fromValue(material));
+		AssetManager::addAsset(assetMat);
+	}
+}
+
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
 {
 	dynamicGrid->updateTile(id, arr);

@@ -1,0 +1,48 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#ifndef SCRIPTING_NODEAPI_H
+#define SCRIPTING_NODEAPI_H
+
+// node.* — operations on one scene node by id (SCRIPTING_SPEC §1.2).
+//
+// remove/duplicate go through the parameterised MainWindow verbs; reparent and
+// transform push their commands directly (the two class-A commands); property
+// get/set ride the SceneNode reflection (getPropertyValue + the new
+// setPropertyValue, lights and transforms first).
+
+#include <QVariantMap>
+
+#include "../apimodule.h"
+#include "../../irisgl/src/irisglfwd.h"
+
+class NodeApi : public ApiModule
+{
+    Q_OBJECT
+public:
+    using ApiModule::ApiModule;
+
+    QString jsName() const override { return QStringLiteral("node"); }
+    QVector<VerbInfo> verbs() const override;
+
+    Q_INVOKABLE bool remove(const QString &id);
+    Q_INVOKABLE QString duplicate(const QString &id);
+    Q_INVOKABLE bool reparent(const QString &id, const QString &parentId);
+    Q_INVOKABLE QVariantMap transform(const QString &id, const QVariantMap &change = QVariantMap());
+    Q_INVOKABLE QVariant property(const QString &id, const QString &key);
+    Q_INVOKABLE bool setProperty(const QString &id, const QString &key, const QVariant &value);
+    Q_INVOKABLE QVariant info(const QString &id);
+
+private:
+    iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);
+};
+
+#endif // SCRIPTING_NODEAPI_H

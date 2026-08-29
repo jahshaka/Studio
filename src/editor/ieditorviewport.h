@@ -108,6 +108,12 @@ public:
     virtual QImage takeScreenshot(int width = 1920, int height = 1080) = 0;
     virtual QImage takeScreenshot(QSize dimension) = 0;
 
+    /// Deterministic frame stepping for scripts and tests (editor.frame(n)):
+    /// document→engine sync + renderOneFrame, n times, synchronously — the exact
+    /// pattern of the headless suites. Only the engine viewport implements it;
+    /// the legacy viewport repaints on its own schedule.
+    virtual void renderFrames(int n) { Q_UNUSED(n); }
+
     // ---- lifecycle ----
     virtual void begin() = 0;
     virtual void end() = 0;

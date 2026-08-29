@@ -89,6 +89,7 @@ public:
 
     // DELETE ===============================================================================
     bool deleteProject();
+    bool deleteProject(const QString &guid);
 	bool destroyTable(const QString &table);
 	void wipeDatabase();
     bool deleteAsset(const QString &guid);
@@ -107,6 +108,7 @@ public:
     bool renameCollection(const int &collectionId, const QString &newName);
     bool renameAsset(const QString &guid, const QString &newName);
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail);
+    bool updateProjectBlob(const QByteArray &sceneBlob);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
     bool updateAssetAsset(const QString &guid, const QByteArray &asset);
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);

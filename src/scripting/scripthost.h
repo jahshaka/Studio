@@ -47,6 +47,11 @@ struct ScriptHost
     /// Unset = false: verbs that requireEngine() fail cleanly.
     std::function<bool()> engineReady;
 
+    /// Called with true/false around the per-run undo macro so the app can
+    /// guard operations that must not run inside an open macro (e.g.
+    /// UiManager::clearUndoStack). Optional.
+    std::function<void(bool)> macroOpenChanged;
+
     bool isProjectOpen() const { return projectOpen && projectOpen(); }
     bool isEngineReady() const { return engineReady && engineReady(); }
 };

@@ -22,16 +22,18 @@ AddSceneNodeCommand::AddSceneNodeCommand(iris::SceneNodePtr parentNode, iris::Sc
     this->sceneNode = sceneNode;
 }
 
+// The UiManager statics are null-checked (like ReparentSceneNodeCommand, the
+// headless-safe template): scripts push these commands with no UI docks built.
 void AddSceneNodeCommand::undo()
 {
     sceneNode->removeFromParent();
-    UiManager::sceneHierarchyWidget->removeChild(sceneNode);
-    UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
+    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->removeChild(sceneNode);
+    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
 }
 
 void AddSceneNodeCommand::redo()
 {
     parentNode->addChild(sceneNode, false);
-    UiManager::sceneHierarchyWidget->insertChild(sceneNode);
-    UiManager::mainWindow->sceneNodeSelected(sceneNode);
+    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->insertChild(sceneNode);
+    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(sceneNode);
 }

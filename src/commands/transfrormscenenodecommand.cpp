@@ -47,12 +47,14 @@ TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node,
 	this->oldScale = oldScale;
 }
 
+// UiManager::propertyWidget is null-checked (like ReparentSceneNodeCommand, the
+// headless-safe template): scripts push this command with no UI docks built.
 void TransformSceneNodeCommand::undo()
 {
 	sceneNode->setLocalPos(oldPos);
 	sceneNode->setLocalRot(oldRot);
 	sceneNode->setLocalScale(oldScale);
-	UiManager::propertyWidget->refreshTransform();
+	if (UiManager::propertyWidget) UiManager::propertyWidget->refreshTransform();
 }
 
 void TransformSceneNodeCommand::redo()
@@ -60,5 +62,5 @@ void TransformSceneNodeCommand::redo()
 	sceneNode->setLocalPos(newPos);
 	sceneNode->setLocalRot(newRot);
 	sceneNode->setLocalScale(newScale);
-	UiManager::propertyWidget->refreshTransform();
+	if (UiManager::propertyWidget) UiManager::propertyWidget->refreshTransform();
 }

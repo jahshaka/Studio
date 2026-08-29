@@ -67,6 +67,14 @@ public:
 
     static bool isUndoStackDirty();
 	static bool getUndoStackCount();
+    /// The stack itself — the scripting engine needs beginMacro/endMacro for
+    /// one-undo-step-per-script wrapping. May be null before setupUndoRedo.
+    static QUndoStack* getUndoStack() { return undoStack; }
+    /// True while a script run's undo macro is open. clearUndoStack() must not
+    /// clear then (QUndoStack::clear() inside an open macro corrupts the macro
+    /// accounting) — e.g. a scripted project.create passes through newProject,
+    /// which clears the stack for the UI flow.
+    static bool scriptMacroOpen;
     static void clearUndoStack();
     static void setUndoStack(QUndoStack*);
     static void pushUndoStack(QUndoCommand*);
