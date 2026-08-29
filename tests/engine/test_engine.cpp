@@ -503,6 +503,63 @@ void shadow_filter_quality_is_settable() {
     fx.e->setShadowFilter(ShadowFilter::Soft);   // restore the default for later tests
 }
 
+void shadow_resolution_rebuilds_the_atlas() {
+    // Engine::setShadowResolution is GLOBAL like the filter, but rebuilds the
+    // shadow node definition and every workspace referencing it — the risky
+    // teardown-order path. Shadows must keep rendering at every size, with a
+    // live shadowed view attached while the rebuild happens.
+    Fixture fx;
+    View *v = fx.view("shadowres-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("shadowres-scene");              REQUIRE(s);
+    v->setScene(s);
+    CHECK(fx.e->shadowResolution() == 2048u);   // documented default
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.1f, 0.1f, 0.1f));
+    MeshId cubeMesh = s->createMesh(unitCubeData());
+    PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 0.9f;
+    MaterialId mat = s->createPbrMaterial(white);
+    NodeId ground = s->createNode();
+    CHECK(s->attachMesh(ground, cubeMesh, mat));
+    s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+    NodeId cube = s->createNode();
+    CHECK(s->attachMesh(cube, cubeMesh, mat));
+    s->setNodeTransform(cube, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+    NodeId sun = s->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 3.0f; d.castShadows = true;
+    CHECK(s->setLight(sun, d));
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(0, 0, 0.3826834f, 0.9238795f), Vec3(1, 1, 1));
+    v->setShadows(true);
+    CameraDesc c; c.position = Vec3(0, 6, 0.01f); c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f); c.fovDegrees = 50;
+    v->setCamera(c);
+    auto lum = [](const Image &img, unsigned x, unsigned y) {
+        const Colour q = img.at(x, y);
+        return int(std::lround((q.r + q.g + q.b) / 3.0f * 255.0f));
+    };
+    auto groundContrast = [&](const Image &img) {
+        int darkest = 255, brightest = 0;
+        for (unsigned x = 2; x < img.width - 2; ++x) {
+            const int l = lum(img, x, 64);
+            darkest = std::min(darkest, l); brightest = std::max(brightest, l);
+        }
+        return brightest - darkest;
+    };
+    for (unsigned res : { 512u, 4096u, 1024u }) {
+        fx.e->setShadowResolution(res);
+        CHECK_MSG(fx.e->shadowResolution() == res, "resolution %u did not stick", res);
+        render(fx.e, 4);
+        Image img; REQUIRE(v->readPixels(img));
+        const int contrast = groundContrast(img);
+        std::printf("    shadow atlas @%-4u: ground row contrast %d\n", res, contrast);
+        CHECK_MSG(contrast > 40, "shadows must keep rendering at %u: contrast %d", res, contrast);
+    }
+    // Out-of-range values are clamped, not fatal.
+    fx.e->setShadowResolution(1u);
+    CHECK(fx.e->shadowResolution() == 256u);
+    render(fx.e, 2);
+    fx.e->setShadowResolution(2048u);   // restore the default for later tests
+    CHECK(fx.e->shadowResolution() == 2048u);
+    render(fx.e, 2);
+}
+
 void equirect_sky_fills_the_background() {
     Fixture fx;
     View *v = fx.view("sky-view", 48, 48, kBlue); REQUIRE(v);
@@ -1021,6 +1078,7 @@ int main(int argc, char **argv) {
         { "background_changes_at_runtime",          background_changes_at_runtime },
         { "shadows_darken_the_ground",              shadows_darken_the_ground },
         { "shadow_filter_quality_is_settable",      shadow_filter_quality_is_settable },
+        { "shadow_resolution_rebuilds_the_atlas",   shadow_resolution_rebuilds_the_atlas },
         { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
         { "cubemap_sky_faces_match_directions",     cubemap_sky_faces_match_directions },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },

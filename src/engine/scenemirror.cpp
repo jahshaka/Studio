@@ -66,8 +66,9 @@ void SceneMirror::setSource(iris::ScenePtr scene)
     mTextures.clear();
     for (TextureId t : mIconTextures) mTarget->destroyTexture(t);
     mIconTextures.clear();
-    mTarget->setSky(SkyMode::NoSky, 0);
-    for (TextureId &t : mSkyFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
+    mTarget->setSky(SkyMode::NoSky, 0);   // also clears the engine's reflection cubemap
+    for (TextureId &t : mSkyFaceTextures)  { if (t) mTarget->destroyTexture(t); t = 0; }
+    for (TextureId &t : mReflFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
     mSkySignature.clear();
     mSource = scene;
 }
@@ -88,6 +89,7 @@ int SceneMirror::sync()
     QSet<long> seen;
     mAnyShadowCaster = false;
     mShadowFilter = ShadowFilter::Hard;
+    mMaxShadowResolution = 0;
     for (auto &child : mSource->getRootNode()->children)
         visit(child, 0, seen);
     removeMissing(seen);
@@ -245,12 +247,31 @@ void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
     if (light->lightType == iris::LightType::Directional) kind = 0;
     else if (light->lightType == iris::LightType::Spot) kind = 2;
     else if (light->lightType == iris::LightType::Area) kind = 3;
-    MeshId m = wireMeshFor(kind);
-    if (!m) return;
+    // Attenuation volumes only for the HIGHLIGHTED light (Unreal convention):
+    // an unselected point light shows just its icon, an unselected spot light
+    // just the direction arrow. The directional arrow and the area rectangle
+    // (the light's physical shape, not a falloff volume) stay on for every
+    // light; icons are always-on with the helpers toggle.
+    const bool selected = mHighlighted &&
+                          mHighlighted.data() == static_cast<iris::SceneNode *>(light);
+    int shape = kind;
+    if (!selected) {
+        if (kind == 1) shape = -1;        // point: rings are the falloff volume
+        else if (kind == 2) shape = 0;    // spot: keep the arrow, drop the cone
+    }
     if (!e.wireNode) e.wireNode = mTarget->createNode(e.node);
+    if (!e.wireNode) return;
+    if (shape < 0) {
+        if (e.wireKind != -1) { mTarget->detachMesh(e.wireNode); e.wireKind = -1; }
+        mTarget->setNodeVisible(e.wireNode, true);   // the icon set rides this node
+        syncLightIcon(e, light);
+        return;
+    }
+    MeshId m = wireMeshFor(shape);
+    if (!m) return;
     if (!e.wireMaterial) e.wireMaterial = mTarget->createUnlitMaterial(Colour(1, 1, 1), false);
-    if (!e.wireNode || !e.wireMaterial) return;
-    if (e.wireKind != kind) { if (mTarget->attachMesh(e.wireNode, m, e.wireMaterial)) e.wireKind = kind; }
+    if (!e.wireMaterial) return;
+    if (e.wireKind != shape) { if (mTarget->attachMesh(e.wireNode, m, e.wireMaterial)) e.wireKind = shape; }
     const QColor c = light->color;
     mTarget->setUnlitMaterial(e.wireMaterial, Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));
     // Wires live in the light node's local space; undo the node's own scale, and
@@ -259,13 +280,13 @@ void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
     // base radius 0.6 — see wireMeshFor). Directional lights have no range.
     float rx = 1.0f, ry = 1.0f, rz = 1.0f;
     const float range = std::max(0.01f, light->distance);
-    if (kind == 1) {
+    if (shape == 1) {
         rx = ry = rz = range / 0.5f;               // rings at radius = range
-    } else if (kind == 2) {
+    } else if (shape == 2) {
         ry = range / 1.5f;                         // cone reaches down to range
         const float half = qDegreesToRadians(std::min(std::max(light->spotCutOff, 1.0f), 89.0f));
         rx = rz = range * std::tan(half) / 0.6f;   // base radius = range * tan(cutoff)
-    } else if (kind == 3) {
+    } else if (shape == 3) {
         rx = std::max(light->rectWidth, 0.01f);    // unit rect scaled to the emitting rectangle
         rz = std::max(light->rectHeight, 0.01f);   // (width = local X, height = local Z; tick stays)
     }
@@ -406,6 +427,10 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
             else if (light->shadowMap->shadowType == iris::ShadowMapType::VerySoft) f = ShadowFilter::VerySoft;
             if (!mAnyShadowCaster || int(f) > int(mShadowFilter)) mShadowFilter = f;
             mAnyShadowCaster = true;
+            // Shadow Size is global too (one atlas): the largest request wins.
+            if (light->shadowMap->resolution > 0)
+                mMaxShadowResolution = std::max(mMaxShadowResolution,
+                                                unsigned(light->shadowMap->resolution));
         }
         syncLightWires(e, light.data());
     }
@@ -829,6 +854,11 @@ void SceneMirror::applyEnvironment(View *view, Engine *engine)
     // Nothing casting shadows leaves the engine's current filter untouched.
     if (engine && mAnyShadowCaster && engine->shadowFilter() != mShadowFilter)
         engine->setShadowFilter(mShadowFilter);
+    // Shadow Size: same policy, largest requested size wins. The engine rebuilds
+    // its shadow atlas on change — the compare here is what keeps that rare.
+    if (engine && mAnyShadowCaster && mMaxShadowResolution > 0 &&
+        engine->shadowResolution() != mMaxShadowResolution)
+        engine->setShadowResolution(mMaxShadowResolution);
     // World-panel Ambient Color: flat, exactly like the legacy uniform (the
     // engine viewport used to hardcode the hemisphere — the panel no-op'd).
     const QColor a = mSource->ambientColor;
@@ -914,12 +944,29 @@ void SceneMirror::applySky(View *view)
     else if (mSource->skyType == iris::SkyType::GRADIENT)
         signature = QString("gradient:%1/%2/%3/%4").arg(mSource->gradientTop.name(), mSource->gradientMid.name(),
                                                         mSource->gradientBot.name()).arg(mSource->gradientOffset);
+    else if (mSource->skyType == iris::SkyType::REALISTIC) {
+        const iris::SkyRealistic &s = mSource->skyRealistic;
+        signature = QString("realistic:%1/%2/%3/%4/%5/%6/%7/%8")
+                        .arg(s.luminance).arg(s.reileigh).arg(s.mieCoefficient).arg(s.mieDirectionalG)
+                        .arg(s.turbidity).arg(s.sunPosX).arg(s.sunPosY).arg(s.sunPosZ);
+    }
     if (signature != mSkySignature) {
+        // Debounce the realistic bake: a slider drag changes the 8 parameters on
+        // every event, and the Preetham bake is per-pixel CPU math. Re-bake at
+        // most every 150 ms — applySky recomputes the signature next frame, so
+        // the final value always lands once the slider settles.
+        if (signature.startsWith("realistic:") && mSkySignature.startsWith("realistic:") &&
+            mRealisticBakeTimer.isValid() && mRealisticBakeTimer.elapsed() < 150)
+            return;
         mSkySignature = signature;
-        for (TextureId &t : mSkyFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
+        for (TextureId &t : mSkyFaceTextures)  { if (t) mTarget->destroyTexture(t); t = 0; }
+        for (TextureId &t : mReflFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
         if (signature.startsWith("equirect:")) {
             TextureId t = textureFor(mSource->skyTexture->source, true);
             mTarget->setSky(t ? SkyMode::Equirectangular : SkyMode::NoSky, t);
+            // Cubemap skies feed environment reflections (IBL); give equirect
+            // skies the same by resampling the image into six small faces.
+            if (t) applySkyReflection(QImage(mSource->skyTexture->source));
         } else if (signature.startsWith("cubemap:")) {
             // The document keeps the six face images (+X,-X,+Y,-Y,+Z,-Z); upload them.
             const QImage *faces = mSource->skyTexture->cubeFaces();
@@ -953,6 +1000,25 @@ void SceneMirror::applySky(View *view)
             }
             mSkyFaceTextures[0] = mTarget->createTexture(W, H, px.data(), true);
             mTarget->setSky(mSkyFaceTextures[0] ? SkyMode::Equirectangular : SkyMode::NoSky, mSkyFaceTextures[0]);
+            if (mSkyFaceTextures[0]) {
+                QImage strip(W, H, QImage::Format_RGBA8888);
+                for (int r = 0; r < H; ++r)
+                    std::memcpy(strip.scanLine(r), &px[size_t(r) * W * 4u], size_t(W) * 4u);
+                applySkyReflection(strip);
+            }
+        } else if (signature.startsWith("realistic:")) {
+            // Legacy realisticsky.frag (Preetham-style scattering), CPU-baked to
+            // an equirect image and pushed through the same sky path as gradient.
+            const QImage baked = bakeRealisticSky(mSource->skyRealistic, 256, 128);
+            mRealisticBakeTimer.restart();
+            if (!baked.isNull()) {
+                mSkyFaceTextures[0] = mTarget->createTexture(unsigned(baked.width()), unsigned(baked.height()),
+                                                             baked.constBits(), true);
+                mTarget->setSky(mSkyFaceTextures[0] ? SkyMode::Equirectangular : SkyMode::NoSky, mSkyFaceTextures[0]);
+                if (mSkyFaceTextures[0]) applySkyReflection(baked);
+            } else {
+                mTarget->setSky(SkyMode::NoSky, 0);
+            }
         } else {
             mTarget->setSky(SkyMode::NoSky, 0);
         }
@@ -961,6 +1027,163 @@ void SceneMirror::applySky(View *view)
         const QColor c = mSource->skyColor;
         view->setBackground(Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));
     }
+}
+
+void SceneMirror::applySkyReflection(const QImage &equirect)
+{
+    if (equirect.isNull()) return;
+    const QImage src = equirect.convertToFormat(QImage::Format_RGBA8888);
+    const int W = src.width(), H = src.height();
+    if (W <= 0 || H <= 0) return;
+    // Face basis identical to the engine's cubemap sky quads (+X,-X,+Y,-Y,+Z,-Z;
+    // dir = axis + right*u + up*v with image row 0 at the top), so reflections
+    // line up with the sky the camera sees. The equirect mapping mirrors the
+    // engine's sky sphere: u = 1 - theta/2pi, v = phi/pi (v = 0 at the zenith).
+    static const float ax[6][3] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+    static const float rt[6][3] = {{0,0,-1},{0,0,1},{1,0,0},{1,0,0},{1,0,0},{-1,0,0}};
+    static const float up[6][3] = {{0,1,0},{0,1,0},{0,0,-1},{0,0,1},{0,1,0},{0,1,0}};
+    const int N = 64;   // modest: the engine mips it; roughness blurs the rest
+    std::vector<unsigned char> face(size_t(N) * N * 4u);
+    TextureId ids[6] = { 0, 0, 0, 0, 0, 0 };
+    bool ok = true;
+    for (int f = 0; f < 6 && ok; ++f) {
+        const float *a = ax[f], *r = rt[f], *u = up[f];
+        for (int py = 0; py < N; ++py) {
+            const float uv = 1.0f - 2.0f * (py + 0.5f) / N;   // up multiplier, row 0 = top
+            for (int px = 0; px < N; ++px) {
+                const float ur = 2.0f * (px + 0.5f) / N - 1.0f;
+                float dx = a[0] + r[0] * ur + u[0] * uv;
+                float dy = a[1] + r[1] * ur + u[1] * uv;
+                float dz = a[2] + r[2] * ur + u[2] * uv;
+                const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+                dx /= len; dy /= len; dz /= len;
+                float ut = 1.0f - std::atan2(dz, dx) / 6.2831853f;
+                ut -= std::floor(ut);
+                const float vt = std::acos(std::min(1.0f, std::max(-1.0f, dy))) / 3.14159265f;
+                const int xi = std::min(W - 1, int(ut * W));
+                const int yi = std::min(H - 1, int(vt * H));
+                std::memcpy(&face[(size_t(py) * N + px) * 4u], src.constScanLine(yi) + size_t(xi) * 4u, 4u);
+            }
+        }
+        ids[f] = mTarget->createTexture(unsigned(N), unsigned(N), face.data(), true);
+        if (!ids[f]) ok = false;
+    }
+    if (ok && mTarget->setSkyReflection(ids)) {
+        for (int i = 0; i < 6; ++i) mReflFaceTextures[i] = ids[i];
+    } else {
+        for (int i = 0; i < 6; ++i) if (ids[i]) mTarget->destroyTexture(ids[i]);
+    }
+}
+
+// CPU port of irisgl/assets/shaders/realisticsky.frag (a Preetham-style analytic
+// scattering shader, Three.js lineage). Faithful to the GLSL — including its
+// quirks (the unused ExposureBias, the simplified Rayleigh term) — evaluated per
+// equirect texel over the view direction; the sun's disc, colour and haze land
+// exactly where the legacy renderer put them.
+QImage SceneMirror::bakeRealisticSky(const iris::SkyRealistic &sky, int width, int height)
+{
+    if (width <= 0 || height <= 0) return QImage();
+    struct V3 {
+        float x, y, z;
+        V3(float v = 0) : x(v), y(v), z(v) {}
+        V3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+        V3 operator+(const V3 &o) const { return V3(x + o.x, y + o.y, z + o.z); }
+        V3 operator-(const V3 &o) const { return V3(x - o.x, y - o.y, z - o.z); }
+        V3 operator*(const V3 &o) const { return V3(x * o.x, y * o.y, z * o.z); }
+        V3 operator/(const V3 &o) const { return V3(x / o.x, y / o.y, z / o.z); }
+        V3 operator*(float s) const { return V3(x * s, y * s, z * s); }
+    };
+    const auto vpow = [](const V3 &v, float e) {
+        return V3(std::pow(std::max(0.0f, v.x), e), std::pow(std::max(0.0f, v.y), e),
+                  std::pow(std::max(0.0f, v.z), e));
+    };
+    const auto vexp = [](const V3 &v) { return V3(std::exp(v.x), std::exp(v.y), std::exp(v.z)); };
+    const float pi = 3.14159265358979f;
+    // Filmic tonemap constants (Uncharted2), verbatim from the shader.
+    const float A = 0.15f, B = 0.50f, C = 0.10f, D = 0.20f, E = 0.02f, F = 0.30f, W = 1000.0f;
+    const auto tonemap = [&](const V3 &v) {
+        const auto f1 = [&](float x) {
+            return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+        };
+        return V3(f1(v.x), f1(v.y), f1(v.z));
+    };
+
+    // Per-image terms (uniform across directions).
+    const float luminance = std::max(0.01f, sky.luminance);
+    const float sunfade = 1.0f - std::min(1.0f, std::max(0.0f, 1.0f - std::exp(sky.sunPosY / 450000.0f)));
+    const float reileighCoefficient = sky.reileigh - (1.0f * (1.0f - sunfade));
+    V3 sunDirection(sky.sunPosX, sky.sunPosY, sky.sunPosZ);
+    {
+        const float len = std::sqrt(sunDirection.x * sunDirection.x + sunDirection.y * sunDirection.y +
+                                    sunDirection.z * sunDirection.z);
+        if (len > 1e-6f) sunDirection = sunDirection * (1.0f / len); else sunDirection = V3(0, 1, 0);
+    }
+    const float cutoffAngle = pi / 1.95f, steepness = 1.5f, EE = 1000.0f;
+    const float sunE = EE * std::max(0.0f, 1.0f - std::exp(-((cutoffAngle - std::acos(std::min(1.0f, std::max(-1.0f, sunDirection.y)))) / steepness)));
+    const V3 betaR = V3(0.0005f / 94.0f, 0.0005f / 40.0f, 0.0005f / 18.0f) * reileighCoefficient;
+    // totalMie(lambda, K, T) * mieCoefficient; lambda/K/v verbatim.
+    const V3 lambda(680e-9f, 550e-9f, 450e-9f);
+    const V3 K(0.686f, 0.678f, 0.666f);
+    const float mieC = (0.2f * sky.turbidity) * 1e-17f;   // (0.2*T)*10E-18 in GLSL
+    const V3 betaM = V3(0.434f * mieC * pi * std::pow(2.0f * pi / lambda.x, 2.0f) * K.x,
+                        0.434f * mieC * pi * std::pow(2.0f * pi / lambda.y, 2.0f) * K.y,
+                        0.434f * mieC * pi * std::pow(2.0f * pi / lambda.z, 2.0f) * K.z) * sky.mieCoefficient;
+    const V3 betaRM = betaR + betaM;
+    const V3 whiteScale = V3(1, 1, 1) / tonemap(V3(W));
+    const float sunAngularDiameterCos = 0.99995667694644844f;
+    const float horizonMix = std::min(1.0f, std::max(0.0f, std::pow(std::max(0.0f, 1.0f - sunDirection.y), 5.0f)));
+    const float exposure = std::log2(2.0f / std::pow(luminance, 4.0f));
+    const float finalGamma = 1.0f / (1.2f + (1.2f * sunfade));
+
+    QImage img(width, height, QImage::Format_RGBA8888);
+    for (int row = 0; row < height; ++row) {
+        unsigned char *out = img.scanLine(row);
+        const float phi = (row + 0.5f) / height * pi;      // 0 at the zenith (sphere v)
+        const float sinPhi = std::sin(phi), cosPhi = std::cos(phi);
+        for (int col = 0; col < width; ++col) {
+            const float theta = (1.0f - (col + 0.5f) / width) * 2.0f * pi;   // sphere u = 1 - theta/2pi
+            const V3 dir(sinPhi * std::cos(theta), cosPhi, sinPhi * std::sin(theta));
+
+            const float zenithAngle = std::acos(std::max(0.0f, dir.y));
+            const float denom = std::cos(zenithAngle) +
+                                0.15f * std::pow(93.885f - zenithAngle * 180.0f / pi, -1.253f);
+            const float sR = 8.4e3f / denom, sM = 1.25e3f / denom;
+            const V3 Fex = vexp(V3(-(betaR.x * sR + betaM.x * sM), -(betaR.y * sR + betaM.y * sM),
+                                   -(betaR.z * sR + betaM.z * sM)));
+
+            const float cosTheta = dir.x * sunDirection.x + dir.y * sunDirection.y + dir.z * sunDirection.z;
+            const float rp = cosTheta * 0.5f + 0.5f;
+            const float rPhase = (3.0f / (16.0f * pi)) * (1.0f + rp * rp);
+            const float g = sky.mieDirectionalG;
+            const float mPhase = (1.0f / (4.0f * pi)) *
+                ((1.0f - g * g) / std::pow(std::max(1e-6f, 1.0f - 2.0f * g * cosTheta + g * g), 1.5f));
+            const V3 betaTheta = betaR * rPhase + betaM * mPhase;
+            const V3 ratio = betaTheta / betaRM;
+
+            V3 Lin = vpow(ratio * sunE * (V3(1, 1, 1) - Fex), 1.5f);
+            const V3 linB = vpow(ratio * sunE * Fex, 0.5f);
+            Lin = Lin * (V3(1.0f - horizonMix) + linB * horizonMix);
+
+            // Night-sky base + the solar disc.
+            V3 L0 = Fex * 0.1f;
+            const float sundisk = cosTheta <= sunAngularDiameterCos ? 0.0f
+                : cosTheta >= sunAngularDiameterCos + 0.00002f ? 1.0f
+                : [&] { const float t = (cosTheta - sunAngularDiameterCos) / 0.00002f; return t * t * (3.0f - 2.0f * t); }();
+            L0 = L0 + Fex * (sunE * 19000.0f * sundisk);
+
+            V3 texColor = (Lin + L0) * 0.04f + V3(0.0f, 0.001f, 0.0025f) * 0.3f;
+            V3 colr = tonemap(texColor * exposure) * whiteScale;
+            colr = vpow(colr, finalGamma);
+
+            const auto to8 = [](float v) {
+                if (!std::isfinite(v)) v = 0.0f;
+                return (unsigned char)std::lround(std::min(1.0f, std::max(0.0f, v)) * 255.0f);
+            };
+            unsigned char *p = out + size_t(col) * 4u;
+            p[0] = to8(colr.x); p[1] = to8(colr.y); p[2] = to8(colr.z); p[3] = 255;
+        }
+    }
+    return img;
 }
 
 void SceneMirror::applyCamera(iris::CameraNodePtr camera, View *view)

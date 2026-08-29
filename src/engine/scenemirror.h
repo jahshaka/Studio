@@ -13,13 +13,15 @@
 //
 // Studio-side code: includes iris (Qt) and the engine abstraction. Never Ogre.
 #include <QColor>
+#include <QElapsedTimer>
 #include <QHash>
+#include <QImage>
 #include <QMatrix4x4>
 #include <QSet>
 #include "irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
-namespace iris { class Mesh; class Material; }
+namespace iris { class Mesh; class Material; struct SkyRealistic; }
 
 class SceneMirror
 {
@@ -90,10 +92,18 @@ public:
     /// hull); true = the on-top polygon wireframe.
     void setHighlightWireframe(bool on);
     bool highlightWireframe() const { return mHighlightWireframe; }
-    /// Light helpers: at every document light, a wire shape sized by the light's
-    /// range (colour = the light's) plus an icon billboard (sun/bulb/spotlight).
+    /// Light helpers: an icon billboard (sun/bulb/spotlight) at every document
+    /// light, plus a wire shape in the light's colour. The attenuation volume
+    /// (point rings / spot cone, sized by the light's range) shows only for the
+    /// HIGHLIGHTED light — the Unreal convention — while the direction arrow
+    /// (directional/spot) and the area rectangle (the light's physical shape)
+    /// stay on for every light whenever helpers are enabled.
     void setLightWires(bool on);
     bool lightWires() const { return mLightWires; }
+
+    /// The legacy Preetham "realistic" sky, CPU-baked to an equirect image —
+    /// exactly realisticsky.frag's math per direction. Public for tests.
+    static QImage bakeRealisticSky(const iris::SkyRealistic &sky, int width, int height);
 
 private:
     struct Entry {
@@ -129,6 +139,10 @@ private:
     /// positions/normals and upload them via Scene::updateMeshVertices. Meshes
     /// without a skeleton never enter this path (they stay immutable).
     void syncSkinnedMeshes();
+    /// Resamples an equirect sky image into six small cubemap faces and pushes
+    /// them as the scene's environment reflections (Scene::setSkyReflection) —
+    /// how equirect/gradient/realistic skies get the IBL cubemap skies have.
+    void applySkyReflection(const QImage &equirect);
     jahshaka::engine::MeshId     meshFor(iris::Mesh *mesh);
     jahshaka::engine::MaterialId materialFor(iris::Material *material);
     void syncTextures(Entry &e, iris::Material *material);
@@ -158,6 +172,13 @@ private:
     bool mLightWires = true;
     QString mSkySignature;
     jahshaka::engine::TextureId mSkyFaceTextures[6] = { 0, 0, 0, 0, 0, 0 };
+    // Faces the reflection (IBL) cubemap was built from; kept until the sky
+    // changes (the engine copies them, but destroy-after-copy stays ours).
+    jahshaka::engine::TextureId mReflFaceTextures[6] = { 0, 0, 0, 0, 0, 0 };
+    // Realistic-sky bake debounce: during a slider drag the 8 parameters change
+    // every event; re-bake at most every ~150 ms (the last change always lands —
+    // applySky recomputes the signature each frame until it sticks).
+    QElapsedTimer mRealisticBakeTimer;
     jahshaka::engine::MeshId mWireMeshes[4] = { 0, 0, 0, 0 };   // directional, point, spot, area
     iris::SceneNodePtr mHighlighted;
     jahshaka::engine::NodeId mHighlightNode = 0;
@@ -171,6 +192,10 @@ private:
     // sync(); pushed engine-wide by applyEnvironment (see comment there).
     jahshaka::engine::ShadowFilter mShadowFilter = jahshaka::engine::ShadowFilter::Hard;
     bool mAnyShadowCaster = false;
+    // Largest shadow-map resolution any shadow-casting light asked for, from the
+    // last sync(); pushed engine-wide by applyEnvironment (the engine's atlas is
+    // global, like the filter — rebuild is expensive, so only on change).
+    unsigned mMaxShadowResolution = 0;
     // Global illumination: last pushed state + the driving light's transform, so
     // applyEnvironment only re-pushes on change and re-traces on light movement.
     jahshaka::engine::GiParams mLastGi;

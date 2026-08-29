@@ -8,6 +8,7 @@
 #include <QImage>
 #include <QDir>
 #include <QJsonObject>
+#include <QThread>
 #include "graphics/texture2d.h"
 #include <QVector3D>
 #include <algorithm>
@@ -514,11 +515,17 @@ int main(int argc, char **argv)
     point->distance = 0.35f;                          // rings are drawn at radius = range now
     auto countMagenta = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) ++n; } return n; };
     mirror.setLightWires(true);
+    // Attenuation volumes are selection-gated (the Unreal convention): an
+    // UNSELECTED point light shows only its icon, no range rings.
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    CHECK(countMagenta(img) == 0, "unselected point light draws no rings (icon only)");
+    mirror.setHighlightedNode(point);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     const int wiresOn = countMagenta(img);
-    std::printf("    light wires on: %d magenta pixels\n", wiresOn);
-    CHECK(wiresOn > 10, "point light draws rings in its colour");
+    std::printf("    light wires on (selected): %d magenta pixels\n", wiresOn);
+    CHECK(wiresOn > 10, "the SELECTED point light draws rings in its colour");
     mirror.setLightWires(false);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
@@ -531,7 +538,15 @@ int main(int argc, char **argv)
     {
         auto countWhite = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.85f && c.g > 0.85f && c.b > 0.85f) ++n; } return n; };
         auto magentaExtent = [&](const Image &im) { int minX = int(im.width), maxX = -1; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) { if (int(x) < minX) minX = int(x); if (int(x) > maxX) maxX = int(x); } } return maxX - minX; };
+        // Icons are always-on with the helpers toggle, selected or not.
         mirror.setLightWires(true);
+        mirror.setHighlightedNode(nullptr);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        std::printf("    unselected: %d white icon px, %d magenta px\n", countWhite(img), countMagenta(img));
+        CHECK(countWhite(img) > 5, "unselected point light still shows its icon");
+        CHECK(countMagenta(img) == 0, "unselected point light shows no rings");
+        mirror.setHighlightedNode(point);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
         const int iconOn = countWhite(img);
@@ -568,6 +583,7 @@ int main(int argc, char **argv)
         view->readPixels(img);
         CHECK(countMagenta(img) == 0 && countWhite(img) == 0, "light wires off removes the icon too");
         QFile::remove(iconPath);
+        mirror.setHighlightedNode(nullptr);
 
         // Point-light shadow controls (the panel unhides Type/Size in engine
         // mode): the Shadow Type combo drives castShadows through toLightDesc.
@@ -713,6 +729,88 @@ int main(int argc, char **argv)
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img); show("gradient sky nadir", img);
         CHECK(centre(img).b > 0.7f && centre(img).g < 0.35f, "gradient sky nadir is the bottom colour");
+    }
+
+    // ---- realistic sky: the legacy Preetham shader CPU-baked to an equirect ----
+    {
+        doc->skyType = iris::SkyType::REALISTIC;
+        doc->skyRealistic.luminance = 1.0f;               // the legacy demo defaults
+        doc->skyRealistic.reileigh = 2.0f;
+        doc->skyRealistic.mieCoefficient = 0.005f;
+        doc->skyRealistic.mieDirectionalG = 0.8f;
+        doc->skyRealistic.turbidity = 10.0f;
+        doc->skyRealistic.sunPosX = 0.0f;                 // sun overhead: a blue day sky
+        doc->skyRealistic.sunPosY = 450000.0f;
+        doc->skyRealistic.sunPosZ = 0.0f;
+        mirror.applySky(view);
+        // Look toward the horizon: daytime sky pixels, blue over red, not black.
+        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), 25.0f));
+        mirror.applyCamera(cam, view);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("realistic sky", img);
+        const Colour day = centre(img);
+        CHECK(day.b > 0.15f && day.b > day.r, "realistic sky bakes sky-like blue-dominant pixels");
+        // The bake tracks the parameters (debounced ~150 ms): pull the sun to the
+        // horizon and the same view must change colour once the debounce passes.
+        doc->skyRealistic.sunPosY = 4000.0f;
+        doc->skyRealistic.sunPosZ = -400000.0f;
+        QThread::msleep(180);
+        mirror.applySky(view);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("realistic sky, sunset", img);
+        const Colour dusk = centre(img);
+        const float delta = std::fabs(dusk.r - day.r) + std::fabs(dusk.g - day.g) + std::fabs(dusk.b - day.b);
+        std::printf("    parameter change moved the same pixel by %.3f\n", delta);
+        CHECK(delta > 0.05f, "moving the sun re-bakes the realistic sky");
+    }
+
+    // ---- equirect sky feeds environment reflections (IBL), like cubemaps do ----
+    {
+        const QString eqPath = QDir::temp().filePath("jahshaka_mirror_equirect.png");
+        {
+            QImage eq(64, 32, QImage::Format_RGBA8888);
+            eq.fill(QColor(0, 255, 0));                    // a uniformly green world
+            eq.save(eqPath);
+        }
+        doc->setSkyTexture(iris::Texture2D::load(eqPath));
+        doc->skyType = iris::SkyType::EQUIRECTANGULAR;
+        mirror.applySky(view);
+        // A mirror-metal cube in near-darkness: everything it shows is reflection.
+        target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
+        auto chromeMat = iris::PbrMaterial::create();
+        chromeMat->setValue("baseColor", QColor(255, 255, 255));
+        chromeMat->setValue("metallic", 1.0f);
+        chromeMat->setValue("roughness", 0.1f);
+        meshNode->setMaterial(chromeMat);
+        doc->getRootNode()->addChild(meshNode);            // was removed by the earlier tests
+        cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f));
+        cam->lookAt(QVector3D(0, 0, 0));
+        cam->angle = 45.0f;
+        mirror.applyCamera(cam, view);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("metal cube, equirect IBL", img);
+        const Colour c = centre(img);
+        CHECK(mirror.engineNode(meshNode.data()) != 0, "the chrome cube is mirrored");
+        CHECK(c.g > 0.25f && c.g > c.r * 1.5f && c.g > c.b * 1.5f,
+              "a metal cube reflects the equirect sky's colour (IBL)");
+        // Control: clear the sky — the reflections go with it, and the same cube
+        // pixel must fall dark (ambient 0.02). Proves the green above was the
+        // cube's IBL, not the sky showing through where a cube failed to mirror.
+        doc->skyType = iris::SkyType::SINGLE_COLOR;
+        doc->skyColor = QColor(0, 0, 255);
+        doc->setSkyTexture(iris::Texture2DPtr());
+        mirror.applySky(view);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("metal cube, no sky (control)", img);
+        const Colour dark = centre(img);
+        CHECK(dark.g < 0.15f && dark.b < 0.15f,
+              "clearing the sky clears the reflections (the cube goes dark)");
+        meshNode->setMaterial(legacyOrange);
+        doc->getRootNode()->removeChild(meshNode);
+        QFile::remove(eqPath);
+        target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+        mirror.applySky(view);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
     mirror.setSource(nullptr);
