@@ -17,7 +17,10 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QtMath>
 #include <QShortcut>
+#include <QKeyEvent>
+#include <QCursor>
 #include "../graph/graphnodescene.h"
+#include "../dialogs/searchdialog.h"
 
 qreal GraphicsView::currentScale = 1.0;
 GraphicsView::GraphicsView( QWidget *parent) : QGraphicsView(parent)
@@ -208,4 +211,28 @@ void GraphicsView::setScene(GraphNodeScene * scene)
 {
 	this->scene = scene;
 	QGraphicsView::setScene((QGraphicsScene*)scene);
+}
+
+// Tab opens the node-search palette at the cursor (NodeGraphQt's tab
+// search); intercepted in event() because Tab otherwise walks focus.
+bool GraphicsView::event(QEvent *event)
+{
+	if (event->type() == QEvent::KeyPress) {
+		auto ke = static_cast<QKeyEvent*>(event);
+		if (ke->key() == Qt::Key_Tab && underMouse() && scene != nullptr) {
+			openNodeSearch();
+			ke->accept();
+			return true;
+		}
+	}
+	return QGraphicsView::event(event);
+}
+
+void GraphicsView::openNodeSearch()
+{
+	if (scene->getNodeGraph() == nullptr)
+		return;
+	auto dialog = new SearchDialog(scene->getNodeGraph(), scene, QCursor::pos());
+	dialog->exec();
+	dialog->deleteLater();
 }

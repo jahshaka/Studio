@@ -24,8 +24,10 @@ private:
 	GraphNodeScene *scene;
 
 	void addShortcuts();
+	void openNodeSearch();
 
 protected:
+	bool event(QEvent *event) override;
 	void dragEnterEvent(QDragEnterEvent *event) override;
 	void dropEvent(QDropEvent *event) override;
 	void dragMoveEvent(QDragMoveEvent *event) override;

@@ -33,3 +33,12 @@ target_include_directories(test_pbr_evaluator PRIVATE
 target_link_libraries(test_pbr_evaluator PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 add_test(NAME shadergraph.pbr_evaluator COMMAND test_pbr_evaluator WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.pbr_evaluator PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
+
+# Fuzzy matcher for the tab-search node palette: pure QString logic.
+add_executable(test_fuzzy_search test_fuzzy_search.cpp)
+set_target_properties(test_fuzzy_search PROPERTIES
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_fuzzy_search PRIVATE Qt6::Core)
+add_test(NAME shadergraph.fuzzy_search COMMAND test_fuzzy_search WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadergraph.fuzzy_search PROPERTIES TIMEOUT 60 LABELS "shadergraph")
