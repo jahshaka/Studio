@@ -8,3 +8,11 @@ compile_commands.json
 
 # clangd index — never track
 .cache/
+
+# Claude Code local state (agents/ may be shared deliberately later; local files never)
+.claude/settings.local.json
+
+# runtime output when the binary is run from the tree
+jahsettings.ini
+jahshaka-ogre.log
+*.log

@@ -391,7 +391,11 @@ set(WIDGETS
 )
 
 include(IncludeOgre)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engine)
+# The engine abstraction lives in the IrisGL repo (owner decision 2026-08-30:
+# Studio = the app; IrisGL = document + engine). It stays a separate library —
+# the document never links it — and keeps build-linux/engine as its binary dir
+# so test and tooling paths are unchanged.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINARY_DIR}/engine)
 
 # Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
 # enable_testing() at top level, which add_test in a subdirectory requires.
