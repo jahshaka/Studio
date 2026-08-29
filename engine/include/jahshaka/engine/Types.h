@@ -66,6 +66,7 @@ struct LightDesc {
     float     range = 10.0f;           // point/spot falloff distance
     float     spotAngleDegrees = 30.0f;    // outer cone
     float     spotSoftness = 0.1f;         // 0..1, inner = outer * (1 - softness)
+    bool      castShadows = true;
 };
 
 /// A View's camera. Position/orientation are absolute (the document composes them).

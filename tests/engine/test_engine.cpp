@@ -385,6 +385,58 @@ MeshData unitCubeData() {
     return d;
 }
 
+void shadows_darken_the_ground() {
+    Fixture fx;
+    View *v = fx.view("shadow-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("shadow-scene");            REQUIRE(s);
+    v->setScene(s);
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.1f, 0.1f, 0.1f));
+    MeshId cubeMesh = s->createMesh(unitCubeData());
+    PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 0.9f;
+    MaterialId mat = s->createPbrMaterial(white);
+    NodeId ground = s->createNode();                     // a flat slab at y=-0.5
+    CHECK(s->attachMesh(ground, cubeMesh, mat));
+    s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+    NodeId cube = s->createNode();                       // floating box above it
+    CHECK(s->attachMesh(cube, cubeMesh, mat));
+    s->setNodeTransform(cube, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+    NodeId sun = s->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 1.0f; d.castShadows = true;
+    CHECK(s->setLight(sun, d));
+    // Light shining straight down: the shadow lands directly under the cube.
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(-0.7071068f, 0, 0, 0.7071068f), Vec3(1,1,1));
+    // Camera looking down from above: cube in the middle, ground all around.
+    CameraDesc c; c.position = Vec3(0, 6, 0.01f); c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f); c.fovDegrees = 50;
+    v->setCamera(c);
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    // Pixel just beside the cube (on the ground) with shadows OFF: lit.
+    auto lum = [&](unsigned x, unsigned y) { const Px q = px(img, x, y); return (q.r + q.g + q.b) / 3; };
+    const int besideOff = lum(48, 28);
+    v->setShadows(true);
+    CHECK(v->shadows());
+    if (!fx.e->lastError().empty()) std::printf("    lastError after setShadows: %s\n", fx.e->lastError().c_str());
+    render(fx.e, 4); REQUIRE(v->readPixels(img));
+    const int besideOn = lum(48, 28), farOn = lum(6, 6);
+    std::printf("    ground beside cube: shadows off %d, on %d; far ground on %d\n", besideOff, besideOn, farOn);
+    // With the light straight above, the ground right beside the cube is NOT shadowed;
+    // what shadows change is the region under the cube, hidden here. So tilt the sun.
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(-0.5f, 0.5f, 0, 0.7071068f), Vec3(1,1,1));
+    render(fx.e, 4); REQUIRE(v->readPixels(img));
+    // Find the darkest and brightest ground pixels along a row beside the cube.
+    int darkest = 255, brightest = 0;
+    for (unsigned x = 62; x < 94; ++x) { const int l = lum(x, 48); darkest = std::min(darkest, l); brightest = std::max(brightest, l); }
+    for (unsigned x = 2; x < 34; ++x)  { const int l = lum(x, 48); darkest = std::min(darkest, l); brightest = std::max(brightest, l); }
+    std::printf("    tilted sun, shadows on: ground row darkest %d brightest %d\n", darkest, brightest);
+    CHECK_MSG(brightest - darkest > 40, "a cast shadow should create contrast on the ground: %d..%d", darkest, brightest);
+    v->setShadows(false);
+    render(fx.e, 4); REQUIRE(v->readPixels(img));
+    int darkest2 = 255, brightest2 = 0;
+    for (unsigned x = 62; x < 94; ++x) { const int l = lum(x, 48); darkest2 = std::min(darkest2, l); brightest2 = std::max(brightest2, l); }
+    for (unsigned x = 2; x < 34; ++x)  { const int l = lum(x, 48); darkest2 = std::min(darkest2, l); brightest2 = std::max(brightest2, l); }
+    std::printf("    tilted sun, shadows off: ground row darkest %d brightest %d\n", darkest2, brightest2);
+    CHECK_MSG(brightest2 - darkest2 < (brightest - darkest), "without shadows the ground row is flatter");
+}
+
 void mesh_from_buffers_renders() {
     Fixture fx;
     View *v = fx.view("mesh-view", 96, 96, kBlue); REQUIRE(v);
@@ -619,6 +671,7 @@ int main(int argc, char **argv) {
         { "destroy_and_recreate_views_and_scenes",  destroy_and_recreate_views_and_scenes },
         { "resize_offscreen",                       resize_offscreen },
         { "background_changes_at_runtime",          background_changes_at_runtime },
+        { "shadows_darken_the_ground",              shadows_darken_the_ground },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },

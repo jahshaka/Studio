@@ -111,6 +111,11 @@ public:
     /// call with the same value; a change rebuilds the view's compositor workspace.
     virtual void setBackground(const Colour &) = 0;
     virtual Colour background() const = 0;
+    /// Shadow maps for this view (PSSM for directional, focused for point/spot;
+    /// lights opt in with LightDesc::castShadows). Off by default; toggling rebuilds
+    /// the view's workspace.
+    virtual void setShadows(bool) = 0;
+    virtual bool shadows() const = 0;
     /// A disabled View is skipped by renderOneFrame(). Hidden viewports MUST be
     /// disabled — the backend otherwise keeps drawing them at full cost.
     virtual void setEnabled(bool) = 0;

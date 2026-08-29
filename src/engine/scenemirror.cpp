@@ -20,6 +20,7 @@
 #include "materials/pbrmaterial.h"
 #include "materials/defaultmaterial.h"
 #include "graphics/texture2d.h"
+#include "graphics/shadowmap.h"
 #include <QFileInfo>
 #include <QtMath>
 
@@ -364,6 +365,7 @@ LightDesc SceneMirror::toLightDesc(iris::LightNode *light)
     d.range = light->distance;
     d.spotAngleDegrees = light->spotCutOff;
     d.spotSoftness = light->spotCutOffSoftness;
+    d.castShadows = light->shadowMap && light->shadowMap->shadowType != iris::ShadowMapType::None;
     return d;
 }
 

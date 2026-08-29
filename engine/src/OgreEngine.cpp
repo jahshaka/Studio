@@ -41,6 +41,9 @@
 #include <Compositor/OgreCompositorManager2.h>
 #include <Compositor/OgreCompositorWorkspace.h>
 #include <Compositor/OgreCompositorNodeDef.h>
+#include <Compositor/OgreCompositorShadowNode.h>
+#include <Compositor/OgreCompositorShadowNodeDef.h>
+#include <OgreRenderSystemCapabilities.h>
 #include <Vao/OgreVaoManager.h>
 #include <Vao/OgreVertexArrayObject.h>
 
@@ -421,6 +424,7 @@ public:
             }
             L->setDiffuseColour(toOgre(d.colour));
             L->setSpecularColour(toOgre(d.colour));
+            L->setCastShadows(d.castShadows);
             L->setPowerScale(d.intensity * Ogre::Math::PI);
             if (d.type != LightType::Directional)
                 L->setAttenuationBasedOnRadius(std::max(d.range, 0.01f), 0.01f);
@@ -745,24 +749,36 @@ public:
         JAH_TRY { if (mWorkspace) mWorkspace->setEnabled(on); } JAH_CATCH(mError, );
     }
     Colour background() const override { return mBackground; }
+    bool shadows() const override { return mShadows; }
+    void setShadows(bool on) override {
+        if (on == mShadows) return;
+        mShadows = on;
+        rebuildWorkspaceDef();
+    }
     void setBackground(const Colour &c) override {
         const bool same = std::abs(c.r - mBackground.r) < 1e-4f && std::abs(c.g - mBackground.g) < 1e-4f &&
                           std::abs(c.b - mBackground.b) < 1e-4f && std::abs(c.a - mBackground.a) < 1e-4f;
         if (same) return;
+        mBackground = c;
+        rebuildWorkspaceDef();
+    }
+    /// The clear colour and the shadow node live in the workspace definition:
+    /// rebuild definition + workspace, keeping scene, camera and enabled state.
+    void rebuildWorkspaceDef() {
         JAH_TRY {
-            // The clear colour lives in the workspace definition: rebuild def + workspace.
             Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
             OgreScene *scene = mScene;
             const bool hadWorkspace = mWorkspace != nullptr;
             if (mWorkspace) { cm->removeWorkspace(mWorkspace); mWorkspace = nullptr; }
             if (cm->hasWorkspaceDefinition(mWorkspaceDef)) cm->removeWorkspaceDefinition(mWorkspaceDef);
             if (cm->hasNodeDefinition(mNodeDef)) cm->removeNodeDefinition(mNodeDef);
-            mBackground = c;
-            cm->createBasicWorkspaceDef(mWorkspaceDef, toOgre(c), Ogre::IdString());
+            cm->createBasicWorkspaceDef(mWorkspaceDef, toOgre(mBackground),
+                                        mShadows ? Ogre::IdString(kShadowNodeName) : Ogre::IdString());
             if (hadWorkspace && scene && mCamera)
                 mWorkspace = cm->addWorkspace(scene->sceneManager(), target(), mCamera, mWorkspaceDef, mEnabled);
         } JAH_CATCH(mError, );
     }
+    static constexpr const char *kShadowNodeName = "JahshakaShadowNode";
     bool isEnabled() const override { return mEnabled; }
     unsigned width()  const override { return mWidth; }
     unsigned height() const override { return mHeight; }
@@ -848,6 +864,7 @@ private:
     unsigned                   mWidth, mHeight;
     Colour                     mBackground;
     bool                       mEnabled = true;
+    bool                       mShadows = false;
     std::string               &mError;
 };
 
@@ -898,6 +915,9 @@ public:
             // Values are Ogre's sample defaults: 16x8 grid, 24 slices, 96 lights per
             // cell, no decals/probes, 2..50 units depth range.
             sm->setForwardClustered(true, 16, 8, 24, 96, 0, 0, 2.0f, 50.0f);
+            // Shadow maps cover nothing until these are set (Ogre's samples set both).
+            sm->setShadowDirectionalLightExtrusionDistance(500.0f);
+            sm->setShadowFarDistance(500.0f);
             mScenes.emplace_back(new OgreScene(mRoot, sm, name, mLastError));
             return mScenes.back().get();
         } JAH_CATCH(mLastError, nullptr);
@@ -1031,6 +1051,32 @@ private:
                 OGRE_NEW Ogre::HlmsPbs(am.load(mMediaDir + mainPath, "FileSystem", true), &libs));
         }
         mHlmsRegistered = true;
+        createShadowNode();
+    }
+    /// One shadow node for the process: PSSM (3 splits) for the first directional
+    /// light (point/spot shadow maps pending — see below).
+    /// Mirrors Ogre's ShadowMapFromCode sample. Views opt in with setShadows(true).
+    void createShadowNode() {
+        Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
+        if (cm->hasShadowNodeDefinition(OgreView::kShadowNodeName)) return;
+        Ogre::ShadowNodeHelper::ShadowParamVec params;
+        Ogre::ShadowNodeHelper::ShadowParam p;
+        memset(&p, 0, sizeof(p));
+        p.technique = Ogre::SHADOWMAP_PSSM;
+        p.numPssmSplits = 3u;
+        p.resolution[0].x = 2048u; p.resolution[0].y = 2048u;
+        for (size_t i = 1u; i < 4u; ++i) { p.resolution[i].x = 1024u; p.resolution[i].y = 1024u; }
+        p.atlasStart[0].x = 0u;    p.atlasStart[0].y = 0u;
+        p.atlasStart[1].x = 0u;    p.atlasStart[1].y = 2048u;
+        p.atlasStart[2].x = 1024u; p.atlasStart[2].y = 2048u;
+        p.supportedLightTypes = 0u;
+        p.addLightType(Ogre::Light::LT_DIRECTIONAL);
+        params.push_back(p);
+        // Point/spot shadow maps need Ogre's 'Ogre/DPSM/CubeToDpsm' material from
+        // Samples/Media/2.0/scripts/materials/Common, which is not shipped yet.
+        // Directional (PSSM) only until that media is staged.
+        Ogre::ShadowNodeHelper::createShadowNodeWithSettings(
+            cm, mRoot->getRenderSystem()->getCapabilities(), OgreView::kShadowNodeName, params, false);
     }
 
     Ogre::Root     *mRoot = nullptr;

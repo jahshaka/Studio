@@ -108,6 +108,7 @@ bool EngineSceneViewport::ensureEngineScene()
     if (!mEngineScene) return false;
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
     view()->setScene(mEngineScene);
+    view()->setShadows(true);           // directional PSSM; lights opt in via the document
     mMirror.reset(new SceneMirror(mEngineScene));
     mOverlay.reset(new GizmoOverlay(mEngineScene));
     if (mScene) mMirror->setSource(mScene);
