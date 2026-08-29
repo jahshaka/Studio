@@ -59,6 +59,7 @@ set(SRCS
     src/globals.cpp 
     src/widgets/sceneviewwidget.cpp 
     src/widgets/engineviewwidget.cpp
+    src/engine/scenemirror.cpp
     src/widgets/enginerenderdriver.cpp
     src/dialogs/ogrepreviewdialog.cpp
     src/widgets/assetfavorites.cpp 
@@ -199,6 +200,7 @@ set(HEADERS
     src/globals.h 
     src/widgets/sceneviewwidget.h 
     src/widgets/engineviewwidget.h
+    src/engine/scenemirror.h
     src/widgets/enginerenderdriver.h
     src/dialogs/ogrepreviewdialog.h
     src/widgets/assetfavorites.h 

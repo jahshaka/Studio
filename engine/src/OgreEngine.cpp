@@ -41,6 +41,7 @@
 
 #include <X11/Xlib.h>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <exception>
 #include <map>
@@ -149,6 +150,126 @@ public:
         } JAH_CATCH(mError, );
     }
 
+    // ---- Hierarchy and transforms ----
+    NodeId createNode(NodeId parent) override {
+        JAH_TRY {
+            Ogre::SceneNode *p = parent ? node(parent) : nullptr;
+            if (parent && !p) { mError = "createNode: unknown parent"; return 0; }
+            if (!p) p = mSceneMgr->getRootSceneNode(Ogre::SCENE_DYNAMIC);
+            Node rec; rec.node = p->createChildSceneNode(Ogre::SCENE_DYNAMIC);
+            return track(rec);
+        } JAH_CATCH(mError, 0);
+    }
+    bool setNodeParent(NodeId id, NodeId parent) override {
+        JAH_TRY {
+            Ogre::SceneNode *n = node(id);
+            if (!n) { mError = "setNodeParent: unknown node"; return false; }
+            Ogre::SceneNode *p = parent ? node(parent) : mSceneMgr->getRootSceneNode(Ogre::SCENE_DYNAMIC);
+            if (!p) { mError = "setNodeParent: unknown parent"; return false; }
+            if (n->getParent() == p) return true;
+            if (n->getParent()) n->getParent()->removeChild(n);
+            p->addChild(n);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    void setNodeTransform(NodeId id, const Vec3 &pos, const Quat &rot, const Vec3 &scale) override {
+        JAH_TRY {
+            if (auto *n = node(id)) {
+                n->setPosition(toOgre(pos));
+                n->setOrientation(Ogre::Quaternion(rot.w, rot.x, rot.y, rot.z));
+                n->setScale(toOgre(scale));
+            }
+        } JAH_CATCH(mError, );
+    }
+    void setNodeVisible(NodeId id, bool visible) override {
+        JAH_TRY { if (auto *n = node(id)) n->setVisible(visible, true); } JAH_CATCH(mError, );
+    }
+
+    // ---- Meshes and materials ----
+    MeshId createMesh(const MeshData &data) override {
+        if (data.positions.empty() || data.positions.size() % 3 != 0) { mError = "createMesh: positions must be xyz triples"; return 0; }
+        if (data.indices.empty() || data.indices.size() % 3 != 0)     { mError = "createMesh: indices must be triangles"; return 0; }
+        const size_t nv = data.vertexCount();
+        for (unsigned i : data.indices) if (i >= nv) { mError = "createMesh: index out of range"; return 0; }
+        if (!data.normals.empty() && data.normals.size() != data.positions.size()) { mError = "createMesh: normals count mismatch"; return 0; }
+        if (!data.uvs.empty() && data.uvs.size() != nv * 2) { mError = "createMesh: uv count mismatch"; return 0; }
+        JAH_TRY {
+            MeshRec rec; rec.name = processUniqueName("mesh");
+            rec.mesh = buildMeshV2(rec.name, data);
+            mMeshes[++mNextMeshId] = rec;
+            return mNextMeshId;
+        } JAH_CATCH(mError, 0);
+    }
+    bool destroyMesh(MeshId id) override {
+        auto it = mMeshes.find(id);
+        if (it == mMeshes.end()) return false;
+        JAH_TRY {
+            for (auto &kv : mNodes) if (kv.second.meshRef == id) detachItem(kv.second);
+            it->second.mesh.reset();
+            Ogre::MeshManager &mm = Ogre::MeshManager::getSingleton();
+            if (mm.resourceExists(it->second.name)) mm.remove(it->second.name);
+            mMeshes.erase(it);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    MaterialId createPbrMaterial(const PbrParams &p) override {
+        JAH_TRY {
+            MaterialRec rec; rec.datablockName = processUniqueName("pbr");
+            auto *hlmsPbs = static_cast<Ogre::HlmsPbs *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS));
+            auto *db = static_cast<Ogre::HlmsPbsDatablock *>(hlmsPbs->createDatablock(
+                Ogre::IdString(rec.datablockName), rec.datablockName,
+                Ogre::HlmsMacroblock(), Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
+            db->setWorkflow(Ogre::HlmsPbsDatablock::MetallicWorkflow);
+            applyPbr(db, p);
+            mMaterials[++mNextMaterialId] = rec;
+            return mNextMaterialId;
+        } JAH_CATCH(mError, 0);
+    }
+    bool setPbrMaterial(MaterialId id, const PbrParams &p) override {
+        auto it = mMaterials.find(id);
+        if (it == mMaterials.end()) return false;
+        JAH_TRY {
+            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
+            auto *db = static_cast<Ogre::HlmsPbsDatablock *>(hlmsPbs->getDatablock(Ogre::IdString(it->second.datablockName)));
+            if (!db) return false;
+            applyPbr(db, p);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool destroyMaterial(MaterialId id) override {
+        auto it = mMaterials.find(id);
+        if (it == mMaterials.end()) return false;
+        JAH_TRY {
+            for (auto &kv : mNodes) if (kv.second.materialRef == id) detachItem(kv.second);
+            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
+            if (hlmsPbs->getDatablock(Ogre::IdString(it->second.datablockName)))
+                hlmsPbs->destroyDatablock(Ogre::IdString(it->second.datablockName));
+            mMaterials.erase(it);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool attachMesh(NodeId id, MeshId meshId, MaterialId matId) override {
+        auto nit = mNodes.find(id); auto mit = mMeshes.find(meshId); auto tit = mMaterials.find(matId);
+        if (nit == mNodes.end()) { mError = "attachMesh: unknown node"; return false; }
+        if (mit == mMeshes.end()) { mError = "attachMesh: unknown mesh"; return false; }
+        if (tit == mMaterials.end()) { mError = "attachMesh: unknown material"; return false; }
+        JAH_TRY {
+            Node &n = nit->second;
+            detachItem(n);
+            n.item = mSceneMgr->createItem(mit->second.mesh, Ogre::SCENE_DYNAMIC);
+            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
+            n.item->setDatablock(hlmsPbs->getDatablock(Ogre::IdString(tit->second.datablockName)));
+            n.node->attachObject(n.item);
+            n.meshRef = meshId; n.materialRef = matId;
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool detachMesh(NodeId id) override {
+        auto it = mNodes.find(id);
+        if (it == mNodes.end()) return false;
+        JAH_TRY { detachItem(it->second); return true; } JAH_CATCH(mError, false);
+    }
+
     Ogre::SceneManager *sceneManager() const { return mSceneMgr; }
 
     /// Releases everything in dependency order. Safe to call twice. Called by
@@ -158,6 +279,17 @@ public:
         JAH_TRY {
             for (auto &kv : mNodes) releaseNode(kv.second);
             mNodes.clear();
+            auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
+            for (auto &kv : mMaterials)
+                if (hlmsPbs->getDatablock(Ogre::IdString(kv.second.datablockName)))
+                    hlmsPbs->destroyDatablock(Ogre::IdString(kv.second.datablockName));
+            mMaterials.clear();
+            Ogre::MeshManager &mm = Ogre::MeshManager::getSingleton();
+            for (auto &kv : mMeshes) {
+                kv.second.mesh.reset();
+                if (mm.resourceExists(kv.second.name)) mm.remove(kv.second.name);
+            }
+            mMeshes.clear();
             mRoot->destroySceneManager(mSceneMgr);
         } JAH_CATCH(mError, );
         mSceneMgr = nullptr;
@@ -170,15 +302,99 @@ private:
         Ogre::SceneNode *node  = nullptr;
         Ogre::Item      *item  = nullptr;
         Ogre::Light     *light = nullptr;
-        Ogre::MeshPtr    mesh;              // uniquely owned; MUST be dropped before Root
+        Ogre::MeshPtr    mesh;              // uniquely owned (addTestCube); MUST be dropped before Root
         std::string      meshName;
-        std::string      datablockName;     // uniquely owned
+        std::string      datablockName;     // uniquely owned (addTestCube)
+        MeshId           meshRef     = 0;   // shared, owned by mMeshes
+        MaterialId       materialRef = 0;   // shared, owned by mMaterials
     };
+    struct MeshRec { Ogre::MeshPtr mesh; std::string name; };
+    struct MaterialRec { std::string datablockName; };
 
+    /// Removes the renderable from a node that references a SHARED mesh/material.
+    void detachItem(Node &n) {
+        if (n.item && n.meshRef) {
+            n.item->detachFromParent(); mSceneMgr->destroyItem(n.item); n.item = nullptr;
+        }
+        n.meshRef = 0; n.materialRef = 0;
+    }
+    static void applyPbr(Ogre::HlmsPbsDatablock *db, const PbrParams &p) {
+        db->setDiffuse(Ogre::Vector3(p.albedo.r, p.albedo.g, p.albedo.b));
+        db->setMetalness(p.metalness);
+        db->setRoughness(p.roughness);
+        db->setEmissive(Ogre::Vector3(p.emissive.r, p.emissive.g, p.emissive.b));
+    }
+    /// Uploads MeshData as a v2 mesh: interleaved position/normal/uv, 16- or 32-bit
+    /// indices. v1 meshes silently render nothing on Vulkan, so only this path exists.
+    Ogre::MeshPtr buildMeshV2(const std::string &name, const MeshData &data) {
+        const size_t nv = data.vertexCount(), ni = data.indices.size();
+        std::vector<float> normals = data.normals;
+        if (normals.empty()) {
+            // Smooth normals from face normals — enough for a lit preview.
+            normals.assign(nv * 3, 0.0f);
+            for (size_t t = 0; t + 2 < ni; t += 3) {
+                const unsigned a = data.indices[t], b = data.indices[t+1], c = data.indices[t+2];
+                const float *pa = &data.positions[a*3], *pb = &data.positions[b*3], *pc = &data.positions[c*3];
+                const float e1[3] = { pb[0]-pa[0], pb[1]-pa[1], pb[2]-pa[2] };
+                const float e2[3] = { pc[0]-pa[0], pc[1]-pa[1], pc[2]-pa[2] };
+                const float n[3] = { e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0] };
+                for (unsigned v : { a, b, c }) for (int k = 0; k < 3; ++k) normals[v*3+k] += n[k];
+            }
+            for (size_t v = 0; v < nv; ++v) {
+                float *n = &normals[v*3];
+                const float len = std::sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
+                if (len > 1e-8f) { n[0] /= len; n[1] /= len; n[2] /= len; } else { n[1] = 1.0f; }
+            }
+        }
+        struct V { float px, py, pz, nx, ny, nz, u, v; };
+        V *verts = reinterpret_cast<V *>(OGRE_MALLOC_SIMD(sizeof(V) * nv, Ogre::MEMCATEGORY_GEOMETRY));
+        Ogre::Vector3 mn(1e30f, 1e30f, 1e30f), mx(-1e30f, -1e30f, -1e30f);
+        for (size_t v = 0; v < nv; ++v) {
+            const float *p = &data.positions[v*3];
+            const float *n = &normals[v*3];
+            verts[v] = { p[0], p[1], p[2], n[0], n[1], n[2],
+                         data.uvs.empty() ? 0.0f : data.uvs[v*2], data.uvs.empty() ? 0.0f : data.uvs[v*2+1] };
+            mn.makeFloor(Ogre::Vector3(p[0], p[1], p[2])); mx.makeCeil(Ogre::Vector3(p[0], p[1], p[2]));
+        }
+        Ogre::VaoManager *vaoMgr = mRoot->getRenderSystem()->getVaoManager();
+        Ogre::VertexElement2Vec decl;
+        decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT3, Ogre::VES_POSITION));
+        decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT3, Ogre::VES_NORMAL));
+        decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT2, Ogre::VES_TEXTURE_COORDINATES));
+        Ogre::VertexBufferPacked *vbuf = vaoMgr->createVertexBuffer(decl, Ogre::uint32(nv), Ogre::BT_IMMUTABLE, verts, true);
+        Ogre::IndexBufferPacked *ibuf = nullptr;
+        if (nv <= 65535u) {
+            Ogre::uint16 *idx = reinterpret_cast<Ogre::uint16 *>(OGRE_MALLOC_SIMD(sizeof(Ogre::uint16) * ni, Ogre::MEMCATEGORY_GEOMETRY));
+            for (size_t i = 0; i < ni; ++i) idx[i] = Ogre::uint16(data.indices[i]);
+            ibuf = vaoMgr->createIndexBuffer(Ogre::IndexBufferPacked::IT_16BIT, Ogre::uint32(ni), Ogre::BT_IMMUTABLE, idx, true);
+        } else {
+            Ogre::uint32 *idx = reinterpret_cast<Ogre::uint32 *>(OGRE_MALLOC_SIMD(sizeof(Ogre::uint32) * ni, Ogre::MEMCATEGORY_GEOMETRY));
+            for (size_t i = 0; i < ni; ++i) idx[i] = data.indices[i];
+            ibuf = vaoMgr->createIndexBuffer(Ogre::IndexBufferPacked::IT_32BIT, Ogre::uint32(ni), Ogre::BT_IMMUTABLE, idx, true);
+        }
+        Ogre::MeshPtr mesh = Ogre::MeshManager::getSingleton().createManual(name, Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME);
+        Ogre::SubMesh *sub = mesh->createSubMesh();
+        Ogre::VertexBufferPackedVec vbufs; vbufs.push_back(vbuf);
+        Ogre::VertexArrayObject *vao = vaoMgr->createVertexArrayObject(vbufs, ibuf, Ogre::OT_TRIANGLE_LIST);
+        sub->mVao[Ogre::VpNormal].push_back(vao);
+        sub->mVao[Ogre::VpShadow].push_back(vao);
+        const Ogre::Aabb aabb = Ogre::Aabb::newFromExtents(mn, mx);
+        mesh->_setBounds(aabb, false);
+        mesh->_setBoundingSphereRadius(aabb.getRadius());
+        return mesh;
+    }
     void releaseNode(Node &n) {
         // Order: renderable off the node -> item (drops the datablock link and one
         // mesh ref) -> datablock -> node -> our mesh ref -> the mesh itself.
         if (n.item)  { n.item->detachFromParent();  mSceneMgr->destroyItem(n.item);   n.item = nullptr; }
+        n.meshRef = 0; n.materialRef = 0;
+        if (n.node) {   // children survive: re-parent them to the root
+            Ogre::SceneNode *root = mSceneMgr->getRootSceneNode(Ogre::SCENE_DYNAMIC);
+            while (n.node->numChildren() > 0) {
+                Ogre::Node *c = n.node->getChild(0);
+                n.node->removeChild(c); root->addChild(c);
+            }
+        }
         if (n.light) { n.light->detachFromParent(); mSceneMgr->destroyLight(n.light); n.light = nullptr; }
         if (!n.datablockName.empty()) {
             auto *hlmsPbs = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS);
@@ -259,7 +475,11 @@ private:
     std::string         mName;
     std::string        &mError;
     std::map<NodeId, Node> mNodes;
+    std::map<MeshId, MeshRec> mMeshes;
+    std::map<MaterialId, MaterialRec> mMaterials;
     NodeId              mNextId = 0;
+    MeshId              mNextMeshId = 0;
+    MaterialId          mNextMaterialId = 0;
 };
 
 // ---------------------------------------------------------------------------

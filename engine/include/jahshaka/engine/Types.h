@@ -18,6 +18,40 @@ struct Colour {
     Colour(float r_, float g_, float b_, float a_ = 1.0f) : r(r_), g(g_), b(b_), a(a_) {}
 };
 
+/// Rotation as a unit quaternion. Identity by default.
+struct Quat {
+    float x = 0.0f, y = 0.0f, z = 0.0f, w = 1.0f;
+    Quat() = default;
+    Quat(float x_, float y_, float z_, float w_) : x(x_), y(y_), z(z_), w(w_) {}
+};
+
+/// Opaque handles to a Scene's meshes and materials. 0 is "none". Per-Scene and
+/// monotonic like NodeId. A mesh or material may be shared by any number of nodes.
+using MeshId     = unsigned int;
+using MaterialId = unsigned int;
+
+/// CPU-side triangle mesh, the shape the assimp importer produces at import time.
+/// positions: xyz per vertex (required). normals: xyz per vertex (optional — smooth
+/// normals are generated when empty). uvs: uv per vertex (optional). indices: three
+/// per triangle (required).
+struct MeshData {
+    std::vector<float>    positions;
+    std::vector<float>    normals;
+    std::vector<float>    uvs;
+    std::vector<unsigned> indices;
+    size_t vertexCount() const { return positions.size() / 3; }
+    size_t triangleCount() const { return indices.size() / 3; }
+};
+
+/// Metallic-roughness PBR parameters — Jahshaka's material model. Textures arrive
+/// in a later step; parameters alone already drive the full lighting path.
+struct PbrParams {
+    Colour albedo   = Colour(0.8f, 0.8f, 0.8f);
+    float  metalness = 0.0f;
+    float  roughness = 0.6f;
+    Colour emissive = Colour(0.0f, 0.0f, 0.0f);
+};
+
 /// Native window handle a View renders into (X11 Window / HWND / NSView).
 using NativeWindowHandle = unsigned long long;
 

@@ -340,6 +340,140 @@ struct Test { const char *name; std::function<void()> fn; };
 
 }  // namespace
 
+
+// ---------------------------------------------------------------------------
+// Step 2/3 verbs: hierarchy, absolute transforms, visibility, meshes, materials.
+
+MeshData unitCubeData() {
+    MeshData d;
+    const float h = 0.5f;
+    const float fn[6][3] = {{0,0,1},{0,0,-1},{1,0,0},{-1,0,0},{0,1,0},{0,-1,0}};
+    const float fv[6][4][3] = {
+        {{-h,-h, h},{ h,-h, h},{ h, h, h},{-h, h, h}}, {{ h,-h,-h},{-h,-h,-h},{-h, h,-h},{ h, h,-h}},
+        {{ h,-h, h},{ h,-h,-h},{ h, h,-h},{ h, h, h}}, {{-h,-h,-h},{-h,-h, h},{-h, h, h},{-h, h,-h}},
+        {{-h, h, h},{ h, h, h},{ h, h,-h},{-h, h,-h}}, {{-h,-h,-h},{ h,-h,-h},{ h,-h, h},{-h,-h, h}} };
+    for (int f = 0; f < 6; ++f) for (int v = 0; v < 4; ++v) {
+        for (int k = 0; k < 3; ++k) d.positions.push_back(fv[f][v][k]);
+        for (int k = 0; k < 3; ++k) d.normals.push_back(fn[f][k]);
+        d.uvs.push_back(v == 1 || v == 2 ? 1.0f : 0.0f); d.uvs.push_back(v >= 2 ? 1.0f : 0.0f);
+    }
+    for (unsigned f = 0; f < 6; ++f) {
+        const unsigned b = f * 4;
+        for (unsigned i : { b, b+1, b+2, b, b+2, b+3 }) d.indices.push_back(i);
+    }
+    return d;
+}
+
+void mesh_from_buffers_renders() {
+    Fixture fx;
+    View *v = fx.view("mesh-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("mesh-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    CHECK_MSG(mesh != 0, "%s", s == nullptr ? "" : fx.e->lastError().c_str());
+    PbrParams p; p.albedo = kOrange; p.roughness = 0.6f;
+    MaterialId mat = s->createPbrMaterial(p);
+    CHECK(mat != 0);
+    NodeId n = s->createNode();
+    CHECK(n != 0);
+    CHECK(s->attachMesh(n, mesh, mat));
+    s->setNodeTransform(n, Vec3(0,0,0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    const Px c = centre(img);
+    std::printf("    mesh-from-buffers centre %d %d %d\n", c.r, c.g, c.b);
+    CHECK(near(corner(img), kBlue));
+    CHECK(c.r > 100 && c.b < 120);
+
+    // Bad data is refused, not thrown.
+    MeshData bad; bad.positions = { 0, 0, 0 }; bad.indices = { 0, 1, 2 };
+    CHECK(s->createMesh(bad) == 0);
+    CHECK(!fx.e->lastError().empty());
+}
+
+void hierarchy_transform_propagates() {
+    Fixture fx;
+    View *v = fx.view("hier-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("hier-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId parent = s->createNode();
+    NodeId child  = s->createNode(parent);
+    REQUIRE(parent && child);
+    CHECK(s->attachMesh(child, mesh, mat));
+    s->setNodeTransform(child, Vec3(0,0,0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);
+    // Move only the PARENT: the child must leave the frame.
+    s->setNodeTransform(parent, Vec3(10, 0, 0), Quat(), Vec3(1, 1, 1));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kBlue));
+    // Re-parent the child to the root: it is back at the origin.
+    CHECK(s->setNodeParent(child, 0));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);
+    // Visibility on the parent cascades once the child is under it again.
+    CHECK(s->setNodeParent(child, parent));
+    s->setNodeTransform(parent, Vec3(0, 0, 0), Quat(), Vec3(1, 1, 1));
+    s->setNodeVisible(parent, false);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kBlue));
+    s->setNodeVisible(parent, true);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);
+    // Removing the parent keeps the child (re-parented to root), still visible.
+    CHECK(s->removeNode(parent));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);
+}
+
+void material_and_mesh_lifetime() {
+    Fixture fx;
+    View *v = fx.view("mat-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("mat-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId a = s->createNode(), b = s->createNode();
+    CHECK(s->attachMesh(a, mesh, mat));
+    CHECK(s->attachMesh(b, mesh, mat));                       // shared mesh + material
+    s->setNodeTransform(a, Vec3(0,0,0), Quat(), Vec3(1.2f,1.2f,1.2f));
+    s->setNodeTransform(b, Vec3(10,0,0), Quat(), Vec3(1,1,1)); // off screen
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    const Px before = centre(img);
+    CHECK(before.r > 100);
+    // Changing the material recolours what is on screen.
+    p.albedo = Colour(0.1f, 0.3f, 0.9f);
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px after = centre(img);
+    std::printf("    material orange->blue: %d %d %d -> %d %d %d\n", before.r, before.g, before.b, after.r, after.g, after.b);
+    CHECK(after.b > after.r);
+    // Removing one node leaves the shared mesh usable by the other.
+    CHECK(s->removeNode(b));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).b > 100);
+    // Destroying the material detaches the item; destroying the mesh as well.
+    CHECK(s->destroyMaterial(mat));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kBlue));
+    CHECK(s->destroyMesh(mesh));
+    CHECK(!s->destroyMesh(mesh));
+    render(fx.e);
+    CHECK(true);
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -352,6 +486,9 @@ int main(int argc, char **argv) {
         { "remove_node_then_render",                remove_node_then_render },
         { "destroy_and_recreate_views_and_scenes",  destroy_and_recreate_views_and_scenes },
         { "resize_offscreen",                       resize_offscreen },
+        { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
+        { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
+        { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

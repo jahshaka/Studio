@@ -36,11 +36,36 @@ public:
     // TEMPORARY — replaced by mesh loading in step 3 of VIEWPORT_MIGRATION_PLAN.md
     virtual NodeId      addTestCube(const Colour &albedo, float metalness, float roughness) = 0;
     /// Removes a node and everything it uniquely owns (mesh, material). Unknown or
-    /// already-removed ids are ignored and return false.
+    /// already-removed ids are ignored and return false. Children are NOT removed;
+    /// they are re-parented to the scene root.
     virtual bool        removeNode(NodeId) = 0;
     virtual void        setNodePosition(NodeId, const Vec3 &) = 0;
     virtual void        setNodeScale(NodeId, const Vec3 &) = 0;
     virtual void        rotateNode(NodeId, float yawRadians, float pitchRadians, float rollRadians) = 0;
+
+    // ---- Hierarchy and transforms (VIEWPORT_MIGRATION_PLAN.md step 2) ----
+    /// An empty transform node under `parent` (0 = the scene root).
+    virtual NodeId      createNode(NodeId parent = 0) = 0;
+    virtual bool        setNodeParent(NodeId, NodeId parent) = 0;
+    /// Absolute LOCAL transform (relative to the parent). The document owns the
+    /// numbers; the engine composes the hierarchy.
+    virtual void        setNodeTransform(NodeId, const Vec3 &position, const Quat &rotation,
+                                         const Vec3 &scale) = 0;
+    /// Hides the node and its subtree.
+    virtual void        setNodeVisible(NodeId, bool) = 0;
+
+    // ---- Meshes and materials (step 3/4) ----
+    /// Uploads geometry. Returns 0 on invalid data (lastError()).
+    virtual MeshId      createMesh(const MeshData &) = 0;
+    virtual bool        destroyMesh(MeshId) = 0;
+    virtual MaterialId  createPbrMaterial(const PbrParams &) = 0;
+    virtual bool        setPbrMaterial(MaterialId, const PbrParams &) = 0;
+    virtual bool        destroyMaterial(MaterialId) = 0;
+    /// Makes the node render `mesh` with `material`. A node renders at most one mesh;
+    /// attaching again replaces it. Mesh and material may be shared across nodes and
+    /// survive the node.
+    virtual bool        attachMesh(NodeId, MeshId, MaterialId) = 0;
+    virtual bool        detachMesh(NodeId) = 0;
 };
 
 /// A view onto a Scene, rendering into a native window supplied by the host or
@@ -73,11 +98,9 @@ public:
 /// Owns the device and every Scene and View.
 ///
 /// ONE PER PROCESS. The backend is a process-wide singleton; create() refuses to
-/// make a second Engine while one is alive (returns null + error). Create it once
-/// and keep it: with the current Ogre-Next build, creating a NEW Engine after the
-/// first is destroyed fails (the Vulkan plugin's static extension list survives
-/// unload — OgreVulkanDevice.cpp:88, upstream-reportable), so treat the Engine as
-/// living until the process exits.
+/// make a second Engine while one is alive (returns null + error). Destroying it
+/// and creating another later is supported (tests/engine/test_engine_recreate) —
+/// this needs the Ogre-Next patch recorded in OGRE_PLATFORM_DEPS.md.
 ///
 /// LIFETIME CONTRACT: every View and Scene pointer handed out is owned by the
 /// Engine and dies with it. Hosts that cache a View* (e.g. a widget) must call

@@ -1,0 +1,64 @@
+#ifndef SCENEMIRROR_H
+#define SCENEMIRROR_H
+
+// SceneMirror — pushes the iris:: scene DOCUMENT into an engine::Scene.
+//
+// This is the seam decided in VIEWPORT_MIGRATION_PLAN.md: Studio keeps
+// iris::Scene/SceneNode/MeshNode/LightNode as its document model (the property
+// panels, hierarchy widget, undo commands, reader/writer all talk to it) and the
+// engine renders a mirror of it. Every frame sync() walks the document, creates
+// engine nodes for new document nodes, removes engine nodes for vanished ones,
+// and pushes local transforms and visibility. Meshes are converted once from the
+// document's CPU vertex buffers and cached per iris::Mesh.
+//
+// Studio-side code: includes iris (Qt) and the engine abstraction. Never Ogre.
+#include <QHash>
+#include <QSet>
+#include "irisglfwd.h"
+#include "jahshaka/engine/Engine.h"
+
+namespace iris { class Mesh; class Material; }
+
+class SceneMirror
+{
+public:
+    explicit SceneMirror(jahshaka::engine::Scene *target);
+    ~SceneMirror();
+
+    /// Replaces the mirrored document. Clears everything previously mirrored.
+    void setSource(iris::ScenePtr scene);
+    iris::ScenePtr source() const { return mSource; }
+
+    /// Brings the engine scene up to date with the document. Call once per frame
+    /// before Engine::renderOneFrame(). Returns the number of document nodes mirrored.
+    int sync();
+
+    /// The engine node mirroring a document node, or 0.
+    jahshaka::engine::NodeId engineNode(const iris::SceneNode *node) const;
+
+    /// Points `view`'s camera where the document camera is looking.
+    void applyCamera(iris::CameraNodePtr camera, jahshaka::engine::View *view);
+
+    /// Converts a document mesh to engine MeshData. Public so importers and tests
+    /// can use the same conversion. Returns false if the mesh has no geometry.
+    static bool toMeshData(iris::Mesh *mesh, jahshaka::engine::MeshData &out);
+
+private:
+    struct Entry {
+        jahshaka::engine::NodeId node = 0;
+        jahshaka::engine::NodeId light = 0;   // engine light node, if the document node is a light
+        bool hasMesh = false;
+    };
+    void visit(iris::SceneNodePtr node, jahshaka::engine::NodeId parent, QSet<long> &seen);
+    void removeMissing(const QSet<long> &seen);
+    jahshaka::engine::MeshId     meshFor(iris::Mesh *mesh);
+    jahshaka::engine::MaterialId materialFor(iris::Material *material);
+
+    jahshaka::engine::Scene *mTarget;
+    iris::ScenePtr           mSource;
+    QHash<long, Entry>       mEntries;         // keyed by iris SceneNode::nodeId
+    QHash<iris::Mesh *, jahshaka::engine::MeshId> mMeshes;
+    jahshaka::engine::MaterialId mDefaultMaterial = 0;
+};
+
+#endif // SCENEMIRROR_H
