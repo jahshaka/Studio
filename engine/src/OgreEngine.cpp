@@ -34,6 +34,7 @@
 #include <OgreTextureFilters.h>
 #include <OgreStagingTexture.h>
 #include <OgrePixelFormatGpuUtils.h>
+#include <OgreImage2.h>
 #include <OgreTextureGpu.h>
 #include <OgreAsyncTextureTicket.h>
 #include <OgreLogManager.h>
@@ -420,6 +421,40 @@ public:
             }
             if (!rgm.resourceExists(kGroup, file)) { mError = "loadTexture: file not found: " + path; return 0; }
             Ogre::TextureGpuManager *tm = mRoot->getRenderSystem()->getTextureGpuManager();
+            {
+                // Grayscale files (single-channel jpg/png) decode to an R8 texture and
+                // sample red-only — a black/white checker renders black/red. Expand to
+                // RGBA on the CPU and upload with CPU-generated mipmaps instead.
+                Ogre::Image2 probe;
+                probe.load(file, kGroup);
+                const Ogre::PixelFormatGpu pf = probe.getPixelFormat();
+                if (Ogre::PixelFormatGpuUtils::getNumberOfComponents(pf) == 1 &&
+                    !Ogre::PixelFormatGpuUtils::isCompressed(pf)) {
+                    const Ogre::uint32 w = probe.getWidth(), h = probe.getHeight();
+                    Ogre::Image2 *rgba = new Ogre::Image2();
+                    rgba->createEmptyImage(w, h, 1u, Ogre::TextureTypes::Type2D,
+                                           srgb ? Ogre::PFG_RGBA8_UNORM_SRGB : Ogre::PFG_RGBA8_UNORM,
+                                           Ogre::PixelFormatGpuUtils::getMaxMipmapCount(w, h));
+                    for (Ogre::uint32 y = 0; y < h; ++y)
+                        for (Ogre::uint32 x = 0; x < w; ++x) {
+                            Ogre::ColourValue c = probe.getColourAt(x, y, 0);
+                            c.g = c.b = c.r; c.a = 1.0f;
+                            rgba->setColourAt(c, x, y, 0);
+                        }
+                    rgba->generateMipmaps(srgb, Ogre::Image2::FILTER_BILINEAR);
+                    Ogre::TextureGpu *tex = tm->createTexture(processUniqueName("gray"),
+                                                              Ogre::GpuPageOutStrategy::Discard, 0,
+                                                              Ogre::TextureTypes::Type2D);
+                    tex->setResolution(w, h);
+                    tex->setNumMipmaps(rgba->getNumMipmaps());
+                    tex->setPixelFormat(rgba->getPixelFormat());
+                    tex->scheduleTransitionTo(Ogre::GpuResidency::Resident, rgba, true);   // deletes rgba
+                    tex->waitForData();
+                    TextureRec rec; rec.texture = tex; rec.path = path;
+                    mTextures[++mNextTextureId] = rec;
+                    return mNextTextureId;
+                }
+            }
             Ogre::uint32 flags = Ogre::TextureFlags::AutomaticBatching;
             if (srgb) flags |= Ogre::TextureFlags::PrefersLoadingFromFileAsSRGB;
             // Alias by full path so the same file name in two folders stays distinct.

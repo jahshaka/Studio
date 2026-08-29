@@ -720,12 +720,18 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     	}
 
 		case WindowSpaces::EFFECT: {
+			qDebug() << "switchSpace(EFFECT): count" << ui->stackedWidget->count()
+			         << "index before" << ui->stackedWidget->currentIndex();
 			ui->stackedWidget->setCurrentIndex(3);
 			ui->stackedWidget->currentWidget()->setFocus();
 
 			toolBar->setVisible(false);
 
 			shaderGraph->refreshShaderGraph();
+			qDebug() << "switchSpace(EFFECT): index now" << ui->stackedWidget->currentIndex()
+			         << "current" << ui->stackedWidget->currentWidget()
+			         << "shaderGraph visible" << shaderGraph->isVisible()
+			         << "size" << shaderGraph->size();
 
 			break;
 		}

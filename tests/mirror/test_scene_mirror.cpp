@@ -222,6 +222,27 @@ int main(int argc, char **argv)
         meshNode2->setMaterial(legacy);
     }
 
+    // ---- a grayscale texture samples grey, not red ----
+    // Regression: 1-channel files (grayscale jpg/png, e.g. checker.jpg) decoded to
+    // an R8 texture, so a black/white checker rendered black/red.
+    {
+        const QString grayPath = QDir::temp().filePath("jahshaka_mirror_gray.png");
+        QImage gray(16, 16, QImage::Format_Grayscale8); gray.fill(230); gray.save(grayPath);
+        auto pbr = iris::PbrMaterial::create();
+        pbr->setValue("baseColor", QColor(255, 255, 255));
+        pbr->setValue("baseColorMap", grayPath);
+        meshNode2->setMaterial(pbr);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("grayscale base map", img);
+        const Colour c = centre(img);
+        std::printf("    grayscale texel at centre: %.2f %.2f %.2f\n", c.r, c.g, c.b);
+        CHECK(c.g > c.r * 0.8f && c.b > c.r * 0.8f && c.r > 0.1f,
+              "a grayscale image renders grey (all channels), not red");
+        QFile::remove(grayPath);
+        meshNode2->setMaterial(legacy);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    }
+
     // ---- normal-mapped PBR keeps its base colour texture ----
     // Regression: engine meshes carried no tangents, so HlmsPbs threw
     // "Renderable can't use normal maps" and every normal-mapped preset
