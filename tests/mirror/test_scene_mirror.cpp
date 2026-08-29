@@ -222,6 +222,29 @@ int main(int argc, char **argv)
         meshNode2->setMaterial(legacy);
     }
 
+    // ---- normal-mapped PBR keeps its base colour texture ----
+    // Regression: engine meshes carried no tangents, so HlmsPbs threw
+    // "Renderable can't use normal maps" and every normal-mapped preset
+    // (stone, sand, brick...) fell back to the flat grey default datablock.
+    {
+        const QString basePath   = QDir::temp().filePath("jahshaka_mirror_nm_base.png");
+        const QString normalPath = QDir::temp().filePath("jahshaka_mirror_nm_normal.png");
+        QImage base(16, 16, QImage::Format_RGBA8888); base.fill(QColor(20, 230, 40)); base.save(basePath);
+        QImage normal(16, 16, QImage::Format_RGBA8888); normal.fill(QColor(128, 128, 255)); normal.save(normalPath);
+        auto pbr = iris::PbrMaterial::create();
+        pbr->setValue("baseColor", QColor(255, 255, 255));
+        pbr->setValue("baseColorMap", basePath);
+        pbr->setValue("normalMap", normalPath);
+        meshNode2->setMaterial(pbr);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("PBR base + normal map", img);
+        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
+              "a normal-mapped PBR material still renders its base colour map (tangents exist)");
+        QFile::remove(basePath); QFile::remove(normalPath);
+        meshNode2->setMaterial(legacy);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    }
+
     // ---- PBR scene round-trip: params + texture maps survive save/load ----
     // The Option A regression (MATERIALS_EFFECTS_AUDIT.md §0.7a): PbrMaterial
     // declared no Texture/Int properties, so SceneWriter never wrote its maps and

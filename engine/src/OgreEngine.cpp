@@ -698,8 +698,10 @@ private:
             break;
         }
     }
-    /// Uploads MeshData as a v2 mesh: interleaved position/normal/uv, 16- or 32-bit
-    /// indices. v1 meshes silently render nothing on Vulkan, so only this path exists.
+    /// Uploads MeshData as a v2 mesh: interleaved position/normal/tangent/uv, 16- or
+    /// 32-bit indices. v1 meshes silently render nothing on Vulkan, so only this path
+    /// exists. Every mesh carries tangents: HlmsPbs refuses to render a normal-mapped
+    /// datablock on a mesh without them (throws, object falls back to flat grey).
     Ogre::MeshPtr buildMeshV2(const std::string &name, const MeshData &data) {
         const size_t nv = data.vertexCount(), ni = data.indices.size();
         std::vector<float> normals = data.normals;
@@ -720,13 +722,58 @@ private:
                 if (len > 1e-8f) { n[0] /= len; n[1] /= len; n[2] /= len; } else { n[1] = 1.0f; }
             }
         }
-        struct V { float px, py, pz, nx, ny, nz, u, v; };
+        std::vector<float> tangents = data.tangents;
+        if (tangents.size() != nv * 4) {
+            // Lengyel accumulation from uvs; a fixed frame when there are no uvs
+            // (normal maps are meaningless without uvs anyway).
+            tangents.assign(nv * 4, 0.0f);
+            std::vector<float> bitan(nv * 3, 0.0f);
+            if (!data.uvs.empty()) {
+                for (size_t t = 0; t + 2 < ni; t += 3) {
+                    const unsigned a = data.indices[t], b = data.indices[t+1], c = data.indices[t+2];
+                    const float *pa = &data.positions[a*3], *pb = &data.positions[b*3], *pc = &data.positions[c*3];
+                    const float *ua = &data.uvs[a*2], *ub = &data.uvs[b*2], *uc = &data.uvs[c*2];
+                    const float e1[3] = { pb[0]-pa[0], pb[1]-pa[1], pb[2]-pa[2] };
+                    const float e2[3] = { pc[0]-pa[0], pc[1]-pa[1], pc[2]-pa[2] };
+                    const float s1 = ub[0]-ua[0], t1 = ub[1]-ua[1], s2 = uc[0]-ua[0], t2 = uc[1]-ua[1];
+                    const float det = s1*t2 - s2*t1;
+                    if (std::fabs(det) < 1e-12f) continue;
+                    const float r = 1.0f / det;
+                    const float T[3] = { (t2*e1[0]-t1*e2[0])*r, (t2*e1[1]-t1*e2[1])*r, (t2*e1[2]-t1*e2[2])*r };
+                    const float B[3] = { (s1*e2[0]-s2*e1[0])*r, (s1*e2[1]-s2*e1[1])*r, (s1*e2[2]-s2*e1[2])*r };
+                    for (unsigned v : { a, b, c }) for (int k = 0; k < 3; ++k) {
+                        tangents[v*4+k] += T[k]; bitan[v*3+k] += B[k];
+                    }
+                }
+            }
+            for (size_t v = 0; v < nv; ++v) {
+                const float *n = &normals[v*3];
+                float *t = &tangents[v*4];
+                // Gram-Schmidt against the normal, then normalize.
+                const float ndt = n[0]*t[0] + n[1]*t[1] + n[2]*t[2];
+                float tx = t[0]-n[0]*ndt, ty = t[1]-n[1]*ndt, tz = t[2]-n[2]*ndt;
+                const float len = std::sqrt(tx*tx + ty*ty + tz*tz);
+                if (len > 1e-8f) { tx /= len; ty /= len; tz /= len; }
+                else { // any unit vector orthogonal to n
+                    if (std::fabs(n[0]) < 0.9f) { tx = 1.0f-n[0]*n[0]; ty = -n[0]*n[1]; tz = -n[0]*n[2]; }
+                    else                        { tx = -n[1]*n[0]; ty = 1.0f-n[1]*n[1]; tz = -n[1]*n[2]; }
+                    const float l2 = std::sqrt(tx*tx + ty*ty + tz*tz);
+                    tx /= l2; ty /= l2; tz /= l2;
+                }
+                const float cx = n[1]*tz - n[2]*ty, cy = n[2]*tx - n[0]*tz, cz = n[0]*ty - n[1]*tx;
+                const float *b = &bitan[v*3];
+                t[0] = tx; t[1] = ty; t[2] = tz;
+                t[3] = (cx*b[0] + cy*b[1] + cz*b[2]) < 0.0f ? -1.0f : 1.0f;
+            }
+        }
+        struct V { float px, py, pz, nx, ny, nz, tx, ty, tz, tw, u, v; };
         V *verts = reinterpret_cast<V *>(OGRE_MALLOC_SIMD(sizeof(V) * nv, Ogre::MEMCATEGORY_GEOMETRY));
         Ogre::Vector3 mn(1e30f, 1e30f, 1e30f), mx(-1e30f, -1e30f, -1e30f);
         for (size_t v = 0; v < nv; ++v) {
             const float *p = &data.positions[v*3];
             const float *n = &normals[v*3];
-            verts[v] = { p[0], p[1], p[2], n[0], n[1], n[2],
+            const float *t = &tangents[v*4];
+            verts[v] = { p[0], p[1], p[2], n[0], n[1], n[2], t[0], t[1], t[2], t[3],
                          data.uvs.empty() ? 0.0f : data.uvs[v*2], data.uvs.empty() ? 0.0f : data.uvs[v*2+1] };
             mn.makeFloor(Ogre::Vector3(p[0], p[1], p[2])); mx.makeCeil(Ogre::Vector3(p[0], p[1], p[2]));
         }
@@ -734,6 +781,7 @@ private:
         Ogre::VertexElement2Vec decl;
         decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT3, Ogre::VES_POSITION));
         decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT3, Ogre::VES_NORMAL));
+        decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT4, Ogre::VES_TANGENT));
         decl.push_back(Ogre::VertexElement2(Ogre::VET_FLOAT2, Ogre::VES_TEXTURE_COORDINATES));
         Ogre::VertexBufferPacked *vbuf = vaoMgr->createVertexBuffer(decl, Ogre::uint32(nv), Ogre::BT_IMMUTABLE, verts, true);
         Ogre::IndexBufferPacked *ibuf = nullptr;

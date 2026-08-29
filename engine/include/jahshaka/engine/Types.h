@@ -38,6 +38,8 @@ struct MeshData {
     std::vector<float>    positions;
     std::vector<float>    normals;
     std::vector<float>    uvs;
+    std::vector<float>    tangents;   // optional, xyzw per vertex (w = handedness);
+                                      // generated from uvs when empty — needed for normal maps
     std::vector<unsigned> indices;
     size_t vertexCount() const { return positions.size() / 3; }
     size_t triangleCount() const { return indices.size() / 3; }
