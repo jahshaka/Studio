@@ -29,6 +29,8 @@ class DynamicGrid;
 class GridWidget;
 class ItemGridWidget;
 class ProgressDialog;
+class QMenu;
+class QAction;
 
 namespace Ui {
 	class ProjectManager;
@@ -64,6 +66,8 @@ public:
 	ModelData loadAiSceneFromModel(const QPair<QString, QString> asset);
 	MainWindow *mainWindow;
 
+    int getCurrentDesktop() const { return currentDesktop; }
+
 protected slots:
     void openSampleProject(QListWidgetItem*);
     void newProject();
@@ -82,6 +86,11 @@ protected slots:
     void closeProjectFromWidget(ItemGridWidget*);
     void deleteProjectFromWidget(ItemGridWidget*);
 
+    // desktops (DESKTOPS_SPEC.md)
+    void moveProjectToDesktop(ItemGridWidget*, int desktop);
+    void switchDesktop(int desktop);
+    void projectTilePositionChanged(ItemGridWidget*);
+
     void searchProjects();
 
 private:
@@ -97,6 +106,18 @@ signals:
 
 private:
     void loadProjectAssets();
+
+    // desktops (DESKTOPS_SPEC.md)
+    void setupDesktopControls();
+    void applyDesktopLayoutMode(bool freeform, bool persist);
+    static QString desktopLayoutKey(int desktop);
+
+    int currentDesktop = 1;
+    QMenu *desktopMenu = nullptr;
+    QMenu *layoutMenu = nullptr;
+    QVector<QAction*> desktopActions;
+    QAction *rowsAction = nullptr;
+    QAction *freeformAction = nullptr;
 
     Ui::ProjectManager *ui;
     SettingsManager* settings;

@@ -404,6 +404,56 @@ void ItemGridWidget::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton) {
         emit singleClicked(this);
     }
+
+    if (event->button() == Qt::LeftButton && freeformDraggable) {
+        dragging = false;
+        dragStartGlobal = event->globalPosition().toPoint();
+        dragStartTilePos = pos();
+    }
+}
+
+void ItemGridWidget::mouseMoveEvent(QMouseEvent *event)
+{
+    QWidget::mouseMoveEvent(event);
+
+    if (!freeformDraggable || !(event->buttons() & Qt::LeftButton)) return;
+
+    const QPoint delta = event->globalPosition().toPoint() - dragStartGlobal;
+    if (!dragging && delta.manhattanLength() < QApplication::startDragDistance()) return;
+
+    if (!dragging) {
+        dragging = true;
+        raise();
+    }
+
+    // clamp inside the desktop canvas (our parent widget)
+    QPoint target = dragStartTilePos + delta;
+    QWidget *canvas = parentWidget();
+    if (canvas) {
+        target.setX(qBound(0, target.x(), qMax(0, canvas->width() - width())));
+        target.setY(qBound(0, target.y(), qMax(0, canvas->height() - height())));
+    }
+    move(target);
+}
+
+void ItemGridWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+    QWidget::mouseReleaseEvent(event);
+
+    if (event->button() == Qt::LeftButton && dragging) {
+        dragging = false;
+
+        // store position normalized to the canvas so window resizes keep placement
+        QWidget *canvas = parentWidget();
+        if (canvas) {
+            const int availW = qMax(1, canvas->width() - width());
+            const int availH = qMax(1, canvas->height() - height());
+            normX = qBound(0.0, qreal(x()) / availW, 1.0);
+            normY = qBound(0.0, qreal(y()) / availH, 1.0);
+            hasFreeformPos = true;
+            emit tileMoved(this);
+        }
+    }
 }
 
 void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
@@ -418,7 +468,7 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
 		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
 		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
 		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item : disabled { color: #555; }"
+		"QMenu::item:disabled { color: #555; }"
 	);
 
     QAction open("Open", this);
@@ -436,6 +486,17 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
     QAction del("Delete", this);
     connect(&del, SIGNAL(triggered()), this, SLOT(deleteProject()));
     menu.addAction(&del);
+
+    // Desktops: re-file this project onto another desktop (current one disabled)
+    QMenu *moveMenu = menu.addMenu("Move to");
+    moveMenu->setStyleSheet(menu.styleSheet());
+    for (int i = 1; i <= 4; ++i) {
+        QAction *moveAction = moveMenu->addAction(QString("Desktop %1").arg(i));
+        moveAction->setEnabled(i != currentDesktop);
+        connect(moveAction, &QAction::triggered, this, [this, i]() {
+            emit moveToDesktopFromWidget(this, i);
+        });
+    }
 
     menu.exec(mapToGlobal(pos));
 }

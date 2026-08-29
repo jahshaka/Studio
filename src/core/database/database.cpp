@@ -38,7 +38,10 @@ Database::Database()
         "    url               TEXT,"
         "    guid              VARCHAR(32) PRIMARY KEY,"
         "    thumbnail         BLOB,"
-        "    scene             BLOB"
+        "    scene             BLOB,"
+        "    desktop           INTEGER DEFAULT 1,"   // which desktop the tile lives on (1..4)
+        "    desktop_x         REAL,"                // freeform position, normalized 0..1
+        "    desktop_y         REAL"                 // NULL = never placed (cascade assigns)
         ")";
 
     thumbnailsTableSchema = 
@@ -210,6 +213,52 @@ bool Database::checkIfTableExists(const QString &tableName)
     }
 
     return false;
+}
+
+bool Database::checkIfColumnExists(const QString &tableName, const QString &columnName)
+{
+    QSqlQuery query;
+    // PRAGMA doesn't take bound parameters; table names here are compile-time constants
+    query.prepare(QString("PRAGMA table_info(%1)").arg(tableName));
+
+    if (query.exec()) {
+        while (query.next()) {
+            // table_info columns: cid, name, type, notnull, dflt_value, pk
+            if (query.value(1).toString().compare(columnName, Qt::CaseInsensitive) == 0) return true;
+        }
+    }
+    else {
+        irisLog(
+            QString("There was an error checking if column %1.%2 exists! %3")
+                .arg(tableName, columnName, query.lastError().text())
+        );
+    }
+
+    return false;
+}
+
+void Database::migrateProjectsTable()
+{
+    // Desktops feature (DESKTOPS_SPEC.md): existing libraries gain the columns in place.
+    // Guarded by a column-existence check so this is idempotent and downgrade-safe —
+    // ALTER TABLE ADD COLUMN with a DEFAULT means pre-existing rows read back as 1.
+    if (!checkIfColumnExists("projects", "desktop")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE projects ADD COLUMN desktop INTEGER DEFAULT 1");
+        executeAndCheckQuery(query, "MigrateProjectsAddDesktop");
+    }
+
+    if (!checkIfColumnExists("projects", "desktop_x")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE projects ADD COLUMN desktop_x REAL");
+        executeAndCheckQuery(query, "MigrateProjectsAddDesktopX");
+    }
+
+    if (!checkIfColumnExists("projects", "desktop_y")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE projects ADD COLUMN desktop_y REAL");
+        executeAndCheckQuery(query, "MigrateProjectsAddDesktopY");
+    }
 }
 
 QString Database::getVersion()
@@ -388,6 +437,7 @@ void Database::createAllTables()
 {
     // TODO - transactions here
     if (!checkIfTableExists("projects"))        createProjectsTable();
+    migrateProjectsTable();
     if (!checkIfTableExists("thumbnails"))      createThumbnailsTable();
     if (!checkIfTableExists("collections"))     createCollectionsTable();
     if (!checkIfTableExists("assets"))          createAssetsTable();
@@ -524,6 +574,25 @@ bool Database::updateAssetViewFilter(const QString& guid, const int& filter)
 	query.addBindValue(filter);
 	query.addBindValue(guid);
 	return executeAndCheckQuery(query, "UpdateAssetViewFilter");
+}
+
+bool Database::updateProjectDesktop(const QString &guid, int desktop)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE projects SET desktop = ? WHERE guid = ?");
+	query.addBindValue(desktop);
+	query.addBindValue(guid);
+	return executeAndCheckQuery(query, "UpdateProjectDesktop");
+}
+
+bool Database::updateProjectPosition(const QString &guid, float x, float y)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE projects SET desktop_x = ?, desktop_y = ? WHERE guid = ?");
+	query.addBindValue(x);
+	query.addBindValue(y);
+	query.addBindValue(guid);
+	return executeAndCheckQuery(query, "UpdateProjectPosition");
 }
 
 void Database::updateSchema()
@@ -1512,20 +1581,37 @@ QVector<CollectionRecord> Database::fetchCollections()
     return tileData;
 }
 
-QVector<ProjectTileData> Database::fetchProjects()
+QVector<ProjectTileData> Database::fetchProjects(int desktop)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid FROM projects ORDER BY last_written DESC");
+    if (desktop > 0) {
+        // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
+        query.prepare(
+            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y "
+            "FROM projects WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC"
+        );
+        query.addBindValue(desktop);
+    }
+    else {
+        query.prepare(
+            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y "
+            "FROM projects ORDER BY last_written DESC"
+        );
+    }
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
     while (query.next())  {
         ProjectTileData data;
         QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.name       = record.value(0).toString();
-            data.thumbnail  = record.value(1).toByteArray();
-            data.guid       = record.value(2).toString();
+        data.name       = record.value(0).toString();
+        data.thumbnail  = record.value(1).toByteArray();
+        data.guid       = record.value(2).toString();
+        data.desktop    = record.value(3).toInt();
+        data.hasPosition = !record.value(4).isNull() && !record.value(5).isNull();
+        if (data.hasPosition) {
+            data.posX = record.value(4).toFloat();
+            data.posY = record.value(5).toFloat();
         }
 
         tileData.push_back(data);

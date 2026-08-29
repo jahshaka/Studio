@@ -37,6 +37,7 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     offset = 10;
+    lastWidth = 0;
     settings = SettingsManager::getDefaultManager();
     tileSize = sizeFromString(settings->getValue("tileSize", "Normal").toString());
 
@@ -83,6 +84,26 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
     connect(gameGridItem,   SIGNAL(deleteFromWidget(ItemGridWidget*)),
             parent,         SLOT(deleteProjectFromWidget(ItemGridWidget*)));
 
+    connect(gameGridItem,   SIGNAL(moveToDesktopFromWidget(ItemGridWidget*, int)),
+            parent,         SLOT(moveProjectToDesktop(ItemGridWidget*, int)));
+
+    connect(gameGridItem,   &ItemGridWidget::tileMoved,
+            this,           &DynamicGrid::tilePositionChanged);
+
+    // desktops state: which desktop this grid shows + the tile's stored freeform position
+    gameGridItem->currentDesktop = currentDesktop;
+    gameGridItem->hasFreeformPos = tileData.hasPosition;
+    gameGridItem->normX = tileData.posX;
+    gameGridItem->normY = tileData.posY;
+
+    if (mode == LayoutMode::Freeform) {
+        gameGridItem->freeformDraggable = true;
+        gridWidget->resize(viewport()->size().expandedTo(gridWidget->size()));
+        placeFreeformTile(gameGridItem);
+        gameGridItem->show();
+        return;
+    }
+
     int columnCount = viewport()->width() / (tileSize.width());
 
     if (columnCount == 0) columnCount = 1;
@@ -91,13 +112,114 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
     gridWidget->adjustSize();
 }
 
+void DynamicGrid::setLayoutMode(LayoutMode newMode)
+{
+    mode = newMode;
+
+    // detach every tile from the flow layout (keep the widgets)
+    QLayoutItem *item;
+    while ((item = gridLayout->takeAt(0)) != Q_NULLPTR) delete item;
+
+    if (mode == LayoutMode::Freeform) {
+        foreach (ItemGridWidget *gridItem, originalItems) gridItem->freeformDraggable = true;
+        applyFreeformLayout();
+    } else {
+        // Rows ignores stored positions: pure sequence, top-left to bottom-right.
+        // The freeform positions are kept (not cleared) for the next freeform show.
+        foreach (ItemGridWidget *gridItem, originalItems) gridItem->freeformDraggable = false;
+        updateGridColumns(qMax(lastWidth, tileSize.width()));
+    }
+}
+
+void DynamicGrid::applyFreeformLayout()
+{
+    // the desktop canvas fills the viewport; positions are normalized to it so
+    // resizes keep relative placement
+    gridWidget->resize(viewport()->size().expandedTo(QSize(tileSize.width(), tileSize.height())));
+
+    // two passes: settle every placed tile first so the cascade for unplaced ones
+    // tests against real positions, not stale ones
+    foreach (ItemGridWidget *gridItem, originalItems) {
+        if (gridItem->hasFreeformPos) placeFreeformTile(gridItem);
+        gridItem->show();
+    }
+    foreach (ItemGridWidget *gridItem, originalItems) {
+        if (!gridItem->hasFreeformPos) placeFreeformTile(gridItem);
+    }
+}
+
+QPoint DynamicGrid::pixelPosFor(ItemGridWidget *widget) const
+{
+    const int availW = qMax(1, gridWidget->width() - widget->width());
+    const int availH = qMax(1, gridWidget->height() - widget->height());
+    return QPoint(qRound(widget->normX * availW), qRound(widget->normY * availH));
+}
+
+void DynamicGrid::placeFreeformTile(ItemGridWidget *widget)
+{
+    if (widget->hasFreeformPos) {
+        widget->move(pixelPosFor(widget));
+        return;
+    }
+
+    // Never placed: new tiles land at the top-left; when the spot is taken, cascade
+    // by 10% of the tile size (like window cascading) until a free spot.
+    // Before the canvas is realized (first populate happens pre-show, when the
+    // viewport is still tiny) defer: assigning + persisting positions against a
+    // degenerate canvas would pile every tile onto one spot. The first real
+    // resize triggers applyFreeformLayout, which lands here again.
+    if (gridWidget->width() < widget->width() * 2 || gridWidget->height() < widget->height()) {
+        widget->move(offset, offset);
+        return;
+    }
+
+    const int stepX = qMax(1, widget->width() / 10);
+    const int stepY = qMax(1, widget->height() / 10);
+    QPoint candidate(offset, offset);
+
+    const int maxX = qMax(0, gridWidget->width() - widget->width());
+    const int maxY = qMax(0, gridWidget->height() - widget->height());
+
+    for (int tries = 0; tries < 512; ++tries) {
+        bool occupied = false;
+        foreach (ItemGridWidget *other, originalItems) {
+            if (other == widget || !other->hasFreeformPos) continue;
+            if (qAbs(other->pos().x() - candidate.x()) < stepX &&
+                qAbs(other->pos().y() - candidate.y()) < stepY) {
+                occupied = true;
+                break;
+            }
+        }
+        if (!occupied) break;
+
+        candidate += QPoint(stepX, stepY);
+        if (candidate.x() > maxX || candidate.y() > maxY) break; // clamp at the far corner
+    }
+
+    candidate.setX(qBound(0, candidate.x(), maxX));
+    candidate.setY(qBound(0, candidate.y(), maxY));
+
+    widget->normX = qBound(0.0, qreal(candidate.x()) / qMax(1, gridWidget->width() - widget->width()), 1.0);
+    widget->normY = qBound(0.0, qreal(candidate.y()) / qMax(1, gridWidget->height() - widget->height()), 1.0);
+    widget->hasFreeformPos = true;
+    widget->move(candidate);
+
+    emit tilePositionChanged(widget);   // persist the assigned position
+}
+
 void DynamicGrid::scaleTile(QString scale)
 {
     QSize size = sizeFromString(scale);
     tileSize.setWidth(size.width());
     tileSize.setHeight(size.height());
 
-    int columnCount = lastWidth / (tileSize.width());
+    if (mode == LayoutMode::Freeform) {
+        foreach (ItemGridWidget *gridItem, originalItems) gridItem->setTileSize(tileSize, iconSize);
+        applyFreeformLayout();
+        return;
+    }
+
+    int columnCount = qMax(1, lastWidth / tileSize.width());
 
     int count = 0;
     foreach(ItemGridWidget *gridItem, originalItems) {
@@ -111,7 +233,16 @@ void DynamicGrid::scaleTile(QString scale)
 
 void DynamicGrid::searchTiles(QString searchString)
 {
-    int columnCount = lastWidth / (tileSize.width());
+    if (mode == LayoutMode::Freeform) {
+        // freeform keeps positions; searching only filters visibility
+        foreach (ItemGridWidget *gridItem, originalItems) {
+            gridItem->setVisible(searchString.isEmpty()
+                                 || gridItem->tileData.name.toLower().contains(searchString));
+        }
+        return;
+    }
+
+    int columnCount = qMax(1, lastWidth / tileSize.width());
 
     int count = 0;
     if (!searchString.isEmpty()) {
@@ -139,8 +270,8 @@ void DynamicGrid::searchTiles(QString searchString)
 
 bool DynamicGrid::containsTiles()
 {
-    if (gridLayout->count()) return true;
-    return false;
+    // freeform tiles are not layout-managed, so count the tiles themselves
+    return !originalItems.isEmpty();
 }
 
 /**
@@ -161,6 +292,12 @@ void deleteChildWidgets(QLayoutItem *item) {
 void DynamicGrid::deleteTile(ItemGridWidget *widget)
 {
     int index = gridLayout->indexOf(widget);
+    if (index == -1) {
+        // freeform tiles are free children of the canvas, not layout items
+        originalItems.removeOne(widget);
+        widget->deleteLater();
+        return;
+    }
     if (index != -1) {
         int row, col, col_span, row_span;
         gridLayout->getItemPosition(index, &row, &col, &col_span, &row_span);
@@ -190,9 +327,13 @@ void DynamicGrid::resetView()
 {
     QLayoutItem *gridItem;
     while ((gridItem = gridLayout->takeAt(0)) != Q_NULLPTR) {
+        originalItems.removeOne(static_cast<ItemGridWidget*>(gridItem->widget()));
         delete gridItem->widget();
         delete gridItem;
     }
+
+    // freeform tiles never entered the layout; delete the stragglers
+    foreach (ItemGridWidget *item, originalItems) delete item;
 
     originalItems.clear();
 }
@@ -200,6 +341,12 @@ void DynamicGrid::resetView()
 void DynamicGrid::resizeEvent(QResizeEvent *event)
 {
     lastWidth = event->size().width();
+
+    if (mode == LayoutMode::Freeform) {
+        QScrollArea::resizeEvent(event);
+        applyFreeformLayout();  // normalized positions -> new canvas size
+        return;
+    }
 
 //    gridWidget->setMinimumWidth(viewport()->width());
 //    gridWidget->setMaximumWidth(viewport()->width());
@@ -216,7 +363,7 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
 
 void DynamicGrid::updateGridColumns(int width)
 {
-    int columnCount = width / (tileSize.width());
+    int columnCount = qMax(1, width / tileSize.width());
 
     int count = 0;
     foreach(ItemGridWidget *gridItem, originalItems) {
