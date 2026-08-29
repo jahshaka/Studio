@@ -2784,7 +2784,14 @@ void MainWindow::setupDesktop()
 {
 	pmContainer = new ProjectManager(db, this);
 	pmContainer->mainWindow = this;
-	_assetView = new AssetView(db, this);
+	// The Assets page: engine mode gives AssetView an EngineAssetViewer (a third
+	// engine Scene with its own preview document); legacy keeps its own AssetViewer.
+	IAssetViewer *assetBackend = nullptr;
+	if (EngineHost::viewportBackend() == ViewportBackend::Engine && EngineHost::instance().isRunning()) {
+		auto &host = EngineHost::instance();
+		assetBackend = createEngineAssetViewer(host.engine(), host.driver(), this);
+	}
+	_assetView = new AssetView(db, this, assetBackend);
 	_assetView->installEventFilter(this);
 
 	ui->stackedWidget->addWidget(pmContainer);

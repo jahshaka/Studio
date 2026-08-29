@@ -46,10 +46,11 @@ For more information see the LICENSE file
 #include "../editor/orbitalcameracontroller.h"
 
 #include "dialogs/progressdialog.h"
+#include "iassetviewer.h"
 
 #include "irisgl/src/graphics/shadowmap.h"
 
-class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress
+class AssetViewer : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, iris::IModelReadProgress, public IAssetViewer
 {
     Q_OBJECT
 
@@ -58,7 +59,14 @@ public:
 
     iris::SceneSource *ssource;
 
-    void setDatabase(Database *db) { this->db = db;  }
+    void setDatabase(Database *db) override { this->db = db;  }
+
+    // IAssetViewer: the page talks to this viewer and to EngineAssetViewer alike.
+    QWidget *asWidget() override { return this; }
+    iris::SceneSource *sceneSource() override { return ssource; }
+    void beginLoad() override { makeCurrent(); }
+    void endLoad() override { doneCurrent(); }
+    iris::SceneNodePtr cachedAsset(const QString &guid) override { return cachedAssets.value(guid); }
     void update();
     void paintGL();
     void updateScene();
@@ -70,12 +78,12 @@ public:
     void renderObject();
     void resetViewerCamera();
 	void resetViewerCameraAfter();
-    void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
+    void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadJafParticleSystem(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
-    void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true);
-    void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
-    void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
-    void loadModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true);
+    void loadJafShader(QString guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
+    void loadJafModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
+    void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
+    void loadModel(QString str, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
 
     void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *e);
@@ -87,15 +95,15 @@ public:
 	void addJafShader(const QString &guid, QMap<QString, QString> &outGuids, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addJafMesh(const QString &path, const QString &guid, bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
 	void addMesh(const QString &path = QString(), bool firstAdd = true, bool cache = false, QVector3D position = QVector3D());
-	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false, bool isOnGround = true);
-	QImage takeScreenshot(int width, int height);
+	void addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QString guid = "", bool viewed = false, bool cache = false, bool isOnGround = true) override;
+	QImage takeScreenshot(int width, int height) override;
 
     float onProgress(float percentage) {
         emit progressChanged(percentage * 100);
         return percentage;
     }
 
-	void changeBackdrop(unsigned int id);
+	void changeBackdrop(unsigned int id) override;
 
 	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
 	void setMaterial(const QJsonObject &matObj) {
@@ -106,7 +114,7 @@ public:
 		return assetMaterial;
 	}
 
-	void clearScene() {
+	void clearScene() override {
 		if (scene->rootNode->hasChildren()) {
 			auto lastNode = scene->rootNode->children.last();
 			if (!lastNode->isBuiltIn) {
@@ -168,7 +176,7 @@ public:
         return lightNode;
     }
 
-	void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) {
+	void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) override {
 		this->localPos = pos;
 		this->distanceFromPivot = distanceFromPivot;
 		this->localRot = localRot;
@@ -176,9 +184,9 @@ public:
 		resetViewerCameraAfter();
 	}
 
-	void cacheCurrentModel(QString guid);
+	void cacheCurrentModel(QString guid) override;
 
-	QJsonObject getSceneProperties();
+	QJsonObject getSceneProperties() override;
 
 	QMap<QString, iris::SceneNodePtr> cachedAssets;
 

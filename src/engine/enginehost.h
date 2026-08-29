@@ -78,4 +78,10 @@ class IPlayerView;
 IPlayerView *createEnginePlayerView(const std::shared_ptr<jahshaka::engine::Engine> &engine,
                                     EngineRenderDriver *driver, QWidget *parent);
 
+/// Factory for the engine-backed Assets page viewer (defined in
+/// src/widgets/engineassetviewer.cpp so MainWindow never names that class).
+class IAssetViewer;
+IAssetViewer *createEngineAssetViewer(const std::shared_ptr<jahshaka::engine::Engine> &engine,
+                                      EngineRenderDriver *driver, QWidget *parent);
+
 #endif // ENGINEHOST_H

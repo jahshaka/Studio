@@ -144,6 +144,8 @@ set(SRCS
     src/widgets/assetview.cpp
     src/widgets/assetview.cpp
     src/widgets/assetviewer.cpp
+    src/widgets/engineassetscene.cpp
+    src/widgets/engineassetviewer.cpp
     src/widgets/assetviewgrid.cpp
     src/widgets/assetgriditem.cpp
     src/editor/outlinerenderer.cpp
@@ -302,6 +304,9 @@ set(HEADERS
     src/dialogs/donatedialog.h
     src/widgets/assetview.h
     src/widgets/assetviewer.h
+    src/widgets/iassetviewer.h
+    src/widgets/engineassetscene.h
+    src/widgets/engineassetviewer.h
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
     src/breakpad/breakpad.h

@@ -66,7 +66,7 @@ enum AssetMetaType
 
 class AssetViewGrid;
 class AssetGridItem;
-class AssetViewer;
+class IAssetViewer;
 class Database;
 class SettingsManager;
 class PreferencesDialog;
@@ -95,7 +95,9 @@ public:
 	QAbstractButton *localAssetsButton;
 	QAbstractButton *onlineAssetsButton;
 	AssetSource assetSource;
-	AssetView(Database *handle, QWidget *parent = Q_NULLPTR);
+	/// `previewViewer` (optional) is the page's preview viewer; null means the
+	/// legacy AssetViewer. MainWindow passes the engine one in engine mode.
+	AssetView(Database *handle, QWidget *parent = Q_NULLPTR, IAssetViewer *previewViewer = nullptr);
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
@@ -182,7 +184,7 @@ private:
 
     QString collectionName;
     SettingsManager* settings;
-	AssetViewer *viewer;
+	IAssetViewer *viewer;
     AssetGridItem *selectedGridItem;
 	QTimer *searchTimer;
 	QString searchTerm;

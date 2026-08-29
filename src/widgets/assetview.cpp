@@ -118,7 +118,7 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 void AssetView::copyTextures(const QString &folderGuid)
 {
     const QString relativePath = "Textures";
-    const aiScene *scene = viewer->ssource->importer.GetScene();
+    const aiScene *scene = viewer->sceneSource()->importer.GetScene();
 
     QStringList texturesToCopy;
 
@@ -217,12 +217,14 @@ QString AssetView::getAssetType(int id)
 	}
 }
 
-AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(parent)
+AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewViewer) : db(handle), QWidget(parent)
 {
 	setParent(parent);
 	this->parent = parent;
 	_assetView = new QListWidget;
-	viewer = new AssetViewer(this);
+	// The page's preview viewer: the engine one when MainWindow hands one in
+	// (engine mode), otherwise the legacy QOpenGLWidget viewer.
+	viewer = previewViewer ? previewViewer : new AssetViewer(this);
     viewer->setDatabase(db);
 
     viewersWidget = new QWidget;
@@ -767,8 +769,8 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
                     }
                 }
 
-                if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
-                    viewer->addNodeToScene(viewer->cachedAssets.value(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
+                if (viewer->cachedAsset(gridItem->metadata["guid"].toString())) {
+                    viewer->addNodeToScene(viewer->cachedAsset(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
                     viewer->orientCamera(pos, rot, distObj);
                 }
                 else {
@@ -779,7 +781,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Material)) {
                 viewers->setCurrentIndex(0);
-                if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
+                if (viewer->cachedAsset(gridItem->metadata["guid"].toString())) {
                     viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
                     viewer->orientCamera(pos, rot, distObj);
                 }
@@ -791,7 +793,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
             if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
                 viewers->setCurrentIndex(0);
-                if (viewer->cachedAssets.value(gridItem->metadata["guid"].toString())) {
+                if (viewer->cachedAsset(gridItem->metadata["guid"].toString())) {
 					QMap<QString, QString> map;
                     viewer->loadJafShader(gridItem->metadata["guid"].toString(), map);
                     viewer->orientCamera(pos, rot, distObj);
@@ -977,7 +979,7 @@ AssetView::AssetView(Database *handle, QWidget *parent) : db(handle), QWidget(pa
 
     _metadataPane->setLayout(metaLayout);
 
-    viewers->addWidget(viewer);
+    viewers->addWidget(viewer->asWidget());
     viewers->addWidget(assetImageViewer);
     viewersWidget->setLayout(viewers);
 
@@ -1591,7 +1593,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
                 if (asset->type == ModelTypes::Mesh) {
                     QStringList texturesToCopy;
-                    viewer->makeCurrent();
+                    viewer->beginLoad();
 
                     bool hasEmbeddedTexture(false);
                     QStringList paths;
@@ -1600,7 +1602,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                                  paths,
                                                                                  hasEmbeddedTexture);
 
-                    viewer->doneCurrent();
+                    viewer->endLoad();
 
                     if (hasEmbeddedTexture) {
                         for (const auto &image : imgaesUsedList) {
@@ -2119,7 +2121,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 		}
 
         if (jafType == ModelTypes::Mesh) {
-            this->viewer->makeCurrent();
+            this->viewer->beginLoad();
             auto ssource = new iris::SceneSource();
             // load mesh as scene
             auto node = iris::MeshNode::loadAsSceneFragment(
@@ -2131,7 +2133,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 
                 return mat;
             }, ssource);
-            this->viewer->doneCurrent();
+            this->viewer->endLoad();
 
             QVariant variant = QVariant::fromValue(node);
             auto nodeAsset = new AssetNodeObject;
