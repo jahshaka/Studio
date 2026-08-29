@@ -267,6 +267,14 @@ int main(int argc, char **argv)
     view->readPixels(img);
     CHECK(countMagenta(img) == 0, "light wires off");
 
+    // ---- flat sky colour from the document becomes the background ----
+    doc->skyType = iris::SkyType::SINGLE_COLOR;
+    doc->skyColor = QColor(200, 30, 200);
+    mirror.applySky(view);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img); show("document sky colour", img);
+    CHECK(corner(img).r > 0.6f && corner(img).b > 0.6f && corner(img).g < 0.3f, "document sky colour is the clear colour");
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);

@@ -39,6 +39,10 @@ public:
 
     /// Points `view`'s camera where the document camera is looking.
     void applyCamera(iris::CameraNodePtr camera, jahshaka::engine::View *view);
+    /// Pushes the document's sky onto the view. Flat colour skies become the clear
+    /// colour; cubemap/equirect/gradient/realistic skies are a later step and leave
+    /// the view's current background.
+    void applySky(jahshaka::engine::View *view);
 
     /// Converts a document mesh to engine MeshData. Public so importers and tests
     /// can use the same conversion. Returns false if the mesh has no geometry.

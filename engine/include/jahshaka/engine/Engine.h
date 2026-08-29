@@ -107,6 +107,10 @@ public:
     /// Full camera state in one call (step 5). The document camera is pushed
     /// through this every frame.
     virtual void setCamera(const CameraDesc &) = 0;
+    /// Clear colour behind the scene (the document's flat sky colour). Cheap to
+    /// call with the same value; a change rebuilds the view's compositor workspace.
+    virtual void setBackground(const Colour &) = 0;
+    virtual Colour background() const = 0;
     /// A disabled View is skipped by renderOneFrame(). Hidden viewports MUST be
     /// disabled — the backend otherwise keeps drawing them at full cost.
     virtual void setEnabled(bool) = 0;

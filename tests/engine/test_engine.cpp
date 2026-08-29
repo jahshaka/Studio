@@ -283,6 +283,27 @@ void destroy_and_recreate_views_and_scenes() {
     }
 }
 
+void background_changes_at_runtime() {
+    Fixture fx;
+    View *v = fx.view("bg-view", 48, 48, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("bg-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    CHECK(near(corner(img), kBlue));
+    v->setBackground(kGreen);
+    CHECK(near(Px{ int(v->background().r * 255), int(v->background().g * 255), int(v->background().b * 255), 255 }, kGreen));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(corner(img), kGreen));
+    v->setBackground(kGreen);                       // same value: no-op, still fine
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(corner(img), kGreen));
+    // The scene still renders after the workspace rebuild.
+    populate(s, kOrange);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100);
+}
+
 void resize_offscreen() {
     Fixture f; Engine *e = f.e;
     View *v = f.view("v", 48, 32, kBlue);
@@ -597,6 +618,7 @@ int main(int argc, char **argv) {
         { "remove_node_then_render",                remove_node_then_render },
         { "destroy_and_recreate_views_and_scenes",  destroy_and_recreate_views_and_scenes },
         { "resize_offscreen",                       resize_offscreen },
+        { "background_changes_at_runtime",          background_changes_at_runtime },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },

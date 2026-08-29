@@ -407,6 +407,15 @@ bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
     return out.indices.size() >= 3;
 }
 
+void SceneMirror::applySky(View *view)
+{
+    if (!mSource || !view) return;
+    if (mSource->skyType == iris::SkyType::SINGLE_COLOR) {
+        const QColor c = mSource->skyColor;
+        view->setBackground(Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));
+    }
+}
+
 void SceneMirror::applyCamera(iris::CameraNodePtr camera, View *view)
 {
     if (!camera || !view) return;

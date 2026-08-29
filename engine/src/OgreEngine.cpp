@@ -744,6 +744,25 @@ public:
         mEnabled = on;
         JAH_TRY { if (mWorkspace) mWorkspace->setEnabled(on); } JAH_CATCH(mError, );
     }
+    Colour background() const override { return mBackground; }
+    void setBackground(const Colour &c) override {
+        const bool same = std::abs(c.r - mBackground.r) < 1e-4f && std::abs(c.g - mBackground.g) < 1e-4f &&
+                          std::abs(c.b - mBackground.b) < 1e-4f && std::abs(c.a - mBackground.a) < 1e-4f;
+        if (same) return;
+        JAH_TRY {
+            // The clear colour lives in the workspace definition: rebuild def + workspace.
+            Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
+            OgreScene *scene = mScene;
+            const bool hadWorkspace = mWorkspace != nullptr;
+            if (mWorkspace) { cm->removeWorkspace(mWorkspace); mWorkspace = nullptr; }
+            if (cm->hasWorkspaceDefinition(mWorkspaceDef)) cm->removeWorkspaceDefinition(mWorkspaceDef);
+            if (cm->hasNodeDefinition(mNodeDef)) cm->removeNodeDefinition(mNodeDef);
+            mBackground = c;
+            cm->createBasicWorkspaceDef(mWorkspaceDef, toOgre(c), Ogre::IdString());
+            if (hadWorkspace && scene && mCamera)
+                mWorkspace = cm->addWorkspace(scene->sceneManager(), target(), mCamera, mWorkspaceDef, mEnabled);
+        } JAH_CATCH(mError, );
+    }
     bool isEnabled() const override { return mEnabled; }
     unsigned width()  const override { return mWidth; }
     unsigned height() const override { return mHeight; }
