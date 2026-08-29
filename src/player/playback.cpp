@@ -32,6 +32,12 @@ void PlayBack::init(iris::ForwardRendererPtr renderer)
 	animTime = 0;
 }
 
+void PlayBack::init()
+{
+	renderer.reset();
+	animTime = 0;
+}
+
 void PlayBack::setScene(iris::ScenePtr scene)
 {
 	this->scene = scene;
@@ -65,14 +71,17 @@ void PlayBack::setRestoreCameraTransform(bool shouldRestore)
 	this->mouseController->setRestoreCameraTransform(shouldRestore);
 }
 
-void PlayBack::renderScene(iris::Viewport& viewport, float dt)
+void PlayBack::update(iris::Viewport& viewport, float dt)
 {
     // must update the mouse controller's viewport
     // needed for picking
     this->mouseController->setViewport(viewport);
 
-	auto vrDevice = renderer->getVrDevice();
-	if (vrDevice->isHeadMounted()) {
+	// The VR controller only exists on the legacy path (its hands are IrisGL
+	// render items); with no renderer there is no VR device and the mouse
+	// controller drives the camera.
+	auto vrDevice = renderer ? renderer->getVrDevice() : nullptr;
+	if (vrDevice && vrDevice->isHeadMounted()) {
 		setController(vrController);
 	}
 	else {
@@ -81,7 +90,9 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 
 	camController->update(dt);
 
-	auto scene = UiManager::sceneViewWidget->getScene();
+	// The editor viewport and the player share one document; fall back to our
+	// own pointer when there is no editor viewport (headless tests).
+	auto scene = UiManager::sceneViewWidget ? UiManager::sceneViewWidget->getScene() : this->scene;
 	//auto renderer = UiManager::sceneViewWidget->getRenderer();
 
 	if (camController->getCamera() != scene->camera)
@@ -99,6 +110,13 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 	}
 
 	camController->postUpdate(dt);
+}
+
+void PlayBack::renderScene(iris::Viewport& viewport, float dt)
+{
+	update(viewport, dt);
+
+	auto vrDevice = renderer->getVrDevice();
 
 	renderer->getGraphicsDevice()->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
 	                                     QColor::fromRgbF(.1f, .1f, .1f, .4f));

@@ -146,6 +146,7 @@ For more information see the LICENSE file
 
 #include "shadergraph/shadergraphmainwindow.h"
 #include "../src/player/playerwidget.h"
+#include "../src/player/iplayerview.h"
 
 enum class VRButtonMode : int
 {
@@ -2725,7 +2726,14 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
-	playerView = new PlayerWidget(viewPort);
+	// The player page: engine mode gives PlayerWidget an EnginePlayerView (a second
+	// engine Scene mirroring the same document); legacy keeps its own PlayerView.
+	IPlayerView *playerBackend = nullptr;
+	if (EngineHost::viewportBackend() == ViewportBackend::Engine && EngineHost::instance().isRunning()) {
+		auto &host = EngineHost::instance();
+		playerBackend = createEnginePlayerView(host.engine(), host.driver(), viewPort);
+	}
+	playerView = new PlayerWidget(viewPort, playerBackend);
 
     wireCheckAction->setChecked(sceneView->getShowLightWires());
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());

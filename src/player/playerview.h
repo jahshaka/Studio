@@ -10,6 +10,7 @@
 #include <QMatrix4x4>
 
 #include "irisgl/src/irisglfwd.h"
+#include "iplayerview.h"
 
 namespace iris
 {
@@ -32,7 +33,7 @@ class QElapsedTimer;
 class QTimer;
 class PlayBack;
 
-class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
+class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, public IPlayerView
 {
 	Q_OBJECT
 
@@ -49,13 +50,15 @@ class PlayerView : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
 public:
 	explicit PlayerView(QWidget* parent = nullptr);
 
-	void setScene(iris::ScenePtr scene);
+	QWidget *asWidget() override { return this; }
+
+	void setScene(iris::ScenePtr scene) override;
 	void setController(CameraControllerBase* controller);
 
 	// called when the menu item is selected
-	void start();
+	void start() override;
 	// called when the menu item is deselected
-	void end();
+	void end() override;
 
 	void initializeGL();
 
@@ -77,11 +80,11 @@ public:
 
 	~PlayerView();
 
-	bool isScenePlaying();
+	bool isScenePlaying() override;
 public slots:
-	void playScene();
+	void playScene() override;
 	void pause();
-	void stopScene();
+	void stopScene() override;
 };
 
-#endif PLAYERVIEW_H
+#endif // PLAYERVIEW_H

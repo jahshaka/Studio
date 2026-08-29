@@ -6,18 +6,20 @@
 #include <QIcon>
 #include "irisglfwd.h"
 
-class PlayerView;
+class IPlayerView;
 class QPushButton;
 
 class PlayerWidget : public QWidget
 {
 	Q_OBJECT
 
-	PlayerView* playerView;
+	IPlayerView* playerView;
 	QPushButton* playBtn;
 	QIcon playIcon, stopIcon;
 public:
-	explicit PlayerWidget(QWidget* parent = nullptr);
+	/// With no `view` the legacy PlayerView (IrisGL, own GL context) is created.
+	/// Engine mode passes an EnginePlayerView; the widget takes ownership either way.
+	explicit PlayerWidget(QWidget* parent = nullptr, IPlayerView* view = nullptr);
 	~PlayerWidget() {}
 	void createUI();
 
@@ -30,4 +32,4 @@ public slots:
     void onPlayScene();
 };
 
-#endif PLAYERWIDGET_H
+#endif // PLAYERWIDGET_H

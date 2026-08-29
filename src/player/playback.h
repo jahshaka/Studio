@@ -72,13 +72,22 @@ public:
 	bool isScenePlaying() { return _isPlaying; }
 
 	PlayBack();
+	/// Legacy (IrisGL) path: takes the renderer and loads the VR hand assets through
+	/// its GraphicsDevice. Needs a current GL context.
 	void init(iris::ForwardRendererPtr renderer);
+	/// Engine path: no renderer, no GL. Physics, animation and the camera controllers
+	/// run exactly as on the legacy path; a SceneMirror does the drawing.
+	void init();
 
 	void setScene(iris::ScenePtr scene);
 	void setController(CameraControllerBase* controller);
 
 	void setRestoreCameraTransform(bool shouldRestore);
 
+	/// Simulation step without drawing: controller selection and update, keyframe
+	/// animation, physics, character controller. GL-free; safe with no renderer.
+	void update(iris::Viewport& viewport, float dt);
+	/// Legacy: update() then clear + draw through the IrisGL renderer.
 	void renderScene(iris::Viewport& viewport, float dt);
 
 	void saveNodeTransforms();

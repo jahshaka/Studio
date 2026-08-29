@@ -72,4 +72,10 @@ class QWidget;
 IEditorViewport *createEngineSceneViewport(const std::shared_ptr<jahshaka::engine::Engine> &engine,
                                            EngineRenderDriver *driver, QWidget *parent);
 
+/// Factory for the engine-backed player view (defined in
+/// src/player/engineplayerview.cpp so MainWindow never names that class).
+class IPlayerView;
+IPlayerView *createEnginePlayerView(const std::shared_ptr<jahshaka::engine::Engine> &engine,
+                                    EngineRenderDriver *driver, QWidget *parent);
+
 #endif // ENGINEHOST_H

@@ -168,6 +168,8 @@ set(SRCS
     # player
     src/player/playerwidget.cpp
     src/player/playerview.cpp
+    src/player/engineplayerscene.cpp
+    src/player/engineplayerview.cpp
     src/player/playervrcontroller.cpp
     src/player/playermousecontroller.cpp
     src/player/hand.cpp
@@ -327,6 +329,9 @@ set(HEADERS
     src/subclass/switch.h
     src/player/playerwidget.h
     src/player/playerview.h
+    src/player/iplayerview.h
+    src/player/engineplayerscene.h
+    src/player/engineplayerview.h
     src/player/sceneplayer.h
     src/player/playervrcontroller.h
     src/player/playermousecontroller.h

@@ -16,12 +16,13 @@ For more information see the LICENSE file
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include "playerwidget.h"
+#include "iplayerview.h"
 #include "playerview.h"
 #include "irisgl/IrisGL.h"
 
 
-PlayerWidget::PlayerWidget(QWidget* parent) :
-	QWidget(parent)
+PlayerWidget::PlayerWidget(QWidget* parent, IPlayerView* view) :
+	QWidget(parent), playerView(view)
 {
 	createUI();
 }
@@ -88,12 +89,13 @@ void PlayerWidget::createUI()
 	*/
 	playerControls->setLayout(playerControlsLayout);
 
-	playerView = new PlayerView(this);
+	if (!playerView) playerView = new PlayerView(this);
+	playerView->asWidget()->setParent(this);
 
 	auto mainLayout = new QVBoxLayout();
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
-	mainLayout->addWidget(playerView, 1);
+	mainLayout->addWidget(playerView->asWidget(), 1);
 	mainLayout->addWidget(playerControls, 0);
 
 	this->setLayout(mainLayout);
@@ -127,6 +129,6 @@ void PlayerWidget::onPlayScene()
     else {
         playerView->playScene();
         playBtn->setIcon(stopIcon);
-        playerView->setFocus();
+        playerView->asWidget()->setFocus();
     }
 }
