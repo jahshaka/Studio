@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "searchdialog.h"
+#include "fuzzysearch.h"
 #include <QVBoxLayout>
 #include <QLineEdit>
 #include <QTabWidget>
@@ -24,34 +25,19 @@ For more information see the LICENSE file
 
 SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point) : QDialog()
 {
-	setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::X11BypassWindowManagerHint);
-	setAttribute(Qt::WA_TranslucentBackground);
-	setAttribute(Qt::WA_NoSystemBackground, true);
-	setMouseTracking(true);
-	setWindowFlag(Qt::SubWindow);
+	// a plain popup: the window manager places it, clicking outside or
+	// pressing Esc closes it (was a frameless X11BypassWindowManagerHint
+	// dialog that closed itself on leaveEvent)
+	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
 	setAttribute(Qt::WA_QuitOnClose, false);
-	
 
 	auto widgetHolder = new QWidget;
 	auto widgetLayout = new QVBoxLayout;
 	widgetHolder->setLayout(widgetLayout);
 	widgetLayout->setContentsMargins(5,5,5,5);
 
-	auto clearWidget = new QWidget;
-	auto clearLayout = new QVBoxLayout;
-	clearWidget->setLayout(clearLayout);
-	clearLayout->setContentsMargins(25, 25, 25, 25);
-	clearWidget->setObjectName(QStringLiteral("clearwidget"));
-	clearWidget->setStyleSheet("QWidget#clearwidget{background : rgba(0,0,0,0);}");
-
-	QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
-	effect->setBlurRadius(15);
-	effect->setXOffset(0);
-	effect->setYOffset(0);
-	effect->setColor(QColor(0, 0, 0, 255));
-	widgetHolder->setGraphicsEffect(effect);
-
 	auto layout = new QVBoxLayout;
+	layout->setContentsMargins(0, 0, 0, 0);
 	setLayout(layout);
 	setFixedSize(280, 450);
 	setWindowModality(Qt::NonModal);
@@ -98,9 +84,8 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 	searchBar->setStyleSheet("border-radius : 2px; ");
 
 
-	clearLayout->addWidget(widgetHolder);
 	widgetLayout->addWidget(tabWidget);
-	layout->addWidget(clearWidget);
+	layout->addWidget(widgetHolder);
 
 	generateTileNode(graph);
 	generateTileProperty(graph);
@@ -108,24 +93,38 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 
 	connect(searchBar, &QLineEdit::textChanged, [=](QString str) {
 		tree->clear();
-		QList<NodeLibraryItem*> lis;
-		for (auto item : graph->library->items) {
-			if (item->displayName.contains(str, Qt::CaseInsensitive)) lis.append(item);
-		}
-		
-		generateTileNode(lis);
 
 		if (str.length() == 0) {
-			tree->clear();
 			configureTreeWidget();
 			generateTileNode(graph);
+			auto item = tree->itemBelow(tree->topLevelItem(0));
+			if (item) {
+				item->setSelected(true);
+				tree->setCurrentItem(item);
+			}
+			return;
 		}
 
-		auto item = tree->itemBelow(tree->topLevelItem(0));
-		if (item) {
-			item->setSelected(true);
-			tree->setCurrentItem(item);
+		// fuzzy match + rank (best first), so Enter creates the best hit
+		QList<QPair<int, NodeLibraryItem*>> ranked;
+		for (auto item : graph->library->items) {
+			if (item->name == "property") continue;
+			int score = 0;
+			if (FuzzySearch::match(str, item->displayName, &score))
+				ranked.append({ score, item });
 		}
+		std::stable_sort(ranked.begin(), ranked.end(),
+			[](const QPair<int, NodeLibraryItem*>& a, const QPair<int, NodeLibraryItem*>& b) {
+				return a.first < b.first;
+			});
+
+		QList<NodeLibraryItem*> lis;
+		for (const auto& pair : ranked) lis.append(pair.second);
+
+		generateTileNode(lis);
+
+		if (!lis.isEmpty())
+			selectItemByName(lis.first()->name);
 	});
 
 	connect(searchBar, &QLineEdit::returnPressed, [=]() {
@@ -171,11 +170,26 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 	}else 	this->point = point;
 
 	//move view under mouse
-	QPoint p(45,45);
+	QPoint p(20,20);
 	this->point = this->point - p;
 
 	installEventFilter(this);
 
+}
+
+void SearchDialog::selectItemByName(const QString& name)
+{
+	for (int i = 0; i < tree->topLevelItemCount(); i++) {
+		auto top = tree->topLevelItem(i);
+		for (int j = 0; j < top->childCount(); j++) {
+			auto child = top->child(j);
+			if (child->data(0, Qt::UserRole).toString() == name) {
+				child->setSelected(true);
+				tree->setCurrentItem(child);
+				return;
+			}
+		}
+	}
 }
 
 
@@ -259,11 +273,6 @@ void SearchDialog::configureTreeWidget()
 		wid->setText(0, NodeModel::getEnumString(static_cast<NodeCategory>(i)));
 		tree->addTopLevelItem(wid);
 	}
-}
-
-void SearchDialog::leaveEvent(QEvent * event)
-{
-	this->close();
 }
 
 void SearchDialog::showEvent(QShowEvent * event)

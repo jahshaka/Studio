@@ -99,6 +99,38 @@ void AddConnectionCommand::redo()
 
 }
 
+DeleteConnectionCommand::DeleteConnectionCommand(SocketConnection *con, GraphNodeScene *scene)
+{
+	this->scene = scene;
+
+	auto outSock = con->getOutSocket();
+	auto inSock = con->getInSocket();
+	leftNodeId = outSock->node->nodeId;
+	left = outSock->socketIndex;
+	rightNodeId = inSock->node->nodeId;
+	right = inSock->socketIndex;
+	connectionID = con->connectionId;
+
+	setText(QObject::tr("Delete %1").arg("connection"));
+}
+
+void DeleteConnectionCommand::redo()
+{
+	scene->removeConnection(connectionID, true, true);
+	UndoRedo::redo();
+}
+
+void DeleteConnectionCommand::undo()
+{
+	auto conModel = scene->nodeGraph->addConnection(leftNodeId, left, rightNodeId, right);
+	auto con = scene->addConnection(leftNodeId, left, rightNodeId, right);
+	connectionID = con->connectionId = conModel->id;
+
+	con->updatePosFromSockets();
+	con->updatePath();
+	UndoRedo::undo();
+}
+
 DeleteNodeCommand::DeleteNodeCommand(QList<GraphNode*> & list, GraphNodeScene *scene)
 {
 	this->list = list;

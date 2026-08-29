@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "graphnode.h"
+#include "nodestyle.h"
 #include <QApplication>
 #include <QPainter>
 #include <QStyleOptionGraphicsItem>
@@ -210,25 +211,18 @@ GraphNode::GraphNode(QGraphicsItem* parent) :
 
 	nodeWidth = 170;
 
-	setPen(QPen(Qt::black));
-	setBrush(QColor(240, 240, 240));
+	setPen(QPen(NodeStyle::Node::border, NodeStyle::Node::borderWidth));
+	setBrush(NodeStyle::Node::fill);
 
 	text = new QGraphicsTextItem(this);
 	text->setPlainText("Title");
 
 	text->setPos(5, 16);
-	text->setDefaultTextColor(QColor(255, 255, 255));
+	text->setDefaultTextColor(NodeStyle::Node::titleText);
 
     QFont font = text->font();
     font.setWeight(QFont::Medium);
     text->setFont(font);
-
-	QGraphicsDropShadowEffect *effect = new QGraphicsDropShadowEffect;
-	effect->setBlurRadius(12);
-	effect->setXOffset(0);
-	effect->setYOffset(0);
-	effect->setColor(QColor(00, 00, 00, 40));
-	setGraphicsEffect(effect);
 
 	// preview widget
 	proxyPreviewWidget = nullptr;
@@ -262,10 +256,9 @@ void GraphNode::setTitleColor(QColor color)
 void GraphNode::setTitle(QString title)
 {
 	text->setPlainText(title);
-	auto textWidth = text->boundingRect().width();
-	auto textRect = text->boundingRect();
-	auto textHeight = textRect.height();
-	text->setPos(nodeWidth / 2 - textWidth / 2, titleHeight / 2 - textHeight / 2);
+	auto textHeight = text->boundingRect().height();
+	// left-aligned next to the 18px header icon (NodeGraphQt layout)
+	text->setPos(10 + NodeStyle::Node::iconSize, titleHeight / 2 - textHeight / 2);
 }
 
 void GraphNode::addInSocket(SocketModel *socket)
@@ -449,52 +442,63 @@ void GraphNode::paint(QPainter *painter,
 	const QStyleOptionGraphicsItem *option,
 	QWidget *widget)
 {
-    // painter->setRenderHint(QPainter::HighQualityAntialigoogleasing);
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setRenderHint(QPainter::TextAntialiasing);
 
-	painter->setPen(pen());
-	setBrush(QColor(45, 45, 51));
-	painter->fillPath(path(), brush());
+    using namespace NodeStyle;
 
-	// title tab
-	QPainterPath titlePath;
-	titlePath.setFillRule(Qt::WindingFill);
-	titlePath.addRect(0, 10, nodeWidth, titleHeight-10);
-	titlePath.addRoundedRect(0, 0, nodeWidth, titleHeight, titleRadius, titleRadius);
-	painter->fillPath(titlePath, QBrush(titleColor));
+    const bool selected = option->state.testFlag(QStyle::State_Selected);
 
-	//draw text node seperator
-	QPainterPath block;
-	block.setFillRule(Qt::WindingFill);
-	block.addRect(0, titleHeight , nodeWidth, 3);
-	painter->fillPath(block, QBrush(QColor(30, 30, 30, 160)));
+    // card fill (near-black, rounded)
+    painter->fillPath(path(), QBrush(Node::fill));
 
-	QPen pen(QColor(00, 00, 00, 250), .5);
-	painter->setPen(pen);
+    // everything inside the card is clipped to its rounded outline
+    painter->save();
+    painter->setClipPath(path());
 
-    // draw border
-	auto rect = boundingRect();
-    painter->setPen(QPen(titleColor, 4));
-    painter->drawRoundedRect(rect, titleRadius, titleRadius);
+    // title area: dark overlay + slim category colour strip
+    const int stripH = isMasterNode ? Node::masterStripHeight : Node::titleStripHeight;
+    painter->fillRect(QRectF(0, 0, nodeWidth, titleHeight),
+        isMasterNode ? Node::masterTitleOverlay : Node::titleOverlay);
+    if (titleColor.alpha() > 0)
+        painter->fillRect(QRectF(0, 0, nodeWidth, stripH), titleColor);
 
-    //draw highlight color
-    if (option->state.testFlag(QStyle::State_Selected) != currentSelectedState) {
-        currentSelectedState = option->state.testFlag(QStyle::State_Selected);
+    // header icon (loaded since forever, finally painted)
+    if (!icon.isNull()) {
+        const QRect iconRect(6, stripH + (titleHeight - stripH - Node::iconSize) / 2,
+            Node::iconSize, Node::iconSize);
+        icon.paint(painter, iconRect);
+    }
+
+    // selection wash over the fill
+    if (selected)
+        painter->fillPath(path(), QBrush(Node::selectedWash));
+
+    painter->restore();
+
+    // border: thin muted category tint at rest, yellow when selected
+    painter->setBrush(Qt::NoBrush);
+    if (selected)
+        painter->setPen(QPen(Node::selectedBorder, Node::selectedBorderWidth));
+    else
+        painter->setPen(QPen(Node::mutedBorder(titleColor), Node::borderWidth));
+    painter->drawPath(path());
+
+    // sync the upstream-chain highlight with the selection state
+    if (selected != currentSelectedState) {
+        currentSelectedState = selected;
         highlightNode(currentSelectedState, 0);
     }
 
     if (isHighlighted && level == 0) {
-        // highlight first node with blue color
-        auto rect = boundingRect();
-        painter->setPen(QPen(QColor(55,155,255), 3));
-        painter->drawRoundedRect(rect, titleRadius, titleRadius);
+        // selected root of the chain: blue outline
+        painter->setPen(QPen(Node::chainRootBorder, Node::chainBorderWidth));
+        painter->drawPath(path());
     }
     else if (isHighlighted && level > 0) {
-        //highlight secondary nodes with a yellow color
-        auto rect = boundingRect();
-        painter->setPen(QPen(QColor(250, 250, 50), 3));
-        painter->drawRoundedRect(rect, titleRadius, titleRadius);
+        // upstream nodes feeding it: yellow outline
+        painter->setPen(QPen(Node::chainLinkBorder, Node::chainBorderWidth));
+        painter->drawPath(path());
     }
 }
 

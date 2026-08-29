@@ -51,6 +51,21 @@ private:
 	QString rightNodeId;
 };
 
+class DeleteConnectionCommand : public UndoRedo
+{
+public:
+	DeleteConnectionCommand(SocketConnection *con, GraphNodeScene *);
+
+	void undo() override;
+	void redo() override;
+private:
+	GraphNodeScene* scene;
+	QString leftNodeId;
+	QString rightNodeId;
+	QString connectionID;
+	int left, right;
+};
+
 class MoveNodeCommand : public UndoRedo
 {
 public:

@@ -81,8 +81,9 @@ public:
 	int nodeType;
 	int level = 0;
 	int titleHeight = 30;
-	int titleRadius = 2;
+	int titleRadius = 4;
 	int increment = 12;
+	bool isMasterNode = false;
 	bool isHighlighted = false;
 	bool currentSelectedState = false;
 	bool check = false;
@@ -131,12 +132,9 @@ public:
 
 	QPointF initialPoint;
 	QPointF movedPoint;
-	int distanceBetweenTwoPoints(QPointF oldPos, QPointF newPos);
 
 	static long pressedZValue;
 
-signals:
-	void positionChanged(const QPointF& pos);
 private:
 	QColor connectedColor = QColor(50, 150, 250);
 	QColor disconnectedColor = QColor(90, 90, 90, 0);

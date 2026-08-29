@@ -19,6 +19,7 @@ public:
 	void generateTileNode(NodeGraph *graph);
 	void generateTileProperty(NodeGraph *graph);
 	void configureTreeWidget();
+	void selectItemByName(const QString& name);
 	int index = 0;
 
 	TreeWidget *tree;
@@ -28,7 +29,6 @@ public:
 	QPoint point;
 
 protected:
-	void leaveEvent(QEvent *event) override;
 	void showEvent(QShowEvent *event) override;
 	bool eventFilter(QObject *, QEvent *) override;
 

@@ -8,6 +8,14 @@ enum class SocketType
 	Out
 };
 
+// live-drag feedback set by the scene while a connection is dragged
+enum class SocketDragHighlight
+{
+	None,
+	Valid,
+	Invalid
+};
+
 class GraphNode;
 class GraphNodeScene;
 class SocketConnection;
@@ -39,28 +47,25 @@ public:
 	QColor getSocketColor();
 	void setSocketColor(QColor color);
 	void updateSocket();
-    QColor connectedColor = QColor(250, 250, 50);
+	void setDragHighlight(SocketDragHighlight state);
+	bool isConnected() const { return connected; }
 	QPoint getSocketPosition();
 	QVariant itemChange(GraphicsItemChange change, const QVariant &value);
 private:
 	QPointF socketPos;
 	QColor socketColor;
-	QColor disconnectedColor = QColor(60, 60, 64).darker(175);
-	QColor regularColor = QColor(97, 97, 97, 150);
 	bool connected = false;
-	bool rounded = true;
+	bool hovered = false;
+	SocketDragHighlight dragHighlight = SocketDragHighlight::None;
 	int outSocketXOffset;
 	int outSocketYOffset;
 	int inSocketXOffset;
 	int inSocketYOffset;
 
-
-
 	void setConnected(bool value);
-	bool setShouldAddInvisibleCover = false;
 
 protected:
 	void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = Q_NULLPTR);
-
-
+	void hoverEnterEvent(QGraphicsSceneHoverEvent *event) override;
+	void hoverLeaveEvent(QGraphicsSceneHoverEvent *event) override;
 };

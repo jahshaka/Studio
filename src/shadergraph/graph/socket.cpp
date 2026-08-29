@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 #include "socket.h"
+#include "nodestyle.h"
 #include "socketconnection.h"
 #include "graphnodescene.h"
 #include <QGuiApplication>
@@ -23,6 +24,7 @@ Socket::Socket(QGraphicsItem* parent, SocketType socketType, QString title) :
 	socketType(socketType)
 {
 	this->setFlag(QGraphicsItem::ItemSendsScenePositionChanges);
+	this->setAcceptHoverEvents(true);
 	text = new QGraphicsTextItem(this);
 	text->setPlainText(title);
 	text->setDefaultTextColor(QColor(200, 200, 200));
@@ -168,38 +170,73 @@ void Socket::updateSocket()
 	this->update();
 }
 
+void Socket::setDragHighlight(SocketDragHighlight state)
+{
+	if (dragHighlight != state) {
+		dragHighlight = state;
+		update();
+	}
+}
+
+void Socket::hoverEnterEvent(QGraphicsSceneHoverEvent *event)
+{
+	hovered = true;
+	update();
+	QGraphicsPathItem::hoverEnterEvent(event);
+}
+
+void Socket::hoverLeaveEvent(QGraphicsSceneHoverEvent *event)
+{
+	hovered = false;
+	update();
+	QGraphicsPathItem::hoverLeaveEvent(event);
+}
+
+// Three-state port painting after NodeGraphQt's qgraphics/port.py
+// (https://github.com/jchanvfx/NodeGraphQt, MIT, Copyright (c) 2017
+// Johnny Chan): idle ring, hover flare, connected inner dot. The ring
+// carries the port's TYPE colour so socket types stay readable.
 void Socket::paint(QPainter * painter, const QStyleOptionGraphicsItem * option, QWidget * widget)
 {
+	Q_UNUSED(option);
+	Q_UNUSED(widget);
 
-    painter->setRenderHint(QPainter::Antialiasing);
-	QPainterPath path;
-	QPainterPath pathShadow;
+	painter->setRenderHint(QPainter::Antialiasing);
 
+	const QRectF circle(socketPos.x(), socketPos.y(), dimentions, dimentions);
 
-	// socket positions are at the outer right or outer left of the graph node
-	path.addRoundedRect(socketPos.x(), socketPos.y(), dimentions, dimentions, radius, radius);
-	pathShadow.addRoundedRect(socketPos.x(), socketPos.y() + 2, dimentions, dimentions, radius, radius);
+	QColor fill;
+	QColor ring;
+	if (dragHighlight == SocketDragHighlight::Valid) {
+		fill = NodeStyle::Port::hoverFill;
+		ring = NodeStyle::Port::validTargetBorder;
+	}
+	else if (dragHighlight == SocketDragHighlight::Invalid) {
+		fill = NodeStyle::Port::hoverFill;
+		ring = NodeStyle::Port::invalidTargetBorder;
+	}
+	else if (hovered) {
+		fill = NodeStyle::Port::hoverFill;
+		ring = NodeStyle::Port::hoverBorder;
+	}
+	else if (connected) {
+		fill = NodeStyle::Port::connectedFill;
+		ring = socketColor;
+	}
+	else {
+		fill = socketColor.darker(400);
+		ring = socketColor;
+	}
 
-	QGraphicsPathItem::paint(painter, option, widget);
+	painter->setPen(QPen(ring, NodeStyle::Port::borderWidth));
+	painter->setBrush(fill);
+	painter->drawEllipse(circle);
 
-	//fill shadow
-	painter->fillPath(pathShadow, QColor(20, 20, 20, 30));
-
-	// fill well
-	painter->fillPath(path, QColor(20,20,24,255));
-
-
-	QPen pen;
-	pen.setWidthF(3);
-	if(connected)	pen.setColor(connectedColor);
-	else			pen.setColor(getSocketColor());
-	painter->setPen(pen);
-	painter->drawPath(path);
-	QPainterPath path1;
-	auto pad = 6;
-
-	path1.addRoundedRect(socketPos.x() + pad / 2, -radius / 2 + pad / 2, dimentions - pad, dimentions - pad, radius, radius);
+	// connected marker: inner dot in the type colour
 	if (connected) {
-		painter->fillPath(path1, connectedColor);
+		const qreal pad = dimentions * 0.32;
+		painter->setPen(Qt::NoPen);
+		painter->setBrush(hovered ? NodeStyle::Port::hoverBorder : socketColor);
+		painter->drawEllipse(circle.adjusted(pad, pad, -pad, -pad));
 	}
 }
