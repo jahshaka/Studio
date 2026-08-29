@@ -97,13 +97,11 @@ void SocketConnection::paint(QPainter * painter, const QStyleOptionGraphicsItem 
 	}
 	if(status == SocketConnectionStatus::Finished) {
 
-        // create gradient for line
-		QLinearGradient grad;
-		grad.setStart(pos1-pos2);
-		grad.setFinalStop( pos2 - pos1);
-		grad.setColorAt(0.0, socket1->connectedColor);
-		grad.setColorAt(1.0, socket2->connectedColor);
-        QPen pen(grad, lineThickness);
+		// pipe carries the source socket's type colour (replaced
+		// wholesale by the NodeGraphQt pipe styling in the next step)
+		auto sourceColor = socket1 != nullptr ? socket1->getSocketColor()
+		                                      : QColor(175, 95, 30);
+		QPen pen(sourceColor, lineThickness);
 		painter->setPen(pen);
 		painter->drawPath(*p);
 	}

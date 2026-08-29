@@ -4,6 +4,7 @@
 #include <QString>
 
 #include "../models/socketmodel.h"
+#include "nodestyle.h"
 #include "../core/sockethelper.h"
 
 class FloatSocketModel : public SocketModel
@@ -13,7 +14,7 @@ public:
 		SocketModel(name, "float")
 	{
 		this->setValue(defaultValue);
-		socketColor = QColor(105, 150, 150);
+		socketColor = NodeStyle::Port::typeFloat;
 	}
 
 	QString convertVarTo(SocketModel* toModel)
@@ -44,7 +45,7 @@ public:
 		SocketModel(name, "vec2")
 	{
 		this->setValue(defaultValue);
-		socketColor = QColor(105, 150, 150);
+		socketColor = NodeStyle::Port::typeVec2;
 	}
 
 	QString convertVarTo(SocketModel* toModel)
@@ -75,7 +76,7 @@ public:
 		SocketModel(name, "vec3")
 	{
 		this->setValue(defaultValue);
-		socketColor = QColor(105, 150, 150);
+		socketColor = NodeStyle::Port::typeVec3;
 	}
 
 	QString convertVarTo(SocketModel* toModel)
@@ -106,7 +107,7 @@ public:
 		SocketModel(name, "vec4")
 	{
 		this->setValue(defaultValue);
-		socketColor = QColor(105, 150, 150);
+		socketColor = NodeStyle::Port::typeVec4;
 	}
 
 	QString convertVarTo(SocketModel* toModel)
@@ -136,7 +137,7 @@ public:
 	TextureSocketModel(QString name) :
 		SocketModel(name, "texture")
 	{
-		socketColor = QColor(60, 155, 60);
+		socketColor = NodeStyle::Port::typeTexture;
 	}
 
 	virtual bool canConvertTo(SocketModel* other)
