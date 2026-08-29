@@ -62,6 +62,8 @@ void SceneMirror::setSource(iris::ScenePtr scene)
     mMaterials.clear();
     for (TextureId t : mTextures) mTarget->destroyTexture(t);
     mTextures.clear();
+    for (TextureId t : mIconTextures) mTarget->destroyTexture(t);
+    mIconTextures.clear();
     mTarget->setSky(SkyMode::NoSky, 0);
     for (TextureId &t : mSkyFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
     mSkySignature.clear();
@@ -223,6 +225,8 @@ MeshId SceneMirror::wireMeshFor(int kind)
 void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
 {
     if (!mLightWires) {
+        // Hides the wire lines AND the icon billboard set riding on wireNode
+        // (the engine toggles a set's visibility flags with its owning node).
         if (e.wireNode) mTarget->setNodeVisible(e.wireNode, false);
         return;
     }
@@ -237,11 +241,83 @@ void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
     if (e.wireKind != kind) { if (mTarget->attachMesh(e.wireNode, m, e.wireMaterial)) e.wireKind = kind; }
     const QColor c = light->color;
     mTarget->setUnlitMaterial(e.wireMaterial, Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));
-    // Wires live in the light node's local space; undo the node's own scale.
+    // Wires live in the light node's local space; undo the node's own scale, and
+    // size the shape by the light's range so the wire shows the actual falloff
+    // volume (the meshes are authored at ring radius 0.5, cone depth 1.5 /
+    // base radius 0.6 — see wireMeshFor). Directional lights have no range.
+    float rx = 1.0f, ry = 1.0f, rz = 1.0f;
+    const float range = std::max(0.01f, light->distance);
+    if (kind == 1) {
+        rx = ry = rz = range / 0.5f;               // rings at radius = range
+    } else if (kind == 2) {
+        ry = range / 1.5f;                         // cone reaches down to range
+        const float half = qDegreesToRadians(std::min(std::max(light->spotCutOff, 1.0f), 89.0f));
+        rx = rz = range * std::tan(half) / 0.6f;   // base radius = range * tan(cutoff)
+    }
     const QVector3D s = light->getLocalScale();
     mTarget->setNodeTransform(e.wireNode, Vec3(), Quat(),
-                              Vec3(s.x() > 1e-6f ? 1.0f / s.x() : 1.0f, s.y() > 1e-6f ? 1.0f / s.y() : 1.0f, s.z() > 1e-6f ? 1.0f / s.z() : 1.0f));
+                              Vec3(rx * (s.x() > 1e-6f ? 1.0f / s.x() : 1.0f),
+                                   ry * (s.y() > 1e-6f ? 1.0f / s.y() : 1.0f),
+                                   rz * (s.z() > 1e-6f ? 1.0f / s.z() : 1.0f)));
     mTarget->setNodeVisible(e.wireNode, true);
+    syncLightIcon(e, light);
+}
+
+// The icon billboard: one camera-facing glyph at the light's position (sun for
+// directional, bulb for point, spotlight for spot — like Unreal's sprites). It
+// rides the wireNode so the light-wires toggle and node teardown govern it, but
+// instance positions are world-space (the set hangs off the engine's static
+// root). Engine-side only: document picking never sees it.
+void SceneMirror::syncLightIcon(Entry &e, iris::LightNode *light)
+{
+    if (!e.wireNode) return;
+    // The document loads a per-light icon (mainwindow/scenereader); its source
+    // path doubles as the image path. Fall back by light type.
+    QString path = light->icon ? light->icon->getSource() : QString();
+    if (path.isEmpty()) {
+        switch (light->lightType) {
+        case iris::LightType::Directional: path = QStringLiteral(":/icons/light.png"); break;    // the sun glyph
+        case iris::LightType::Spot:        path = QStringLiteral(":/icons/spotlight.png"); break;
+        default:                           path = QStringLiteral(":/icons/bulb.png"); break;
+        }
+    }
+    if (!e.hasIcon || e.iconSignature != path) {
+        if (!mTarget->createBillboardSet(e.wireNode, iconTextureFor(path), false, 1))
+            return;
+        e.hasIcon = true;
+        e.iconSignature = path;
+    }
+    BillboardInstance b;
+    const QVector3D p = light->getGlobalPosition();
+    b.position = Vec3(p.x(), p.y(), p.z());
+    b.size = light->iconSize > 0.0f ? light->iconSize : 0.5f;
+    mTarget->setBillboards(e.wireNode, &b, 1);
+}
+
+TextureId SceneMirror::iconTextureFor(const QString &path)
+{
+    auto it = mIconTextures.constFind(path);
+    if (it != mIconTextures.constEnd()) return it.value();
+    // Qt resource or file path; the engine can't read resources, so upload the
+    // pixels ourselves. Icons are forced to white glyphs (alpha kept) so every
+    // icon reads the same regardless of the source image's colour.
+    QImage img(path);
+    if (img.isNull()) {
+        // No image (e.g. resources absent in tests): a plain white disc.
+        img = QImage(32, 32, QImage::Format_RGBA8888);
+        img.fill(Qt::transparent);
+        for (int y = 0; y < 32; ++y)
+            for (int x = 0; x < 32; ++x)
+                if ((x - 15.5f) * (x - 15.5f) + (y - 15.5f) * (y - 15.5f) <= 14.0f * 14.0f)
+                    img.setPixelColor(x, y, QColor(255, 255, 255, 255));
+    }
+    img = img.convertToFormat(QImage::Format_RGBA8888);
+    uchar *bits = img.bits();
+    const qsizetype n = img.width() * qsizetype(img.height());
+    for (qsizetype i = 0; i < n; ++i) { bits[i * 4 + 0] = 255; bits[i * 4 + 1] = 255; bits[i * 4 + 2] = 255; }
+    TextureId id = mTarget->createTexture(unsigned(img.width()), unsigned(img.height()), img.constBits(), true);
+    mIconTextures.insert(path, id);   // cache failures (0) too: don't retry every frame
+    return id;
 }
 
 void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen)

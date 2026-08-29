@@ -69,7 +69,8 @@ public:
     /// hull); true = the on-top polygon wireframe.
     void setHighlightWireframe(bool on);
     bool highlightWireframe() const { return mHighlightWireframe; }
-    /// Light wires: a small shape at every document light (colour = the light's).
+    /// Light helpers: at every document light, a wire shape sized by the light's
+    /// range (colour = the light's) plus an icon billboard (sun/bulb/spotlight).
     void setLightWires(bool on);
     bool lightWires() const { return mLightWires; }
 
@@ -86,11 +87,15 @@ private:
         jahshaka::engine::NodeId wireNode = 0;       // light wire shape, child of `node`
         jahshaka::engine::MaterialId wireMaterial = 0;
         int wireKind = -1;                           // which shape is attached
+        bool hasIcon = false;                        // light icon billboard on wireNode
+        QString iconSignature;                       // icon image path; recreate on change
         bool hasBillboards = false;                  // particle emitter mirrored as billboards
         QString billboardSignature;                  // texture + blend; recreate on change
     };
     void syncParticles(Entry &e, iris::ParticleSystemNode *ps);
     void syncLightWires(Entry &e, iris::LightNode *light);
+    void syncLightIcon(Entry &e, iris::LightNode *light);
+    jahshaka::engine::TextureId iconTextureFor(const QString &path);
     void syncHighlight();
     jahshaka::engine::MeshId wireMeshFor(int kind);
     void visit(iris::SceneNodePtr node, jahshaka::engine::NodeId parent, QSet<long> &seen);
@@ -114,6 +119,7 @@ private:
     QHash<iris::Mesh *, jahshaka::engine::MeshId> mMeshes;
     QHash<iris::Material *, jahshaka::engine::MaterialId> mMaterials;
     QHash<QString, jahshaka::engine::TextureId> mTextures;
+    QHash<QString, jahshaka::engine::TextureId> mIconTextures;   // light icon glyphs (Qt resources)
     jahshaka::engine::MaterialId mDefaultMaterial = 0;
     bool mLightWires = true;
     QString mSkySignature;

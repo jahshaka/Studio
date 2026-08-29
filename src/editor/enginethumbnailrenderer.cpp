@@ -69,6 +69,7 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
         mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
         mView->setScene(mScene);
         mMirror.reset(new SceneMirror(mScene));
+        mMirror->setLightWires(false);   // a thumbnail never shows editor light helpers
     }
     if (mView->width() != unsigned(size.width()) || mView->height() != unsigned(size.height()))
         mView->resize(unsigned(size.width()), unsigned(size.height()));

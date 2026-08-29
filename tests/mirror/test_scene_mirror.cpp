@@ -19,6 +19,7 @@
 #include "scenegraph/scenenode.h"
 #include "scenegraph/meshnode.h"
 #include "scenegraph/lightnode.h"
+#include "graphics/shadowmap.h"
 #include "graphics/mesh.h"
 #include "materials/defaultmaterial.h"
 #include "materials/pbrmaterial.h"
@@ -86,6 +87,10 @@ int main(int argc, char **argv)
     light->setName("sun");
     light->intensity = 1.0f;
     light->setLocalRot(QQuaternion::fromEulerAngles(-50.0f, 30.0f, 0.0f));
+    // Off-origin, out of frame: a directional light's position never affects
+    // lighting, but its helper icon billboard would otherwise sit at the origin
+    // and trip every "centre is background" assertion below.
+    light->setLocalPos(QVector3D(0.0f, 6.0f, 0.0f));
     doc->getRootNode()->addChild(light);
 
     MeshData md;
@@ -505,6 +510,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->removeChild(meshNode2);
     point->color = QColor(255, 0, 255);              // magenta wires
     point->setLocalPos(QVector3D(0.0f, 0.0f, 0.0f));  // in the middle of the frame
+    point->distance = 0.35f;                          // rings are drawn at radius = range now
     auto countMagenta = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) ++n; } return n; };
     mirror.setLightWires(true);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
@@ -516,6 +522,59 @@ int main(int argc, char **argv)
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     CHECK(countMagenta(img) == 0, "light wires off");
+
+    // ---- light icon billboard + range-scaled wires ----
+    // The icon rides the light-wires toggle (one "show light helpers" concept);
+    // the rings are sized by the light's range (distance), like Unreal's
+    // falloff sphere. The icon is engine-side only: white glyph, alpha-blended.
+    {
+        auto countWhite = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.85f && c.g > 0.85f && c.b > 0.85f) ++n; } return n; };
+        auto magentaExtent = [&](const Image &im) { int minX = int(im.width), maxX = -1; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) { if (int(x) < minX) minX = int(x); if (int(x) > maxX) maxX = int(x); } } return maxX - minX; };
+        mirror.setLightWires(true);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const int iconOn = countWhite(img);
+        const int extentSmall = magentaExtent(img);
+        std::printf("    light icon on: %d white pixels, ring extent %d px\n", iconOn, extentSmall);
+        CHECK(iconOn > 5, "point light shows an icon billboard at its position");
+        CHECK(extentSmall > 0, "range-scaled rings are in frame");
+
+        // A document-supplied icon image (mainwindow loads :/icons/*.png; here a
+        // real file, since Qt resources are not compiled into the tests).
+        const QString iconPath = QDir::temp().filePath("jahshaka_mirror_light_icon.png");
+        {
+            QImage ic(16, 16, QImage::Format_RGBA8888); ic.fill(Qt::transparent);
+            for (int y = 4; y < 12; ++y) for (int x = 4; x < 12; ++x) ic.setPixelColor(x, y, QColor(255, 255, 255, 255));
+            ic.save(iconPath);
+        }
+        point->icon = iris::Texture2D::load(iconPath);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        std::printf("    document icon file: %d white pixels\n", countWhite(img));
+        CHECK(countWhite(img) > 5, "the document's own icon image renders at the light");
+
+        // Range change scales the ring wires (the visible extent grows).
+        point->distance = 0.9f;
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const int extentLarge = magentaExtent(img);
+        std::printf("    ring extent: range 0.35 -> %d px, range 0.9 -> %d px\n", extentSmall, extentLarge);
+        CHECK(extentLarge > extentSmall + 5, "the ring wires scale with the light's range");
+
+        // Wires OFF removes the icon too.
+        mirror.setLightWires(false);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(countMagenta(img) == 0 && countWhite(img) == 0, "light wires off removes the icon too");
+        QFile::remove(iconPath);
+
+        // Point-light shadow controls (the panel unhides Type/Size in engine
+        // mode): the Shadow Type combo drives castShadows through toLightDesc.
+        point->shadowMap->shadowType = iris::ShadowMapType::Soft;
+        CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=Soft casts shadows");
+        point->shadowMap->shadowType = iris::ShadowMapType::None;
+        CHECK(!SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=None stops casting");
+    }
 
     // ---- flat sky colour from the document becomes the background ----
     doc->skyType = iris::SkyType::SINGLE_COLOR;

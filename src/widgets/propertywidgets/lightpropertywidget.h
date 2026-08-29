@@ -97,6 +97,7 @@ private:
 	HFloatSliderWidget* shadowAlpha;
 	// False in engine mode: no per-light shadow tint exists there (controls hidden).
 	bool mShadowTintSupported = true;
+	bool mPointShadowsSupported = false;   // engine mode: point lights get Shadow Type/Size
 
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;

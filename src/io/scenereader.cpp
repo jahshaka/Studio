@@ -554,7 +554,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
 
     //TODO: move this to the sceneview widget or somewhere more appropriate
     if (lightNode->lightType == iris::LightType::Directional) {
-        lightNode->icon = iris::Texture2D::load(":/icons/light.png");
+        lightNode->icon = iris::Texture2D::load(":/icons/light.png");      // the sun glyph
+    } else if (lightNode->lightType == iris::LightType::Spot) {
+        lightNode->icon = iris::Texture2D::load(":/icons/spotlight.png");
     } else {
         lightNode->icon = iris::Texture2D::load(":/icons/bulb.png");
     }

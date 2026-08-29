@@ -59,6 +59,10 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 		shadowAlpha->hide();
 		shadowColor->hide();
 	}
+	// The legacy renderer never shadowed point lights, so the panel hid their
+	// shadow controls. The engine renders point shadows (focused/DPSM maps), so
+	// in engine mode Shadow Type and Size stay available for point lights too.
+	mPointShadowsSupported = EngineHost::viewportBackend() == ViewportBackend::Engine;
 
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));
@@ -106,10 +110,16 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap->shadowType));
         //shadowBias->setValue(lightNode->shadowMap->bias);
 
-        // hide shadow params for point lights
+        // Point lights: legacy never shadowed them (controls hidden); the engine
+        // does, so engine mode keeps Shadow Type/Size. Tint stays per-backend.
         if (lightNode->getLightType()==iris::LightType::Point) {
-            shadowSize->hide();
-            shadowType->hide();
+            if (mPointShadowsSupported) {
+                shadowSize->show();
+                shadowType->show();
+            } else {
+                shadowSize->hide();
+                shadowType->hide();
+            }
 			shadowColor->hide();
 			shadowAlpha->hide();
             //shadowBias->hide();

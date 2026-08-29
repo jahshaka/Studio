@@ -1550,7 +1550,7 @@ void MainWindow::addSpotLight()
     this->sceneView->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load(":/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/spotlight.png");
     node->setName("Spot Light");
     addNodeToScene(node);
 }
@@ -1562,7 +1562,7 @@ void MainWindow::addDirectionalLight()
     auto node = iris::LightNode::create();
     node->shadowMap->shadowType = iris::ShadowMapType::Soft;
     node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load(":/icons/bulb.png");
+    node->icon = iris::Texture2D::load(":/icons/light.png");   // the sun glyph
     node->setName("Directional Light");
     addNodeToScene(node);
 }
