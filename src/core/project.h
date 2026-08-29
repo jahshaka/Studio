@@ -43,6 +43,10 @@ struct ProjectTileData {
     QString     name;
     QByteArray  thumbnail;
     QString     guid;
+    int         desktop = 1;        // which desktop (1..4) the project lives on
+    bool        hasPosition = false;// freeform position ever assigned?
+    float       posX = 0.f;         // normalized 0..1 on the desktop canvas
+    float       posY = 0.f;
 };
 
 enum AssetViewFilter : int

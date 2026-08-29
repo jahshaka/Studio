@@ -113,6 +113,8 @@ public:
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
 	bool updateAssetViewFilter(const QString& guid, const int& filter);
+	bool updateProjectDesktop(const QString &guid, int desktop);
+	bool updateProjectPosition(const QString &guid, float x, float y);
 	void updateSchema();
 	bool updateMetadataVersion(const QString &version);
 
@@ -128,7 +130,9 @@ public:
     QVector<AssetRecord> fetchThumbnails();
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
-    QVector<ProjectTileData> fetchProjects();
+    // desktop <= 0 fetches every project (legacy behaviour); desktop 1..N filters
+    // to that desktop, treating an absent/NULL desktop column value as Desktop 1.
+    QVector<ProjectTileData> fetchProjects(int desktop = 0);
     QVector<FolderRecord> fetchChildFolders(const QString &parent);
     QVector<FolderRecord> fetchCrumbTrail(const QString &parent);
     QVector<AssetRecord> fetchAssetThumbnails(const QStringList &guids);
@@ -184,6 +188,10 @@ public:
 
     int getTableCount();
     bool checkIfTableExists(const QString &tableName);
+    bool checkIfColumnExists(const QString &tableName, const QString &columnName);
+    // Guarded, idempotent schema evolution for the projects table (desktops feature).
+    // Runs on every startup via createAllTables; ALTERs only when a column is missing.
+    void migrateProjectsTable();
 
     QString getVersion();
 
