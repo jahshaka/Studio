@@ -99,7 +99,6 @@ set(SRCS
     src/io/scenereader.cpp 
     src/widgets/propertywidgets/emitterpropertywidget.cpp 
     src/widgets/propertywidgets/nodepropertywidget.cpp 
-    src/editor/editorvrcontroller.cpp 
     src/widgets/propertywidgets/demopane.cpp 
     src/widgets/labelwidget.cpp 
     src/widgets/checkboxwidget.cpp 
@@ -111,7 +110,6 @@ set(SRCS
     src/widgets/filepickerwidget.cpp 
     src/widgets/propertywidgets/meshpropertywidget.cpp
     src/widgets/propertywidgets/shaderpropertywidget.cpp 
-    src/widgets/propertywidgets/handpropertywidget.cpp 
     src/widgets/propertywidget.cpp 
     src/widgets/propertywidgets/postprocesspropertywidget.cpp 
     src/widgets/propertywidgets/scenepropertywidget.cpp
@@ -171,15 +169,12 @@ set(SRCS
     src/helpers/tooltip.cpp
     src/helpers/dialoghelper.cpp
     src/subclass/switch.cpp
-    src/editor/handgizmo.cpp
     # player
     src/player/playerwidget.cpp
     src/player/playerview.cpp
     src/player/engineplayerscene.cpp
     src/player/engineplayerview.cpp
-    src/player/playervrcontroller.cpp
     src/player/playermousecontroller.cpp
-    src/player/hand.cpp
     src/player/playback.cpp
 )
 
@@ -263,7 +258,6 @@ set(HEADERS
     src/editor/editordata.h 
     src/widgets/propertywidgets/emitterpropertywidget.h 
     src/widgets/propertywidgets/nodepropertywidget.h 
-    src/editor/editorvrcontroller.h 
     src/widgets/propertywidgets/demopane.h 
     src/widgets/labelwidget.h 
     src/widgets/checkboxwidget.h 
@@ -275,7 +269,6 @@ set(HEADERS
     src/widgets/filepickerwidget.h 
     src/widgets/propertywidgets/meshpropertywidget.h 
     src/widgets/propertywidgets/shaderpropertywidget.h 
-    src/widgets/propertywidgets/handpropertywidget.h
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
     src/widgets/propertywidgets/postprocesspropertywidget.h 
@@ -338,7 +331,6 @@ set(HEADERS
     src/dialogs/toast.h
     src/helpers/tooltip.h
     src/helpers/dialoghelper.h
-    src/editor/handgizmo.h
 
     # player
     src/subclass/switch.h
@@ -348,9 +340,7 @@ set(HEADERS
     src/player/engineplayerscene.h
     src/player/engineplayerview.h
     src/player/sceneplayer.h
-    src/player/playervrcontroller.h
     src/player/playermousecontroller.h
-    src/player/hand.h
     src/player/playback.h
 )
 

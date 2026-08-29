@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include "../core/keyboardstate.h"
 #include "../widgets/sceneviewwidget.h"
 #include <irisgl/SceneGraph.h>
-#include <irisgl/Vr.h>
 #include <irisgl/Physics.h>
 #include <irisgl/Graphics.h>
 #include "irisgl/src/geometry/trimesh.h"
@@ -357,7 +356,6 @@ void PlayerMouseController::update(float dt)
 		updateCameraTransform();
 	}
 	else {
-		//auto vrDevice = iris::VrManager::getDefaultDevice();
 
 		float dirX = 0;
 		float dirY = 0;

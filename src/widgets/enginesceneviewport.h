@@ -57,9 +57,6 @@ public:
     void setEditorData(EditorData *data) override;
     EditorData *getEditorData() override;
 
-    void setViewportMode(ViewportMode mode) override { mViewportMode = mode; }
-    ViewportMode getViewportMode() override { return mViewportMode; }
-    bool isVrSupported() override { return false; }
     void setWindowSpace(WindowSpaces) override {}
     void setSceneMode(SceneMode) override {}
     void enterEditorMode() override {}
@@ -76,12 +73,9 @@ public:
     void pausePlayingScene() override;
     void stopPlayingScene() override;
     bool isPlaying() const { return mPlaying; }
-    void startPhysicsSimulation() override {}
-    void restartPhysicsSimulation() override {}
-    void stopPhysicsSimulation() override {}
-    void addBodyToWorld(btRigidBody *, const iris::SceneNodePtr &) override {}
-    void removeBodyFromWorld(btRigidBody *) override {}
-    void removeBodyFromWorld(const QString &) override {}
+    void startPhysicsSimulation() override;    // simulate in place: steps the document's
+    void restartPhysicsSimulation() override;  // physics world without entering play mode
+    void stopPhysicsSimulation() override;
 
     bool getShowLightWires() const override { return mShowLightWires; }
     void setShowLightWires(bool value) override { mShowLightWires = value; }
@@ -164,7 +158,6 @@ private:
     iris::SceneNodePtr mSelectedNode;
     iris::CameraNodePtr mEditorCam;
     EditorData *mEditorData = nullptr;
-    ViewportMode mViewportMode = ViewportMode::Editor;
     bool mShowLightWires = true;
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;

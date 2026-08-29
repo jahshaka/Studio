@@ -8,8 +8,6 @@ add_executable(test_engine_player test_engine_player.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/player/engineplayerscene.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
-    ${CMAKE_SOURCE_DIR}/src/player/playervrcontroller.cpp
-    ${CMAKE_SOURCE_DIR}/src/player/hand.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/cameracontrollerbase.cpp
     ${CMAKE_SOURCE_DIR}/src/editor/animationpath.cpp
     ${CMAKE_SOURCE_DIR}/src/core/keyboardstate.cpp

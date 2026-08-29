@@ -27,7 +27,6 @@ namespace iris
 }
 
 class CameraControllerBase;
-class PlayerVrController;
 class PlayerMouseController;
 class QElapsedTimer;
 class QTimer;
@@ -53,7 +52,6 @@ class PlayBack
 {
 	QMatrix4x4 savedCameraMatrix;
 	CameraControllerBase* camController;
-	PlayerVrController* vrController;
 	PlayerMouseController* mouseController;
 
 	bool shouldRestoreCameraTransform;
@@ -99,7 +97,6 @@ public:
 
 	iris::ForwardRendererPtr getRenderer() { return renderer; }
 	PlayerMouseController* getMouseController() const;
-	PlayerVrController* getVrController() const;
 
 	// callbacks from ui
 	void mousePressEvent(QMouseEvent* evt);

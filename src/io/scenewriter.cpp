@@ -197,9 +197,6 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         case iris::SceneNodeType::ParticleSystem:
             writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
         break;
-		case iris::SceneNodeType::Grab:
-			writeGrabNodeData(sceneNodeObj, sceneNode.staticCast<iris::GrabNode>());
-		break;
         default: break;
     }
 
@@ -390,22 +387,6 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
         : QString();
 }
 
-void SceneWriter::writeGrabNodeData(QJsonObject & sceneNodeObject, iris::GrabNodePtr node)
-{
-	sceneNodeObject["guid"] = node->getGUID();
-	switch (node->handPose->getPoseType()) {
-	case iris::HandPoseType::Grab:
-		sceneNodeObject["poseType"] = "grab";
-		break;
-	case iris::HandPoseType::Pinch:
-		sceneNodeObject["poseType"] = "pinch";
-		break;
-	default:
-		sceneNodeObject["poseType"] = "grab";
-		break;
-	}
-	sceneNodeObject["poseFactor"] = node->poseFactor;
-}
 
 void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat, bool relative)
 {
@@ -577,8 +558,6 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
             return "viewer";
         case iris::SceneNodeType::ParticleSystem:
             return "particle system";
-		case iris::SceneNodeType::Grab:
-			return "grab";
         default:
             return "empty";
     }

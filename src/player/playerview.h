@@ -27,7 +27,6 @@ namespace iris
 }
 
 class CameraControllerBase;
-class PlayerVrController;
 class PlayerMouseController;
 class QElapsedTimer;
 class QTimer;

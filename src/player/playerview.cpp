@@ -17,9 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/Graphics.h"
 #include "irisgl/SceneGraph.h"
 #include "irisgl/Physics.h"
-#include "irisgl/Vr.h"
 #include "irisgl/Content.h"
-#include "playervrcontroller.h"
 #include "playermousecontroller.h"
 #include "src/core/keyboardstate.h"
 #include "playback.h"
@@ -55,7 +53,7 @@ void PlayerView::initializeGL()
 	makeCurrent();
 	initializeOpenGLFunctions();
 
-	renderer = iris::ForwardRenderer::create(true, true);
+	renderer = iris::ForwardRenderer::create(true);
 	renderer->setScene(scene);
 
 	updateTimer = new QTimer(this);
@@ -81,7 +79,6 @@ void PlayerView::start()
 	this->setFocus();
 	makeCurrent();
 
-	renderer->regenerateSwapChain();
 	savedCameraMatrix = scene->getCamera()->getLocalTransform();
 
 	// force camera update to prevent jumping when switching from

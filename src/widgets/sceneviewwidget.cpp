@@ -46,11 +46,8 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/cameranode.h"
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/scenegraph/viewernode.h"
-#include "irisgl/src/scenegraph/grabnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/content/contentmanager.h"
-#include "irisgl/src/vr/vrdevice.h"
-#include "irisgl/src/vr/vrmanager.h"
 #include "irisgl/src/physics/environment.h"
 #include "irisgl/src/physics/physicshelper.h"
 #include "irisgl/src/content/contentmanager.h"
@@ -70,7 +67,6 @@ For more information see the LICENSE file
 #include "editor/cameracontrollerbase.h"
 #include "editor/editordata.h"
 #include "editor/editorcameracontroller.h"
-#include "editor/editorvrcontroller.h"
 #include "editor/gizmo.h"
 #include "editor/orbitalcameracontroller.h"
 #include "editor/outlinerenderer.h"
@@ -81,7 +77,6 @@ For more information see the LICENSE file
 #include "editor/viewercontroller.h"
 #include "editor/viewermaterial.h"
 #include "scenehierarchywidget.h"
-#include "editor/handgizmo.h"
 
 #include "player/playback.h"
 
@@ -117,7 +112,6 @@ void SceneViewWidget::setShowPerspeciveLabel(bool val)
 
 void SceneViewWidget::begin()
 {
-	renderer->regenerateSwapChain();
 }
 
 void SceneViewWidget::end()
@@ -335,7 +329,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 
     viewport = new iris::Viewport();
 
-    vrCam = nullptr;
     defaultCam = new EditorCameraController(this);
     orbitalCam = new OrbitalCameraController(this);
     viewerCam = new ViewerCameraController();
@@ -347,8 +340,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
     editorCam->setLocalPos(QVector3D(0, 5, 14));
     editorCam->setLocalRot(QQuaternion::fromEulerAngles(-5, 0, 0));
     camController->setCamera(editorCam);
-
-    viewportMode = ViewportMode::Editor;
 
     elapsedTimer = new QElapsedTimer();
     playScene = false;
@@ -371,8 +362,6 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	settings = SettingsManager::getDefaultManager();
 
     //m_pickedConstraint = nullptr;
-	handGizmoHandler = new HandGizmoHandler();
-
 	playback = new PlayBack();
 	playback->setRestoreCameraTransform(false);
 	initialized = false;
@@ -410,9 +399,6 @@ void SceneViewWidget::initialize()
     
     transformMode = "Global";
     gizmo = translationGizmo;
-
-    // has to be initialized here since it loads assets
-    vrCam = new EditorVrController(content);
 
     initLightAssets();
 }
@@ -535,35 +521,12 @@ void SceneViewWidget::addViewerHeadsToScene()
 	}
 }
 
-void SceneViewWidget::addGrabGizmosToScene()
-{
-	/*
-	QMatrix4x4 scale;
-	scale.setToIdentity();
-	scale.scale(1.0f);// scale by 1/100;
-	for (auto grabber : scene->grabbers) {
-		// set appropriate animation
-
-		// set time based on factor
-
-		// update animation
-		for (auto& modelMesh : handGizmoModel->modelMeshes) {
-			scene->geometryRenderList->submitMesh(modelMesh.mesh, handGizmoMaterial, grabber->getGlobalTransform() * modelMesh.transform * scale);
-		}
-		
-	}
-	*/
-	handGizmoHandler->submitHandToScene(scene);
-}
-
 void SceneViewWidget::setScene(iris::ScenePtr scene)
 {
     this->scene = scene;
     scene->setCamera(editorCam);
     if (!!renderer)
         renderer->setScene(scene);
-    if (vrCam)
-        vrCam->setScene(scene);
 
 	playback->setScene(scene);
 
@@ -621,7 +584,7 @@ void SceneViewWidget::enterPlayerMode()
 
 void SceneViewWidget::renderGizmos(bool once)
 {
-	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
+	if (UiManager::sceneMode != SceneMode::EditMode)
 		return;
 
 //    QOpenGLContext* context = QOpenGLContext::currentContext();
@@ -642,7 +605,7 @@ void SceneViewWidget::renderGizmos(bool once)
 
 void SceneViewWidget::renderSelectedNode(iris::SceneNodePtr selectedNode)
 {
-	if (viewportMode != ViewportMode::Editor || UiManager::sceneMode != SceneMode::EditMode)
+	if (UiManager::sceneMode != SceneMode::EditMode)
 		return;
 	outliner->renderOutline(renderer->getGraphicsDevice(), selectedNode, editorCam, qBound(1.f,(float)scene->outlineWidth,2.f),scene->outlineColor);
 }
@@ -671,7 +634,7 @@ void SceneViewWidget::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
-    renderer = iris::ForwardRenderer::create(true, true); 
+    renderer = iris::ForwardRenderer::create(true); 
 	content = iris::ContentManager::create(renderer->getGraphicsDevice());
     spriteBatch = iris::SpriteBatch::create(renderer->getGraphicsDevice());
     font = iris::Font::create(renderer->getGraphicsDevice(), fontSize);
@@ -697,12 +660,6 @@ void SceneViewWidget::initializeGL()
 
 	outliner = new OutlinerRenderer();
 	outliner->loadAssets();
-
-	handGizmoModel = content->loadModel(IrisUtils::getAbsoluteAssetPath("app/models/right_hand_anims.fbx"));
-	handGizmoMaterial = iris::DefaultMaterial::create();
-	handGizmoMaterial->setDiffuseColor(Qt::white);
-
-	handGizmoHandler->loadAssets(content);
 
     emit initializeGraphics(this, this);
 
@@ -743,18 +700,6 @@ void SceneViewWidget::initializeOpenGLDebugger()
 void SceneViewWidget::paintGL()
 {
     makeCurrent();
-
-    if (iris::VrManager::getDefaultDevice()->isHeadMounted() && viewportMode != ViewportMode::VR) {
-        // set to vr mode automatically if a headset is detected
-        this->setViewportMode(ViewportMode::VR);
-        timer->setInterval(Constants::FPS_90); // 90 fps for vr
-    }
-    else if (!iris::VrManager::getDefaultDevice()->isHeadMounted() &&
-            viewportMode == ViewportMode::VR)
-    {
-        this->setViewportMode(ViewportMode::Editor);
-        timer->setInterval(Constants::FPS_60); // 60 for regular
-    }
 
 	renderScene();
 
@@ -798,7 +743,6 @@ void SceneViewWidget::renderScene()
 		}
 
         // insert vr head
-		//if ((UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)) {
 		if (UiManager::sceneMode == SceneMode::EditMode) {
             renderer->renderLightBillboards = true;
         } else {
@@ -824,17 +768,11 @@ void SceneViewWidget::renderScene()
             }
         }
 
-		//if (UiManager::sceneMode == SceneMode::EditMode && viewportMode == ViewportMode::Editor)
 		if (UiManager::sceneMode == SceneMode::EditMode) {
 			addViewerHeadsToScene();
-			addGrabGizmosToScene();
 		}
 
-        if (viewportMode == ViewportMode::Editor) {
-            renderer->renderScene(dt, viewport);
-        } else {
-            renderer->renderSceneVr(dt, viewport, UiManager::sceneMode == SceneMode::PlayMode);
-        }
+        renderer->renderScene(dt, viewport);
 
         // dont show thumbnail in play mode
         if (!playScene) {
@@ -1088,7 +1026,7 @@ void SceneViewWidget::mouseDoubleClickEvent(QMouseEvent * e)
 	if (e->button() == Qt::LeftButton) {
 		editorCam->updateCameraMatrices();
 
-		if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
+		if (UiManager::sceneMode == SceneMode::EditMode) {
 			if (selectedNode.isNull()) {
 				// double-click to select object
 				if (settings->getValue("mouse_controls", "default").toString() == "jahshaka") {
@@ -1119,7 +1057,7 @@ void SceneViewWidget::mousePressEvent(QMouseEvent *e)
 
         QPointF physicalPos = e->localPos() * this->devicePixelRatioF();
 
-        if (viewportMode == ViewportMode::Editor && UiManager::sceneMode == SceneMode::EditMode) {
+        if (UiManager::sceneMode == SceneMode::EditMode) {
             this->doGizmoPicking(physicalPos);
 
             if (!!selectedNode) {
@@ -1532,35 +1470,6 @@ void SceneViewWidget::focusOnNode(iris::SceneNodePtr sceneNode)
 	orbitalCam->focusOnNode(sceneNode);
 }
 
-bool SceneViewWidget::isVrSupported()
-{
-    return renderer->isVrSupported();
-}
-
-void SceneViewWidget::setViewportMode(ViewportMode viewportMode)
-{
-    this->viewportMode = viewportMode;
-
-    // switch cam to vr mode
-    if (viewportMode == ViewportMode::VR) {
-        prevCamController = camController;
-		vrCam->setScene(scene);
-        camController = vrCam;
-        camController->setCamera(editorCam);
-        camController->resetMouseStates();
-    }
-    else {
-        camController = prevCamController;
-        camController->setCamera(editorCam);
-        camController->resetMouseStates();
-    }
-}
-
-ViewportMode SceneViewWidget::getViewportMode()
-{
-    return viewportMode;
-}
-
 void SceneViewWidget::setGizmoTransformToLocal()
 {
 	translationGizmo->setTransformSpace(GizmoTransformSpace::Local);
@@ -1574,21 +1483,6 @@ void SceneViewWidget::setGizmoTransformToGlobal()
 	rotationGizmo->setTransformSpace(GizmoTransformSpace::Global);
 	// scaling is only done locally
 	scaleGizmo->setTransformSpace(GizmoTransformSpace::Local);
-}
-
-void SceneViewWidget::addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node)
-{
-    scene->getPhysicsEnvironment()->addBodyToWorld(body, node);
-}
-
-void SceneViewWidget::removeBodyFromWorld(btRigidBody *body)
-{
-    scene->getPhysicsEnvironment()->removeBodyFromWorld(body);
-}
-
-void SceneViewWidget::removeBodyFromWorld(const QString &guid)
-{
-    scene->getPhysicsEnvironment()->removeBodyFromWorld(guid);
 }
 
 void SceneViewWidget::setGizmoLoc()

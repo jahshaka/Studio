@@ -103,7 +103,6 @@ public:
     iris::ViewerNodePtr createViewer(QJsonObject &nodeObj);
 
 	iris::ParticleSystemNodePtr createParticleSystem(QJsonObject &nodeObj);
-	iris::GrabNodePtr createGrab(QJsonObject &nodeObj);
 
     iris::LightType getLightTypeFromName(QString lightType);
     iris::TangentType getTangentTypeFromName(QString tangentType);

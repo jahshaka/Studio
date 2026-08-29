@@ -248,9 +248,6 @@ public:
 
 private:
 
-    // sets up the button for vr
-    void setupVrUi();
-
     // menus
     void setupFileMenu();
 
@@ -310,7 +307,6 @@ public slots:
     void addGear();
     void addEmpty();
     void addViewer();
-	void addGrabHand();
     void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
     void addPrimitiveObject(const QString &guid);
 	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &guid = QString(), const QString &name = QString());
@@ -362,7 +358,6 @@ public slots:
     void useLocalTransform();
     void useGlobalTransform();
 
-    void vrButtonClicked(bool);
     void updateSceneSettings();
 
     void undo();
@@ -455,8 +450,6 @@ private:
 	QPushButton *help;
 	QPushButton *prefs;
 
-    bool vrMode;
-    QPushButton* vrButton;
     QMainWindow *dialog;
 
     QDockWidget *sceneHierarchyDock;

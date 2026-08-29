@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "irisgl/src/scenegraph/viewernode.h"
 #include "irisgl/src/scenegraph/particlesystemnode.h"
 #include "irisgl/src/scenegraph/meshnode.h"
-#include "irisgl/src/scenegraph/grabnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/materials/pbrmaterial.h"
@@ -149,13 +148,6 @@ For more information see the LICENSE file
 #include "../src/player/playerwidget.h"
 #include "../src/player/iplayerview.h"
 
-enum class VRButtonMode : int
-{
-    Default = 0,
-    Disabled,
-    VRMode
-};
-
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
@@ -187,7 +179,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     aboutDialog = new AboutDialog();
 
     camControl = Q_NULLPTR;
-    vrMode = false;
 
     setupFileMenu();
 	fontIcons = new QtAwesome;
@@ -239,56 +230,6 @@ void MainWindow::goToDesktop()
 {
     show();
     switchSpace(WindowSpaces::DESKTOP, true);
-}
-
-void MainWindow::setupVrUi()
-{
-    /*
-    vrButton->setToolTipDuration(0);
-
-    if (sceneView->isVrSupported()) {
-        vrButton->setEnabled(true);
-        vrButton->setToolTip("Press to view the scene in vr");
-        vrButton->setProperty("vrMode", (int) VRButtonMode::Default);
-    } else {
-        vrButton->setEnabled(false);
-        vrButton->setToolTip("No Oculus device detected");
-        vrButton->setProperty("vrMode", (int) VRButtonMode::Disabled);
-    }
-
-    connect(vrButton, SIGNAL(clicked(bool)), SLOT(vrButtonClicked(bool)));
-
-    // needed to apply changes
-    vrButton->style()->unpolish(vrButton);
-    vrButton->style()->polish(vrButton);
-    */
-}
-
-/**
- * uses style property trick
- * http://wiki.qt.io/Dynamic_Properties_and_Stylesheets
- */
-void MainWindow::vrButtonClicked(bool)
-{
-    if (!sceneView->isVrSupported()) {
-        // pass
-    } else {
-        if (sceneView->getViewportMode()==ViewportMode::Editor) {
-            sceneView->setViewportMode(ViewportMode::VR);
-
-            // highlight button blue
-            vrButton->setProperty("vrMode",(int)VRButtonMode::VRMode);
-        } else {
-            sceneView->setViewportMode(ViewportMode::Editor);
-
-            // return button back to normal color
-            vrButton->setProperty("vrMode",(int)VRButtonMode::Default);
-        }
-    }
-
-    // needed to apply changes
-    vrButton->style()->unpolish(vrButton);
-    vrButton->style()->polish(vrButton);
 }
 
 iris::ScenePtr MainWindow::getScene()
@@ -414,7 +355,6 @@ void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_
     Q_UNUSED(gl);
     if (auto renderer = widget->getRenderer())
         postProcessWidget->setPostProcessMgr(renderer->getPostProcessManager());
-    setupVrUi();
 }
 
 void MainWindow::setSettingsManager(SettingsManager* settings)
@@ -1617,14 +1557,6 @@ void MainWindow::addViewer()
 
 	node->setActiveCharacterController(true);
 	scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
-}
-
-void MainWindow::addGrabHand()
-{
-	this->sceneView->beginResourceLoad();
-	auto node = iris::GrabNode::create();
-	node->setName("Hand");
-	addNodeToScene(node);
 }
 
 void MainWindow::addParticleSystem()
@@ -3049,14 +2981,6 @@ void MainWindow::setupToolBar()
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
 	connect(viewDocks,			SIGNAL(triggered(bool)), SLOT(toggleDockWidgets()));
 	connect(actionSaveScene,	SIGNAL(triggered(bool)), SLOT(saveScene()));
-
-    /*
-    vrButton = new QPushButton();
-    QIcon icovr(":/icons/virtual-reality.svg");
-    vrButton->setIcon(icovr);
-    vrButton->setObjectName("vrButton");
-    toolBar->addWidget(vrButton);
-    */
 
     viewPort->addToolBar(toolBar);
 }

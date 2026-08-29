@@ -5,6 +5,7 @@
 #include "../editor/scenepicker.h"
 #include "../player/playback.h"
 #include "../irisgl/src/graphics/viewport.h"
+#include "../irisgl/src/physics/environment.h"
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
@@ -380,6 +381,29 @@ void EngineSceneViewport::stopPlayingScene()
     if (mScene) mScene->updateSceneAnimation(0.0f);
 }
 
+// "Simulate physics" — run the document's physics world in the editor, without
+// entering play mode. Same three calls as the legacy viewport
+// (sceneviewwidget.cpp); the per-frame stepping happens in syncFrame.
+void EngineSceneViewport::startPhysicsSimulation()
+{
+    if (!mScene) return;
+    mScene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(mScene->getRootNode());
+    mScene->getPhysicsEnvironment()->simulatePhysics();
+}
+
+void EngineSceneViewport::restartPhysicsSimulation()
+{
+    if (!mScene) return;
+    mScene->getPhysicsEnvironment()->restartPhysics();
+    mScene->getPhysicsEnvironment()->restoreNodeTransformations(mScene->getRootNode());
+}
+
+void EngineSceneViewport::stopPhysicsSimulation()
+{
+    if (!mScene) return;
+    mScene->getPhysicsEnvironment()->stopPhysics();
+}
+
 // The setter does NOT emit: MainWindow calls it in response to sceneNodeSelected,
 // so emitting here would loop. Only picking (below) announces a selection.
 void EngineSceneViewport::setSelectedNode(iris::SceneNodePtr sceneNode)
@@ -458,9 +482,17 @@ void EngineSceneViewport::syncFrame()
     // ticks the WHOLE scene each frame, sceneviewwidget.cpp). Here only the
     // particle nodes tick: a full scene update would also run physics while not
     // playing. Play mode already ticks them via PlayBack::update -> scene->update.
+    // Exception: "Simulate physics" (startPhysicsSimulation) — then the full
+    // scene update runs, stepping Bullet and writing body transforms back onto
+    // the document nodes; it also ticks the emitters, so skip the explicit
+    // particle loop that frame to avoid double-ticking them.
     if (!mPlaying && mScene) {
-        for (const auto &ps : mScene->particleSystems)
-            if (ps) ps->update(dt);
+        if (mScene->getPhysicsEnvironment()->isSimulating()) {
+            mScene->update(dt);
+        } else {
+            for (const auto &ps : mScene->particleSystems)
+                if (ps) ps->update(dt);
+        }
     }
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
     if (mMirror) {

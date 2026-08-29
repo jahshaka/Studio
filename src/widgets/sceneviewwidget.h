@@ -48,7 +48,6 @@ class CameraControllerBase;
 class EditorCameraController;
 class EditorData;
 #include "../editor/ieditorviewport.h"
-class EditorVrController;
 class Gizmo;
 class OrbitalCameraController;
 class OutlinerRenderer;
@@ -65,8 +64,6 @@ class TranslationGizmo;
 class ViewerCameraController;
 class ViewportGizmo;
 class Globals;
-class btRigidBody;
-class HandGizmoHandler;
 
 class PlayBack;
 
@@ -90,9 +87,6 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
     EditorCameraController* defaultCam;
     OrbitalCameraController* orbitalCam;
     ViewerCameraController* viewerCam;
-    EditorVrController* vrCam;
-
-    ViewportMode viewportMode;
 
     QElapsedTimer* elapsedTimer;
     QTimer* timer;
@@ -115,10 +109,6 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 	// vr viewer representation
 	iris::MaterialPtr viewerMat;
 	iris::MeshPtr viewerMesh;
-
-	iris::ModelPtr handGizmoModel;
-	iris::DefaultMaterialPtr handGizmoMaterial;
-	HandGizmoHandler* handGizmoHandler;
 
 	PlayBack* playback;
 	bool initialized;
@@ -177,16 +167,8 @@ public:
 
 	void focusOnNode(iris::SceneNodePtr sceneNode) override;
 
-    bool isVrSupported() override;
-    void setViewportMode(ViewportMode viewportMode) override;
-    ViewportMode getViewportMode() override;
-
     void setGizmoTransformToLocal() override;
     void setGizmoTransformToGlobal() override;
-
-    void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node) override;
-    void removeBodyFromWorld(btRigidBody *body) override;
-    void removeBodyFromWorld(const QString &guid) override;
 
     void setGizmoLoc() override;
     void setGizmoRot() override;
@@ -351,7 +333,6 @@ private:
     void addLightShapesToScene();
 
 	void addViewerHeadsToScene();
-	void addGrabGizmosToScene();
 
 	WindowSpaces windowSpace;
 	bool displayGizmos;

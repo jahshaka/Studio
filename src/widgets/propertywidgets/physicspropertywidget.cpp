@@ -192,8 +192,6 @@ void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
     //    return;
     //};
 
- /*   sceneView->removeBodyFromWorld(sceneNode->getGUID());
-    this->sceneView->addBodyToWorld(body, sceneNode);*/
 }
 
 void PhysicsPropertyWidget::onVisibilityChanged(bool value)

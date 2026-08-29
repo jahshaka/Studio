@@ -24,15 +24,8 @@ class QWidget;
 class MainWindow;
 class Database;
 class EditorData;
-class btRigidBody;
 enum WindowSpaces : int;      // mainwindow.h
 enum class SceneMode;         // uimanager.h
-
-enum class ViewportMode
-{
-    Editor,
-    VR
-};
 
 /// Signals a viewport emits. A separate QObject so the interface itself stays a
 /// plain abstract class (QOpenGLWidget and QWidget cannot both be an interface base).
@@ -79,9 +72,6 @@ public:
     virtual EditorData *getEditorData() = 0;
 
     // ---- modes ----
-    virtual void setViewportMode(ViewportMode mode) = 0;
-    virtual ViewportMode getViewportMode() = 0;
-    virtual bool isVrSupported() = 0;
     virtual void setWindowSpace(WindowSpaces windowSpace) = 0;
     virtual void setSceneMode(SceneMode sceneMode) = 0;
     virtual void enterEditorMode() = 0;
@@ -101,9 +91,6 @@ public:
     virtual void startPhysicsSimulation() = 0;
     virtual void restartPhysicsSimulation() = 0;
     virtual void stopPhysicsSimulation() = 0;
-    virtual void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node) = 0;
-    virtual void removeBodyFromWorld(btRigidBody *body) = 0;
-    virtual void removeBodyFromWorld(const QString &guid) = 0;
 
     // ---- overlays / output ----
     virtual bool getShowLightWires() const = 0;

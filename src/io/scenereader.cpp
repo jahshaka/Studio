@@ -314,10 +314,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "particle system") {
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
-    } else if (nodeType == "grab") {
-		sceneNode = createGrab(nodeObj).staticCast<iris::SceneNode>();
-	}
-	else {
+    } else {
         sceneNode = iris::SceneNode::create();
     }
 
@@ -626,22 +623,6 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     return particleNode;
 }
 
-iris::GrabNodePtr SceneReader::createGrab(QJsonObject & nodeObj)
-{
-	iris::HandPoseType poseType;
-	auto poseName = nodeObj["poseType"].toString();
-	if (poseName == "grab")
-		poseType = iris::HandPoseType::Grab;
-	else if (poseName == "pinch")
-		poseType = iris::HandPoseType::Pinch;
-
-	auto grabNode = iris::GrabNode::create();
-	grabNode->setGUID(nodeObj["guid"].toString());
-	grabNode->setPose(poseType);
-	grabNode->poseFactor = (float)nodeObj["poseFactor"].toDouble();
-
-	return grabNode;
-}
 
 iris::LightType SceneReader::getLightTypeFromName(QString lightType)
 {

@@ -13,8 +13,8 @@
 #include <QImage>
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 
-// Specific headers only: the irisgl/IrisGL.h umbrella pulls in VR/libovr.
 #include <functional>
 #include "irisglfwd.h"
 #include "scenegraph/scene.h"
@@ -26,6 +26,8 @@
 #include "graphics/texture2d.h"
 #include "materials/defaultmaterial.h"
 #include "materials/defaultskymaterial.h"
+#include "physics/environment.h"
+#include "physics/physicsproperties.h"
 // The reparent command's cycle guard is header-only document logic (its
 // undo/redo bodies live in the app; only the static guard is exercised here).
 #include "commands/reparentscenenodecommand.h"
@@ -108,6 +110,36 @@ int main(int argc, char **argv)
         CHECK(ReparentSceneNodeCommand::wouldCreateCycle(iris::SceneNodePtr(), a), "null dragged node is refused");
         CHECK(ReparentSceneNodeCommand::wouldCreateCycle(a, iris::SceneNodePtr()), "null target is refused");
         scene->getRootNode()->removeChild(a);
+    }
+
+    // --- "Simulate physics" without play mode (PHYSICS_AUDIT 5.1): the exact call
+    // sequence EngineSceneViewport::startPhysicsSimulation + syncFrame's stepper
+    // performs — init world, simulatePhysics, tick scene->update, bodies move;
+    // restart restores transforms; stop clears the flag. No GL, no viewport.
+    {
+        auto physScene = iris::Scene::create();
+        auto body = iris::MeshNode::create();
+        body->setGUID("simulate-test-sphere");
+        body->setLocalPos(QVector3D(0, 10, 0));
+        body->isPhysicsBody = true;
+        body->physicsProperty.objectMass = 1.0f;
+        body->physicsProperty.shape = iris::PhysicsCollisionShape::Sphere;
+        body->physicsProperty.type = iris::PhysicsType::RigidBody;
+        physScene->getRootNode()->addChild(body);
+
+        auto env = physScene->getPhysicsEnvironment();
+        env->initializePhysicsWorldFromScene(physScene->getRootNode());
+        env->simulatePhysics();
+        CHECK(env->isSimulating(), "simulate: environment reports simulating without play mode");
+        const float y0 = body->getLocalPos().y();
+        for (int i = 0; i < 60; ++i) physScene->update(1.0f / 60.0f);  // syncFrame's editor-mode stepper
+        CHECK(body->getLocalPos().y() < y0 - 0.5f, "simulate: dynamic body fell under gravity via scene->update");
+        env->restartPhysics();
+        env->restoreNodeTransformations(physScene->getRootNode());
+        CHECK(std::fabs(body->getLocalPos().y() - y0) < 0.01f, "restart: node transform restored");
+        env->stopPhysics();
+        CHECK(!env->isSimulating(), "stop: simulation flag cleared");
+        physScene.reset(); body.reset();
     }
 
     // --- Teardown with no GL must not crash either

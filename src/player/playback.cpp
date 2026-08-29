@@ -7,16 +7,13 @@
 #include "irisgl/Graphics.h"
 #include "irisgl/SceneGraph.h"
 #include "irisgl/Physics.h"
-#include "irisgl/Vr.h"
 #include "irisgl/Content.h"
-#include "playervrcontroller.h"
 #include "playermousecontroller.h"
 #include "src/core/keyboardstate.h"
 
 PlayBack::PlayBack()
 {
 	camController = nullptr;
-	vrController = new PlayerVrController();
 	mouseController = new PlayerMouseController();
 	this->setRestoreCameraTransform(true);
 }
@@ -25,9 +22,6 @@ void PlayBack::init(iris::ForwardRendererPtr renderer)
 {
 	this->renderer = renderer;
 	renderer->setScene(scene);
-
-	auto content = iris::ContentManager::create(renderer->getGraphicsDevice());
-	vrController->loadAssets(content);
 
 	animTime = 0;
 }
@@ -44,8 +38,6 @@ void PlayBack::setScene(iris::ScenePtr scene)
 	if (renderer)
 		renderer->setScene(scene);
 
-	vrController->setScene(scene);
-	vrController->setCamera(scene->getCamera());
 	mouseController->setScene(scene);
 	mouseController->setCamera(scene->getCamera());
 }
@@ -77,16 +69,7 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
     // needed for picking
     this->mouseController->setViewport(viewport);
 
-	// The VR controller only exists on the legacy path (its hands are IrisGL
-	// render items); with no renderer there is no VR device and the mouse
-	// controller drives the camera.
-	auto vrDevice = renderer ? renderer->getVrDevice() : nullptr;
-	if (vrDevice && vrDevice->isHeadMounted()) {
-		setController(vrController);
-	}
-	else {
-		setController(mouseController);
-	}
+	setController(mouseController);
 
 	camController->update(dt);
 
@@ -116,18 +99,10 @@ void PlayBack::renderScene(iris::Viewport& viewport, float dt)
 {
 	update(viewport, dt);
 
-	auto vrDevice = renderer->getVrDevice();
-
 	renderer->getGraphicsDevice()->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
 	                                     QColor::fromRgbF(.1f, .1f, .1f, .4f));
 
-	if (vrDevice->isHeadMounted()) {
-		renderer->renderSceneVr(dt, &viewport, false);
-	}
-	else {
-		renderer->renderScene(dt, &viewport);
-	}
-	//renderer->renderScene(dt, &vp);
+	renderer->renderScene(dt, &viewport);
 }
 
 void PlayBack::saveNodeTransforms()
@@ -193,7 +168,6 @@ void PlayBack::playScene()
 {
 	_isPlaying = true;
 	saveNodeTransforms();
-	vrController->setPlayState(_isPlaying);
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
 	scene->getPhysicsEnvironment()->simulatePhysics();
@@ -210,7 +184,6 @@ void PlayBack::pause() {}
 void PlayBack::stopScene()
 {
 	_isPlaying = false;
-	vrController->setPlayState(_isPlaying);
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
@@ -224,10 +197,6 @@ PlayerMouseController * PlayBack::getMouseController() const
 	return mouseController;
 }
 
-PlayerVrController * PlayBack::getVrController() const
-{
-	return vrController;
-}
 
 
 void PlayBack::keyPressEvent(QKeyEvent *event)
