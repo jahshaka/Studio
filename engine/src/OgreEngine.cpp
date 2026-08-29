@@ -31,9 +31,13 @@
 #include <OgreHlmsPbsDatablock.h>
 #include <OgreHlmsUnlitDatablock.h>
 #include <OgreTextureGpuManager.h>
+#include <OgreTextureFilters.h>
 #include <OgreTextureGpu.h>
 #include <OgreAsyncTextureTicket.h>
 #include <OgreLogManager.h>
+#include <OgreResourceGroupManager.h>
+#include <OgreHlmsSamplerblock.h>
+#include <set>
 #include <Compositor/OgreCompositorManager2.h>
 #include <Compositor/OgreCompositorWorkspace.h>
 #include <Compositor/OgreCompositorNodeDef.h>
@@ -275,6 +279,70 @@ public:
         JAH_TRY { detachItem(it->second); return true; } JAH_CATCH(mError, false);
     }
 
+    // ---- Textures ----
+    TextureId loadTexture(const std::string &path, bool srgb) override {
+        for (auto &kv : mTextures) if (kv.second.path == path) return kv.first;
+        const size_t slash = path.find_last_of("/\\");
+        const std::string dir  = slash == std::string::npos ? "." : path.substr(0, slash);
+        const std::string file = slash == std::string::npos ? path : path.substr(slash + 1);
+        JAH_TRY {
+            Ogre::ResourceGroupManager &rgm = Ogre::ResourceGroupManager::getSingleton();
+            static const char *kGroup = "Jahshaka";
+            if (!rgm.resourceGroupExists(kGroup)) rgm.createResourceGroup(kGroup, false);
+            if (!mTextureDirs.count(dir)) {
+                rgm.addResourceLocation(dir, "FileSystem", kGroup, false);
+                mTextureDirs.insert(dir);
+            }
+            if (!rgm.resourceExists(kGroup, file)) { mError = "loadTexture: file not found: " + path; return 0; }
+            Ogre::TextureGpuManager *tm = mRoot->getRenderSystem()->getTextureGpuManager();
+            Ogre::uint32 flags = Ogre::TextureFlags::AutomaticBatching;
+            if (srgb) flags |= Ogre::TextureFlags::PrefersLoadingFromFileAsSRGB;
+            // Alias by full path so the same file name in two folders stays distinct.
+            Ogre::TextureGpu *tex = tm->createOrRetrieveTexture(file, path, Ogre::GpuPageOutStrategy::Discard,
+                                                                flags, Ogre::TextureTypes::Type2D, kGroup,
+                                                                Ogre::TextureFilter::TypeGenerateDefaultMipmaps);
+            if (!tex) { mError = "loadTexture: could not create texture for " + path; return 0; }
+            tex->scheduleTransitionTo(Ogre::GpuResidency::Resident);
+            tex->waitForData();
+            TextureRec rec; rec.texture = tex; rec.path = path;
+            mTextures[++mNextTextureId] = rec;
+            return mNextTextureId;
+        } JAH_CATCH(mError, 0);
+    }
+    bool destroyTexture(TextureId id) override {
+        auto it = mTextures.find(id);
+        if (it == mTextures.end()) return false;
+        JAH_TRY {
+            Ogre::TextureGpuManager *tm = mRoot->getRenderSystem()->getTextureGpuManager();
+            tm->destroyTexture(it->second.texture);
+            mTextures.erase(it);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool setPbrTexture(MaterialId mat, PbrTextureSlot slot, TextureId texId) override {
+        auto mit = mMaterials.find(mat);
+        if (mit == mMaterials.end() || mit->second.unlit) { mError = "setPbrTexture: not a PBR material"; return false; }
+        Ogre::TextureGpu *tex = nullptr;
+        if (texId) { auto tit = mTextures.find(texId); if (tit == mTextures.end()) { mError = "setPbrTexture: unknown texture"; return false; } tex = tit->second.texture; }
+        JAH_TRY {
+            auto *db = static_cast<Ogre::HlmsPbsDatablock *>(hlmsFor(mit->second)->getDatablock(Ogre::IdString(mit->second.datablockName)));
+            if (!db) return false;
+            Ogre::PbsTextureTypes unit = Ogre::PBSM_DIFFUSE;
+            switch (slot) {
+            case PbrTextureSlot::Albedo:    unit = Ogre::PBSM_DIFFUSE;   break;
+            case PbrTextureSlot::Normal:    unit = Ogre::PBSM_NORMAL;    break;
+            case PbrTextureSlot::Metalness: unit = Ogre::PBSM_METALLIC;  break;
+            case PbrTextureSlot::Roughness: unit = Ogre::PBSM_ROUGHNESS; break;
+            case PbrTextureSlot::Emissive:  unit = Ogre::PBSM_EMISSIVE;  break;
+            }
+            Ogre::HlmsSamplerblock sampler;
+            sampler.mU = Ogre::TAM_WRAP; sampler.mV = Ogre::TAM_WRAP;
+            sampler.mMaxAnisotropy = 4; sampler.mMipFilter = Ogre::FO_LINEAR;
+            db->setTexture(static_cast<Ogre::uint8>(unit), tex, &sampler);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+
     // ---- Overlay primitives ----
     MaterialId createUnlitMaterial(const Colour &c, bool depthTest, bool wireframe) override {
         JAH_TRY {
@@ -391,6 +459,11 @@ public:
                     hlms->destroyDatablock(Ogre::IdString(kv.second.datablockName));
             }
             mMaterials.clear();
+            {
+                Ogre::TextureGpuManager *tm = mRoot->getRenderSystem()->getTextureGpuManager();
+                for (auto &kv : mTextures) tm->destroyTexture(kv.second.texture);
+                mTextures.clear();
+            }
             Ogre::MeshManager &mm = Ogre::MeshManager::getSingleton();
             for (auto &kv : mMeshes) {
                 kv.second.mesh.reset();
@@ -417,6 +490,7 @@ private:
     };
     struct MeshRec { Ogre::MeshPtr mesh; std::string name; };
     struct MaterialRec { std::string datablockName; bool unlit = false; bool onTop = false; };
+    struct TextureRec { Ogre::TextureGpu *texture = nullptr; std::string path; };
 
     Ogre::Hlms *hlmsFor(const MaterialRec &m) const {
         return mRoot->getHlmsManager()->getHlms(m.unlit ? Ogre::HLMS_UNLIT : Ogre::HLMS_PBS);
@@ -587,6 +661,9 @@ private:
     std::map<NodeId, Node> mNodes;
     std::map<MeshId, MeshRec> mMeshes;
     std::map<MaterialId, MaterialRec> mMaterials;
+    std::map<TextureId, TextureRec> mTextures;
+    std::set<std::string> mTextureDirs;
+    TextureId           mNextTextureId = 0;
     NodeId              mNextId = 0;
     MeshId              mNextMeshId = 0;
     MaterialId          mNextMaterialId = 0;

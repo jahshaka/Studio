@@ -61,6 +61,7 @@ private:
         bool hasLight = false;
         jahshaka::engine::MaterialId material = 0;   // per document material instance
         iris::Material *materialPtr = nullptr;
+        QString textureSignature;                    // which files are bound; re-sync on change
         jahshaka::engine::NodeId wireNode = 0;       // light wire shape, child of `node`
         jahshaka::engine::MaterialId wireMaterial = 0;
         int wireKind = -1;                           // which shape is attached
@@ -72,6 +73,8 @@ private:
     void removeMissing(const QSet<long> &seen);
     jahshaka::engine::MeshId     meshFor(iris::Mesh *mesh);
     jahshaka::engine::MaterialId materialFor(iris::Material *material);
+    void syncTextures(Entry &e, iris::Material *material);
+    jahshaka::engine::TextureId textureFor(const QString &path, bool srgb);
     /// Reads a document material into PBR parameters. Public for tests.
 public:
     static bool toPbrParams(iris::Material *material, jahshaka::engine::PbrParams &out);
@@ -83,6 +86,7 @@ private:
     QHash<long, Entry>       mEntries;         // keyed by iris SceneNode::nodeId
     QHash<iris::Mesh *, jahshaka::engine::MeshId> mMeshes;
     QHash<iris::Material *, jahshaka::engine::MaterialId> mMaterials;
+    QHash<QString, jahshaka::engine::TextureId> mTextures;
     jahshaka::engine::MaterialId mDefaultMaterial = 0;
     bool mLightWires = true;
     jahshaka::engine::MeshId mWireMeshes[3] = { 0, 0, 0 };   // directional, point, spot

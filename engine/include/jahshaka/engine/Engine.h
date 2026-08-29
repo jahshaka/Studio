@@ -67,6 +67,15 @@ public:
     virtual bool        attachMesh(NodeId, MeshId, MaterialId) = 0;
     virtual bool        detachMesh(NodeId) = 0;
 
+    // ---- Textures (step 4b): image files on disk, shared across materials ----
+    /// Loads an image file (png/jpg/tga/dds...). `srgb` for colour maps (albedo,
+    /// emissive); false for data maps (normal, roughness, metalness). The same path
+    /// loaded twice returns the same id. 0 on failure (lastError()).
+    virtual TextureId   loadTexture(const std::string &path, bool srgb) = 0;
+    virtual bool        destroyTexture(TextureId) = 0;
+    /// Binds (or, with 0, clears) a texture slot on a PBR material.
+    virtual bool        setPbrTexture(MaterialId, PbrTextureSlot, TextureId) = 0;
+
     // ---- Overlay primitives (step 8): gizmos, light wires, animation paths ----
     /// Flat colour, unlit. With depthTest=false it draws on top of everything —
     /// what gizmo handles need. Alpha < 1 blends.

@@ -19,6 +19,8 @@
 #include "graphics/material.h"
 #include "materials/pbrmaterial.h"
 #include "materials/defaultmaterial.h"
+#include "graphics/texture2d.h"
+#include <QFileInfo>
 #include <QtMath>
 
 using namespace jahshaka::engine;
@@ -53,6 +55,8 @@ void SceneMirror::setSource(iris::ScenePtr scene)
     mMeshes.clear();
     for (MaterialId m : mMaterials) mTarget->destroyMaterial(m);
     mMaterials.clear();
+    for (TextureId t : mTextures) mTarget->destroyTexture(t);
+    mTextures.clear();
     mSource = scene;
 }
 
@@ -219,11 +223,14 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
             MaterialId mat = materialFor(material);
             if (m && mat && mTarget->attachMesh(e.node, m, mat)) {
                 e.hasMesh = true; e.material = mat; e.materialPtr = material;
+                e.textureSignature.clear();
+                syncTextures(e, material);
             }
         } else if (e.hasMesh && e.material && material) {
             // Parameters may change every frame from the property panel: push them.
             PbrParams p;
             if (toPbrParams(material, p)) mTarget->setPbrMaterial(e.material, p);
+            syncTextures(e, material);
         }
     }
 
@@ -277,6 +284,44 @@ MaterialId SceneMirror::materialFor(iris::Material *material)
     MaterialId id = mTarget->createPbrMaterial(p);
     if (id) mMaterials.insert(material, id);
     return id;
+}
+
+TextureId SceneMirror::textureFor(const QString &path, bool srgb)
+{
+    auto it = mTextures.constFind(path);
+    if (it != mTextures.constEnd()) return it.value();
+    if (!QFileInfo::exists(path)) return 0;      // Qt resources (":/...") are not files the engine can read
+    TextureId id = mTarget->loadTexture(path.toStdString(), srgb);
+    if (id) mTextures.insert(path, id);
+    return id;
+}
+
+void SceneMirror::syncTextures(Entry &e, iris::Material *material)
+{
+    if (!material || !e.material || e.material == mDefaultMaterial) return;
+    // Document slot name -> engine slot. PbrMaterial and DefaultMaterial naming.
+    struct Slot { const char *name; PbrTextureSlot slot; bool srgb; };
+    static const Slot kSlots[] = {
+        { "u_baseColorMap",  PbrTextureSlot::Albedo,    true  }, { "u_diffuseTexture", PbrTextureSlot::Albedo,    true  },
+        { "u_normalMap",     PbrTextureSlot::Normal,    false }, { "u_normalTexture",  PbrTextureSlot::Normal,    false },
+        { "u_metallicMap",   PbrTextureSlot::Metalness, false }, { "u_roughnessMap",   PbrTextureSlot::Roughness, false },
+        { "u_emissiveMap",   PbrTextureSlot::Emissive,  true  },
+    };
+    QString signature;
+    for (const Slot &sl : kSlots) {
+        auto it = material->textures.constFind(sl.name);
+        if (it != material->textures.constEnd() && it.value()) signature += QString(sl.name) + '=' + it.value()->source + ';';
+    }
+    if (signature == e.textureSignature) return;
+    e.textureSignature = signature;
+    bool bound[5] = { false, false, false, false, false };
+    for (const Slot &sl : kSlots) {
+        auto it = material->textures.constFind(sl.name);
+        if (it == material->textures.constEnd() || !it.value()) continue;
+        TextureId t = textureFor(it.value()->source, sl.srgb);
+        if (t && mTarget->setPbrTexture(e.material, sl.slot, t)) bound[int(sl.slot)] = true;
+    }
+    for (int i = 0; i < 5; ++i) if (!bound[i]) mTarget->setPbrTexture(e.material, PbrTextureSlot(i), 0);
 }
 
 bool SceneMirror::toPbrParams(iris::Material *material, PbrParams &out)

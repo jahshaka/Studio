@@ -43,6 +43,9 @@ struct MeshData {
     size_t triangleCount() const { return indices.size() / 3; }
 };
 
+using TextureId = unsigned int;
+enum class PbrTextureSlot { Albedo, Normal, Metalness, Roughness, Emissive };
+
 /// Metallic-roughness PBR parameters — Jahshaka's material model. Textures arrive
 /// in a later step; parameters alone already drive the full lighting path.
 struct PbrParams {

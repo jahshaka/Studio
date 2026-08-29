@@ -5,6 +5,9 @@
 // operation the editor performs: move a parent, hide, show, remove.
 // No window; runs with DISPLAY reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
 #include <QGuiApplication>
+#include <QImage>
+#include <QDir>
+#include "graphics/texture2d.h"
 #include <QVector3D>
 #include <cmath>
 #include <cstdio>
@@ -172,6 +175,25 @@ int main(int argc, char **argv)
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("DefaultMaterial green", img);
     CHECK(centre(img).g > centre(img).r && centre(img).g > centre(img).b, "DefaultMaterial diffuse -> albedo");
+
+    // ---- step 4b: a diffuse TEXTURE from the document reaches the engine ----
+    {
+        const QString pngPath = QDir::temp().filePath("jahshaka_mirror_test_green.png");
+        QImage tex(32, 32, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
+        auto textured = iris::DefaultMaterial::create();
+        textured->setDiffuseColor(QColor(255, 255, 255));                 // white tint: the texture decides
+        textured->setDiffuseTexture(iris::Texture2D::load(pngPath));     // deferred: no GL, path recorded
+        meshNode2->setMaterial(textured);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("diffuse texture (green)", img);
+        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "document texture colours the cube");
+        textured->setDiffuseTexture(iris::Texture2DPtr());
+        textured->setDiffuseColor(QColor(230, 60, 20));
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("texture removed", img);
+        CHECK(isMaterial(centre(img)), "removing the texture goes back to the material colour");
+        QFile::remove(pngPath);
+    }
 
     // ---- step 5: a POINT light on a document node lights the side it is on ----
     // Remove the sun so only the point light matters; drop ambient to make it obvious.
