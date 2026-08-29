@@ -19,6 +19,7 @@ set(SRCS
 	#main.cpp
 	src/shadergraph/core/materialhelper.cpp
 	src/shadergraph/core/materialwriter.cpp
+	src/shadergraph/core/pbrgraphevaluator.cpp
 	#src/shadergraph/core/project.cpp
 	src/shadergraph/core/texturemanager.cpp
 	src/shadergraph/core/undoredo.cpp
@@ -49,6 +50,7 @@ set(SRCS
 	src/shadergraph/nodes/inputs.cpp
 	src/shadergraph/nodes/math.cpp
 	src/shadergraph/nodes/object.cpp
+	src/shadergraph/nodes/pbrmasternode.cpp
 	src/shadergraph/nodes/test.cpp
 	src/shadergraph/nodes/texture.cpp
 	src/shadergraph/nodes/utils.cpp
@@ -82,6 +84,7 @@ set(HEADERS
 	src/shadergraph/core/guidhelper.h
 	src/shadergraph/core/materialhelper.h
 	src/shadergraph/core/materialwriter.h
+	src/shadergraph/core/pbrgraphevaluator.h
 	#src/shadergraph/core/project.h
 	src/shadergraph/core/texturemanager.h
 	src/shadergraph/core/undoredo.h
@@ -112,6 +115,7 @@ set(HEADERS
 	src/shadergraph/nodes/inputs.h
 	src/shadergraph/nodes/math.h
 	src/shadergraph/nodes/object.h
+	src/shadergraph/nodes/pbrmasternode.h
 	src/shadergraph/nodes/test.h
 	src/shadergraph/nodes/texture.h
 	src/shadergraph/nodes/utils.h
