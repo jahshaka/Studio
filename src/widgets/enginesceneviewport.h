@@ -18,6 +18,16 @@
 class SceneMirror;
 class EngineRenderDriver;
 class EditorData;
+class Gizmo;
+class TranslationGizmo;
+class RotationGizmo;
+class ScaleGizmo;
+class GizmoOverlay;
+class CameraControllerBase;
+class EditorCameraController;
+class OrbitalCameraController;
+#include <QElapsedTimer>
+#include <QPointF>
 
 class EngineSceneViewport : public EngineViewWidget, public IEditorViewport
 {
@@ -41,8 +51,8 @@ public:
     iris::CameraNodePtr editorCamera() override { return mEditorCam; }
     void setEditorCamera(iris::CameraNodePtr camera) override;
     void resetEditorCam() override;
-    void setFreeCameraMode() override {}          // TODO(step 6b): camera controllers
-    void setArcBallCameraMode() override {}
+    void setFreeCameraMode() override;
+    void setArcBallCameraMode() override;
     void setEditorData(EditorData *data) override;
     EditorData *getEditorData() override;
 
@@ -54,11 +64,12 @@ public:
     void enterEditorMode() override {}
     void enterPlayerMode() override {}
 
-    void setGizmoLoc() override {}                // TODO(step 8): overlay primitives
-    void setGizmoRot() override {}
-    void setGizmoScale() override {}
-    void setGizmoTransformToLocal() override {}
-    void setGizmoTransformToGlobal() override {}
+    void setGizmoLoc() override;
+    void setGizmoRot() override;
+    void setGizmoScale() override;
+    void setGizmoTransformToLocal() override;
+    void setGizmoTransformToGlobal() override;
+    Gizmo *activeGizmo() const { return mGizmo; }
 
     void startPlayingScene() override {}          // TODO(step 11): player on the engine
     void pausePlayingScene() override {}
@@ -97,9 +108,30 @@ public:
 protected:
     void showEvent(QShowEvent *) override;
     void mousePressEvent(QMouseEvent *) override;
+    void mouseMoveEvent(QMouseEvent *) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
+    void wheelEvent(QWheelEvent *) override;
+    void keyPressEvent(QKeyEvent *) override;
+    void keyReleaseEvent(QKeyEvent *) override;
 
 private:
     bool ensureEngineScene();
+    void setActiveGizmo(Gizmo *g);
+    void setCameraController(CameraControllerBase *c);
+    /// Mouse ray for the current pointer position (false if the pointer never entered).
+    bool mouseRay(QVector3D &rayPos, QVector3D &rayDir, QVector3D &viewDir) const;
+
+    TranslationGizmo *mTranslateGizmo = nullptr;
+    RotationGizmo    *mRotateGizmo = nullptr;
+    ScaleGizmo       *mScaleGizmo = nullptr;
+    Gizmo            *mGizmo = nullptr;
+    std::unique_ptr<GizmoOverlay> mOverlay;
+    EditorCameraController  *mFreeCam = nullptr;
+    OrbitalCameraController *mOrbitCam = nullptr;
+    CameraControllerBase    *mCamController = nullptr;
+    QPointF mMousePos, mPrevMousePos;
+    bool mHaveMouse = false;
+    QElapsedTimer mFrameTimer;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
     EngineRenderDriver *mDriver = nullptr;
