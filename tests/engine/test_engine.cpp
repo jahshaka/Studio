@@ -125,14 +125,9 @@ void create_twice_returns_null_with_error() {
     CHECK_MSG(!error.empty(), "error must name the reason");
     std::printf("    second create refused: %s\n", error.c_str());
     CHECK(Engine::isAlive());
-    // Re-creation after destroying the first is NOT exercised here. It is
-    // genuinely impossible with the current Ogre-Next build: the Vulkan plugin's
-    // VulkanInstance::enumerateExtensionsAndLayers (OgreVulkanDevice.cpp:88)
-    // appends to static FastArrays that survive dlclose, so the second Root
-    // requests duplicate/dangling extension names and vkCreateInstance fails with
-    // VK_ERROR_EXTENSION_NOT_PRESENT. Two-line fix upstream (clear() both arrays);
-    // until then hosts create the Engine once and keep it — teardown_is_clean,
-    // last in this suite, covers destruction.
+    // Re-creation after destroying the first is exercised by test_engine_recreate
+    // (a separate process). It required patching Ogre-Next's VulkanInstance to
+    // clear its static extension/layer arrays — see OGRE_PLATFORM_DEPS.md.
 }
 
 void ordering_contract() {
