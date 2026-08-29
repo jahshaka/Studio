@@ -45,6 +45,7 @@ For more information see the LICENSE file
 
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
+#include "dialogs/ogrepreviewdialog.h"
 #include "dialogs/donatedialog.h"
 #include "dialogs/custompopup.h"
 #include "core/assethelper.h"
@@ -2481,6 +2482,26 @@ void MainWindow::setupViewPort()
     physicsCheckAction->setCheckable(true);
     connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
     wireFramesMenu->addAction(physicsCheckAction);
+
+    // --- Engine preview (Ogre-Next) -------------------------------------
+    // Scaffolding for the engine migration: opens a window driven entirely
+    // through the engine abstraction. Removed once the editor viewport moves over.
+    {
+        QAction *enginePreviewAction = new QAction(QIcon(), "Engine Preview (Ogre-Next)", this);
+        enginePreviewAction->setShortcut(QKeySequence("Ctrl+Shift+O"));
+        // Register on the window itself, application-wide: an action living only in a
+        // toolbar-button menu does not reliably deliver its shortcut.
+        enginePreviewAction->setShortcutContext(Qt::ApplicationShortcut);
+        this->addAction(enginePreviewAction);
+        wireFramesMenu->addSeparator();
+        wireFramesMenu->addAction(enginePreviewAction);
+        connect(enginePreviewAction, &QAction::triggered, this, [this]() {
+            auto *dlg = new OgrePreviewDialog(this);
+            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            dlg->show();
+        });
+    }
+    // --------------------------------------------------------------------
 
     wireFramesButton->setMenu(wireFramesMenu);
     wireFramesButton->setText("View Options ");

@@ -58,6 +58,8 @@ set(SRCS
     src/dialogs/infodialog.cpp 
     src/globals.cpp 
     src/widgets/sceneviewwidget.cpp 
+    src/widgets/engineviewwidget.cpp
+    src/dialogs/ogrepreviewdialog.cpp
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
     src/widgets/assetmaterialpanel.cpp 
@@ -195,6 +197,8 @@ set(HEADERS
     src/editor/editorcameracontroller.h 
     src/globals.h 
     src/widgets/sceneviewwidget.h 
+    src/widgets/engineviewwidget.h
+    src/dialogs/ogrepreviewdialog.h
     src/widgets/assetfavorites.h 
     src/widgets/assetpanel.h 
     src/widgets/assetmodelpanel.h 
@@ -358,7 +362,10 @@ set(WIDGETS
     src/dialogs/softwareupdatedialog.ui
 )
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL ${OPENGL_LIBRARIES})
+include(IncludeOgre)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/engine)
+
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)

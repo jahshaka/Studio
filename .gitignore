@@ -5,3 +5,6 @@ build/
 # local tooling
 compile_commands.json
 .clangd
+
+# clangd index — never track
+.cache/
