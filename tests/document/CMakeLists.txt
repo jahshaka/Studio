@@ -1,4 +1,5 @@
 # Characterisation tests for the iris:: scene DOCUMENT (no GL required).
+find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_document_no_gl test_document_no_gl.cpp)
 set_target_properties(test_document_no_gl PROPERTIES AUTOMOC OFF)
 target_include_directories(test_document_no_gl PRIVATE
