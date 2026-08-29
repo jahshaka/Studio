@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <QCursor>
 #include "../graph/graphnodescene.h"
+#include "../graph/nodestyle.h"
 #include "../dialogs/searchdialog.h"
 
 qreal GraphicsView::currentScale = 1.0;
@@ -44,12 +45,12 @@ GraphicsView::GraphicsView( QWidget *parent) : QGraphicsView(parent)
 
 void GraphicsView::increaseScale()
 {
-	double const step = 1.2;
-    double const factor = pow(step, 1.0);
+	double factor = NodeStyle::Canvas::zoomStep;
+	const double current = transform().m11();
 
-	QTransform t = transform();
-
-	if (t.m11() > 2.0)
+	if (current * factor > NodeStyle::Canvas::zoomMax)
+		factor = NodeStyle::Canvas::zoomMax / current;
+	if (factor <= 1.0001)
 		return;
 
 	scale(factor, factor);
@@ -57,8 +58,14 @@ void GraphicsView::increaseScale()
 
 void GraphicsView::decreaseScale()
 {
-	double const step = 1.2;
-	double const factor = std::pow(step, -1.0);
+	double factor = 1.0 / NodeStyle::Canvas::zoomStep;
+	const double current = transform().m11();
+
+	// clamp zoom-out (was unbounded)
+	if (current * factor < NodeStyle::Canvas::zoomMin)
+		factor = NodeStyle::Canvas::zoomMin / current;
+	if (factor >= 0.9999)
+		return;
 
 	scale(factor, factor);
 }
@@ -79,49 +86,41 @@ void GraphicsView::dragMoveEvent(QDragMoveEvent * event)
 	event->setAccepted(true);
 }
 
+// Two-level line grid after NodeGraphQt's viewer background (MIT,
+// Copyright (c) 2017 Johnny Chan): a fine grid that fades out as you
+// zoom away, over a coarse grid at 8x the spacing.
 void GraphicsView::drawBackground(QPainter * painter, const QRectF & rect)
 {
-	painter->setRenderHint(QPainter::Antialiasing);
 	QGraphicsView::drawBackground(painter, rect);
 
-	QRect   windowRect = this->rect();
-	QPointF tl = mapToScene(windowRect.topLeft());
-	QPointF br = mapToScene(windowRect.bottomRight());
-	QRectF sceneRect(tl, br);
-	painter->fillRect(sceneRect, QBrush(QColor(20, 20, 20)));
+	painter->fillRect(rect, NodeStyle::Canvas::background);
 
-	auto drawGrid =
-		[&](double gridStep)
+	const qreal zoom = transform().m11();
+
+	auto drawGrid = [&](double gridStep, QColor color)
 	{
-
-		double left = std::floor(tl.x() / gridStep - 0.5);
-		double right = std::floor(br.x() / gridStep + 1.0);
-		double bottom = std::floor(tl.y() / gridStep - 0.5);
-		double top = std::floor(br.y() / gridStep + 1.0);
-
-		QPen pen(QColor(35, 35, 35), 2);
+		QPen pen(color, 1.0);
+		pen.setCosmetic(true); // hairline regardless of zoom
 		painter->setPen(pen);
 
-		// vertical lines
-		for (int xi = int(left); xi <= int(right); ++xi)
-		{
-			QLineF line(xi * gridStep, bottom * gridStep,
-				xi * gridStep, top * gridStep);
+		const double left = std::floor(rect.left() / gridStep) * gridStep;
+		const double top = std::floor(rect.top() / gridStep) * gridStep;
 
-			painter->drawLine(line);
-		}
-
-		// horizontal lines
-		for (int yi = int(bottom); yi <= int(top); ++yi)
-		{
-			QLineF line(left * gridStep, yi * gridStep,
-				right * gridStep, yi * gridStep);
-			painter->drawLine(line);
-		}
+		for (double x = left; x <= rect.right(); x += gridStep)
+			painter->drawLine(QLineF(x, rect.top(), x, rect.bottom()));
+		for (double y = top; y <= rect.bottom(); y += gridStep)
+			painter->drawLine(QLineF(rect.left(), y, rect.right(), y));
 	};
 
-	drawGrid(35);
+	// fine grid fades with zoom so it never turns into noise
+	if (zoom > 0.35) {
+		auto fine = NodeStyle::Canvas::grid;
+		fine.setAlphaF(qMin(1.0, (zoom - 0.35) / 0.4));
+		drawGrid(NodeStyle::Canvas::gridSize, fine);
+	}
 
+	drawGrid(NodeStyle::Canvas::gridSize * NodeStyle::Canvas::gridZoomFactor,
+		NodeStyle::Canvas::gridCoarse);
 }
 
 void GraphicsView::wheelEvent(QWheelEvent * event)
@@ -141,7 +140,9 @@ void GraphicsView::wheelEvent(QWheelEvent * event)
 	else
 		decreaseScale();
 
-	QGraphicsView::wheelEvent(event);
+	// consume the event: the base class would additionally scroll the
+	// view, so every zoom used to drift the canvas
+	event->accept();
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent * event)
@@ -205,6 +206,61 @@ void GraphicsView::addShortcuts()
 		scene->update();
 		//this->repaint();
 	});
+
+	// F frames the selection (all nodes when nothing is selected)
+	auto fitShortcut = new QShortcut(this);
+	fitShortcut->setKey(Qt::Key_F);
+	connect(fitShortcut, &QShortcut::activated, [this]()
+	{
+		fitSelection();
+	});
+
+	// H resets the zoom
+	auto resetZoomShortcut = new QShortcut(this);
+	resetZoomShortcut->setKey(Qt::Key_H);
+	connect(resetZoomShortcut, &QShortcut::activated, [this]()
+	{
+		resetZoom();
+	});
+}
+
+void GraphicsView::fitSelection()
+{
+	if (scene == nullptr)
+		return;
+
+	QRectF bounds;
+	const auto selected = scene->selectedItems();
+	if (!selected.isEmpty()) {
+		for (auto item : selected)
+			bounds = bounds.united(item->sceneBoundingRect());
+	}
+	else {
+		bounds = scene->itemsBoundingRect();
+	}
+	if (!bounds.isValid())
+		return;
+
+	const auto margin = NodeStyle::Canvas::fitMargin;
+	bounds.adjust(-margin, -margin, margin, margin);
+
+	// panning translates sceneRect by hand, so re-anchor it before fitting
+	setSceneRect(bounds);
+	fitInView(bounds, Qt::KeepAspectRatio);
+
+	// keep the result inside the zoom clamps
+	const qreal zoom = transform().m11();
+	if (zoom > NodeStyle::Canvas::zoomMax)
+		scale(NodeStyle::Canvas::zoomMax / zoom, NodeStyle::Canvas::zoomMax / zoom);
+	else if (zoom < NodeStyle::Canvas::zoomMin)
+		scale(NodeStyle::Canvas::zoomMin / zoom, NodeStyle::Canvas::zoomMin / zoom);
+}
+
+void GraphicsView::resetZoom()
+{
+	const qreal zoom = transform().m11();
+	if (zoom > 0.0)
+		scale(1.0 / zoom, 1.0 / zoom);
 }
 
 void GraphicsView::setScene(GraphNodeScene * scene)

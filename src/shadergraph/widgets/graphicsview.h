@@ -13,6 +13,10 @@ public:
 
 	void setScene(GraphNodeScene *scene);
 
+	// F: frame the selection (or the whole graph); H: reset zoom to 1:1
+	void fitSelection();
+	void resetZoom();
+
 private:
 	void increaseScale();
 	void decreaseScale();
