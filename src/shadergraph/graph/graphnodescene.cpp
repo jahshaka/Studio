@@ -93,6 +93,8 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 	nodeView->setModel(model);
 	nodeView->setTitle(model->title);
 	nodeView->setTitleColor(model->setNodeTitleColor());
+	nodeView->setIcon(model->icon);
+	nodeView->isMasterNode = (nodeGraph != nullptr && nodeGraph->getMasterNode() == model);
 
 	for (auto sock : model->inSockets)
 		nodeView->addInSocket(sock);
