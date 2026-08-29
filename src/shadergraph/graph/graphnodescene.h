@@ -123,6 +123,12 @@ public:
 	void deleteNode(GraphNode* node);
 	void clearDragHighlight();
 
+	// clipboard copy/paste/duplicate of the selected nodes and the
+	// connections that run between them
+	void copySelectedToClipboard();
+	void pasteFromClipboard();
+	void duplicateSelected();
+
 	bool areSocketsComptible(Socket* sock1, Socket* sock2);
 
 	void emitGraphInvalidated();

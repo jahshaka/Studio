@@ -13,6 +13,8 @@ For more information see the LICENSE file
 #include "../nodes/test.h"
 #include "core/project.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QListWidgetItem>
@@ -361,6 +363,144 @@ bool GraphNodeScene::areSocketsComptible(Socket* sock1, Socket* sock2)
 void GraphNodeScene::emitGraphInvalidated()
 {
 	emit graphInvalidated();
+}
+
+// serialize the selected nodes (never the master) and the connections
+// running between them, in the same shape NodeGraph::serialize uses
+static QJsonObject serializeSelection(GraphNodeScene* scene)
+{
+	auto nodeGraph = scene->getNodeGraph();
+	QSet<QString> selectedIds;
+	QJsonArray nodesJson;
+
+	for (auto item : scene->selectedItems()) {
+		if (item->type() != (int)GraphicsItemType::Node)
+			continue;
+		auto node = static_cast<GraphNode*>(item);
+		if (node->model == nullptr || node->model == nodeGraph->getMasterNode())
+			continue;
+
+		QJsonObject nodeObj;
+		nodeObj["id"] = node->model->id;
+		nodeObj["type"] = node->model->typeName;
+		nodeObj["value"] = node->model->serializeWidgetValue();
+		nodeObj["x"] = node->x();
+		nodeObj["y"] = node->y();
+		nodesJson.append(nodeObj);
+		selectedIds.insert(node->model->id);
+	}
+
+	QJsonArray consJson;
+	for (auto con : nodeGraph->connections.values()) {
+		auto leftId = con->leftSocket->node->id;
+		auto rightId = con->rightSocket->node->id;
+		if (!selectedIds.contains(leftId) || !selectedIds.contains(rightId))
+			continue;
+		QJsonObject conObj;
+		conObj["leftNodeId"] = leftId;
+		conObj["leftNodeSocketIndex"] = con->leftSocket->node->outSockets.indexOf(con->leftSocket);
+		conObj["rightNodeId"] = rightId;
+		conObj["rightNodeSocketIndex"] = con->rightSocket->node->inSockets.indexOf(con->rightSocket);
+		consJson.append(conObj);
+	}
+
+	QJsonObject data;
+	data["jahshaka_nodes"] = true;
+	data["nodes"] = nodesJson;
+	data["connections"] = consJson;
+	return data;
+}
+
+// rebuild nodes+connections from a serializeSelection payload as one
+// undo macro; returns true when anything was created
+static bool pasteSelection(GraphNodeScene* scene, const QJsonObject& data, float offset)
+{
+	if (!data["jahshaka_nodes"].toBool())
+		return false;
+
+	auto nodeGraph = scene->getNodeGraph();
+	auto nodesJson = data["nodes"].toArray();
+	if (nodeGraph == nullptr || nodesJson.isEmpty())
+		return false;
+
+	scene->stack->beginMacro(QObject::tr("Paste nodes"));
+
+	QMap<QString, QString> idMap; // source id -> pasted copy id
+	for (auto nodeVar : nodesJson) {
+		auto nodeObj = nodeVar.toObject();
+		auto type = nodeObj["type"].toString();
+
+		auto copy = nodeGraph->library->createNode(type);
+		if (copy == nullptr)
+			continue; // master types are not in the library
+
+		if (type == "property") {
+			// a property node references a graph property by id
+			auto prop = nodeGraph->getPropertyById(nodeObj["value"].toString());
+			if (prop == nullptr) {
+				delete copy;
+				continue;
+			}
+			static_cast<PropertyNode*>(copy)->setProperty(prop);
+		}
+		else {
+			copy->deserializeWidgetValue(nodeObj["value"]);
+		}
+
+		copy->setX(nodeObj["x"].toDouble() + offset);
+		copy->setY(nodeObj["y"].toDouble() + offset);
+		idMap[nodeObj["id"].toString()] = copy->id;
+		scene->addNodeModel(copy); // pushes AddNodeCommand
+	}
+
+	// recreate connections between pasted nodes
+	for (auto conVar : data["connections"].toArray()) {
+		auto conObj = conVar.toObject();
+		auto left = idMap.value(conObj["leftNodeId"].toString());
+		auto right = idMap.value(conObj["rightNodeId"].toString());
+		if (left.isEmpty() || right.isEmpty())
+			continue;
+		scene->stack->push(new AddConnectionCommand(left, right, scene,
+			conObj["leftNodeSocketIndex"].toInt(),
+			conObj["rightNodeSocketIndex"].toInt()));
+	}
+
+	scene->stack->endMacro();
+
+	if (idMap.isEmpty())
+		return false;
+
+	// select the pasted copies so a follow-up move/duplicate acts on them
+	scene->clearSelection();
+	for (const auto& newId : idMap)
+		if (auto node = scene->getNodeById(newId))
+			node->setSelected(true);
+
+	scene->emitGraphInvalidated();
+	return true;
+}
+
+void GraphNodeScene::copySelectedToClipboard()
+{
+	auto data = serializeSelection(this);
+	if (data["nodes"].toArray().isEmpty())
+		return;
+	QApplication::clipboard()->setText(
+		QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact)));
+}
+
+void GraphNodeScene::pasteFromClipboard()
+{
+	auto doc = QJsonDocument::fromJson(QApplication::clipboard()->text().toUtf8());
+	if (!doc.isObject())
+		return;
+	pasteSelection(this, doc.object(), 30.0f);
+}
+
+void GraphNodeScene::duplicateSelected()
+{
+	// straight through the same payload, skipping the clipboard
+	pasteSelection(this, serializeSelection(this), 30.0f);
 }
 
 void GraphNodeScene::clearDragHighlight()

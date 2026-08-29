@@ -207,6 +207,28 @@ void GraphicsView::addShortcuts()
 		//this->repaint();
 	});
 
+	// copy / paste / duplicate
+	auto copyShortcut = new QShortcut(this);
+	copyShortcut->setKey(QKeySequence::Copy);
+	connect(copyShortcut, &QShortcut::activated, [this]()
+	{
+		scene->copySelectedToClipboard();
+	});
+
+	auto pasteShortcut = new QShortcut(this);
+	pasteShortcut->setKey(QKeySequence::Paste);
+	connect(pasteShortcut, &QShortcut::activated, [this]()
+	{
+		scene->pasteFromClipboard();
+	});
+
+	auto duplicateShortcut = new QShortcut(this);
+	duplicateShortcut->setKey(QKeySequence(Qt::CTRL | Qt::Key_D));
+	connect(duplicateShortcut, &QShortcut::activated, [this]()
+	{
+		scene->duplicateSelected();
+	});
+
 	// F frames the selection (all nodes when nothing is selected)
 	auto fitShortcut = new QShortcut(this);
 	fitShortcut->setKey(Qt::Key_F);
