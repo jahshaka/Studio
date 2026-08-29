@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "../accordianbladewidget.h"
 #include <QWidget>
+#include <QDebug>
 
 #include "lightpropertywidget.h"
 #include "../hfloatsliderwidget.h"
@@ -117,12 +118,14 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
 void LightPropertyWidget::lightColorChanged(QColor color)
 {
+    qDebug() << "lightColorChanged" << color << "node" << (lightNode ? lightNode->getName() : "(null)");
     if(!!lightNode)
         lightNode->color = color;
 }
 
 void LightPropertyWidget::lightIntensityChanged(float intensity)
 {
+    qDebug() << "lightIntensityChanged" << intensity << "node" << (lightNode ? lightNode->getName() : "(null)");
     if(!!lightNode)
         lightNode->intensity = intensity;
 }

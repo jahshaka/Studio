@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "constants.h"
 #include "core/guidmanager.h"
 #include "io/materialpresetreader.h"
+#include "engine/enginehost.h"
 #include "io/assetmanager.h"
 #include "mainwindow.h"
 #include "../src/shadergraph/core/materialhelper.h"
@@ -74,8 +75,12 @@ void AssetMaterialPanel::addDefaultItems()
 
     auto reader = new MaterialPresetReader();
 
+    // The engine viewport authors PBR only: legacy (non-PBR) presets are
+    // deprecated there and hidden from the drawer. Legacy mode still shows both.
+    const bool pbrOnly = EngineHost::viewportBackend() == ViewportBackend::Engine;
     for (const auto &file : files) {
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
+        if (pbrOnly && preset.type.compare("PBR", Qt::CaseInsensitive) != 0) continue;
         defaultMaterials.append(preset);
     }
 	int i;

@@ -476,6 +476,7 @@ void EngineSceneViewport::syncFrame()
         mOverlay->update(mSelectedNode ? mGizmo : nullptr, rayPos, rayDir, viewDir);
     }
     if (mMirror) mMirror->applySky(view());
+    if (mMirror) mMirror->applyEnvironment(view());
     if (mMirror && mEditorCam) mMirror->applyCamera(mEditorCam, view());
 }
 

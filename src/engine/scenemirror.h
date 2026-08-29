@@ -44,6 +44,10 @@ public:
     /// the view's current background.
     void applySky(jahshaka::engine::View *view);
 
+    /// Pushes the document's world settings the sky doesn't cover: ambient colour
+    /// (flat, like the legacy uniform) and the scene's shadowEnabled toggle.
+    void applyEnvironment(jahshaka::engine::View *view);
+
     /// Converts a document mesh to engine MeshData. Public so importers and tests
     /// can use the same conversion. Returns false if the mesh has no geometry.
     static bool toMeshData(iris::Mesh *mesh, jahshaka::engine::MeshData &out);

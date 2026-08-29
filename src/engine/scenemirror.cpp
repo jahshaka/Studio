@@ -554,6 +554,19 @@ bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
     return out.indices.size() >= 3;
 }
 
+void SceneMirror::applyEnvironment(View *view)
+{
+    if (!mSource || !view) return;
+    // World-panel Ambient Color: flat, exactly like the legacy uniform (the
+    // engine viewport used to hardcode the hemisphere — the panel no-op'd).
+    const QColor a = mSource->ambientColor;
+    mTarget->setAmbient(Colour(a.redF(), a.greenF(), a.blueF(), 1.0f),
+                        Colour(a.redF(), a.greenF(), a.blueF(), 1.0f));
+    // World-panel Enable Shadows (used to be hardcoded on).
+    if (view->shadows() != mSource->shadowEnabled)
+        view->setShadows(mSource->shadowEnabled);
+}
+
 void SceneMirror::applySky(View *view)
 {
     if (!mSource || !view) return;
