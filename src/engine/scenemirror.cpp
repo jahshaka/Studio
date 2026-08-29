@@ -1,6 +1,8 @@
 #include "scenemirror.h"
 
 #include <QQuaternion>
+#include <QMatrix3x3>
+#include <QMatrix4x4>
 #include <QVector3D>
 #include <cstring>
 #include <algorithm>
@@ -36,9 +38,17 @@ SceneMirror::~SceneMirror()
 
 void SceneMirror::setSource(iris::ScenePtr scene)
 {
-    for (const Entry &e : mEntries)
+    for (const Entry &e : mEntries) {
+        if (e.wireNode) mTarget->removeNode(e.wireNode);
+        if (e.wireMaterial) mTarget->destroyMaterial(e.wireMaterial);
         if (e.node) mTarget->removeNode(e.node);
+    }
     mEntries.clear();
+    for (MeshId &m : mWireMeshes) { if (m) mTarget->destroyMesh(m); m = 0; }
+    mHighlighted.clear();
+    if (mHighlightNode) { mTarget->removeNode(mHighlightNode); mHighlightNode = 0; }
+    if (mHighlightMaterial) { mTarget->destroyMaterial(mHighlightMaterial); mHighlightMaterial = 0; }
+    mHighlightMesh = 0;
     for (MeshId m : mMeshes) mTarget->destroyMesh(m);
     mMeshes.clear();
     for (MaterialId m : mMaterials) mTarget->destroyMaterial(m);
@@ -63,7 +73,124 @@ int SceneMirror::sync()
     for (auto &child : mSource->getRootNode()->children)
         visit(child, 0, seen);
     removeMissing(seen);
+    syncHighlight();
     return seen.size();
+}
+
+MeshId SceneMirror::engineMesh(iris::Mesh *mesh) const
+{
+    auto it = mMeshes.constFind(mesh);
+    return it == mMeshes.constEnd() ? 0 : it.value();
+}
+
+void SceneMirror::pushTransform(Scene *scene, NodeId node, const QMatrix4x4 &t)
+{
+    const QVector3D cx = t.column(0).toVector3D(), cy = t.column(1).toVector3D(), cz = t.column(2).toVector3D();
+    const QVector3D scale(cx.length(), cy.length(), cz.length());
+    const QVector3D pos = t.column(3).toVector3D();
+    const float sx = scale.x() > 1e-8f ? scale.x() : 1.0f, sy = scale.y() > 1e-8f ? scale.y() : 1.0f, sz = scale.z() > 1e-8f ? scale.z() : 1.0f;
+    float m[9] = { cx.x() / sx, cy.x() / sy, cz.x() / sz,
+                   cx.y() / sx, cy.y() / sy, cz.y() / sz,
+                   cx.z() / sx, cy.z() / sy, cz.z() / sz };
+    const QQuaternion rot = QQuaternion::fromRotationMatrix(QMatrix3x3(m));
+    scene->setNodeTransform(node, Vec3(pos.x(), pos.y(), pos.z()),
+                            Quat(rot.x(), rot.y(), rot.z(), rot.scalar()),
+                            Vec3(scale.x(), scale.y(), scale.z()));
+}
+
+// ---- selection highlight -------------------------------------------------------
+
+void SceneMirror::setHighlightedNode(iris::SceneNodePtr node)
+{
+    mHighlighted = node;
+}
+
+void SceneMirror::syncHighlight()
+{
+    iris::MeshNode *meshNode = (mHighlighted && mHighlighted->getSceneNodeType() == iris::SceneNodeType::Mesh)
+                                   ? static_cast<iris::MeshNode *>(mHighlighted.data()) : nullptr;
+    iris::Mesh *mesh = meshNode ? meshNode->getMesh().data() : nullptr;
+    MeshId m = mesh ? engineMesh(mesh) : 0;
+    if (!m) {
+        if (mHighlightNode) mTarget->setNodeVisible(mHighlightNode, false);
+        mHighlightMesh = 0;
+        return;
+    }
+    if (!mHighlightMaterial)
+        mHighlightMaterial = mTarget->createUnlitMaterial(Colour(1.0f, 0.85f, 0.1f), false, true);   // on top, wireframe
+    if (!mHighlightNode) mHighlightNode = mTarget->createNode();
+    if (!mHighlightNode || !mHighlightMaterial) return;
+    if (mHighlightMesh != m) {
+        if (mTarget->attachMesh(mHighlightNode, m, mHighlightMaterial)) mHighlightMesh = m;
+    }
+    pushTransform(mTarget, mHighlightNode, meshNode->globalTransform);
+    mTarget->setNodeVisible(mHighlightNode, true);
+}
+
+// ---- light wires ---------------------------------------------------------------
+
+void SceneMirror::setLightWires(bool on)
+{
+    mLightWires = on;
+}
+
+MeshId SceneMirror::wireMeshFor(int kind)
+{
+    if (kind < 0 || kind > 2) return 0;
+    if (mWireMeshes[kind]) return mWireMeshes[kind];
+    std::vector<Vec3> pts;
+    auto circle = [&](int axis, float r) {
+        const int n = 24;
+        for (int i = 0; i < n; ++i) {
+            const float a0 = float(i) / n * 6.2831853f, a1 = float(i + 1) / n * 6.2831853f;
+            const float c0 = std::cos(a0) * r, s0 = std::sin(a0) * r, c1 = std::cos(a1) * r, s1 = std::sin(a1) * r;
+            if (axis == 0)      { pts.push_back(Vec3(0, c0, s0)); pts.push_back(Vec3(0, c1, s1)); }
+            else if (axis == 1) { pts.push_back(Vec3(c0, 0, s0)); pts.push_back(Vec3(c1, 0, s1)); }
+            else                { pts.push_back(Vec3(c0, s0, 0)); pts.push_back(Vec3(c1, s1, 0)); }
+        }
+    };
+    if (kind == 1) {                       // point: three rings
+        circle(0, 0.5f); circle(1, 0.5f); circle(2, 0.5f);
+    } else {                               // directional / spot: an arrow down -Z (+ a cone for spot)
+        pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(0, 0, -1.5f));
+        for (int i = 0; i < 4; ++i) {
+            const float a = float(i) / 4 * 6.2831853f;
+            pts.push_back(Vec3(0, 0, -1.5f)); pts.push_back(Vec3(std::cos(a) * 0.15f, std::sin(a) * 0.15f, -1.2f));
+        }
+        if (kind == 2) { const float r = 0.6f;   // spot cone
+            for (int i = 0; i < 8; ++i) {
+                const float a0 = float(i) / 8 * 6.2831853f, a1 = float(i + 1) / 8 * 6.2831853f;
+                pts.push_back(Vec3(std::cos(a0) * r, std::sin(a0) * r, -1.5f)); pts.push_back(Vec3(std::cos(a1) * r, std::sin(a1) * r, -1.5f));
+                if (i % 2 == 0) { pts.push_back(Vec3(0, 0, 0)); pts.push_back(Vec3(std::cos(a0) * r, std::sin(a0) * r, -1.5f)); }
+            }
+        }
+    }
+    mWireMeshes[kind] = mTarget->createLineMesh(pts, false);
+    return mWireMeshes[kind];
+}
+
+void SceneMirror::syncLightWires(Entry &e, iris::LightNode *light)
+{
+    if (!mLightWires) {
+        if (e.wireNode) mTarget->setNodeVisible(e.wireNode, false);
+        return;
+    }
+    int kind = 1;
+    if (light->lightType == iris::LightType::Directional) kind = 0;
+    else if (light->lightType == iris::LightType::Spot) kind = 2;
+    MeshId m = wireMeshFor(kind);
+    if (!m) return;
+    if (!e.wireNode) e.wireNode = mTarget->createNode(e.node);
+    if (!e.wireMaterial) e.wireMaterial = mTarget->createUnlitMaterial(Colour(1, 1, 1), false);
+    if (!e.wireNode || !e.wireMaterial) return;
+    if (e.wireKind != kind) { if (mTarget->attachMesh(e.wireNode, m, e.wireMaterial)) e.wireKind = kind; }
+    const QColor c = light->color;
+    mTarget->setUnlitMaterial(e.wireMaterial, Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));
+    // Wires live in the light node's local space; undo the node's own scale.
+    const QVector3D s = light->getLocalScale();
+    mTarget->setNodeTransform(e.wireNode, Vec3(), Quat(),
+                              Vec3(s.x() > 1e-6f ? 1.0f / s.x() : 1.0f, s.y() > 1e-6f ? 1.0f / s.y() : 1.0f, s.z() > 1e-6f ? 1.0f / s.z() : 1.0f));
+    mTarget->setNodeVisible(e.wireNode, true);
 }
 
 void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen)
@@ -104,6 +231,7 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
         // The light rides on the mirrored node: position and direction follow the document.
         auto light = node.staticCast<iris::LightNode>();
         if (mTarget->setLight(e.node, toLightDesc(light.data()))) e.hasLight = true;
+        syncLightWires(e, light.data());
     }
 
     for (auto &child : node->children)
@@ -114,6 +242,8 @@ void SceneMirror::removeMissing(const QSet<long> &seen)
 {
     for (auto it = mEntries.begin(); it != mEntries.end();) {
         if (seen.contains(it.key())) { ++it; continue; }
+        if (it->wireNode) mTarget->removeNode(it->wireNode);
+        if (it->wireMaterial) mTarget->destroyMaterial(it->wireMaterial);
         if (it->node)  mTarget->removeNode(it->node);
         it = mEntries.erase(it);
     }

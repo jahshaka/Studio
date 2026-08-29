@@ -557,6 +557,25 @@ void overlay_lines_draw_on_top() {
     const Px shown = centre(img);
     std::printf("    overlay centre: depth-tested %d %d %d | on-top %d %d %d\n", hidden.r, hidden.g, hidden.b, shown.r, shown.g, shown.b);
     CHECK_MSG(shown.g > 150 && shown.g > shown.r, "on-top lines must win at the centre: %d %d %d", shown.r, shown.g, shown.b);
+    // Wireframe on top over the solid cube: edges show through, faces do not cover.
+    MaterialId wire = s->createUnlitMaterial(kGreen, false, true);
+    NodeId wireNode = s->createNode();
+    CHECK(s->attachMesh(wireNode, cubeMesh, wire));
+    s->setNodeTransform(wireNode, Vec3(0,0,0), Quat(), Vec3(1.2f,1.2f,1.2f));
+    CHECK(s->attachMesh(lineNode, lines, tested));   // put the line fan back behind faces
+    render(fx.e); REQUIRE(v->readPixels(img));
+    {
+        int green = 0, orange = 0;
+        for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
+            const Px q = px(img, x, y);
+            if (q.g > 200 && q.r < 80) ++green; else if (q.r > 100 && q.g < 90) ++orange;
+        }
+        std::printf("    wireframe overlay: %d green edge pixels, %d orange face pixels\n", green, orange);
+        CHECK_MSG(green > 20, "wireframe edges visible: %d", green);
+        CHECK_MSG(orange > 200, "faces still visible through the wireframe: %d", orange);
+    }
+    CHECK(s->destroyMaterial(wire));
+    CHECK(s->attachMesh(lineNode, lines, onTop));
     CHECK(s->setUnlitMaterial(onTop, Colour(1, 0, 1)));
     render(fx.e); REQUIRE(v->readPixels(img));
     CHECK(centre(img).b > 150 && centre(img).r > 150);

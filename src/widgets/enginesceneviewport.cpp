@@ -263,7 +263,11 @@ void EngineSceneViewport::syncFrame()
     const float dt = float(mFrameTimer.restart()) / 1000.0f;
     if (mCamController) mCamController->update(dt);
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
-    if (mMirror) mMirror->sync();
+    if (mMirror) {
+        mMirror->setLightWires(mShowLightWires);
+        mMirror->setHighlightedNode(mSelectedNode);
+        mMirror->sync();
+    }
     if (mGizmo && mEditorCam && mSelectedNode) mGizmo->updateSize(mEditorCam);
     if (mOverlay) {
         QVector3D rayPos, rayDir, viewDir;

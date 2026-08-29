@@ -70,7 +70,8 @@ public:
     // ---- Overlay primitives (step 8): gizmos, light wires, animation paths ----
     /// Flat colour, unlit. With depthTest=false it draws on top of everything —
     /// what gizmo handles need. Alpha < 1 blends.
-    virtual MaterialId  createUnlitMaterial(const Colour &, bool depthTest) = 0;
+    /// `wireframe` draws only the triangle edges — the selection outline uses it.
+    virtual MaterialId  createUnlitMaterial(const Colour &, bool depthTest, bool wireframe = false) = 0;
     virtual bool        setUnlitMaterial(MaterialId, const Colour &) = 0;
     /// A line list (pairs of points) or, with `strip`, a connected polyline.
     /// Attach with attachMesh like any mesh. One pixel wide.

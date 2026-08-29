@@ -276,7 +276,7 @@ public:
     }
 
     // ---- Overlay primitives ----
-    MaterialId createUnlitMaterial(const Colour &c, bool depthTest) override {
+    MaterialId createUnlitMaterial(const Colour &c, bool depthTest, bool wireframe) override {
         JAH_TRY {
             MaterialRec rec; rec.datablockName = processUniqueName("unlit"); rec.unlit = true; rec.onTop = !depthTest;
             auto *hlmsUnlit = static_cast<Ogre::HlmsUnlit *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT));
@@ -284,6 +284,7 @@ public:
             macro.mDepthCheck = depthTest;
             macro.mDepthWrite = depthTest;
             macro.mCullMode = Ogre::CULL_NONE;
+            if (wireframe) macro.mPolygonMode = Ogre::PM_WIREFRAME;
             Ogre::HlmsBlendblock blend;
             if (c.a < 0.999f) blend.setBlendType(Ogre::SBT_TRANSPARENT_ALPHA);
             auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->createDatablock(

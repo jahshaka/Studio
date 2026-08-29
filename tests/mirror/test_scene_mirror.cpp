@@ -213,6 +213,36 @@ int main(int argc, char **argv)
     view->readPixels(img); show("document camera moved", img);
     CHECK(isBlue(centre(img)), "moving the document camera moves the view");
 
+    // ---- selection highlight (on-top wireframe) and light wires ----
+    cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f)); cam->lookAt(QVector3D(0, 0, 0));
+    mirror.applyCamera(cam, view);
+    auto countYellow = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++n; } return n; };
+    mirror.setHighlightedNode(meshNode2);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    const int yellowOn = countYellow(img);
+    std::printf("    highlight on: %d yellow wireframe pixels\n", yellowOn);
+    CHECK(yellowOn > 10, "selected mesh gets a yellow wireframe highlight");
+    mirror.setHighlightedNode(nullptr);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    CHECK(countYellow(img) == 0, "highlight cleared");
+
+    doc->getRootNode()->removeChild(meshNode2);
+    point->color = QColor(255, 0, 255);              // magenta wires
+    point->setLocalPos(QVector3D(0.0f, 0.0f, 0.0f));  // in the middle of the frame
+    auto countMagenta = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) ++n; } return n; };
+    mirror.setLightWires(true);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    const int wiresOn = countMagenta(img);
+    std::printf("    light wires on: %d magenta pixels\n", wiresOn);
+    CHECK(wiresOn > 10, "point light draws rings in its colour");
+    mirror.setLightWires(false);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    CHECK(countMagenta(img) == 0, "light wires off");
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);
