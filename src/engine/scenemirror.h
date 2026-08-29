@@ -18,6 +18,8 @@
 #include <QImage>
 #include <QMatrix4x4>
 #include <QSet>
+#include <utility>
+#include <vector>
 #include "irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -181,12 +183,19 @@ private:
     QElapsedTimer mRealisticBakeTimer;
     jahshaka::engine::MeshId mWireMeshes[4] = { 0, 0, 0, 0 };   // directional, point, spot, area
     iris::SceneNodePtr mHighlighted;
-    jahshaka::engine::NodeId mHighlightNode = 0;
+    /// One highlight shell per mesh under the highlighted node: selecting an
+    /// asset's root outlines the whole subtree. Pooled and reused across frames.
+    struct HighlightShell {
+        jahshaka::engine::NodeId node = 0;
+        jahshaka::engine::MeshId mesh = 0;   // engine mesh currently attached
+        bool wireframe = false;              // which material the shell carries
+    };
+    std::vector<HighlightShell> mHighlightShells;
+    void collectHighlightMeshes(const iris::SceneNodePtr &node,
+                                std::vector<std::pair<iris::MeshNode *, jahshaka::engine::MeshId>> &out);
     jahshaka::engine::MaterialId mHighlightMaterial = 0;   // wireframe (on top)
     jahshaka::engine::MaterialId mOutlineMaterial = 0;     // inverted hull
-    jahshaka::engine::MeshId mHighlightMesh = 0;
     bool mHighlightWireframe = false;
-    bool mHighlightWireframeApplied = false;
     QColor mHighlightColourApplied;                        // what the materials show now
     // Strongest shadow quality any shadow-casting light asked for, from the last
     // sync(); pushed engine-wide by applyEnvironment (see comment there).

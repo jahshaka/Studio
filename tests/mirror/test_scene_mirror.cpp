@@ -509,6 +509,48 @@ int main(int argc, char **argv)
     view->readPixels(img);
     CHECK(countYellow(img) == 0, "highlight cleared");
 
+    // ---- a GROUP selection outlines the whole subtree ----
+    // Selecting a multi-part asset's ROOT must outline every descendant mesh;
+    // before, only a single MeshNode selection drew anything.
+    {
+        cam->setLocalPos(QVector3D(0.0f, 0.8f, 5.0f)); cam->lookAt(QVector3D(0, 0, 0));
+        mirror.applyCamera(cam, view);
+        auto group = iris::SceneNode::create();
+        auto makePart = [&](float x) {
+            auto part = iris::MeshNode::create();
+            part->setMesh(":assets/models/cube.obj");
+            part->setLocalScale(QVector3D(s, s, s));
+            part->setLocalPos(QVector3D(x, 0, 0));
+            part->setMaterial(legacy);
+            part->setAttached(true);
+            group->addChild(part, false);
+            return part;
+        };
+        makePart(-1.4f); makePart(1.4f);
+        doc->getRootNode()->addChild(group);
+        mirror.setHighlightedNode(group);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        auto countYellowIn = [&](unsigned x0, unsigned x1) { int nn = 0; for (unsigned y = 0; y < img.height; ++y) for (unsigned x = x0; x < x1; ++x) { const Colour c = img.at(x, y); if (c.r > 0.8f && c.g > 0.6f && c.b < 0.4f) ++nn; } return nn; };
+        const int leftY = countYellowIn(0, img.width / 2), rightY = countYellowIn(img.width / 2, img.width);
+        std::printf("    group outline: %d yellow left, %d yellow right\n", leftY, rightY);
+        CHECK(leftY > 10 && rightY > 10, "group selection outlines EVERY descendant mesh (both parts)");
+        mirror.setHighlightWireframe(true);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const int leftW = countYellowIn(0, img.width / 2), rightW = countYellowIn(img.width / 2, img.width);
+        std::printf("    group wireframe: %d yellow left, %d yellow right\n", leftW, rightW);
+        CHECK(leftW > 10 && rightW > 10, "the wireframe toggle covers the whole group");
+        mirror.setHighlightWireframe(false);
+        mirror.setHighlightedNode(nullptr);
+        doc->getRootNode()->removeChild(group);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(countYellow(img) == 0, "group highlight cleared");
+        cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f)); cam->lookAt(QVector3D(0, 0, 0));
+        mirror.applyCamera(cam, view);
+    }
+
     doc->getRootNode()->removeChild(meshNode2);
     point->color = QColor(255, 0, 255);              // magenta wires
     point->setLocalPos(QVector3D(0.0f, 0.0f, 0.0f));  // in the middle of the frame

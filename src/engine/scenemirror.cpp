@@ -54,9 +54,9 @@ void SceneMirror::setSource(iris::ScenePtr scene)
     mEntries.clear();
     for (MeshId &m : mWireMeshes) { if (m) mTarget->destroyMesh(m); m = 0; }
     mHighlighted.clear();
-    if (mHighlightNode) { mTarget->removeNode(mHighlightNode); mHighlightNode = 0; }
+    for (HighlightShell &s : mHighlightShells) if (s.node) mTarget->removeNode(s.node);
+    mHighlightShells.clear();
     if (mHighlightMaterial) { mTarget->destroyMaterial(mHighlightMaterial); mHighlightMaterial = 0; }
-    mHighlightMesh = 0;
     for (MeshId m : mMeshes) mTarget->destroyMesh(m);
     mMeshes.clear();
     mSkins.clear();
@@ -132,15 +132,26 @@ void SceneMirror::setHighlightWireframe(bool on)
     mHighlightWireframe = on;
 }
 
+void SceneMirror::collectHighlightMeshes(const iris::SceneNodePtr &node,
+                                         std::vector<std::pair<iris::MeshNode *, MeshId>> &out)
+{
+    if (!node || !node->isVisible()) return;
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto meshNode = static_cast<iris::MeshNode *>(node.data());
+        if (iris::Mesh *mesh = meshNode->getMesh().data())
+            if (MeshId m = engineMesh(mesh)) out.emplace_back(meshNode, m);
+    }
+    for (auto &child : node->children) collectHighlightMeshes(child, out);
+}
+
 void SceneMirror::syncHighlight()
 {
-    iris::MeshNode *meshNode = (mHighlighted && mHighlighted->getSceneNodeType() == iris::SceneNodeType::Mesh)
-                                   ? static_cast<iris::MeshNode *>(mHighlighted.data()) : nullptr;
-    iris::Mesh *mesh = meshNode ? meshNode->getMesh().data() : nullptr;
-    MeshId m = mesh ? engineMesh(mesh) : 0;
-    if (!m) {
-        if (mHighlightNode) mTarget->setNodeVisible(mHighlightNode, false);
-        mHighlightMesh = 0;
+    // Every mesh under the highlighted node, the node itself included: selecting
+    // an asset's ROOT (or any group) outlines the whole asset, not just one part.
+    std::vector<std::pair<iris::MeshNode *, MeshId>> targets;
+    if (mHighlighted) collectHighlightMeshes(mHighlighted, targets);
+    if (targets.empty()) {
+        for (HighlightShell &s : mHighlightShells) { if (s.node) mTarget->setNodeVisible(s.node, false); s.mesh = 0; }
         return;
     }
     // The user's outline colour preference lives on the document
@@ -168,20 +179,34 @@ void SceneMirror::syncHighlight()
         if (mHighlightMaterial) mTarget->setUnlitMaterial(mHighlightMaterial, kSelection);
         if (mOutlineMaterial)   mTarget->setUnlitMaterial(mOutlineMaterial, kSelection);
     }
-    if (!mHighlightNode) mHighlightNode = mTarget->createNode();
-    if (!mHighlightNode || !mat) return;
-    if (mHighlightMesh != m || mHighlightWireframeApplied != mHighlightWireframe) {
-        if (mTarget->attachMesh(mHighlightNode, m, mat)) {
-            mHighlightMesh = m;
-            mHighlightWireframeApplied = mHighlightWireframe;
+    if (!mat) return;
+    // One pooled shell per target mesh; extra shells from a previous (larger)
+    // selection are hidden, not destroyed.
+    if (mHighlightShells.size() < targets.size()) mHighlightShells.resize(targets.size());
+    for (size_t i = 0; i < targets.size(); ++i) {
+        iris::MeshNode *meshNode = targets[i].first;
+        const MeshId m = targets[i].second;
+        HighlightShell &s = mHighlightShells[i];
+        if (!s.node) s.node = mTarget->createNode();
+        if (!s.node) continue;
+        if (s.mesh != m || s.wireframe != mHighlightWireframe) {
+            if (mTarget->attachMesh(s.node, m, mat)) {
+                s.mesh = m;
+                s.wireframe = mHighlightWireframe;
+            }
         }
+        // The outline is the same mesh scaled up slightly around the node's pivot:
+        // only the band where the shell pokes out past the original is visible.
+        QMatrix4x4 t = meshNode->globalTransform;
+        if (!mHighlightWireframe) t.scale(1.04f);
+        pushTransform(mTarget, s.node, t);
+        mTarget->setNodeVisible(s.node, true);
     }
-    // The outline is the same mesh scaled up slightly around the node's pivot:
-    // only the band where the shell pokes out past the original is visible.
-    QMatrix4x4 t = meshNode->globalTransform;
-    if (!mHighlightWireframe) t.scale(1.04f);
-    pushTransform(mTarget, mHighlightNode, t);
-    mTarget->setNodeVisible(mHighlightNode, true);
+    for (size_t i = targets.size(); i < mHighlightShells.size(); ++i) {
+        HighlightShell &s = mHighlightShells[i];
+        if (s.node) mTarget->setNodeVisible(s.node, false);
+        s.mesh = 0;
+    }
 }
 
 // ---- light wires ---------------------------------------------------------------
@@ -478,7 +503,7 @@ void SceneMirror::reclaimUnused()
 {
     QSet<MeshId> usedMeshes; QSet<MaterialId> usedMaterials;
     for (const Entry &e : mEntries) { if (e.mesh) usedMeshes.insert(e.mesh); if (e.material) usedMaterials.insert(e.material); }
-    if (mHighlightMesh) usedMeshes.insert(mHighlightMesh);
+    for (const HighlightShell &s : mHighlightShells) if (s.mesh) usedMeshes.insert(s.mesh);
     for (auto it = mMeshes.begin(); it != mMeshes.end();) {
         if (usedMeshes.contains(it.value())) { ++it; continue; }
         mSkins.remove(it.key());
