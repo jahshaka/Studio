@@ -31,6 +31,11 @@ public:
     virtual ~Scene() = default;
     virtual const std::string &name() const = 0;
     virtual void        setAmbient(const Colour &upper, const Colour &lower) = 0;
+    /// Linear distance fog on lit (PBR) surfaces, matching the legacy renderer:
+    /// mix(surface, colour, clamp((eyeDistance - start) / (end - start), 0, 1)).
+    /// Unlit overlays (gizmos, wires, billboards) and the sky are never fogged.
+    /// Off by default; cheap to call every frame (no shader recompilation).
+    virtual void        setFog(bool enabled, const Colour &colour, float start, float end) = 0;
     virtual NodeId      addDirectionalLight(const Vec3 &direction, float power) = 0;
     /// Textured sky behind everything: an equirectangular (lat-long) image, or a
     /// cubemap texture. SkyMode::NoSky removes it (the View's background shows).

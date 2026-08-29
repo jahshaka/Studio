@@ -565,6 +565,11 @@ void SceneMirror::applyEnvironment(View *view)
     // World-panel Enable Shadows (used to be hardcoded on).
     if (view->shadows() != mSource->shadowEnabled)
         view->setShadows(mSource->shadowEnabled);
+    // Fog panel: linear distance fog on lit surfaces (engine keeps unlit overlays
+    // and the sky unfogged, like the legacy renderer). Cheap per-frame push.
+    const QColor f = mSource->fogColor;
+    mTarget->setFog(mSource->fogEnabled, Colour(f.redF(), f.greenF(), f.blueF(), 1.0f),
+                    mSource->fogStart, mSource->fogEnd);
 }
 
 void SceneMirror::applySky(View *view)

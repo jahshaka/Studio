@@ -1,0 +1,41 @@
+// Jahshaka linear distance fog — parity with the legacy IrisGL forward renderer
+// (irisgl/assets/shaders/pbr_material.frag:397-401):
+//     zDist      = length(v_worldPos - u_eyePos)
+//     fogFactor  = clamp((zDist - start) / (end - start), 0, 1)
+//     finalColor = mix(finalColor, fogColor, fogFactor)
+//
+// Attached per-datablock with setCustomPieceFile() by OgreEngine — every lit PBS
+// material gets it; Unlit (gizmos, wires, billboards) and the low-level sky
+// material do not, so they stay unfogged, exactly like legacy.
+//
+// The pass-buffer members below are inserted at the END of the PassData struct
+// (500.Structs_piece_vs_piece_ps.any @insertpiece(custom_passBuffer)); the values
+// are appended to the end of the pass buffer by FogHlmsListener in OgreEngine.cpp
+// — the two layouts line up by construction. The listener ALWAYS appends the two
+// float4s (even with fog off): the shader branches on jahFogColour.w, so toggling
+// fog needs no shader recompile and no Hlms cache invalidation.
+//
+// Shadow-caster shaders share this insertion point but not the lit pass buffer,
+// hence the guard.
+@property( !hlms_shadowcaster )
+
+@piece( custom_passBuffer )
+	float4 jahFogColour;	// rgb = fog colour (linear), w = enabled (0.0 / 1.0)
+	float4 jahFogParams;	// x = start, y = end, z = 1/(end-start), w unused
+@end
+
+@piece( custom_ps_posExecution )
+	if( passBuf.jahFogColour.w > 0.5 )
+	{
+		// inPs.pos is the view-space position: its length is the eye distance,
+		// the same metric as legacy's length(v_worldPos - u_eyePos).
+		float jahZDist     = length( inPs.pos.xyz );
+		float jahFogFactor = clamp( ( jahZDist - passBuf.jahFogParams.x ) *
+									passBuf.jahFogParams.z, 0.0, 1.0 );
+		outPs_colour0.xyz = lerp( outPs_colour0.xyz,
+								  midf3_c( passBuf.jahFogColour.xyz ),
+								  midf_c( jahFogFactor ) );
+	}
+@end
+
+@end

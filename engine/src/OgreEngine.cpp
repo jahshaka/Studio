@@ -26,6 +26,7 @@
 #include <OgreSubMesh2.h>
 #include <OgreArchiveManager.h>
 #include <OgreHlmsManager.h>
+#include <OgreHlmsListener.h>
 #include <OgreHlmsPbs.h>
 #include <OgreHlmsUnlit.h>
 #include <OgreHlmsPbsDatablock.h>
@@ -57,6 +58,7 @@
 #include <functional>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <map>
@@ -85,6 +87,61 @@ std::string processUniqueName(const char *prefix) {
 class OgreEngine;
 
 // ---------------------------------------------------------------------------
+// Linear distance fog (media/Hlms/Jahshaka/JahFog_piece_ps.any, attached to every
+// lit PBS datablock). Parameters are per-scene, keyed by SceneManager: the listener
+// is global to HlmsPbs, but preparePassBuffer receives the SceneManager of the pass
+// being built. The two float4s are ALWAYS appended — fog off writes enabled=0 — so
+// the pass-buffer layout is constant and toggling fog is a uniform change, never a
+// shader recompile or Hlms cache event.
+struct FogParams {
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    float start = 0.0f, end = 1.0f;
+    bool  enabled = false;
+};
+std::map<const Ogre::SceneManager *, FogParams> gFogParams;   // render thread only
+
+class FogHlmsListener final : public Ogre::HlmsListener {
+public:
+    Ogre::uint32 getPassBufferSize(const Ogre::CompositorShadowNode *, bool /*casterPass*/,
+                                   bool, Ogre::SceneManager *) const override {
+        // Caster passes get the bytes too (constant layout); their shaders never
+        // declare the members, which is legal — the block may be smaller than the buffer.
+        return 8u * sizeof(float);
+    }
+    float *preparePassBuffer(const Ogre::CompositorShadowNode *, bool, bool,
+                             Ogre::SceneManager *sceneManager, float *passBufferPtr) override {
+        FogParams p;
+        const auto it = gFogParams.find(sceneManager);
+        if (it != gFogParams.end()) p = it->second;
+        *passBufferPtr++ = p.r;
+        *passBufferPtr++ = p.g;
+        *passBufferPtr++ = p.b;
+        *passBufferPtr++ = p.enabled ? 1.0f : 0.0f;
+        *passBufferPtr++ = p.start;
+        *passBufferPtr++ = p.end;
+        *passBufferPtr++ = 1.0f / std::max(p.end - p.start, 1e-4f);
+        *passBufferPtr++ = 0.0f;
+        return passBufferPtr;
+    }
+};
+FogHlmsListener gFogListener;
+
+/// Every lit PBS datablock carries the fog piece (Unlit and the sky do not — they
+/// must stay unfogged). A missing piece file degrades to "no fog", logged, instead
+/// of failing material creation.
+void attachFogPiece(Ogre::HlmsPbsDatablock *db) {
+    try {
+        db->setCustomPieceFile("JahFog_piece_ps.any",
+                               Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
+                               Ogre::CustomPieceStage::PixelShader);
+    } catch (Ogre::Exception &e) {
+        Ogre::LogManager::getSingleton().logMessage(
+            "Jahshaka: fog piece not attached (materials render unfogged): " +
+            e.getFullDescription());
+    }
+}
+
+// ---------------------------------------------------------------------------
 class OgreScene final : public Scene {
 public:
     OgreScene(Ogre::Root *root, Ogre::SceneManager *sm, const std::string &name,
@@ -98,6 +155,14 @@ public:
         JAH_TRY {
             mSceneMgr->setAmbientLight(toOgre(upper), toOgre(lower), Ogre::Vector3::UNIT_Y);
         } JAH_CATCH(mError, );
+    }
+
+    void setFog(bool enabled, const Colour &colour, float start, float end) override {
+        FogParams p;
+        p.r = colour.r; p.g = colour.g; p.b = colour.b;
+        p.start = start; p.end = end;
+        p.enabled = enabled;
+        gFogParams[mSceneMgr] = p;   // read by FogHlmsListener::preparePassBuffer
     }
 
     NodeId addDirectionalLight(const Vec3 &direction, float power) override {
@@ -124,6 +189,10 @@ public:
             if (mode == SkyMode::Cubemap) { mError = "setSky: cubemap skies are not supported yet (equirectangular only)"; return false; }
             auto it = mTextures.find(texId);
             if (it == mTextures.end()) { mError = "setSky: unknown texture"; return false; }
+            // A cubemap sky may already occupy mSkyNode (six quads with their own
+            // datablocks and no mSkyDatablockName) — replace it rather than inherit
+            // its node, or the lookup below derefs a null datablock.
+            if (mSkyNode && !mSkyFaces.empty()) destroySky();
             if (!mSkyNode) {
                 mSkyMeshName = processUniqueName("skysphere");
                 mSkyMesh = buildSkySphere(mSkyMeshName);
@@ -281,6 +350,7 @@ public:
                 Ogre::HlmsMacroblock(), Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
             // Ogre defaults to SpecularWorkflow; Jahshaka's material model is metallic-roughness.
             db->setWorkflow(Ogre::HlmsPbsDatablock::MetallicWorkflow);
+            attachFogPiece(db);
             db->setDiffuse(Ogre::Vector3(albedo.r, albedo.g, albedo.b));
             db->setMetalness(metalness);
             db->setRoughness(roughness);
@@ -398,6 +468,7 @@ public:
                 Ogre::IdString(rec.datablockName), rec.datablockName,
                 Ogre::HlmsMacroblock(), Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
             db->setWorkflow(Ogre::HlmsPbsDatablock::MetallicWorkflow);
+            attachFogPiece(db);
             applyPbr(db, p);
             if (mReflectionTex) db->setTexture(Ogre::PBSM_REFLECTION, mReflectionTex);
             mMaterials[++mNextMaterialId] = rec;
@@ -833,6 +904,7 @@ public:
             mMeshes.clear();
             mRoot->destroySceneManager(mSceneMgr);
         } JAH_CATCH(mError, );
+        gFogParams.erase(mSceneMgr);
         mSceneMgr = nullptr;
     }
 
@@ -1618,6 +1690,13 @@ private:
             mRoot->getHlmsManager()->registerHlms(
                 OGRE_NEW Ogre::HlmsPbs(am.load(mMediaDir + mainPath, "FileSystem", true), &libs));
         }
+        // Fog: append the per-scene fog constants to every PBS pass buffer. Unlit
+        // gets no listener — gizmos, wires and billboards stay unfogged.
+        mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS)->setListener(&gFogListener);
+        // Shader-generation debugging: JAHSHAKA_HLMS_DEBUG_DIR=/some/dir/ dumps every
+        // generated shader (and its properties) there. Diagnostic only.
+        if (const char *dbg = std::getenv("JAHSHAKA_HLMS_DEBUG_DIR"))
+            mRoot->getHlmsManager()->getHlms(Ogre::HLMS_PBS)->setDebugOutputPath(true, true, dbg);
         mHlmsRegistered = true;
         registerCommonMaterials();
         createShadowNode();
@@ -1633,7 +1712,9 @@ private:
             const char *dirs[] = { "2.0/scripts/materials/Common", "2.0/scripts/materials/Common/Any",
                                    "2.0/scripts/materials/Common/GLSL", "2.0/scripts/materials/Common/HLSL",
                                    "2.0/scripts/materials/Common/Metal",
-                                   "Hlms/Common/Any", "Hlms/Common/GLSL", "Hlms/Common/HLSL", "Hlms/Common/Metal" };
+                                   "Hlms/Common/Any", "Hlms/Common/GLSL", "Hlms/Common/HLSL", "Hlms/Common/Metal",
+                                   // Jahshaka's own pieces (fog); resolved by setCustomPieceFile.
+                                   "Hlms/Jahshaka" };
             for (const char *d : dirs) rgm.addResourceLocation(mMediaDir + d, "FileSystem", group, false);
             rgm.initialiseAllResourceGroups(true);
         } catch (Ogre::Exception &e) {

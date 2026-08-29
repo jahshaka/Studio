@@ -833,6 +833,57 @@ void pbr_two_sided_shows_inside_faces() {
     CHECK(near(centre(img), kBlue, 20));
 }
 
+void fog_fades_distant_surfaces_to_fog_colour() {
+    Fixture fx;
+    View *v = fx.view("fog-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("fog-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);   // near cube at the origin; its front face is ~3.0 from the eye
+    aim(v);
+    // A huge cube 50 units down the view axis (half-extent 30 after scaling the
+    // ±0.5 test cube): its faces fill every pixel around the near cube. Measured
+    // eye distance of that backdrop is >= ~8.2 (the cube's near corner passes
+    // close to the camera), so with fogEnd = 7 it is fully fogged everywhere.
+    NodeId farNode = s->addTestCube(kCyan, 0.0f, 0.6f);
+    REQUIRE(farNode != 0);
+    s->setNodePosition(farNode, Vec3(-28.6f, -23.4f, -33.8f));
+    s->setNodeScale(farNode, Vec3(60.0f, 60.0f, 60.0f));
+
+    const Colour kMagenta(1.0f, 0.0f, 1.0f);   // 0/1 channels: sRGB-invariant
+    Image img;
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px near0 = centre(img);
+    const Px far0  = px(img, img.width / 2, 6);
+    CHECK_MSG(!near(far0, kMagenta, 30),
+              "baseline far surface is not fog-coloured: %d %d %d", far0.r, far0.g, far0.b);
+
+    // Fog on: the near cube (eye distance ~3.0, before fogStart) is untouched;
+    // the far surface (past fogEnd) must converge to exactly the fog colour.
+    s->setFog(true, kMagenta, 5.0f, 7.0f);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px near1 = centre(img);
+    const Px far1  = px(img, img.width / 2, 6);
+    std::printf("    near %d %d %d -> %d %d %d | far %d %d %d -> %d %d %d\n",
+                near0.r, near0.g, near0.b, near1.r, near1.g, near1.b,
+                far0.r, far0.g, far0.b, far1.r, far1.g, far1.b);
+    CHECK_MSG(near(far1, kMagenta),
+              "fully fogged surface equals the fog colour: %d %d %d", far1.r, far1.g, far1.b);
+    CHECK_MSG(std::abs(near1.r - near0.r) <= 6 && std::abs(near1.g - near0.g) <= 6 &&
+              std::abs(near1.b - near0.b) <= 6,
+              "surface before fogStart stays material-coloured: %d %d %d vs %d %d %d",
+              near1.r, near1.g, near1.b, near0.r, near0.g, near0.b);
+
+    // Toggle off: the same shaders render unfogged again (the enable flag rides
+    // the pass buffer — no shader variant switch to go stale).
+    s->setFog(false, kMagenta, 5.0f, 7.0f);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px far2 = px(img, img.width / 2, 6);
+    CHECK_MSG(std::abs(far2.r - far0.r) <= 6 && std::abs(far2.g - far0.g) <= 6 &&
+              std::abs(far2.b - far0.b) <= 6,
+              "fog off restores the baseline: %d %d %d vs %d %d %d",
+              far2.r, far2.g, far2.b, far0.r, far0.g, far0.b);
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -857,6 +908,7 @@ int main(int argc, char **argv) {
         { "pbr_alpha_blend_mixes_with_background",  pbr_alpha_blend_mixes_with_background },
         { "pbr_alpha_cutout_discards_below_cutoff", pbr_alpha_cutout_discards_below_cutoff },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
+        { "fog_fades_distant_surfaces_to_fog_colour", fog_fades_distant_surfaces_to_fog_colour },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";
