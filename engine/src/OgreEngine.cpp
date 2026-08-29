@@ -989,9 +989,15 @@ private:
             break;
         case PbrAlphaMode::Blend:
             db->setAlphaTest(Ogre::CMPF_ALWAYS_PASS);
-            // Fade = plain alpha blending (glTF BLEND); Transparent would keep
-            // specular at the cost of premultiplying diffuse by alpha^2.
+            // Fade = plain alpha blending (glTF BLEND); imports keep spec semantics.
             db->setTransparency(p.alpha, Ogre::HlmsPbsDatablock::Fade);
+            break;
+        case PbrAlphaMode::Glass:
+            db->setAlphaTest(Ogre::CMPF_ALWAYS_PASS);
+            // Ogre's own words: "realistic transparency that preserves lighting
+            // reflections (particularly specular on the edges). Great for glass."
+            // Fade here was why authored glass looked merely faded.
+            db->setTransparency(p.alpha, Ogre::HlmsPbsDatablock::Transparent);
             break;
         }
     }

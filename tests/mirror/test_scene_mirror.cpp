@@ -262,6 +262,67 @@ int main(int argc, char **argv)
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
               "a normal-mapped PBR material still renders its base colour map (tangents exist)");
         QFile::remove(basePath); QFile::remove(normalPath);
+    }
+
+    // ---- Glass alpha mode keeps its specular while Fade dims everything ----
+    // Regression: authored glass used Ogre's Fade ("just fading out an object");
+    // alphaMode 3 = Glass maps to Transparent, which preserves specular/reflections.
+    {
+        auto centreLum = [](const Image &im) {   // 11x11 patch: guaranteed cube pixels
+            float sum = 0; int n = 0;
+            for (unsigned y = im.height / 2 - 5; y <= im.height / 2 + 5; ++y)
+                for (unsigned x = im.width / 2 - 5; x <= im.width / 2 + 5; ++x) {
+                    const Colour c = im.at(x, y); sum += c.r + c.g + c.b; ++n;
+                }
+            return sum / n;
+        };
+        mirror.setLightWires(false);   // the white wire billboard saturates maxLum in both modes
+        // Glass shows its nature via ENVIRONMENT reflections (a flat cube face rarely
+        // mirrors a directional light into the camera): bright cubemap sky -> the
+        // engine binds it as the PBR reflection map; Glass keeps it, Fade dims it.
+        const QString skyDir = QDir::temp().filePath("jahshaka_mirror_glass_sky");
+        QDir().mkpath(skyDir);
+        QString facePaths[6];
+        for (int i = 0; i < 6; ++i) {
+            QImage f(8, 8, QImage::Format_RGBA8888); f.fill(QColor(235, 235, 235));
+            facePaths[i] = skyDir + QString("/f%1.png").arg(i); f.save(facePaths[i]);
+        }
+        doc->setSkyTexture(iris::Texture2D::createCubeMap(facePaths[0], facePaths[1], facePaths[2],
+                                                          facePaths[3], facePaths[4], facePaths[5]));
+        doc->skyType = iris::SkyType::CUBEMAP;
+        mirror.applySky(view);
+        auto glassMat = iris::PbrMaterial::create();
+        glassMat->setValue("baseColor", QColor(238, 244, 248));
+        glassMat->setValue("roughness", 0.05f);
+        glassMat->setValue("metallic", 0.0f);
+        glassMat->setValue("alpha", 0.3f);
+        glassMat->setValue("alphaMode", 2);                      // Fade first
+        meshNode2->setMaterial(glassMat);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("blend (fade) glass", img);
+        const float fadeLum = centreLum(img);
+        glassMat->setValue("alphaMode", 3);                      // Glass
+        PbrParams gp;
+        CHECK(SceneMirror::toPbrParams(glassMat.data(), gp) && gp.alphaMode == PbrAlphaMode::Glass,
+              "document alphaMode 3 maps to PbrAlphaMode::Glass");
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("glass (transparent)", img);
+        const float glassLum = centreLum(img);
+        // Fade blends 70% bright background through the surface; Transparent
+        // premultiplies the diffuse and shows more of the surface itself. The exact
+        // ordering is a render detail — what the regression pins is that alphaMode 3
+        // takes a DIFFERENT Ogre transparency path than alphaMode 2 (it used to be
+        // the same Fade, which is why authored glass looked merely faded).
+        std::printf("    centre-patch luminance: fade %.3f vs glass %.3f\n", fadeLum, glassLum);
+        CHECK(std::fabs(glassLum - fadeLum) > 0.25f,
+              "Glass (alphaMode 3) renders through a different transparency path than Blend/Fade");
+        mirror.setLightWires(true);
+        doc->skyType = iris::SkyType::SINGLE_COLOR;
+        doc->skyColor = QColor(0, 0, 255);           // restore the suite's blue clear colour
+        doc->setSkyTexture(iris::Texture2DPtr());
+        mirror.applySky(view);
+        for (int i = 0; i < 6; ++i) QFile::remove(facePaths[i]);
+        QDir().rmdir(skyDir);
         meshNode2->setMaterial(legacy);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }

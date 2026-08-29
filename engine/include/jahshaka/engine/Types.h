@@ -54,11 +54,14 @@ enum class SkyMode { NoSky, Equirectangular, Cubemap };   // 'None' collides wit
 /// (bake AO into the base colour map at import time if it matters).
 enum class PbrTextureSlot { Albedo, Normal, Metalness, Roughness, Emissive };
 
-/// How PbrParams::alpha / alphaCutoff are interpreted (glTF's OPAQUE/MASK/BLEND).
+/// How PbrParams::alpha / alphaCutoff are interpreted (glTF's OPAQUE/MASK/BLEND,
+/// plus Glass for authored transparency that should still reflect).
 enum class PbrAlphaMode {
     Opaque,   ///< alpha ignored
     Cutout,   ///< pixels whose albedo-texture alpha < alphaCutoff are discarded
-    Blend     ///< the whole surface is alpha-blended by `alpha`
+    Blend,    ///< plain alpha blend ("fade") — glTF BLEND semantics for imports
+    Glass     ///< diffuse fades by alpha but specular/reflections stay full —
+              ///< the backend's realistic-transparency mode; use for glass/plastic
 };
 
 /// Metallic-roughness PBR parameters — Jahshaka's material model, sized to what

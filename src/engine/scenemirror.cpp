@@ -474,6 +474,7 @@ bool SceneMirror::toPbrParams(iris::Material *material, PbrParams &out)
         switch (pbr->alphaMode) {
         case 1:  out.alphaMode = PbrAlphaMode::Cutout; break;
         case 2:  out.alphaMode = PbrAlphaMode::Blend;  break;
+        case 3:  out.alphaMode = PbrAlphaMode::Glass;  break;   // fades diffuse, keeps reflections
         default: out.alphaMode = PbrAlphaMode::Opaque; break;
         }
         out.alpha           = pbr->alpha;

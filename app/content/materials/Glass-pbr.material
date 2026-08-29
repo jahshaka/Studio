@@ -5,7 +5,7 @@
     "baseColor"         : "#EEF4F8",
     "metallic"          : 0.0,
     "roughness"         : 0.05,
-    "alphaMode"         : 2,
+    "alphaMode"         : 3,
     "alpha"             : 0.3,
     "normalFactor"      : 1.0,
     "occlusionFactor"   : 1.0,
