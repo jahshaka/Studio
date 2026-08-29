@@ -30,7 +30,9 @@ class Database;
 #include "../dialogs/progressdialog.h"
 #include "../editor/thumbnailgenerator.h"
 #include "../core/project.h"
-#include "../widgets/sceneviewwidget.h"
+#include "../editor/ieditorviewport.h"
+#include "../irisgl/src/scenegraph/scene.h"
+#include <QButtonGroup>
 
 // Look into this (iKlsR) - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -255,7 +257,7 @@ public:
 
     MainWindow *mainWindow;
 
-	SceneViewWidget *sceneView;
+	IEditorViewport *sceneView;
 
 signals:
 	void assetItemSelected(QListWidgetItem*);

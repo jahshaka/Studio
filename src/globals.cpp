@@ -11,12 +11,12 @@ For more information see the LICENSE file
 
 #include "globals.h"
 #include "core/project.h"
-#include "widgets/sceneviewwidget.h"
+#include "editor/ieditorviewport.h"
 
 float					Globals::animFrameTime =	0;
 QString					Globals::appWorkingDir =	QString();
 Project*				Globals::project =			Project::createNew();
 Database*				Globals::db =				nullptr;
-SceneViewWidget*		Globals::sceneViewWidget =	nullptr;
+IEditorViewport*		Globals::sceneViewWidget =	nullptr;
 QMap<QString, QString>	Globals::assetNames =		QMap<QString, QString>();
 QPointer<Subscriber>    Globals::eventSubscriber =  QPointer<Subscriber>(new Subscriber);

@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include "mainwindow.h"
 #include "globals.h"
 #include "core/project.h"
-#include "widgets/sceneviewwidget.h"
+#include "editor/ieditorviewport.h"
 
 #include <QUndoStack>
 #include <QUndoCommand>
@@ -21,7 +21,7 @@ For more information see the LICENSE file
 
 MainWindow *UiManager::mainWindow = Q_NULLPTR;
 AnimationWidget *UiManager::animationWidget = Q_NULLPTR;
-SceneViewWidget *UiManager::sceneViewWidget = Q_NULLPTR;
+IEditorViewport *UiManager::sceneViewWidget = Q_NULLPTR;
 SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
 SceneNodePropertiesWidget *UiManager::propertyWidget = Q_NULLPTR;
 
@@ -49,12 +49,12 @@ void UiManager::stopPhysicsSimulation()
     sceneViewWidget->stopPhysicsSimulation();
 }
 
-SceneViewWidget *UiManager::getSceneViewWidget()
+IEditorViewport *UiManager::getSceneViewWidget()
 {
     return sceneViewWidget;
 }
 
-void UiManager::setSceneViewWidget(SceneViewWidget *value)
+void UiManager::setSceneViewWidget(IEditorViewport *value)
 {
     sceneViewWidget = value;
 }

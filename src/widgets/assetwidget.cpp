@@ -307,7 +307,7 @@ void AssetWidget::trigger()
     auto reader = new MaterialPresetReader();
 
     // needs opengl context so we have to call this after the window is shown...
-    sceneView->makeCurrent();
+    sceneView->beginResourceLoad();
     for (const auto &file : files) {
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
 
@@ -334,12 +334,12 @@ void AssetWidget::trigger()
         assetMat->setValue(QVariant::fromValue(m));
         AssetManager::addAsset(assetMat);
     }
-    sceneView->doneCurrent();
+    sceneView->endResourceLoad();
 
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	populateAssetTree(true);
 
-	sceneView->makeCurrent();
+	sceneView->beginResourceLoad();
 	for (auto &asset : AssetManager::getAssets()) {
 		if (asset->type == ModelTypes::Object) {
 			auto material = db->fetchAssetData(asset->assetGuid);
@@ -393,7 +393,7 @@ void AssetWidget::trigger()
 			asset = nodeAsset;
 		}
 	}
-	sceneView->doneCurrent();
+	sceneView->endResourceLoad();
 }
 
 void AssetWidget::refresh()
@@ -2102,7 +2102,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                 }
 
                 if (jafType == ModelTypes::Mesh) {
-                    this->sceneView->makeCurrent();
+                    this->sceneView->beginResourceLoad();
                     auto ssource = new iris::SceneSource();
                     // load mesh as scene
                     auto node = iris::MeshNode::loadAsSceneFragment(
@@ -2113,7 +2113,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                         mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
                         return mat;
                     }, ssource);
-                    this->sceneView->doneCurrent();
+                    this->sceneView->endResourceLoad();
 
                     // Add to persistent store
                     QVariant variant = QVariant::fromValue(node);
@@ -2493,14 +2493,14 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 
                 if (asset->type == ModelTypes::Mesh) {
                     QStringList texturesToCopy;
-                    this->sceneView->makeCurrent();
+                    this->sceneView->beginResourceLoad();
                     bool hasEmbeddedTexture(false);
                     QStringList paths;
                     auto scene = AssetHelper::extractTexturesAndMaterialFromMesh(asset->path,
                                                                                  texturesToCopy,
                                                                                  paths,
                                                                                  hasEmbeddedTexture);
-                    this->sceneView->doneCurrent();
+                    this->sceneView->endResourceLoad();
 
 					QString preObjectGuid = GUIDManager::generateGUID();
 

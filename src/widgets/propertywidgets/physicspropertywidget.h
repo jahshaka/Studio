@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include "irisgl/src/irisglfwd.h"
 #include "../accordianbladewidget.h"
 
-class SceneViewWidget;
+class IEditorViewport;
 class btRigidBody;
 
 class PhysicsPropertyWidget : public AccordianBladeWidget
@@ -30,7 +30,7 @@ public:
     ~PhysicsPropertyWidget();
 
     void setSceneNode(iris::SceneNodePtr sceneNode);
-    void setSceneView(SceneViewWidget *sceneView);
+    void setSceneView(IEditorViewport *sceneView);
 
 protected slots:
     void onPhysicsTypeChanged(int);
@@ -44,7 +44,7 @@ protected slots:
 private:
     btRigidBody *currentBody;
     iris::SceneNodePtr sceneNode;
-    SceneViewWidget *sceneView;
+    IEditorViewport *sceneView;
 
     CheckBoxWidget* isVisible;
     HFloatSliderWidget *massValue;

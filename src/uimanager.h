@@ -16,7 +16,7 @@ class AnimationWidget;
 class QUndoStack;
 class QUndoCommand;
 class MainWindow;
-class SceneViewWidget;
+class IEditorViewport;
 class SceneHierarchyWidget;
 class SceneNodePropertiesWidget;
 
@@ -36,15 +36,15 @@ class UiManager
 public:
     static MainWindow* mainWindow;
     static AnimationWidget* animationWidget;
-    static SceneViewWidget* sceneViewWidget;
+    static IEditorViewport* sceneViewWidget;
     static SceneHierarchyWidget* sceneHierarchyWidget;
 	static SceneNodePropertiesWidget* propertyWidget;
 
     static AnimationWidget *getAnimationWidget();
     static void setAnimationWidget(AnimationWidget *value);
 
-    static SceneViewWidget *getSceneViewWidget();
-    static void setSceneViewWidget(SceneViewWidget *value);
+    static IEditorViewport *getSceneViewWidget();
+    static void setSceneViewWidget(IEditorViewport *value);
 
     static void enterPlayMode();
     static void enterEditMode();

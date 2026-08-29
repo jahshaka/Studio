@@ -10,6 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "dialogs/ogrepreviewdialog.h"
+#include "engine/enginehost.h"
+#include "editor/ieditorviewport.h"
+#include <QImage>
+#include <QColor>
+#include <QElapsedTimer>
+#include <QThread>
+#include <cstdio>
 #include <QApplication>
 #include <QPalette>
 #include <QStyleFactory>
@@ -56,6 +63,57 @@ inline void GetGitCommitHash()
 #endif
 }
 
+// --engine-selftest <out.png>
+//
+// The self-verification path for the engine viewport (VIEWPORT_MIGRATION_PLAN.md
+// step 6): MainWindow built normally in engine mode, its default scene created and
+// set on the viewport exactly as newScene() does at runtime, ~30 frames pumped, one
+// offscreen screenshot saved. Exit 0 iff the image exists and its centre pixel is
+// not the clear colour (0.10, 0.11, 0.14) — i.e. the ground plane rendered.
+static int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outPng)
+{
+    window.show();
+    app.processEvents();
+
+    QString why;
+    if (!window.beginEngineSelftest(why)) {
+        std::fprintf(stderr, "engine-selftest: %s\n", qPrintable(why));
+        return 1;
+    }
+
+    // Pump the render loop for ~30 frames (the driver ticks every 16 ms).
+    QElapsedTimer clock;
+    clock.start();
+    for (int frame = 0; frame < 30; ++frame) {
+        app.processEvents(QEventLoop::AllEvents, 50);
+        QThread::msleep(16);
+    }
+    app.processEvents();
+
+    QImage img = window.viewport()->takeScreenshot(256, 256);
+    if (img.isNull()) {
+        std::fprintf(stderr, "engine-selftest: takeScreenshot returned a null image after %lld ms\n",
+                     static_cast<long long>(clock.elapsed()));
+        return 1;
+    }
+    if (!img.save(outPng, "PNG")) {
+        std::fprintf(stderr, "engine-selftest: could not save %s\n", qPrintable(outPng));
+        return 1;
+    }
+    const QColor centre = img.pixelColor(img.width() / 2, img.height() / 2);
+    const QColor clear = QColor::fromRgbF(0.10f, 0.11f, 0.14f);
+    const int tolerance = 2;
+    const bool differs = qAbs(centre.red() - clear.red()) > tolerance ||
+                         qAbs(centre.green() - clear.green()) > tolerance ||
+                         qAbs(centre.blue() - clear.blue()) > tolerance;
+    std::fprintf(stderr, "engine-selftest: %dx%d image, centre pixel (%d,%d,%d), clear (%d,%d,%d) -> %s\n",
+                 img.width(), img.height(), centre.red(), centre.green(), centre.blue(),
+                 clear.red(), clear.green(), clear.blue(), differs ? "PASS" : "FAIL");
+    window.endEngineSelftest();
+    EngineHost::instance().shutdown();
+    return differs ? 0 : 1;
+}
+
 int main(int argc, char *argv[])
 {
     GetGitCommitHash();
@@ -68,10 +126,24 @@ int main(int argc, char *argv[])
     // Wayland backend and needs xcb. This mode is the transition path — it becomes
     // the normal startup once the editor viewport moves onto the engine.
     bool enginePreviewOnly = false;
-    for (int i = 1; i < argc; ++i)
+    // --engine-selftest <out.png>: engine viewport, default scene, one screenshot, exit.
+    QString selftestPng;
+    for (int i = 1; i < argc; ++i) {
         if (qstrcmp(argv[i], "--engine-preview") == 0) enginePreviewOnly = true;
+        else if (qstrcmp(argv[i], "--engine-selftest") == 0 && i + 1 < argc) selftestPng = QString::fromLocal8Bit(argv[++i]);
+    }
+
+    // --viewport=engine|legacy (env JAHSHAKA_VIEWPORT, CMake JAHSHAKA_ENGINE_VIEWPORT):
+    // which editor viewport MainWindow builds. Engine mode needs xcb (Ogre has no
+    // Wayland backend) and must not set up the legacy GL defaults; legacy mode is
+    // exactly the behaviour before the switch existed.
+    ViewportBackend backend = EngineHost::resolveViewportBackend(argc, argv);
+    if (!selftestPng.isEmpty()) backend = ViewportBackend::Engine;
+    EngineHost::setViewportBackend(backend);
+    const bool engineViewport = backend == ViewportBackend::Engine;
+
     // Only force xcb when the user has not chosen a platform themselves.
-    if (enginePreviewOnly && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+    if ((enginePreviewOnly || engineViewport) && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "xcb");
 
 #ifdef Q_OS_LINUX
@@ -81,7 +153,7 @@ int main(int argc, char *argv[])
     // Don't force xcb. On this stack QOpenGLWidget only renders under the
     // native wayland platform: xcb+GLX fails to make the context current,
     // and xcb+EGL makes it current but renders nothing.
-    if (!enginePreviewOnly && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+    if (!enginePreviewOnly && !engineViewport && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
         if (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
             qputenv("QT_QPA_PLATFORM", "wayland");
         else
@@ -92,21 +164,25 @@ int main(int argc, char *argv[])
     // Fixes issue on osx where the SceneView widget shows up blank
     // Causes freezing on linux for some reason (Nick)
 #if defined(Q_OS_MAC) || defined(Q_OS_LINUX)
-    QSurfaceFormat format;
-    format.setDepthBufferSize(32);
-    format.setMajorVersion(3);
-    format.setMinorVersion(2);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    // Without this the EGL paths hand back an OpenGL ES context and the
-    // 3.2 Core function resolver returns null.
-    format.setRenderableType(QSurfaceFormat::OpenGL);
-    QSurfaceFormat::setDefaultFormat(format);
+    if (!engineViewport) {
+        QSurfaceFormat format;
+        format.setDepthBufferSize(32);
+        format.setMajorVersion(3);
+        format.setMinorVersion(2);
+        format.setProfile(QSurfaceFormat::CoreProfile);
+        // Without this the EGL paths hand back an OpenGL ES context and the
+        // 3.2 Core function resolver returns null.
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+        QSurfaceFormat::setDefaultFormat(format);
+    }
 #endif
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 	QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
-	QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+    // The engine viewport creates no Qt GL context; the legacy one needs the shared
+    // context for its loading/thumbnail contexts.
+    if (!engineViewport) QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
 
@@ -180,6 +256,10 @@ int main(int argc, char *argv[])
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
+
+    if (!selftestPng.isEmpty())
+        return runEngineSelftest(window, app, selftestPng);
+
     //window.setAttribute(Qt::WA_DontShowOnScreen);
     //window.show();
     //window.grabOpenGLContextHack();
@@ -206,5 +286,8 @@ int main(int argc, char *argv[])
 
 	app.installEventFilter(new ToolTipHelper());
 
-    return app.exec();
+    const int rc = app.exec();
+    // The engine borrows Qt's X display: release it before QApplication goes away.
+    EngineHost::instance().shutdown();
+    return rc;
 }

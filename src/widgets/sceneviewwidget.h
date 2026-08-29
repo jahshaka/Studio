@@ -79,7 +79,7 @@ struct PickingResult
     float distanceFromCameraSqrd;
 };
 
-class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core
+class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Core, public IEditorViewport
 {
 	Q_OBJECT
 
@@ -122,18 +122,28 @@ class SceneViewWidget : public QOpenGLWidget, protected QOpenGLFunctions_3_2_Cor
 
 	PlayBack* playback;
 	bool initialized;
+	// The signal hub every other part of Studio connects to (IEditorViewport::events()).
+	EditorViewportEvents viewportEvents;
 public:
 	bool showFps;
+
+	// ---- IEditorViewport ----
+	QWidget *asWidget() override { return this; }
+	EditorViewportEvents *events() override { return &viewportEvents; }
+	iris::CameraNodePtr editorCamera() override { return editorCam; }
+	// Studio loads meshes and textures into THIS context.
+	void beginResourceLoad() override { makeCurrent(); }
+	void endResourceLoad() override { doneCurrent(); }
 
     iris::CameraNodePtr editorCam;
 
     MainWindow *mainWindow;
-    void setMainWindow(MainWindow *window) {
+    void setMainWindow(MainWindow *window) override {
         mainWindow = window;
     }
 
     Database *database;
-    void setDatabase(Database *window) {
+    void setDatabase(Database *window) override {
         database = database;
     }
 
@@ -147,55 +157,55 @@ public:
 
     explicit SceneViewWidget(QWidget *parent = Q_NULLPTR);
 
-    void setScene(iris::ScenePtr scene);
-    iris::ScenePtr getScene();
-    void setSelectedNode(iris::SceneNodePtr sceneNode);
-    void clearSelectedNode();
+    void setScene(iris::ScenePtr scene) override;
+    iris::ScenePtr getScene() override;
+    void setSelectedNode(iris::SceneNodePtr sceneNode) override;
+    void clearSelectedNode() override;
 
-	void enterEditorMode();
-	void enterPlayerMode();
+	void enterEditorMode() override;
+	void enterPlayerMode() override;
 
-    void setEditorCamera(iris::CameraNodePtr camera);
-    void resetEditorCam();
+    void setEditorCamera(iris::CameraNodePtr camera) override;
+    void resetEditorCam() override;
 
     // switches to the free editor camera controller
-    void setFreeCameraMode();
+    void setFreeCameraMode() override;
 
     //switches to the arc ball editor camera controller
-    void setArcBallCameraMode();
+    void setArcBallCameraMode() override;
     void setCameraController();
 
-	void focusOnNode(iris::SceneNodePtr sceneNode);
+	void focusOnNode(iris::SceneNodePtr sceneNode) override;
 
-    bool isVrSupported();
-    void setViewportMode(ViewportMode viewportMode);
-    ViewportMode getViewportMode();
+    bool isVrSupported() override;
+    void setViewportMode(ViewportMode viewportMode) override;
+    ViewportMode getViewportMode() override;
 
-    void setGizmoTransformToLocal();
-    void setGizmoTransformToGlobal();
+    void setGizmoTransformToLocal() override;
+    void setGizmoTransformToGlobal() override;
 
-    void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node);
-    void removeBodyFromWorld(btRigidBody *body);
-    void removeBodyFromWorld(const QString &guid);
+    void addBodyToWorld(btRigidBody *body, const iris::SceneNodePtr &node) override;
+    void removeBodyFromWorld(btRigidBody *body) override;
+    void removeBodyFromWorld(const QString &guid) override;
 
-    void setGizmoLoc();
-    void setGizmoRot();
-    void setGizmoScale();
+    void setGizmoLoc() override;
+    void setGizmoRot() override;
+    void setGizmoScale() override;
 	Gizmo* getActiveGizmo()
 	{
 		return gizmo;
 	}
 
-    void setEditorData(EditorData* data);
-    EditorData* getEditorData();
+    void setEditorData(EditorData* data) override;
+    EditorData* getEditorData() override;
 
-	void setWindowSpace(WindowSpaces windowSpace);
+	void setWindowSpace(WindowSpaces windowSpace) override;
 
-    void startPlayingScene();
-    void pausePlayingScene();
-    void stopPlayingScene();
+    void startPlayingScene() override;
+    void pausePlayingScene() override;
+    void stopPlayingScene() override;
 
-    iris::ForwardRendererPtr getRenderer() const;
+    iris::ForwardRendererPtr getRenderer() const override;
 
     QVector3D calculateMouseRay(const QPointF& pos);
 	QVector3D screenSpaceToWoldSpace(const QPointF& pos, float depth);
@@ -226,30 +236,30 @@ public:
 		bool skipViewers = false
 	);
 
-	QImage takeScreenshot(QSize dimension);
-    QImage takeScreenshot(int width=1920, int height=1080);
-    bool getShowLightWires() const;
-    void setShowLightWires(bool value);
-	bool getShowDebugDrawFlags() const;
-	void setShowDebugDrawFlags(bool value);
+	QImage takeScreenshot(QSize dimension) override;
+    QImage takeScreenshot(int width=1920, int height=1080) override;
+    bool getShowLightWires() const override;
+    void setShowLightWires(bool value) override;
+	bool getShowDebugDrawFlags() const override;
+	void setShowDebugDrawFlags(bool value) override;
     void toggleDebugDrawFlags(bool value);
 
-	void startPhysicsSimulation();
-	void restartPhysicsSimulation();
-	void stopPhysicsSimulation();
+	void startPhysicsSimulation() override;
+	void restartPhysicsSimulation() override;
+	void stopPhysicsSimulation() override;
 
-    void setShowFps(bool value);
+    void setShowFps(bool value) override;
 	void renderSelectedNode(iris::SceneNodePtr selectedNode);
 
-	void setSceneMode(SceneMode sceneMode);
+	void setSceneMode(SceneMode sceneMode) override;
 
-    void cleanup();
-	void setShowPerspeciveLabel(bool val);
+    void cleanup() override;
+	void setShowPerspeciveLabel(bool val) override;
 
-	void begin();
-	void end();
+	void begin() override;
+	void end() override;
 
-	bool isInitialized() { return initialized; }
+	bool isInitialized() override { return initialized; }
 	
 protected:
     void initializeGL();
@@ -358,14 +368,11 @@ private:
 	int offset;
 
 signals:
-    void addPrimitive(QString guid);
-    void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
-    void addDroppedParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
+    // Legacy-only: hands the IrisGL renderer to the post-process UI. Everything else
+    // (drops, selection, toolbar, sky) is emitted through events() so that callers
+    // connect to the interface, not to this widget.
     void initializeGraphics(SceneViewWidget* widget,
                             QOpenGLFunctions_3_2_Core* gl);
-    void sceneNodeSelected(iris::SceneNodePtr sceneNode);
-	void updateToolbarButton();
-	void changeSkyFromAssetWidget(int index);
 
 };
 

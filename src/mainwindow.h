@@ -69,6 +69,7 @@ class AdvancedTransformGizmo;
 class TransformWidget;
 
 class SceneViewWidget;
+class IEditorViewport;
 class SceneHierarchyWidget;
 class PlayerWidget;
 
@@ -136,6 +137,14 @@ public:
 
     void makeLoadingGLContextCurrent();
     void grabOpenGLContextHack();
+
+    /// The editor viewport (legacy SceneViewWidget or the engine-backed one).
+    IEditorViewport *viewport() { return sceneView; }
+    /// --engine-selftest: show the editor page, build the default scene the way
+    /// newScene() does and start the viewport. False (with a reason) if the engine
+    /// viewport is not in use or has no view.
+    bool beginEngineSelftest(QString &why);
+    void endEngineSelftest();
     void goToDesktop();
     void setupProjectDB();
     void setupUndoRedo();
@@ -379,10 +388,13 @@ private slots:
 private:
     QOpenGLContext* loadingContext;
     QOffscreenSurface* loadingSurface;
+    // Re-entrancy guard: a viewport may echo setSelectedNode() through
+    // EditorViewportEvents::sceneNodeSelected, which lands back in sceneNodeSelected().
+    bool inSceneNodeSelected = false;
 
     Ui::MainWindow *ui;
     SurfaceView* surface;
-    SceneViewWidget* sceneView;
+    IEditorViewport* sceneView;
 	PlayerWidget* playerView;
 
     QStandardItemModel* treeModel;

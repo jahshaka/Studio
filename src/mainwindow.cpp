@@ -47,6 +47,9 @@ For more information see the LICENSE file
 #include "core/guidmanager.h"
 #include "core/thumbnailmanager.h"
 #include "dialogs/ogrepreviewdialog.h"
+#include "engine/enginehost.h"
+#include "widgets/enginerenderdriver.h"
+#include "widgets/sceneviewwidget.h"
 #include "dialogs/donatedialog.h"
 #include "dialogs/custompopup.h"
 #include "core/assethelper.h"
@@ -201,22 +204,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	undoStackCount = 0;
 
-    QSurfaceFormat format;
-    format.setDepthBufferSize(32);
-    format.setMajorVersion(3);
-    format.setMinorVersion(2);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setRenderableType(QSurfaceFormat::OpenGL);
+    loadingContext = nullptr;
+    loadingSurface = nullptr;
+    if (EngineHost::viewportBackend() == ViewportBackend::Legacy) {
+        // A GL context shared with the viewport's, made current while scenes load.
+        // The engine viewport needs none: the document is GL-free.
+        QSurfaceFormat format;
+        format.setDepthBufferSize(32);
+        format.setMajorVersion(3);
+        format.setMinorVersion(2);
+        format.setProfile(QSurfaceFormat::CoreProfile);
+        format.setRenderableType(QSurfaceFormat::OpenGL);
 
-    loadingContext = new QOpenGLContext();
-    loadingContext->setFormat(format);
-    auto globContext = QOpenGLContext::globalShareContext();
-    loadingContext->setShareContext(globContext);
-    loadingContext->create();
+        loadingContext = new QOpenGLContext();
+        loadingContext->setFormat(format);
+        auto globContext = QOpenGLContext::globalShareContext();
+        loadingContext->setShareContext(globContext);
+        loadingContext->create();
 
-    loadingSurface = new QOffscreenSurface();
-    loadingSurface->setFormat(format);
-    loadingSurface->create();
+        loadingSurface = new QOffscreenSurface();
+        loadingSurface->setFormat(format);
+        loadingSurface->create();
+    }
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -401,7 +410,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
 void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_2_Core *gl)
 {
     Q_UNUSED(gl);
-    postProcessWidget->setPostProcessMgr(widget->getRenderer()->getPostProcessManager());
+    if (auto renderer = widget->getRenderer())
+        postProcessWidget->setPostProcessMgr(renderer->getPostProcessManager());
     setupVrUi();
 }
 
@@ -449,7 +459,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (obj == surface) return handleMousePress(static_cast<QMouseEvent*>(event));
 
             if (obj == sceneContainer) {
-                sceneView->mousePressEvent(static_cast<QMouseEvent*>(event));
+                QCoreApplication::sendEvent(sceneView->asWidget(), event);
             }
 
             break;
@@ -559,7 +569,8 @@ void MainWindow::stopAnimWidget()
 
 void MainWindow::makeLoadingGLContextCurrent()
 {
-    loadingContext->makeCurrent(loadingSurface);
+    if (loadingContext) loadingContext->makeCurrent(loadingSurface);
+    else sceneView->beginResourceLoad();   // engine viewport: no-op
 }
 
 void MainWindow::setupProjectDB()
@@ -767,9 +778,10 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 {
 	SceneWriter writer;
+	auto renderer = sceneView->getRenderer();
 	auto sceneObject = writer.getSceneObject(projectPath,
 											 this->scene,
-											 sceneView->getRenderer()->getPostProcessManager(),
+											 renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
 											 sceneView->getEditorData());
 
 	auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
@@ -792,9 +804,10 @@ void MainWindow::saveScene()
 		return;
 
 	SceneWriter writer;
+    auto renderer = sceneView->getRenderer();
     auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
                                       scene,
-                                      sceneView->getRenderer()->getPostProcessManager(),
+                                      renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
                                       sceneView->getEditorData());
 
     auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
@@ -838,7 +851,7 @@ void MainWindow::openProject(bool playMode)
     // use new post process that has fxaa by default
     // TODO: remember to find a better replacement (Nick)
     postProcessWidget->setPostProcessMgr(postMan);
-    this->sceneView->doneCurrent();
+    this->sceneView->endResourceLoad();
 
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
@@ -1166,6 +1179,8 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 
 void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 {
+    if (inSceneNodeSelected) return;
+    struct Guard { bool &f; Guard(bool &v) : f(v) { f = true; } ~Guard() { f = false; } } guard(inSceneNodeSelected);
     activeSceneNode = sceneNode;
 
     sceneView->setSelectedNode(sceneNode);
@@ -1184,7 +1199,7 @@ void MainWindow::setSceneAnimTime(float time)
 
 void MainWindow::addPlane()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/plane.obj",
@@ -1209,7 +1224,7 @@ void MainWindow::addPlane()
 
 void MainWindow::addGround()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/models/ground.obj",
@@ -1234,7 +1249,7 @@ void MainWindow::addGround()
 
 void MainWindow::addCone()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/cone.obj",
@@ -1259,7 +1274,7 @@ void MainWindow::addCone()
 
 void MainWindow::addCapsule()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/capsule.obj",
@@ -1284,7 +1299,7 @@ void MainWindow::addCapsule()
 
 void MainWindow::addCube()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/cube.obj",
@@ -1309,7 +1324,7 @@ void MainWindow::addCube()
 
 void MainWindow::addTorus()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/torus.obj",
@@ -1334,7 +1349,7 @@ void MainWindow::addTorus()
 
 void MainWindow::addSphere()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/sphere.obj",
@@ -1359,7 +1374,7 @@ void MainWindow::addSphere()
 
 void MainWindow::addCylinder()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/cylinder.obj",
@@ -1384,7 +1399,7 @@ void MainWindow::addCylinder()
 
 void MainWindow::addPyramid()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/pyramid.obj",
@@ -1409,7 +1424,7 @@ void MainWindow::addPyramid()
 
 void MainWindow::addSponge()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/sponge.obj",
@@ -1434,7 +1449,7 @@ void MainWindow::addSponge()
 
 void MainWindow::addTeapot()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/teapot.obj",
@@ -1459,7 +1474,7 @@ void MainWindow::addTeapot()
 
 void MainWindow::addSteps()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/steps.obj",
@@ -1484,7 +1499,7 @@ void MainWindow::addSteps()
 
 void MainWindow::addGear()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/gear.obj",
@@ -1509,7 +1524,7 @@ void MainWindow::addGear()
 
 void MainWindow::addPointLight()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(":/icons/bulb.png");
@@ -1521,7 +1536,7 @@ void MainWindow::addPointLight()
 
 void MainWindow::addSpotLight()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(":/icons/bulb.png");
@@ -1532,7 +1547,7 @@ void MainWindow::addSpotLight()
 
 void MainWindow::addDirectionalLight()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->shadowMap->shadowType = iris::ShadowMapType::Soft;
     node->setLightType(iris::LightType::Directional);
@@ -1543,7 +1558,7 @@ void MainWindow::addDirectionalLight()
 
 void MainWindow::addEmpty()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::SceneNode::create();
     node->setName("Empty");
     addNodeToScene(node);
@@ -1551,7 +1566,7 @@ void MainWindow::addEmpty()
 
 void MainWindow::addViewer()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::ViewerNode::create();
     node->setName("Avatar");
     addNodeToScene(node);
@@ -1569,7 +1584,7 @@ void MainWindow::addViewer()
 
 void MainWindow::addGrabHand()
 {
-	this->sceneView->makeCurrent();
+	this->sceneView->beginResourceLoad();
 	auto node = iris::GrabNode::create();
 	node->setName("Hand");
 	addNodeToScene(node);
@@ -1577,7 +1592,7 @@ void MainWindow::addGrabHand()
 
 void MainWindow::addParticleSystem()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::ParticleSystemNode::create();
     node->setName("Particle System");
 
@@ -1657,7 +1672,7 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     iris::SceneSource *ssource = new iris::SceneSource();
 
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
@@ -1720,9 +1735,9 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
     auto reader = new SceneReader;
     reader->setBaseDirectory(Globals::project->getProjectFolder());
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     iris::SceneNodePtr node = reader->readSceneNode(document);
-    this->sceneView->doneCurrent();
+    this->sceneView->endResourceLoad();
     delete reader;
 
 	// rename animation sources to relative paths
@@ -1735,7 +1750,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
 
 void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName)
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
 
     QJsonObject pDefs;
     QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
@@ -1782,7 +1797,7 @@ void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString
 void MainWindow::addDragPlaceholder()
 {
     /*
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto node = iris::MeshNode::create();
     node->scale = QVector3D(.5f, .5f, .5f);
     node->setMesh(":app/content/primitives/arrow.obj");
@@ -1836,8 +1851,8 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     // @TODO: add this to a constants file
     if (!ignore) {
         const float spawnDist = 10.0f;
-        auto offset = sceneView->editorCam->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-        offset += sceneView->editorCam->getLocalPos();
+        auto offset = sceneView->editorCamera()->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+        offset += sceneView->editorCamera()->getLocalPos();
         sceneNode->setLocalPos(offset);
     }
 
@@ -1865,13 +1880,13 @@ void MainWindow::duplicateNode()
     if (!scene) return;
     if (!activeSceneNode || !activeSceneNode->isDuplicable()) return;
 
-	sceneView->makeCurrent();
+	sceneView->beginResourceLoad();
     auto node = activeSceneNode->duplicate();
     activeSceneNode->parent->addChild(node, false);
 
     this->sceneHierarchyWidget->repopulateTree();
     sceneNodeSelected(node);
-	sceneView->doneCurrent();
+	sceneView->endResourceLoad();
 }
 
 void MainWindow::createMaterial()
@@ -2685,10 +2700,26 @@ void MainWindow::setupViewPort()
     viewPort->setWindowFlags(Qt::Widget);
     viewPort->setCentralWidget(container);
 
-    sceneView = new SceneViewWidget(viewPort);
-    sceneView->setParent(viewPort);
-    sceneView->setFocusPolicy(Qt::ClickFocus);
-    sceneView->setFocus();
+    // The runtime switch (--viewport=engine|legacy): engine mode starts the one
+    // process-wide Engine and builds the engine-backed viewport; legacy mode is the
+    // IrisGL SceneViewWidget exactly as before. A failed engine start falls back to
+    // legacy so the window still comes up (with the reason on stderr).
+    sceneView = nullptr;
+    if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
+        auto &host = EngineHost::instance();
+        QString error;
+        if (host.start(error)) {
+            sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
+            host.driver()->start(16);
+        } else {
+            qCritical("Engine viewport unavailable, falling back to the legacy viewport: %s",
+                      qPrintable(error));
+        }
+    }
+    if (!sceneView) sceneView = new SceneViewWidget(viewPort);
+    sceneView->asWidget()->setParent(viewPort);
+    sceneView->asWidget()->setFocusPolicy(Qt::ClickFocus);
+    sceneView->asWidget()->setFocus();
     sceneView->setMainWindow(this);
     sceneView->setDatabase(db);
     Globals::sceneViewWidget = sceneView;
@@ -2700,27 +2731,31 @@ void MainWindow::setupViewPort()
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
 
     QGridLayout* layout = new QGridLayout;
-    layout->addWidget(sceneView);
+    layout->addWidget(sceneView->asWidget());
     layout->setContentsMargins(0, 0, 0, 0);
     sceneContainer->setLayout(layout);
 
-    connect(sceneView, &SceneViewWidget::addDroppedMesh, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
+    auto events = sceneView->events();
+    connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
         addMaterialMesh(path, v, pos, guid, name);
     });
 
-    connect(sceneView, &SceneViewWidget::addPrimitive, [this](QString guid) {
+    connect(events, &EditorViewportEvents::addPrimitive, this, [this](QString guid) {
         addPrimitiveObject(guid);
     });
 
-    connect(sceneView, &SceneViewWidget::addDroppedParticleSystem, [this](bool v, QVector3D pos, QString guid, QString name) {
+    connect(events, &EditorViewportEvents::addDroppedParticleSystem, this, [this](bool v, QVector3D pos, QString guid, QString name) {
         addAssetParticleSystem(v, pos, guid, name);
     });
 
-    connect(sceneView,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
-            this,       SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
+    // Legacy only: the IrisGL renderer's post-process manager for the post-process dock.
+    if (auto legacy = dynamic_cast<SceneViewWidget*>(sceneView)) {
+        connect(legacy,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
+                this,    SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
+    }
 
-    connect(sceneView,  SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
-            this,       SLOT(sceneNodeSelected(iris::SceneNodePtr)));
+    connect(events, &EditorViewportEvents::sceneNodeSelected,
+            this,   qOverload<iris::SceneNodePtr>(&MainWindow::sceneNodeSelected));
 
     connect(playSceneBtn, SIGNAL(clicked(bool)), SLOT(onPlaySceneButton()));
 
@@ -2897,12 +2932,12 @@ void MainWindow::setupToolBar()
 
 	cameraView->setIconSize(QSize(17, 17));
 
-	connect(cameraView, &QPushButton::clicked, [=](){ emit projectionChangeRequested(!sceneView->editorCam->isPerspective); });
+	connect(cameraView, &QPushButton::clicked, [=](){ emit projectionChangeRequested(!sceneView->editorCamera()->isPerspective); });
 
 	connect(this, SIGNAL(projectionChangeRequested(bool)), this, SLOT(changeProjection(bool)));	
 
-	connect(sceneView, &SceneViewWidget::updateToolbarButton, [=]() {
-		if (sceneView->editorCam->isPerspective) projectionChangeRequested(true);
+	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [=]() {
+		if (sceneView->editorCamera()->isPerspective) projectionChangeRequested(true);
 		else projectionChangeRequested(false);
 	});
 	
@@ -2924,25 +2959,25 @@ void MainWindow::setupToolBar()
 void MainWindow::setupShortcuts()
 {
     // Translation, Rotation and Scaling gizmo shortcuts for
-    QShortcut *shortcut = new QShortcut(QKeySequence("t"),sceneView);
+    QShortcut *shortcut = new QShortcut(QKeySequence("t"),sceneView->asWidget());
     connect(shortcut, SIGNAL(activated()), this, SLOT(translateGizmo()));
 
-    shortcut = new QShortcut(QKeySequence("r"),sceneView);
+    shortcut = new QShortcut(QKeySequence("r"),sceneView->asWidget());
     connect(shortcut, SIGNAL(activated()), this, SLOT(rotateGizmo()));
 
-    shortcut = new QShortcut(QKeySequence("alt+s"),sceneView);
+    shortcut = new QShortcut(QKeySequence("alt+s"),sceneView->asWidget());
     connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
 
     // Save
-	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView);
+	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView->asWidget());
 	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
 
-	shortcut = new QShortcut(QKeySequence("o"), sceneView);
+	shortcut = new QShortcut(QKeySequence("o"), sceneView->asWidget());
 	connect(shortcut, &QShortcut::activated, [=]() {
 		emit projectionChangeRequested(false);
 	});
 
-	shortcut = new QShortcut(QKeySequence("p"), sceneView);
+	shortcut = new QShortcut(QKeySequence("p"), sceneView->asWidget());
 	connect(shortcut, &QShortcut::activated, [=]() {
 		emit projectionChangeRequested(true);
 	});
@@ -3217,11 +3252,36 @@ void MainWindow::showProjectManagerInternal()
 
 void MainWindow::newScene()
 {
-    this->sceneView->makeCurrent();
+    this->sceneView->beginResourceLoad();
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
-    this->sceneView->doneCurrent();
+    this->sceneView->endResourceLoad();
+}
+
+bool MainWindow::beginEngineSelftest(QString &why)
+{
+    if (EngineHost::viewportBackend() != ViewportBackend::Engine || !EngineHost::instance().isRunning()) {
+        why = "the engine viewport is not in use (engine failed to start?)";
+        return false;
+    }
+    // The editor page of the stacked widget; showing it gives the viewport its
+    // native window, and with it the engine View and Scene.
+    ui->stackedWidget->setCurrentIndex(1);
+    sceneView->setWindowSpace(WindowSpaces::EDITOR);
+    QCoreApplication::processEvents();
+    if (!sceneView->isInitialized()) {
+        why = "the engine viewport has no view after being shown";
+        return false;
+    }
+    newScene();
+    sceneView->begin();
+    return true;
+}
+
+void MainWindow::endEngineSelftest()
+{
+    sceneView->end();
 }
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)

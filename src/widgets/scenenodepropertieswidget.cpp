@@ -227,7 +227,7 @@ void SceneNodePropertiesWidget::refreshTransform()
 	}
 }
 
-void SceneNodePropertiesWidget::setSceneView(SceneViewWidget *sceneView)
+void SceneNodePropertiesWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
 }

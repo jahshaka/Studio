@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define GLOBALS_H
 
 class Project;
-class SceneViewWidget;
+class IEditorViewport;
 
 #include <QMap>
 #include <QPointer>
@@ -28,7 +28,7 @@ public:
     static QString appWorkingDir;
     static Project* project;
 	static Database* db;
-    static SceneViewWidget* sceneViewWidget;
+    static IEditorViewport* sceneViewWidget;
     static QMap<QString, QString> assetNames;
 
 	static QPointer<Subscriber> eventSubscriber;

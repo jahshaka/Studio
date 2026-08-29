@@ -216,19 +216,19 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 
     if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
         auto ppos = dragScenePos;
-        emit addDroppedParticleSystem(
+        emit viewportEvents.addDroppedParticleSystem(
             true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
     }
     else if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Object)) {
         // if builtin asset
         if (Constants::Reserved::DefaultPrimitives.contains(roleDataMap.value(3).toString())) {
-            emit addPrimitive(Constants::Reserved::DefaultPrimitives.value(roleDataMap.value(3).toString()));
+            emit viewportEvents.addPrimitive(Constants::Reserved::DefaultPrimitives.value(roleDataMap.value(3).toString()));
             return;
         }
         
         auto ppos = dragScenePos;
-        emit addDroppedMesh(
+        emit viewportEvents.addDroppedMesh(
             QDir(Globals::project->getProjectFolder()).filePath(roleDataMap.value(2).toString()),
             true, ppos, roleDataMap.value(3).toString(), roleDataMap.value(1).toString()
         );
@@ -284,7 +284,7 @@ void SceneViewWidget::dropEvent(QDropEvent *event)
 		scene->skyData.insert(scene->skyTypeToStr[skyTypeIndex], skyDefinition);
 		scene->skyType = static_cast<iris::SkyType>(skyTypeIndex);
 
-		emit changeSkyFromAssetWidget(skyTypeIndex);
+		emit viewportEvents.changeSkyFromAssetWidget(skyTypeIndex);
 	}
 }
 
@@ -376,6 +376,16 @@ SceneViewWidget::SceneViewWidget(QWidget *parent) : QOpenGLWidget(parent)
 	playback = new PlayBack();
 	playback->setRestoreCameraTransform(false);
 	initialized = false;
+}
+
+// Was declared but never defined; the interface makes it real. Mirrors what
+// setEditorData does with the camera it is handed.
+void SceneViewWidget::setEditorCamera(iris::CameraNodePtr camera)
+{
+    if (!camera) return;
+    editorCam = camera;
+    if (!!scene) scene->setCamera(editorCam);
+    camController->setCamera(editorCam);
 }
 
 void SceneViewWidget::resetEditorCam()
@@ -1242,7 +1252,7 @@ void SceneViewWidget::doObjectPicking(
 
     if (hitList.size() == 0) {
         // no hits, deselect last selected object in viewport and heirarchy
-        emit sceneNodeSelected(iris::SceneNodePtr());
+        emit viewportEvents.sceneNodeSelected(iris::SceneNodePtr());
         return;
     }
 
@@ -1279,7 +1289,7 @@ void SceneViewWidget::doObjectPicking(
 	}
 
     gizmo->setSelectedNode(pickedNode);
-    emit sceneNodeSelected(pickedNode);
+    emit viewportEvents.sceneNodeSelected(pickedNode);
 }
 
 QImage SceneViewWidget::takeScreenshot(QSize dimension)
@@ -1327,7 +1337,7 @@ void SceneViewWidget::doGizmoPicking(const QPointF& point)
         if (gizmo != nullptr && gizmo->isHit(segStart, rayDir)) {
 
         } else {
-            emit sceneNodeSelected(iris::SceneNodePtr());
+            emit viewportEvents.sceneNodeSelected(iris::SceneNodePtr());
             return;
         }
     }
@@ -1610,7 +1620,7 @@ void SceneViewWidget::setEditorData(EditorData* data)
     camController->setCamera(editorCam);
     showLightWires = data->showLightWires;
 	showDebugDrawFlags = data->showDebugDrawFlags;
-	emit updateToolbarButton();
+	emit viewportEvents.updateToolbarButton();
 }
 
 EditorData* SceneViewWidget::getEditorData()

@@ -33,7 +33,7 @@ class MeshPropertyWidget;
 class PhysicsPropertyWidget;
 class HandPropertyWidget;
 class DemoPane;
-class SceneViewWidget;
+class IEditorViewport;
 class Database;
 
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
@@ -58,7 +58,7 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     void setAssetItem(QListWidgetItem *item);
-	void setSceneView(SceneViewWidget *sceneView);
+	void setSceneView(IEditorViewport *sceneView);
 
     /**
      * Updates material properties if active scene node is a mesh
@@ -99,7 +99,7 @@ private:
 
     Database *db;
 	ShaderPropertyWidget *shaderPropView;
-    SceneViewWidget *sceneView;
+    IEditorViewport *sceneView;
 
     QWidget *widgetProperty;
     QVBoxLayout *widgetPropertyLayout;

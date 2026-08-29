@@ -411,7 +411,8 @@ void WorldSettingsWidget::configureEditor()
 	fps->setChecked(settings->getValue("show_fps", false).toBool());
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
 	autoUpdates->setChecked(settings->getValue("automatic_updates", true).toBool());
-	viewportProjection->setChecked( UiManager::sceneViewWidget ? UiManager::sceneViewWidget->showFps : false);
+	// showFps is the persisted "show_fps" setting (SceneViewWidget reads it from there too).
+	viewportProjection->setChecked( UiManager::sceneViewWidget ? settings->getValue("show_fps", false).toBool() : false);
 	
 	// mouse control options
 	QStringList list;

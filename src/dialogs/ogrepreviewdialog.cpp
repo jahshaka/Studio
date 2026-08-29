@@ -1,6 +1,7 @@
 #include "ogrepreviewdialog.h"
 #include "../widgets/engineviewwidget.h"
 #include "../widgets/enginerenderdriver.h"
+#include "../engine/enginehost.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -10,26 +11,6 @@
 #include <QGuiApplication>
 
 using namespace jahshaka::engine;
-
-EngineConfig OgrePreviewDialog::resolveConfig()
-{
-    EngineConfig cfg;
-    cfg.backend = Backend::Vulkan;
-
-    const QByteArray envPlugins = qgetenv("JAHSHAKA_OGRE_PLUGINS");
-    const QByteArray envMedia   = qgetenv("JAHSHAKA_OGRE_MEDIA");
-    const QString appMedia = QCoreApplication::applicationDirPath() + QStringLiteral("/media/");
-
-    if (!envPlugins.isEmpty())                      cfg.pluginDir = envPlugins.toStdString();
-    else                                            cfg.pluginDir = JAHSHAKA_OGRE_PLUGIN_DIR_DEFAULT;
-
-    if (!envMedia.isEmpty())                        cfg.hlmsMediaDir = envMedia.toStdString();
-    else if (QDir(appMedia + "Hlms/Pbs").exists())  cfg.hlmsMediaDir = appMedia.toStdString();
-    else                                            cfg.hlmsMediaDir = JAHSHAKA_OGRE_MEDIA_DIR_DEFAULT;
-
-    cfg.logFile = "jahshaka-ogre.log";
-    return cfg;
-}
 
 OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
 {
@@ -62,38 +43,13 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     // Native window ids must exist before the engine can bind to them.
     QCoreApplication::processEvents();
 
-    // Ogre has no Wayland backend: its Vulkan path uses VK_KHR_xcb_surface and needs a
-    // real X11 window. Jahshaka forces QT_QPA_PLATFORM=wayland (main.cpp) because the OLD
-    // Qt-GL viewport only renders there. The two cannot coexist yet, so refuse clearly
-    // rather than hand Ogre a Wayland handle and crash.
-    const QString platform = QGuiApplication::platformName();
-    if (platform != QLatin1String("xcb")) {
-        mStatus->setText(
-            tr("<b>Requires the xcb platform.</b> Running on '%1'.<br>"
-               "Ogre-Next has no Wayland backend — relaunch with:<br>"
-               "<tt>QT_QPA_PLATFORM=xcb ./Jahshaka</tt><br><br>"
-               "Note: the old editor viewport does not render on xcb; that is the "
-               "transition this migration removes.").arg(platform));
+    QString error;
+    if (!EngineHost::instance().start(error)) {
+        mStatus->setText(tr("Engine failed to start: %1").arg(error));
         mStatus->setTextFormat(Qt::RichText);
         return;
     }
-
-    EngineConfig cfg = resolveConfig();
-    // Hand the engine OUR X connection. Opening a second connection to the same
-    // windows causes flicker and lets other windows' content bleed into the viewport.
-    if (auto *x11 = qApp->nativeInterface<QNativeInterface::QX11Application>())
-        cfg.display = reinterpret_cast<NativeDisplayHandle>(x11->display());
-    if (!cfg.display) {
-        mStatus->setText(tr("Could not obtain the X11 display connection from Qt."));
-        return;
-    }
-
-    std::string error;
-    mEngine = Engine::create(cfg, error);
-    if (!mEngine) {
-        mStatus->setText(tr("Engine failed to start: %1").arg(QString::fromStdString(error)));
-        return;
-    }
+    mEngine = EngineHost::instance().engine();
 
     // ORDER: views (windows) first, then scenes — the engine's material and buffer
     // systems only start once a render window exists.
@@ -131,21 +87,31 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     mStatus->setText(tr("Backend: %1   —   2 windows, 2 independent scenes")
                          .arg(QString::fromStdString(mEngine->backendName())));
 
-    // The ONE render loop. renderOneFrame() draws every enabled view.
-    mDriver = new EngineRenderDriver(mEngine.get(), this);
-    connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() {
+    // The ONE render loop (EngineHost's). renderOneFrame() draws every enabled view.
+    auto *driver = EngineHost::instance().driver();
+    connect(driver, &EngineRenderDriver::beforeFrame, this, [this]() {
         if (mEditorScene)  mEditorScene->rotateNode(mCube,  0.012f, 0.0f, 0.005f);
         if (mEffectsScene) mEffectsScene->rotateNode(mCube2, 0.0f, 0.010f, 0.0f);
     });
-    mDriver->start(16);
+    if (!driver->isRunning()) {
+        driver->start(16);
+        mStartedDriver = true;
+    }
 }
 
 OgrePreviewDialog::~OgrePreviewDialog()
 {
-    // Deterministic teardown: stop the loop, release the views while the Engine is
-    // alive, then the Engine (which takes the scenes with it).
-    if (mDriver) mDriver->stop();
+    // Deterministic teardown: release our views and scenes while the Engine is
+    // alive. The Engine itself belongs to EngineHost and outlives this dialog.
+    auto *driver = EngineHost::instance().driver();
+    if (driver) disconnect(driver, nullptr, this, nullptr);
+    if (driver && mStartedDriver) driver->stop();
     if (mEditorView)  mEditorView->destroyView();
     if (mEffectsView) mEffectsView->destroyView();
+    if (mEngine) {
+        if (mEditorScene)  mEngine->destroyScene(mEditorScene);
+        if (mEffectsScene) mEngine->destroyScene(mEffectsScene);
+    }
+    mEditorScene = mEffectsScene = nullptr;
     mEngine.reset();
 }

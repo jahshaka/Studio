@@ -113,7 +113,7 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     }
 }
 
-void PhysicsPropertyWidget::setSceneView(SceneViewWidget *sceneView)
+void PhysicsPropertyWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
 }
