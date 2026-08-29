@@ -12,7 +12,7 @@ set(APP_OUTPUT_NAME "Jahshaka")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia Qml)
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
@@ -66,6 +66,9 @@ set(SRCS
     src/widgets/enginerenderdriver.cpp
     src/dialogs/ogrepreviewdialog.cpp
     src/engine/enginehost.cpp
+    src/scripting/apimodule.cpp
+    src/scripting/apiregistry.cpp
+    src/scripting/scriptengine.cpp
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
     src/widgets/assetmaterialpanel.cpp 
@@ -217,6 +220,10 @@ set(HEADERS
     src/widgets/enginerenderdriver.h
     src/dialogs/ogrepreviewdialog.h
     src/engine/enginehost.h
+    src/scripting/scripthost.h
+    src/scripting/apimodule.h
+    src/scripting/apiregistry.h
+    src/scripting/scriptengine.h
     src/widgets/assetfavorites.h 
     src/widgets/assetpanel.h 
     src/widgets/assetmodelpanel.h 
@@ -405,7 +412,7 @@ if(JAHSHAKA_BUILD_TESTS)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif()
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeShaderGraph)
