@@ -426,6 +426,12 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			valuesObj[prop->name] = prop->getValue().toFloat();
         }
 
+        // PbrMaterial's alphaMode is an IntProperty; without this case it would
+        // silently vanish from the saved scene.
+        if (prop->type == iris::PropertyType::Int) {
+			valuesObj[prop->name] = prop->getValue().toInt();
+        }
+
         if (prop->type == iris::PropertyType::Color) {
 			valuesObj[prop->name] = prop->getValue().value<QColor>().name();
         }
@@ -435,6 +441,11 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			auto id = relative
 				? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
 				: getRelativePath(prop->getValue().toString());
+			// A texture that is not a database asset (no GUID) would otherwise be
+			// written as an empty string and lost; fall back to a relative path,
+			// which the reader also resolves.
+			if (relative && id.isEmpty() && !prop->getValue().toString().isEmpty())
+				id = getRelativePath(prop->getValue().toString());
 			valuesObj[prop->name] = id;
         }
 

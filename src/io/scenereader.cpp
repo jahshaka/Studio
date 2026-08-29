@@ -660,12 +660,38 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 		case iris::PropertyType::Float:
 			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
 			break;
+		case iris::PropertyType::Int:
+			mat->setValue(prop->name, val.toInt());
+			break;
 		case iris::PropertyType::Color:
 			mat->setValue(prop->name, QColor(val.toString()));
 			break;
 		case iris::PropertyType::Bool:
 			mat->setValue(prop->name, val.toBool());
 			break;
+		case iris::PropertyType::Texture: {
+			// SceneWriter stores a texture as the asset GUID when saving against
+			// the project database (relative == true), or as a scene-relative
+			// path otherwise. Resolve the GUID the way MaterialReader::parseMaterial
+			// does (asset name joined onto the project folder / asset directory),
+			// and fall back to treating the value as a path relative to the scene
+			// file. An empty result clears the map.
+			const QString stored = val.toString();
+			QString path;
+			if (!stored.isEmpty()) {
+				if (handle) {
+					const QString assetName = handle->fetchAsset(stored).name;
+					if (!assetName.isEmpty()) {
+						path = useAlternativeLocation
+							? QDir(assetDirectory).filePath(assetName)
+							: IrisUtils::join(Globals::project->getProjectFolder(), assetName);
+					}
+				}
+				if (path.isEmpty()) path = getAbsolutePath(stored);
+			}
+			mat->setValue(prop->name, path);
+			break;
+		}
 		default:
 			break;
 		}

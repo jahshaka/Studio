@@ -7,6 +7,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QDir>
+#include <QJsonObject>
 #include "graphics/texture2d.h"
 #include <QVector3D>
 #include <cmath>
@@ -219,6 +220,100 @@ int main(int argc, char **argv)
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "CustomMaterial's diffuseTexture property reaches the engine");
         QFile::remove(pngPath);
         meshNode2->setMaterial(legacy);
+    }
+
+    // ---- PBR scene round-trip: params + texture maps survive save/load ----
+    // The Option A regression (MATERIALS_EFFECTS_AUDIT.md §0.7a): PbrMaterial
+    // declared no Texture/Int properties, so SceneWriter never wrote its maps and
+    // SceneReader::readPbrMaterial never restored them — maps were lost on load.
+    {
+        const QString dir = QDir::temp().filePath("jahshaka_mirror_roundtrip");
+        QDir().mkpath(dir);
+        const QString pngPath = dir + "/albedo_green.png";
+        QImage tex(32, 32, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
+        auto saved = iris::PbrMaterial::create();
+        saved->setValue("baseColor", QColor(255, 255, 255));
+        saved->setValue("metallic", 0.05f);
+        saved->setValue("roughness", 0.9f);
+        saved->setValue("roughnessLowerBound", 0.2f);
+        saved->setValue("roughnessUpperBound", 0.5f);
+        saved->setValue("alphaMode", 2);
+        saved->setValue("alpha", 0.5f);
+        saved->setValue("alphaCutoff", 0.7f);
+        saved->setValue("baseColorMap", pngPath);
+        CHECK(saved->textures.contains("u_baseColorMap"), "setValue bound the base colour map");
+
+        // Serialise exactly as SceneWriter::writeSceneNodeMaterial does: a values
+        // object built from mat->properties by PropertyType, textures as
+        // scene-relative paths (the writer's non-database branch). SceneReader
+        // itself links half the app (Database, Globals, AssetManager), so this
+        // suite replicates the writer/reader JSON contract instead of linking
+        // them; the regression guarded here — PbrMaterial not DECLARING the
+        // texture/int properties, so they never reach the JSON — trips either way.
+        QJsonObject matObj; matObj["materialType"] = "pbr"; matObj["version"] = 2;
+        QJsonObject values;
+        const QDir sceneDir(dir);
+        for (auto *prop : saved->properties) {
+            switch (prop->type) {
+            case iris::PropertyType::Bool:  values[prop->name] = prop->getValue().toBool(); break;
+            case iris::PropertyType::Int:   values[prop->name] = prop->getValue().toInt(); break;
+            case iris::PropertyType::Float: values[prop->name] = prop->getValue().toFloat(); break;
+            case iris::PropertyType::Color: values[prop->name] = prop->getValue().value<QColor>().name(); break;
+            case iris::PropertyType::Texture:
+                values[prop->name] = prop->getValue().toString().isEmpty()
+                    ? QString() : sceneDir.relativeFilePath(prop->getValue().toString());
+                break;
+            default: break;
+            }
+        }
+        matObj["values"] = values;
+        CHECK(values.contains("baseColorMap") && !values["baseColorMap"].toString().isEmpty(),
+              "texture map reaches the saved values");
+        CHECK(values.contains("alphaMode") && values["alphaMode"].toInt() == 2,
+              "alphaMode reaches the saved values");
+
+        // Read it back the way SceneReader::readPbrMaterial dispatches (textures
+        // resolved back to absolute paths against the scene folder).
+        auto reloaded = iris::PbrMaterial::create();
+        const QJsonObject rvalues = matObj["values"].toObject();
+        for (auto *prop : reloaded->properties) {
+            if (!rvalues.contains(prop->name)) continue;
+            const auto val = rvalues.value(prop->name);
+            switch (prop->type) {
+            case iris::PropertyType::Float:  reloaded->setValue(prop->name, static_cast<float>(val.toDouble())); break;
+            case iris::PropertyType::Int:    reloaded->setValue(prop->name, val.toInt()); break;
+            case iris::PropertyType::Color:  reloaded->setValue(prop->name, QColor(val.toString())); break;
+            case iris::PropertyType::Bool:   reloaded->setValue(prop->name, val.toBool()); break;
+            case iris::PropertyType::Texture:
+                reloaded->setValue(prop->name, val.toString().isEmpty() ? QString() : sceneDir.filePath(val.toString()));
+                break;
+            default: break;
+            }
+        }
+        CHECK(reloaded->useBaseColorMap && reloaded->textures.contains("u_baseColorMap"),
+              "reloaded material has its base colour map");
+        CHECK(std::fabs(reloaded->roughnessLowerBound - 0.2f) < 1e-4f &&
+              std::fabs(reloaded->roughnessUpperBound - 0.5f) < 1e-4f, "roughness bounds round-tripped");
+        CHECK(reloaded->alphaMode == 2 && std::fabs(reloaded->alpha - 0.5f) < 1e-4f &&
+              std::fabs(reloaded->alphaCutoff - 0.7f) < 1e-4f, "alpha mode/value/cutoff round-tripped");
+        PbrParams rp;
+        CHECK(SceneMirror::toPbrParams(reloaded.data(), rp), "reloaded PbrMaterial -> PbrParams");
+        CHECK(rp.alphaMode == PbrAlphaMode::Blend && std::fabs(rp.alpha - 0.5f) < 1e-4f,
+              "alpha mode + value reach the engine params");
+        CHECK(std::fabs(rp.roughness - 0.5f) < 1e-4f, "roughness 0.9 clamped into bounds [0.2, 0.5]");
+
+        // Mirror it opaque (unambiguous pixels) and prove the round-tripped
+        // texture colours the cube.
+        reloaded->setValue("alphaMode", 0);
+        meshNode2->setMaterial(reloaded);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("round-tripped PBR texture", img);
+        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
+              "texture from the round-tripped material colours the cube");
+        meshNode2->setMaterial(legacy);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        QFile::remove(pngPath);
+        QDir().rmdir(dir);
     }
 
     // ---- step 5: a POINT light on a document node lights the side it is on ----

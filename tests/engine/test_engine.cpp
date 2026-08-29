@@ -721,6 +721,117 @@ void overlay_lines_draw_on_top() {
     CHECK(centre(img).r > 100);                     // cube again
 }
 
+// ---------------------------------------------------------------------------
+// Widened PBR surface (MATERIALS_EFFECTS_AUDIT.md Option A): alpha blend/cutout,
+// two-sided lighting. All pixel-asserted offscreen.
+
+void pbr_alpha_blend_mixes_with_background() {
+    Fixture fx;
+    View *v = fx.view("blend-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("blend-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
+    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange; p.roughness = 0.8f;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    s->setNodeTransform(n, Vec3(0,0,0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    const Px opaque = centre(img);
+    CHECK_MSG(opaque.r > 100 && opaque.b < 90, "opaque cube is solid orange: %d %d %d", opaque.r, opaque.g, opaque.b);
+    // Half-alpha blend: the centre must MIX cube orange with background blue.
+    p.alphaMode = PbrAlphaMode::Blend; p.alpha = 0.5f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px mixed = centre(img);
+    std::printf("    blend 0.5 centre: opaque %d %d %d -> mixed %d %d %d\n",
+                opaque.r, opaque.g, opaque.b, mixed.r, mixed.g, mixed.b);
+    CHECK_MSG(mixed.b > opaque.b + 40, "background blue shows through: b %d -> %d", opaque.b, mixed.b);
+    CHECK_MSG(mixed.r > 40, "the cube still contributes red: %d", mixed.r);
+    CHECK_MSG(mixed.b < 240, "not pure background either: b %d", mixed.b);
+    // Alpha ~0: the cube fades out entirely.
+    p.alpha = 0.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK_MSG(near(centre(img), kBlue, 20), "alpha 0 is invisible");
+    // Back to opaque: solid again.
+    p.alphaMode = PbrAlphaMode::Opaque; p.alpha = 1.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100 && centre(img).b < 90);
+}
+
+void pbr_alpha_cutout_discards_below_cutoff() {
+    Fixture fx;
+    View *v = fx.view("cutout-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("cutout-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
+    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 0.8f;
+    MaterialId mat = s->createPbrMaterial(p);
+    // A green albedo texture whose ALPHA is 0.5 everywhere.
+    std::vector<unsigned char> pix(16 * 16 * 4);
+    for (int i = 0; i < 16 * 16; ++i) { pix[i*4] = 20; pix[i*4+1] = 230; pix[i*4+2] = 40; pix[i*4+3] = 128; }
+    TextureId tex = s->createTexture(16, 16, pix.data(), true);
+    CHECK_MSG(tex != 0, "%s", fx.e->lastError().c_str());
+    CHECK(s->setPbrTexture(mat, PbrTextureSlot::Albedo, tex));
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    s->setNodeTransform(n, Vec3(0,0,0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    const Px shown = centre(img);
+    CHECK_MSG(shown.g > 100 && shown.g > shown.b, "opaque mode ignores texture alpha: %d %d %d", shown.r, shown.g, shown.b);
+    // Cutoff 1.0: texture alpha 0.5 < 1.0 -> every pixel discarded -> invisible.
+    p.alphaMode = PbrAlphaMode::Cutout; p.alphaCutoff = 1.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px gone = centre(img);
+    std::printf("    cutout 1.0 centre: %d %d %d (texture alpha 0.5)\n", gone.r, gone.g, gone.b);
+    CHECK_MSG(near(gone, kBlue, 20), "cutoff above texture alpha discards the cube: %d %d %d", gone.r, gone.g, gone.b);
+    // Cutoff 0.25: alpha 0.5 passes -> visible again.
+    p.alphaCutoff = 0.25f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px back = centre(img);
+    CHECK_MSG(back.g > 100 && back.g > back.b, "cutoff below texture alpha keeps the cube: %d %d %d", back.r, back.g, back.b);
+}
+
+void pbr_two_sided_shows_inside_faces() {
+    Fixture fx;
+    View *v = fx.view("twosided-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("twosided-scene");            REQUIRE(s);
+    v->setScene(s);
+    s->setAmbient(Colour(0.5f, 0.5f, 0.5f), Colour(0.4f, 0.4f, 0.4f));
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange; p.roughness = 0.9f;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    s->setNodeTransform(n, Vec3(0,0,0), Quat(), Vec3(3.0f, 3.0f, 3.0f));
+    // Camera at the origin, INSIDE the cube: one-sided faces are back-face culled,
+    // so the background shows straight through the enclosing cube.
+    CameraDesc c; c.position = Vec3(0, 0, 0); c.fovDegrees = 45; c.nearClip = 0.05f; c.farClip = 100;
+    v->setCamera(c);
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    const Px culled = centre(img);
+    CHECK_MSG(near(culled, kBlue, 20), "inside a one-sided cube only the background is visible: %d %d %d", culled.r, culled.g, culled.b);
+    p.twoSided = true;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px inside = centre(img);
+    std::printf("    inside the cube: one-sided %d %d %d | two-sided %d %d %d\n",
+                culled.r, culled.g, culled.b, inside.r, inside.g, inside.b);
+    CHECK_MSG(!near(inside, kBlue, 20) && inside.r > 50, "two-sided lighting shows the inner faces: %d %d %d", inside.r, inside.g, inside.b);
+    p.twoSided = false;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kBlue, 20));
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -742,6 +853,9 @@ int main(int argc, char **argv) {
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
         { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
         { "overlay_lines_draw_on_top",              overlay_lines_draw_on_top },
+        { "pbr_alpha_blend_mixes_with_background",  pbr_alpha_blend_mixes_with_background },
+        { "pbr_alpha_cutout_discards_below_cutoff", pbr_alpha_cutout_discards_below_cutoff },
+        { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

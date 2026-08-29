@@ -325,6 +325,8 @@ void SceneMirror::syncTextures(Entry &e, iris::Material *material)
 {
     if (!material || !e.material || e.material == mDefaultMaterial) return;
     // Document slot name -> engine slot. PbrMaterial and DefaultMaterial naming.
+    // PbrMaterial's "u_occlusionMap" is deliberately NOT mapped: the engine has no
+    // ambient-occlusion slot (HlmsPbs limitation, see engine Types.h).
     struct Slot { const char *name; PbrTextureSlot slot; bool srgb; };
     static const Slot kSlots[] = {
         { "u_baseColorMap",  PbrTextureSlot::Albedo,    true  }, { "u_diffuseTexture", PbrTextureSlot::Albedo,    true  },
@@ -375,10 +377,26 @@ bool SceneMirror::toPbrParams(iris::Material *material, PbrParams &out)
         const float f = pbr->baseColorFactor;
         out.albedo    = Colour(c.redF() * f, c.greenF() * f, c.blueF() * f, 1.0f);
         out.metalness = pbr->metallicFactor;
-        out.roughness = pbr->roughnessFactor;
+        // The document's roughness remap bounds apply per-texel to a sampled map;
+        // the engine has no such remap, so approximate by clamping the scalar
+        // factor into the (order-normalised) bounds.
+        const float lo = std::min(pbr->roughnessLowerBound, pbr->roughnessUpperBound);
+        const float hi = std::max(pbr->roughnessLowerBound, pbr->roughnessUpperBound);
+        out.roughness = std::max(lo, std::min(pbr->roughnessFactor, hi));
         const QColor e = pbr->emissiveColor;
         out.emissive  = Colour(e.redF() * pbr->emissiveIntensity, e.greenF() * pbr->emissiveIntensity,
                                e.blueF() * pbr->emissiveIntensity, 1.0f);
+        switch (pbr->alphaMode) {
+        case 1:  out.alphaMode = PbrAlphaMode::Cutout; break;
+        case 2:  out.alphaMode = PbrAlphaMode::Blend;  break;
+        default: out.alphaMode = PbrAlphaMode::Opaque; break;
+        }
+        out.alpha           = pbr->alpha;
+        out.alphaCutoff     = pbr->alphaCutoff;
+        out.normalMapWeight = pbr->normalFactor;
+        out.twoSided        = pbr->renderStates.rasterState.cullMode == iris::CullMode::None;
+        // occlusionMap/occlusionFactor: no engine equivalent (HlmsPbs has no AO
+        // slot — see Types.h); intentionally dropped, not faked.
         return true;
     }
     if (auto *custom = dynamic_cast<iris::CustomMaterial *>(material)) {

@@ -654,11 +654,49 @@ private:
         }
         n.meshRef = 0; n.materialRef = 0;
     }
+    // Ogre::HlmsPbsDatablock::None is unspellable here: X11's `None` macro (this
+    // file includes Xlib.h for window handles) eats the identifier.
+    static constexpr auto kTransparencyNone = static_cast<Ogre::HlmsPbsDatablock::TransparencyModes>(0);
     static void applyPbr(Ogre::HlmsPbsDatablock *db, const PbrParams &p) {
         db->setDiffuse(Ogre::Vector3(p.albedo.r, p.albedo.g, p.albedo.b));
         db->setMetalness(p.metalness);
         db->setRoughness(p.roughness);
         db->setEmissive(Ogre::Vector3(p.emissive.r, p.emissive.g, p.emissive.b));
+        db->setNormalMapWeight(p.normalMapWeight);
+        // Manage the macroblock ourselves: setTwoSidedLighting(changeMacroblock=true)
+        // swaps culling to CULL_NONE when enabling but never restores it when
+        // disabling, and applyPbr must be idempotent in both directions.
+        db->setTwoSidedLighting(p.twoSided, false);
+        {
+            Ogre::HlmsMacroblock macro = *db->getMacroblock();
+            const Ogre::CullingMode want = p.twoSided ? Ogre::CULL_NONE : Ogre::CULL_CLOCKWISE;
+            if (macro.mCullMode != want) { macro.mCullMode = want; db->setMacroblock(macro); }
+        }
+        // NOTE HlmsPbs has NO ambient-occlusion slot and no roughness remap: the
+        // document's occlusionMap/Factor stay unsupported (see Types.h), and
+        // roughness bounds are clamped by the caller before they reach here.
+        switch (p.alphaMode) {
+        case PbrAlphaMode::Opaque:
+            db->setAlphaTest(Ogre::CMPF_ALWAYS_PASS);
+            db->setTransparency(1.0f, kTransparencyNone);
+            break;
+        case PbrAlphaMode::Cutout:
+            // The Hlms template discards when `threshold CMP alpha` is true
+            // (threshold on the LEFT — 800.PixelShader_piece_ps.any:300), so
+            // CMPF_GREATER discards alpha < cutoff: glTF MASK semantics. The
+            // compared alpha comes from the diffuse texture; with no diffuse
+            // texture it is 1.0.
+            db->setTransparency(1.0f, kTransparencyNone);
+            db->setAlphaTest(Ogre::CMPF_GREATER);
+            db->setAlphaTestThreshold(p.alphaCutoff);
+            break;
+        case PbrAlphaMode::Blend:
+            db->setAlphaTest(Ogre::CMPF_ALWAYS_PASS);
+            // Fade = plain alpha blending (glTF BLEND); Transparent would keep
+            // specular at the cost of premultiplying diffuse by alpha^2.
+            db->setTransparency(p.alpha, Ogre::HlmsPbsDatablock::Fade);
+            break;
+        }
     }
     /// Uploads MeshData as a v2 mesh: interleaved position/normal/uv, 16- or 32-bit
     /// indices. v1 meshes silently render nothing on Vulkan, so only this path exists.

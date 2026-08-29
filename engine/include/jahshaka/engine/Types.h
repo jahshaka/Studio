@@ -45,15 +45,35 @@ struct MeshData {
 
 using TextureId = unsigned int;
 enum class SkyMode { NoSky, Equirectangular, Cubemap };   // 'None' collides with X11's macro
+
+/// PBR texture slots. NOTE: there is deliberately NO Occlusion slot — the Ogre
+/// backend (HlmsPbs) has no dedicated ambient-occlusion input, so the document's
+/// occlusionMap/occlusionFactor are documented as unsupported rather than faked
+/// (bake AO into the base colour map at import time if it matters).
 enum class PbrTextureSlot { Albedo, Normal, Metalness, Roughness, Emissive };
 
-/// Metallic-roughness PBR parameters — Jahshaka's material model. Textures arrive
-/// in a later step; parameters alone already drive the full lighting path.
+/// How PbrParams::alpha / alphaCutoff are interpreted (glTF's OPAQUE/MASK/BLEND).
+enum class PbrAlphaMode {
+    Opaque,   ///< alpha ignored
+    Cutout,   ///< pixels whose albedo-texture alpha < alphaCutoff are discarded
+    Blend     ///< the whole surface is alpha-blended by `alpha`
+};
+
+/// Metallic-roughness PBR parameters — Jahshaka's material model, sized to what
+/// the backend's PBR pipeline can honour. Emissive arrives with any intensity
+/// already folded in (colour * intensity). Roughness remap bounds are applied by
+/// the CALLER as a clamp before filling `roughness` — the backend has no
+/// per-texel remap. Texture maps bind separately via setPbrTexture().
 struct PbrParams {
     Colour albedo   = Colour(0.8f, 0.8f, 0.8f);
     float  metalness = 0.0f;
     float  roughness = 0.6f;
     Colour emissive = Colour(0.0f, 0.0f, 0.0f);
+    PbrAlphaMode alphaMode = PbrAlphaMode::Opaque;
+    float  alpha       = 1.0f;   ///< Blend mode: 1 opaque .. 0 invisible
+    float  alphaCutoff = 0.5f;   ///< Cutout mode threshold
+    bool   twoSided    = false;  ///< draw and light both faces (no back-face culling)
+    float  normalMapWeight = 1.0f;   ///< strength of the bound normal map
 };
 
 enum class LightType { Directional, Point, Spot };
