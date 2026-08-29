@@ -13,6 +13,7 @@
 
 #include "engineassetscene.h"
 #include "enginerenderdriver.h"
+#include "../editor/enginethumbnailrenderer.h"
 #include "../engine/enginehost.h"
 #include "../constants.h"
 #include "../globals.h"
@@ -312,47 +313,14 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
 
 iris::MaterialPtr EngineAssetViewer::mirrorable(iris::MaterialPtr material)
 {
-    if (!material) return iris::DefaultMaterial::create().staticCast<iris::Material>();
-    auto custom = material.dynamicCast<iris::CustomMaterial>();
-    if (!custom) return material;
-
-    auto out = iris::DefaultMaterial::create();
-    bool any = false;
-    for (auto prop : custom->properties) {
-        if (!prop) continue;
-        const QVariant v = prop->getValue();
-        if (prop->type == iris::PropertyType::Color) {
-            const QColor c = v.value<QColor>();
-            if (prop->name == "diffuseColor")       { out->setDiffuseColor(c);  any = true; }
-            else if (prop->name == "specularColor") { out->setSpecularColor(c); }
-            else if (prop->name == "ambientColor")  { out->setAmbientColor(c); }
-        }
-        else if (prop->type == iris::PropertyType::Texture) {
-            const QString path = v.toString();
-            if (path.isEmpty() || !QFileInfo(path).isFile()) continue;
-            if (prop->name == "diffuseTexture")       { out->setDiffuseTexture(iris::Texture2D::load(path));  any = true; }
-            else if (prop->name == "normalTexture")   { out->setNormalTexture(iris::Texture2D::load(path)); }
-            else if (prop->name == "specularTexture") { out->setSpecularTexture(iris::Texture2D::load(path)); }
-        }
-        else if (prop->type == iris::PropertyType::Float) {
-            if (prop->name == "shininess")            out->setShininess(v.toFloat());
-            else if (prop->name == "textureScale")    out->setTextureScale(v.toFloat());
-            else if (prop->name == "normalIntensity") out->setNormalIntensity(v.toFloat());
-        }
-    }
-    Q_UNUSED(any);
-    return out.staticCast<iris::Material>();
+    // One conversion for previews AND thumbnails (they diverged once: thumbnails
+    // dropped the textures and rendered grey).
+    return EngineThumbnailRenderer::previewMaterialFor(material);
 }
 
 void EngineAssetViewer::mirrorableMaterials(iris::SceneNodePtr node)
 {
-    if (!node) return;
-    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
-        auto mat = meshNode->getMaterial();
-        if (mat && mat.dynamicCast<iris::CustomMaterial>()) meshNode->setMaterial(mirrorable(mat));
-    }
-    for (auto child : node->children) mirrorableMaterials(child);
+    EngineThumbnailRenderer::previewMaterials(node);
 }
 
 IAssetViewer *createEngineAssetViewer(const std::shared_ptr<Engine> &engine,

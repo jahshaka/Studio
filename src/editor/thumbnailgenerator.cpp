@@ -526,23 +526,9 @@ void ThumbnailGenerator::processOneEngineRequest()
 
 iris::MaterialPtr ThumbnailGenerator::previewMaterialFor(iris::MaterialPtr material)
 {
-    // The engine mirror understands PbrMaterial and DefaultMaterial. Anything else
-    // (shader-graph CustomMaterial) contributes its diffuse/base colour if it has one.
-    if (!material) return iris::DefaultMaterial::create().staticCast<iris::Material>();
-    if (dynamic_cast<iris::PbrMaterial *>(material.data()) ||
-        dynamic_cast<iris::DefaultMaterial *>(material.data()))
-        return material;
-
-    auto def = iris::DefaultMaterial::create();
-    for (auto prop : material->properties) {
-        if (!prop || prop->type != iris::PropertyType::Color) continue;
-        if (prop->name == "diffuseColor" || prop->name == "color" || prop->name == "albedo" ||
-            prop->name == "baseColor") {
-            def->setDiffuseColor(prop->getValue().value<QColor>());
-            break;
-        }
-    }
-    return def.staticCast<iris::Material>();
+    // Shared with the mesh path: colours AND textures survive the conversion
+    // (a colour-only downgrade rendered every textured material grey).
+    return EngineThumbnailRenderer::previewMaterialFor(material);
 }
 
 QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
@@ -564,13 +550,8 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         auto node = iris::MeshNode::loadAsSceneFragment(request.path,
             [](iris::MeshPtr, iris::MeshMaterialData &data)
         {
-            // Textures are not yet in the engine material model (materials v0).
-            auto mat = iris::DefaultMaterial::create();
-            mat->setDiffuseColor(data.diffuseColor.isValid() ? data.diffuseColor : QColor(200, 200, 200));
-            mat->setSpecularColor(data.specularColor.isValid() ? data.specularColor : QColor(255, 255, 255));
-            mat->setAmbientColor(QColor(110, 110, 110));
-            mat->setShininess(data.shininess);
-            return mat.staticCast<iris::Material>();
+            // Colours AND texture maps — the asset's real look, not a grey stand-in.
+            return EngineThumbnailRenderer::previewMaterialForMeshData(data);
         }, &source);
         if (!node) return QImage();
         return engineRenderer->renderNode(node, size);

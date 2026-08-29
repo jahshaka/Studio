@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <memory>
 #include "irisglfwd.h"
+#include "graphics/mesh.h"          // MeshMaterialData
 #include "scenegraph/meshnode.h"
 #include "materials/defaultmaterial.h"
 #include "editor/enginethumbnailrenderer.h"
@@ -120,7 +121,34 @@ int main(int argc, char **argv)
             CHECK(isBackground(h.pixelColor(2, 2)), "giant cube is framed inside the view");
         }
 
-        // 7. the primary view is untouched: still its own clear colour, nothing of the thumbs scene
+        // 7. a textured model must NOT come out greyscale: the Mesh path's material
+        // factory keeps the diffuse map (it used to drop textures — grey thumbnails
+        // for every imported model whose colour lives in its texture).
+        {
+            QImage tex(64, 64, QImage::Format_RGBA8888);
+            tex.fill(QColor(255, 60, 0));                    // saturated orange
+            const QString texPath = QStringLiteral("test_thumbnails_texture.png");
+            CHECK(tex.save(texPath), "test texture written");
+
+            iris::MeshMaterialData data;                     // what assimp reports for the model
+            data.shininess = 8.0f;
+            data.diffuseTexture = texPath;
+            auto mat = EngineThumbnailRenderer::previewMaterialForMeshData(data);
+            CHECK(!mat.isNull(), "mesh-data factory returns a material");
+
+            auto node = iris::MeshNode::create();
+            node->setMesh(":assets/models/cube.obj");
+            node->setMaterial(mat);
+            QImage t = renderer.renderNode(node, size); show("textured cube", t);
+            const QColor ct = centre(t);
+            CHECK(!isBackground(ct), "textured cube renders");
+            const int variance = std::abs(ct.red() - ct.green()) + std::abs(ct.green() - ct.blue());
+            std::printf("    centre channel variance = %d\n", variance);
+            CHECK(variance > 60, "thumbnail shows the texture's colour, not greyscale");
+            CHECK(ct.red() > ct.blue() + 60, "and the colour is the texture's (red-dominant)");
+        }
+
+        // 8. the primary view is untouched: still its own clear colour, nothing of the thumbs scene
         Image pimg; primary->readPixels(pimg);
         const Colour pc = pimg.at(32, 32);
         CHECK(pc.r < 0.05f && pc.g < 0.05f && pc.b < 0.05f, "the primary view did not render the thumbs scene");

@@ -1717,9 +1717,10 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                     QJsonDocument(nodeWithGUIDs).toJson(),
                                                                     AssetViewFilter::AssetsView);
 
-                    ThumbnailGenerator::getSingleton()->requestThumbnail(
-                        ThumbnailRequestType::Mesh, asset->path, objectGuid
-                        );
+                    // No async thumbnail request here: the queued render used to land
+                    // AFTER the post-load screenshot below and overwrite it (with a
+                    // grey, texture-less image at that). The viewer screenshot at the
+                    // end of this import IS the thumbnail.
 
                     QVariant variant = QVariant::fromValue(scene);
                     auto nodeAsset = new AssetNodeObject;
