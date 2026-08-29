@@ -66,6 +66,10 @@ public:
     /// survive the node.
     virtual bool        attachMesh(NodeId, MeshId, MaterialId) = 0;
     virtual bool        detachMesh(NodeId) = 0;
+
+    // ---- Lights (step 5): a node may carry one light ----
+    virtual bool        setLight(NodeId, const LightDesc &) = 0;   // creates or updates
+    virtual bool        removeLight(NodeId) = 0;
 };
 
 /// A view onto a Scene, rendering into a native window supplied by the host or
@@ -81,6 +85,9 @@ public:
     virtual Scene *scene() const = 0;
     virtual void setCameraPosition(const Vec3 &) = 0;
     virtual void lookAt(const Vec3 &) = 0;
+    /// Full camera state in one call (step 5). The document camera is pushed
+    /// through this every frame.
+    virtual void setCamera(const CameraDesc &) = 0;
     /// A disabled View is skipped by renderOneFrame(). Hidden viewports MUST be
     /// disabled — the backend otherwise keeps drawing them at full cost.
     virtual void setEnabled(bool) = 0;

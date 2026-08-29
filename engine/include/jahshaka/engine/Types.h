@@ -52,6 +52,29 @@ struct PbrParams {
     Colour emissive = Colour(0.0f, 0.0f, 0.0f);
 };
 
+enum class LightType { Directional, Point, Spot };
+
+/// A light attached to a node. Direction comes from the node's orientation
+/// (lights shine down the node's -Z), position from the node's transform.
+struct LightDesc {
+    LightType type = LightType::Point;
+    Colour    colour = Colour(1.0f, 1.0f, 1.0f);
+    float     intensity = 1.0f;        // radiometric scale (Jahshaka's "intensity")
+    float     range = 10.0f;           // point/spot falloff distance
+    float     spotAngleDegrees = 30.0f;    // outer cone
+    float     spotSoftness = 0.1f;         // 0..1, inner = outer * (1 - softness)
+};
+
+/// A View's camera. Position/orientation are absolute (the document composes them).
+struct CameraDesc {
+    Vec3  position;
+    Quat  orientation;                 // camera looks down its local -Z
+    float fovDegrees = 45.0f;          // vertical
+    float nearClip = 0.1f, farClip = 1000.0f;
+    bool  orthographic = false;
+    float orthoSize = 10.0f;           // vertical extent when orthographic
+};
+
 /// Native window handle a View renders into (X11 Window / HWND / NSView).
 using NativeWindowHandle = unsigned long long;
 

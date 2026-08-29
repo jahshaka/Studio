@@ -3,6 +3,8 @@
 #include <QQuaternion>
 #include <QVector3D>
 #include <cstring>
+#include <algorithm>
+#include <cmath>
 
 #include "scenegraph/scene.h"
 #include "scenegraph/scenenode.h"
@@ -13,6 +15,9 @@
 #include "graphics/vertexlayout.h"
 #include "graphics/graphicsdevice.h"   // VertexBuffer / IndexBuffer (CPU copies)
 #include "graphics/material.h"
+#include "materials/pbrmaterial.h"
+#include "materials/defaultmaterial.h"
+#include <QtMath>
 
 using namespace jahshaka::engine;
 
@@ -31,13 +36,13 @@ SceneMirror::~SceneMirror()
 
 void SceneMirror::setSource(iris::ScenePtr scene)
 {
-    for (const Entry &e : mEntries) {
-        if (e.light) mTarget->removeNode(e.light);
-        if (e.node)  mTarget->removeNode(e.node);
-    }
+    for (const Entry &e : mEntries)
+        if (e.node) mTarget->removeNode(e.node);
     mEntries.clear();
     for (MeshId m : mMeshes) mTarget->destroyMesh(m);
     mMeshes.clear();
+    for (MaterialId m : mMaterials) mTarget->destroyMaterial(m);
+    mMaterials.clear();
     mSource = scene;
 }
 
@@ -78,22 +83,27 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
     mTarget->setNodeTransform(e.node, toVec3(node->getLocalPos()), toQuat(node->getLocalRot()), toVec3(node->getLocalScale()));
     mTarget->setNodeVisible(e.node, node->visible);
 
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh && !e.hasMesh) {
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto meshNode = node.staticCast<iris::MeshNode>();
         iris::Mesh *mesh = meshNode->getMesh().data();
-        if (mesh) {
+        iris::Material *material = meshNode->getMaterial().data();
+        if (mesh && (!e.hasMesh || e.materialPtr != material)) {
             MeshId m = meshFor(mesh);
-            MaterialId mat = materialFor(meshNode->getMaterial().data());
-            if (m && mat && mTarget->attachMesh(e.node, m, mat)) e.hasMesh = true;
+            MaterialId mat = materialFor(material);
+            if (m && mat && mTarget->attachMesh(e.node, m, mat)) {
+                e.hasMesh = true; e.material = mat; e.materialPtr = material;
+            }
+        } else if (e.hasMesh && e.material && material) {
+            // Parameters may change every frame from the property panel: push them.
+            PbrParams p;
+            if (toPbrParams(material, p)) mTarget->setPbrMaterial(e.material, p);
         }
     }
 
-    if (node->getSceneNodeType() == iris::SceneNodeType::Light && !e.light) {
-        // v0: every document light becomes a directional light along the node's forward.
-        // Point/spot mapping and per-frame light sync arrive in plan step 5.
+    if (node->getSceneNodeType() == iris::SceneNodeType::Light) {
+        // The light rides on the mirrored node: position and direction follow the document.
         auto light = node.staticCast<iris::LightNode>();
-        const QVector3D fwd = node->getGlobalRotation().rotatedVector(QVector3D(0, 0, -1));
-        e.light = mTarget->addDirectionalLight(toVec3(fwd), light->intensity * 3.14159f);
+        if (mTarget->setLight(e.node, toLightDesc(light.data()))) e.hasLight = true;
     }
 
     for (auto &child : node->children)
@@ -104,7 +114,6 @@ void SceneMirror::removeMissing(const QSet<long> &seen)
 {
     for (auto it = mEntries.begin(); it != mEntries.end();) {
         if (seen.contains(it.key())) { ++it; continue; }
-        if (it->light) mTarget->removeNode(it->light);
         if (it->node)  mTarget->removeNode(it->node);
         it = mEntries.erase(it);
     }
@@ -121,14 +130,66 @@ MeshId SceneMirror::meshFor(iris::Mesh *mesh)
     return id;
 }
 
-MaterialId SceneMirror::materialFor(iris::Material *)
+MaterialId SceneMirror::materialFor(iris::Material *material)
 {
-    // v0: one shared default material. Plan step 4 maps PbrMaterial/DefaultMaterial.
-    if (!mDefaultMaterial) {
-        PbrParams p; p.albedo = Colour(0.8f, 0.3f, 0.2f); p.metalness = 0.0f; p.roughness = 0.6f;
-        mDefaultMaterial = mTarget->createPbrMaterial(p);
+    PbrParams p;
+    if (!material || !toPbrParams(material, p)) {
+        // Unknown material kinds (CustomMaterial shader graphs, matcap, glass...) get
+        // one shared neutral material until they have an engine equivalent.
+        if (!mDefaultMaterial) {
+            PbrParams d; d.albedo = Colour(0.8f, 0.8f, 0.8f); d.metalness = 0.0f; d.roughness = 0.6f;
+            mDefaultMaterial = mTarget->createPbrMaterial(d);
+        }
+        return mDefaultMaterial;
     }
-    return mDefaultMaterial;
+    auto it = mMaterials.constFind(material);
+    if (it != mMaterials.constEnd()) return it.value();
+    MaterialId id = mTarget->createPbrMaterial(p);
+    if (id) mMaterials.insert(material, id);
+    return id;
+}
+
+bool SceneMirror::toPbrParams(iris::Material *material, PbrParams &out)
+{
+    if (!material) return false;
+    if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material)) {
+        const QColor c = pbr->baseColor;
+        const float f = pbr->baseColorFactor;
+        out.albedo    = Colour(c.redF() * f, c.greenF() * f, c.blueF() * f, 1.0f);
+        out.metalness = pbr->metallicFactor;
+        out.roughness = pbr->roughnessFactor;
+        const QColor e = pbr->emissiveColor;
+        out.emissive  = Colour(e.redF() * pbr->emissiveIntensity, e.greenF() * pbr->emissiveIntensity,
+                               e.blueF() * pbr->emissiveIntensity, 1.0f);
+        return true;
+    }
+    if (auto *def = dynamic_cast<iris::DefaultMaterial *>(material)) {
+        // Legacy Blinn-Phong material: diffuse -> albedo, shininess -> roughness.
+        const QColor c = def->getDiffuseColor();
+        out.albedo    = Colour(c.redF(), c.greenF(), c.blueF(), 1.0f);
+        out.metalness = 0.0f;
+        const float shin = std::max(0.0f, std::min(def->getShininess(), 128.0f));
+        out.roughness = 1.0f - std::sqrt(shin / 128.0f) * 0.9f;
+        out.emissive  = Colour(0, 0, 0);
+        return true;
+    }
+    return false;
+}
+
+LightDesc SceneMirror::toLightDesc(iris::LightNode *light)
+{
+    LightDesc d;
+    switch (light->lightType) {
+    case iris::LightType::Directional: d.type = LightType::Directional; break;
+    case iris::LightType::Spot:        d.type = LightType::Spot; break;
+    case iris::LightType::Point: default: d.type = LightType::Point; break;
+    }
+    d.colour = Colour(light->color.redF(), light->color.greenF(), light->color.blueF(), 1.0f);
+    d.intensity = light->intensity;
+    d.range = light->distance;
+    d.spotAngleDegrees = light->spotCutOff;
+    d.spotSoftness = light->spotCutOffSoftness;
+    return d;
 }
 
 bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
@@ -175,8 +236,13 @@ void SceneMirror::applyCamera(iris::CameraNodePtr camera, View *view)
 {
     if (!camera || !view) return;
     camera->update(0.0f);
-    const QVector3D pos = camera->getGlobalPosition();
-    const QVector3D fwd = camera->getGlobalRotation().rotatedVector(QVector3D(0, 0, -1));
-    view->setCameraPosition(toVec3(pos));
-    view->lookAt(toVec3(pos + fwd));
+    CameraDesc c;
+    c.position     = toVec3(camera->getGlobalPosition());
+    c.orientation  = toQuat(camera->getGlobalRotation());
+    c.fovDegrees   = camera->angle > 0.0f ? camera->angle : 45.0f;
+    c.nearClip     = camera->nearClip;
+    c.farClip      = camera->farClip;
+    c.orthographic = !camera->isPerspective;
+    c.orthoSize    = camera->orthoSize;
+    view->setCamera(c);
 }

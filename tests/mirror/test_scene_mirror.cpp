@@ -17,6 +17,8 @@
 #include "scenegraph/lightnode.h"
 #include "graphics/mesh.h"
 #include "materials/defaultmaterial.h"
+#include "materials/pbrmaterial.h"
+#include "scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
 #include "engine/scenemirror.h"
 
@@ -27,7 +29,8 @@ static int failures = 0;
 static Colour centre(const Image &i) { return i.at(i.width / 2, i.height / 2); }
 static Colour corner(const Image &i) { return i.at(2, 2); }
 static bool isBlue(const Colour &c) { return c.b > 0.8f && c.r < 0.15f && c.g < 0.15f; }
-static bool isMaterial(const Colour &c) { return c.r > 0.3f && c.r > c.b && c.r > c.g; }
+// The document material is orange/red: red must dominate and be clearly lit.
+static bool isMaterial(const Colour &c) { return c.r > 0.12f && c.r > c.b * 1.5f && c.r > c.g * 1.5f; }
 static void show(const char *tag, const Image &i) {
     const Colour c = centre(i), k = corner(i);
     std::printf("    %-28s centre %3.0f %3.0f %3.0f   corner %3.0f %3.0f %3.0f\n", tag,
@@ -65,7 +68,9 @@ int main(int argc, char **argv)
     auto meshNode = iris::MeshNode::create();
     meshNode->setName("cube");
     meshNode->setMesh(":assets/models/cube.obj");
-    meshNode->setMaterial(iris::DefaultMaterial::create());
+    auto legacyOrange = iris::DefaultMaterial::create();
+    legacyOrange->setDiffuseColor(QColor(204, 76, 51));   // the document decides the colour now
+    meshNode->setMaterial(legacyOrange);
     CHECK(!!meshNode->getMesh(), "cube.obj loaded into the document (no GL)");
     const float r = meshNode->getMeshRadius();
     const float s = r > 0.0f ? 1.0f / r : 1.0f;      // normalise to unit radius
@@ -139,6 +144,74 @@ int main(int argc, char **argv)
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("removed", img);
     CHECK(isBlue(centre(img)), "removed node renders nothing");
+
+    // ---- step 4: material colour comes from the DOCUMENT ----
+    auto meshNode2 = iris::MeshNode::create();
+    meshNode2->setMesh(":assets/models/cube.obj");
+    meshNode2->setLocalScale(QVector3D(s, s, s));
+    auto pbr = iris::PbrMaterial::create();
+    pbr->setBaseColor(QColor(30, 80, 230));      // blue-ish
+    pbr->setMetallicFactor(0.0f);
+    pbr->setRoughnessFactor(0.7f);
+    meshNode2->setMaterial(pbr);
+    doc->getRootNode()->addChild(meshNode2);
+    PbrParams pp;
+    CHECK(SceneMirror::toPbrParams(pbr.data(), pp), "PbrMaterial -> PbrParams");
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img); show("document PbrMaterial", img);
+    CHECK(centre(img).b > centre(img).r, "centre takes the document material's colour (blue)");
+    // Edit the material in the document (what the property panel does) -> engine follows.
+    pbr->setBaseColor(QColor(230, 60, 20));
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img); show("material edited -> red", img);
+    CHECK(isMaterial(centre(img)), "runtime material edit reached the engine");
+    // Legacy DefaultMaterial maps too.
+    auto legacy = iris::DefaultMaterial::create();
+    legacy->setDiffuseColor(QColor(20, 200, 40));
+    meshNode2->setMaterial(legacy);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img); show("DefaultMaterial green", img);
+    CHECK(centre(img).g > centre(img).r && centre(img).g > centre(img).b, "DefaultMaterial diffuse -> albedo");
+
+    // ---- step 5: a POINT light on a document node lights the side it is on ----
+    // Remove the sun so only the point light matters; drop ambient to make it obvious.
+    doc->getRootNode()->removeChild(light);
+    target->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
+    auto point = iris::LightNode::create();
+    point->lightType = iris::LightType::Point;
+    point->intensity = 4.0f;
+    point->distance = 20.0f;
+    point->color = QColor(255, 255, 255);
+    point->setLocalPos(QVector3D(4.0f, 1.0f, 2.5f));   // camera-right of the cube
+    doc->getRootNode()->addChild(point);
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    auto lum = [&](unsigned x, unsigned y) { const Colour c = img.at(x, y); return c.r + c.g + c.b; };
+    const float rightSide = lum(img.width * 3 / 4, img.height / 2), leftSide = lum(img.width / 4, img.height / 2);
+    std::printf("    point light right: left-of-frame %.2f  right-of-frame %.2f\n", leftSide, rightSide);
+    CHECK(rightSide > leftSide + 0.05f, "point light on the right lights the right side more");
+    point->setLocalPos(QVector3D(-4.0f, 1.0f, 2.5f));   // move the light node to the left
+    mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    const float rightSide2 = lum(img.width * 3 / 4, img.height / 2), leftSide2 = lum(img.width / 4, img.height / 2);
+    std::printf("    point light left:  left-of-frame %.2f  right-of-frame %.2f\n", leftSide2, rightSide2);
+    CHECK(leftSide2 > rightSide2 + 0.05f, "moving the light NODE in the document moves the light");
+
+    // ---- document camera drives the view ----
+    target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+    auto cam = iris::CameraNode::create();
+    cam->setLocalPos(QVector3D(0.0f, 0.0f, 4.0f));       // straight in front, looking -Z
+    cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 100.0f;
+    doc->getRootNode()->addChild(cam);
+    mirror.applyCamera(cam, view);
+    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img); show("document camera", img);
+    CHECK(!isBlue(centre(img)), "document camera sees the cube");
+    cam->setLocalPos(QVector3D(0.0f, 20.0f, 4.0f));      // way above: cube leaves the centre
+    mirror.applyCamera(cam, view);
+    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img); show("document camera moved", img);
+    CHECK(isBlue(centre(img)), "moving the document camera moves the view");
 
     mirror.setSource(nullptr);
     engine->destroyView(view);

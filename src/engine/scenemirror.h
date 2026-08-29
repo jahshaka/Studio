@@ -46,18 +46,26 @@ public:
 private:
     struct Entry {
         jahshaka::engine::NodeId node = 0;
-        jahshaka::engine::NodeId light = 0;   // engine light node, if the document node is a light
-        bool hasMesh = false;
+        bool hasMesh  = false;
+        bool hasLight = false;
+        jahshaka::engine::MaterialId material = 0;   // per document material instance
+        iris::Material *materialPtr = nullptr;
     };
     void visit(iris::SceneNodePtr node, jahshaka::engine::NodeId parent, QSet<long> &seen);
     void removeMissing(const QSet<long> &seen);
     jahshaka::engine::MeshId     meshFor(iris::Mesh *mesh);
     jahshaka::engine::MaterialId materialFor(iris::Material *material);
+    /// Reads a document material into PBR parameters. Public for tests.
+public:
+    static bool toPbrParams(iris::Material *material, jahshaka::engine::PbrParams &out);
+    static jahshaka::engine::LightDesc toLightDesc(iris::LightNode *light);
+private:
 
     jahshaka::engine::Scene *mTarget;
     iris::ScenePtr           mSource;
     QHash<long, Entry>       mEntries;         // keyed by iris SceneNode::nodeId
     QHash<iris::Mesh *, jahshaka::engine::MeshId> mMeshes;
+    QHash<iris::Material *, jahshaka::engine::MaterialId> mMaterials;
     jahshaka::engine::MaterialId mDefaultMaterial = 0;
 };
 

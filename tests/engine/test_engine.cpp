@@ -474,6 +474,53 @@ void material_and_mesh_lifetime() {
     CHECK(true);
 }
 
+void light_on_node_and_camera_desc() {
+    Fixture fx;
+    View *v = fx.view("light-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("light-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = Colour(0.9f, 0.9f, 0.9f); p.roughness = 0.8f;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId cube = s->createNode();
+    CHECK(s->attachMesh(cube, mesh, mat));
+    s->setNodeTransform(cube, Vec3(0,0,0), Quat(), Vec3(1.2f,1.2f,1.2f));
+    NodeId lightNode = s->createNode();
+    LightDesc d; d.type = LightType::Point; d.intensity = 0.8f; d.range = 20.0f;   // low enough not to saturate
+    CHECK(s->setLight(lightNode, d));
+    s->setNodeTransform(lightNode, Vec3(4, 1, 2.5f), Quat(), Vec3(1,1,1));
+    render(fx.e);
+    Image img; REQUIRE(v->readPixels(img));
+    auto lum = [&](unsigned x, unsigned y) { const Colour c = img.at(x, y); return c.r + c.g + c.b; };
+    const float r1 = lum(72, 48), l1 = lum(24, 48);
+    s->setNodeTransform(lightNode, Vec3(-4, 1, 2.5f), Quat(), Vec3(1,1,1));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const float r2 = lum(72, 48), l2 = lum(24, 48);
+    std::printf("    light right: L %.2f R %.2f | light left: L %.2f R %.2f\n", l1, r1, l2, r2);
+    CHECK(r1 > l1 + 0.05f);
+    CHECK(l2 > r2 + 0.05f);
+    CHECK(s->removeLight(lightNode));
+    CHECK(!s->removeLight(lightNode));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(lum(48, 48) < 0.3f);   // only faint ambient remains
+
+    // CameraDesc: same pose as aim() gives the cube; a far pose does not.
+    s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+    CameraDesc c; c.position = Vec3(0, 0, 4); c.fovDegrees = 45; c.nearClip = 0.1f; c.farClip = 100;
+    v->setCamera(c);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(!near(centre(img), kBlue));
+    c.position = Vec3(0, 40, 4);
+    v->setCamera(c);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kBlue));
+    c.position = Vec3(0, 0, 4); c.orthographic = true; c.orthoSize = 3.0f;
+    v->setCamera(c);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(!near(centre(img), kBlue));
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -489,6 +536,7 @@ int main(int argc, char **argv) {
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
+        { "light_on_node_and_camera_desc",          light_on_node_and_camera_desc },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

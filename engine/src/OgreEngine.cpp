@@ -41,6 +41,7 @@
 
 #include <X11/Xlib.h>
 #include <atomic>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <exception>
@@ -268,6 +269,44 @@ public:
         auto it = mNodes.find(id);
         if (it == mNodes.end()) return false;
         JAH_TRY { detachItem(it->second); return true; } JAH_CATCH(mError, false);
+    }
+
+    // ---- Lights ----
+    bool setLight(NodeId id, const LightDesc &d) override {
+        auto it = mNodes.find(id);
+        if (it == mNodes.end()) { mError = "setLight: unknown node"; return false; }
+        JAH_TRY {
+            Node &n = it->second;
+            if (!n.light) { n.light = mSceneMgr->createLight(); n.node->attachObject(n.light); }
+            Ogre::Light *L = n.light;
+            switch (d.type) {
+            case LightType::Directional: L->setType(Ogre::Light::LT_DIRECTIONAL); break;
+            case LightType::Point:       L->setType(Ogre::Light::LT_POINT); break;
+            case LightType::Spot:        L->setType(Ogre::Light::LT_SPOTLIGHT); break;
+            }
+            L->setDiffuseColour(toOgre(d.colour));
+            L->setSpecularColour(toOgre(d.colour));
+            L->setPowerScale(d.intensity * Ogre::Math::PI);
+            if (d.type != LightType::Directional)
+                L->setAttenuationBasedOnRadius(std::max(d.range, 0.01f), 0.01f);
+            if (d.type == LightType::Spot) {
+                const float outer = std::max(1.0f, std::min(d.spotAngleDegrees, 179.0f));
+                const float inner = outer * (1.0f - std::min(std::max(d.spotSoftness, 0.0f), 0.99f));
+                L->setSpotlightRange(Ogre::Degree(inner), Ogre::Degree(outer), 1.0f);
+            }
+            // Ogre lights shine down their node's -Z once attached (default direction).
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool removeLight(NodeId id) override {
+        auto it = mNodes.find(id);
+        if (it == mNodes.end() || !it->second.light) return false;
+        JAH_TRY {
+            it->second.light->detachFromParent();
+            mSceneMgr->destroyLight(it->second.light);
+            it->second.light = nullptr;
+            return true;
+        } JAH_CATCH(mError, false);
     }
 
     Ogre::SceneManager *sceneManager() const { return mSceneMgr; }
@@ -536,6 +575,23 @@ public:
     void lookAt(const Vec3 &t) override {
         JAH_TRY { if (mCamera) mCamera->lookAt(toOgre(t)); } JAH_CATCH(mError, );
     }
+    void setCamera(const CameraDesc &c) override {
+        JAH_TRY {
+            if (!mCamera) return;
+            mCamera->setPosition(toOgre(c.position));
+            mCamera->setOrientation(Ogre::Quaternion(c.orientation.w, c.orientation.x, c.orientation.y, c.orientation.z));
+            mCamera->setNearClipDistance(std::max(c.nearClip, 0.001f));
+            mCamera->setFarClipDistance(std::max(c.farClip, c.nearClip + 0.01f));
+            if (c.orthographic) {
+                mCamera->setProjectionType(Ogre::PT_ORTHOGRAPHIC);
+                const float aspect = mHeight ? float(mWidth) / float(mHeight) : 1.0f;
+                mCamera->setOrthoWindow(c.orthoSize * aspect, c.orthoSize);
+            } else {
+                mCamera->setProjectionType(Ogre::PT_PERSPECTIVE);
+                mCamera->setFOVy(Ogre::Degree(std::max(1.0f, std::min(c.fovDegrees, 179.0f))));
+            }
+        } JAH_CATCH(mError, );
+    }
     void setEnabled(bool on) override {
         mEnabled = on;
         JAH_TRY { if (mWorkspace) mWorkspace->setEnabled(on); } JAH_CATCH(mError, );
@@ -670,6 +726,11 @@ public:
             if (s->name() == name) { mLastError = "Scene '" + name + "' already exists"; return nullptr; }
         JAH_TRY {
             Ogre::SceneManager *sm = mRoot->createSceneManager(Ogre::ST_GENERIC, 2, name);
+            // HlmsPbs shades point and spot lights ONLY through Forward+ (Forward3D /
+            // ForwardClustered); without it only directional lights reach the shader.
+            // Values are Ogre's sample defaults: 16x8 grid, 24 slices, 96 lights per
+            // cell, no decals/probes, 2..50 units depth range.
+            sm->setForwardClustered(true, 16, 8, 24, 96, 0, 0, 2.0f, 50.0f);
             mScenes.emplace_back(new OgreScene(mRoot, sm, name, mLastError));
             return mScenes.back().get();
         } JAH_CATCH(mLastError, nullptr);
