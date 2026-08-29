@@ -977,6 +977,10 @@ public:
             auto *s = static_cast<OgreScene *>(scene);
             mCamera = s->sceneManager()->createCamera(mName + "/Camera");
             mCamera->setNearClipDistance(0.1f);
+            // Ogre's default far plane is 100000; PSSM splits computed over that range
+            // leave no shadow-map resolution for the actual scene (views that only use
+            // setCameraPosition/lookAt never call setCamera to override it).
+            mCamera->setFarClipDistance(1000.0f);
             mCamera->setAutoAspectRatio(true);
             mWorkspace = mRoot->getCompositorManager2()->addWorkspace(
                 s->sceneManager(), target(), mCamera, mWorkspaceDef, mEnabled);
