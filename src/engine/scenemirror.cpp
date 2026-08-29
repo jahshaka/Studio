@@ -412,6 +412,14 @@ bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
 void SceneMirror::applySky(View *view)
 {
     if (!mSource || !view) return;
+    QString equirect;
+    if (mSource->skyType == iris::SkyType::EQUIRECTANGULAR && mSource->skyTexture)
+        equirect = mSource->skyTexture->source;
+    if (equirect != mSkySignature) {
+        mSkySignature = equirect;
+        TextureId t = equirect.isEmpty() ? 0 : textureFor(equirect, true);
+        mTarget->setSky(t ? SkyMode::Equirectangular : SkyMode::NoSky, t);
+    }
     if (mSource->skyType == iris::SkyType::SINGLE_COLOR) {
         const QColor c = mSource->skyColor;
         view->setBackground(Colour(c.redF(), c.greenF(), c.blueF(), 1.0f));

@@ -44,6 +44,7 @@ struct MeshData {
 };
 
 using TextureId = unsigned int;
+enum class SkyMode { NoSky, Equirectangular, Cubemap };   // 'None' collides with X11's macro
 enum class PbrTextureSlot { Albedo, Normal, Metalness, Roughness, Emissive };
 
 /// Metallic-roughness PBR parameters — Jahshaka's material model. Textures arrive

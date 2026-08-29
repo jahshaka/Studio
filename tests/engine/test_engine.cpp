@@ -437,6 +437,31 @@ void shadows_darken_the_ground() {
     CHECK_MSG(brightest2 - darkest2 < (brightest - darkest), "without shadows the ground row is flatter");
 }
 
+void equirect_sky_fills_the_background() {
+    Fixture fx;
+    View *v = fx.view("sky-view", 48, 48, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("sky-scene");            REQUIRE(s);
+    v->setScene(s); aim(v);
+    // A solid magenta 64x32 PPM (no image library needed); FreeImage reads PPM.
+    const std::string path = "sky_test_magenta.ppm";
+    { FILE *f = std::fopen(path.c_str(), "wb"); std::fprintf(f, "P6 64 32 255\n");
+      for (int i = 0; i < 64 * 32; ++i) { std::fputc(255, f); std::fputc(0, f); std::fputc(255, f); } std::fclose(f); }
+    TextureId skyTex = s->loadTexture(path, true);
+    CHECK_MSG(skyTex != 0, "%s", fx.e->lastError().c_str());
+    if (!skyTex) { std::remove(path.c_str()); return; }
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    CHECK(near(corner(img), kBlue));
+    CHECK(s->setSky(SkyMode::Equirectangular, skyTex));
+    render(fx.e, 3); REQUIRE(v->readPixels(img));
+    const Px k = corner(img);
+    std::printf("    equirect sky corner: %d %d %d\n", k.r, k.g, k.b);
+    CHECK_MSG(k.r > 150 && k.b > 150 && k.g < 80, "sky texture should fill the background: %d %d %d", k.r, k.g, k.b);
+    CHECK(s->setSky(SkyMode::NoSky, 0));
+    render(fx.e, 2); REQUIRE(v->readPixels(img));
+    CHECK(near(corner(img), kBlue));
+    std::remove(path.c_str());
+}
+
 void mesh_from_buffers_renders() {
     Fixture fx;
     View *v = fx.view("mesh-view", 96, 96, kBlue); REQUIRE(v);
@@ -672,6 +697,7 @@ int main(int argc, char **argv) {
         { "resize_offscreen",                       resize_offscreen },
         { "background_changes_at_runtime",          background_changes_at_runtime },
         { "shadows_darken_the_ground",              shadows_darken_the_ground },
+        { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },

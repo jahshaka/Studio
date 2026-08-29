@@ -107,6 +107,66 @@ public:
         } JAH_CATCH(mError, 0);
     }
 
+    /// Jahshaka's own sky: a UV sphere around the camera with an unlit textured
+    /// material, depth test/write off, drawn first (render queue 0) so the scene
+    /// paints over it. Ogre's SceneManager::setSky is not used — on Vulkan its
+    /// Sky.material throws on 'sliceIdx' after the sky renderable is already
+    /// attached, which then crashes in the render queue with a null datablock.
+    bool setSky(SkyMode mode, TextureId texId) override {
+        JAH_TRY {
+            if (mode == SkyMode::NoSky) { destroySky(); return true; }
+            if (mode == SkyMode::Cubemap) { mError = "setSky: cubemap skies are not supported yet (equirectangular only)"; return false; }
+            auto it = mTextures.find(texId);
+            if (it == mTextures.end()) { mError = "setSky: unknown texture"; return false; }
+            if (!mSkyNode) {
+                mSkyMeshName = processUniqueName("skysphere");
+                mSkyMesh = buildSkySphere(mSkyMeshName);
+                auto *hlmsUnlit = static_cast<Ogre::HlmsUnlit *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT));
+                mSkyDatablockName = processUniqueName("sky");
+                Ogre::HlmsMacroblock macro;
+                macro.mDepthCheck = false; macro.mDepthWrite = false; macro.mCullMode = Ogre::CULL_NONE;
+                auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->createDatablock(
+                    Ogre::IdString(mSkyDatablockName), mSkyDatablockName, macro, Ogre::HlmsBlendblock(), Ogre::HlmsParamVec()));
+                db->setUseColour(true);
+                db->setColour(Ogre::ColourValue::White);
+                mSkyItem = mSceneMgr->createItem(mSkyMesh, Ogre::SCENE_DYNAMIC);
+                mSkyItem->setDatablock(db);
+                mSkyItem->setRenderQueueGroup(0);
+                mSkyItem->setCastShadows(false);
+                mSkyNode = mSceneMgr->getRootSceneNode(Ogre::SCENE_DYNAMIC)->createChildSceneNode(Ogre::SCENE_DYNAMIC);
+                mSkyNode->attachObject(mSkyItem);
+            }
+            auto *hlmsUnlit = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT);
+            auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->getDatablock(Ogre::IdString(mSkyDatablockName)));
+            Ogre::HlmsSamplerblock sampler;
+            sampler.mU = Ogre::TAM_WRAP; sampler.mV = Ogre::TAM_CLAMP; sampler.mMipFilter = Ogre::FO_LINEAR;
+            db->setTexture(0, it->second.texture, &sampler);
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    /// Called by the engine before rendering: keep the sky centred on the camera and
+    /// inside its far plane.
+    void followCamera(const Ogre::Vector3 &camPos, float farClip) {
+        if (!mSkyNode) return;
+        mSkyNode->setPosition(camPos);
+        const float r = std::max(1.0f, farClip * 0.5f);
+        mSkyNode->setScale(r, r, r);
+    }
+    void destroySky() {
+        if (mSkyItem) { mSkyItem->detachFromParent(); mSceneMgr->destroyItem(mSkyItem); mSkyItem = nullptr; }
+        if (mSkyNode) { mSceneMgr->destroySceneNode(mSkyNode); mSkyNode = nullptr; }
+        if (!mSkyDatablockName.empty()) {
+            auto *hlmsUnlit = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT);
+            if (hlmsUnlit->getDatablock(Ogre::IdString(mSkyDatablockName))) hlmsUnlit->destroyDatablock(Ogre::IdString(mSkyDatablockName));
+            mSkyDatablockName.clear();
+        }
+        mSkyMesh.reset();
+        if (!mSkyMeshName.empty()) {
+            Ogre::MeshManager &mm = Ogre::MeshManager::getSingleton();
+            if (mm.resourceExists(mSkyMeshName)) mm.remove(mSkyMeshName);
+            mSkyMeshName.clear();
+        }
+    }
     // TEMPORARY — replaced by mesh loading in step 3 of VIEWPORT_MIGRATION_PLAN.md
     NodeId addTestCube(const Colour &albedo, float metalness, float roughness) override {
         JAH_TRY {
@@ -571,6 +631,27 @@ private:
         mesh->_setBoundingSphereRadius(aabb.getRadius());
         return mesh;
     }
+    /// Inward-facing UV sphere (radius 1); u = longitude, v = latitude — equirect mapping.
+    Ogre::MeshPtr buildSkySphere(const std::string &name) {
+        MeshData d;
+        const int rings = 24, segs = 48;
+        for (int r = 0; r <= rings; ++r) {
+            const float v = float(r) / rings, phi = v * 3.14159265f;
+            for (int sIdx = 0; sIdx <= segs; ++sIdx) {
+                const float u = float(sIdx) / segs, theta = u * 6.2831853f;
+                const float x = std::sin(phi) * std::cos(theta), y = std::cos(phi), z = std::sin(phi) * std::sin(theta);
+                d.positions.push_back(x); d.positions.push_back(y); d.positions.push_back(z);
+                d.normals.push_back(-x); d.normals.push_back(-y); d.normals.push_back(-z);
+                d.uvs.push_back(1.0f - u); d.uvs.push_back(v);
+            }
+        }
+        for (int r = 0; r < rings; ++r) for (int sIdx = 0; sIdx < segs; ++sIdx) {
+            const unsigned a = unsigned(r * (segs + 1) + sIdx), b = a + unsigned(segs + 1);
+            d.indices.push_back(a); d.indices.push_back(a + 1); d.indices.push_back(b);      // inward winding
+            d.indices.push_back(a + 1); d.indices.push_back(b + 1); d.indices.push_back(b);
+        }
+        return buildMeshV2(name, d);
+    }
     void releaseNode(Node &n) {
         // Order: renderable off the node -> item (drops the datablock link and one
         // mesh ref) -> datablock -> node -> our mesh ref -> the mesh itself.
@@ -667,6 +748,10 @@ private:
     std::map<MaterialId, MaterialRec> mMaterials;
     std::map<TextureId, TextureRec> mTextures;
     std::set<std::string> mTextureDirs;
+    Ogre::SceneNode *mSkyNode = nullptr;
+    Ogre::Item      *mSkyItem = nullptr;
+    Ogre::MeshPtr    mSkyMesh;
+    std::string      mSkyMeshName, mSkyDatablockName;
     TextureId           mNextTextureId = 0;
     NodeId              mNextId = 0;
     MeshId              mNextMeshId = 0;
@@ -825,6 +910,10 @@ public:
         } JAH_CATCH(mError, false);
     }
 
+    /// Keeps the scene's sky sphere centred on this view's camera.
+    void updateSky() {
+        if (mEnabled && mScene && mCamera) mScene->followCamera(mCamera->getPosition(), mCamera->getFarClipDistance());
+    }
     /// Releases workspace, camera, workspace definitions and the window/texture.
     /// Safe to call twice. Called by Engine::destroyView and by the Engine
     /// destructor BEFORE Root dies.
@@ -997,7 +1086,10 @@ public:
     }
 
     void renderOneFrame() override {
-        JAH_TRY { if (mRoot) mRoot->renderOneFrame(); } JAH_CATCH(mLastError, );
+        JAH_TRY {
+            for (auto &v : mViews) v->updateSky();
+            if (mRoot) mRoot->renderOneFrame();
+        } JAH_CATCH(mLastError, );
     }
     std::string backendName() const override { return mBackendName; }
     const std::string &lastError() const override { return mLastError; }
@@ -1051,7 +1143,26 @@ private:
                 OGRE_NEW Ogre::HlmsPbs(am.load(mMediaDir + mainPath, "FileSystem", true), &libs));
         }
         mHlmsRegistered = true;
+        registerCommonMaterials();
         createShadowNode();
+    }
+    /// Ogre's low-level material scripts (sky quad, DPSM shadow maps, depth utils).
+    /// Staged from Samples/Media/2.0/scripts/materials/Common next to the Hlms data.
+    void registerCommonMaterials() {
+        try {
+            Ogre::ResourceGroupManager &rgm = Ogre::ResourceGroupManager::getSingleton();
+            const std::string group = Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME;
+            // Registered folder by folder like Ogre's own resources2.cfg: a recursive
+            // location does not resolve bare shader file names in subfolders.
+            const char *dirs[] = { "2.0/scripts/materials/Common", "2.0/scripts/materials/Common/Any",
+                                   "2.0/scripts/materials/Common/GLSL", "2.0/scripts/materials/Common/HLSL",
+                                   "2.0/scripts/materials/Common/Metal",
+                                   "Hlms/Common/Any", "Hlms/Common/GLSL", "Hlms/Common/HLSL", "Hlms/Common/Metal" };
+            for (const char *d : dirs) rgm.addResourceLocation(mMediaDir + d, "FileSystem", group, false);
+            rgm.initialiseAllResourceGroups(true);
+        } catch (Ogre::Exception &e) {
+            Ogre::LogManager::getSingleton().logMessage("Jahshaka: common material scripts not registered: " + e.getFullDescription());
+        }
     }
     /// One shadow node for the process: PSSM (3 splits) for the first directional
     /// light (point/spot shadow maps pending — see below).

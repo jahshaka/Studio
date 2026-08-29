@@ -32,6 +32,9 @@ public:
     virtual const std::string &name() const = 0;
     virtual void        setAmbient(const Colour &upper, const Colour &lower) = 0;
     virtual NodeId      addDirectionalLight(const Vec3 &direction, float power) = 0;
+    /// Textured sky behind everything: an equirectangular (lat-long) image, or a
+    /// cubemap texture. SkyMode::NoSky removes it (the View's background shows).
+    virtual bool        setSky(SkyMode, TextureId) = 0;
     /// Unit cube with a PBR metallic-roughness material. Proves the material path end to end.
     // TEMPORARY — replaced by mesh loading in step 3 of VIEWPORT_MIGRATION_PLAN.md
     virtual NodeId      addTestCube(const Colour &albedo, float metalness, float roughness) = 0;

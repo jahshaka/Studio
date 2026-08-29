@@ -93,6 +93,7 @@ private:
     QHash<QString, jahshaka::engine::TextureId> mTextures;
     jahshaka::engine::MaterialId mDefaultMaterial = 0;
     bool mLightWires = true;
+    QString mSkySignature;
     jahshaka::engine::MeshId mWireMeshes[3] = { 0, 0, 0 };   // directional, point, spot
     iris::SceneNodePtr mHighlighted;
     jahshaka::engine::NodeId mHighlightNode = 0;
