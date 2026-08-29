@@ -430,6 +430,38 @@ QComboBox::down-arrow:!enabled {
        </layout>
       </item>
       <item>
+       <widget class="QPushButton" name="desktopSwitcher">
+        <property name="minimumSize">
+         <size>
+          <width>110</width>
+          <height>32</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Switch desktop</string>
+        </property>
+        <property name="text">
+         <string>Desktop 1 ▾</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="layoutToggle">
+        <property name="minimumSize">
+         <size>
+          <width>96</width>
+          <height>32</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Desktop layout: sequential rows or freeform (drag tiles anywhere)</string>
+        </property>
+        <property name="text">
+         <string>Rows ▾</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="horizontalSpacer_2">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>

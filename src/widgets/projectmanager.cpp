@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include <QtConcurrent/QtConcurrent>
+#include <QActionGroup>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -209,6 +210,8 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/get/scenes/"));
 	});
 
+    setupDesktopControls();
+
     populateDesktop();
 
     QGridLayout *layout = new QGridLayout();
@@ -352,6 +355,9 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         assetGuids
     );
 
+    // imported projects land on the desktop the user is looking at
+    db->updateProjectDesktop(importGuid, currentDesktop);
+
     // Update files that reference guids
 
     if (shouldOpen) {
@@ -448,11 +454,137 @@ void ProjectManager::searchProjects()
     dynamicGrid->searchTiles(ui->lineEdit->text());
 }
 
+// ===== Desktops (DESKTOPS_SPEC.md): switcher, per-desktop layout mode, move-to =====
+
+QString ProjectManager::desktopLayoutKey(int desktop)
+{
+    return QString("desktop_%1_layout").arg(desktop);
+}
+
+void ProjectManager::setupDesktopControls()
+{
+    currentDesktop = qBound(1, settings->getValue("current_desktop", 1).toInt(), 4);
+
+    const QString menuStyle =
+        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+        "QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 10px; margin: 0; }"
+        "QMenu::item:selected { background-color: #3498db; color: #EEE; }"
+        "QMenu::item:disabled { color: #555; }";
+
+    // switcher popup: Desktop 1..4, current one checked
+    desktopMenu = new QMenu(this);
+    desktopMenu->setStyleSheet(menuStyle);
+    auto desktopGroup = new QActionGroup(desktopMenu);
+    desktopGroup->setExclusive(true);
+    for (int i = 1; i <= 4; ++i) {
+        QAction *action = desktopMenu->addAction(QString("Desktop %1").arg(i));
+        action->setCheckable(true);
+        action->setChecked(i == currentDesktop);
+        desktopGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, i]() { switchDesktop(i); });
+        desktopActions.push_back(action);
+    }
+
+    ui->desktopSwitcher->setText(QString("Desktop %1 ▾").arg(currentDesktop));
+    ui->desktopSwitcher->setCursor(Qt::PointingHandCursor);
+    connect(ui->desktopSwitcher, &QPushButton::pressed, this, [this]() {
+        // the footer sits at the bottom of the window; pop the menu up, not down
+        const QPoint corner = ui->desktopSwitcher->mapToGlobal(QPoint(0, 0));
+        desktopMenu->exec(corner - QPoint(0, desktopMenu->sizeHint().height()));
+    });
+
+    // per-desktop layout mode: Rows (sequential grid) vs Freeform (drag anywhere)
+    layoutMenu = new QMenu(this);
+    layoutMenu->setStyleSheet(menuStyle);
+    auto layoutGroup = new QActionGroup(layoutMenu);
+    layoutGroup->setExclusive(true);
+    rowsAction = layoutMenu->addAction("Rows");
+    rowsAction->setCheckable(true);
+    freeformAction = layoutMenu->addAction("Freeform");
+    freeformAction->setCheckable(true);
+    layoutGroup->addAction(rowsAction);
+    layoutGroup->addAction(freeformAction);
+    connect(rowsAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode(false, true); });
+    connect(freeformAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode(true, true); });
+
+    ui->layoutToggle->setCursor(Qt::PointingHandCursor);
+    connect(ui->layoutToggle, &QPushButton::pressed, this, [this]() {
+        const QPoint corner = ui->layoutToggle->mapToGlobal(QPoint(0, 0));
+        layoutMenu->exec(corner - QPoint(0, layoutMenu->sizeHint().height()));
+    });
+
+    // freeform drags (and first-show cascade placements) persist to the library DB
+    connect(dynamicGrid, &DynamicGrid::tilePositionChanged,
+            this, &ProjectManager::projectTilePositionChanged);
+
+    dynamicGrid->setCurrentDesktop(currentDesktop);
+    const bool freeform =
+        settings->getValue(desktopLayoutKey(currentDesktop), "rows").toString() == "freeform";
+    applyDesktopLayoutMode(freeform, false);
+}
+
+void ProjectManager::applyDesktopLayoutMode(bool freeform, bool persist)
+{
+    if (persist) settings->setValue(desktopLayoutKey(currentDesktop), freeform ? "freeform" : "rows");
+
+    rowsAction->setChecked(!freeform);
+    freeformAction->setChecked(freeform);
+    ui->layoutToggle->setText(freeform ? QString("Freeform ▾") : QString("Rows ▾"));
+
+    dynamicGrid->setLayoutMode(freeform ? DynamicGrid::LayoutMode::Freeform
+                                        : DynamicGrid::LayoutMode::Rows);
+}
+
+void ProjectManager::switchDesktop(int desktop)
+{
+    desktop = qBound(1, desktop, 4);
+    if (desktop == currentDesktop) return;
+
+    currentDesktop = desktop;
+    settings->setValue("current_desktop", desktop);
+
+    for (int i = 0; i < desktopActions.size(); ++i)
+        desktopActions[i]->setChecked(i + 1 == desktop);
+    ui->desktopSwitcher->setText(QString("Desktop %1 ▾").arg(desktop));
+
+    dynamicGrid->setCurrentDesktop(desktop);
+
+    // this desktop's layout mode FIRST (so tiles populate under the right mode —
+    // a rows desktop must not cascade-assign freeform positions), then its projects
+    const bool freeform =
+        settings->getValue(desktopLayoutKey(desktop), "rows").toString() == "freeform";
+    applyDesktopLayoutMode(freeform, false);
+    populateDesktop(true);
+}
+
+void ProjectManager::moveProjectToDesktop(ItemGridWidget *widget, int desktop)
+{
+    desktop = qBound(1, desktop, 4);
+    if (desktop == currentDesktop) return;
+
+    if (db->updateProjectDesktop(widget->tileData.guid, desktop)) {
+        dynamicGrid->deleteTile(widget);
+        checkForEmptyState();
+    } else {
+        QMessageBox::warning(this,
+                             "Move failed",
+                             "Failed to move project, please try again!",
+                             QMessageBox::Ok);
+    }
+}
+
+void ProjectManager::projectTilePositionChanged(ItemGridWidget *widget)
+{
+    db->updateProjectPosition(widget->tileData.guid,
+                              static_cast<float>(widget->normX),
+                              static_cast<float>(widget->normY));
+}
+
 void ProjectManager::addImportedTileToDesktop(const QString &guid)
 {
 	int i = 0;
 	ProjectTileData importedScene;
-	foreach(const ProjectTileData &record, db->fetchProjects()) {
+	foreach(const ProjectTileData &record, db->fetchProjects(currentDesktop)) {
 		if (record.guid == guid) importedScene = record;
 		i++;
 	}
@@ -469,7 +601,7 @@ void ProjectManager::populateDesktop(bool reset)
     if (reset) dynamicGrid->resetView();
 
     int i = 0;
-    foreach (const ProjectTileData &record, db->fetchProjects()) {
+    foreach (const ProjectTileData &record, db->fetchProjects(currentDesktop)) {
         dynamicGrid->addToGridView(record, i);
         i++;
     }
@@ -518,8 +650,11 @@ void ProjectManager::newProject()
 		QDir projectDir(fullProjectPath);
 		if (!projectDir.exists()) projectDir.mkpath(".");
 
-		// Insert an empty scene to get access to the project guid... 
+		// Insert an empty scene to get access to the project guid...
 		if (!db->createProject(projectGuid, projectName)) return;
+
+		// new projects belong to the desktop they were created on
+		db->updateProjectDesktop(projectGuid, currentDesktop);
 
 		emit fileToCreate(projectName, fullProjectPath);
 

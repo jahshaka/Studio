@@ -45,6 +45,14 @@ public:
     QWidget *controls;
     ProjectTileData tileData;
 
+    // Desktops (DESKTOPS_SPEC.md): the desktop this tile's grid is showing (to disable
+    // the current entry in the Move-to submenu) and the freeform layout state.
+    int currentDesktop = 1;
+    bool freeformDraggable = false; // set by DynamicGrid when the desktop is in freeform mode
+    bool hasFreeformPos = false;    // normalized position assigned (from DB or cascade)
+    qreal normX = 0.0;              // 0..1 across the desktop canvas minus the tile size
+    qreal normY = 0.0;
+
 	void updateTile(const QByteArray &arr);
 
     void setTileSize(QSize size, QSize iSize);
@@ -76,6 +84,8 @@ protected:
     void enterEvent(QEnterEvent*);
     void leaveEvent(QEvent*);
     void mousePressEvent(QMouseEvent*);
+    void mouseMoveEvent(QMouseEvent*);
+    void mouseReleaseEvent(QMouseEvent*);
     void mouseDoubleClickEvent(QMouseEvent*);
 
 signals:
@@ -93,6 +103,8 @@ signals:
     void renameFromWidget(ItemGridWidget*);
     void closeFromWidget(ItemGridWidget*);
     void deleteFromWidget(ItemGridWidget*);
+    void moveToDesktopFromWidget(ItemGridWidget*, int desktop);
+    void tileMoved(ItemGridWidget*);    // freeform drag ended; normX/normY updated
 
 private:
 //    QWidget *gameGridItem;
@@ -103,6 +115,11 @@ private:
     QPixmap image;
     QPixmap oimage;
     QWidget *parent;
+
+    // freeform drag state
+    bool dragging = false;
+    QPoint dragStartGlobal;
+    QPoint dragStartTilePos;
 };
 
 #endif // ITEMGRIDWIDGET_HPP
