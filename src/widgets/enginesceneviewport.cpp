@@ -3,6 +3,8 @@
 #include <QShowEvent>
 #include <QMouseEvent>
 #include "../editor/scenepicker.h"
+#include "../player/playback.h"
+#include "../irisgl/src/graphics/viewport.h"
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
@@ -55,6 +57,8 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
     mGizmo = mTranslateGizmo;
     mFreeCam  = new EditorCameraController(this);
     mOrbitCam = new OrbitalCameraController(this);
+    mPlayback = new PlayBack();
+    mPlayback->init();                 // GL-free init: physics, animation, controllers
     resetEditorCam();
     setCameraController(mFreeCam);
     mFrameTimer.start();
@@ -66,6 +70,7 @@ EngineSceneViewport::~EngineSceneViewport()
 {
     cleanup();
     delete mFreeCam; delete mOrbitCam;
+    delete mPlayback;
     delete mTranslateGizmo; delete mRotateGizmo; delete mScaleGizmo;
 }
 
@@ -272,6 +277,7 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
 {
     EngineViewWidget::mousePressEvent(e);
     setFocus();
+    if (mPlaying && mPlayback) { mPlayback->mousePressEvent(e); return; }
     mMousePos = mPrevMousePos = e->position(); mHaveMouse = true;
     if (e->button() == Qt::LeftButton) {
         QVector3D rayPos, rayDir, viewDir;
@@ -291,6 +297,7 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
 void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
 {
     EngineViewWidget::mouseMoveEvent(e);
+    if (mPlaying && mPlayback) { mPlayback->mouseMoveEvent(e); return; }
     mMousePos = e->position(); mHaveMouse = true;
     const QPointF dir = mMousePos - mPrevMousePos;
     mPrevMousePos = mMousePos;
@@ -305,30 +312,60 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
 void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
 {
     EngineViewWidget::mouseReleaseEvent(e);
+    if (mPlaying && mPlayback) { mPlayback->mouseReleaseEvent(e); return; }
     if (e->button() == Qt::LeftButton && mGizmo && mGizmo->isDragging()) mGizmo->endDragging();
     if (mCamController) mCamController->onMouseUp(e->button());
 }
 
 void EngineSceneViewport::wheelEvent(QWheelEvent *e)
 {
+    if (mPlaying && mPlayback) { mPlayback->wheelEvent(e); return; }
     if (mCamController) mCamController->onMouseWheel(e->angleDelta().y());
 }
 
 void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
 {
+    if (mPlaying && mPlayback) { mPlayback->keyPressEvent(e); return; }
     if (mCamController) mCamController->onKeyPressed(static_cast<Qt::Key>(e->key()));
 }
 
 void EngineSceneViewport::keyReleaseEvent(QKeyEvent *e)
 {
+    if (mPlaying && mPlayback) { mPlayback->keyReleaseEvent(e); return; }
     if (mCamController) mCamController->keyReleaseEvent(e);
 }
 
 void EngineSceneViewport::setScene(iris::ScenePtr scene)
 {
+    if (mPlaying) stopPlayingScene();
     mScene = scene;
     mSelectedNode.clear();
+    if (mPlayback && scene) {
+        // Like the legacy viewport: the editor camera doubles as the play camera.
+        if (mEditorCam) scene->setCamera(mEditorCam);
+        mPlayback->setScene(scene);
+    }
     if (mMirror) mMirror->setSource(scene);
+}
+
+void EngineSceneViewport::startPlayingScene()
+{
+    if (!mScene || !mPlayback) return;
+    if (!mPlaying) mPlayback->playScene();
+    mPlaying = true;
+}
+
+void EngineSceneViewport::pausePlayingScene()
+{
+    mPlaying = false;                 // time is not reset, like the legacy viewport
+}
+
+void EngineSceneViewport::stopPlayingScene()
+{
+    if (!mPlaying && !(mPlayback && mPlayback->isScenePlaying())) return;
+    mPlaying = false;
+    if (mPlayback) mPlayback->stopScene();
+    if (mScene) mScene->updateSceneAnimation(0.0f);
 }
 
 // The setter does NOT emit: MainWindow calls it in response to sceneNodeSelected,
@@ -395,7 +432,12 @@ void EngineSceneViewport::syncFrame()
     if (!mActive || !view()) return;
     if (!ensureEngineScene()) return;
     const float dt = float(mFrameTimer.restart()) / 1000.0f;
-    if (mCamController) mCamController->update(dt);
+    if (mPlaying && mPlayback) {
+        iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
+        mPlayback->update(vp, dt);        // physics, animation, play controllers move the document
+    } else if (mCamController) {
+        mCamController->update(dt);
+    }
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
     if (mMirror) {
         mMirror->setLightWires(mShowLightWires);

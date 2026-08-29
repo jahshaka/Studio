@@ -24,6 +24,7 @@ class RotationGizmo;
 class ScaleGizmo;
 class GizmoOverlay;
 class CameraControllerBase;
+class PlayBack;
 class EditorCameraController;
 class OrbitalCameraController;
 #include <QElapsedTimer>
@@ -71,9 +72,10 @@ public:
     void setGizmoTransformToGlobal() override;
     Gizmo *activeGizmo() const { return mGizmo; }
 
-    void startPlayingScene() override {}          // TODO(step 11): player on the engine
-    void pausePlayingScene() override {}
-    void stopPlayingScene() override {}
+    void startPlayingScene() override;            // play in place: PlayBack drives the document
+    void pausePlayingScene() override;
+    void stopPlayingScene() override;
+    bool isPlaying() const { return mPlaying; }
     void startPhysicsSimulation() override {}
     void restartPhysicsSimulation() override {}
     void stopPhysicsSimulation() override {}
@@ -137,6 +139,8 @@ private:
     EditorCameraController  *mFreeCam = nullptr;
     OrbitalCameraController *mOrbitCam = nullptr;
     CameraControllerBase    *mCamController = nullptr;
+    PlayBack                *mPlayback = nullptr;
+    bool                     mPlaying = false;
     QPointF mMousePos, mPrevMousePos;
     bool mHaveMouse = false;
     // drag-and-drop state (material hover preview), as in SceneViewWidget
