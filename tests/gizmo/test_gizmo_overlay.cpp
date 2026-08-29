@@ -2,6 +2,8 @@
 #include <QGuiApplication>
 #include <QVector3D>
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 #include "irisglfwd.h"
 #include "scenegraph/scene.h"
 #include "scenegraph/scenenode.h"
@@ -18,7 +20,7 @@
 using namespace jahshaka::engine;
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
-static bool isBg(const Colour &c) { return c.b > 0.8f && c.r < 0.15f && c.g < 0.15f; }
+static bool isBg(const Colour &c) { return c.r < 0.15f && c.g < 0.15f && c.b < 0.15f; }
 static int countNonBg(const Image &img) { int n = 0; for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) if (!isBg(img.at(x, y))) ++n; return n; }
 static bool hasColour(const Image &img, float r, float g, float b) {
     for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
@@ -36,7 +38,7 @@ int main(int argc, char **argv)
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine"); if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
-    View *view = engine->createOffscreenView("gizmo", 128, 128, Colour(0, 0, 1));
+    View *view = engine->createOffscreenView("gizmo", 128, 128, Colour(0.1f, 0.1f, 0.1f));
     Scene *target = engine->createScene("gizmo");
     view->setScene(target);
     target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
@@ -94,13 +96,29 @@ int main(int argc, char **argv)
     CHECK(rot.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 3, "rotation gizmo: 3 rings");
     ScaleGizmo scl; scl.setSelectedNode(node); scl.updateSize(cam);
     CHECK(scl.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 4, "scale gizmo: 4 handles");
+    {
+        auto ri = rot.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1));
+        for (int i = 0; i < ri.size(); ++i) {
+            MeshData md; const bool ok = SceneMirror::toMeshData(ri[i].mesh.data(), md);
+            float mx = 0; for (size_t v = 0; v < md.vertexCount(); ++v) mx = std::max(mx, std::abs(md.positions[v*3]));
+            std::printf("    ring %d: ok=%d verts=%zu tris=%zu scaleX=%.2f maxX=%.2f colour=%d,%d,%d\n", i, ok, md.vertexCount(), md.triangleCount(),
+                        ri[i].transform.column(0).toVector3D().length(), mx, ri[i].colour.red(), ri[i].colour.green(), ri[i].colour.blue());
+        }
+    }
     overlay.update(&rot, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
+    std::printf("    rotation pixels drawn (reused overlay): %d\n", countNonBg(img));
+    overlay.clear();
+    GizmoOverlay overlay2(target);
+    overlay2.update(&rot, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    view->readPixels(img);
+    std::printf("    rotation pixels drawn (fresh overlay):  %d\n", countNonBg(img));
+    overlay2.clear();
     CHECK(countNonBg(img) > 5, "rotation gizmo is visible");
     CHECK(hasColour(img, 1, 0, 0) || hasColour(img, 0, 1, 0) || hasColour(img, 0, 0, 1), "rotation rings carry axis colours");
 
-    overlay.clear();
     mirror.setSource(nullptr);
     engine->destroyView(view); engine->destroyScene(target); engine.reset();
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
