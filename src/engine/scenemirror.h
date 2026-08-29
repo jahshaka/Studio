@@ -76,7 +76,10 @@ private:
         jahshaka::engine::NodeId wireNode = 0;       // light wire shape, child of `node`
         jahshaka::engine::MaterialId wireMaterial = 0;
         int wireKind = -1;                           // which shape is attached
+        bool hasBillboards = false;                  // particle emitter mirrored as billboards
+        QString billboardSignature;                  // texture + blend; recreate on change
     };
+    void syncParticles(Entry &e, iris::ParticleSystemNode *ps);
     void syncLightWires(Entry &e, iris::LightNode *light);
     void syncHighlight();
     jahshaka::engine::MeshId wireMeshFor(int kind);

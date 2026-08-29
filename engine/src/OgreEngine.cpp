@@ -49,6 +49,8 @@
 #include <OgreRenderSystemCapabilities.h>
 #include <Vao/OgreVaoManager.h>
 #include <Vao/OgreVertexArrayObject.h>
+#include <ParticleSystem/OgreBillboardSet2.h>
+#include <ParticleSystem/OgreParticleSystemManager2.h>
 
 #include <X11/Xlib.h>
 #include <atomic>
@@ -348,7 +350,17 @@ public:
         } JAH_CATCH(mError, );
     }
     void setNodeVisible(NodeId id, bool visible) override {
-        JAH_TRY { if (auto *n = node(id)) n->setVisible(visible, true); } JAH_CATCH(mError, );
+        JAH_TRY {
+            auto it = mNodes.find(id);
+            if (it == mNodes.end()) return;
+            if (it->second.node) it->second.node->setVisible(visible, true);
+            // The billboard set hangs off the STATIC root (world-space positions),
+            // not off this node, so the cascade above never reaches it. And
+            // setVisible() is USELESS for PFX2 objects: ParticleSystemManager2::
+            // _addToRenderQueue tests getVisibilityFlags(), which strips the
+            // LAYER_VISIBILITY bit setVisible toggles. Toggle the user flags.
+            if (it->second.billboards) it->second.billboards->setVisibilityFlags(visible ? 1u : 0u);
+        } JAH_CATCH(mError, );
     }
 
     // ---- Meshes and materials ----
@@ -643,6 +655,102 @@ public:
         } JAH_CATCH(mError, 0);
     }
 
+    // ---- Particles (billboard sets) ----
+    // Ogre-Next's BillboardSet2 (ParticleFX2 core, lives in OgreNextMain — no
+    // plugin needed): geometry is generated in the vertex shader from a read-only
+    // buffer the ParticleSystemManager2 uploads each frame. The manager attaches
+    // every set to the STATIC root scene node, so positions are world-space —
+    // exactly how the document simulates. Requires
+    // Hlms::_setHasParticleFX2Plugin(true) before shaders are built (ensureHlms).
+    bool createBillboardSet(NodeId id, TextureId texId, bool additiveBlend,
+                            unsigned capacity) override {
+        auto it = mNodes.find(id);
+        if (it == mNodes.end()) { mError = "createBillboardSet: unknown node"; return false; }
+        Ogre::TextureGpu *tex = nullptr;
+        if (texId) {
+            auto tit = mTextures.find(texId);
+            if (tit == mTextures.end()) { mError = "createBillboardSet: unknown texture"; return false; }
+            tex = tit->second.texture;
+        }
+        JAH_TRY {
+            Node &n = it->second;
+            releaseBillboards(n);
+            // Legacy particle pass: depth test on, depth write off; additive is
+            // (SRC_ALPHA, ONE), otherwise plain alpha blending.
+            const std::string dbName = processUniqueName("billboards");
+            auto *hlmsUnlit = static_cast<Ogre::HlmsUnlit *>(mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT));
+            Ogre::HlmsMacroblock macro;
+            macro.mDepthCheck = true; macro.mDepthWrite = false; macro.mCullMode = Ogre::CULL_NONE;
+            Ogre::HlmsBlendblock blend;
+            if (additiveBlend) {
+                blend.mSourceBlendFactor = Ogre::SBF_SOURCE_ALPHA;
+                blend.mDestBlendFactor   = Ogre::SBF_ONE;
+            } else {
+                blend.setBlendType(Ogre::SBT_TRANSPARENT_ALPHA);
+            }
+            auto *db = static_cast<Ogre::HlmsUnlitDatablock *>(hlmsUnlit->createDatablock(
+                Ogre::IdString(dbName), dbName, macro, blend, Ogre::HlmsParamVec()));
+            db->setUseColour(true);
+            db->setColour(Ogre::ColourValue::White);
+            if (tex) {
+                Ogre::HlmsSamplerblock sampler;
+                sampler.mU = Ogre::TAM_CLAMP; sampler.mV = Ogre::TAM_CLAMP;
+                sampler.mMipFilter = Ogre::FO_LINEAR;
+                db->setTexture(0, tex, &sampler);
+            }
+            Ogre::BillboardSet *set = mSceneMgr->createBillboardSet2();
+            set->setParticleQuota(std::max(1u, capacity));   // aligned up internally
+            // Legacy rotates the quad's vertices around the view axis (not the UVs).
+            set->setRotationType(Ogre::ParticleRotationType::Vertex);
+            set->setMaterialName(dbName, Ogre::ResourceGroupManager::AUTODETECT_RESOURCE_GROUP_NAME);
+            set->init(mRoot->getRenderSystem()->getVaoManager());
+            n.billboards = set;
+            n.billboardDatablockName = dbName;
+            n.billboardCapacity = std::max(1u, capacity);
+            // Visibility follows the node: the caller pushes it via setNodeVisible
+            // (the mirror does so every frame); a fresh set starts visible.
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool setBillboards(NodeId id, const BillboardInstance *data, size_t count) override {
+        auto it = mNodes.find(id);
+        if (it == mNodes.end() || !it->second.billboards) {
+            mError = "setBillboards: node has no billboard set"; return false;
+        }
+        if (!data && count) { mError = "setBillboards: null data"; return false; }
+        JAH_TRY {
+            Node &n = it->second;
+            const size_t want = std::min(count, size_t(n.billboardCapacity));
+            while (n.billboardHandles.size() < want) {
+                Ogre::Billboard b = n.billboards->allocBillboard();
+                if (b.mHandle == Ogre::ParticleSystemDef::InvalidHandle) break;
+                n.billboardHandles.push_back(b.mHandle);
+            }
+            while (n.billboardHandles.size() > want) {
+                n.billboards->deallocBillboard(n.billboardHandles.back());
+                n.billboardHandles.pop_back();
+            }
+            for (size_t i = 0; i < n.billboardHandles.size(); ++i) {
+                const BillboardInstance &src = data[i];
+                // The shader spans the quad pos +/- dim: dim is the HALF extent.
+                const float half = std::max(0.0f, src.size * 0.5f);
+                // Rotation is packed snorm * pi on upload: normalise to [-pi, pi].
+                float rot = std::fmod(src.rotationRadians, 2.0f * Ogre::Math::PI);
+                if (rot >  Ogre::Math::PI) rot -= 2.0f * Ogre::Math::PI;
+                if (rot < -Ogre::Math::PI) rot += 2.0f * Ogre::Math::PI;
+                Ogre::Billboard b(n.billboardHandles[i], n.billboards);
+                b.set(toOgre(src.position), Ogre::Vector3::NEGATIVE_UNIT_Z,
+                      Ogre::Vector2(half, half), toOgre(src.colour), Ogre::Radian(rot));
+            }
+            return true;
+        } JAH_CATCH(mError, false);
+    }
+    bool destroyBillboardSet(NodeId id) override {
+        auto it = mNodes.find(id);
+        if (it == mNodes.end() || !it->second.billboards) return false;
+        JAH_TRY { releaseBillboards(it->second); return true; } JAH_CATCH(mError, false);
+    }
+
     // ---- Lights ----
     bool setLight(NodeId id, const LightDesc &d) override {
         auto it = mNodes.find(id);
@@ -741,6 +849,12 @@ private:
         std::string      datablockName;     // uniquely owned (addTestCube)
         MeshId           meshRef     = 0;   // shared, owned by mMeshes
         MaterialId       materialRef = 0;   // shared, owned by mMaterials
+        // Billboard set (particles): uniquely owned; freed by releaseBillboards
+        // BEFORE the scene manager dies (its _destroy needs the live VaoManager).
+        Ogre::BillboardSet       *billboards = nullptr;
+        std::vector<Ogre::uint32> billboardHandles;   // live handles, dense, in order
+        std::string               billboardDatablockName;
+        unsigned                  billboardCapacity = 0;
     };
     struct MeshRec { Ogre::MeshPtr mesh; std::string name; };
     struct MaterialRec { std::string datablockName; bool unlit = false; bool onTop = false; };
@@ -937,9 +1051,27 @@ private:
         }
         return buildMeshV2(name, d);
     }
+    /// Frees a node's billboard set and its datablock, in that order (the set
+    /// references the datablock until it is destroyed). Safe to call twice.
+    void releaseBillboards(Node &n) {
+        if (n.billboards) {
+            // Detaches, releases the GPU buffers via the live VaoManager, deletes.
+            mSceneMgr->destroyBillboardSet2(n.billboards);
+            n.billboards = nullptr;
+            n.billboardHandles.clear();
+            n.billboardCapacity = 0;
+        }
+        if (!n.billboardDatablockName.empty()) {
+            auto *hlmsUnlit = mRoot->getHlmsManager()->getHlms(Ogre::HLMS_UNLIT);
+            if (hlmsUnlit->getDatablock(Ogre::IdString(n.billboardDatablockName)))
+                hlmsUnlit->destroyDatablock(Ogre::IdString(n.billboardDatablockName));
+            n.billboardDatablockName.clear();
+        }
+    }
     void releaseNode(Node &n) {
         // Order: renderable off the node -> item (drops the datablock link and one
         // mesh ref) -> datablock -> node -> our mesh ref -> the mesh itself.
+        releaseBillboards(n);
         if (n.item)  { n.item->detachFromParent();  mSceneMgr->destroyItem(n.item);   n.item = nullptr; }
         n.meshRef = 0; n.materialRef = 0;
         // The internal light child must go before the reparent loop below would leak it to root.
@@ -1232,6 +1364,12 @@ public:
     void updateSky() {
         if (mEnabled && mScene && mCamera) mScene->followCamera(mCamera->getPosition(), mCamera->getFarClipDistance());
     }
+    /// Feeds the camera position to the scene's particle manager: billboard uploads
+    /// are depth-sorted against it (matters for alpha-blended sets).
+    void updateParticles() {
+        if (mEnabled && mScene && mCamera)
+            mScene->sceneManager()->getParticleSystemManager2()->setCameraPosition(mCamera->getPosition());
+    }
     /// Releases workspace, camera, workspace definitions and the window/texture.
     /// Safe to call twice. Called by Engine::destroyView and by the Engine
     /// destructor BEFORE Root dies.
@@ -1419,7 +1557,7 @@ public:
 
     void renderOneFrame() override {
         JAH_TRY {
-            for (auto &v : mViews) { v->applyPendingResize(); v->updateSky(); }
+            for (auto &v : mViews) { v->applyPendingResize(); v->updateSky(); v->updateParticles(); }
             if (mRoot) mRoot->renderOneFrame();
         } JAH_CATCH(mLastError, );
     }
@@ -1457,6 +1595,12 @@ private:
     /// First render target: the VaoManager now exists, so Hlms can be registered.
     void ensureHlms() {
         if (mHlmsRegistered) return;
+        // BillboardSet2 needs no ParticleFX2 plugin (its core is in OgreNextMain),
+        // BUT the Hlms only puts the view matrix in the pass buffer — which the
+        // particle vertex shader needs for camera-facing quads — when this static
+        // flag is set. The plugin's install() is normally what sets it; without a
+        // plugin we set it ourselves, BEFORE any shader is built.
+        Ogre::Hlms::_setHasParticleFX2Plugin(true);
         Ogre::ArchiveManager &am = Ogre::ArchiveManager::getSingleton();
         Ogre::String mainPath; Ogre::StringVector libPaths;
 

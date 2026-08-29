@@ -2,6 +2,7 @@
 add_subdirectory(engine)
 add_subdirectory(document)
 add_subdirectory(mirror)
+add_subdirectory(particles)
 add_subdirectory(picking)
 add_subdirectory(app)
 add_subdirectory(gizmo)

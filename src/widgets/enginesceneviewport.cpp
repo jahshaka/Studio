@@ -32,6 +32,7 @@
 #include "scenehierarchywidget.h"
 #include "../irisgl/src/materials/custommaterial.h"
 #include "../irisgl/src/math/intersectionhelper.h"
+#include "../irisgl/src/scenegraph/particlesystemnode.h"
 #include <QVector3D>
 #include <QQuaternion>
 
@@ -452,6 +453,14 @@ void EngineSceneViewport::syncFrame()
         mPlayback->update(vp, dt);        // physics, animation, play controllers move the document
     } else if (mCamController) {
         mCamController->update(dt);
+    }
+    // Emitters animate in the editor exactly as in the legacy viewport (which
+    // ticks the WHOLE scene each frame, sceneviewwidget.cpp). Here only the
+    // particle nodes tick: a full scene update would also run physics while not
+    // playing. Play mode already ticks them via PlayBack::update -> scene->update.
+    if (!mPlaying && mScene) {
+        for (const auto &ps : mScene->particleSystems)
+            if (ps) ps->update(dt);
     }
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
     if (mMirror) {

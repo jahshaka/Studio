@@ -78,6 +78,16 @@ struct PbrParams {
     float  normalMapWeight = 1.0f;   ///< strength of the bound normal map
 };
 
+/// One camera-facing textured quad in a node's billboard set (Scene::setBillboards).
+/// Positions are WORLD-space: the document simulates particles in world space and
+/// the engine draws them as-is.
+struct BillboardInstance {
+    Vec3   position;                       ///< world-space centre of the quad
+    float  size = 1.0f;                    ///< quad edge length in world units
+    float  rotationRadians = 0.0f;         ///< spin around the view axis
+    Colour colour = Colour(1.0f, 1.0f, 1.0f, 1.0f);   ///< multiplies the texture
+};
+
 enum class LightType { Directional, Point, Spot };
 
 /// A light attached to a node. Direction comes from the node's orientation

@@ -13,6 +13,8 @@
 #include "scenegraph/meshnode.h"
 #include "scenegraph/lightnode.h"
 #include "scenegraph/cameranode.h"
+#include "scenegraph/particlesystemnode.h"
+#include "graphics/particle.h"
 #include "graphics/mesh.h"
 #include "graphics/vertexlayout.h"
 #include "graphics/graphicsdevice.h"   // VertexBuffer / IndexBuffer (CPU copies)
@@ -263,6 +265,9 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
         }
     }
 
+    if (node->getSceneNodeType() == iris::SceneNodeType::ParticleSystem)
+        syncParticles(e, static_cast<iris::ParticleSystemNode *>(node.data()));
+
     if (node->getSceneNodeType() == iris::SceneNodeType::Light) {
         // The light rides on the mirrored node: position and direction follow the document.
         auto light = node.staticCast<iris::LightNode>();
@@ -275,6 +280,38 @@ void SceneMirror::visit(iris::SceneNodePtr node, NodeId parent, QSet<long> &seen
     const NodeId self = e.node;
     for (auto &child : node->children)
         visit(child, self, seen);
+}
+
+// ---- particles ------------------------------------------------------------------
+// The document simulates (ParticleSystemNode::update, CPU, world-space); the
+// mirror pushes the live particle list into the node's engine billboard set each
+// sync. The engine frees the set with the node (removeNode / scene teardown).
+void SceneMirror::syncParticles(Entry &e, iris::ParticleSystemNode *ps)
+{
+    if (!e.node) return;
+    const QString texPath = ps->texture ? ps->texture->getSource() : QString();
+    const QString sig = (ps->useAdditive ? QStringLiteral("add|") : QStringLiteral("alpha|")) + texPath;
+    if (!e.hasBillboards || e.billboardSignature != sig) {
+        // maxParticles is the document's (unenforced) cap; 0 means none was set.
+        const unsigned capacity = ps->maxParticles > 0 ? unsigned(ps->maxParticles) : 4096u;
+        // Colour map -> srgb. Qt resource textures (":...") are not files the
+        // engine can read; textureFor returns 0 and the quads render white.
+        TextureId tex = texPath.isEmpty() ? 0 : textureFor(texPath, true);
+        if (!mTarget->createBillboardSet(e.node, tex, ps->useAdditive, capacity))
+            return;
+        e.hasBillboards = true;
+        e.billboardSignature = sig;
+    }
+    std::vector<BillboardInstance> instances;
+    instances.reserve(ps->particles.size());
+    for (const iris::Particle *p : ps->particles) {
+        BillboardInstance b;
+        b.position = toVec3(p->position);                    // already world-space
+        b.size = 2.0f * p->scale;                            // legacy quad spans +/- scale
+        b.rotationRadians = qDegreesToRadians(p->rotation);  // legacy stores degrees
+        instances.push_back(b);
+    }
+    mTarget->setBillboards(e.node, instances.data(), instances.size());
 }
 
 void SceneMirror::reclaimUnused()

@@ -97,6 +97,19 @@ public:
     /// Attach with attachMesh like any mesh. One pixel wide.
     virtual MeshId      createLineMesh(const std::vector<Vec3> &points, bool strip) = 0;
 
+    // ---- Particles: externally-simulated particles drawn as camera-facing quads.
+    // The set rides on a node for ownership (removeNode frees it) but instance
+    // positions are WORLD-space — the document simulates in world space.
+    /// Creates (or replaces) the node's billboard set: up to `capacity` quads,
+    /// textured by `texture` (0 = untextured white), additive (src-alpha, one) or
+    /// alpha-blended. Depth test on, depth write off, drawn after opaques.
+    virtual bool createBillboardSet(NodeId, TextureId texture, bool additiveBlend,
+                                    unsigned capacity) = 0;
+    /// Replaces the set's instances each frame; count above capacity is clamped.
+    virtual bool setBillboards(NodeId, const BillboardInstance *, size_t count) = 0;
+    /// Removes the node's billboard set (removeNode does this too).
+    virtual bool destroyBillboardSet(NodeId) = 0;
+
     // ---- Lights (step 5): a node may carry one light. Directional and spot lights
     // shine down the node's -Y (the document's convention: identity = straight down).
     virtual bool        setLight(NodeId, const LightDesc &) = 0;   // creates or updates

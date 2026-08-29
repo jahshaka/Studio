@@ -371,7 +371,11 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
 	sceneNodeObject["visible"]				= node->isVisible();
-    sceneNodeObject["texture"]              = handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName());
+    // An emitter can have no texture (cleared in the property panel): write an
+    // empty guid instead of dereferencing null (audit defect #6).
+    sceneNodeObject["texture"]              = node->texture
+        ? handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName())
+        : QString();
 }
 
 void SceneWriter::writeGrabNodeData(QJsonObject & sceneNodeObject, iris::GrabNodePtr node)
