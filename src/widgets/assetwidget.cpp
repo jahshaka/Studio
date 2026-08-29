@@ -345,10 +345,22 @@ void AssetWidget::trigger()
 	sceneView->beginResourceLoad();
 	for (auto &asset : AssetManager::getAssets()) {
 		if (asset->type == ModelTypes::Object) {
+			// Not every Object asset holds an AssimpObject: add-to-project registers
+			// an AssetNodeObject (value = SceneNodePtr) under the same type, and
+			// value<AssimpObject*>() then returns null — dereferencing unchecked was
+			// a latent crash (ASSET_ADD_AUDIT D3). Those assets are already in their
+			// final form; skip them.
+			AssimpObject *assimpObject = asset->getValue().value<AssimpObject*>();
+			if (!assimpObject || !assimpObject->getSceneData()) {
+				qDebug() << "AssetWidget::trigger: Object asset" << asset->assetGuid
+						 << "carries no assimp scene (already a node asset) — skipped";
+				continue;
+			}
+
 			auto material = db->fetchAssetData(asset->assetGuid);
             auto materialObj = QJsonDocument::fromJson(material);
 
-			auto node = iris::MeshNode::loadAsSceneFragment(QString(), asset->getValue().value<AssimpObject*>()->getSceneData(),
+			auto node = iris::MeshNode::loadAsSceneFragment(QString(), assimpObject->getSceneData(),
 				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
 			{
 				auto mat = iris::CustomMaterial::create();

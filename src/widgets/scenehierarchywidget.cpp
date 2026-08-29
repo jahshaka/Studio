@@ -13,7 +13,10 @@ For more information see the LICENSE file
 #include "ui_scenehierarchywidget.h"
 
 #include <QMenu>
+#include <QMimeData>
 #include <QTreeWidgetItem>
+
+#include "../commands/reparentscenenodecommand.h"
 
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/scenenode.h"
@@ -208,37 +211,64 @@ void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
 
 bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 {
+    // Drag-to-reparent, guarded (ASSET_ADD_AUDIT D2): only a drag that actually
+    // originates on this tree may reparent (mime + source check — a foreign drag
+    // Qt routes in must never move the current selection), descendant targets
+    // are refused (they would create a parent cycle — infinite recursion in
+    // getGlobalTransform), and the reparent goes through the undo stack.
     // @TODO, handle multiple items later on
-    if (event->type() == QEvent::Drop) {
-		auto dropEventPtr = static_cast<QDropEvent*>(event);
-
-        QTreeWidgetItem *droppedIndex = ui->sceneTree->itemAt(dropEventPtr->pos().x(), dropEventPtr->pos().y());
-        if (droppedIndex) {
-            long itemId = droppedIndex->data(0, Qt::UserRole).toLongLong();
-            auto source = nodeList[itemId];
-            source->addChild(this->lastDraggedHiearchyItemSrc);
-		}
-		else {
-			//dropEventPtr->ignore();
-			dropEventPtr->setDropAction(Qt::IgnoreAction);
-		}
-    }
-
-	if (event->type() == QEvent::DragMove) {
-		auto evt = static_cast<QDragMoveEvent*>(event);
-		QTreeWidgetItem* item = ui->sceneTree->itemAt(evt->pos());
-		//if (ui->sceneTree->currentColumn() != 1) qDebug() << "yes";
-	}
+    static const char *kTreeMime = "application/x-qabstractitemmodeldatalist";
 
     if (event->type() == QEvent::DragEnter) {
         auto evt = static_cast<QDragEnterEvent*>(event);
-
-        auto selected = ui->sceneTree->selectedItems();
-        if (selected.size() > 0) {
-            long itemId = selected[0]->data(0, Qt::UserRole).toLongLong();
-            auto source = nodeList[itemId];
-            lastDraggedHiearchyItemSrc = source;
+        lastDraggedHiearchyItemSrc.clear();
+        const bool internal = evt->source() == ui->sceneTree ||
+                              evt->source() == ui->sceneTree->viewport();
+        if (internal && evt->mimeData() && evt->mimeData()->hasFormat(kTreeMime)) {
+            // The drag starts on the pressed item, which the press made current.
+            auto selected = ui->sceneTree->selectedItems();
+            if (selected.size() > 0) {
+                long itemId = selected[0]->data(0, Qt::UserRole).toLongLong();
+                lastDraggedHiearchyItemSrc = nodeList.value(itemId);
+            }
         }
+    }
+
+    if (event->type() == QEvent::Drop) {
+        auto dropEventPtr = static_cast<QDropEvent*>(event);
+        auto dragged = lastDraggedHiearchyItemSrc;
+        lastDraggedHiearchyItemSrc.clear();
+
+        const bool internal = dropEventPtr->source() == ui->sceneTree ||
+                              dropEventPtr->source() == ui->sceneTree->viewport();
+        if (!internal || !dropEventPtr->mimeData() ||
+            !dropEventPtr->mimeData()->hasFormat(kTreeMime) || !dragged) {
+            dropEventPtr->setDropAction(Qt::IgnoreAction);
+            dropEventPtr->ignore();
+            return true;   // consume: a foreign drag must not touch the tree
+        }
+
+        QTreeWidgetItem *droppedIndex =
+            ui->sceneTree->itemAt(dropEventPtr->pos().x(), dropEventPtr->pos().y());
+        iris::SceneNodePtr target;
+        if (droppedIndex)
+            target = nodeList.value(droppedIndex->data(0, Qt::UserRole).toLongLong());
+
+        // Refuse: no target row, dropping on the current parent (no-op), or any
+        // target that is the dragged node itself / one of its descendants.
+        if (!target || target == dragged->parent ||
+            ReparentSceneNodeCommand::wouldCreateCycle(dragged, target)) {
+            dropEventPtr->setDropAction(Qt::IgnoreAction);
+            dropEventPtr->ignore();
+            return true;
+        }
+
+        UiManager::pushUndoStack(new ReparentSceneNodeCommand(dragged, target));
+        // The command repopulated the tree from the document. Consume the event
+        // so QTreeWidget's own InternalMove does not run on the rebuilt tree.
+        dropEventPtr->setDropAction(Qt::IgnoreAction);
+        dropEventPtr->accept();
+        return true;
     }
 
     return QObject::eventFilter(watched, event);

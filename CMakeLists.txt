@@ -129,8 +129,9 @@ set(SRCS
     src/core/guidmanager.cpp 
     src/commands/transfrormscenenodecommand.cpp 
     src/commands/changematerialpropertycommand.cpp 
-    src/commands/addscenenodecommand.cpp 
-    src/commands/deletescenenodecommand.cpp 
+    src/commands/addscenenodecommand.cpp
+    src/commands/deletescenenodecommand.cpp
+    src/commands/reparentscenenodecommand.cpp
     src/dialogs/progressdialog.cpp 
     src/widgets/screenshotwidget.cpp 
     src/widgets/projectmanager.cpp 
@@ -293,8 +294,9 @@ set(HEADERS
     src/core/guidmanager.h 
     src/commands/transfrormscenenodecommand.h 
     src/commands/changematerialpropertycommand.h 
-    src/commands/addscenenodecommand.h 
-    src/commands/deletescenenodecommand.h 
+    src/commands/addscenenodecommand.h
+    src/commands/deletescenenodecommand.h
+    src/commands/reparentscenenodecommand.h
     src/dialogs/progressdialog.h 
     src/commands/deleteanimationkeycommand.h 
     src/widgets/screenshotwidget.h 

@@ -26,6 +26,9 @@
 #include "graphics/texture2d.h"
 #include "materials/defaultmaterial.h"
 #include "materials/defaultskymaterial.h"
+// The reparent command's cycle guard is header-only document logic (its
+// undo/redo bodies live in the app; only the static guard is exercised here).
+#include "commands/reparentscenenodecommand.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -88,6 +91,24 @@ int main(int argc, char **argv)
     CHECK(count == 3, "root + light + mesh = 3 nodes");
     CHECK(light->getSceneNodeType() == iris::SceneNodeType::Light, "light node type");
     CHECK(meshNode->getSceneNodeType() == iris::SceneNodeType::Mesh, "mesh node type");
+
+    // --- Hierarchy-panel reparent guard (ASSET_ADD_AUDIT D2): pure document logic
+    {
+        auto a = iris::SceneNode::create();
+        auto b = iris::SceneNode::create();
+        auto c = iris::SceneNode::create();
+        scene->getRootNode()->addChild(a);
+        a->addChild(b);
+        b->addChild(c);
+        CHECK(!ReparentSceneNodeCommand::wouldCreateCycle(c, a), "moving a leaf up its chain is allowed");
+        CHECK(!ReparentSceneNodeCommand::wouldCreateCycle(b, scene->getRootNode()), "reparenting to the root is allowed");
+        CHECK(ReparentSceneNodeCommand::wouldCreateCycle(a, c), "dropping a node into its own descendant is refused");
+        CHECK(ReparentSceneNodeCommand::wouldCreateCycle(a, b), "direct child target is refused too");
+        CHECK(ReparentSceneNodeCommand::wouldCreateCycle(a, a), "self-parenting is refused");
+        CHECK(ReparentSceneNodeCommand::wouldCreateCycle(iris::SceneNodePtr(), a), "null dragged node is refused");
+        CHECK(ReparentSceneNodeCommand::wouldCreateCycle(a, iris::SceneNodePtr()), "null target is refused");
+        scene->getRootNode()->removeChild(a);
+    }
 
     // --- Teardown with no GL must not crash either
     scene.reset(); light.reset(); meshNode.reset(); mat.reset(); tex.reset();

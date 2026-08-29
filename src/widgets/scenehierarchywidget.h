@@ -104,6 +104,10 @@ public:
 
 	void selectNode(QString nodeId);
 
+    /// Rebuilds the whole tree from the document. Public for the undo commands
+    /// (reparent) that change the document's hierarchy behind the widget's back.
+    void repopulateTree();
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
@@ -125,7 +129,6 @@ protected slots:
 
 private:
 	void showHideNode(QTreeWidgetItem* item, bool show);
-    void repopulateTree();
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
     QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
