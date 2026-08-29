@@ -17,6 +17,11 @@ struct Colour {
 /// Native window handle a View renders into (X11 Window / HWND / NSView).
 using NativeWindowHandle = unsigned long long;
 
+/// Native display connection (X11 Display*). MUST be the host's own connection —
+/// opening a second connection to the same windows causes flicker and cross-bleed
+/// between windows. 0 where the platform has no such concept.
+using NativeDisplayHandle = unsigned long long;
+
 /// Opaque handle to something in a Scene. 0 is "none".
 using NodeId = unsigned int;
 

@@ -33,6 +33,9 @@ public:
 class View {
 public:
     virtual ~View() = default;
+    /// Binds a Scene to this View. Call after createScene(); a View renders nothing
+    /// until a Scene is attached.
+    virtual void setScene(Scene *) = 0;
     virtual void setCameraPosition(const Vec3 &) = 0;
     virtual void lookAt(const Vec3 &) = 0;
     virtual void setRenderFlags(const RenderFlags &) = 0;
@@ -46,12 +49,17 @@ public:
     virtual ~Engine() = default;
 
     /// Creates the engine. Returns null on failure and fills `error`.
-    static std::unique_ptr<Engine> create(Backend, std::string &error);
+    static std::unique_ptr<Engine> create(Backend, NativeDisplayHandle, std::string &error);
 
-    virtual Scene *createScene(const std::string &name) = 0;
-    virtual View  *createView(const std::string &name, Scene *,
+    /// ORDER MATTERS. A View must be created before any Scene: the underlying engine
+    /// only starts its material and buffer systems when the first render window
+    /// exists, and creating a Scene before that dereferences null.
+    ///   createView(...)  ->  createScene(...)  ->  view->setScene(scene)
+    virtual View  *createView(const std::string &name,
                               NativeWindowHandle, unsigned width, unsigned height,
                               const Colour &background) = 0;
+    /// Returns null if called before the first createView().
+    virtual Scene *createScene(const std::string &name) = 0;
 
     /// Draws every View once. The host owns the loop and calls this.
     virtual void renderOneFrame() = 0;

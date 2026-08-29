@@ -22,16 +22,26 @@ public:
 
     /// Binds this widget to a View on `scene`. Must be called after the widget is shown
     /// so a native window id exists.
-    bool attach(jahshaka::engine::Engine *engine,
-                jahshaka::engine::Scene *scene,
-                const QString &name,
-                const jahshaka::engine::Colour &background =
-                    jahshaka::engine::Colour(0.10f, 0.11f, 0.14f));
+    /// Creates the View bound to this widget's native window. Must happen BEFORE
+    /// any Scene is created — see Engine.h on ordering. Attach a Scene afterwards
+    /// with view()->setScene().
+    bool createView(jahshaka::engine::Engine *engine,
+                    const QString &name,
+                    const jahshaka::engine::Colour &background =
+                        jahshaka::engine::Colour(0.10f, 0.11f, 0.14f));
 
     jahshaka::engine::View *view() const { return mView; }
 
     /// Qt must not paint here — the engine owns these pixels.
     QPaintEngine *paintEngine() const override { return nullptr; }
+
+protected:
+    /// Deliberately empty. Together with WA_OpaquePaintEvent this stops Qt
+    /// erasing or repainting the region between the engine's presents, which
+    /// otherwise shows as heavy flicker.
+    void paintEvent(QPaintEvent *) override {}
+
+public:
 
     void startRendering(int intervalMs = 16);
     void stopRendering();

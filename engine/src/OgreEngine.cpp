@@ -167,14 +167,18 @@ private:
     unsigned     mNameCounter = 0;
 };
 
+class OgreScene;
+
 class OgreView final : public View {
 public:
-    OgreView(Ogre::Window *w, Ogre::Camera *c, Ogre::CompositorWorkspace *ws,
-             Ogre::CompositorManager2 *cm, const std::string &defName)
-        : mWindow(w), mCamera(c), mWorkspace(ws), mCompositor(cm), mWorkspaceDef(defName) {}
+    OgreView(Ogre::Window *w, Ogre::CompositorManager2 *cm, const std::string &defName,
+             const Colour &background)
+        : mWindow(w), mCompositor(cm), mWorkspaceDef(defName), mBackground(background) {}
 
-    void setCameraPosition(const Vec3 &p) override { mCamera->setPosition(toOgre(p)); }
-    void lookAt(const Vec3 &t) override            { mCamera->lookAt(toOgre(t)); }
+    void setScene(Scene *scene) override;
+
+    void setCameraPosition(const Vec3 &p) override { if (mCamera) mCamera->setPosition(toOgre(p)); }
+    void lookAt(const Vec3 &t) override            { if (mCamera) mCamera->lookAt(toOgre(t)); }
     void setRenderFlags(const RenderFlags &f) override { mFlags = f; }
     RenderFlags renderFlags() const override           { return mFlags; }
     void resize(unsigned w, unsigned h) override {
@@ -184,17 +188,29 @@ public:
     }
 
 private:
-    Ogre::Window             *mWindow;
-    Ogre::Camera             *mCamera;
-    Ogre::CompositorWorkspace *mWorkspace;
-    Ogre::CompositorManager2 *mCompositor;
-    std::string               mWorkspaceDef;
-    RenderFlags               mFlags;
+    Ogre::Window              *mWindow;
+    Ogre::Camera              *mCamera    = nullptr;
+    Ogre::CompositorWorkspace *mWorkspace = nullptr;
+    Ogre::CompositorManager2  *mCompositor;
+    std::string                mWorkspaceDef;
+    Colour                     mBackground;
+    RenderFlags                mFlags;
 };
+
+void OgreView::setScene(Scene *scene) {
+    auto *s = static_cast<OgreScene *>(scene);
+    if (!s) return;
+    mCamera = s->sceneManager()->createCamera(mWorkspaceDef + "/Camera");
+    mCamera->setNearClipDistance(0.1f);
+    mCamera->setAutoAspectRatio(true);
+    mWorkspace = mCompositor->addWorkspace(s->sceneManager(), mWindow->getTexture(),
+                                           mCamera, mWorkspaceDef, true);
+}
 
 class OgreEngine final : public Engine {
 public:
-    bool init(Backend backend, std::string &error) {
+    bool init(Backend backend, NativeDisplayHandle display, std::string &error) {
+        mDisplay = reinterpret_cast<Display *>(display);
         mAbiCookie = Ogre::generateAbiCookie();
         mRoot = new Ogre::Root(&mAbiCookie, "", "", "jahshaka-ogre.log", "Jahshaka");
 
@@ -209,44 +225,48 @@ public:
         mRoot->setRenderSystem(list[0]);
         mBackendName = list[0]->getName();
         mRoot->initialise(false);
-        registerHlms();
+        // NOTE: Hlms registration is deferred to the first createView(). The VaoManager
+        // does not exist until a render window is created, and HlmsUnlit/HlmsPbs
+        // registration walks it via ConstBufferPool::_changeRenderSystem — registering
+        // here segfaults.
         return true;
     }
 
     Scene *createScene(const std::string &name) override {
+        if (!mHlmsRegistered) return nullptr;   // no window yet: engine not started
         Ogre::SceneManager *sm = mRoot->createSceneManager(Ogre::ST_GENERIC, 2, name);
         mScenes.emplace_back(new OgreScene(mRoot, sm));
         return mScenes.back().get();
     }
 
-    View *createView(const std::string &name, Scene *scene,
+    View *createView(const std::string &name,
                      NativeWindowHandle handle, unsigned width, unsigned height,
                      const Colour &background) override {
-        auto *ogreScene = static_cast<OgreScene *>(scene);
         Ogre::NameValuePairList params;
         if (mBackendName.find("Vulkan") != std::string::npos) {
             // Vulkan/XCB takes only "SDL2x11": a pointer to {Display*, Window}.
-            mX11Handles.emplace_back(new X11Handle{ XOpenDisplayShared(), (::Window)handle });
+            if (!mDisplay) return nullptr;   // host must supply its X display
+            mX11Handles.emplace_back(new X11Handle{ mDisplay, (::Window)handle });
             params["SDL2x11"] =
                 Ogre::StringConverter::toString((unsigned long)mX11Handles.back().get());
         } else {
             params["parentWindowHandle"] = Ogre::StringConverter::toString((unsigned long)handle);
             params["gamma"] = "true";
         }
+        params["vsync"]         = "true";
+        params["vsyncInterval"] = "1";
         Ogre::Window *window =
             mRoot->createRenderWindow(name, width, height, false, &params);
+        window->setVSync(true, 1);
 
-        Ogre::Camera *cam = ogreScene->sceneManager()->createCamera(name + "/Camera");
-        cam->setNearClipDistance(0.1f);
-        cam->setAutoAspectRatio(true);
+        // First window: the VaoManager now exists, so Hlms can be registered.
+        if (!mHlmsRegistered) { registerHlms(); mHlmsRegistered = true; }
 
         Ogre::CompositorManager2 *cm = mRoot->getCompositorManager2();
         const std::string defName = name + "/Workspace";
         cm->createBasicWorkspaceDef(defName, toOgre(background), Ogre::IdString());
-        Ogre::CompositorWorkspace *ws = cm->addWorkspace(
-            ogreScene->sceneManager(), window->getTexture(), cam, defName, true);
 
-        mViews.emplace_back(new OgreView(window, cam, ws, cm, defName));
+        mViews.emplace_back(new OgreView(window, cm, defName, background));
         return mViews.back().get();
     }
 
@@ -260,11 +280,6 @@ public:
 
 private:
     struct X11Handle { Display *display; ::Window window; };
-
-    static Display *XOpenDisplayShared() {
-        static Display *dpy = XOpenDisplay(nullptr);
-        return dpy;
-    }
 
     void registerHlms() {
         const Ogre::String root = JAHSHAKA_OGRE_MEDIA_DIR;
@@ -288,6 +303,8 @@ private:
     }
 
     Ogre::Root     *mRoot = nullptr;
+    Display        *mDisplay = nullptr;
+    bool            mHlmsRegistered = false;
     Ogre::AbiCookie mAbiCookie{};
     std::string     mBackendName;
     std::vector<std::unique_ptr<OgreScene>> mScenes;
@@ -297,9 +314,10 @@ private:
 
 }  // namespace
 
-std::unique_ptr<Engine> Engine::create(Backend backend, std::string &error) {
+std::unique_ptr<Engine> Engine::create(Backend backend, NativeDisplayHandle display,
+                                       std::string &error) {
     auto engine = std::unique_ptr<OgreEngine>(new OgreEngine());
-    if (!engine->init(backend, error)) return nullptr;
+    if (!engine->init(backend, display, error)) return nullptr;
     return engine;
 }
 

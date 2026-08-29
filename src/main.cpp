@@ -9,6 +9,7 @@ and/or modify it under the terms of the GPLv3 License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "dialogs/ogrepreviewdialog.h"
 #include <QApplication>
 #include <QPalette>
 #include <QStyleFactory>
@@ -59,6 +60,19 @@ int main(int argc, char *argv[])
 {
     GetGitCommitHash();
 
+    // --engine-preview: start ONLY the new engine, skipping the legacy Qt-GL editor.
+    //
+    // The two renderers need different Qt platforms and cannot coexist yet:
+    // the legacy viewport requires wayland (xcb gives it no GL context and the app
+    // dies with "versionFunctions: No OpenGL context"), while Ogre-Next has no
+    // Wayland backend and needs xcb. This mode is the transition path — it becomes
+    // the normal startup once the editor viewport moves onto the engine.
+    bool enginePreviewOnly = false;
+    for (int i = 1; i < argc; ++i)
+        if (qstrcmp(argv[i], "--engine-preview") == 0) enginePreviewOnly = true;
+    if (enginePreviewOnly)
+        qputenv("QT_QPA_PLATFORM", "xcb");
+
 #ifdef Q_OS_LINUX
     // Only force xcb if the user hasn't chosen a platform, and use EGL rather
     // than GLX: under GLX, making an offscreen context current on a background
@@ -66,7 +80,7 @@ int main(int argc, char *argv[])
     // Don't force xcb. On this stack QOpenGLWidget only renders under the
     // native wayland platform: xcb+GLX fails to make the context current,
     // and xcb+EGL makes it current but renders nothing.
-    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
+    if (!enginePreviewOnly && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
         if (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
             qputenv("QT_QPA_PLATFORM", "wayland");
         else
@@ -98,6 +112,14 @@ int main(int argc, char *argv[])
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif
+
+    if (enginePreviewOnly) {
+        // No MainWindow, no IrisGL, no legacy GL context.
+        OgrePreviewDialog preview;
+        preview.setAttribute(Qt::WA_QuitOnClose, true);
+        preview.show();
+        return app.exec();
+    }
 	
 	/*
 	QtConcurrent::run([&updateChecker]() {

@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QtGui/QGuiApplication>
 
 using namespace jahshaka::engine;
 
@@ -57,14 +58,33 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
         return;
     }
 
+    // Hand the engine OUR X connection. Opening a second connection to the same
+    // windows causes flicker and lets other windows' content bleed into the viewport.
+    NativeDisplayHandle display = 0;
+    if (auto *x11 = qApp->nativeInterface<QNativeInterface::QX11Application>())
+        display = reinterpret_cast<NativeDisplayHandle>(x11->display());
+    if (!display) {
+        mStatus->setText(tr("Could not obtain the X11 display connection from Qt."));
+        return;
+    }
+
     std::string error;
-    mEngine = Engine::create(Backend::Vulkan, error);
+    mEngine = Engine::create(Backend::Vulkan, display, error);
     if (!mEngine) {
         mStatus->setText(tr("Engine failed to start: %1").arg(QString::fromStdString(error)));
         return;
     }
 
+    // ORDER: views (windows) first, then scenes — the engine's material and buffer
+    // systems only start once a render window exists.
+    mEditorView->createView(mEngine.get(), "editor",  Colour(0.10f, 0.11f, 0.14f));
+    mEffectsView->createView(mEngine.get(), "effects", Colour(0.16f, 0.12f, 0.10f));
+
     mEditorScene = mEngine->createScene("editor");
+    if (!mEditorScene) {
+        mStatus->setText(tr("Scene creation failed — no render window was created."));
+        return;
+    }
     mEditorScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
     mEditorScene->addDirectionalLight(Vec3(-0.55f, -0.7f, -0.45f), 3.14159f);
     mCube = mEditorScene->addTestCube(Colour(0.85f, 0.35f, 0.15f), 0.85f, 0.25f);
@@ -74,8 +94,8 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     mEffectsScene->addDirectionalLight(Vec3(0.4f, -0.8f, 0.35f), 3.14159f);
     mCube2 = mEffectsScene->addTestCube(Colour(0.20f, 0.55f, 0.85f), 0.10f, 0.55f);
 
-    mEditorView->attach(mEngine.get(), mEditorScene, "editor",  Colour(0.10f, 0.11f, 0.14f));
-    mEffectsView->attach(mEngine.get(), mEffectsScene, "effects", Colour(0.16f, 0.12f, 0.10f));
+    if (auto *v = mEditorView->view())  v->setScene(mEditorScene);
+    if (auto *v = mEffectsView->view()) v->setScene(mEffectsScene);
 
     if (auto *v = mEditorView->view()) {
         v->setCameraPosition(Vec3(2.6f, 1.9f, 3.4f));

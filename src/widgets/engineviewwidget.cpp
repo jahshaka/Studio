@@ -8,22 +8,29 @@ EngineViewWidget::EngineViewWidget(QWidget *parent) : QWidget(parent)
     setAttribute(Qt::WA_NativeWindow);
     setAttribute(Qt::WA_PaintOnScreen);
     setAttribute(Qt::WA_NoSystemBackground);
+    // Tell Qt this widget paints every pixel itself, so it neither erases the
+    // background nor composites anything underneath into it.
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAutoFillBackground(false);
     setMinimumSize(160, 120);
 }
 
 EngineViewWidget::~EngineViewWidget() { stopRendering(); }
 
-bool EngineViewWidget::attach(jahshaka::engine::Engine *engine,
-                              jahshaka::engine::Scene *scene,
-                              const QString &name,
-                              const jahshaka::engine::Colour &background)
+bool EngineViewWidget::createView(jahshaka::engine::Engine *engine,
+                                  const QString &name,
+                                  const jahshaka::engine::Colour &background)
 {
-    if (!engine || !scene) return false;
+    if (!engine) return false;
     mEngine = engine;
-    mView = engine->createView(name.toStdString(), scene,
+    mView = engine->createView(name.toStdString(),
                                static_cast<jahshaka::engine::NativeWindowHandle>(winId()),
                                static_cast<unsigned>(width()),
                                static_cast<unsigned>(height()), background);
+    if (mView) {
+        // From here the engine owns this region entirely; Qt updates would fight it.
+        setUpdatesEnabled(false);
+    }
     return mView != nullptr;
 }
 
