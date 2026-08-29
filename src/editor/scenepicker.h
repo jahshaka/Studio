@@ -36,9 +36,10 @@ public:
     /// The nearest hit, or a null node.
     static ScenePick nearest(const QList<ScenePick> &hits);
 
-    /// The legacy selection rule: with `selectRootObject`, clicking an attached
-    /// child selects its root unless that root (or something under it) was already
-    /// selected, in which case the actual child is selected.
+    /// The selection rule: with `selectRootObject`, clicking an attached child
+    /// selects its root (the whole asset). Only a click on the root that is
+    /// ALREADY the current selection drills down to the part under the cursor;
+    /// re-clicking a selected part keeps it.
     static iris::SceneNodePtr resolveRootSelection(iris::SceneNodePtr picked,
                                                    iris::SceneNodePtr lastSelected,
                                                    bool selectRootObject);

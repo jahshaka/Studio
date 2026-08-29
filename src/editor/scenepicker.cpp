@@ -113,15 +113,15 @@ iris::SceneNodePtr ScenePicker::resolveRootSelection(iris::SceneNodePtr picked, 
                                                      bool selectRootObject)
 {
     if (!picked || !selectRootObject) return picked;
-    iris::SceneNodePtr lastRoot;
-    if (lastSelected) {
-        lastRoot = lastSelected;
-        while (lastRoot->isAttached()) lastRoot = lastRoot->parent;
-    }
     iris::SceneNodePtr pickedRoot = picked;
     while (pickedRoot->isAttached()) pickedRoot = pickedRoot->parent;
-    // Clicking away, or into a different root, selects the root; a second click
-    // within the already-selected root selects the actual object.
-    if (!lastSelected || pickedRoot != lastRoot) return pickedRoot;
-    return picked;
+    // A click selects the whole asset (its root) — even when a part of it is
+    // already selected (a just-dropped asset arrives selected, and the old
+    // "same root drills down" rule then sent the FIRST viewport click straight
+    // to a sub-mesh). Drilling down needs deliberate aim: only a click on the
+    // root that IS the current selection descends to the part under the cursor,
+    // and re-clicking the selected part keeps it.
+    if (lastSelected == pickedRoot) return picked;
+    if (lastSelected == picked) return picked;
+    return pickedRoot;
 }

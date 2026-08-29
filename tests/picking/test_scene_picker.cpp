@@ -87,12 +87,18 @@ int main(int argc, char **argv) {
     doc->getRootNode()->removeChild(front);
     holder->addChild(front, false);
     front->setAttached(true);                      // "part of" its parent
+    auto sibling = cubeAt(doc, QVector3D(2, 0, 0), "sibling", holder);
+    sibling->setAttached(true);                    // a second part of the same asset
     auto r1 = ScenePicker::resolveRootSelection(front, nullptr, true);
     CHECK(r1 == holder, "first click on an attached child selects its root");
     auto r2 = ScenePicker::resolveRootSelection(front, holder, true);
-    CHECK(r2 == front, "second click within the selected root selects the child");
+    CHECK(r2 == front, "click on the already-selected root drills down to the part");
     auto r3 = ScenePicker::resolveRootSelection(front, back, true);
     CHECK(r3 == holder, "click from a different selection goes back to the root");
+    auto r4 = ScenePicker::resolveRootSelection(front, sibling, true);
+    CHECK(r4 == holder, "click while a SIBLING part is selected selects the root, not the part");
+    auto r5 = ScenePicker::resolveRootSelection(front, front, true);
+    CHECK(r5 == front, "re-click on the selected part keeps it");
     CHECK(ScenePicker::resolveRootSelection(front, nullptr, false) == front, "rule disabled: the child");
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
