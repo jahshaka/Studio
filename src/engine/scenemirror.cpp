@@ -415,13 +415,31 @@ bool SceneMirror::toMeshData(iris::Mesh *mesh, MeshData &out)
 void SceneMirror::applySky(View *view)
 {
     if (!mSource || !view) return;
-    QString equirect;
+    QString signature;
     if (mSource->skyType == iris::SkyType::EQUIRECTANGULAR && mSource->skyTexture)
-        equirect = mSource->skyTexture->source;
-    if (equirect != mSkySignature) {
-        mSkySignature = equirect;
-        TextureId t = equirect.isEmpty() ? 0 : textureFor(equirect, true);
-        mTarget->setSky(t ? SkyMode::Equirectangular : SkyMode::NoSky, t);
+        signature = "equirect:" + mSource->skyTexture->source;
+    else if (mSource->skyType == iris::SkyType::CUBEMAP && mSource->skyTexture && mSource->skyTexture->isCubeMap())
+        signature = "cubemap:" + QString::number(reinterpret_cast<quintptr>(mSource->skyTexture.data()));
+    if (signature != mSkySignature) {
+        mSkySignature = signature;
+        for (TextureId &t : mSkyFaceTextures) { if (t) mTarget->destroyTexture(t); t = 0; }
+        if (signature.startsWith("equirect:")) {
+            TextureId t = textureFor(mSource->skyTexture->source, true);
+            mTarget->setSky(t ? SkyMode::Equirectangular : SkyMode::NoSky, t);
+        } else if (signature.startsWith("cubemap:")) {
+            // The document keeps the six face images (+X,-X,+Y,-Y,+Z,-Z); upload them.
+            const QImage *faces = mSource->skyTexture->cubeFaces();
+            bool ok = faces != nullptr;
+            for (int i = 0; ok && i < 6; ++i) {
+                const QImage img = faces[i].convertToFormat(QImage::Format_RGBA8888);
+                if (img.isNull()) { ok = false; break; }
+                mSkyFaceTextures[i] = mTarget->createTexture(unsigned(img.width()), unsigned(img.height()), img.constBits(), true);
+                if (!mSkyFaceTextures[i]) ok = false;
+            }
+            if (ok) mTarget->setSkyCubemap(mSkyFaceTextures); else mTarget->setSky(SkyMode::NoSky, 0);
+        } else {
+            mTarget->setSky(SkyMode::NoSky, 0);
+        }
     }
     if (mSource->skyType == iris::SkyType::SINGLE_COLOR) {
         const QColor c = mSource->skyColor;
