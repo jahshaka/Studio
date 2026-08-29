@@ -427,6 +427,10 @@ void EngineSceneViewport::setEditorData(EditorData *data)
         mShowLightWires = data->showLightWires;
         mShowDebugDraw = data->showDebugDrawFlags;
     }
+    // The controller must steer the SAME camera the view renders; without this a
+    // project load leaves the mouse driving the old, no-longer-rendered camera.
+    if (mCamController) mCamController->setCamera(mEditorCam);
+    if (mPlayback && mScene && mEditorCam) mScene->setCamera(mEditorCam);
 }
 
 EditorData *EngineSceneViewport::getEditorData()
