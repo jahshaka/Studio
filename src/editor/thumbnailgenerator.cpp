@@ -187,6 +187,7 @@ void RenderThread::prepareScene(const ThumbnailRequest &request)
         QJsonObject objectHierarchy = document.object();
 
         SceneReader *reader = new SceneReader;
+        reader->setDatabaseHandle(db);
         reader->setBaseDirectory(IrisUtils::join(
             Globals::project->getProjectFolder())
         );
@@ -550,6 +551,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         if (!db || !Globals::project) return QImage();
         QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(request.id));
         SceneReader reader;
+        reader.setDatabaseHandle(db);
         reader.setBaseDirectory(IrisUtils::join(Globals::project->getProjectFolder()));
         QJsonObject objectHierarchy = document.object();
         auto node = reader.readSceneNode(objectHierarchy);

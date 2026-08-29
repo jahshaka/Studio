@@ -102,7 +102,25 @@ int main(int argc, char **argv)
         CHECK(!m.isNull() && m.size() == size, "material preview renders at the requested size");
         CHECK(centre(m).red() > centre(m).blue() + 40 && centre(m).green() > centre(m).blue() + 40, "material sphere shows the material colour");
 
-        // 6. the primary view is untouched: still its own clear colour, nothing of the thumbs scene
+        // 6. a huge model (ASSETS_AUDIT.md finding 3): a cube scaled x200 has a
+        // world radius of ~346 (a cm-scaled Sketchfab glb) and is framed ~1000
+        // units out — beyond the old fixed farClip of 500, which rendered a
+        // uniform-background thumbnail. The clip planes must follow the framing.
+        {
+            auto giant = iris::MeshNode::create();
+            giant->setMesh(":assets/models/cube.obj");
+            auto gm = iris::DefaultMaterial::create();
+            gm->setDiffuseColor(QColor(220, 30, 30));
+            giant->setMaterial(gm);
+            giant->setLocalScale(QVector3D(200.0f, 200.0f, 200.0f));
+            QImage h = renderer.renderNode(giant, size); show("giant cube x200", h);
+            const QColor ch = centre(h);
+            CHECK(!isBackground(ch), "a huge model still renders (far plane follows the framing)");
+            CHECK(ch.red() > ch.green() + 40 && ch.red() > ch.blue() + 40, "giant cube shows its material colour");
+            CHECK(isBackground(h.pixelColor(2, 2)), "giant cube is framed inside the view");
+        }
+
+        // 7. the primary view is untouched: still its own clear colour, nothing of the thumbs scene
         Image pimg; primary->readPixels(pimg);
         const Colour pc = pimg.at(32, 32);
         CHECK(pc.r < 0.05f && pc.g < 0.05f && pc.b < 0.05f, "the primary view did not render the thumbs scene");

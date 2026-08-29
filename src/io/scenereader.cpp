@@ -459,7 +459,10 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 {
     auto meshNode = iris::MeshNode::create();
 
-	auto asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
+	// Without a database handle the mesh GUID cannot be resolved to a file
+	// name; the node still loads for the ":"-prefixed built-in primitives.
+	AssetRecord asset;
+	if (handle) asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
 
     QString source = nodeObj["mesh"].toString("");
 	// Keep a special reference to embedded asset primitives for now
@@ -583,9 +586,10 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setName(nodeObj["name"].toString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
 
-    QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
-
-    particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
+    if (handle) {
+        QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
+        particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
+    }
 	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
     return particleNode;
@@ -740,7 +744,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     }
     else {
         if (useAlternativeLocation) {
-            auto shader = handle->fetchAssetData(shaderGuid);
+            auto shader = handle ? handle->fetchAssetData(shaderGuid) : QByteArray();
             QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
 
             if (!shaderDefinition.isEmpty()) {
@@ -779,7 +783,7 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
     for (auto prop : m->properties) {
         if (mat.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
-                QString textureStr = !mat[prop->name].toString().isEmpty()
+                QString textureStr = (handle && !mat[prop->name].toString().isEmpty())
                         ? QDir(assetDirectory).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
                         : QString();
 

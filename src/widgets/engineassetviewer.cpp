@@ -238,6 +238,7 @@ iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QS
     QJsonObject objectHierarchy = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
 
     SceneReader reader;
+    reader.setDatabaseHandle(mDb);   // resolves mesh and texture GUIDs to store files
     reader.setBaseDirectory(assetFolder(guid));
     iris::SceneNodePtr node = reader.readSceneNode(objectHierarchy);
     if (!node) return node;

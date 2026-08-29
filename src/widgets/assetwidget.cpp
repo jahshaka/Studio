@@ -2789,7 +2789,10 @@ void AssetWidget::onThumbnailResult(ThumbnailResult *result)
 	buffer.open(QIODevice::WriteOnly);
 
     if (!result->preview) {
-        auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(iconSize.height(), Qt::SmoothTransformation);
+        // Store the render at full size (requests are 512x512): scaling it to
+        // the icon height here permanently degraded every stored thumbnail to
+        // 72px (ASSETS_AUDIT.md finding 5). Views scale at display time.
+        auto thumbnail = QPixmap::fromImage(result->thumbnail);
         thumbnail.save(&buffer, "PNG");
 
         db->updateAssetThumbnail(result->id, bytes);

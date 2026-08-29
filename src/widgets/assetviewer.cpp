@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 #include "io/materialreader.hpp"
+#include "editor/previewframing.h"
 
 #include <QApplication>
 #include <QFileDialog>
@@ -231,6 +232,8 @@ void AssetViewer::resetViewerCamera()
     orbitalCam->pivot = QVector3D(lookAt);
     orbitalCam->distFromPivot = distanceFromPivot;
     orbitalCam->setRotationSpeed(.5f);
+    preview::clipPlanesForFraming(float(distanceFromPivot), qMax(subjectRadius, 1.0f),
+                                  camera->nearClip, camera->farClip);
     orbitalCam->updateCameraRot();
     camera->update(0);
 }
@@ -244,6 +247,8 @@ void AssetViewer::resetViewerCameraAfter()
 	orbitalCam->distFromPivot = distanceFromPivot;
 	orbitalCam->setCamera(camera);
 	orbitalCam->setRotationSpeed(.5f);
+	preview::clipPlanesForFraming(float(distanceFromPivot), qMax(subjectRadius, 1.0f),
+	                              camera->nearClip, camera->farClip);
 }
 
 void AssetViewer::loadJafMaterial(QString guid, bool firstAdd, bool cache, bool firstLoad) {
@@ -565,6 +570,7 @@ void AssetViewer::addJafMesh(const QString &path, const QString &guid, bool firs
     QJsonObject objectHierarchy = document.object();
 
     SceneReader *reader = new SceneReader;
+    reader->setDatabaseHandle(db);   // resolves mesh and texture GUIDs to store files
     reader->setBaseDirectory(IrisUtils::join(
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
         Constants::ASSET_FOLDER, guid)
@@ -776,7 +782,12 @@ void AssetViewer::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, QStr
     }
 
 	bound = aabb.getMinimalEnclosingSphere();
-    float dist = (bound.radius * 1.2) / qTan(qDegreesToRadians(camera->angle / 2.f));
+    float dist = preview::framingDistance(bound.radius, camera->angle);
+
+    // Clip planes must follow the framing distance or a large (cm-scaled)
+    // model sits entirely beyond the default farClip of 500 (ASSETS_AUDIT.md).
+    subjectRadius = qMax(bound.radius, 1.0f);
+    preview::clipPlanesForFraming(dist, subjectRadius, camera->nearClip, camera->farClip);
 
 	if (!viewed) {
 		lookAt = bound.pos;
@@ -813,20 +824,9 @@ void AssetViewer::getBoundingSpheres(iris::SceneNodePtr node, QList<iris::Boundi
 
 iris::AABB AssetViewer::getNodeBoundingBox(iris::SceneNodePtr node)
 {
-	iris::AABB aabb;
-	if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-		//auto sphere = node.staticCast<iris::MeshNode>()->getTransformedBoundingSphere();
-		//aabb.merge(sphere.getAABB());
-		auto box = node.staticCast<iris::MeshNode>()->getMesh()->getAABB();
-		box.offset(node->getGlobalPosition());// todo: include other transforms
-		aabb.merge(box);
-	}
-
-	for (auto child : node->children) {
-		aabb.merge(getNodeBoundingBox(child));
-	}
-
-	return aabb;
+	// World-space: every mesh AABB through its node's full global transform
+	// (scale and rotation included — ASSETS_AUDIT.md finding 4).
+	return preview::worldBoundingBox(node);
 }
 
 QImage AssetViewer::takeScreenshot(int width, int height)

@@ -248,7 +248,9 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         }
     };
 
-    getUsedTexture(node);
+    // assimp may have failed (e.g. a Draco-compressed glb — Draco is not
+    // compiled in): return the null node and let the caller surface the error.
+    if (node) getUsedTexture(node);
 
     textureList = texturesToCopy;
     // SceneWriter::writeSceneNode(QJsonObject(), node, false);

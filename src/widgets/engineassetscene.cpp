@@ -9,6 +9,7 @@
 #include <QtMath>
 
 #include "engine/scenemirror.h"
+#include "../editor/previewframing.h"
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/geometry/aabb.h"
 #include "irisgl/src/geometry/boundingsphere.h"
@@ -27,20 +28,12 @@ namespace {
 
 const char *kFloorName = "ae98cx7u_floor";
 
-// AssetViewer::getNodeBoundingBox: every mesh's box, offset by its node's world position.
+// World-space bounds: mesh AABBs through the full global transform (scale and
+// rotation included — ASSETS_AUDIT.md finding 4; the legacy getNodeBoundingBox
+// only offset by position, framing a 0.0143-scaled model at its unscaled radius).
 iris::AABB nodeBoundingBox(iris::SceneNodePtr node)
 {
-    iris::AABB aabb;
-    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
-        if (meshNode->getMesh()) {
-            auto box = meshNode->getMesh()->getAABB();
-            box.offset(node->getGlobalPosition());
-            aabb.merge(box);
-        }
-    }
-    for (auto child : node->children) aabb.merge(nodeBoundingBox(child));
-    return aabb;
+    return preview::worldBoundingBox(node);
 }
 
 float lerp(float a, float b, float t) { return a * (1 - t) + b * t; }
@@ -214,7 +207,13 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
     auto aabb = nodeBoundingBox(node);
     iris::BoundingSphere bound = aabb.getMinimalEnclosingSphere();
     if (bound.radius <= 0.0f) { bound.pos = node->getGlobalPosition(); bound.radius = 1; }
-    const float dist = (bound.radius * 1.2f) / qTan(qDegreesToRadians(mCamera->angle / 2.0f));
+    const float dist = preview::framingDistance(bound.radius, mCamera->angle);
+
+    // The framing distance grows with the subject; the clip planes must follow
+    // it or a large model sits entirely beyond its own far plane and renders
+    // nothing (ASSETS_AUDIT.md finding 3: any radius over ~170 vanished).
+    mSubjectRadius = bound.radius;
+    preview::clipPlanesForFraming(dist, mSubjectRadius, mCamera->nearClip, mCamera->farClip);
 
     if (!viewed) {
         mLookAt = bound.pos;
@@ -298,6 +297,16 @@ void EngineAssetScene::updateCameraRot()
     mCamera->update(0);
 }
 
+void EngineAssetScene::applyClipPlanes()
+{
+    // mDistanceFromPivot may come from stored scene properties (orientCamera),
+    // not only from setSubject's framing: re-derive planes that contain both
+    // the orbit distance and the subject.
+    const float dist = qMax(mDistanceFromPivot, mDistFromPivot);
+    preview::clipPlanesForFraming(dist, qMax(mSubjectRadius, 1.0f),
+                                  mCamera->nearClip, mCamera->farClip);
+}
+
 void EngineAssetScene::resetCamera()
 {
     // AssetViewer::resetViewerCamera
@@ -310,6 +319,7 @@ void EngineAssetScene::resetCamera()
     mPivot = mLookAt;
     mDistFromPivot = mDistanceFromPivot;
     mRotationSpeed = 0.5f;
+    applyClipPlanes();
     updateCameraRot();
 }
 
@@ -323,6 +333,7 @@ void EngineAssetScene::resetCameraAfter()
     mDistFromPivot = mDistanceFromPivot;
     orbitFromCamera();
     mRotationSpeed = 0.5f;
+    applyClipPlanes();
 }
 
 void EngineAssetScene::orientCamera(QVector3D pos, QVector3D localRot, float distanceFromPivot)
@@ -389,6 +400,10 @@ void EngineAssetScene::wheel(int delta)
     const float zoomSpeed = 0.01f;
     mDistFromPivot += -delta * zoomSpeed;
     if (mDistFromPivot < 0) mDistFromPivot = 0;
+    // Zooming out must never push the subject past the far plane.
+    if (mDistFromPivot + 2.0f * mSubjectRadius > mCamera->farClip)
+        preview::clipPlanesForFraming(mDistFromPivot, qMax(mSubjectRadius, 1.0f),
+                                      mCamera->nearClip, mCamera->farClip);
     updateCameraRot();
 }
 

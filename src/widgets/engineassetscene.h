@@ -93,6 +93,9 @@ private:
     void buildDocument();
     void updateCameraRot();
     void orbitFromCamera();
+    /// Fits nearClip/farClip to the orbit distance and the subject's radius
+    /// (a preview camera must see the framed model regardless of its scale).
+    void applyClipPlanes();
     static QImage toQImage(const jahshaka::engine::Image &img);
 
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
@@ -117,6 +120,7 @@ private:
     // Framing (AssetViewer::localPos / localRot / lookAt / distanceFromPivot)
     QVector3D mLocalPos, mLocalRot, mLookAt;
     float mDistanceFromPivot = 5.0f;
+    float mSubjectRadius = 1.0f;   // world-space radius of the framed subject
 };
 
 #endif // ENGINEASSETSCENE_H

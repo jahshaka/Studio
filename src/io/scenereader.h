@@ -42,7 +42,10 @@ class SceneReader : public AssetIOBase
     QSet<QString> assimpScenes;
     QHash<QString,QMap<QString, iris::SkeletalAnimationPtr>> animations;
 
-	Database *handle;
+	// Never left indeterminate: several call sites construct a SceneReader
+	// without a handle, and createMesh/readMaterial dereference it
+	// (ASSETS_AUDIT.md finding 6 — that was live UB).
+	Database *handle = nullptr;
     // We can choose to load assets from a flat file or from those already cached
     // TODO - also cache assets in the viewer
 public:

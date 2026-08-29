@@ -15,6 +15,7 @@
 #include "irisgl/src/scenegraph/lightnode.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "engine/scenemirror.h"
+#include "previewframing.h"
 
 using namespace jahshaka::engine;
 
@@ -133,7 +134,11 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
         bound.radius = 1;
         for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
     }
-    const float dist = (bound.radius * 1.2f) / qTan(qDegreesToRadians(cam->angle / 2.0f));
+    const float dist = preview::framingDistance(bound.radius, cam->angle);
+    // The clip planes must follow the framing distance: a large model (cm-scaled
+    // glb) framed at ~2.9 * radius sat beyond the default farClip of 500 and
+    // rendered a blank thumbnail (ASSETS_AUDIT.md finding 3).
+    preview::clipPlanesForFraming(dist, bound.radius, cam->nearClip, cam->farClip);
     cam->setLocalPos(QVector3D(0, bound.pos.y(), dist));
     cam->lookAt(bound.pos);
     cam->update(0);

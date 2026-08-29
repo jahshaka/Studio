@@ -226,6 +226,7 @@ private:
 
     QVector3D localPos, localRot, lookAt;
 	int distanceFromPivot;
+	float subjectRadius = 1.0f;   // world-space radius of the framed subject
 
     QString lastNode;
 };

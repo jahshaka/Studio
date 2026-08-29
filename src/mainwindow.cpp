@@ -1744,6 +1744,7 @@ void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D pos
     auto document = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
 
     auto reader = new SceneReader;
+    reader->setDatabaseHandle(db);
     reader->setBaseDirectory(Globals::project->getProjectFolder());
     this->sceneView->beginResourceLoad();
     iris::SceneNodePtr node = reader->readSceneNode(document);
@@ -1832,8 +1833,11 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
         if (!meshNode->getMaterial()) {
-            auto mat = iris::DefaultMaterial::create();
-            meshNode->setMaterial(mat);
+            // The engine viewport authors PBR only; legacy keeps its old default.
+            if (EngineHost::viewportBackend() == ViewportBackend::Engine)
+                meshNode->setMaterial(iris::PbrMaterial::create());
+            else
+                meshNode->setMaterial(iris::DefaultMaterial::create());
         }
     }
 
@@ -1870,9 +1874,14 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         if (!meshNode->getMaterial()) {
-            auto mat = iris::CustomMaterial::create();
-            mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-            meshNode->setMaterial(mat);
+            if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
+                // The engine viewport authors PBR only.
+                meshNode->setMaterial(iris::PbrMaterial::create());
+            } else {
+                auto mat = iris::CustomMaterial::create();
+                mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+                meshNode->setMaterial(mat);
+            }
         }
     }
 

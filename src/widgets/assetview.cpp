@@ -734,7 +734,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 			QVector3D pos;
 			QVector3D rot;
-			int distObj;
+			int distObj = 5;   // was read uninitialized when no camera props were stored
 
 			bool cached = false;
 
@@ -1291,6 +1291,12 @@ void AssetView::importModel(const QString &fileName, bool jfx)
         return;
     }
 
+    // The grid tile and metadata pane read the `filename` member, which only
+    // the browse dialog used to set — a drag-and-dropped model got a nameless
+    // tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
+    // here, so set it here.
+    filename = fileName;
+
     QApplication::processEvents();
 
     QFileInfo entryInfo(fileName);
@@ -1441,6 +1447,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
     QList<directory_tuple> imagesInUse;
     QList<QString> imgaesUsedList;
+    QString meshImportError;
 
     foreach(const auto &entry, finalImportList) {
         QFileInfo entryInfo(entry.path);
@@ -1604,6 +1611,18 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
                     viewer->endLoad();
 
+                    if (!scene) {
+                        // assimp could not import the model (e.g. a Draco-compressed
+                        // glb: ASSIMP_BUILD_DRACO is off) — fail with a message
+                        // instead of dereferencing a null hierarchy below.
+                        meshImportError = tr("\"%1\" could not be imported.\n"
+                                             "The file may be corrupt or use an unsupported "
+                                             "feature (for example Draco mesh compression in "
+                                             "a .glb/.gltf).").arg(asset->fileName);
+                        db->deleteAsset(assetGuid);   // drop the Mesh row created above
+                        continue;
+                    }
+
                     if (hasEmbeddedTexture) {
                         for (const auto &image : imgaesUsedList) {
                             int index = texturesToCopy.indexOf(image);
@@ -1734,10 +1753,25 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
     progressDialog->hide();
 
+    if (!meshImportError.isEmpty()) {
+        // Nothing was imported for this model: no preview, no tile.
+        QMessageBox::warning(this, tr("Import failed"), meshImportError);
+        return;
+    }
 
     renameModelField->setText(QFileInfo(fileName).baseName());
     QString new_file = IrisUtils::join(assetFolder, QFileInfo(fileName).fileName());
     viewer->loadModel(new_file, main_guid);
+
+    // The Object row's thumbnail and camera properties were captured before
+    // the model finished loading (ASSETS_AUDIT.md finding 5: soulless stored
+    // the default camera, lotus stored soulless's) — refresh them now that the
+    // viewer actually shows the imported model.
+    auto loadedSnapshot = viewer->takeScreenshot(512, 512);
+    if (!loadedSnapshot.isNull())
+        db->updateAssetThumbnail(main_guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(loadedSnapshot)));
+    db->updateAssetProperties(main_guid, QJsonDocument(viewer->getSceneProperties()).toJson());
+
     addToLibrary(main_guid, jfx);
 }
 

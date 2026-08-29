@@ -21,6 +21,7 @@
 #include "materials/defaultmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "widgets/engineassetscene.h"
+#include "editor/previewframing.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -186,7 +187,59 @@ int main(int argc, char **argv)
         QImage big = assets.renderImage(256, 96);
         CHECK(big.width() == 256 && big.height() == 96, "renderImage honours an arbitrary size");
 
-        // ---- 5. saved orbit round-trips ----
+        // ---- 5. scale must not break the preview (ASSETS_AUDIT.md findings 3 + 4) ----
+        // 5a. the framing math itself: world bounds include node scale.
+        auto giant = iris::MeshNode::create();
+        giant->setName("giant");
+        giant->setMesh(":assets/models/cube.obj");
+        auto blue = iris::DefaultMaterial::create();
+        blue->setDiffuseColor(QColor(30, 60, 220));
+        giant->setMaterial(blue);
+        giant->setLocalScale(QVector3D(200.0f, 200.0f, 200.0f));
+        const iris::AABB gbox = preview::worldBoundingBox(giant);
+        std::printf("    giant world box %.1f x %.1f x %.1f\n",
+                    double(gbox.getSize().x()), double(gbox.getSize().y()), double(gbox.getSize().z()));
+        CHECK(gbox.getSize().x() > 300.0f && gbox.getSize().y() > 300.0f,
+              "worldBoundingBox includes node scale (unscaled cube is ~2 units)");
+
+        // 5b. a huge model (world radius ~346, a cm-scaled glb) is framed ~1000
+        // units out — beyond iris's default farClip of 500 — and must be seen.
+        assets.setSubject(giant, false, true);
+        assets.resetCamera();
+        const float gr = gbox.getMinimalEnclosingSphere().radius;
+        const float gdist = preview::framingDistance(gr, assets.camera()->angle);
+        std::printf("    radius %.1f framed at %.1f  near %.2f far %.1f\n", double(gr), double(gdist),
+                    double(assets.camera()->nearClip), double(assets.camera()->farClip));
+        CHECK(gdist > 500.0f, "the framing distance really is past the old far plane");
+        CHECK(assets.camera()->farClip > gdist + gr, "far plane follows the framing distance");
+        CHECK(assets.camera()->nearClip < gdist - gr, "near plane leaves the subject in front of it");
+        Image huge = render(assets, *engine, view, 3);
+        show("giant cube (scale 200)", huge, W / 2, H / 2);
+        CHECK(at(huge, W / 2, H / 2).b > 0.12f && at(huge, W / 2, H / 2).b > at(huge, W / 2, H / 2).r * 1.5f,
+              "a huge model is visible at the centre (not far-clipped)");
+        CHECK(isBackground(at(huge, 2, 2)), "the huge model is framed inside the view");
+
+        // 5c. the lotus trap: framing a scaled model from its UNSCALED radius
+        // put the camera inside/nowhere near it. A cube scaled x3 (world radius
+        // ~5.2) framed from the raw mesh radius (~1.7 -> dist 5) has the camera
+        // inside the model; the world-space framing backs off ~15 units.
+        auto scaled = iris::MeshNode::create();
+        scaled->setName("scaled");
+        scaled->setMesh(":assets/models/cube.obj");
+        scaled->setMaterial(red);
+        scaled->setLocalScale(QVector3D(3.0f, 3.0f, 3.0f));
+        assets.setSubject(scaled, false, true);
+        assets.resetCamera();
+        const QVector3D spivotCam = assets.camera()->getLocalPos();
+        Image sm = render(assets, *engine, view, 3);
+        show("cube (scale 3)", sm, W / 2, H / 2);
+        CHECK(isRed(at(sm, W / 2, H / 2)), "a scaled model is framed from its world-space bounds");
+        CHECK(isBackground(at(sm, 2, 2)), "and fits inside the view (camera not inside the model)");
+        const iris::AABB sbox = preview::worldBoundingBox(scaled);
+        CHECK((spivotCam - sbox.getCenter()).length() > sbox.getMinimalEnclosingSphere().radius,
+              "the camera stands outside the scaled model");
+
+        // ---- 6. saved orbit round-trips ----
         QJsonObject props = assets.sceneProperties();
         CHECK(props.contains("camera") && props["camera"].toObject().contains("distFromPivot"), "sceneProperties carries the orbit");
 
