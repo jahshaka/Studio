@@ -143,6 +143,7 @@ For more information see the LICENSE file
 
 #include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
+#include "scripting/mcp/mcpserver.h"
 #include "ui/panels/scriptconsole.h"
 #include "scripting/modules/studiomodules.h"
 
@@ -234,6 +235,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptConsoleDock->setWidget(scriptConsole);
 	viewPort->addDockWidget(Qt::BottomDockWidgetArea, scriptConsoleDock);
 	scriptConsoleDock->hide();
+
+	// MCP endpoint (CLAUDE_EDITOR_SPEC.md phase 1): OFF by default — total
+	// lockdown, the scripting engine is the only capability surface. Started
+	// here only when the Preferences toggle was saved on; --mcp-port=N starts
+	// it from the CLI path instead.
+	mcpServer = new McpServer(scriptEngine, this);
+	prefsDialog->wireMcp(mcpServer, this);
+	if (settings->getValue("mcp_enabled", false).toBool()) {
+		QString mcpError;
+		if (!startMcpServer(quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt()), &mcpError))
+			qWarning("MCP: %s", qPrintable(mcpError));
+	}
 
 	updateTopMenuStates(currentSpace);
 
@@ -2405,6 +2418,27 @@ bool MainWindow::beginEngineSelftest(QString &why)
 void MainWindow::endEngineSelftest()
 {
     sceneView->end();
+}
+
+bool MainWindow::startMcpServer(quint16 port, QString *errorOut)
+{
+    if (!mcpServer) {
+        if (errorOut) *errorOut = QStringLiteral("the MCP server was not created");
+        return false;
+    }
+    QString error;
+    if (!mcpServer->start(port, &error)) {
+        if (errorOut) *errorOut = error;
+        return false;
+    }
+    // The console dock shows the copyable connect line (the token lives only
+    // in this session — it is never persisted).
+    if (scriptConsole) {
+        scriptConsole->announce(QStringLiteral("MCP server listening on http://127.0.0.1:%1/mcp")
+                                    .arg(mcpServer->port()));
+        scriptConsole->announce(mcpServer->connectCommand());
+    }
+    return true;
 }
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)

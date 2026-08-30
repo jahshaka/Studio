@@ -199,6 +199,13 @@ public:
     /// ScriptHost). Null only before the ctor finishes.
     class ScriptEngine *scripting() { return scriptEngine; }
 
+    /// The MCP endpoint (CLAUDE_EDITOR_SPEC.md phase 1). Created in the ctor,
+    /// OFF by default; started by the Preferences toggle or --mcp-port=N.
+    class McpServer *mcp() { return mcpServer; }
+    /// Starts the MCP server on 127.0.0.1:port and announces the connect line
+    /// in the script console dock. False (with errorOut) when the bind fails.
+    bool startMcpServer(quint16 port, QString *errorOut = nullptr);
+
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**
@@ -565,6 +572,7 @@ private:
     class ScriptEngine *scriptEngine = nullptr;
     QDockWidget *scriptConsoleDock = nullptr;
     class ScriptConsole *scriptConsole = nullptr;
+    class McpServer *mcpServer = nullptr;
 };
 
 #endif // MAINWINDOW_H

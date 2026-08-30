@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include "bridge/enginehost.h"
 #include "scripting/scriptengine.h"
+#include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
 
 int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless)
@@ -66,6 +67,43 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
     }
 
     if (!headless) window.endEngineSelftest();
+    EngineHost::instance().shutdown();
+    return rc;
+}
+
+int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool headless)
+{
+    window.show();
+    app.processEvents();
+
+    if (!headless) {
+        // Same boot as a windowed script run: editor page shown, engine view
+        // live, a default scene up — screenshot works immediately, and
+        // run_script's project.create() switches to a real project.
+        QString why;
+        if (!window.beginEngineSelftest(why)) {
+            std::fprintf(stderr, "mcp: %s\n", qPrintable(why));
+            return 1;
+        }
+        for (int frame = 0; frame < 10; ++frame) {
+            app.processEvents(QEventLoop::AllEvents, 50);
+            QThread::msleep(16);
+        }
+    }
+
+    QString error;
+    if (!window.startMcpServer(port, &error)) {
+        std::fprintf(stderr, "mcp: %s\n", qPrintable(error));
+        return 1;
+    }
+
+    McpServer *mcp = window.mcp();
+    std::printf("MCP: listening on http://127.0.0.1:%u/mcp\n", unsigned(mcp->port()));
+    std::printf("MCP: token %s\n", qPrintable(mcp->token()));
+    std::printf("MCP: connect with: %s\n", qPrintable(mcp->connectCommand()));
+    std::fflush(stdout);
+
+    const int rc = app.exec();
     EngineHost::instance().shutdown();
     return rc;
 }

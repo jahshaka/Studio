@@ -12,7 +12,7 @@ set(APP_OUTPUT_NAME "Jahshaka")
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia Qml)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia Qml HttpServer)
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
@@ -93,6 +93,9 @@ set(SRCS
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
     src/scripting/modules/studiomodules.cpp
+    src/scripting/mcp/mcpserver.cpp
+    src/scripting/mcp/mcptools.cpp
+    src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
@@ -255,6 +258,9 @@ set(HEADERS
     src/modules/publish/publishmodule.h
     src/modules/studiomodule.h
     src/scripting/modules/studiomodules.h
+    src/scripting/mcp/mcpserver.h
+    src/scripting/mcp/mcptools.h
+    src/ui/dialogs/preferences/mcpsettingswidget.h
     src/services/services.h
     src/services/assetimporter.h
     src/services/projectservice.h
@@ -434,7 +440,7 @@ if(JAHSHAKA_BUILD_TESTS)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif()
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml Qt6::HttpServer IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeMaterialsModule)

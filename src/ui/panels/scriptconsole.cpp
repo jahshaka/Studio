@@ -119,6 +119,11 @@ void ScriptConsole::runInput()
     }
 }
 
+void ScriptConsole::announce(const QString &text)
+{
+    appendLine(text, QStringLiteral("#8ec6ff"));
+}
+
 void ScriptConsole::runFile(const QString &path)
 {
     QFile file(path);

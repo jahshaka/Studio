@@ -1,5 +1,6 @@
 # out-of-source build directories
 build-linux/
+build-mcp/
 build/
 
 # local tooling

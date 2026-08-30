@@ -23,6 +23,8 @@ namespace Ui {
 class QListWidgetItem;
 class SettingsManager;
 class WorldSettingsWidget;
+class McpSettingsWidget;
+class McpServer;
 class IEditorViewport;
 class MainWindow;
 class Database;
@@ -45,9 +47,12 @@ public:
     explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
     /// Forwards the editor wiring to the world-settings page (Phase 4).
     void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow);
+    /// Forwards the MCP server to its settings page (created after the dialog).
+    void wireMcp(McpServer *server, MainWindow *mainWindow);
     ~PreferencesDialog();
 
 	WorldSettingsWidget* worldSettings;
+	McpSettingsWidget* mcpSettings = nullptr;
 	Database *db;
 
 protected:
