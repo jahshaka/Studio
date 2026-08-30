@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include "texturepickerwidget.h"
 #include "ui_texturepickerwidget.h"
 #include "transformeditor.h"
-#include "ui_transformeditor.h"
 #include "checkboxwidget.h"
 #include "ui_checkboxwidget.h"
 #include "comboboxwidget.h"

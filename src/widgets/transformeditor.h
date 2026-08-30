@@ -14,15 +14,16 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QSharedPointer>
+#include <QVector3D>
+#include <QQuaternion>
 
 namespace iris
 {
     class SceneNode;
 }
 
-namespace Ui {
-class TransformEditor;
-}
+class DragSpinBox;
+class QPushButton;
 
 class TransformEditor : public QWidget
 {
@@ -30,23 +31,16 @@ class TransformEditor : public QWidget
 
 public:
     explicit TransformEditor(QWidget *parent = 0);
-    ~TransformEditor();
 
     /**
-     *  sects active scene node
+     *  sets active scene node
      * @param sceneNode
      */
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
 
-	void refreshUi();
+    void refreshUi();
 
 protected slots:
-    /**
-     * should be triggered when active scene node's properties gets
-     * updated externally (from gizmo, scripts, etc)
-     */
-    // void sceneNodeUpdated();
-
     void xPosChanged(double value);
     void yPosChanged(double value);
     void zPosChanged(double value);
@@ -61,10 +55,31 @@ protected slots:
 
     void onResetBtnClicked();
 
+    // a scrub (click-drag on a field) becomes ONE undoable change:
+    // capture the transform when the drag starts, push a single
+    // TransformSceneNodeCommand when it ends (same pattern as the gizmo)
+    void onScrubStarted();
+    void onScrubFinished(bool cancelled);
+
 private:
+    // builds one horizontal row: title label left, X/Y/Z fields side by side
+    void addRow(class QGridLayout* grid, int row, const QString& title,
+                DragSpinBox*& x, DragSpinBox*& y, DragSpinBox*& z,
+                double perPixelStep);
+    DragSpinBox* createField(const QString& objectName, double perPixelStep);
+
     QSharedPointer<iris::SceneNode> sceneNode;
     QSharedPointer<iris::SceneNode> defaultStateNode;
-    Ui::TransformEditor* ui;
+
+    DragSpinBox* xpos; DragSpinBox* ypos; DragSpinBox* zpos;
+    DragSpinBox* xrot; DragSpinBox* yrot; DragSpinBox* zrot;
+    DragSpinBox* xscale; DragSpinBox* yscale; DragSpinBox* zscale;
+    QPushButton* resetBtn;
+
+    // transform at scrub start, for the single undo command
+    QVector3D scrubStartPos;
+    QQuaternion scrubStartRot;
+    QVector3D scrubStartScale;
 };
 
 #endif // TRANSFORMEDITOR_H
