@@ -1128,6 +1128,77 @@ void pbr_two_sided_shows_inside_faces() {
     CHECK(near(centre(img), kBlue, 20));
 }
 
+void pbr_texture_scale_tiles_uvs() {
+    Fixture fx;
+    View *v = fx.view("uvscale-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("uvscale-scene");               REQUIRE(s);
+    v->setScene(s);
+    // Face-on: only the cube's +Z face (full 0..1 UVs) is visible, so a
+    // left-red/right-green texture renders as clean vertical stripes.
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 2.2f), Vec3(0.0f, 0.0f, 0.0f));
+    s->setAmbient(Colour(0.6f, 0.6f, 0.6f), Colour(0.5f, 0.5f, 0.5f));
+    enginetest::addDirectionalLight(s, Vec3(0.2f, -0.3f, -1.0f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 1.0f;
+    MaterialId mat = s->createPbrMaterial(p);
+    std::vector<unsigned char> pix(16 * 16 * 4);
+    for (int y = 0; y < 16; ++y) for (int x = 0; x < 16; ++x) {
+        unsigned char *q = &pix[(y * 16 + x) * 4];
+        q[0] = x < 8 ? 255 : 0; q[1] = x < 8 ? 0 : 255; q[2] = 0; q[3] = 255;
+    }
+    TextureId tex = s->createTexture(16, 16, pix.data(), true);
+    CHECK_MSG(tex != 0, "%s", fx.e->lastError().c_str());
+    CHECK(s->setPbrTexture(mat, PbrTextureSlot::Albedo, tex));
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    // Red<->green changes along the middle scanline, cube pixels only: 1 with the
+    // texture shown once, 7 when uvScale=4 wraps it into 4 tiles.
+    auto transitions = [](const Image &img) {
+        int t = 0; bool haveLast = false, lastRed = false;
+        const unsigned y = img.height / 2;
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Px q = px(img, x, y);
+            if (q.b > q.r && q.b > q.g) continue;        // blue background
+            const bool red   = q.r > q.g + 30;
+            const bool green = q.g > q.r + 30;
+            if (!red && !green) continue;                // filtered edge texels
+            if (haveLast && red != lastRed) ++t;
+            haveLast = true; lastRed = red;
+        }
+        return t;
+    };
+    render(fx.e); Image img1; REQUIRE(v->readPixels(img1));
+    const int t1 = transitions(img1);
+    p.uvScale = 4.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image img4; REQUIRE(v->readPixels(img4));
+    const int t4 = transitions(img4);
+    std::printf("    stripe transitions: %d at uvScale 1, %d at uvScale 4\n", t1, t4);
+    CHECK_MSG(t1 >= 1 && t1 <= 2, "uvScale 1 shows the texture once, got %d edges", t1);
+    CHECK_MSG(t4 >= 5, "uvScale 4 tiles the texture across the face, got %d edges", t4);
+    // A fixed probe flips colour: 3/16 into the face samples u=0.1875 (red) at
+    // scale 1 but u=0.75 (green) once UVs wrap at scale 4.
+    unsigned xL = 0, xR = 0; const unsigned yMid = img1.height / 2;
+    for (unsigned x = 0; x < img1.width; ++x) {
+        const Px q = px(img1, x, yMid);
+        if (q.b > q.r && q.b > q.g) continue;
+        if (!xL) xL = x;
+        xR = x;
+    }
+    REQUIRE(xR > xL + 16);
+    const unsigned xProbe = xL + (xR - xL) * 3u / 16u;
+    const Px probe1 = px(img1, xProbe, yMid), probe4 = px(img4, xProbe, yMid);
+    std::printf("    probe x=%u: scale1 %d %d %d | scale4 %d %d %d\n",
+                xProbe, probe1.r, probe1.g, probe1.b, probe4.r, probe4.g, probe4.b);
+    CHECK_MSG(probe1.r > probe1.g + 30, "probe is red at scale 1: %d %d %d", probe1.r, probe1.g, probe1.b);
+    CHECK_MSG(probe4.g > probe4.r + 30, "probe is green at scale 4: %d %d %d", probe4.r, probe4.g, probe4.b);
+    // Back to 1: the tiling is fully reversible at runtime.
+    p.uvScale = 1.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); Image imgBack; REQUIRE(v->readPixels(imgBack));
+    CHECK_MSG(transitions(imgBack) == t1, "uvScale back to 1 restores the single image");
+}
+
 void fog_fades_distant_surfaces_to_fog_colour() {
     Fixture fx;
     View *v = fx.view("fog-view", 96, 96, kBlue); REQUIRE(v);
@@ -1206,6 +1277,7 @@ int main(int argc, char **argv) {
         { "pbr_alpha_blend_mixes_with_background",  pbr_alpha_blend_mixes_with_background },
         { "pbr_alpha_cutout_discards_below_cutoff", pbr_alpha_cutout_discards_below_cutoff },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
+        { "pbr_texture_scale_tiles_uvs",            pbr_texture_scale_tiles_uvs },
         { "fog_fades_distant_surfaces_to_fog_colour", fog_fades_distant_surfaces_to_fog_colour },
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },

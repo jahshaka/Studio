@@ -24,7 +24,7 @@ namespace
 
 // ---- the one place the gizmo look is tuned --------------------------------------
 // All values are in handle-local units (scaled by gizmoScale * handleScale later).
-const float kShaftRadius   = 0.035f;  // thin axis line (old OBJ girth: 0.211)
+const float kShaftRadius   = 0.0175f; // thin axis line (halved 2026-08-30; before: 0.035, old OBJ girth: 0.211)
 const float kShaftStart    = 0.12f;   // leave the core clear
 const float kConeBase      = 0.115f;  // small arrow head
 const float kConeStart     = 1.56f;
@@ -33,9 +33,9 @@ const float kCubeHalf      = 0.11f;   // small scale-tip cube
 const float kScaleEnd      = 1.46f;   // same reach as the old scale handle
 const float kCoreSphere    = 0.10f;
 const float kCoreCubeHalf  = 0.12f;
-const float kRingMinor     = 0.02f;   // thin rotation circles (old rings were flat fat bands)
+const float kRingMinor     = 0.01f;   // thin rotation circles (halved 2026-08-30; old rings were flat fat bands)
 const float kScreenRingR   = 1.18f;   // just outside the axis rings
-const float kScreenRingMinor = 0.014f;
+const float kScreenRingMinor = 0.007f;  // halved 2026-08-30 (was 0.014)
 const int   kSegments      = 20;      // round sections
 const int   kRingSegments  = 64;      // ring smoothness
 const int   kRingSides     = 8;

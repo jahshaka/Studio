@@ -339,7 +339,14 @@ void WorldSettingsWidget::configureViewport()
 	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
-	spinbox->setValue(settings->getValue("outline_width", 6).toInt());
+	// Default halved 6 -> 3 (2026-08-30). A stored 6 is indistinguishable from
+	// the old default, so treat it AS the new default; any other stored value is
+	// a deliberate user choice and is kept.
+	int storedOutlineWidth = settings->getValue("outline_width", 3).toInt();
+	if (storedOutlineWidth == 6) storedOutlineWidth = 3;
+	outlineWidth = storedOutlineWidth;   // read by MainWindow::updateSceneSettings
+	                                     // before the spinbox ever fires
+	spinbox->setValue(storedOutlineWidth);
 	colorPicker->setColor(settings->getValue("outline_color", "#3498db").toString());
 	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
 
