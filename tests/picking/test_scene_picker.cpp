@@ -1,8 +1,12 @@
 // ScenePicker characterisation: picking on the document, no renderer, no GL.
 #include <QGuiApplication>
+#include <QMatrix4x4>
 #include <QVector3D>
+#include <algorithm>
 #include <cstdio>
 #include "irisgl/irisglfwd.h"
+#include "irisgl/core/geometry/trimesh.h"
+#include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -47,6 +51,22 @@ int main(int argc, char **argv) {
     ScenePicker::screenSegment(cam, W, H, QPointF(3, 3), a, b);
     CHECK(ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition()).isEmpty(), "corner ray misses");
 
+    // mesh hits report their triangle (V-hold vertex snap reads its corners)
+    {
+        ScenePicker::screenSegment(cam, W, H, QPointF(W / 2, H / 2), a, b);
+        const ScenePick pick = ScenePicker::nearest(ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition()));
+        CHECK(pick.triangleIndex >= 0, "mesh hit carries a triangle index");
+        auto tris = front->getMesh()->getTriMesh()->triangles;
+        CHECK(pick.triangleIndex < tris.size(), "triangle index is in range");
+        const auto &tri = tris[pick.triangleIndex];
+        const QMatrix4x4 xf = front->getGlobalTransform();
+        float nearest = 1e9f;
+        for (const QVector3D &c : { xf * tri.a, xf * tri.b, xf * tri.c })
+            nearest = std::min(nearest, (c - pick.hitPoint).length());
+        std::printf("    nearest triangle corner is %.3f from the hit point\n", nearest);
+        CHECK(nearest < 2.0f, "the indexed triangle's corners surround the hit point");
+    }
+
     // a second cube behind the first: the nearer one wins
     auto back = cubeAt(doc, QVector3D(0, 0, -4), "back");
     ScenePicker::screenSegment(cam, W, H, QPointF(W / 2, H / 2), a, b);
@@ -77,6 +97,7 @@ int main(int argc, char **argv) {
     light->setLocalPos(QVector3D(0, 0, 2.5f));      // between camera and cube
     hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
     CHECK(ScenePicker::nearest(hits).node == light, "light sphere on the ray is nearest");
+    CHECK(ScenePicker::nearest(hits).triangleIndex == -1, "sphere hits carry no triangle index");
     hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, false);
     CHECK(ScenePicker::nearest(hits).node == front, "lights can be excluded");
     doc->getRootNode()->removeChild(light);

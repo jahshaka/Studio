@@ -55,6 +55,7 @@ void ScenePicker::pickMeshes(iris::SceneNodePtr node, const QVector3D &segStart,
                     p.node = node;
                     p.hitPoint = meshNode->globalTransform * r.hitPoint;
                     p.distanceFromCameraSqrd = (p.hitPoint - cameraPos).lengthSquared();
+                    p.triangleIndex = r.triangleIndex;
                     out.append(p);
                 }
             }

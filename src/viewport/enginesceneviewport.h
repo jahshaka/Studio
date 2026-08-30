@@ -138,6 +138,8 @@ protected:
 private:
     bool ensureEngineScene();
     void setActiveGizmo(Gizmo *g);
+    /// V-hold vertex snapping during a translate drag (EDITOR_SHORTCUTS_SPEC §4).
+    bool snapDragToVertexUnderCursor();
     void setCameraController(CameraControllerBase *c);
     /// Mouse ray for the current pointer position (false if the pointer never entered).
     bool mouseRay(QVector3D &rayPos, QVector3D &rayDir, QVector3D &viewDir) const;
@@ -169,6 +171,7 @@ private:
     MainWindow *mMainWindow = nullptr;
     StudioServices *mServices = nullptr;      // undo + scene-edit for Alt+drag / snap-to-floor
     bool mAltDragMacroOpen = false;           // duplicate+move rides one undo macro
+    bool mVertexSnapHeld = false;             // V held: translate drags snap to vertices
     QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)

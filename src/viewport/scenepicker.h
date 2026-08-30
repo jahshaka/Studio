@@ -17,6 +17,10 @@ struct ScenePick
     iris::SceneNodePtr node;
     QVector3D hitPoint;
     float distanceFromCameraSqrd = 0.0f;
+    /// Index into the mesh's TriMesh triangle list for mesh hits, -1 for
+    /// light/viewer sphere hits — V-hold vertex snapping reads the triangle's
+    /// corners back (EDITOR_SHORTCUTS_SPEC §4).
+    int triangleIndex = -1;
 };
 
 class ScenePicker

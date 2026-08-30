@@ -31,6 +31,7 @@
 #include "ui/panels/scenehierarchywidget.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/math/intersectionhelper.h"
+#include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include <QVector3D>
 #include <QQuaternion>
@@ -327,6 +328,11 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
     const QPointF dir = mMousePos - mPrevMousePos;
     mPrevMousePos = mMousePos;
     if (mGizmo && mGizmo->isDragging()) {
+        // V held during a translate drag: snap the dragged node's pivot to the
+        // nearest vertex of the triangle under the cursor on OTHER meshes
+        // (EDITOR_SHORTCUTS_SPEC §4). No target under the cursor -> plain drag.
+        if (mVertexSnapHeld && mGizmo == mTranslateGizmo && snapDragToVertexUnderCursor())
+            return;
         QVector3D rayPos, rayDir, viewDir;
         if (mouseRay(rayPos, rayDir, viewDir)) mGizmo->drag(rayPos, rayDir, viewDir);
         return;
@@ -369,6 +375,7 @@ void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
     // Auto-repeat presses would be harmless (the key is already in the held
     // set) but auto-repeat RELEASES would clear it mid-hold — skip both.
     if (e->isAutoRepeat()) return;
+    if (e->key() == Qt::Key_V) mVertexSnapHeld = true;
     if (mCamController) mCamController->onKeyPressed(static_cast<Qt::Key>(e->key()));
 }
 
@@ -376,6 +383,7 @@ void EngineSceneViewport::keyReleaseEvent(QKeyEvent *e)
 {
     if (mPlaying && mPlayback) { mPlayback->keyReleaseEvent(e); return; }
     if (e->isAutoRepeat()) return;
+    if (e->key() == Qt::Key_V) mVertexSnapHeld = false;
     if (mCamController) mCamController->keyReleaseEvent(e);
 }
 
@@ -384,7 +392,47 @@ void EngineSceneViewport::focusOutEvent(QFocusEvent *e)
     // Keys released while another widget has focus never reach us — drop the
     // held set so fly keys cannot stick down.
     if (mCamController) mCamController->clearKeys();
+    mVertexSnapHeld = false;
     EngineViewWidget::focusOutEvent(e);
+}
+
+// The V-hold vertex snap: pick under the cursor against every OTHER mesh
+// (document CPU picking already reports the hit triangle), then move the
+// dragged node's pivot to the hit triangle's nearest corner. Runs inside the
+// live translate drag, so endDragging()'s undo command covers it.
+bool EngineSceneViewport::snapDragToVertexUnderCursor()
+{
+    if (!mSelectedNode || !mScene || !mEditorCam || !mHaveMouse) return false;
+    QVector3D a, b;
+    ScenePicker::screenSegment(mEditorCam, width(), height(), mMousePos, a, b);
+    const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(),
+                                           true, false, false);
+    ScenePick best;
+    for (const auto &h : hits) {
+        if (!h.node || h.triangleIndex < 0) continue;
+        bool own = false;                       // never snap to the dragged subtree
+        for (iris::SceneNode *n = h.node.data(); n; n = n->parent.data())
+            if (n == mSelectedNode.data()) { own = true; break; }
+        if (own) continue;
+        if (!best.node || h.distanceFromCameraSqrd < best.distanceFromCameraSqrd) best = h;
+    }
+    if (!best.node) return false;
+    auto meshNode = best.node.staticCast<iris::MeshNode>();
+    auto mesh = meshNode->getMesh();
+    if (!mesh || !mesh->getTriMesh() ||
+        best.triangleIndex >= mesh->getTriMesh()->triangles.size())
+        return false;
+    const iris::Triangle &tri = mesh->getTriMesh()->triangles[best.triangleIndex];
+    const QMatrix4x4 &xf = meshNode->globalTransform;
+    const QVector3D corners[3] = { xf * tri.a, xf * tri.b, xf * tri.c };
+    QVector3D vertex = corners[0];
+    for (int i = 1; i < 3; ++i)
+        if ((corners[i] - best.hitPoint).lengthSquared() <
+            (vertex - best.hitPoint).lengthSquared())
+            vertex = corners[i];
+    mSelectedNode->setGlobalPos(vertex);
+    if (mServices && mServices->sceneEdit) mServices->sceneEdit->notifyTransformChanged();
+    return true;
 }
 
 bool EngineSceneViewport::event(QEvent *e)

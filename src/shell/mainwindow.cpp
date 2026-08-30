@@ -2167,6 +2167,7 @@ void MainWindow::setupShortcuts()
             [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->snapSelectionToFloor(); });
     reg.addFixed("snap.relative", "Snap While Dragging", "Snapping", "Ctrl (hold)");
     reg.addFixed("snap.altdrag", "Duplicate While Dragging", "Snapping", "Alt + drag gizmo");
+    reg.addFixed("snap.vertex", "Snap To Vertex", "Snapping", "V (hold) while moving");
 
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
