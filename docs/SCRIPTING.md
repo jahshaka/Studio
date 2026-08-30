@@ -83,6 +83,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `world.fog({enabled, color, start, end}) -> bool` | document | Sets any subset of the fog settings. |
 | `world.shadows({enabled}) -> bool` | document | Toggles shadow rendering. |
 | `world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh}) -> bool` | document | Global illumination: mode off\|instant_radiosity\|vct\|vct_pcc_hybrid, quality low\|medium\|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). |
+| `world.antiAliasing() -> int` | document | Reads the anti-aliasing (MSAA) sample count. With the engine viewport live this is the ACHIEVED count (the driver may clamp the request); otherwise the scene's requested value. |
+| `world.setAntiAliasing(samples) -> int` | document | Sets the scene's anti-aliasing: 1 (off), 2, 4 or 8 MSAA samples. Returns the achieved sample count (the driver may clamp; with no engine viewport, the requested value). |
 | `world.sky(type, {...}) -> bool` | document | Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, sunPosX, sunPosY, sunPosZ}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). |
 | `world.get() -> {ambient, gravity, fog, shadows, gi, sky}` | document | Reads the current world settings. |
 

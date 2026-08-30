@@ -42,6 +42,7 @@ class ShaderPropertyWidget;
 class SkyPropertyWidget;
 class WorldSkyPropertyWidget;
 class WorldGiPropertyWidget;
+class WorldAaPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -79,6 +80,7 @@ public:
 
 	WorldSkyPropertyWidget *worldSkyPropView;
 	WorldGiPropertyWidget *worldGiPropView;
+	WorldAaPropertyWidget *worldAaPropView;
 
 public slots:
 	void acceptCubemapTexturesFromSkyPresets(QStringList guids);
@@ -109,7 +111,7 @@ private:
 
     Database *db;
 	ShaderPropertyWidget *shaderPropView;
-    IEditorViewport *sceneView;
+    IEditorViewport *sceneView = nullptr;   // was uninitialized: read before setSceneView() on some paths
 
     QWidget *widgetProperty;
     QVBoxLayout *widgetPropertyLayout;

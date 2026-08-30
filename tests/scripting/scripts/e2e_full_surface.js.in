@@ -44,6 +44,16 @@ var thrown = false;
 try { world.sky("volumetric"); } catch (e) { thrown = true; }
 assert(thrown, "unknown sky type refused");
 
+// ---- world anti-aliasing (WORLD_AA_SPEC.md phase 1) ----
+assert(world.antiAliasing() === 1, "anti-aliasing starts off (1 sample)");
+var aa = world.setAntiAliasing(4);   // 4x is the one MSAA level Vulkan guarantees
+assert(aa === 4, "setAntiAliasing(4) achieved 4x (got " + aa + ")");
+assert(world.get().antiAliasing === 4, "document stores the AA request");
+thrown = false;
+try { world.setAntiAliasing(3); } catch (e) { thrown = true; }
+assert(thrown, "invalid sample count refused");
+assert(world.get().antiAliasing === 4, "refused AA call left the setting alone");
+
 // ---- assets.* ----
 var builtins = assets.builtins();
 assert(builtins.length > 20, "builtins enumerated (" + builtins.length + ")");
@@ -116,5 +126,14 @@ assert(s1.center.r === s2.center.r && s1.center.g === s2.center.g && s1.center.b
        "screenshots deterministic");
 var differs = Math.abs(s1.center.r - 26) > 2 || Math.abs(s1.center.g - 28) > 2 || Math.abs(s1.center.b - 36) > 2;
 assert(differs, "scene rendered (centre != clear colour)");
+
+// ---- anti-aliasing survives save -> close -> open (SceneWriter/SceneReader) ----
+assert(project.save() === true, "project.save before AA reload");
+assert(project.close() === true, "project.close");
+assert(project.open(guid) === true, "project.open");
+assert(world.get().antiAliasing === 4, "antiAliasing round-trips through save/load");
+editor.frame(2);   // let the mirror push the reloaded value and the view rebuild
+assert(world.antiAliasing() === 4, "reloaded scene achieves 4x again");
+world.setAntiAliasing(1);   // leave the scratch project the way defaults expect
 
 console.log("e2e_full_surface: ALL OK");

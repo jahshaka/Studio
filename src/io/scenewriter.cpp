@@ -130,6 +130,10 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogEnabled"] = scene->fogEnabled;
     sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
+    // Anti-aliasing: the REQUESTED MSAA sample count (1 = off). The achieved
+    // count is a per-machine runtime fact and is never serialized.
+    sceneObj["antiAliasing"] = scene->antiAliasing;
+
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.
     static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };

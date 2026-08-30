@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/skypropertywidget.h"
 #include "ui/panels/propertywidgets/worldskypropertywidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "ui/panels/propertywidgets/worldaapropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
 {
@@ -61,6 +62,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	worldGiPropView = new WorldGiPropertyWidget();
 	worldGiPropView->setPanelTitle("Global Illumination");
 	worldGiPropView->expand();
+
+	worldAaPropView = new WorldAaPropertyWidget();
+	worldAaPropView->setPanelTitle("Anti-Aliasing");
+	worldAaPropView->expand();
 
     transformPropView = new AccordianBladeWidget();
     transformPropView->setPanelTitle("Transformation");
@@ -120,9 +125,13 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldPropView->setScene(sceneNode->scene);
             worldGiPropView->setParent(this);
             worldGiPropView->setScene(sceneNode->scene);
+            worldAaPropView->setParent(this);
+            worldAaPropView->setSceneView(sceneView);
+            worldAaPropView->setScene(sceneNode->scene);
             widgetPropertyLayout->addWidget(worldPropView);
             widgetPropertyLayout->addWidget(worldSkyPropView);
             widgetPropertyLayout->addWidget(worldGiPropView);
+            widgetPropertyLayout->addWidget(worldAaPropView);
             widgetPropertyLayout->addWidget(fogPropView);
         }
         else {

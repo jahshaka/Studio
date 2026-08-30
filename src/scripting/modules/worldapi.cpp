@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
+#include "viewport/ieditorviewport.h"
 #include "irisgl/document/assets/texture2d.h"
 
 using namespace scriptmod;
@@ -43,6 +44,12 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh}) -> bool",
           "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only).",
+          Needs::Document },
+        { "antiAliasing", "world.antiAliasing() -> int",
+          "Reads the anti-aliasing (MSAA) sample count. With the engine viewport live this is the ACHIEVED count (the driver may clamp the request); otherwise the scene's requested value.",
+          Needs::Document },
+        { "setAntiAliasing", "world.setAntiAliasing(samples) -> int",
+          "Sets the scene's anti-aliasing: 1 (off), 2, 4 or 8 MSAA samples. Returns the achieved sample count (the driver may clamp; with no engine viewport, the requested value).",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, sunPosX, sunPosY, sunPosZ}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project).",
@@ -131,6 +138,34 @@ bool WorldApi::gi(const QVariantMap &params)
     if (params.contains("autoRefresh"))
         scene->giAutoRefresh = params.value("autoRefresh").toBool();
     return true;
+}
+
+int WorldApi::antiAliasing()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.antiAliasing"));
+    if (!scene) return 0;
+    // Achieved beats requested when there is a live viewport to ask: the driver
+    // may have clamped (Vulkan only guarantees 1x and 4x).
+    if (host.isEngineReady() && host.viewport) return host.viewport->sampleCount();
+    return scene->antiAliasing;
+}
+
+int WorldApi::setAntiAliasing(int samples)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.setAntiAliasing"));
+    if (!scene) return 0;
+    if (samples != 1 && samples != 2 && samples != 4 && samples != 8) {
+        fail(QStringLiteral("world.setAntiAliasing: samples must be 1 (off), 2, 4 or 8"));
+        return 0;
+    }
+    scene->antiAliasing = samples;
+    // SceneMirror pushes the document value at the next sync; step two frames so
+    // the pending target rebuild is applied and the achieved count is readable.
+    if (host.isEngineReady() && host.viewport) {
+        host.viewport->renderFrames(2);
+        return host.viewport->sampleCount();
+    }
+    return samples;
 }
 
 bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut)
@@ -267,6 +302,7 @@ QVariantMap WorldApi::get()
     out["ambient"] = colorToJs(scene->ambientColor);
     out["gravity"] = scene->gravity;
     out["shadows"] = scene->shadowEnabled;
+    out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["fog"] = QVariantMap{ { "enabled", scene->fogEnabled },
                               { "color", colorToJs(scene->fogColor) },
                               { "start", scene->fogStart },

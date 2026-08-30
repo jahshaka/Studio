@@ -123,6 +123,11 @@ public:
     virtual QImage takeScreenshot(int width = 1920, int height = 1080) = 0;
     virtual QImage takeScreenshot(QSize dimension) = 0;
 
+    /// The ACHIEVED anti-aliasing (MSAA) sample count of the viewport's render
+    /// target — the driver may clamp what scene->antiAliasing requested. Only
+    /// the engine viewport reports it; the legacy viewport has no MSAA (1).
+    virtual int sampleCount() const { return 1; }
+
     /// Deterministic frame stepping for scripts and tests (editor.frame(n)):
     /// document→engine sync + renderOneFrame, n times, synchronously — the exact
     /// pattern of the headless suites. Only the engine viewport implements it;

@@ -90,6 +90,8 @@ public:
     void setShowPerspeciveLabel(bool) override {}
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
     QImage takeScreenshot(QSize dimension) override;
+    int sampleCount() const override
+    { return view() ? int(view()->sampleCount()) : 1; }
     void renderFrames(int n) override;
 
     void begin() override;

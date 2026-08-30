@@ -338,6 +338,123 @@ void resize_offscreen() {
     CHECK(img.width == 20 && img.height == 20);
 }
 
+// ---- Anti-aliasing (WORLD_AA_SPEC.md phase 1) ------------------------------
+// A flat UNLIT cube against a flat background renders EXACTLY two colours at
+// 1x; MSAA's whole observable effect offscreen is blended silhouette pixels.
+namespace msaa {
+NodeId addUnlitCube(Scene *s, const Colour &c) {
+    const NodeId node = s->createNode();
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    const MaterialId mat = s->createUnlitMaterial(c, true, false);
+    if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
+    return node;
+}
+unsigned intermediatePixels(const Image &img, const Colour &bg, const Colour &fg) {
+    unsigned n = 0;
+    for (unsigned y = 0; y < img.height; ++y)
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Px p = px(img, x, y);
+            if (!near(p, bg, 12) && !near(p, fg, 12)) ++n;
+        }
+    return n;
+}
+}  // namespace msaa
+
+void msaa_offscreen_views_default_to_one_sample() {
+    // The guard that keeps every pixel-asserted suite exact: offscreen views
+    // start at 1 sample unless a caller opts in.
+    Fixture f;
+    View *v = f.view("aa-default", 32, 32, kBlue);
+    REQUIRE(v);
+    CHECK_MSG(v->sampleCount() == 1, "offscreen default is 1, got %u", v->sampleCount());
+}
+
+void msaa_4x_blends_silhouette_edges() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("aa4", 96, 96, kBlue);
+    REQUIRE(v);
+    Scene *s = f.scene("aa4-scene");
+    REQUIRE(s);
+    REQUIRE(msaa::addUnlitCube(s, kOrange));
+    CHECK(v->setScene(s));
+    aim(v);
+    render(e);
+    Image img1;
+    REQUIRE(v->readPixels(img1));
+    const unsigned edges1 = msaa::intermediatePixels(img1, kBlue, kOrange);
+    CHECK_MSG(edges1 <= 4, "1x unlit scene is (near) two-colour, got %u in-betweens", edges1);
+    CHECK(near(centre(img1), kOrange));
+    CHECK(near(corner(img1), kBlue));
+
+    // 4x is the one MSAA level the Vulkan spec REQUIRES; the achieved count
+    // must come back exactly.
+    v->setSampleCount(4);
+    render(e);
+    CHECK_MSG(v->sampleCount() == 4, "achieved %u for a 4x request", v->sampleCount());
+    Image img4;
+    REQUIRE(v->readPixels(img4));
+    CHECK(near(centre(img4), kOrange));
+    CHECK(near(corner(img4), kBlue));
+    const unsigned edges4 = msaa::intermediatePixels(img4, kBlue, kOrange);
+    CHECK_MSG(edges4 >= 10 && edges4 > edges1,
+              "4x should blend the cube silhouette: %u in-betweens vs %u at 1x", edges4, edges1);
+    std::printf("    edge blend pixels: 1x=%u 4x=%u\n", edges1, edges4);
+}
+
+void msaa_runtime_toggle_and_clamping() {
+    // Runtime change is the pending-resize path (window) / an RTT rebuild
+    // (offscreen): 1 -> 4 -> 8 -> 1 on one live view, rendering in between.
+    // The ASan suite runs this too, covering the rebuilds for leaks/UAF.
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("aa-toggle", 64, 64, kBlue);
+    REQUIRE(v);
+    Scene *s = f.scene("aa-toggle-scene");
+    REQUIRE(s);
+    REQUIRE(msaa::addUnlitCube(s, kOrange));
+    CHECK(v->setScene(s));
+    aim(v);
+    render(e);
+    CHECK(v->sampleCount() == 1);
+
+    v->setSampleCount(4);
+    render(e);
+    CHECK(v->sampleCount() == 4);
+    Image img;
+    REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kOrange));
+
+    // 8x is NOT guaranteed by Vulkan: the driver may clamp by halving. Either
+    // way the readback must report what was actually achieved (a power of two
+    // no lower than the mandatory 4).
+    v->setSampleCount(8);
+    render(e);
+    const unsigned got8 = v->sampleCount();
+    CHECK_MSG(got8 == 8 || got8 == 4, "8x request achieved %u", got8);
+    std::printf("    8x request -> achieved %ux\n", got8);
+    REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kOrange));
+
+    // Odd values round DOWN to a power of two before reaching the driver.
+    v->setSampleCount(3);
+    render(e);
+    CHECK_MSG(v->sampleCount() == 2, "3 rounds down to 2, got %u", v->sampleCount());
+
+    v->setSampleCount(1);
+    render(e);
+    CHECK_MSG(v->sampleCount() == 1, "back to 1x, got %u", v->sampleCount());
+    REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kOrange));
+    CHECK(near(corner(img), kBlue));
+    const unsigned edges = msaa::intermediatePixels(img, kBlue, kOrange);
+    CHECK_MSG(edges <= 4, "back at 1x the image is crisp again, got %u in-betweens", edges);
+
+    // A resize while MSAA is requested keeps the sample count.
+    v->setSampleCount(4);
+    v->resize(48, 48);
+    render(e);
+    CHECK_MSG(v->sampleCount() == 4, "resize kept 4x, got %u", v->sampleCount());
+}
+
 void teardown_is_clean() {
     // Last test: destroys the process's Engine with everything still registered.
     Engine *e = gEngine.get();
@@ -1090,6 +1207,9 @@ int main(int argc, char **argv) {
         { "pbr_alpha_cutout_discards_below_cutoff", pbr_alpha_cutout_discards_below_cutoff },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
         { "fog_fades_distant_surfaces_to_fog_colour", fog_fades_distant_surfaces_to_fog_colour },
+        { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
+        { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
+        { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

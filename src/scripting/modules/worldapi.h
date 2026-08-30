@@ -39,6 +39,8 @@ public:
     Q_INVOKABLE bool fog(const QVariantMap &params);
     Q_INVOKABLE bool shadows(const QVariantMap &params);
     Q_INVOKABLE bool gi(const QVariantMap &params);
+    Q_INVOKABLE int antiAliasing();
+    Q_INVOKABLE int setAntiAliasing(int samples);
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap get();
 

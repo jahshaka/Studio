@@ -296,6 +296,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
+    // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd
+    // is rounded down to the nearest supported step (1/2/4/8).
+    {
+        const int aa = sceneObj["antiAliasing"].toInt(1);
+        scene->antiAliasing = aa >= 8 ? 8 : aa >= 4 ? 4 : aa >= 2 ? 2 : 1;
+    }
 	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));
 
     auto rootNode = sceneObj["rootNode"].toObject();
