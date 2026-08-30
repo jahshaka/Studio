@@ -503,6 +503,36 @@ const QString StyleSheet::ValueSliderGradient()
 	);
 }
 
+// The Preferences dialog's tab container. The dialog's own sheet paints the
+// QDialog dark, but a QTabWidget draws a platform-light pane and tab bar over
+// it, and unstyled labels inside the pages render black — the "white settings
+// dialog" regression. One sheet on the QTabWidget covers the bar, the pane,
+// every page background, and text defaults; widgets that carry their own
+// styles (grouped buttons, styled line edits) still win, being closer.
+const QString StyleSheet::PreferencesTabs()
+{
+	return QString(
+		"QTabWidget::pane { border: 0; background: #222; }"
+		"QStackedWidget { background: #222; }"
+		"QTabBar { background: #222; }"
+		"QTabBar::tab { background: #2b2b2b; color: #DEDEDE; border: 0; padding: 8px 18px; }"
+		"QTabBar::tab:selected { background: rgba(50,148,213,0.9); color: #FFF; }"
+		"QTabBar::tab:hover:!selected { background: #444; }"
+		"QLabel { color: rgba(255,255,255,.9); background: transparent; }"
+		"QCheckBox { color: rgba(255,255,255,.9); background: transparent; }"
+		"QLineEdit { color: rgba(255,255,255,.9); background: rgba(64,64,64,1); border: 0; padding: 5px; selection-background-color: #808080; }"
+		"QScrollArea { background: transparent; border: 0; }"
+		"QScrollArea > QWidget > QWidget { background: transparent; }"
+	);
+}
+
+const QString StyleSheet::MutedInfoText()
+{
+	return QString(
+		"QLabel { color: rgba(255,255,255,.55); background: transparent; font-size: 11px; }"
+	);
+}
+
 const QString StyleSheet::TopMenuDisabled()
 {
 	return QString(

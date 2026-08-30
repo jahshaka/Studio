@@ -73,6 +73,14 @@ public:
 	static const QString ColorViewInputCircle();
 	static const QString ValueSliderGradient();
 
+	// preferences dialog
+	// The whole tab container (tab bar, pane, pages): the dark theme the
+	// dialog's own sheet cannot reach — a bare QTabWidget renders the
+	// platform-light pane, and unstyled child labels come out black.
+	static const QString PreferencesTabs();
+	// Secondary/muted explanation text on the dark theme.
+	static const QString MutedInfoText();
+
 	// main window
 	static const QString TopMenuDisabled();
 	static const QString TopMenuSelected();

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
 #include "ui/dialogs/aboutdialog.h"
+#include "ui/style/stylesheet.h"
 
 PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, SettingsManager* settings) :
     QDialog(parent),
@@ -45,6 +46,10 @@ void PreferencesDialog::setupPages()
     mcpSettings = new McpSettingsWidget(settings);
 
     auto *tabs = new QTabWidget(this);
+    // The dark theme: a bare QTabWidget renders the platform-light pane over
+    // the dark dialog (owner regression 2026-08-31) — the centralized sheet
+    // covers the tab bar, pane, page backgrounds and text defaults.
+    tabs->setStyleSheet(StyleSheet::PreferencesTabs());
     tabs->addTab(worldSettings, "General");
     tabs->addTab(mcpSettings, "Claude / MCP");
     ui->worldLayout->addWidget(tabs);

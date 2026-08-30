@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
+#include "ui/style/stylesheet.h"
 
 McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
     : QWidget(parent), mSettings(settings)
@@ -67,7 +68,23 @@ McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
     mStatus = new QLabel(this);
     form->addRow("Status", mStatus);
     layout->addLayout(form);
+
+    // What to actually DO with the connect line (owner ask 2026-08-31).
+    auto *howTo = new QLabel(
+        "Run the line above once in a normal terminal (your shell, not inside a "
+        "Claude chat) \xe2\x80\x94 it registers Jahshaka with Claude Code. Then start "
+        "claude in any terminal, or resume an existing session, and ask it to build "
+        "in the editor \xe2\x80\x94 it will use these tools automatically. The token "
+        "changes each time Jahshaka starts, so re-copy the line after restarting "
+        "the app.", this);
+    howTo->setWordWrap(true);
+    howTo->setStyleSheet(StyleSheet::MutedInfoText());
+    layout->addWidget(howTo);
     layout->addStretch(1);
+
+    // Dark-theme text/inputs (the tab sheet covers defaults; the spinbox needs
+    // its dedicated dark style).
+    StyleSheet::setStyle({ intro, mEnabled, mPort, mStatus });
 
     connect(regenerate, &QPushButton::clicked, this, [this] {
         if (mServer) mServer->regenerateToken();
