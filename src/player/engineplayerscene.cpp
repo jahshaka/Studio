@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <string>
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "player/playback.h"
 #include "player/playermousecontroller.h"
 #include "irisgl/core/viewport.h"

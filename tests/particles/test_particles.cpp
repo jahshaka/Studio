@@ -21,7 +21,7 @@
 #include "irisgl/document/scenegraph/particle.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;

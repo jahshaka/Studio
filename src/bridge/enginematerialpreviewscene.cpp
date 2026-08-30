@@ -5,7 +5,7 @@
 #include <QFileInfo>
 #include <QQuaternion>
 
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/defaultmaterial.h"

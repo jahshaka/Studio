@@ -12,7 +12,7 @@ set_target_properties(test_services PROPERTIES AUTOMOC ON)
 target_include_directories(test_services PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl/include)
+   )
 target_link_libraries(test_services PRIVATE Qt6::Gui Qt6::Widgets)
 add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

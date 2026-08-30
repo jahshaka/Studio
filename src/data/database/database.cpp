@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/constants.h"
-#include <irisgl/IrisGL.h>
+#include "irisgl/irisglfwd.h"
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"

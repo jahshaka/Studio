@@ -36,7 +36,7 @@
 #include <QQuaternion>
 
 #include "viewport/enginerenderdriver.h"
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "viewport/editordata.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"

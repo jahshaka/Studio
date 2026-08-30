@@ -11,12 +11,12 @@ add_executable(test_engine_player test_engine_player.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/scenemirror.cpp)
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_engine_player PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_engine_player PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl/include ${CMAKE_SOURCE_DIR}/irisgl
+   ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_engine_player PRIVATE

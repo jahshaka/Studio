@@ -11,7 +11,17 @@ For more information see the LICENSE file
 
 #include "io/materialreader.h"
 #include "irisgl/irisgl.h"
-#include "irisgl/Graphics.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/import/model.h"
+#include "irisgl/document/assets/vertexlayout.h"
+#include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/assets/texture.h"
+#include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/assets/shader.h"
+#include "irisgl/document/materials/renderstates.h"
+#include "irisgl/document/materials/rasterizerstate.h"
+#include "irisgl/import/graphicshelper.h"
+#include "irisgl/core/viewport.h"
 #include <QMap>
 #include "data/constants.h"
 #include "io/assetmanager.h"

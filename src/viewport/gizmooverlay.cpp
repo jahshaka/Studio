@@ -1,7 +1,7 @@
 #include "viewport/gizmooverlay.h"
 #include <QMatrix3x3>
 #include <QQuaternion>
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/assets/mesh.h"
 
 using namespace jahshaka::engine;

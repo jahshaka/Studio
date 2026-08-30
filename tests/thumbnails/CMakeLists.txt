@@ -3,12 +3,12 @@
 # app/content/primitives/sphere.obj (relative to the executable) resolves.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_thumbnails test_thumbnails.cpp
-    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/src/bridge/scenemirror.cpp)
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_thumbnails PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_thumbnails PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/irisgl/include ${CMAKE_SOURCE_DIR}/irisgl
+   ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_thumbnails PRIVATE

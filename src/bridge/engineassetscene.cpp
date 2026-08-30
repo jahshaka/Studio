@@ -8,7 +8,7 @@
 #include <QQuaternion>
 #include <QtMath>
 
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "viewport/previewframing.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/geometry/aabb.h"

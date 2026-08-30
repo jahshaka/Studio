@@ -12,9 +12,15 @@ For more information see the LICENSE file
 #include <QQuaternion>
 #include "player/playermousecontroller.h"
 #include "viewport/keyboardstate.h"
-#include <irisgl/SceneGraph.h>
-#include <irisgl/Physics.h>
-#include <irisgl/Graphics.h>
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/viewernode.h"
+#include "irisgl/document/physics/physicshelper.h"
+#include "irisgl/document/physics/environment.h"
+#include "irisgl/core/geometry/trimesh.h"
+#include "irisgl/core/viewport.h" 
 #include "irisgl/core/geometry/trimesh.h"
 
 

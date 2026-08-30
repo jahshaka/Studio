@@ -44,12 +44,14 @@ elseif(UNIX)
 
 
             COMMAND ${CMAKE_COMMAND} -E copy
-                    # "${CMAKE_BINARY_DIR}/irisgl/libIrisGL.so"
-                    # "${CMAKE_BINARY_DIR}/irisgl/assimp/bin/libassimp.so.6.0.2"
-                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/zip/libzip.so"
-                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/bullet3/src/BulletDynamics/libBulletDynamics.so.2.88"
-                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/bullet3/src/LinearMath/libLinearMath.so.2.88"
-                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/bullet3/src/BulletCollision/libBulletCollision.so.2.88"
+                    # Generator expressions track the real built names (Debug 'd'
+                    # suffix, soname) so a Bullet bump or build type cannot silently
+                    # break the deploy (audit §5.4.6: the old hardcoded .so.2.88
+                    # paths missed Debug entirely).
+                    "$<TARGET_FILE:zip>"
+                    "$<TARGET_FILE:BulletDynamics>"
+                    "$<TARGET_FILE:LinearMath>"
+                    "$<TARGET_FILE:BulletCollision>"
                     "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/"
 
             COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"

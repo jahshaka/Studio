@@ -14,7 +14,7 @@
 #include "viewport/rotationgizmo.h"
 #include "viewport/scalegizmo.h"
 #include "viewport/gizmooverlay.h"
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 
 using namespace jahshaka::engine;

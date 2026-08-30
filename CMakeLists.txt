@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
 foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
     if(POLICY ${p})
@@ -71,7 +71,7 @@ set(SRCS
     src/viewport/editorcameracontroller.cpp 
     src/ui/dialogs/infodialog.cpp 
     src/viewport/engineviewwidget.cpp
-    src/bridge/scenemirror.cpp
+    irisgl/mirror/scenemirror.cpp
     src/viewport/enginesceneviewport.cpp
     src/viewport/scenepicker.cpp
     src/viewport/gizmooverlay.cpp
@@ -226,7 +226,7 @@ set(HEADERS
     src/data/settingsmanager.h 
     src/viewport/editorcameracontroller.h 
     src/viewport/engineviewwidget.h
-    src/bridge/scenemirror.h
+    irisgl/mirror/scenemirror.h
     src/viewport/enginesceneviewport.h
     src/viewport/headlesseditorviewport.h
     src/viewport/ieditorviewport.h
@@ -521,9 +521,19 @@ add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/app/main.cpp ${SRCS} ${HE
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
+
+# The executable finds its bundled shared libs beside itself when installed
+# (the tests already set an RPATH; the app never did - audit §5.4.14).
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN")
+
+# Minimal install story (audit §5.4.8): the binary and the runtime media tree
+# (Hlms shader templates) it resolves relative to itself.
+include(GNUInstallDirs)
+install(TARGETS ${CMAKE_PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} BUNDLE DESTINATION .)
+install(DIRECTORY ${JAHSHAKA_MEDIA_DIR} DESTINATION ${CMAKE_INSTALL_BINDIR})
 target_include_directories(${PROJECT_NAME} PUBLIC
                             src
-                            irisgl/include
+
                             irisgl
                             thirdparty/breakpad/breakpad/src
                             downloader)

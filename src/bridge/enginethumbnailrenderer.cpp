@@ -18,7 +18,7 @@
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/assets/texture2d.h"
 #include <QFileInfo>
-#include "bridge/scenemirror.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "viewport/previewframing.h"
 
 using namespace jahshaka::engine;
