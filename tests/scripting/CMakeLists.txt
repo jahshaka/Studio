@@ -42,3 +42,17 @@ endfunction()
 
 add_script_e2e(build_scene e2e_build_scene.js)
 add_script_e2e(undo_macro e2e_undo_macro.js)
+
+# phase 2: full surface (assets/materials/graph/world). The script needs real
+# repo paths (a mesh to import, a shipped .effect) — configured in.
+set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
+configure_file(scripts/e2e_full_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-full_surface)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.full_surface
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_full_surface.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.full_surface PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 240)

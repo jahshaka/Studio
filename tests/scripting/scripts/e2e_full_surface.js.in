@@ -1,0 +1,113 @@
+// scripting.e2e.full_surface — SCRIPTING_SPEC phase 2 end-to-end proof.
+// Configured by CMake (@SOURCE_DIR@ -> the repo) so the import test has a real
+// mesh file. Runs in the real app with the engine up and a scratch HOME.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, eps) { return Math.abs(a - b) < (eps || 1e-3); }
+
+var guid = project.create("Full Surface " + Date.now());
+assert(guid.length > 10, "project created");
+
+// ---- world.* ----
+world.ambient("#404040");
+world.fog({ enabled: true, color: "#a0a0a0", start: 50, end: 150 });
+world.gravity(12);
+world.gi({ mode: "instant_radiosity", quality: "high", bounces: 2 });
+world.shadows({ enabled: true });
+var w = world.get();
+assert(w.ambient === "#404040", "ambient round-trips");
+assert(w.fog.enabled === true && near(w.fog.start, 50) && near(w.fog.end, 150), "fog round-trips");
+assert(near(w.gravity, 12), "gravity round-trips");
+assert(w.gi.mode === "instant_radiosity" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
+// Back off: leaving Instant Radiosity live through the asset/thumbnail churn
+// below trips heap corruption in Ogre's InstantRadiosity teardown (engine-side
+// interaction, filed as a follow-up — not a scripting behaviour).
+world.gi({ mode: "off" });
+
+world.sky("color", { color: "#204060" });
+assert(world.get().sky.type === "SingleColor", "sky type set");
+assert(world.get().sky.data.skyColor.r === 32, "skyData rebuilt (save-safe)");
+world.sky("gradient", { top: "#88bbff", mid: "#ffffff", bottom: "#334455", offset: 0.6 });
+var sky = world.get().sky;
+assert(sky.type === "Gradient" && near(sky.data.gradientOffset, 0.6), "gradient sky + skyData");
+var thrown = false;
+try { world.sky("volumetric"); } catch (e) { thrown = true; }
+assert(thrown, "unknown sky type refused");
+
+// ---- assets.* ----
+var builtins = assets.builtins();
+assert(builtins.length > 20, "builtins enumerated (" + builtins.length + ")");
+assert(builtins.some(function (b) { return b.kind === "primitive" && b.name === "Cube"; }), "cube primitive listed");
+
+var storeCountBefore = assets.list({ scope: "store" }).length;
+var objGuid = assets.import("@SOURCE_DIR@/app/content/primitives/cube.obj");
+assert(objGuid.length > 10, "assets.import -> " + objGuid);
+assert(assets.list({ scope: "store" }).length === storeCountBefore + 1, "store gained one object");
+var deps = assets.dependencies(objGuid);
+assert(deps.length >= 2, "object has dependencies (self + mesh): " + deps.length);
+
+var projGuid = assets.addToProject(objGuid);
+assert(projGuid.length > 10 && projGuid !== objGuid, "assets.addToProject -> fresh guid");
+assert(assets.list({ scope: "project" }).some(function (a) { return a.guid === projGuid; }),
+       "project sees the copied asset");
+
+var nodeId = assets.addToScene(projGuid, { position: { x: 0, y: 1, z: -2 } });
+assert(nodeId.length > 10, "assets.addToScene -> node " + nodeId);
+assert(node.info(nodeId).type === "mesh", "instantiated node is a mesh");
+assert(near(node.info(nodeId).position.y, 1), "drop position honoured");
+
+assert(assets.refreshThumbnail(objGuid), "assets.refreshThumbnail (engine render + DB write)");
+
+// ---- materials.* / material.* ----
+var presets = materials.presets();
+assert(presets.length >= 10, "presets enumerated (" + presets.length + ")");
+assert(material.apply(nodeId, presets[0].name), "material.apply(" + presets[0].name + ")");
+var props = material.get(nodeId);
+assert(Object.keys(props).length > 3, "material.get returns properties");
+assert(material.set(nodeId, { roughness: 0.85, baseColor: "#123456" }), "material.set");
+var after = material.get(nodeId);
+assert(near(after.roughness, 0.85), "roughness round-trips");
+assert(after.baseColor === "#123456", "baseColor round-trips");
+
+// ---- graph.* (the Effects module, headless) ----
+var graphGuid = materials.createGraph("Scripted Effect");
+assert(graphGuid.length > 10, "materials.createGraph -> " + graphGuid);
+var gnodes = graph.nodes();
+assert(gnodes.length === 1 && gnodes[0].master && gnodes[0].type === "PbrMaterial", "new graph has a PBR master");
+assert(graph.nodeTypes().indexOf("float") >= 0, "node type registry listed");
+
+var f = graph.addNode("float");
+graph.setValue(f, 0.77);
+assert(near(graph.getValue(f), 0.77), "float node value round-trips");
+var masterId = gnodes[0].id;
+assert(graph.connect(f, 0, masterId, "Roughness"), "float -> master.Roughness connected");
+var evald = graph.evaluate();
+assert(evald.hasPbrMaster === true, "evaluator sees the PBR master");
+assert(near(evald.values.roughness, 0.77), "graph folds to roughness 0.77");
+assert(graph.toMaterial(nodeId), "graph.toMaterial applied to the node");
+assert(graph.save(), "graph.save wrote the asset");
+
+// reload from the asset and re-evaluate: the save round-trips
+var reload = materials.loadGraph(graphGuid);
+assert(reload.nodes === 2, "saved graph reloads with both nodes");
+assert(near(graph.evaluate().values.roughness, 0.77), "reloaded graph folds identically");
+
+// the shipped glass preset loads through the same path
+var glass = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/glass.effect");
+assert(glass.nodes >= 3, "glass.effect loads (" + glass.nodes + " nodes)");
+assert(graph.evaluate().hasPbrMaster === true, "glass has a PBR master");
+
+// ---- save + render sanity ----
+assert(project.save() === true, "project.save");
+editor.frame(3);
+var s1 = editor.screenshot("full1.png", 128, 128);
+var s2 = editor.screenshot("full2.png", 128, 128);
+assert(s1.center.r === s2.center.r && s1.center.g === s2.center.g && s1.center.b === s2.center.b,
+       "screenshots deterministic");
+var differs = Math.abs(s1.center.r - 26) > 2 || Math.abs(s1.center.g - 28) > 2 || Math.abs(s1.center.b - 36) > 2;
+assert(differs, "scene rendered (centre != clear colour)");
+
+console.log("e2e_full_surface: ALL OK");

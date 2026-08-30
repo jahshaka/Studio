@@ -13,10 +13,13 @@ For more information see the LICENSE file
 
 #include "../scriptengine.h"
 #include "appapi.h"
+#include "assetsapi.h"
 #include "editorapi.h"
+#include "materialsapi.h"
 #include "nodeapi.h"
 #include "projectapi.h"
 #include "sceneapi.h"
+#include "worldapi.h"
 
 void registerStudioModules(ScriptEngine &engine)
 {
@@ -26,4 +29,13 @@ void registerStudioModules(ScriptEngine &engine)
     engine.addModule(new NodeApi(host));
     engine.addModule(new EditorApi(host));
     engine.addModule(new AppApi(host));
+    engine.addModule(new WorldApi(host));
+    engine.addModule(new AssetsApi(host));
+
+    auto *graphApi = new GraphApi(host);
+    auto *materialsApi = new MaterialsApi(host);
+    materialsApi->setGraphModule(graphApi);
+    engine.addModule(materialsApi);
+    engine.addModule(new MaterialApi(host));
+    engine.addModule(graphApi);
 }

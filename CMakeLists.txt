@@ -75,6 +75,10 @@ set(SRCS
     src/scripting/modules/nodeapi.cpp
     src/scripting/modules/editorapi.cpp
     src/scripting/modules/appapi.cpp
+    src/scripting/modules/worldapi.cpp
+    src/scripting/modules/assetsapi.cpp
+    src/scripting/modules/materialsapi.cpp
+    src/scripting/services/assetimporter.cpp
     src/scripting/modules/studiomodules.cpp
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
@@ -238,6 +242,10 @@ set(HEADERS
     src/scripting/modules/nodeapi.h
     src/scripting/modules/editorapi.h
     src/scripting/modules/appapi.h
+    src/scripting/modules/worldapi.h
+    src/scripting/modules/assetsapi.h
+    src/scripting/modules/materialsapi.h
+    src/scripting/services/assetimporter.h
     src/scripting/modules/studiomodules.h
     src/widgets/assetfavorites.h 
     src/widgets/assetpanel.h 
