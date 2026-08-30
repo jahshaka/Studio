@@ -270,5 +270,7 @@ void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
 {
     if (services && services->undo)
-        services->undo->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
+        // currentMaterial(), not the CustomMaterial member - that one is null
+        // whenever the mesh carries a PbrMaterial and the command would crash.
+        services->undo->push(new ChangeMaterialPropertyCommand(currentMaterial(), prop->name, startValue, prop->getValue()));
 }

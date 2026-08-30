@@ -35,6 +35,9 @@ void ChangeMaterialPropertyCommand::redo()
 
 void ChangeMaterialPropertyCommand::setMaterialProperty(QString name, QVariant value)
 {
+    if (!material)
+        return;
+
     // CustomMaterial keeps its historical path: textures resolve through the
     // uniform table, everything else lands on the Property object.
     if (auto custom = material.dynamicCast<iris::CustomMaterial>()) {
