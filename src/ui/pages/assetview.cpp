@@ -427,7 +427,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
             collectionName = input->text();
             
             if (!collectionName.isEmpty()) {
-                db->insertCollectionGlobal(collectionName);
+                db->createCollection(collectionName);
                 emit refreshCollections();
                 QString infoText = QString("Collection Created.");
                 QMessageBox::information(this, "Collection Creation Successful", infoText, QMessageBox::Ok);

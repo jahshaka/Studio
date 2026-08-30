@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QSqlRecord>
 #include <QDateTime>
 #include <QMessageBox>
@@ -53,11 +54,12 @@ Database::Database()
         "    thumbnail         BLOB"
         ")";
 
-    collectionsTableSchema = 
+    collectionsTableSchema =
         "CREATE TABLE IF NOT EXISTS collections ("
         "    name              VARCHAR(128),"
         "    date_created      DATETIME DEFAULT CURRENT_TIMESTAMP,"
-        "    collection_id     INTEGER PRIMARY KEY"
+        "    collection_id     INTEGER PRIMARY KEY,"
+        "    parent            INTEGER DEFAULT -1"     // drawer nesting; -1 = top level
         ")";
 
     assetsTableSchema = 
@@ -260,6 +262,18 @@ void Database::migrateProjectsTable()
     }
 }
 
+void Database::migrateCollectionsTable()
+{
+    // Asset drawers (ASSET_DRAWERS_SPEC.md §2): collections gain nesting in
+    // place. Additive and guarded like the desktops migration above — existing
+    // user collections read back parent -1 and keep working at top level.
+    if (!checkIfColumnExists("collections", "parent")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE collections ADD COLUMN parent INTEGER DEFAULT -1");
+        executeAndCheckQuery(query, "MigrateCollectionsAddParent");
+    }
+}
+
 QString Database::getVersion()
 {
     //QSqlQuery pquery;
@@ -439,6 +453,7 @@ void Database::createAllTables()
     migrateProjectsTable();
     if (!checkIfTableExists("thumbnails"))      createThumbnailsTable();
     if (!checkIfTableExists("collections"))     createCollectionsTable();
+    migrateCollectionsTable();
     if (!checkIfTableExists("assets"))          createAssetsTable();
     if (!checkIfTableExists("dependencies"))    createDependenciesTable();
     if (!checkIfTableExists("author"))          createAuthorTable();
@@ -857,9 +872,26 @@ bool Database::deleteAsset(const QString &guid)
 
 bool Database::deleteCollection(const int &collectionId)
 {
+    // Drawers (ASSET_DRAWERS_SPEC §2): the virtual root (-1) and Uncategorized
+    // (0, the fallback home) are not deletable. Deleting a drawer moves the
+    // whole subtree's assets to Uncategorized, then removes the subtree rows.
+    if (collectionId <= 0) return false;
+
+    const QVector<int> subtree = fetchCollectionSubtree(collectionId);
+    if (subtree.isEmpty()) return false;   // no such drawer
+
+    QStringList placeholders;
+    for (int i = 0; i < subtree.size(); ++i) placeholders << "?";
+
+    QSqlQuery reassign;
+    reassign.prepare("UPDATE assets SET collection = 0, last_updated = datetime() "
+                     "WHERE collection IN (" + placeholders.join(", ") + ")");
+    for (const int id : subtree) reassign.addBindValue(id);
+    if (!executeAndCheckQuery(reassign, "DeleteCollectionReassignAssets")) return false;
+
     QSqlQuery query;
-    query.prepare("DELETE FROM collections WHERE collection_id = ?");
-    query.addBindValue(collectionId);
+    query.prepare("DELETE FROM collections WHERE collection_id IN (" + placeholders.join(", ") + ")");
+    for (const int id : subtree) query.addBindValue(id);
     return executeAndCheckQuery(query, "DeleteCollection");
 }
 
@@ -1045,7 +1077,9 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         "SELECT A.name, A.thumbnail, A.guid, C.collection_id, A.type, A.collection, A.properties, "
         "A.author, A.license, A.tags, A.project_guid, A.asset, A.view_filter "
         "FROM assets A "
-        "INNER JOIN collections C ON A.collection = C.collection_id "
+        // LEFT JOIN: a row whose collection no longer exists must still show
+        // (pre-drawers deleteCollection orphaned assets instead of reassigning)
+        "LEFT JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.view_filter = :view_filter "
         "AND A.guid NOT IN (SELECT dependee from dependencies) "
         "ORDER BY A.name DESC"
@@ -1172,39 +1206,6 @@ DatabaseMetadataRecord Database::getDbMetadata()
 	record.patch = dbPatch;
 
 	return record;
-}
-
-QVector<AssetRecord> Database::fetchAssetsByCollection(const int &collection_id)
-{
-    QSqlQuery query;
-    query.prepare(
-        "SELECT assets.name,"
-        "assets.thumbnail, assets.guid, collections.id,"
-        "assets.author, assets.license, assets.tags"
-        "FROM assets"
-        "INNER JOIN collections ON assets.collection = collections.collection_id  WHERE assets.type = 5"
-        "ORDER BY assets.name DESC WHERE assets.collection_id = ?"
-    );
-    query.addBindValue(collection_id);
-    executeAndCheckQuery(query, "fetchAssetsByCollection");
-
-    QVector<AssetRecord> tileData;
-    while (query.next()) {
-        AssetRecord data;
-        QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.name = record.value(0).toString();
-            data.thumbnail = record.value(1).toByteArray();
-            data.guid = record.value(2).toString();
-            data.collection = record.value(3).toInt();
-            data.type = record.value(4).toInt();
-        }
-
-
-        tileData.push_back(data);
-    }
-
-    return tileData;
 }
 
 QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString &projectGuid)
@@ -1429,16 +1430,40 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
     QSqlDatabase::removeDatabase("NodeExportConnection");
 }
 
-void Database::insertCollectionGlobal(const QString &collectionName)
+int Database::createCollection(const QString &collectionName, const int parent)
 {
-    QSqlQuery query;
-    auto guid = GUIDManager::generateGUID();
-    query.prepare("INSERT INTO " + Constants::DB_COLLECT_TABLE +
-        " (name, date_created)" +
-        " VALUES (:name, datetime())");
-    query.bindValue(":name", collectionName);
+    // parent -1 = top level; anything else must be an existing drawer.
+    if (parent != -1 && fetchCollectionSubtree(parent).isEmpty()) return -1;
 
-    executeAndCheckQuery(query, "insertSceneCollection");
+    QSqlQuery query;
+    query.prepare("INSERT INTO " + Constants::DB_COLLECT_TABLE +
+        " (name, date_created, parent)" +
+        " VALUES (:name, datetime(), :parent)");
+    query.bindValue(":name", collectionName);
+    query.bindValue(":parent", parent);
+
+    if (!executeAndCheckQuery(query, "CreateCollection")) return -1;
+    return query.lastInsertId().toInt();
+}
+
+bool Database::setCollectionParent(const int collectionId, const int parent)
+{
+    // The virtual root (-1) and Uncategorized (0, the fallback home) stay put.
+    if (collectionId <= 0) return false;
+    if (parent == collectionId) return false;
+
+    const QVector<int> subtree = fetchCollectionSubtree(collectionId);
+    if (subtree.isEmpty()) return false;                        // no such drawer
+    if (parent != -1) {
+        if (subtree.contains(parent)) return false;             // cycle
+        if (fetchCollectionSubtree(parent).isEmpty()) return false;   // no such parent
+    }
+
+    QSqlQuery query;
+    query.prepare("UPDATE collections SET parent = ? WHERE collection_id = ?");
+    query.addBindValue(parent);
+    query.addBindValue(collectionId);
+    return executeAndCheckQuery(query, "SetCollectionParent");
 }
 
 bool Database::switchAssetCollection(const int id, const QString &guid)
@@ -1576,22 +1601,65 @@ QVector<AssetRecord> Database::fetchFilteredAssets(const QString &guid, const in
 QVector<CollectionRecord> Database::fetchCollections()
 {
     QSqlQuery query;
-    query.prepare("SELECT name, collection_id FROM " + Constants::DB_COLLECT_TABLE + " ORDER BY name, date_created DESC");
+    query.prepare("SELECT name, collection_id, COALESCE(parent, -1) FROM " + Constants::DB_COLLECT_TABLE +
+                  " ORDER BY name, date_created DESC");
     executeAndCheckQuery(query, "fetchCollections");
 
     QVector<CollectionRecord> tileData;
     while (query.next()) {
         CollectionRecord data;
-        QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.name = record.value(0).toString();
-            data.id = record.value(1).toInt();
-        }
-
+        data.name = query.value(0).toString();
+        data.id = query.value(1).toInt();
+        data.parent = query.value(2).toInt();
         tileData.push_back(data);
     }
 
     return tileData;
+}
+
+QVector<int> Database::fetchCollectionSubtree(const int collectionId)
+{
+    // The drawer plus all its descendants, breadth-first. Empty when the id
+    // names no row (the virtual root -1 is not a row).
+    QMultiHash<int, int> children;   // parent -> child ids
+    QSet<int> known;
+    for (const auto &coll : fetchCollections()) {
+        children.insert(coll.parent, coll.id);
+        known.insert(coll.id);
+    }
+
+    QVector<int> subtree;
+    if (!known.contains(collectionId)) return subtree;
+
+    QVector<int> pending { collectionId };
+    while (!pending.isEmpty()) {
+        const int id = pending.takeFirst();
+        if (subtree.contains(id)) continue;   // defensive: a cycled row must not loop forever
+        subtree.push_back(id);
+        for (const int child : children.values(id)) pending.push_back(child);
+    }
+    return subtree;
+}
+
+int Database::countAssetsInCollections(const QVector<int> &collectionIds)
+{
+    if (collectionIds.isEmpty()) return 0;
+
+    QStringList placeholders;
+    for (int i = 0; i < collectionIds.size(); ++i) placeholders << "?";
+
+    QSqlQuery query;
+    query.prepare("SELECT COUNT(*) FROM assets WHERE collection IN (" + placeholders.join(", ") + ")");
+    for (const int id : collectionIds) query.addBindValue(id);
+
+    if (query.exec()) {
+        if (query.first()) return query.value(0).toInt();
+    }
+    else {
+        irisLog("countAssetsInCollections query failed! " + query.lastError().text());
+    }
+
+    return 0;
 }
 
 QVector<ProjectTileData> Database::fetchProjects(int desktop)

@@ -90,11 +90,18 @@ public:
     bool addFavorite(const QString &guid);
     bool removeFavorite(const QString &guid);
 
+    /// Creates a drawer (ASSET_DRAWERS_SPEC §2). parent -1 = top level; any
+    /// other parent must be an existing drawer. Returns the new drawer's id,
+    /// or -1 on failure.
+    int createCollection(const QString &collectionName, const int parent = -1);
+
     // DELETE ===============================================================================
     bool deleteProject(const QString &guid);
 	bool destroyTable(const QString &table);
 	void wipeDatabase();
     bool deleteAsset(const QString &guid);
+    /// Deletes a drawer AND its sub-drawers; every asset of the subtree moves
+    /// to Uncategorized (0). Ids <= 0 (the root and Uncategorized) are refused.
     bool deleteCollection(const int &collectionId);
     bool deleteFolder(const QString &guid);
     bool deleteDependency(const QString &dependee);
@@ -108,6 +115,9 @@ public:
     bool renameProject(const QString &guid, const QString &newName);
     bool renameFolder(const QString &guid, const QString &newName);
     bool renameCollection(const int &collectionId, const QString &newName);
+    /// Reparents a drawer (parent -1 = top level). Refuses ids <= 0, unknown
+    /// drawers/parents, and cycles (a drawer cannot move under its own subtree).
+    bool setCollectionParent(const int collectionId, const int parent);
     bool renameAsset(const QString &guid, const QString &newName);
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid);
     bool updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid);
@@ -127,13 +137,17 @@ public:
     QVector<AssetRecord> fetchAssetsForAssetView();
     QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1, bool showDependencies = true);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
-    QVector<AssetRecord> fetchAssetsByCollection(const int &collection_id);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
 	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchThumbnails();
     QVector<AssetRecord> fetchFavorites();
     QVector<CollectionRecord> fetchCollections();
+    /// The drawer plus all its descendants (breadth-first); empty when the id
+    /// names no drawer row.
+    QVector<int> fetchCollectionSubtree(const int collectionId);
+    /// How many asset rows live in these drawers (the delete confirm).
+    int countAssetsInCollections(const QVector<int> &collectionIds);
     // desktop <= 0 fetches every project (legacy behaviour); desktop 1..N filters
     // to that desktop, treating an absent/NULL desktop column value as Desktop 1.
     QVector<ProjectTileData> fetchProjects(int desktop = 0);
@@ -199,6 +213,8 @@ public:
     // Guarded, idempotent schema evolution for the projects table (desktops feature).
     // Runs on every startup via createAllTables; ALTERs only when a column is missing.
     void migrateProjectsTable();
+    // Same contract for the collections table (asset drawers: parent column).
+    void migrateCollectionsTable();
 
     QString getVersion();
 
@@ -212,7 +228,6 @@ public:
 	void updateAuthorInfo(const QString &author_name);
 	bool isAuthorInfoPresent();
 	QString getAuthorName();
-    void insertCollectionGlobal(const QString &collectionName);
     bool switchAssetCollection(const int, const QString&);
     void insertThumbnailGlobal(const QString &world_guid,
                                const QString &name,

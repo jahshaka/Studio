@@ -120,6 +120,7 @@ struct CollectionRecord
     QString     name;
     QDateTime   dateCreated;
     int         id;
+    int         parent = -1;    // parent drawer id; -1 = top level (ASSET_DRAWERS_SPEC §2)
 };
 
 enum class ModelTypes
