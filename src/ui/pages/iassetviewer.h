@@ -11,6 +11,7 @@
 #include <QMap>
 #include <QString>
 #include <QVector3D>
+#include <functional>
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -60,6 +61,12 @@ public:
 
     /// The RTT preview: the current scene from the current camera at this size.
     virtual QImage takeScreenshot(int width, int height) = 0;
+
+    /// Invoked when a load*() call has finished putting the asset on screen —
+    /// AssetView clears the tile's loading overlay here (ASSET_DRAWERS_SPEC
+    /// §1: big GLBs take a while). Defaulted to a no-op sink for viewers that
+    /// never load (the headless stand-in reports completion synchronously).
+    virtual void setLoadFinishedCallback(std::function<void()> callback) { Q_UNUSED(callback); }
 };
 
 #endif // IASSETVIEWER_H

@@ -38,6 +38,11 @@ public:
     }
 	void addTo(AssetGridItem *widget, int count, bool select = false);
 	void addTo(QJsonObject details, QImage image, int count, QJsonObject properties, QJsonObject tags, bool select = false);
+	/// The tile showing this asset, or null.
+	AssetGridItem *tileByGuid(const QString &guid);
+	/// Rewrites tiles' drawer metadata after a drawer delete moved their
+	/// assets to Uncategorized (ASSET_DRAWERS_SPEC §2).
+	void reassignCollections(const QVector<int> &from, int to, const QString &toName);
 	void resizeEvent(QResizeEvent *event);
 	void mousePressEvent(QMouseEvent*);
 	void updateGridColumns(int width);

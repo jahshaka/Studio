@@ -45,12 +45,6 @@ class ProgressDialog;
 #endif // Q_OS_WIN
 
 
-enum AssetSource
-{
-	LOCAL,
-	ONLINE
-};
-
 enum AssetMetaType
 {
 	Shader,
@@ -65,6 +59,7 @@ enum AssetMetaType
 
 class AssetViewGrid;
 class AssetGridItem;
+class DrawerTreeWidget;
 class IAssetViewer;
 class Database;
 struct StudioServices;
@@ -87,15 +82,11 @@ public slots:
 	void fetchMetadata(AssetGridItem*);
 
 	void addAssetItemToProject(AssetGridItem*);
-	void changeAssetCollection(AssetGridItem*);
+	void moveAssetToDrawer(AssetGridItem*, int drawerId);
 	void removeAssetFromProject(AssetGridItem*);
 
 public:
 	int gridCount;
-	QButtonGroup *sourceGroup;
-	QAbstractButton *localAssetsButton;
-	QAbstractButton *onlineAssetsButton;
-	AssetSource assetSource;
 	/// `previewViewer` (optional) is the page's preview viewer; null means the
 	/// legacy AssetViewer. MainWindow passes the engine one in engine mode.
 	AssetView(Database *handle, QWidget *parent = Q_NULLPTR, IAssetViewer *previewViewer = nullptr);
@@ -122,10 +113,23 @@ public:
 	void importJahBundle(const QString &filename);
 	void importModel(const QString &filename, bool jfx = false);
 
-signals:
-    void refreshCollections();
-
 private:
+	// Drawers (ASSET_DRAWERS_SPEC §1/§2). The tree rebuild is the single
+	// source of truth for what the left column shows.
+	void rebuildDrawerTree();
+	void createDrawerUnder(int parentId);
+	void deleteDrawer(int drawerId);
+	QTreeWidgetItem *findDrawerItem(int drawerId) const;
+	QString drawerName(int drawerId) const;
+	/// Indented (id, name) pairs for the tile context menu's Move to ▸.
+	QVector<QPair<int, QString>> drawerMenuEntries() const;
+	/// Refilters the grid to the selected drawer (root -1 = everything).
+	void filterFromSelection();
+	/// The tile signal plumbing every creation path shares.
+	void wireTile(AssetGridItem *gridItem);
+	/// Loading overlay (§1): shown on the double-clicked tile until the
+	/// viewer's loadFinished callback (or the selection handler's tail) clears it.
+	void clearLoadingTile();
     void extractTexturesAndMaterialFromMaterial(
         const QString &filePath,
         QStringList &textureList,
@@ -167,13 +171,14 @@ private:
 	QLabel *backdropLabel;
 	QComboBox *backdropColor;
 
-    QTreeWidget *treeWidget;
+    DrawerTreeWidget *treeWidget;
     /// Bottom half of the left column: the selected asset's own node tree
     /// (the model's scene graph, read from its stored node-tree blob).
     QTreeWidget *assetNodeTree = nullptr;
     void populateAssetNodeTree(const QString &guid, int assetType);
 	QTreeWidgetItem *rootItem;
-	QVector<int> collections;
+	bool drawerTreeUpdating = false;   // guards itemChanged during rebuilds
+	AssetGridItem *loadingTile = nullptr;
 
 	AssetViewGrid *fastGrid;
 	QWidget *emptyGrid;
@@ -192,9 +197,6 @@ private:
     QPushButton *changeMetaCollection;
 	QLabel *metadataCollection;
 
-	QJsonArray fetchedOnlineAssets;
-
-    QString collectionName;
     SettingsManager* settings;
 	IAssetViewer *viewer;
     AssetGridItem *selectedGridItem;

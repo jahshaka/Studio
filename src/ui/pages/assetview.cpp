@@ -48,7 +48,9 @@ For more information see the LICENSE file
 #include <QTreeWidgetItem>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMenu>
 #include <QMimeData>
+#include <QTreeWidgetItemIterator>
 #include <QDesktopServices>
 #include <QTemporaryDir>
 #include <QProgressDialog>
@@ -61,6 +63,7 @@ For more information see the LICENSE file
 #include "services/projectservice.h"
 #include "ui/controls/assetviewgrid.h"
 #include "ui/controls/assetgriditem.h"
+#include "ui/controls/drawertreewidget.h"
 #include "services/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
@@ -263,6 +266,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// stand-in when no engine view can exist.
 	viewer = previewViewer ? previewViewer : new HeadlessAssetViewer(this);
     viewer->setDatabase(db);
+	// Clears the double-clicked tile's loading overlay once the preview is
+	// actually showing (ASSET_DRAWERS_SPEC §1 — big GLBs take a while).
+	viewer->setLoadFinishedCallback([this]() { clearLoadingTile(); });
 
     viewersWidget = new QWidget;
     viewers = new QStackedLayout;
@@ -277,38 +283,23 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     settings = SettingsManager::getDefaultManager();
 	//prefsDialog = new PreferencesDialog(this, db, settings);
 
-	sourceGroup = new QButtonGroup;
-	localAssetsButton = new QPushButton(tr(" Local Assets"));
-	localAssetsButton->setCheckable(true);
-	localAssetsButton->setObjectName(QStringLiteral("localAssetsButton"));
-	localAssetsButton->setAccessibleName(QStringLiteral("assetsButton"));
-	localAssetsButton->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-server-50.png")));
-	localAssetsButton->setIconSize(QSize(16, 16));
-	localAssetsButton->setCursor(Qt::PointingHandCursor);
-
-	onlineAssetsButton = new QPushButton(tr(" Online Assets"));
-	onlineAssetsButton->setCheckable(true);
-	onlineAssetsButton->setObjectName(QStringLiteral("onlineAssetsButton"));
-	onlineAssetsButton->setAccessibleName(QStringLiteral("assetsButton"));
-	onlineAssetsButton->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-cloud-50.png")));
-	onlineAssetsButton->setIconSize(QSize(16, 16));
-	onlineAssetsButton->setCursor(Qt::PointingHandCursor);
-    onlineAssetsButton->setDisabled(true);
-
-	sourceGroup->addButton(localAssetsButton);
-	sourceGroup->addButton(onlineAssetsButton);
-
-	assetSource = AssetSource::LOCAL;
-
-	connect(sourceGroup,
-			static_cast<void(QButtonGroup::*)(QAbstractButton *, bool)>(&QButtonGroup::buttonToggled),
-			[](QAbstractButton *button, bool checked)
-	{
-		QString style = checked ? "background: #3498db" : "background: #212121";
-		button->setStyleSheet(style);
-	});
-
-	localAssetsButton->toggle();
+	// Header row (ASSET_DRAWERS_SPEC §1): the Local Assets label plus the [+]
+	// drawer button. The Online Assets stub (assetSource was never read, no
+	// network code) and the bottom Create Collection button are gone.
+	auto headerRow = new QWidget;
+	auto headerLayout = new QHBoxLayout;
+	headerLayout->setContentsMargins(6, 6, 6, 0);
+	auto localAssetsLabel = new QLabel(tr("Local Assets"));
+	localAssetsLabel->setStyleSheet("font-size: 12px; padding: 4px;");
+	auto addDrawerButton = new QPushButton("+");
+	addDrawerButton->setFixedSize(24, 24);
+	addDrawerButton->setCursor(Qt::PointingHandCursor);
+	addDrawerButton->setToolTip(tr("New drawer (under the selected drawer)"));
+	addDrawerButton->setStyleSheet("font-size: 14px; font-weight: bold;");
+	headerLayout->addWidget(localAssetsLabel);
+	headerLayout->addStretch();
+	headerLayout->addWidget(addDrawerButton);
+	headerRow->setLayout(headerLayout);
 
 	fastGrid = new AssetViewGrid(this);
 	//fastGrid->installEventFilter(this);
@@ -324,8 +315,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     _navPane->setLayout(navLayout);
     _navPane->setStyleSheet("background: #202020;");
 
-	treeWidget = new QTreeWidget;
-	//treeWidget->setStyleSheet("border: 1px solid red");
+	// The drawers tree (ASSET_DRAWERS_SPEC §1): nested like a file system,
+	// rebuilt from the collections table by rebuildDrawerTree().
+	treeWidget = new DrawerTreeWidget;
 	treeWidget->setObjectName(QStringLiteral("TreeWidget"));
     treeWidget->setAlternatingRowColors(true);
 	treeWidget->setColumnCount(2);
@@ -334,60 +326,71 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	treeWidget->header()->setStretchLastSection(false);
 	treeWidget->header()->setSectionResizeMode(0, QHeaderView::Stretch);
 	treeWidget->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-
-	rootItem = new QTreeWidgetItem;
-	rootItem->setText(0, "Asset Collections");
-	rootItem->setText(1, QString());
-	rootItem->setData(0, Qt::UserRole, -1);
+	// Renames are deliberate acts (context menu / the [+] flow) — a plain
+	// double-click on a drawer must not open an editor.
+	treeWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
     progressDialog = new ProgressDialog;
     progressDialog->setLabelText("Importing assets...");
 
-    // list collections
-    for (auto coll : db->fetchCollections()) {
-        QTreeWidgetItem *treeItem = new QTreeWidgetItem;
-        treeItem->setText(0, coll.name);
-        treeItem->setData(0, Qt::UserRole, coll.id);
-        // treeItem->setText(1, "2 items");
-        //treeItem->setIcon(1, QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/world.svg")));
-        rootItem->addChild(treeItem);
-    }
+	rebuildDrawerTree();
 
 	connect(treeWidget, &QTreeWidget::itemClicked, [this](QTreeWidgetItem *item, int column) {
+		Q_UNUSED(column);
 		fastGrid->filterAssets(item->data(0, Qt::UserRole).toInt());
 	});
 
-	//QTreeWidgetItem *treeItem = new QTreeWidgetItem;
-	//treeItem->setText(0, "Node");
-	//treeItem->setIcon(1, QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/world.svg")));
+	// Inline rename commits straight to the database; a refused or empty name
+	// snaps back on the rebuild.
+	connect(treeWidget, &QTreeWidget::itemChanged, [this](QTreeWidgetItem *item, int column) {
+		if (drawerTreeUpdating || column != 0) return;
+		const int id = item->data(0, Qt::UserRole).toInt();
+		if (id < 0) return;
+		const QString name = item->text(0).trimmed();
+		if (!name.isEmpty() && db->renameCollection(id, name))
+			fastGrid->reassignCollections({ id }, id, name);   // tiles' collection_name
+		rebuildDrawerTree();
+	});
 
-	//QTreeWidgetItem *treeItem2 = new QTreeWidgetItem;
-	//treeItem2->setText(0, "Node2");
-	//treeItem2->setIcon(1, QIcon(IrisUtils::getAbsoluteAssetPath("app/icons/world.svg")));
+	connect(addDrawerButton, &QPushButton::clicked, [this]() {
+		const int parentId = treeWidget->currentItem()
+		    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1;
+		createDrawerUnder(parentId < 0 ? -1 : parentId);
+	});
 
-	//rootItem->addChild(treeItem);
-	//rootItem->addChild(treeItem2);
-	treeWidget->addTopLevelItem(rootItem);
-	treeWidget->expandItem(rootItem);
+	connect(treeWidget, &QTreeWidget::customContextMenuRequested, [this](const QPoint &pos) {
+		auto item = treeWidget->itemAt(pos);
+		if (!item) return;
+		const int id = item->data(0, Qt::UserRole).toInt();
 
-    connect(this, &AssetView::refreshCollections, [this]() {
-        treeWidget->clear();
+		QMenu menu(this);
+		menu.setStyleSheet(StyleSheet::QMenuDark());
+		if (id >= 0) {   // the virtual root keeps its name
+			connect(menu.addAction(tr("Rename")), &QAction::triggered, [this, item]() {
+				treeWidget->editItem(item, 0);
+			});
+		}
+		connect(menu.addAction(tr("New Sub-Drawer")), &QAction::triggered, [this, id]() {
+			createDrawerUnder(id);
+		});
+		if (id > 0) {   // Uncategorized is the fallback home
+			connect(menu.addAction(tr("Delete")), &QAction::triggered, [this, id]() {
+				deleteDrawer(id);
+			});
+		}
+		menu.exec(treeWidget->mapToGlobal(pos));
+	});
 
-        rootItem = new QTreeWidgetItem;
-        rootItem->setText(0, "My Collections");
-        rootItem->setText(1, QString());
+	// Drops (both kinds) are requests — the database decides (cycle guard
+	// included), then the tree rebuilds from what it accepted.
+	connect(treeWidget, &DrawerTreeWidget::drawerMoveRequested, [this](int id, int parentId) {
+		if (db->setCollectionParent(id, parentId)) rebuildDrawerTree();
+	});
 
-        treeWidget->addTopLevelItem(rootItem);
-
-        for (auto coll : db->fetchCollections()) {
-            QTreeWidgetItem *treeItem = new QTreeWidgetItem;
-            treeItem->setText(0, coll.name);
-            treeItem->setData(0, Qt::UserRole, coll.id);
-            rootItem->addChild(treeItem);
-        }
-
-        treeWidget->expandItem(rootItem);
-    });
+	connect(treeWidget, &DrawerTreeWidget::assetMoveRequested, [this](const QString &guid, int drawerId) {
+		if (auto tile = fastGrid->tileByGuid(guid)) moveAssetToDrawer(tile, drawerId);
+	});
 
 	// The selected asset's own node tree (the model's scene graph, from its
 	// stored node-tree blob). Read-only for now; later: delete parts.
@@ -406,42 +409,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	leftSplit->setStretchFactor(0, 1);
 	leftSplit->setStretchFactor(1, 1);
 
-    navLayout->addWidget(localAssetsButton);
-	navLayout->addWidget(onlineAssetsButton);
-	navLayout->addSpacing(12);
+    navLayout->addWidget(headerRow);
 	navLayout->addWidget(leftSplit);
-	auto collectionButton = new QPushButton("Create Collection");
-	collectionButton->setStyleSheet("font-size: 12px; padding: 8px;");
-	navLayout->addWidget(collectionButton);
-
-    connect(collectionButton, &QPushButton::pressed, [this]() {
-        QDialog d;
-        d.setStyleSheet(StyleSheet::AssetViewCollectionDialog());
-        QHBoxLayout *l = new QHBoxLayout;
-        d.setFixedWidth(350);
-        d.setLayout(l);
-        QLineEdit *input = new QLineEdit;
-        QPushButton *accept = new QPushButton(tr("Create Collection"));
-
-        connect(accept, &QPushButton::pressed, [&]() {
-            collectionName = input->text();
-            
-            if (!collectionName.isEmpty()) {
-                db->createCollection(collectionName);
-                emit refreshCollections();
-                QString infoText = QString("Collection Created.");
-                QMessageBox::information(this, "Collection Creation Successful", infoText, QMessageBox::Ok);
-                d.close();
-            } else {
-                QString warningText = QString("Failed to create collection. Try again.");
-                QMessageBox::warning(this, "Collection Creation Failed", warningText, QMessageBox::Ok);
-            }
-        });
-
-        l->addWidget(input);
-        l->addWidget(accept);
-        d.exec();
-    });
 
     //QWidget *_previewPane;  
 	split = new QSplitter;
@@ -590,6 +559,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	// show assets
 	int i = 0;
+	// The tile's collection_name used to store the collection's int id — the
+	// metadata pane showed a number. Store the actual name (§2 defect list).
+	QMap<int, QString> drawerNames;
+	for (const auto &coll : db->fetchCollections()) drawerNames.insert(coll.id, coll.name);
 	foreach(const AssetRecord &record, db->fetchAssetsForAssetView()) {
 		QJsonObject object;
 		object["icon_url"] = "";
@@ -597,7 +570,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		object["name"] = record.name;
 		object["type"] = record.type;
 		object["collection"] = record.collection;
-		object["collection_name"] = record.collection;
+		object["collection_name"] = drawerNames.value(record.collection, tr("Uncategorized"));
 		object["author"] = record.author;
 		object["license"] = record.license;
 
@@ -613,18 +586,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
         auto sceneProperties = QJsonDocument::fromJson(record.properties);
 
 		auto gridItem = new AssetGridItem(object, image, sceneProperties.object(), tags.object());
-
-		connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
-			addAssetItemToProject(item);
-		});
-
-		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-			changeAssetCollection(item);
-		});
-
-		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-			removeAssetFromProject(item);
-		});
+		wireTile(gridItem);
 
 		fastGrid->addTo(gridItem, i);
 		i++;
@@ -788,7 +750,14 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 				cached = true;
 			}
 
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object) || 
+			// The loading overlay (§1): visible from the double-click until the
+			// viewer reports the load finished. The synchronous loads below
+			// block the event loop, so paint it before starting.
+			loadingTile = gridItem;
+			gridItem->showLoadingOverlay();
+			QApplication::processEvents();
+
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object) ||
                 gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
                 viewers->setCurrentIndex(0);
 
@@ -858,6 +827,11 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 			selectedGridItem = gridItem;
 			selectedGridItem->highlight(true);
+
+			// Types with no viewer load (textures, audio) end up here with the
+			// overlay still up — and the viewer callback already fired for the
+			// rest. Either way the overlay is done.
+			clearLoadingTile();
 		}
     });
 
@@ -1868,18 +1842,7 @@ void AssetView::addToJahLibrary(const QString fileName, const QString guid, bool
     object["guid"] = guid;
 
     auto gridItem = new AssetGridItem(object, thumbnail, viewer->getSceneProperties(), tags);
-
-    connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
-		addAssetItemToProject(item);
-    });
-
-    connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-        changeAssetCollection(item);
-    });
-
-    connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-        removeAssetFromProject(item);
-    });
+    wireTile(gridItem);
 
     viewer->cacheCurrentModel(guid);
 
@@ -1991,18 +1954,7 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
 		//db->insertGlobalDependency(static_cast<int>(ModelTypes::Material), guid, material_guid);
 
 		auto gridItem = new AssetGridItem(object, assetSnapshot, viewer->getSceneProperties(), tags);
-
-		connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
-			addAssetItemToProject(item);
-		});
-
-		connect(gridItem, &AssetGridItem::changeAssetCollection, [this](AssetGridItem *item) {
-			changeAssetCollection(item);
-		});
-
-		connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
-			removeAssetFromProject(item);
-		});
+		wireTile(gridItem);
 
     viewer->cacheCurrentModel(main_guid);
 
@@ -2306,48 +2258,164 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
     }
 }
 
-void AssetView::changeAssetCollection(AssetGridItem *item)
+// Files an asset in a drawer — the tile drag-drop and the context menu's
+// Move to ▸ both land here (ASSET_DRAWERS_SPEC §1; replaced the old Change
+// Collections dialog).
+void AssetView::moveAssetToDrawer(AssetGridItem *item, int drawerId)
 {
-	QDialog d;
-	d.setStyleSheet(StyleSheet::AssetViewRenameDialog());
+	const auto guid = item->metadata["guid"].toString();
+	if (guid.isEmpty() || !db->switchAssetCollection(drawerId, guid)) return;
 
-	QHBoxLayout *l = new QHBoxLayout;
-	d.setFixedWidth(350);
-	d.setLayout(l);
-	QComboBox *input = new QComboBox;
-	QPushButton *accept = new QPushButton(tr("Change Collection"));
-	l->addWidget(input);
-	l->addWidget(accept);
+	item->metadata["collection"] = drawerId;
+	item->metadata["collection_name"] = drawerName(drawerId);
+	if (selectedGridItem == item) fetchMetadata(item);
+	filterFromSelection();
+}
 
-	for (auto item : db->fetchCollections()) {
-		input->addItem(item.name, QVariant(item.id));
+// ---- drawers: the left column (ASSET_DRAWERS_SPEC §1/§2) -------------------
+
+void AssetView::rebuildDrawerTree()
+{
+	drawerTreeUpdating = true;
+	const int selectedId = treeWidget->currentItem()
+	    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1;
+	treeWidget->clear();
+
+	// The virtual root: id -1, shows ALL assets. Not renamable, not
+	// deletable, not draggable — and not a database row.
+	rootItem = new QTreeWidgetItem;
+	rootItem->setText(0, tr("Asset Collections"));
+	rootItem->setText(1, QString());
+	rootItem->setData(0, Qt::UserRole, -1);
+	rootItem->setFlags((rootItem->flags() | Qt::ItemIsDropEnabled)
+	                   & ~(Qt::ItemIsDragEnabled | Qt::ItemIsEditable));
+	treeWidget->addTopLevelItem(rootItem);
+
+	const auto collections = db->fetchCollections();
+	QMap<int, QTreeWidgetItem*> items;
+	items.insert(-1, rootItem);
+	for (const auto &coll : collections) {
+		auto treeItem = new QTreeWidgetItem;
+		treeItem->setText(0, coll.name);
+		treeItem->setData(0, Qt::UserRole, coll.id);
+		Qt::ItemFlags flags = Qt::ItemIsEnabled | Qt::ItemIsSelectable
+		    | Qt::ItemIsEditable | Qt::ItemIsDropEnabled;
+		if (coll.id > 0) flags |= Qt::ItemIsDragEnabled;   // Uncategorized stays put
+		treeItem->setFlags(flags);
+		items.insert(coll.id, treeItem);
 	}
 
-	auto guid = item->metadata["guid"].toString();
+	// Attach: Uncategorized first (always the root's first child), then the
+	// rest in fetch order. A row with a vanished parent falls back to the root.
+	if (items.contains(0)) rootItem->addChild(items.value(0));
+	for (const auto &coll : collections) {
+		if (coll.id == 0) continue;
+		auto parent = items.value(coll.parent, rootItem);
+		if (parent == items.value(coll.id)) parent = rootItem;
+		parent->addChild(items.value(coll.id));
+	}
 
-	connect(accept, &QPushButton::pressed, [&]() {
-		if (db->switchAssetCollection(input->currentData().toInt(), guid)) {
-			QString infoText = QString("Collection Changed.");
-			QMessageBox::information(this, "Collection Change Successful", infoText, QMessageBox::Ok);
-			item->metadata["collection"] = input->currentData().toInt();
-			item->metadata["collection_name"] = input->currentText();
+	treeWidget->expandAll();
+	if (auto restore = findDrawerItem(selectedId)) treeWidget->setCurrentItem(restore);
+	drawerTreeUpdating = false;
+}
 
-			if (!treeWidget->selectedItems().isEmpty()) {
-				fastGrid->filterAssets(treeWidget->currentItem()->data(0, Qt::UserRole).toInt());
-			}
-			else {
-				fastGrid->filterAssets(-1);
-			}
+void AssetView::createDrawerUnder(int parentId)
+{
+	const int id = db->createCollection(tr("New Drawer"), parentId);
+	if (id < 0) return;
+	rebuildDrawerTree();
+	if (auto item = findDrawerItem(id)) {
+		treeWidget->setCurrentItem(item);
+		treeWidget->editItem(item, 0);   // inline-editable name, straight away
+	}
+}
+
+void AssetView::deleteDrawer(int drawerId)
+{
+	const auto subtree = db->fetchCollectionSubtree(drawerId);
+	if (subtree.isEmpty()) return;
+
+	// No dialog for an empty drawer; a Yes/No confirm when assets would move.
+	const int assetCount = db->countAssetsInCollections(subtree);
+	if (assetCount > 0) {
+		const auto option = QMessageBox::question(this, tr("Delete Drawer"),
+		    tr("%n asset(s) in this drawer will move to Uncategorized. Delete it?",
+		       nullptr, assetCount),
+		    QMessageBox::Yes | QMessageBox::No);
+		if (option != QMessageBox::Yes) return;
+	}
+
+	if (!db->deleteCollection(drawerId)) return;
+	fastGrid->reassignCollections(subtree, 0, drawerName(0));
+	rebuildDrawerTree();
+	filterFromSelection();
+}
+
+QTreeWidgetItem *AssetView::findDrawerItem(int drawerId) const
+{
+	for (QTreeWidgetItemIterator it(treeWidget); *it; ++it) {
+		if ((*it)->data(0, Qt::UserRole).toInt() == drawerId) return *it;
+	}
+	return nullptr;
+}
+
+QString AssetView::drawerName(int drawerId) const
+{
+	for (const auto &coll : db->fetchCollections()) {
+		if (coll.id == drawerId) return coll.name;
+	}
+	return tr("Uncategorized");
+}
+
+QVector<QPair<int, QString>> AssetView::drawerMenuEntries() const
+{
+	// The drawer tree flattened for a menu, indentation showing the nesting.
+	// Uncategorized leads, like the tree itself.
+	QVector<QPair<int, QString>> entries;
+	const auto collections = db->fetchCollections();
+
+	std::function<void(int, int)> walk = [&](int parent, int depth) {
+		for (const auto &coll : collections) {
+			if (coll.parent != parent || coll.id == 0) continue;
+			entries.append({ coll.id, QString(depth * 3, QChar(' ')) + coll.name });
+			walk(coll.id, depth + 1);
 		}
-		else {
-			QString warningText = QString("Failed to change collection. Try again.");
-			QMessageBox::warning(this, "Collection Change Failed", warningText, QMessageBox::Ok);
-		}
+	};
+	for (const auto &coll : collections)
+		if (coll.id == 0) entries.append({ 0, coll.name });
+	walk(-1, 0);
+	return entries;
+}
 
-		d.close();
+void AssetView::filterFromSelection()
+{
+	fastGrid->filterAssets(treeWidget->currentItem()
+	    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1);
+}
+
+void AssetView::wireTile(AssetGridItem *gridItem)
+{
+	gridItem->setDrawerProvider([this]() { return drawerMenuEntries(); });
+
+	connect(gridItem, &AssetGridItem::addAssetItemToProject, [this](AssetGridItem *item) {
+		addAssetItemToProject(item);
 	});
 
-	d.exec();
+	connect(gridItem, &AssetGridItem::moveAssetToDrawer, [this](AssetGridItem *item, int drawerId) {
+		moveAssetToDrawer(item, drawerId);
+	});
+
+	connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
+		removeAssetFromProject(item);
+	});
+}
+
+void AssetView::clearLoadingTile()
+{
+	if (!loadingTile) return;
+	loadingTile->hideLoadingOverlay();
+	loadingTile = nullptr;
 }
 
 void AssetView::removeAssetFromProject(AssetGridItem *item)

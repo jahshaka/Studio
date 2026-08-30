@@ -172,6 +172,9 @@ void EngineAssetViewer::showProgress()
 void EngineAssetViewer::hideProgress()
 {
     mProgress->close();
+    // Every load*() funnels through here once the asset is on screen — this is
+    // the "load finished" moment AssetView's tile overlay waits for.
+    if (mLoadFinished) mLoadFinished();
 }
 
 void EngineAssetViewer::loadJafModel(QString path, QString guid, bool firstAdd, bool cache, bool firstLoad)

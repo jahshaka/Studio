@@ -50,6 +50,7 @@ public:
     void loadJafSky(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     QImage takeScreenshot(int width, int height) override;
+    void setLoadFinishedCallback(std::function<void()> callback) override { mLoadFinished = callback; }
 
     EngineAssetScene *assetScene() const { return mScene.get(); }
 
@@ -85,6 +86,7 @@ private:
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::SceneSource *mSource = nullptr;
     ProgressDialog *mProgress = nullptr;
+    std::function<void()> mLoadFinished;   // fires in hideProgress (end of every load*)
     QMap<QString, iris::SceneNodePtr> mCachedAssets;
     QPointF mPrevMousePos;
     QElapsedTimer mFrameTimer;

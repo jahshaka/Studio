@@ -180,6 +180,7 @@ set(SRCS
     src/bridge/enginematerialpreview.cpp
     src/ui/controls/assetviewgrid.cpp
     src/ui/controls/assetgriditem.cpp
+    src/ui/controls/drawertreewidget.cpp
     src/data/constants.cpp
     src/app/updatechecker.cpp
     src/ui/dialogs/softwareupdatedialog.cpp
@@ -348,6 +349,7 @@ set(HEADERS
     src/bridge/enginematerialpreview.h
     src/ui/controls/assetviewgrid.h
     src/ui/controls/assetgriditem.h
+    src/ui/controls/drawertreewidget.h
     src/app/breakpad.h
     src/app/updatechecker.h
     src/ui/dialogs/softwareupdatedialog.h

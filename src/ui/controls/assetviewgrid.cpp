@@ -41,7 +41,14 @@ void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 
 	originalItems.push_back(item);
 
+	// Tile interaction flip (ASSET_DRAWERS_SPEC §1): a plain click is only a
+	// subtle highlight; double-click selects and loads the preview.
 	connect(item, &AssetGridItem::singleClicked, [this](AssetGridItem *item) {
+		deselectAll();
+		item->highlight(true);
+	});
+
+	connect(item, &AssetGridItem::doubleClicked, [this](AssetGridItem *item) {
 		emit selectedTile(item);
 	});
 
@@ -66,8 +73,12 @@ void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObj
 	originalItems.push_back(sampleWidget);
 
 	connect(sampleWidget, &AssetGridItem::singleClicked, [this](AssetGridItem *item) {
-		//qobject_cast<AssetView*>(parent)->fetchMetadata(item);
-        emit selectedTile(item);
+		deselectAll();
+		item->highlight(true);
+	});
+
+	connect(sampleWidget, &AssetGridItem::doubleClicked, [this](AssetGridItem *item) {
+		emit selectedTile(item);
 	});
 
 	connect(sampleWidget, &AssetGridItem::specialClicked, [this](AssetGridItem *item) {
@@ -207,6 +218,24 @@ void AssetViewGrid::updateGridColumns(int width)
 
 	// gridWidget->setMinimumWidth(gridCount * (180 + 10));
 	gridWidget->adjustSize();
+}
+
+AssetGridItem *AssetViewGrid::tileByGuid(const QString &guid)
+{
+	foreach(AssetGridItem *gridItem, originalItems) {
+		if (gridItem->metadata["guid"].toString() == guid) return gridItem;
+	}
+	return nullptr;
+}
+
+void AssetViewGrid::reassignCollections(const QVector<int> &from, int to, const QString &toName)
+{
+	foreach(AssetGridItem *gridItem, originalItems) {
+		if (from.contains(gridItem->metadata["collection"].toInt())) {
+			gridItem->metadata["collection"] = to;
+			gridItem->metadata["collection_name"] = toName;
+		}
+	}
 }
 
 void AssetViewGrid::deselectAll()

@@ -24,8 +24,11 @@ For more information see the LICENSE file
 #include <QButtonGroup>
 
 #include <QWidget>
+#include <functional>
 
 #include "irisgl/core/irisutils.h"
+
+class QTimer;
 
 class AssetGridItem : public QWidget
 {
@@ -41,15 +44,32 @@ public:
 	QJsonObject sceneProperties;
 	QJsonObject tags;
 
+	/// One drawer entry for the Move to ▸ submenu: id + display name
+	/// (pre-indented to show nesting).
+	using DrawerEntry = QPair<int, QString>;
+
 	AssetGridItem() = default;
 	AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent = Q_NULLPTR);
 	void setTile(QPixmap pix);
 	void highlight(bool);
 	void updateMetadata(QJsonObject details, QJsonObject tags);
-	
+
+	/// AssetView injects the live drawer list; the context menu's Move to ▸
+	/// submenu enumerates it on open (ASSET_DRAWERS_SPEC §1).
+	void setDrawerProvider(std::function<QVector<DrawerEntry>()> provider);
+
+	/// The double-click loading pulse (§1 tile interaction flip): shown from
+	/// the click until the viewer reports the load finished.
+	void showLoadingOverlay();
+	void hideLoadingOverlay();
+
 	void enterEvent(QEvent *event);
 	void leaveEvent(QEvent *event);
 	void mousePressEvent(QMouseEvent *event);
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void mouseDoubleClickEvent(QMouseEvent *event) override;
+	void resizeEvent(QResizeEvent *event) override;
 
 public slots:
 	void projectContextMenu(const QPoint &pos);
@@ -59,13 +79,26 @@ public slots:
 signals:
 	void hovered();
 	void left();
-	void singleClicked(AssetGridItem*);
+	void singleClicked(AssetGridItem*);		// plain click: subtle highlight, nothing loads
+	void doubleClicked(AssetGridItem*);		// select + load into the preview
 	void specialClicked(AssetGridItem*);	// bypass loading asset and add to scene
 	void contextClicked(AssetGridItem*);	// use this exclusively for right clicks
 
 	void addAssetItemToProject(AssetGridItem*);
-	void changeAssetCollection(AssetGridItem*);
+	void moveAssetToDrawer(AssetGridItem*, int drawerId);
 	void removeAssetFromProject(AssetGridItem*);
+
+private:
+	void startDrag();
+
+	QPoint pressPos;
+	bool dragCandidate = false;
+
+	std::function<QVector<DrawerEntry>()> drawerProvider;
+
+	QLabel *loadingOverlay = nullptr;
+	QTimer *loadingPulse = nullptr;
+	bool pulsePhase = false;
 };
 
 #endif // ASSETGRIDITEM_HPP
