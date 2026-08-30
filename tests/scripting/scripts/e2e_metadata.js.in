@@ -1,0 +1,66 @@
+// scripting.e2e.metadata — rich asset metadata end to end (ASSET_DRAWERS_SPEC
+// addendum): assets.importFile / assets.import write the per-type "metadata"
+// block at import time, and assets.metadata(guid) serves it (and backfills it
+// for rows that lack one). Runs the real binary --script --headless with HOME
+// redirected to a scratch dir — a fresh JahLibrary.db, never the user's.
+// Throwing exits non-zero.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+// ---- image: resolution from the header, format, size, import date ----
+var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+var pngMeta = assets.metadata(png);
+assert(pngMeta.kind === "image", "png metadata kind is image");
+assert(pngMeta.format === "png", "png format recorded");
+assert(pngMeta.width === 8 && pngMeta.height === 8, "png resolution 8x8");
+assert(pngMeta.fileSize > 0, "png file size > 0");
+assert(typeof pngMeta.imported === "string" && pngMeta.imported.length >= 10,
+       "png import date present (" + pngMeta.imported + ")");
+assert(pngMeta.type === "texture", "png row type is texture");
+
+// ---- audio: wav header fields ----
+var wav = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+var wavMeta = assets.metadata(wav);
+assert(wavMeta.kind === "audio", "wav metadata kind is audio");
+assert(wavMeta.format === "wav", "wav format recorded");
+assert(wavMeta.sampleRate === 8000, "wav sample rate 8000");
+assert(wavMeta.channels === 1, "wav mono");
+assert(wavMeta.duration === 50, "wav duration 50 ms");
+assert(wavMeta.fileSize === 844, "wav file size 844");
+
+// ---- model: counts from the assimp scene loaded during import ----
+var obj = assets.import("@SOURCE_DIR@/app/content/primitives/cube.obj");
+var objMeta = assets.metadata(obj);
+assert(objMeta.kind === "model", "obj metadata kind is model");
+assert(objMeta.format === "obj", "obj source format recorded");
+assert(objMeta.triangles === 12, "cube has 12 triangles");
+assert(objMeta.vertices > 0, "cube vertex count > 0");
+assert(objMeta.meshes >= 1, "cube mesh count >= 1");
+assert(objMeta.materials >= 1, "cube material count >= 1");
+assert(objMeta.textures === 0, "cube references no textures");
+assert(objMeta.fileSize > 0, "obj file size > 0");
+assert(objMeta.type === "object", "obj row type is object");
+
+// ---- stability: a second call serves the persisted block unchanged ----
+var again = assets.metadata(obj);
+assert(again.triangles === objMeta.triangles && again.fileSize === objMeta.fileSize,
+       "metadata is stable across calls (persisted, not recomputed)");
+
+// ---- refreshThumbnail: document-only types work headless now ----
+assert(assets.refreshThumbnail(png) === true, "refreshThumbnail(image) headless");
+assert(assets.refreshThumbnail(wav) === true, "refreshThumbnail(audio) headless");
+
+// ---- errors ----
+mustThrow(function () { assets.metadata("no-such-guid"); }, "unknown guid throws");
+mustThrow(function () { assets.refreshThumbnail("no-such-guid"); },
+          "refreshThumbnail unknown guid throws");
+
+console.log("e2e metadata: all assertions passed");

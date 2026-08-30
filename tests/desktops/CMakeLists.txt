@@ -10,6 +10,7 @@ add_executable(test_desktops_db test_desktops_db.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp

@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
+#include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
@@ -62,6 +63,24 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
         return result;
     }
 
+    // .obj sidecars: the .mtl files the model names live beside the SOURCE and
+    // must follow it into the store, or any later re-read of the copy (metadata
+    // backfill, preview rebuilds) loses every material. Textures are copied
+    // below through assimp's material references; the .mtl itself is not one.
+    if (sourceInfo.suffix().toLower() == QStringLiteral("obj")) {
+        QFile obj(filePath);
+        if (obj.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            while (!obj.atEnd()) {
+                const QString line = QString::fromUtf8(obj.readLine()).trimmed();
+                if (!line.startsWith(QStringLiteral("mtllib "))) continue;
+                const QFileInfo mtl(sourceInfo.dir(), line.mid(7).trimmed());
+                if (mtl.exists() && mtl.isFile())
+                    QFile::copy(mtl.absoluteFilePath(),
+                                IrisUtils::join(assetFolder, mtl.fileName()));
+            }
+        }
+    }
+
     // Member row for the mesh file (parent = mainGuid, view_filter = Editor).
     const QString meshGuid = GUIDManager::generateGUID();
     db->createAssetEntry(meshGuid, sourceInfo.fileName(),
@@ -69,10 +88,18 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
                          project->getProjectGuid());
 
     // Assimp load + texture discovery (no DB rows, no file copies inside).
+    // modelStats: vertex/triangle/material/texture counts from that same
+    // assimp scene — the Object row's "metadata" properties block.
+    // Extract from the SOURCE path, not the store copy: sibling files the
+    // model references (.mtl, textures) only exist beside the original, so
+    // extracting from the lone copy silently dropped every material texture
+    // (white previews/thumbnails from assets.import, texture count 0).
     QStringList textureNames, texturePaths;
     bool hasEmbedded = false;
-    auto node = AssetHelper::extractTexturesAndMaterialFromMesh(copiedModel, textureNames,
-                                                                texturePaths, hasEmbedded);
+    QJsonObject modelStats;
+    auto node = AssetHelper::extractTexturesAndMaterialFromMesh(filePath, textureNames,
+                                                                texturePaths, hasEmbedded,
+                                                                &modelStats);
     if (!node) {
         db->deleteAsset(meshGuid);
         QDir(assetFolder).removeRecursively();
@@ -127,10 +154,13 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     SceneWriter::writeSceneNode(blob, node, false);
 
     // The Object row — the only row with view_filter AssetsView, parent = root.
+    QJsonObject properties;
+    if (!modelStats.isEmpty()) properties["metadata"] = modelStats;
     db->createAssetEntry(mainGuid, sourceInfo.baseName(),
                          static_cast<int>(ModelTypes::Object), QString(),
                          project->getProjectGuid(),
-                         QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
+                         QString(), QString(), QByteArray(),
+                         QJsonDocument(properties).toJson(), QByteArray(),
                          QJsonDocument(blob).toJson(), AssetViewFilter::AssetsView);
 
     for (const auto &tex : textures)
@@ -202,10 +232,15 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
             thumbnail = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
         }
 
+        // Import-time metadata: image header / wav header + format + byte size.
+        const QJsonObject meta = (type == ModelTypes::Texture)
+                                     ? AssetMetadata::forImageFile(copied)
+                                     : AssetMetadata::forAudioFile(copied);
         db->createAssetEntry(guid, sourceInfo.fileName(), static_cast<int>(type),
                              QString(), project ? project->getProjectGuid() : QString(),
                              QString(), QString(), AssetHelper::makeBlobFromPixmap(thumbnail),
-                             QByteArray(), QByteArray(), QByteArray(),
+                             QJsonDocument(QJsonObject{ { "metadata", meta } }).toJson(),
+                             QByteArray(), QByteArray(),
                              AssetViewFilter::AssetsView);
         result.objectGuid = guid;
         break;

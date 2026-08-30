@@ -21,6 +21,7 @@ For more information see the LICENSE file
 
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
+#include "services/assetmetadata.h"
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
 // This class updates a meshnode with the values in a material definition
@@ -178,7 +179,8 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     const QString &filePath,
     QStringList &textureList,
     QStringList &texturesFullPath,
-    bool& hasEmbeddedTexture)
+    bool& hasEmbeddedTexture,
+    QJsonObject *modelStats)
 {
     auto ssource = new iris::SceneSource();
     // load mesh as scene
@@ -215,6 +217,12 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     }, ssource);
 
     const aiScene *scene = ssource->importer.GetScene();
+
+    // Import-time metadata (ASSET_DRAWERS_SPEC addendum): count from the
+    // scene assimp just loaded — no second parse of the file, ever.
+    if (modelStats && scene)
+        *modelStats = AssetMetadata::forModelScene(scene, filePath);
+
     QStringList texturesToCopy;
 
 

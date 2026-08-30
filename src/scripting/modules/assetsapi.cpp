@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include "services/assetservice.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
+#include "services/assetmetadata.h"
+#include "services/thumbnailmanager.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
@@ -91,6 +93,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "list", "assets.list({scope: 'store'|'project', type}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized).",
           Needs::Document },
+        { "metadata", "assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}",
+          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
+          Needs::Document },
         { "import", "assets.import(path) -> guid",
           "Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable.",
           Needs::Document },
@@ -128,8 +133,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
-          "Re-renders an object or material asset's thumbnail synchronously and writes it to the database.",
-          Needs::Engine },
+          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file and audio/file rows reset to their type icon (document-only).",
+          Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
           Needs::Document },
@@ -166,6 +171,27 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                                 { "type", typeName(record.type) },
                                 { "drawer", record.collection } });
     }
+    return out;
+}
+
+QVariantMap AssetsApi::metadata(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.metadata: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+
+    // The lazy backfill: computes + persists the block when absent.
+    out = AssetMetadata::ensure(host.db, guid).toVariantMap();
+    out["guid"] = record.guid;
+    out["name"] = record.name;
+    out["type"] = typeName(record.type);
+    if (record.dateCreated.isValid())
+        out["imported"] = record.dateCreated.toString(Qt::ISODate);
     return out;
 }
 
@@ -459,36 +485,52 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
 bool AssetsApi::refreshThumbnail(const QString &guid)
 {
     if (!host.db) return fail("assets: not available in this session");
-    if (!requireEngine()) return false;
-    auto engine = EngineHost::instance().engine();
-    if (!engine) return fail("assets.refreshThumbnail: the engine is not running");
 
     const auto record = host.db->fetchAsset(guid);
     if (record.guid.isEmpty())
         return fail(QStringLiteral("assets.refreshThumbnail: no asset with guid '%1'").arg(guid));
 
+    // Document-only types first — no engine needed (headless-safe), mirroring
+    // the tile's "Rebuild Thumbnail" action.
+    if (record.type == static_cast<int>(ModelTypes::Texture)) {
+        auto thumb = ThumbnailManager::createThumbnail(
+            IrisUtils::join(storeFolderFor(guid), record.name), 256, 256);
+        if (!thumb || !thumb->thumb || thumb->thumb->isNull())
+            return fail("assets.refreshThumbnail: could not read the image");
+        return host.db->updateAssetThumbnail(
+            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(*thumb->thumb)));
+    }
+    if (record.type == static_cast<int>(ModelTypes::Music)) {
+        return host.db->updateAssetThumbnail(
+            guid, AssetHelper::makeBlobFromPixmap(
+                      QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"))));
+    }
+    if (record.type == static_cast<int>(ModelTypes::File)) {
+        return host.db->updateAssetThumbnail(
+            guid, AssetHelper::makeBlobFromPixmap(
+                      QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"))));
+    }
+
+    if (!requireEngine()) return false;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) return fail("assets.refreshThumbnail: the engine is not running");
+
     QImage image;
     EngineThumbnailRenderer renderer(engine);
     if (record.type == static_cast<int>(ModelTypes::Object)) {
-        // Prefer the session-registered node (import registers one); fall back
-        // to rebuilding from the blob with the store folder as the base dir.
-        iris::SceneNodePtr node;
-        for (auto &asset : AssetManager::getAssets()) {
-            if (asset->assetGuid == guid && asset->type == ModelTypes::Object) {
-                node = asset->getValue().value<iris::SceneNodePtr>();
-                if (node) break;
-            }
-        }
-        if (!node) {
-            SceneReader reader;
-            reader.setDatabaseHandle(host.db);
-            reader.setProject(host.project);
-            const QString storeDir = storeFolderFor(guid);
-            reader.setBaseDirectory(QDir(storeDir).exists() && host.project
-                                        ? storeDir : host.project->getProjectFolder());
-            auto blob = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
-            node = reader.readSceneNode(blob);
-        }
+        // ALWAYS rebuild from the blob: the session-registered import node
+        // carries texture properties rewritten to raw guids (no reader ever
+        // resolved them), so rendering it gives the white, untextured
+        // thumbnail this verb existed to replace. SceneReader + the database
+        // handle resolves those guids to store files.
+        SceneReader reader;
+        reader.setDatabaseHandle(host.db);
+        reader.setProject(host.project);
+        const QString storeDir = storeFolderFor(guid);
+        if (QDir(storeDir).exists()) reader.setBaseDirectory(storeDir);
+        else if (host.project) reader.setBaseDirectory(host.project->getProjectFolder());
+        auto blob = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
+        iris::SceneNodePtr node = reader.readSceneNode(blob);
         if (!node) return fail("assets.refreshThumbnail: could not rebuild the object");
         image = renderer.renderNode(node, QSize(512, 512));
     } else if (record.type == static_cast<int>(ModelTypes::Material)) {

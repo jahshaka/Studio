@@ -28,10 +28,14 @@ public:
     static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
     static QStringList getChildGuids(const iris::SceneNodePtr &node);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
+    /// modelStats (optional): filled with AssetMetadata::forModelScene counts
+    /// from the aiScene this load already produced — the import-time source
+    /// of the per-asset "metadata" properties block.
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
                                                                  QStringList &textureList,
                                                                  QStringList &texturesFullPath,
-                                                                 bool& hasEmbeddedTexture);
+                                                                 bool& hasEmbeddedTexture,
+                                                                 QJsonObject *modelStats = nullptr);
 };
 
 #endif

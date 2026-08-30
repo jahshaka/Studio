@@ -1046,7 +1046,7 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -1060,6 +1060,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
             data.type = query.value(4).toInt();
             data.properties = query.value(5).toByteArray();
             data.view_filter = query.value(6).toInt();
+            data.dateCreated = query.value(7).toDateTime();
             return data;
         }
     }

@@ -35,6 +35,7 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE QVariantList list(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap metadata(const QString &guid);
     Q_INVOKABLE QString import(const QString &path);
     Q_INVOKABLE QString importFile(const QString &path, int drawerId = -1);
     Q_INVOKABLE QVariantList drawers();

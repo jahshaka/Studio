@@ -63,12 +63,26 @@ set_tests_properties(scripting.e2e.full_surface PROPERTIES
 # document verb, so this runs --headless (offscreen platform, no engine) —
 # fixture paths are configured in.
 configure_file(scripts/e2e_drawers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js @ONLY)
+configure_file(scripts/e2e_metadata.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-drawers)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.drawers
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_drawers.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.drawers PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
+# Rich asset metadata (ASSET_DRAWERS_SPEC addendum): import-time "metadata"
+# blocks + the assets.metadata verb (with its lazy backfill). Image/audio/mesh
+# imports here are all document-side, so this runs --headless too.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.metadata
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_metadata.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.metadata PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 120)

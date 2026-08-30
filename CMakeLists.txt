@@ -94,6 +94,7 @@ set(SRCS
     src/modules/publish/publishmodule.cpp
     src/scripting/modules/studiomodules.cpp
     src/services/assetimporter.cpp
+    src/services/assetmetadata.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
     src/services/sceneeditservice.cpp
@@ -257,6 +258,7 @@ set(HEADERS
     src/scripting/modules/studiomodules.h
     src/services/services.h
     src/services/assetimporter.h
+    src/services/assetmetadata.h
     src/services/projectservice.h
     src/services/sceneeditservice.h
     src/services/thumbnailservice.h
