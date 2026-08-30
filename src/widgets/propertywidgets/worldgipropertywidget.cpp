@@ -11,8 +11,8 @@ For more information see the LICENSE file
 
 #include "worldgipropertywidget.h"
 
-#include "../../irisgl/src/scenegraph/scene.h"
-#include "../../irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 
 #include "../comboboxwidget.h"
 #include "../hfloatsliderwidget.h"

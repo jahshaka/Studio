@@ -13,7 +13,7 @@
 // wraps it.
 #include <memory>
 #include <QMatrix4x4>
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
 class SceneMirror;

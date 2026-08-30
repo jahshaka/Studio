@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <Qt>
 #include <QSharedPointer>
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 namespace iris
 {

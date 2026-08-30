@@ -14,19 +14,19 @@ For more information see the LICENSE file
 
 #include <QStandardItemModel>
 
-#include "irisgl/src/scenegraph/meshnode.h"
-#include "irisgl/src/scenegraph/scene.h"
-#include "irisgl/src/physics/environment.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/physics/environment.h"
 #include "globals.h"
 #include "../checkboxwidget.h"
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 
-#include "irisgl/src/bullet3/src/btBulletDynamicsCommon.h"
-#include "bullet3/src/BulletCollision/CollisionShapes/btConvexHullShape.h"
-#include "bullet3/src/BulletCollision/CollisionShapes/btShapeHull.h"
-#include "physics/physicshelper.h"
-#include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
+#include "BulletCollision/CollisionShapes/btConvexHullShape.h"
+#include "BulletCollision/CollisionShapes/btShapeHull.h"
+#include "irisgl/document/physics/physicshelper.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 using namespace iris;
 

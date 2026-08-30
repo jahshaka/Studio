@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define KEYFRAMELABEL_H
 
 #include <QWidget>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 
 namespace Ui {

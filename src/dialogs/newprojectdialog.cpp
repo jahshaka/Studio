@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include <QFileDialog>
 #include <QFontDatabase>
 
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 #include "../core/settingsmanager.h"
 #include "..//misc/stylesheet.h"
 #include "newprojectdialog.h"

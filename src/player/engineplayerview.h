@@ -11,7 +11,7 @@
 #include <memory>
 #include <QElapsedTimer>
 #include "../widgets/engineviewwidget.h"
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
 class EngineRenderDriver;

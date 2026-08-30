@@ -20,9 +20,9 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonDocument>
 //#include "../irisgl/src/core/scenenode.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/animation/keyframeanimation.h"
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/irisglfwd.h"
 
 class EditorData;
 class Database;	// this is a temp way to get this working, remove later

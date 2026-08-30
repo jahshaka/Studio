@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QMouseEvent>
 #include <vector>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 namespace Ui {
     class KeyFrameLabelWidget;

@@ -13,8 +13,8 @@
 #include "../editor/ieditorviewport.h"
 #include "../uimanager.h"
 #include "../core/keyboardstate.h"
-#include "irisgl/src/graphics/viewport.h"
-#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/core/viewport.h"
+#include "irisgl/document/scenegraph/scene.h"
 
 using namespace jahshaka::engine;
 

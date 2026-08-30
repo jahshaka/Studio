@@ -1,7 +1,7 @@
 // Link stubs: PlayBack's controllers reach into Studio's globals (UiManager, the
 // undo stack). The test drives the mouse controller only; none of this is exercised.
 #include <QUndoCommand>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "uimanager.h"
 #include "commands/transfrormscenenodecommand.h"
 

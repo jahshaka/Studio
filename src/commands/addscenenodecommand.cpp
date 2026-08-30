@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "addscenenodecommand.h"
 #include "../uimanager.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 #include "../mainwindow.h"
 #include "../widgets/scenehierarchywidget.h"
 

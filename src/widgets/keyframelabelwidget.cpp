@@ -18,10 +18,10 @@ For more information see the LICENSE file
 #include <QScrollBar>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/animation/keyframeset.h"
-#include "../irisgl/src/animation/keyframeanimation.h"
-#include "../irisgl/src/animation/animation.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/animation/keyframeset.h"
+#include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/document/animation/animation.h"
 #include "keyframelabelwidget.h"
 #include "keyframelabel.h"
 #include "ui_keyframelabelwidget.h"

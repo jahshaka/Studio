@@ -14,11 +14,11 @@
 #include <string>
 #include <vector>
 
-#include "irisglfwd.h"
-#include "scenegraph/scene.h"
-#include "scenegraph/scenenode.h"
-#include "scenegraph/particlesystemnode.h"
-#include "graphics/particle.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/particle.h"
 #include "jahshaka/engine/Engine.h"
 #include "engine/scenemirror.h"
 

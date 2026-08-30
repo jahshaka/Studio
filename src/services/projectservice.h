@@ -28,7 +28,7 @@ For more information see the LICENSE file
 
 #include <QString>
 
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class Database;
 class Project;

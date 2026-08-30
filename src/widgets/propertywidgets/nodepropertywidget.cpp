@@ -15,8 +15,8 @@ For more information see the LICENSE file
 #include "../hfloatsliderwidget.h"
 #include "../comboboxwidget.h"
 
-#include "../../irisgl/src/scenegraph/meshnode.h"
-#include "../../irisgl/src/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
 
 NodePropertyWidget::NodePropertyWidget()
 {

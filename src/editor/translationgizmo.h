@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define TRANSLATIONGIZMO_H
 
 #include "gizmo.h"
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 
 class Gizmo;

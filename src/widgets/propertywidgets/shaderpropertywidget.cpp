@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 #include "constants.h"
 #include "globals.h"

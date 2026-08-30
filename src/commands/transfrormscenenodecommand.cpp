@@ -11,8 +11,8 @@ For more information see the LICENSE file
 
 #include <QQuaternion>
 #include "transfrormscenenodecommand.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/math/mathhelper.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/core/math/mathhelper.h"
 #include "../uimanager.h"
 #include "../widgets/scenenodepropertieswidget.h"
 

@@ -21,9 +21,9 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QSharedPointer>
 
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "assetiobase.h"
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class Database;
 enum class TextureSource

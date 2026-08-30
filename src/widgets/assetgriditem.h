@@ -25,7 +25,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 
 class AssetGridItem : public QWidget
 {

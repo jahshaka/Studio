@@ -12,9 +12,9 @@ For more information see the LICENSE file
 #ifndef SCENENODEHELPER_H
 #define SCENENODEHELPER_H
 
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
-#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 #include "constants.h"
 #include "core/project.h"

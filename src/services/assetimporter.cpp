@@ -26,10 +26,10 @@ For more information see the LICENSE file
 #include "../core/guidmanager.h"
 #include "../io/assetmanager.h"
 #include "../io/scenewriter.h"
-#include "../../irisgl/src/core/irisutils.h"
-#include "../../irisgl/src/core/property.h"
-#include "../../irisgl/src/materials/custommaterial.h"
-#include "../../irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/core/properties/property.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Database *db)
 {

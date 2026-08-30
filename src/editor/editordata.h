@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef EDITORDATA_H
 #define EDITORDATA_H
 
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class EditorData
 {

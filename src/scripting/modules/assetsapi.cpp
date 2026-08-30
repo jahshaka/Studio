@@ -36,9 +36,9 @@ For more information see the LICENSE file
 #include "../../services/sceneeditservice.h"
 #include "../../services/selectionservice.h"
 #include "../../services/services.h"
-#include "../../irisgl/src/core/irisutils.h"
-#include "../../irisgl/src/materials/custommaterial.h"
-#include "../../irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 using namespace scriptmod;
 

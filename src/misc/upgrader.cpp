@@ -28,7 +28,7 @@ For more information see the LICENSE file
 
 #include "core/database/database.h"
 #include "core/settingsmanager.h"
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 #include "constants.h"
 
 #include <QDebug>

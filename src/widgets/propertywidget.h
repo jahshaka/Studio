@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define PROPERTYWIDGET_H
 
 #include <QWidget>
-#include "core/property.h"
+#include "irisgl/core/properties/property.h"
 #include "src/shadergraph//propertywidgets/propertywidgetbase.h"
 
 namespace Ui {

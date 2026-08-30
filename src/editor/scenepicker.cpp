@@ -4,15 +4,15 @@
 #include <QVector4D>
 #include <algorithm>
 
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/scenegraph/viewernode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
-#include "../irisgl/src/graphics/mesh.h"
-#include "../irisgl/src/geometry/trimesh.h"
-#include "../irisgl/src/math/intersectionhelper.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/viewernode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/core/geometry/trimesh.h"
+#include "irisgl/core/math/intersectionhelper.h"
 
 namespace {
 QVector3D unproject(const iris::CameraNodePtr &cam, int w, int h, const QPointF &pos, float depth)

@@ -26,7 +26,7 @@ For more information see the LICENSE file
 // The gizmos scale them by gizmoScale * handleScale exactly as before, so
 // hit-testing (which is analytic, not mesh-based) is untouched.
 
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "gizmo.h"
 
 namespace GizmoMeshes

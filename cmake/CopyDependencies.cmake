@@ -45,11 +45,11 @@ elseif(UNIX)
 
             COMMAND ${CMAKE_COMMAND} -E copy
                     # "${CMAKE_BINARY_DIR}/irisgl/libIrisGL.so"
-                    # "${CMAKE_BINARY_DIR}/irisgl/src/assimp/bin/libassimp.so.6.0.2"
-                    "${CMAKE_BINARY_DIR}/irisgl/src/zip/libzip.so"
-                    "${CMAKE_BINARY_DIR}/irisgl/src/bullet3/src/BulletDynamics/libBulletDynamics.so.2.88"
-                    "${CMAKE_BINARY_DIR}/irisgl/src/bullet3/src/LinearMath/libLinearMath.so.2.88"
-                    "${CMAKE_BINARY_DIR}/irisgl/src/bullet3/src/BulletCollision/libBulletCollision.so.2.88"
+                    # "${CMAKE_BINARY_DIR}/irisgl/assimp/bin/libassimp.so.6.0.2"
+                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/zip/libzip.so"
+                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/bullet3/src/BulletDynamics/libBulletDynamics.so.2.88"
+                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/bullet3/src/LinearMath/libLinearMath.so.2.88"
+                    "${CMAKE_BINARY_DIR}/irisgl/thirdparty/bullet3/src/BulletCollision/libBulletCollision.so.2.88"
                     "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/"
 
             COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"

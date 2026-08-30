@@ -10,14 +10,14 @@
 #include <cstdio>
 #include <string>
 
-#include "irisglfwd.h"
-#include "scenegraph/scene.h"
-#include "scenegraph/scenenode.h"
-#include "scenegraph/meshnode.h"
-#include "scenegraph/lightnode.h"
-#include "scenegraph/cameranode.h"
-#include "materials/defaultmaterial.h"
-#include "physics/physicsproperties.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/physics/physicsproperties.h"
 #include "jahshaka/engine/Engine.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"

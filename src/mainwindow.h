@@ -25,7 +25,7 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include <QMenu>
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "misc/QtAwesome.h"
 #include "misc/QtAwesomeAnim.h"
 #include "core/project.h"
@@ -123,10 +123,10 @@ enum class Widget
 };
 
 #include <QJsonObject>
-#include "irisgl/src/scenegraph/lightnode.h"
-#include "irisgl/src/graphics/shadowmap.h"
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/shadowmap.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/assets/texture2d.h"
 
 class Database;
 class MainWindow : public QMainWindow

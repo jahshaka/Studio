@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QMessageBox>
 
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 
 #include "constants.h"
 #include "core/materialpreset.h"

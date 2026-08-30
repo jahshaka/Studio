@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include "../../mainwindow.h"
 #include "../../services/sceneeditservice.h"
 #include "../../services/services.h"
-#include "../../irisgl/src/graphics/texture2d.h"
+#include "irisgl/document/assets/texture2d.h"
 
 using namespace scriptmod;
 

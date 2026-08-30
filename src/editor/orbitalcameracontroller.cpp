@@ -15,8 +15,8 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QtMath>
 
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "cameracontrollerbase.h"
 #include "orbitalcameracontroller.h"
 

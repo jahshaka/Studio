@@ -21,12 +21,12 @@ For more information see the LICENSE file
 
 #include "irisgl/Graphics.h"
 #include "irisgl/Animation.h"
-#include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/materials/pbrmaterial.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/SceneGraph.h"
 
-#include "irisgl/src/graphics/postprocess.h"
-#include "irisgl/src/graphics/postprocessmanager.h"
+#include "irisgl/document/materials/postprocess.h"
+#include "irisgl/document/materials/postprocessmanager.h"
 
 #include "assetiobase.h"
 #include "constants.h"

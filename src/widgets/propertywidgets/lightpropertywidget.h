@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
-#include "../../irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 
 class ColorValueWidget;
 class ColorPickerWidget;

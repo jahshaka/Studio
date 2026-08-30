@@ -14,10 +14,10 @@ For more information see the LICENSE file
 #include <QPixmap>
 #include <QBuffer>
 
-#include "irisgl/src/core/property.h"
-#include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/scenegraph/scenenode.h"
-#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/core/properties/property.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"

@@ -35,15 +35,15 @@ For more information see the LICENSE file
 #include "irisgl/Animation.h"
 #include "irisgl/SceneGraph.h"
 
-#include "irisgl/src/graphics/postprocess.h"
-#include "irisgl/src/graphics/postprocessmanager.h"
+#include "irisgl/document/materials/postprocess.h"
+#include "irisgl/document/materials/postprocessmanager.h"
 
-#include "../irisgl/src/postprocesses/fxaapostprocess.h"
+#include "irisgl/document/materials/postfx/fxaapostprocess.h"
 
-#include "irisgl/src/physics/physicsproperties.h"
-#include "irisgl/src/physics/physicshelper.h"
-#include "irisgl/src/materials/pbrmaterial.h"
-#include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/document/physics/physicsproperties.h"
+#include "irisgl/document/physics/physicshelper.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/materials/custommaterial.h"
 
 #include "materialreader.hpp"
 #include "../core/guidmanager.h"

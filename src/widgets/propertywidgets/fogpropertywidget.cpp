@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "fogpropertywidget.h"
 #include "../texturepickerwidget.h"
-#include "../../irisgl/src/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scene.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"

@@ -20,9 +20,9 @@ For more information see the LICENSE file
 #include "../comboboxwidget.h"
 #include "../checkboxwidget.h"
 
-#include "../../irisgl/src/scenegraph/scene.h"
-#include "../../irisgl/src/scenegraph/scenenode.h"
-#include "../../irisgl/src/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 
 #include "../../engine/enginehost.h"
 

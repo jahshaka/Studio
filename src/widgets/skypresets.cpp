@@ -13,9 +13,9 @@ For more information see the LICENSE file
 #include "ui_skypresets.h"
 
 #include "../mainwindow.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/core/irisutils.h"
-#include "../irisgl/src/graphics/texture2d.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/assets/texture2d.h"
 
 #include "core/database/database.h"
 

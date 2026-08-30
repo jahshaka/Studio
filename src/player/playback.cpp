@@ -4,7 +4,7 @@
 #include "constants.h"
 #include "uimanager.h"
 #include "editor/ieditorviewport.h"
-#include "irisgl/src/graphics/viewport.h"
+#include "irisgl/core/viewport.h"
 #include "irisgl/SceneGraph.h"
 #include "irisgl/Physics.h"
 #include "playermousecontroller.h"

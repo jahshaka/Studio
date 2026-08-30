@@ -19,7 +19,7 @@ For more information see the LICENSE file
 
 #include "../io/materialpresetreader.h"
 #include "../core/materialpreset.h"
-#include "../irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 
 #include "../mainwindow.h"
 

@@ -18,7 +18,7 @@
 #include <QString>
 #include <QVector3D>
 #include <Qt>
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
 class SceneMirror;

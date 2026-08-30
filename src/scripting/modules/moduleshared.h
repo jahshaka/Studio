@@ -24,9 +24,9 @@ For more information see the LICENSE file
 #include <QVariantMap>
 #include <QVector3D>
 
-#include "../../irisgl/src/irisglfwd.h"
-#include "../../irisgl/src/scenegraph/scene.h"
-#include "../../irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 namespace scriptmod {
 

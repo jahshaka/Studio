@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QDrag>
 #include "../engine/enginehost.h"
 #include "core/materialpreviewwidget.h"
-#include "irisgl/src/materials/pbrmaterial.h"   // complete type: PbrMaterialPtr -> MaterialPtr upcast
+#include "irisgl/document/materials/pbrmaterial.h"   // complete type: PbrMaterialPtr -> MaterialPtr upcast
 #include <QTimer>
 #include <QLayout>
 #include <QGridLayout>
@@ -69,7 +69,7 @@ For more information see the LICENSE file
 #include "../uimanager.h"
 #include "../globals.h"
 #include "../core/guidmanager.h"
-#include "../../irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 #include "../io/assetmanager.h"
 #include "../dialogs/progressdialog.h"
 #else

@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef ORBITALCAMERACONTROLLER_H
 #define ORBITALCAMERACONTROLLER_H
 
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include <QPoint>
 #include <QVector3D>
 #include <QSharedPointer>

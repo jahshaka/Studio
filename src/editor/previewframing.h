@@ -19,10 +19,10 @@
 #include <QVector3D>
 #include <QtMath>
 
-#include "irisgl/src/geometry/aabb.h"
-#include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/scenegraph/scenenode.h"
-#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/core/geometry/aabb.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 namespace preview {
 

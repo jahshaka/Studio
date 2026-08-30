@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "worldskypropertywidget.h"
-#include "../../irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 
 
 #include "../colorvaluewidget.h"

@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef ANIMATIONWIDGETDATA_H
 #define ANIMATIONWIDGETDATA_H
 
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class AnimationWidgetData
 {

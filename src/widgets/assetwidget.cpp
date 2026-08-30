@@ -33,10 +33,10 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QComboBox>
 
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/scenegraph/particlesystemnode.h" 
-#include "irisgl/src/scenegraph/scene.h" 
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h" 
+#include "irisgl/document/scenegraph/scene.h" 
 #include "zip.h"
 
 #include "assetview.h"

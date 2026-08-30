@@ -22,8 +22,8 @@
 #include "shadergraph/models/library.h"
 #include "shadergraph/core/pbrgraphevaluator.h"
 
-#include "irisgl/src/materials/pbrmaterial.h"
-#include "irisgl/src/graphics/texture2d.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/assets/texture2d.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)

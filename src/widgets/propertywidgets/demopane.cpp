@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include "../labelwidget.h"
 #include "../filepickerwidget.h"
 
-#include "../../core/property.h"
+#include "irisgl/core/properties/property.h"
 #include "../propertywidget.h"
 
 #include <QDebug>

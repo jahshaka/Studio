@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "meshpropertywidget.h"
 #include "../filepickerwidget.h"
-#include "../../irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 #include "../../globals.h"
 #include "../comboboxwidget.h"
 

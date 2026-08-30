@@ -12,8 +12,8 @@ For more information see the LICENSE file
 #include <QQuaternion>
 #include "editorcameracontroller.h"
 #include <QVector3D>
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>
 #include "../core/keyboardstate.h"

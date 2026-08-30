@@ -516,7 +516,7 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT $
 target_include_directories(${PROJECT_NAME} PUBLIC
                             src
                             irisgl/include
-                            irisgl/src
+                            irisgl
                             thirdparty/breakpad/breakpad/src
                             downloader)
 

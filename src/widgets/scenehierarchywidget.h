@@ -22,8 +22,8 @@ For more information see the LICENSE file
 #include <QStyledItemDelegate>
 
 #include <qcombobox.h>
-#include "irisgl/src/irisglfwd.h"
-#include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 #include "core/project.h"
 

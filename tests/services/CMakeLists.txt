@@ -10,6 +10,7 @@ add_executable(test_services test_services.cpp
     ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp)
 set_target_properties(test_services PROPERTIES AUTOMOC ON)
 target_include_directories(test_services PRIVATE
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl/include)
 target_link_libraries(test_services PRIVATE Qt6::Gui Qt6::Widgets)

@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "worldsettingswidget.h"
 #include "ui_worldsettings.h"
 
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 
 #include <QFileDialog>
 #include <QListView>

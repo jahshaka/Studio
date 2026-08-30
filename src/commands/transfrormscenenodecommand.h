@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QQuaternion>
 #include <QUndoCommand>
 #include <QMatrix4x4>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class TransformSceneNodeCommand : public QUndoCommand
 {

@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "materialreader.hpp"
-#include "irisgl.h"
+#include "irisgl/irisgl.h"
 #include "irisgl/Graphics.h"
 #include <QMap>
 #include "../constants.h"
@@ -22,8 +22,8 @@ For more information see the LICENSE file
 #include "../core/settingsmanager.h"
 
 // iris includes
-#include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/core/irisutils.h"
 //#include "irisgl/src/core/property.h"
 #include "shadergraph/core/materialhelper.h"
 

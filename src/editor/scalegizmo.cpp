@@ -13,16 +13,16 @@ For more information see the LICENSE file
 #include "scalegizmo.h"
 #include <QApplication>
 
-#include "irisgl/src/math/intersectionhelper.h"
-#include "irisgl/src/math/mathhelper.h"
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/scenegraph/scene.h"
-#include "irisgl/src/graphics/vertexlayout.h"
-#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/core/math/intersectionhelper.h"
+#include "irisgl/core/math/mathhelper.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/assets/vertexlayout.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "uimanager.h"
 #include "gizmomeshes.h"
 #include "../commands/transfrormscenenodecommand.h"
-#include "irisgl/src/math/mathhelper.h"
+#include "irisgl/core/math/mathhelper.h"
 #include "../widgets/scenenodepropertieswidget.h"
 #include "../widgets/propertywidgets/transformpropertywidget.h"
 

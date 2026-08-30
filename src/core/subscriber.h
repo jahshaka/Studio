@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef SUBSCRIBER_H
 #define SUBSCRIBER_H
 
-#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "core/project.h"
 
 #include <QObject>

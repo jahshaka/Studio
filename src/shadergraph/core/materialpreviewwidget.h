@@ -20,7 +20,7 @@ For more information see the LICENSE file
 // choice and the background colour, nothing else. Pure Qt + iris types here —
 // no engine, no GL, no Ogre.
 #include <QColor>
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class QWidget;
 

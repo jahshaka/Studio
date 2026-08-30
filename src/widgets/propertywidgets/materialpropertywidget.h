@@ -16,8 +16,8 @@ For more information see the LICENSE file
 
 #include "../../io/assetmanager.h"
 #include "../accordianbladewidget.h"
-#include "../../irisgl/src/graphics/material.h"
-#include "../../irisgl/src/core/property.h"
+#include "irisgl/document/materials/material.h"
+#include "irisgl/core/properties/property.h"
 
 namespace iris {
     class SceneNode;

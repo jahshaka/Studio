@@ -5,9 +5,9 @@
 #include "engine/scenemirror.h"
 #include "playback.h"
 #include "playermousecontroller.h"
-#include "irisgl/src/graphics/viewport.h"
-#include "irisgl/src/scenegraph/scene.h"
-#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/core/viewport.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 
 using namespace jahshaka::engine;
 

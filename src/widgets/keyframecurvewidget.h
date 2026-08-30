@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QPen>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 namespace Ui {
 class KeyFrameCurveWidget;

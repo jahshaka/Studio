@@ -32,9 +32,9 @@ For more information see the LICENSE file
 #include <QStyledItemDelegate>
 #include <QOffscreenSurface>
 
-#include "irisgl/src/assimp/include/assimp/Importer.hpp"
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/thirdparty/assimp/include/assimp/Importer.hpp"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/materials/custommaterial.h"
 #include "zip.h"
 
 #include "constants.h"

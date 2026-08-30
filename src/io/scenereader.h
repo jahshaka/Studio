@@ -26,10 +26,10 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "core/project.h"
 
-#include "../irisgl/src/irisglfwd.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/lightnode.h"
-#include "../irisgl/src/animation/keyframeanimation.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/animation/keyframeanimation.h"
 
 class EditorData;
 class aiScene;

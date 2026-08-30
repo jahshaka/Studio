@@ -14,7 +14,7 @@ add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp)
 set_target_properties(test_script_engine PROPERTIES AUTOMOC ON)
-target_include_directories(test_script_engine PRIVATE
+target_include_directories(test_script_engine PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src/scripting)
 target_link_libraries(test_script_engine PRIVATE Qt6::Widgets Qt6::Qml)
 add_test(NAME scripting.engine COMMAND test_script_engine

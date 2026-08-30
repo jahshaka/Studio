@@ -12,10 +12,10 @@ For more information see the LICENSE file
 #ifndef THUMBNAILGENERATOR_H
 #define THUMBNAILGENERATOR_H
 
-#include "irisgl/src/irisglfwd.h"
-#include "irisgl/src/scenegraph/meshnode.h"
-#include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/defaultmaterial.h"
 
 #include <QObject>
 #include <QImage>

@@ -16,17 +16,17 @@
 #include <cmath>
 
 #include <functional>
-#include "irisglfwd.h"
-#include "scenegraph/scene.h"
-#include "scenegraph/scenenode.h"
-#include "scenegraph/lightnode.h"
-#include "scenegraph/meshnode.h"
-#include "graphics/mesh.h"
-#include "graphics/shadowmap.h"
-#include "graphics/texture2d.h"
-#include "materials/defaultmaterial.h"
-#include "physics/environment.h"
-#include "physics/physicsproperties.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/scenegraph/shadowmap.h"
+#include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/physics/environment.h"
+#include "irisgl/document/physics/physicsproperties.h"
 // The reparent command's cycle guard is header-only document logic (its
 // undo/redo bodies live in the app; only the static guard is exercised here).
 #include "commands/reparentscenenodecommand.h"

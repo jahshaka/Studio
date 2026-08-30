@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QVector>
 #include <QQuaternion>
 #include <QMatrix4x4>
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 
 enum class GizmoAxis

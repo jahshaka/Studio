@@ -4,8 +4,8 @@
 #include <QMouseEvent>
 #include "../editor/scenepicker.h"
 #include "../player/playback.h"
-#include "../irisgl/src/graphics/viewport.h"
-#include "../irisgl/src/physics/environment.h"
+#include "irisgl/core/viewport.h"
+#include "irisgl/document/physics/environment.h"
 #include "../editor/translationgizmo.h"
 #include "../editor/rotationgizmo.h"
 #include "../editor/scalegizmo.h"
@@ -31,18 +31,18 @@
 #include "../core/database/database.h"
 #include "../io/assetmanager.h"
 #include "scenehierarchywidget.h"
-#include "../irisgl/src/materials/custommaterial.h"
-#include "../irisgl/src/math/intersectionhelper.h"
-#include "../irisgl/src/scenegraph/particlesystemnode.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/core/math/intersectionhelper.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
 #include <QVector3D>
 #include <QQuaternion>
 
 #include "enginerenderdriver.h"
 #include "../engine/scenemirror.h"
 #include "../editor/editordata.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 
 using namespace jahshaka::engine;
 

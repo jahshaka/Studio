@@ -18,7 +18,7 @@
 #include <QSize>
 #include <QString>
 #include <QVector3D>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class QWidget;
 class MainWindow;

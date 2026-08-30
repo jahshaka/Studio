@@ -16,9 +16,9 @@ For more information see the LICENSE file
 #include "texturemanager.h"
 #include <QFileInfo>
 #include <QJsonObject>
-#include "irisgl/src/materials/custommaterial.h"
-#include "irisgl/src/materials/pbrmaterial.h"
-#include "irisgl/src/graphics/shader.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/assets/shader.h"
 #include "../models/libraryv1.h"
 #include <QVector2D>
 #include <QVector3D>

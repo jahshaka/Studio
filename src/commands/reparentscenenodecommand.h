@@ -13,8 +13,8 @@ For more information see the LICENSE file
 #define REPARENTSCENENODECOMMAND_H
 
 #include <QUndoCommand>
-#include "irisglfwd.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 /// Moves a node under a new parent (the hierarchy panel's drag-and-drop),
 /// keeping its WORLD pose — addChild(keepTransform = true) recomputes the local

@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QLayout>
 
-#include "irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 
 #include "uimanager.h"

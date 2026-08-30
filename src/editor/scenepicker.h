@@ -10,7 +10,7 @@
 #include <QList>
 #include <QPointF>
 #include <QVector3D>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 struct ScenePick
 {

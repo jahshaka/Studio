@@ -16,11 +16,11 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 //#include "../scenegraph/scenenodes.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/animation/keyframeset.h"
-#include "../irisgl/src/animation/keyframeanimation.h"
-#include "../irisgl/src/animation/animation.h"
-#include "../irisgl/src/animation/propertyanim.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/animation/keyframeset.h"
+#include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/propertyanim.h"
 #include "keyframewidget.h"
 #include "keyframelabelwidget.h"
 #include "keyframelabeltreewidget.h"

@@ -26,7 +26,7 @@ For more information see the LICENSE file
 
 #include <QObject>
 
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class SelectionService : public QObject
 {

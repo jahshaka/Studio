@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QIcon>
 //#include "ui_animationwidget.h"
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class QWidget;
 class QElapsedTimer;

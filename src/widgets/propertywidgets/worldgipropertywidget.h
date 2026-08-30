@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QVector3D>
 #include "../accordianbladewidget.h"
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class ComboBoxWidget;
 class HFloatSliderWidget;

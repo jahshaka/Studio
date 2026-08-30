@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "cubemapwidget.h"
-#include "../../irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 #include "src/core/thumbnailmanager.h"
 #include "widgets/assetpickerwidget.h"
 #include "globals.h"

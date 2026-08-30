@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonArray>
 
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "constants.h"
 #include "core/project.h"
 #include "core/database/database.h"

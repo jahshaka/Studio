@@ -12,10 +12,10 @@
 #include <cstdio>
 #include <string>
 
-#include "irisglfwd.h"
-#include "scenegraph/scene.h"
-#include "scenegraph/cameranode.h"
-#include "materials/pbrmaterial.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "widgets/enginematerialpreviewscene.h"
 

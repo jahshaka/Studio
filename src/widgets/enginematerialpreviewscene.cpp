@@ -6,14 +6,14 @@
 #include <QQuaternion>
 
 #include "engine/scenemirror.h"
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/materials/defaultmaterial.h"
-#include "irisgl/src/scenegraph/scene.h"
-#include "irisgl/src/scenegraph/scenenode.h"
-#include "irisgl/src/scenegraph/meshnode.h"
-#include "irisgl/src/scenegraph/lightnode.h"
-#include "irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 
 using namespace jahshaka::engine;
 

@@ -21,7 +21,7 @@ For more information see the LICENSE file
 
 #include "../project.h"
 
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 // Every project-scoped function takes the project guid explicitly — the data
 // layer no longer reads the app's ambient current project (SCRIPTING_SPEC

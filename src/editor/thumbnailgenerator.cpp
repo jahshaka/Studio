@@ -17,12 +17,12 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QTimer>
 
-#include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/graphics/texture2d.h"
-#include "irisgl/src/scenegraph/cameranode.h"
-#include "irisgl/src/scenegraph/lightnode.h"
-#include "irisgl/src/scenegraph/meshnode.h"
-#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/scene.h"
 
 #include "constants.h"
 #include "io/assetmanager.h"
@@ -30,8 +30,8 @@ For more information see the LICENSE file
 #include "io/materialreader.hpp"
 #include "engine/enginehost.h"
 #include "enginethumbnailrenderer.h"
-#include "irisgl/src/materials/defaultmaterial.h"
-#include "irisgl/src/materials/pbrmaterial.h"
+#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
 

@@ -31,7 +31,7 @@ class Database;
 #include "../editor/thumbnailgenerator.h"
 #include "../core/project.h"
 #include "../editor/ieditorviewport.h"
-#include "../irisgl/src/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include <QButtonGroup>
 
 // Look into this (iKlsR) - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab

@@ -20,7 +20,7 @@
 #include <QSet>
 #include <utility>
 #include <vector>
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
 namespace iris { class Mesh; class Material; struct SkyRealistic; }

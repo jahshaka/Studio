@@ -11,8 +11,8 @@ For more information see the LICENSE file
 
 #include "worldpropertywidget.h"
 
-#include "irisgl/src/scenegraph/scene.h"
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/core/irisutils.h"
 
 #include "core/project.h"
 #include "core/database/database.h"

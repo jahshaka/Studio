@@ -11,11 +11,11 @@ For more information see the LICENSE file
 
 #include "gizmo.h"
 
-#include "irisgl/src/irisgl.h"
-#include "irisgl/src/scenegraph/scenenode.h"
-#include "irisgl/src/scenegraph/cameranode.h"
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/irisgl.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 

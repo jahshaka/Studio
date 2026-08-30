@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QDirIterator>
 #include <QJsonDocument>
-#include "materials/materialhelper.h"
+#include "irisgl/import/materialhelper.h"
 
 #include "../core/materialhelper.h"
 

@@ -17,17 +17,17 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QToolButton>
 #include <QTime>
-#include "../irisgl/src/animation/keyframeanimation.h"
-#include "../irisgl/src/animation/keyframeset.h"
-#include "../irisgl/src/animation/animation.h"
-#include "../irisgl/src/animation/propertyanim.h"
-#include "../irisgl/src/animation/animableproperty.h"
-#include "../irisgl/src/scenegraph/scenenode.h"
-#include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/scenegraph/meshnode.h"
+#include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/document/animation/keyframeset.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/propertyanim.h"
+#include "irisgl/document/animation/animableproperty.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
-#include "../irisgl/src/graphics/material.h"
-#include "../irisgl/src/materials/custommaterial.h"
+#include "irisgl/document/materials/material.h"
+#include "irisgl/document/materials/custommaterial.h"
 
 #include "keyframewidget.h"
 #include "keyframecurvewidget.h"

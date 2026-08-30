@@ -8,7 +8,7 @@
 // the assimp SceneSource and the node cache. Nothing renders.
 #include <QWidget>
 #include "iassetviewer.h"
-#include "irisgl/src/scenegraph/meshnode.h"   // iris::SceneSource
+#include "irisgl/document/scenegraph/meshnode.h"   // iris::SceneSource
 
 class HeadlessAssetViewer : public IAssetViewer
 {

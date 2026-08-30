@@ -11,7 +11,7 @@
 #include <QWidget>
 #include "ieditorviewport.h"
 #include "editordata.h"
-#include "../irisgl/src/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 
 class HeadlessEditorViewport : public IEditorViewport
 {

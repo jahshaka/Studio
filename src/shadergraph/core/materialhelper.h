@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
-#include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/document/materials/custommaterial.h"
 #include "pbrgraphevaluator.h"
 
 class GraphNodeScene;

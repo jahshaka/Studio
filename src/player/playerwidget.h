@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <QObject>
 #include <QIcon>
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class EnginePlayerView;
 class QPushButton;

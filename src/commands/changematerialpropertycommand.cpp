@@ -10,9 +10,9 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "changematerialpropertycommand.h"
-#include "../irisgl/src/core/property.h"
-#include "../irisgl/src/graphics/material.h"
-#include "../irisgl/src/materials/custommaterial.h"
+#include "irisgl/core/properties/property.h"
+#include "irisgl/document/materials/material.h"
+#include "irisgl/document/materials/custommaterial.h"
 
 
 ChangeMaterialPropertyCommand::ChangeMaterialPropertyCommand(iris::MaterialPtr material, QString name, QVariant oldValue, QVariant newValue)

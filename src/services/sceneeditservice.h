@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include <QString>
 #include <QVector3D>
 
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "../core/project.h"   // ModelTypes
 
 #include <functional>

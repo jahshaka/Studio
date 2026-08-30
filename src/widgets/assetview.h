@@ -14,8 +14,8 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
-#include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/core/irisutils.h"
 
 class QSplitter;
 class QListWidget;

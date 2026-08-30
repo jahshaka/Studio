@@ -10,10 +10,10 @@
 #include <cmath>
 #include <algorithm>
 #include <memory>
-#include "irisglfwd.h"
-#include "graphics/mesh.h"          // MeshMaterialData
-#include "scenegraph/meshnode.h"
-#include "materials/defaultmaterial.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/assets/mesh.h"          // MeshMaterialData
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/materials/defaultmaterial.h"
 #include "editor/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
 

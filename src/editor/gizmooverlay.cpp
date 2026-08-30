@@ -2,7 +2,7 @@
 #include <QMatrix3x3>
 #include <QQuaternion>
 #include "../engine/scenemirror.h"
-#include "../irisgl/src/graphics/mesh.h"
+#include "irisgl/document/assets/mesh.h"
 
 using namespace jahshaka::engine;
 

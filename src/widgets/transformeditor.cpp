@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "transformeditor.h"
 #include "dragspinbox.h"
 
-#include "../irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 #include "../uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 

@@ -18,10 +18,10 @@ For more information see the LICENSE file
 
 #include "../commands/reparentscenenodecommand.h"
 
-#include "irisgl/src/scenegraph/scene.h"
-#include "irisgl/src/scenegraph/scenenode.h"
-#include "irisgl/src/scenegraph/viewernode.h"
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/viewernode.h"
+#include "irisgl/core/irisutils.h"
 #include "mainwindow.h"
 #include "uimanager.h"
 #include "editor/ieditorviewport.h"

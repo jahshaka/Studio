@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include "../accordianbladewidget.h"
 
-#include "irisgl/src/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scene.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>

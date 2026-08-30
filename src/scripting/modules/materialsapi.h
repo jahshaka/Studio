@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "../apimodule.h"
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class NodeGraph;
 class GraphApi;

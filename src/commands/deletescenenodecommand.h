@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define DELETESCENENODECOMMAND_H
 
 #include <QUndoCommand>
-#include "irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class MainWindow;
 class SceneHierarchyWidget;

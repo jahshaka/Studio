@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/src/materials/defaultmaterial.h"
+#include "irisgl/document/materials/defaultmaterial.h"
 #include "materialpresetreader.h"
 #include "core/materialpreset.h"
 

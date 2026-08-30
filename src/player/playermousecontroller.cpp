@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <irisgl/SceneGraph.h>
 #include <irisgl/Physics.h>
 #include <irisgl/Graphics.h>
-#include "irisgl/src/geometry/trimesh.h"
+#include "irisgl/core/geometry/trimesh.h"
 
 
 void PlayerMouseController::setViewer(const iris::ViewerNodePtr &value)

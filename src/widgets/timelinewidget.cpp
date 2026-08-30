@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
-#include "../irisgl/src/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 #include "timelinewidget.h"
 #include <QtMath>
 #include <cmath>

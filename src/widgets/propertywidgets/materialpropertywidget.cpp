@@ -27,10 +27,10 @@ For more information see the LICENSE file
 #include "../../constants.h"
 #include "../../io/assetiobase.h"
 
-#include "../../irisgl/src/graphics/texture2d.h"
-#include "../../irisgl/src/scenegraph/meshnode.h"
-#include "../../irisgl/src/materials/custommaterial.h"
-#include "../../irisgl/src/core/property.h"
+#include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/core/properties/property.h"
 
 #include "../../uimanager.h"
 #include "../../commands/changematerialpropertycommand.h"

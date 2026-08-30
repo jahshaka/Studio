@@ -7,7 +7,7 @@
 #include <QSharedPointer>
 #include <QMatrix4x4>
 
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 namespace iris
 {

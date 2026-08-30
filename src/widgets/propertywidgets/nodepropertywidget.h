@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QSharedPointer>
 
-#include "../../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "../accordianbladewidget.h"
 
 class NodePropertyWidget : public AccordianBladeWidget

@@ -14,7 +14,7 @@
 #include <memory>
 #include <QImage>
 #include <QSize>
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
 class SceneMirror;

@@ -15,9 +15,9 @@ For more information see the LICENSE file
 #include <QVector3D>
 #include <QtMath>
 
-#include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/graphics/vertexbuffer.h"
-#include "irisgl/src/graphics/vertexlayout.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/assets/vertexlayout.h"
 
 namespace
 {

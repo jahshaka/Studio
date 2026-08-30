@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <functional>
 
-#include "irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 class NodeGraph;
 class NodeModel;

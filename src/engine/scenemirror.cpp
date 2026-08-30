@@ -8,24 +8,24 @@
 #include <algorithm>
 #include <cmath>
 
-#include "scenegraph/scene.h"
-#include "scenegraph/scenenode.h"
-#include "scenegraph/meshnode.h"
-#include "scenegraph/lightnode.h"
-#include "scenegraph/cameranode.h"
-#include "scenegraph/particlesystemnode.h"
-#include "graphics/particle.h"
-#include "graphics/mesh.h"
-#include "graphics/skeleton.h"
-#include "graphics/vertexlayout.h"
-#include "graphics/vertexbuffer.h"     // VertexBuffer / IndexBuffer (CPU copies)
-#include "graphics/material.h"
-#include "materials/pbrmaterial.h"
-#include "materials/defaultmaterial.h"
-#include "materials/custommaterial.h"
-#include "core/property.h"
-#include "graphics/texture2d.h"
-#include "graphics/shadowmap.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/particle.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/skeleton.h"
+#include "irisgl/document/assets/vertexlayout.h"
+#include "irisgl/document/assets/vertexbuffer.h"     // VertexBuffer / IndexBuffer (CPU copies)
+#include "irisgl/document/materials/material.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/core/properties/property.h"
+#include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/scenegraph/shadowmap.h"
 #include <QFileInfo>
 #include <QtMath>
 

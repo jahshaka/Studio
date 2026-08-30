@@ -18,17 +18,17 @@
 #include <string>
 #include <vector>
 
-#include "irisglfwd.h"
-#include "scenegraph/scene.h"
-#include "scenegraph/scenenode.h"
-#include "scenegraph/meshnode.h"
-#include "graphics/mesh.h"
-#include "graphics/skeleton.h"
-#include "graphics/vertexlayout.h"
-#include "graphics/vertexbuffer.h"
-#include "animation/animation.h"
-#include "animation/skeletalanimation.h"
-#include "materials/defaultmaterial.h"
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/assets/skeleton.h"
+#include "irisgl/document/assets/vertexlayout.h"
+#include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/skeletalanimation.h"
+#include "irisgl/document/materials/defaultmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "engine/scenemirror.h"
 

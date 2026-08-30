@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "../models/socketmodel.h"
 #include "../nodes/test.h" // PropertyNode, TextureNode
 
-#include "irisgl/src/materials/pbrmaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 
 namespace
 {

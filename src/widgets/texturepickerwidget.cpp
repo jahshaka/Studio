@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include "../core/project.h"
 #include "../core/thumbnailmanager.h"
 #include "../widgets/assetpickerwidget.h"
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 #include "globals.h"
 #include <QMimeData>
 #include <QDrag>

@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include <QUndoCommand>
 #include <QMatrix4x4>
 #include <QVariant>
-#include "../irisgl/src/irisglfwd.h"
+#include "irisgl/irisglfwd.h"
 
 // Widened from CustomMaterialPtr to MaterialPtr (SCRIPTING_SPEC §1.4): PbrMaterial
 // edits — the engine viewport's authoring model — are undoable through the same

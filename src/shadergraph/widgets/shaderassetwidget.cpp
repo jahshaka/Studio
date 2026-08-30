@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QDebug>
 
 
-#include "irisgl/src/core/irisutils.h"
+#include "irisgl/core/irisutils.h"
 #include "../core/materialhelper.h"
 #include "../models/properties.h"
 #include <QStandardPaths>

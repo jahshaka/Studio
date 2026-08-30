@@ -19,8 +19,8 @@ For more information see the LICENSE file
 #include "dialogs/preferences/worldsettings.h"
 #include "dialogs/preferences/worldsettingswidget.h"
 
-#include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/document/assets/mesh.h"
 #include "zip.h"
 
 #include <QStackedLayout>
