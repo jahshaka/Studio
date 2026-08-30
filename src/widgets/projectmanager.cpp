@@ -87,7 +87,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		progressDialog->setValue(40);
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), Globals::project->getProjectGuid())) {
             auto assetFile = new AssetFile;
             assetFile->fileName = asset.name;
             assetFile->assetGuid = asset.guid;
@@ -95,7 +95,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
             AssetManager::addAsset(assetFile);
         }
 
-        //for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::CubeMap))) {
+        //for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::CubeMap), Globals::project->getProjectGuid())) {
         //    QJsonDocument mapDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
         //    QJsonObject mapObject = mapDefinition.object();
 
@@ -107,7 +107,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
         //    AssetManager::addAsset(assetCubeMap);
         //}
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), Globals::project->getProjectGuid())) {
             auto assetTexture = new AssetTexture;
             assetTexture->fileName = asset.name;
             assetTexture->assetGuid = asset.guid;
@@ -117,7 +117,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		progressDialog->setValue(60);
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), Globals::project->getProjectGuid())) {
             QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
             QJsonObject shaderObject = shaderDefinition.object();
 
@@ -130,7 +130,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		progressDialog->setValue(70);
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), Globals::project->getProjectGuid())) {
             QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
             QJsonObject particleObject = particleDefinition.object();
 
@@ -425,7 +425,7 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
         if (dirToRemove.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
             Globals::project->setProjectGuid(widget->tileData.guid);
-            db->deleteProject();
+            db->deleteProject(Globals::project->getProjectGuid());
 
 			// Delete folder and contents
 			for (const auto &files : db->deleteFolderAndDependencies(Globals::project->getProjectGuid())) {
@@ -840,7 +840,7 @@ void ProjectManager::loadProjectAssetsSync()
 		AssetManager::addAsset(model);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File))) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), Globals::project->getProjectGuid())) {
 		auto assetFile = new AssetFile;
 		assetFile->fileName = asset.name;
 		assetFile->assetGuid = asset.guid;
@@ -848,7 +848,7 @@ void ProjectManager::loadProjectAssetsSync()
 		AssetManager::addAsset(assetFile);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture))) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), Globals::project->getProjectGuid())) {
 		auto assetTexture = new AssetTexture;
 		assetTexture->fileName = asset.name;
 		assetTexture->assetGuid = asset.guid;
@@ -856,7 +856,7 @@ void ProjectManager::loadProjectAssetsSync()
 		AssetManager::addAsset(assetTexture);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader))) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), Globals::project->getProjectGuid())) {
 		QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 		QJsonObject shaderObject = shaderDefinition.object();
 
@@ -867,7 +867,7 @@ void ProjectManager::loadProjectAssetsSync()
 		AssetManager::addAsset(assetShader);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem))) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), Globals::project->getProjectGuid())) {
 		QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 		QJsonObject particleObject = particleDefinition.object();
 

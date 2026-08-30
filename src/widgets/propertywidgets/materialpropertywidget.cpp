@@ -242,11 +242,11 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
         
         // HANDLE CASE where the widget isn't deselected
 
-        QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName());
+        QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), Globals::project->getProjectGuid());
         if (assetGuid.isEmpty()) {
             db->deleteDependency(
                 meshNodeGuid,
-                db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName())
+                db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName(), Globals::project->getProjectGuid())
             );
         }
         else {

@@ -20,6 +20,8 @@ For more information see the LICENSE file
 
 #include "../constants.h"
 #include "../core/assethelper.h"
+#include "../core/project.h"
+#include "../globals.h"
 #include "../core/database/database.h"
 #include "../core/guidmanager.h"
 #include "../io/assetmanager.h"
@@ -62,7 +64,8 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     // Member row for the mesh file (parent = mainGuid, view_filter = Editor).
     const QString meshGuid = GUIDManager::generateGUID();
     db->createAssetEntry(meshGuid, sourceInfo.fileName(),
-                         static_cast<int>(ModelTypes::Mesh), mainGuid);
+                         static_cast<int>(ModelTypes::Mesh), mainGuid,
+                         Globals::project->getProjectGuid());
 
     // Assimp load + texture discovery (no DB rows, no file copies inside).
     QStringList textureNames, texturePaths;
@@ -88,7 +91,8 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
         QFile::copy(texPath, IrisUtils::join(assetFolder, texInfo.fileName()));
         TexEntry entry{ texInfo.fileName(), GUIDManager::generateGUID() };
         db->createAssetEntry(entry.guid, entry.fileName,
-                             static_cast<int>(ModelTypes::Texture), mainGuid);
+                             static_cast<int>(ModelTypes::Texture), mainGuid,
+                             Globals::project->getProjectGuid());
         textures.append(entry);
     }
 
@@ -124,6 +128,7 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     // The Object row — the only row with view_filter AssetsView, parent = root.
     db->createAssetEntry(mainGuid, sourceInfo.baseName(),
                          static_cast<int>(ModelTypes::Object), QString(),
+                         Globals::project->getProjectGuid(),
                          QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
                          QJsonDocument(blob).toJson(), AssetViewFilter::AssetsView);
 

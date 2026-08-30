@@ -67,7 +67,7 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         ambientColor->setColorValue(scene->ambientColor);
 		worldGravity->setValue(scene->gravity);
 
-		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music));
+		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), Globals::project->getProjectGuid());
 
 		if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
 		else ambientMusicSelector->show();

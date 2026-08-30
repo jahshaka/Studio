@@ -119,9 +119,9 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
 		QString newFileName = skyName + "_" + fileInfo.fileName();
 		newNames.append(newFileName);
 
-		if (db->checkIfRecordExists("name", newFileName, "assets")) {
+		if (db->checkIfRecordExists("name", newFileName, "assets", false, Globals::project->getProjectGuid())) {
 			importAssetsFirst = true;
-			guids.append(db->fetchAssetGUIDByName(newFileName));
+			guids.append(db->fetchAssetGUIDByName(newFileName, Globals::project->getProjectGuid()));
 		}
 	}
 
@@ -141,6 +141,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
 		const QString guid = db->createAssetEntry(GUIDManager::generateGUID(),
 								newFileName,
 								static_cast<int>(ModelTypes::Texture),
+								Globals::project->getProjectGuid(),
 								Globals::project->getProjectGuid());
 
 		guids.append(guid);

@@ -138,7 +138,7 @@ bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pa
     // guid first (assets are guid-keyed), then by file name like the sky panel
     QString guid;
     if (!host.db->fetchAsset(value).guid.isEmpty()) guid = value;
-    else guid = host.db->fetchAssetGUIDByName(QFileInfo(value).fileName());
+    else guid = host.db->fetchAssetGUIDByName(QFileInfo(value).fileName(), Globals::project->getProjectGuid());
     if (guid.isEmpty()) return false;
 
     const QString path = QDir(Globals::project->getProjectFolder())

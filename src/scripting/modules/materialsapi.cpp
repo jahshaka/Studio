@@ -112,7 +112,8 @@ QString MaterialsApi::createGraph(const QString &name)
 
     const QString assetGuid = GUIDManager::generateGUID();
     host.db->createAssetEntry(assetGuid, IrisUtils::buildFileName(shaderName, "shader"),
-                              static_cast<int>(ModelTypes::Shader), parentFolder);
+                              static_cast<int>(ModelTypes::Shader), parentFolder,
+                              Globals::project->getProjectGuid());
 
     // A minimal graph with a PbrMaterial master — the current Effects format
     // (the old ShaderTemplate.shader predates the graph and cannot be reopened

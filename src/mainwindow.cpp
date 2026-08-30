@@ -299,6 +299,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
         nodeGuid, node->getName(),
         static_cast<int>(ModelTypes::Object),
         Globals::project->getProjectGuid(),
+        Globals::project->getProjectGuid(),
         QString(),
         QString(),
         QByteArray(),
@@ -338,6 +339,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	const QString assetGuid = db->createAssetEntry(tileGuid,
 												   "Tile.png",
 												   static_cast<int>(ModelTypes::Texture),
+												   Globals::project->getProjectGuid(),
 												   Globals::project->getProjectGuid(),
                                                    QString(),
                                                    QString(), 
@@ -1334,7 +1336,8 @@ void MainWindow::exportSceneAsZip()
     // Maybe in the future one could add a way to using an in memory database
     // and saving that as a blob which can be put into the zip as bytes (iKlsR)
     // prepare our export database with the current scene, use the os temp location and remove after
-    db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation));
+    db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation),
+                          Globals::project->getProjectGuid());
 
     // get the current project working directory
     auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
@@ -2511,6 +2514,13 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 MainWindow::~MainWindow()
 {
     this->db->closeDatabase();
+    // The QObject services (selection/playback/sceneEdit) are parented to the
+    // window; the plain ones are deleted here.
+    delete services;
+    delete projectService;
+    delete thumbnailService;
+    delete assetService;
+    delete undoService;
     delete ui;
 }
 

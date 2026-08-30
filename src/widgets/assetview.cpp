@@ -1165,7 +1165,8 @@ void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
                             QMap<QString, QString>(),
                             guidCompareMap,
                             records,
-							AssetViewFilter::AssetsView);
+							AssetViewFilter::AssetsView,
+							Globals::project->getProjectGuid());
 
         const QString assetFolder = QDir(assetPath).filePath(guid);
         QDir().mkpath(assetFolder);
@@ -1301,7 +1302,8 @@ void AssetView::importJahBundle(const QString &fileName)
             QDir(temporaryDir.path()).filePath("asset.db"),
             QMap<QString, QString>(),
             guidCompareMap,
-            records
+            records,
+            Globals::project->getProjectGuid()
         );
 
         QMap<QString, QString> guidsToReplace;
@@ -1500,7 +1502,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
         QFileInfo entryInfo(entry.path);
 
         if (entryInfo.isDir()) {
-            db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid);
+            db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid, Globals::project->getProjectGuid());
         }
         else {
             ModelTypes type;
@@ -1538,6 +1540,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                asset->fileName,
                                                                static_cast<int>(asset->type),
                                                                entry.parent_guid,
+                                                               Globals::project->getProjectGuid(),
                                                                QString(),
                                                                QString(),
                                                                AssetHelper::makeBlobFromPixmap(thumbnail));
@@ -1697,6 +1700,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                            dt.path,
                                                                            static_cast<int>(ModelTypes::Texture),
                                                                            main_guid,
+                                                                           Globals::project->getProjectGuid(),
                                                                            QString(),
                                                                            QString(),
                                                                            AssetHelper::makeBlobFromPixmap(thumbnail));
@@ -1756,6 +1760,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                     QFileInfo(asset->fileName).baseName(),
                                                                     static_cast<int>(ModelTypes::Object),
                                                                     QString(),
+                                                                    Globals::project->getProjectGuid(),
                                                                     QString(),
                                                                     QString(),
                                                                     AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
@@ -2264,7 +2269,8 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
     QString guidReturned = db->copyAsset(
         jafType, guid, newNames,
         oldAssetRecords, Globals::project->getProjectGuid(),
-		AssetViewFilter::Editor
+		AssetViewFilter::Editor,
+		Globals::project->getProjectGuid()
     );
 
     for (auto &asset : AssetManager::getAssets()) {

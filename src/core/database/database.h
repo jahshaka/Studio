@@ -23,8 +23,10 @@ For more information see the LICENSE file
 
 #include "irisglfwd.h"
 
-// Note that some functions that operate with projects don't accept anything, this is because
-// they use the globally available getProjectGuid() which is always set to the current project
+// Every project-scoped function takes the project guid explicitly — the data
+// layer no longer reads the app's ambient current project (SCRIPTING_SPEC
+// §1.6.1 / APP_ARCHITECTURE_AUDIT §2.5; callers pass
+// Globals::project->getProjectGuid() until the hub dissolves).
 // Also note there are some general functions such as deleteRecord(...) that can delete a record
 // from any table however there will always exist the explicit function which is preferred
 // The general variants are better for use with in memory databases and followup queries
@@ -57,11 +59,12 @@ public:
                        const QString &name,
                        const QByteArray &sceneBlob = QByteArray(),
                        const QByteArray &thumbnail = QByteArray());
-    bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, bool visible = true);
+    bool createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, const QString &projectGuid, bool visible = true);
     QString createAssetEntry(const QString &guid,
                              const QString &assetname,
                              const int &type,
                              const QString &parentFolder,
+                             const QString &projectGuid,
                              const QString &license = QString(),
                              const QString &author = QString(),
                              const QByteArray &thumbnail = QByteArray(),
@@ -88,7 +91,6 @@ public:
     bool removeFavorite(const QString &guid);
 
     // DELETE ===============================================================================
-    bool deleteProject();
     bool deleteProject(const QString &guid);
 	bool destroyTable(const QString &table);
 	void wipeDatabase();
@@ -107,8 +109,8 @@ public:
     bool renameFolder(const QString &guid, const QString &newName);
     bool renameCollection(const int &collectionId, const QString &newName);
     bool renameAsset(const QString &guid, const QString &newName);
-    bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail);
-    bool updateProjectBlob(const QByteArray &sceneBlob);
+    bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid);
+    bool updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
     bool updateAssetAsset(const QString &guid, const QByteArray &asset);
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
@@ -123,10 +125,10 @@ public:
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
     QVector<AssetRecord> fetchAssetsForAssetView();
-    QVector<AssetRecord> fetchChildAssets(const QString &parent, int filter = -1, bool showDependencies = true);
+    QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1, bool showDependencies = true);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
     QVector<AssetRecord> fetchAssetsByCollection(const int &collection_id);
-	QVector<AssetRecord> fetchAssetsByType(const int &type);
+	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
 	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);
     QVector<AssetRecord> fetchFilteredAssets(const QString &guid, const int &type);
     QVector<AssetRecord> fetchThumbnails();
@@ -135,8 +137,8 @@ public:
     // desktop <= 0 fetches every project (legacy behaviour); desktop 1..N filters
     // to that desktop, treating an absent/NULL desktop column value as Desktop 1.
     QVector<ProjectTileData> fetchProjects(int desktop = 0);
-    QVector<FolderRecord> fetchChildFolders(const QString &parent);
-    QVector<FolderRecord> fetchCrumbTrail(const QString &parent);
+    QVector<FolderRecord> fetchChildFolders(const QString &parent, const QString &projectGuid);
+    QVector<FolderRecord> fetchCrumbTrail(const QString &parent, const QString &projectGuid);
     QVector<AssetRecord> fetchAssetThumbnails(const QStringList &guids);
     QByteArray fetchAssetData(const QString &guid) const;
 
@@ -150,7 +152,7 @@ public:
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependeesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);
-    QString fetchAssetGUIDByName(const QString &name);
+    QString fetchAssetGUIDByName(const QString &name, const QString &projectGuid);
     QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
     QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
 
@@ -166,12 +168,14 @@ public:
                         QMap<QString, QString> &outGuids,
                         QVector<AssetRecord> &assetRecords,
 						AssetViewFilter view_filter_to,
+                        const QString &projectGuid,
                         const QString &parent = QString());
 
     QString importAssetBundle(const QString &pathToDb,
                              const QMap<QString, QString> &newNames,
                              QMap<QString, QString> &outGuids,
                              QVector<AssetRecord> &assetRecords,
+                             const QString &projectGuid,
                              const QString &parent = QString());
 
     QString copyAsset(const ModelTypes &jafType,
@@ -179,13 +183,14 @@ public:
                       const QMap<QString, QString> &newNames,
                       QVector<AssetRecord> &oldAssetRecords,
                       const QString &parent,
-					  AssetViewFilter view_filter_to);
+					  AssetViewFilter view_filter_to,
+					  const QString &projectGuid);
 
     // EXPORT ===============================================================================
     bool createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath);
     bool createBlobFromAsset(const QString &guid, const QString &writePath);
 
-    void createExportScene(const QString& outTempFilePath);
+    void createExportScene(const QString& outTempFilePath, const QString &projectGuid);
     void createExportBundle(const QStringList& objectGuids, const QString& outTempFilePath);
 
     int getTableCount();
@@ -197,7 +202,7 @@ public:
 
     QString getVersion();
 
-    QByteArray getSceneBlobGlobal() const;
+    QByteArray getSceneBlobGlobal(const QString &projectGuid) const;
 	void updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
 	void updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
 
@@ -215,7 +220,7 @@ public:
 							   const QString &thumbnail_guid);
     bool hasCachedThumbnail(const QString& name);
 
-	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, bool perProject = false);
+	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, bool perProject = false, const QString &projectGuid = QString());
     bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     bool checkIfProjectVersionSupported(const QString& pathToDb);

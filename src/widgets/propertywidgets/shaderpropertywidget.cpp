@@ -111,7 +111,7 @@ void ShaderPropertyWidget::onVertexShaderFileChanged(int index)
             jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
             jsonFile.write(QJsonDocument(shaderObject).toJson());
 
-            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies")) {
+            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, Globals::project->getProjectGuid())) {
                 db->createDependency(
                     static_cast<int>(ModelTypes::Shader),
                     static_cast<int>(ModelTypes::File),
@@ -147,7 +147,7 @@ void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
             jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
             jsonFile.write(QJsonDocument(shaderObject).toJson());
 
-            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies")) {
+            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, Globals::project->getProjectGuid())) {
                 db->createDependency(
                     static_cast<int>(ModelTypes::Shader),
                     static_cast<int>(ModelTypes::File),

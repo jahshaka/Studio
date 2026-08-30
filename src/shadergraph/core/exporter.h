@@ -117,6 +117,7 @@ public:
 			QFileInfo(fileName).fileName(),
 			static_cast<int>(ModelTypes::Material),
 			QString(),
+			Globals::project->getProjectGuid(),
 			QString(),
 			QString(),
 			QByteArray(),

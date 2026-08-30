@@ -94,7 +94,7 @@ void ShaderAssetWidget::updateAssetView(const QString & path)
 {
 	assetViewWidget->clear();
 
-	for (const auto &asset : db->fetchChildAssets(path, static_cast<int>(ModelTypes::Shader))) 
+	for (const auto &asset : db->fetchChildAssets(path, Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Shader))) 
 		addItem(asset);
 
 	setWidgetToBeShown();
@@ -426,7 +426,7 @@ void ShaderAssetWidget::createFolder()
 	const QString parent = item->data(MODEL_PARENT_ROLE).toString();
 
 	//// Create a new database entry for the new folder
-	db->createFolder(folderName, parent, guid);
+	db->createFolder(folderName, parent, guid, Globals::project->getProjectGuid());
 
 	// We could just addItem but this is by choice and also so we can order folders first
 	updateAssetView(assetItemShader.selectedGuid);
@@ -464,6 +464,7 @@ void ShaderAssetWidget::createShader(QString *shaderName)
 		IrisUtils::buildFileName(newShader, "shader"),
 		static_cast<int>(ModelTypes::Shader),
 		assetItemShader.selectedGuid,
+		Globals::project->getProjectGuid(),
 		QByteArray());
 
 	item->setText(newShader);
@@ -557,6 +558,7 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 	db->createAssetEntry(targetGuid,
 		sourceRecord.name,
 		static_cast<int>(ModelTypes::Shader),
+		Globals::project->getProjectGuid(),
 		Globals::project->getProjectGuid());
 
 	

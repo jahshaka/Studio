@@ -31,6 +31,8 @@ For more information see the LICENSE file
 #include "assetiobase.h"
 #include "constants.h"
 #include "core/database/database.h"
+#include "core/project.h"
+#include "globals.h"
 #include "editor/editordata.h"
 
 Database *SceneWriter::handle = 0;
@@ -383,7 +385,7 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     // An emitter can have no texture (cleared in the property panel): write an
     // empty guid instead of dereferencing null (audit defect #6).
     sceneNodeObject["texture"]              = node->texture
-        ? handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName())
+        ? handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName(), Globals::project->getProjectGuid())
         : QString();
 }
 
@@ -436,7 +438,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
         if (prop->type == iris::PropertyType::Texture) {
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
 			auto id = relative
-				? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName())
+				? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), Globals::project->getProjectGuid())
 				: getRelativePath(prop->getValue().toString());
 			// A texture that is not a database asset (no GUID) would otherwise be
 			// written as an empty string and lost; fall back to a relative path,

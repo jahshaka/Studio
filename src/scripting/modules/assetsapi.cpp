@@ -133,7 +133,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         records = host.db->fetchAssetsForAssetView();
     } else if (scope == "project") {
         if (!requireProject()) return out;
-        records = host.db->fetchChildAssets(Globals::project->getProjectGuid(), -1, true);
+        records = host.db->fetchChildAssets(Globals::project->getProjectGuid(), Globals::project->getProjectGuid(), -1, true);
     } else {
         fail("assets.list: scope must be 'store' or 'project'");
         return out;
@@ -249,7 +249,8 @@ QString AssetsApi::addToProject(const QString &guid)
     QVector<AssetRecord> newRecords;
     const QString newGuid = host.db->copyAsset(jafType, guid, newNames, newRecords,
                                                Globals::project->getProjectGuid(),
-                                               AssetViewFilter::Editor);
+                                               AssetViewFilter::Editor,
+                                               Globals::project->getProjectGuid());
 
     // Post-copy registrations, per type (the widget's tail).
     for (auto &asset : AssetManager::getAssets()) {

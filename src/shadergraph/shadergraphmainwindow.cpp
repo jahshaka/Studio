@@ -386,7 +386,8 @@ void MainWindow::importEffect(QString fileName)
 			QMap<QString, QString>(),
 			guidCompareMap,
 			records,
-			AssetViewFilter::Effects);
+			AssetViewFilter::Effects,
+			Globals::project->getProjectGuid());
 
 		const QString assetFolder = QDir(assetPath).filePath(guid);
 		QDir().mkpath(assetFolder);
@@ -1609,6 +1610,7 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 		assetGuid,
 		QFileInfo(fileName).fileName(),
 		static_cast<int>(ModelTypes::Material),
+		Globals::project->getProjectGuid(),
 		Globals::project->getProjectGuid(),
 		QString(),
 		QString(),

@@ -122,7 +122,7 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
 
     postMan = iris::PostProcessManagerPtr();
     return reader->readScene(project->getProjectFolder(),
-                             db->getSceneBlobGlobal(),
+                             db->getSceneBlobGlobal(project->getProjectGuid()),
                              postMan,
                              editorData);
 }
@@ -150,10 +150,10 @@ bool ProjectService::saveProjectBlob()
         QBuffer buffer(&thumb);
         buffer.open(QIODevice::WriteOnly);
         img.save(&buffer, "PNG");
-        ok = db->updateProject(blob, thumb);
+        ok = db->updateProject(blob, thumb, project->getProjectGuid());
         projectManager->updateTile(project->getProjectGuid(), thumb);
     } else {
-        ok = db->updateProjectBlob(blob);
+        ok = db->updateProjectBlob(blob, project->getProjectGuid());
     }
 
     undo->markSaved();
@@ -180,7 +180,7 @@ void ProjectService::saveOpenScene()
     buffer.open(QIODevice::WriteOnly);
     img.save(&buffer, "PNG");
 
-    db->updateProject(blob, thumb);
+    db->updateProject(blob, thumb, project->getProjectGuid());
     projectManager->updateTile(project->getProjectGuid(), thumb);
 
     undo->markSaved();
@@ -205,7 +205,7 @@ void ProjectService::saveInitialScene(const QString &projectPath)
         img.save(&buffer, "PNG");
     }
 
-    db->updateProject(sceneObject, thumb);
+    db->updateProject(sceneObject, thumb, project->getProjectGuid());
 
     undo->markSaved();
 }

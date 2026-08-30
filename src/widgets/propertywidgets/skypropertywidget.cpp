@@ -150,7 +150,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 			connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
 				// Remember that asset names are unique (auto incremented) so this is fine
-				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
+				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), Globals::project->getProjectGuid());
 				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
 				if (!assetGuid.isEmpty()) {
 					db->createDependency(
@@ -225,7 +225,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 {
 	// Normally there'd be a check for if value is empty here but in that case we can clear the guid
-	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName());
+	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), Globals::project->getProjectGuid());
 	db->deleteDependency(skyGuid, guid);
 	// Remember that asset names are unique (auto incremented) so this is fine
 	if (!assetGuid.isEmpty()) {

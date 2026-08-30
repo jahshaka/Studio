@@ -513,7 +513,7 @@ void AssetWidget::populateAssetTree(bool initialRun)
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 {
-	for (const auto &folder : db->fetchChildFolders(path)) {
+	for (const auto &folder : db->fetchChildFolders(path, Globals::project->getProjectGuid())) {
 		auto item = new QTreeWidgetItem();
 		item->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
 		item->setData(0, Qt::DisplayRole, folder.name);
@@ -666,12 +666,12 @@ void AssetWidget::updateAssetView(const QString &path, int filter, bool showDepe
 	ui->assetView->clear();
 
     if (filter > 0) {
-        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);
+        for (const auto &asset : db->fetchChildAssets(path, Globals::project->getProjectGuid(), filter, showDependencies)) addItem(asset);
     }
     else {
-        for (const auto &folder : db->fetchChildFolders(path)) addItem(folder);
-        for (const auto &asset : db->fetchChildAssets(path, filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
-        addCrumbs(db->fetchCrumbTrail(path));
+        for (const auto &folder : db->fetchChildFolders(path, Globals::project->getProjectGuid())) addItem(folder);
+        for (const auto &asset : db->fetchChildAssets(path, Globals::project->getProjectGuid(), filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
+        addCrumbs(db->fetchCrumbTrail(path, Globals::project->getProjectGuid()));
     }
 
     goUpOneControl->setEnabled(false);
@@ -1860,6 +1860,7 @@ void AssetWidget::createShader()
 						 IrisUtils::buildFileName(shaderName, "shader"),
 						 static_cast<int>(ModelTypes::Shader),
 					     assetItem.selectedGuid,
+						 Globals::project->getProjectGuid(),
 						 QByteArray());
 
 	item->setText(shaderName);
@@ -1919,6 +1920,7 @@ void AssetWidget::createSky()
 		"Sky",
 		static_cast<int>(ModelTypes::Sky),
 		Globals::project->getProjectGuid(),
+		Globals::project->getProjectGuid(),
 		QString(),
 		QString(),
 		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
@@ -1960,7 +1962,7 @@ void AssetWidget::createFolder()
 	const QString parent = item->data(MODEL_PARENT_ROLE).toString();
 
 	//// Create a new database entry for the new folder
-	db->createFolder(folderName, parent, guid);
+	db->createFolder(folderName, parent, guid, Globals::project->getProjectGuid());
 
 	// Update the tree browser
 	QTreeWidgetItem *child = ui->assetTree->currentItem();
@@ -2186,6 +2188,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                 guidCompareMap,
                 oldAssetRecords,
 				AssetViewFilter::Editor,
+                Globals::project->getProjectGuid(),
                 assetItem.selectedGuid
             );
 
@@ -2348,7 +2351,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 		QFileInfo entryInfo(entry.path);
 
 		if (entryInfo.isDir()) {
-			db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid);
+			db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid, Globals::project->getProjectGuid());
 		}
 		else {
 			QString fileName;
@@ -2399,6 +2402,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
                                                                asset->fileName,
                                                                static_cast<int>(asset->type),
                                                                entry.parent_guid,
+                                                               Globals::project->getProjectGuid(),
                                                                QString(),
                                                                QString(),
                                                                AssetHelper::makeBlobFromPixmap(thumbnail));
@@ -2561,6 +2565,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 																	QFileInfo(asset->fileName).baseName(),
 																	static_cast<int>(ModelTypes::Object),
 																	entry.parent_guid,
+                                                                    Globals::project->getProjectGuid(),
                                                                     QString(),
                                                                     QString(),
                                                                     QByteArray(),

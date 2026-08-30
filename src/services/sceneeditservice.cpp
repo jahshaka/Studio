@@ -86,6 +86,7 @@ void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QStrin
         nodeGuid, node->getName(),
         static_cast<int>(ModelTypes::Object),
         project->getProjectGuid(),
+        project->getProjectGuid(),
         QString(),
         QString(),
         QByteArray(),
@@ -211,8 +212,8 @@ void SceneEditService::addParticleSystem()
     node->setName("Particle System");
 
     auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Systems", "folders")) {
-        if (!db->createFolder("Systems", project->getProjectGuid(), fguid, false)) return;
+    if (!db->checkIfRecordExists("name", "Systems", "folders", false, project->getProjectGuid())) {
+        if (!db->createFolder("Systems", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
     }
 
     auto nodeGuid = GUIDManager::generateGUID();
@@ -222,6 +223,7 @@ void SceneEditService::addParticleSystem()
         nodeGuid, node->getName(),
         static_cast<int>(ModelTypes::ParticleSystem),
         fguid,
+        project->getProjectGuid(),
         QString(),
         QString(),
         QByteArray(),
@@ -247,6 +249,7 @@ void SceneEditService::addParticleSystem()
     const QString assetGuid = db->createAssetEntry(tileGuid,
         "Glowing Particle.jpg",
         static_cast<int>(ModelTypes::Texture),
+        project->getProjectGuid(),
         project->getProjectGuid(),
         QString(),
         QString(),
@@ -562,8 +565,8 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
     jsonFile.write(QJsonDocument(material).toJson());
 
     auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Presets", "folders")) {
-        if (!db->createFolder("Presets", project->getProjectGuid(), fguid, false)) return;
+    if (!db->checkIfRecordExists("name", "Presets", "folders", false, project->getProjectGuid())) {
+        if (!db->createFolder("Presets", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
     }
 
     QString guid = db->createAssetEntry(
@@ -571,6 +574,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
         preset.name,
         static_cast<int>(ModelTypes::Material),
         fguid,
+        project->getProjectGuid(),
         QString(),
         QString(),
         QByteArray(),
@@ -598,6 +602,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
                 QFileInfo(file).fileName(),
                 static_cast<int>(ModelTypes::Texture),
                 fguid,
+                project->getProjectGuid(),
                 QString(),
                 QString(),
                 QByteArray(),
@@ -677,6 +682,7 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
             QFileInfo(fileName).fileName(),
             static_cast<int>(ModelTypes::Material),
             folderGuid,
+            project->getProjectGuid(),
             QString(),
             QString(),
             QByteArray(),
