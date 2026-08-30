@@ -19,7 +19,10 @@ For more information see the LICENSE file
 #include "moduleshared.h"
 #include "../../editor/ieditorviewport.h"
 #include "../../mainwindow.h"
-#include "../../uimanager.h"
+#include "../../services/services.h"
+#include "../../services/playbackservice.h"
+#include "../../services/selectionservice.h"
+#include "../../services/undoservice.h"
 
 using namespace scriptmod;
 
@@ -64,65 +67,69 @@ QVector<VerbInfo> EditorApi::verbs() const
 
 bool EditorApi::select(const QVariant &id)
 {
-    if (!host.mainWindow) return fail("editor: not available in this session");
+    if (!host.services || !host.services->selection || !host.mainWindow)
+        return fail("editor: not available in this session");
     auto scene = host.mainWindow->getScene();
     if (!scene) return fail("editor.select: no scene is open");
 
     const QString guid = id.toString();
     if (guid.isEmpty()) {
-        host.mainWindow->sceneNodeSelected(iris::SceneNodePtr());
+        host.services->selection->select(iris::SceneNodePtr());
         return true;
     }
     auto node = findNodeByGuid(scene->getRootNode(), guid);
     if (!node) return fail(QStringLiteral("editor.select: no node with id '%1'").arg(guid));
-    host.mainWindow->sceneNodeSelected(node);
+    host.services->selection->select(node);
     return true;
 }
 
 QVariant EditorApi::selection()
 {
-    if (!host.mainWindow) return QVariant();
-    auto node = host.mainWindow->selectedSceneNode();
+    if (!host.services || !host.services->selection) return QVariant();
+    auto node = host.services->selection->selected();
     return node ? QVariant(node->getGUID()) : QVariant();
 }
 
 bool EditorApi::undo()
 {
-    if (!host.mainWindow) return fail("editor: not available in this session");
-    host.mainWindow->undo();
+    if (!host.services || !host.services->undo) return fail("editor: not available in this session");
+    host.services->undo->undo();
     return true;
 }
 
 bool EditorApi::redo()
 {
-    if (!host.mainWindow) return fail("editor: not available in this session");
-    host.mainWindow->redo();
+    if (!host.services || !host.services->undo) return fail("editor: not available in this session");
+    host.services->undo->redo();
     return true;
 }
 
 bool EditorApi::play()
 {
-    if (!host.mainWindow || !host.viewport) return fail("editor: not available in this session");
-    if (UiManager::isScenePlaying) return true;
-    host.mainWindow->enterPlayMode();
+    if (!host.services || !host.services->playback || !host.viewport)
+        return fail("editor: not available in this session");
+    if (host.services->playback->isPlaying()) return true;
+    host.services->playback->enterPlayMode();
     host.viewport->startPlayingScene();
     return true;
 }
 
 bool EditorApi::stop()
 {
-    if (!host.mainWindow || !host.viewport) return fail("editor: not available in this session");
-    if (!UiManager::isScenePlaying) return true;
-    host.mainWindow->enterEditMode();
+    if (!host.services || !host.services->playback || !host.viewport)
+        return fail("editor: not available in this session");
+    if (!host.services->playback->isPlaying()) return true;
+    host.services->playback->enterEditMode();
     host.viewport->stopPlayingScene();
     return true;
 }
 
 bool EditorApi::simulate(bool enabled)
 {
-    if (!host.viewport) return fail("editor: not available in this session");
-    if (enabled) UiManager::startPhysicsSimulation();
-    else UiManager::stopPhysicsSimulation();
+    if (!host.services || !host.services->playback || !host.viewport)
+        return fail("editor: not available in this session");
+    if (enabled) host.services->playback->startSimulation();
+    else host.services->playback->stopSimulation();
     return true;
 }
 

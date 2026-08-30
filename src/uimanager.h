@@ -19,6 +19,7 @@ class MainWindow;
 class IEditorViewport;
 class SceneHierarchyWidget;
 class SceneNodePropertiesWidget;
+class UndoService;
 
 /*
 Tied directly to the WindowSpaces enum
@@ -65,25 +66,24 @@ public:
 
     static void updateWindowTitle();
 
+    // Undo: forwarding shims over UndoService (src/services/undoservice.h).
+    // The stack, the script-macro guard and the saved-count bookkeeping live
+    // in the service now; these statics survive only until the remaining
+    // callers are rerouted (audit §9, Phase 4 deletes the hub).
     static bool isUndoStackDirty();
 	static bool getUndoStackCount();
     /// The stack itself — the scripting engine needs beginMacro/endMacro for
     /// one-undo-step-per-script wrapping. May be null before setupUndoRedo.
-    static QUndoStack* getUndoStack() { return undoStack; }
-    /// True while a script run's undo macro is open. clearUndoStack() must not
-    /// clear then (QUndoStack::clear() inside an open macro corrupts the macro
-    /// accounting) — e.g. a scripted project.create passes through newProject,
-    /// which clears the stack for the UI flow.
-    static bool scriptMacroOpen;
+    static QUndoStack* getUndoStack();
     static void clearUndoStack();
-    static void setUndoStack(QUndoStack*);
     static void pushUndoStack(QUndoCommand*);
     static void popUndoStack();
+    static void setUndoService(UndoService*);
 
     static SceneMode sceneMode;
 
 private:
-    static QUndoStack* undoStack;
+    static UndoService* undoService;
 };
 
 #endif // UIMANAGER_H

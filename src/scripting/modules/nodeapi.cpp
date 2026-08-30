@@ -15,7 +15,8 @@ For more information see the LICENSE file
 #include "../../commands/reparentscenenodecommand.h"
 #include "../../commands/transfrormscenenodecommand.h"
 #include "../../mainwindow.h"
-#include "../../uimanager.h"
+#include "../../services/services.h"
+#include "../../services/undoservice.h"
 
 using namespace scriptmod;
 
@@ -87,7 +88,7 @@ bool NodeApi::reparent(const QString &id, const QString &parentId)
     if (!parent) return false;
     if (ReparentSceneNodeCommand::wouldCreateCycle(node, parent))
         return fail("node.reparent: that would create a cycle");
-    UiManager::pushUndoStack(new ReparentSceneNodeCommand(node, parent));
+    host.services->undo->push(new ReparentSceneNodeCommand(node, parent));
     return true;
 }
 
@@ -100,7 +101,7 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
     const QVector3D rotEuler = vecFromJs(change.value("rotation"), node->getLocalRot().toEulerAngles());
     const QVector3D scale = vecFromJs(change.value("scale"), node->getLocalScale());
 
-    UiManager::pushUndoStack(new TransformSceneNodeCommand(
+    host.services->undo->push(new TransformSceneNodeCommand(
         node, pos, QQuaternion::fromEulerAngles(rotEuler), scale));
 
     return { { "position", vecToJs(node->getLocalPos()) },

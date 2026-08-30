@@ -80,6 +80,9 @@ set(SRCS
     src/scripting/modules/materialsapi.cpp
     src/scripting/services/assetimporter.cpp
     src/scripting/modules/studiomodules.cpp
+    src/services/undoservice.cpp
+    src/services/selectionservice.cpp
+    src/services/playbackservice.cpp
     src/widgets/assetfavorites.cpp 
     src/widgets/assetmodelpanel.cpp 
     src/widgets/assetmaterialpanel.cpp 
@@ -248,6 +251,10 @@ set(HEADERS
     src/scripting/modules/materialsapi.h
     src/scripting/services/assetimporter.h
     src/scripting/modules/studiomodules.h
+    src/services/services.h
+    src/services/undoservice.h
+    src/services/selectionservice.h
+    src/services/playbackservice.h
     src/widgets/assetfavorites.h 
     src/widgets/assetpanel.h 
     src/widgets/assetmodelpanel.h 

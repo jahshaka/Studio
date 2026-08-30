@@ -17,7 +17,8 @@ For more information see the LICENSE file
 #include "../../commands/reparentscenenodecommand.h"
 #include "../../commands/transfrormscenenodecommand.h"
 #include "../../mainwindow.h"
-#include "../../uimanager.h"
+#include "../../services/services.h"
+#include "../../services/undoservice.h"
 
 using namespace scriptmod;
 
@@ -105,13 +106,13 @@ bool SceneApi::applyOptions(const iris::SceneNodePtr &node, const QVariantMap &o
             return fail(QStringLiteral("%1: no node with id '%2' for parent").arg(verb, options.value("parent").toString()));
         if (ReparentSceneNodeCommand::wouldCreateCycle(node, parent))
             return fail(QStringLiteral("%1: reparenting would create a cycle").arg(verb));
-        UiManager::pushUndoStack(new ReparentSceneNodeCommand(node, parent));
+        host.services->undo->push(new ReparentSceneNodeCommand(node, parent));
     }
     if (options.contains("position") || options.contains("rotation") || options.contains("scale")) {
         const QVector3D pos = vecFromJs(options.value("position"), node->getLocalPos());
         const QVector3D rotEuler = vecFromJs(options.value("rotation"), node->getLocalRot().toEulerAngles());
         const QVector3D scale = vecFromJs(options.value("scale"), node->getLocalScale());
-        UiManager::pushUndoStack(new TransformSceneNodeCommand(
+        host.services->undo->push(new TransformSceneNodeCommand(
             node, pos, QQuaternion::fromEulerAngles(rotEuler), scale));
     }
     return true;

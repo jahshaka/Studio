@@ -30,6 +30,7 @@ class Database;
 class IEditorViewport;
 class ProjectManager;
 class QUndoStack;
+struct StudioServices;
 
 struct ScriptHost
 {
@@ -38,6 +39,12 @@ struct ScriptHost
     IEditorViewport *viewport = nullptr;        // editor viewport, if one exists
     ProjectManager  *projectManager = nullptr;
     QUndoStack      *undoStack = nullptr;       // for one-undo-step-per-script macros
+
+    /// The service layer (src/services/services.h) — the ApiModules' verbs
+    /// call these, not MainWindow (APP_ARCHITECTURE_AUDIT §3.2/§3.3). Null in
+    /// hosts that have no services (the scripting core stays Studio-free:
+    /// this is a forward declaration only).
+    StudioServices  *services = nullptr;
 
     /// True when a project is open (a scene is loaded and Globals::project has a
     /// guid). Unset = false: verbs that requireProject() fail cleanly.

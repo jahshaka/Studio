@@ -86,6 +86,12 @@ class GizmoHitData;
 class AdvancedGizmoHandle;
 class MaterialPreset;
 class AssetWidget;
+
+// services (src/services/) — the shell constructs these and delegates to them
+struct StudioServices;
+class UndoService;
+class SelectionService;
+class PlaybackService;
 // class SceneNodePropertiesWidget;
 
 class AssetModelPanel;
@@ -168,9 +174,12 @@ public:
 
     iris::ScenePtr getScene();
 
-    /// Selection read-back for the scripting API (SCRIPTING_SPEC §1.2): the
-    /// single accessor to the otherwise-private activeSceneNode.
-    iris::SceneNodePtr selectedSceneNode() const { return activeSceneNode; }
+    /// Selection read-back (SCRIPTING_SPEC §1.2) — delegates to SelectionService.
+    iris::SceneNodePtr selectedSceneNode() const;
+
+    /// The service layer (APP_ARCHITECTURE_AUDIT §3.3). Owned by the window;
+    /// valid from the end of the constructor.
+    StudioServices *studioServices() const { return services; }
 
     /// Blob-only save (SCRIPTING_SPEC §1.6.2): writes the scene into the
     /// project row — with a viewport thumbnail when one is available — and
@@ -408,11 +417,17 @@ private slots:
 	void changeProjection(bool val);
 
 private:
+    void setupServices();
+    /// The widget fan-out for a selection change (viewport, properties,
+    /// hierarchy, timeline) — driven by SelectionService::selectionChanged.
+    void applySelectionToUi(iris::SceneNodePtr sceneNode);
+    /// The play-button chrome halves of the old enterEditMode/enterPlayMode —
+    /// driven by PlaybackService's mode signals.
+    void applyEditModeUi();
+    void applyPlayModeUi();
+
     QOpenGLContext* loadingContext;
     QOffscreenSurface* loadingSurface;
-    // Re-entrancy guard: a viewport may echo setSelectedNode() through
-    // EditorViewportEvents::sceneNodeSelected, which lands back in sceneNodeSelected().
-    bool inSceneNodeSelected = false;
 
     Ui::MainWindow *ui;
     SurfaceView* surface;
@@ -424,7 +439,6 @@ private:
     EditorCameraController* camControl;
 
     QSharedPointer<iris::Scene> scene;
-    QSharedPointer<iris::SceneNode> activeSceneNode;
 
     QTimer* timer;
 
@@ -449,7 +463,6 @@ private:
     bool dragging;
     QVector3D dragScenePos;
 
-	int undoStackCount;
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
     AboutDialog* aboutDialog;
@@ -530,6 +543,13 @@ private:
 
 	bool isSceneOpen = false;
 	shadergraph::MainWindow *shaderGraph;
+
+    // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
+    // deleted in the dtor. The QObject services are parented to the window.
+    StudioServices *services = nullptr;
+    UndoService *undoService = nullptr;
+    SelectionService *selectionService = nullptr;
+    PlaybackService *playbackService = nullptr;
 
     // scripting (SCRIPTING_SPEC §2): the host struct must outlive the engine
     struct ScriptHost *scriptHost = nullptr;

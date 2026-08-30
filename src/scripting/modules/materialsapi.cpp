@@ -29,7 +29,8 @@ For more information see the LICENSE file
 #include "../../io/assetmanager.h"
 #include "../../io/materialpresetreader.h"
 #include "../../mainwindow.h"
-#include "../../uimanager.h"
+#include "../../services/services.h"
+#include "../../services/undoservice.h"
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../irisgl/src/core/property.h"
 #include "../../irisgl/src/materials/custommaterial.h"
@@ -289,7 +290,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 return fail(QStringLiteral("material.set: unknown property '%1'").arg(key));
         }
 
-        UiManager::pushUndoStack(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
+        host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
     }
     return true;
 }

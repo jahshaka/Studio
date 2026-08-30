@@ -153,6 +153,11 @@ For more information see the LICENSE file
 #include "scripting/scriptconsole.h"
 #include "scripting/modules/studiomodules.h"
 
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "services/selectionservice.h"
+#include "services/playbackservice.h"
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
@@ -195,6 +200,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupDockWidgets();
     setupShortcuts();
 	setupUndoRedo();
+	setupServices();
 
 	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
 	// dock starts hidden — Ctrl+` toggles it in the editor space.
@@ -204,6 +210,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptHost->viewport = sceneView;
 	scriptHost->projectManager = pmContainer;
 	scriptHost->undoStack = undoStack;
+	scriptHost->services = services;
 	scriptHost->projectOpen = []() {
 		return UiManager::isSceneOpen && !Globals::project->getProjectGuid().isEmpty();
 	};
@@ -211,7 +218,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		return EngineHost::viewportBackend() == ViewportBackend::Engine
 			&& EngineHost::instance().isRunning() && sceneView->isInitialized();
 	};
-	scriptHost->macroOpenChanged = [](bool open) { UiManager::scriptMacroOpen = open; };
+	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
 	scriptEngine = new ScriptEngine(*scriptHost, this);
 	registerStudioModules(*scriptEngine);
 
@@ -226,8 +233,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
 	restoreState(settings->getValue("windowState", "").toByteArray());
-
-	undoStackCount = 0;
 
     loadingContext = nullptr;
     loadingSurface = nullptr;
@@ -472,7 +477,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		event->accept();
 	}
 	else {
-		if (UiManager::isUndoStackDirty() && (undoStackCount != UiManager::getUndoStackCount())) {
+		if (undoService->isDirty() && !undoService->savedCountMatchesCurrent()) {
 			QMessageBox::StandardButton reply;
 			reply = QMessageBox::question(this,
 				"Unsaved Changes",
@@ -560,10 +565,34 @@ void MainWindow::setupProjectDB()
 	Globals::db = db;
 }
 
+void MainWindow::setupServices()
+{
+    // The service layer (APP_ARCHITECTURE_AUDIT §3.3). The shell constructs
+    // the services, wires their signals to its widgets, and hands the
+    // aggregate to the scripting host. UiManager's undo statics forward to
+    // UndoService until the hub dissolves (audit §9, Phase 4).
+    undoService = new UndoService(undoStack);
+    UiManager::setUndoService(undoService);
+
+    selectionService = new SelectionService(this);
+    connect(selectionService, &SelectionService::selectionChanged,
+            this, &MainWindow::applySelectionToUi);
+
+    playbackService = new PlaybackService(this);
+    connect(playbackService, &PlaybackService::editModeEntered,
+            this, &MainWindow::applyEditModeUi);
+    connect(playbackService, &PlaybackService::playModeEntered,
+            this, &MainWindow::applyPlayModeUi);
+
+    services = new StudioServices;
+    services->undo = undoService;
+    services->selection = selectionService;
+    services->playback = playbackService;
+}
+
 void MainWindow::setupUndoRedo()
 {
     undoStack = new QUndoStack(this);
-    UiManager::setUndoStack(undoStack);
     UiManager::mainWindow = this;
 
     connect(ui->actionUndo, &QAction::triggered, [this]() {
@@ -787,7 +816,7 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 
 	db->updateProject(sceneObject, thumb);
 
-	undoStackCount = UiManager::getUndoStackCount();
+	undoService->markSaved();
 }
 
 bool MainWindow::saveProjectBlob()
@@ -818,7 +847,7 @@ bool MainWindow::saveProjectBlob()
 		ok = db->updateProjectBlob(blob);
 	}
 
-	undoStackCount = UiManager::getUndoStackCount();
+	undoService->markSaved();
 	return ok;
 }
 
@@ -846,7 +875,7 @@ void MainWindow::saveScene()
     db->updateProject(blob, thumb);
 	pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
 
-	undoStackCount = UiManager::getUndoStackCount();
+	undoService->markSaved();
 }
 
 void MainWindow::openProject(bool playMode)
@@ -891,7 +920,7 @@ void MainWindow::openProject(bool playMode)
 
     assetWidget->trigger();
 
-	undoStackCount = 0;
+	undoService->resetSavedCount();
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 
@@ -903,7 +932,7 @@ void MainWindow::openProject(bool playMode)
     if (playMode) {
         playBtn->setToolTip("Pause the scene");
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-        UiManager::playScene();
+        playbackService->playScene();
         playerView->onPlayScene();
     }
 
@@ -946,7 +975,7 @@ void MainWindow::closeProject()
     UiManager::isScenePlaying = false;
     ui->actionClose->setDisabled(false);
 
-    UiManager::clearUndoStack();
+    undoService->clear();
     AssetManager::clearAssetList();
 
     UiManager::mainWindow->setWindowTitle(originalTitle);
@@ -954,7 +983,7 @@ void MainWindow::closeProject()
     scene->cleanup();
     scene.clear();
 
-	undoStackCount = 0;
+	undoService->resetSavedCount();
 
 	if (currentSpace == WindowSpaces::DESKTOP) {
 		deselectViewports();
@@ -983,6 +1012,7 @@ void MainWindow::applyMaterialPreset(QString guid)
 
 void MainWindow::applyMaterialPreset(MaterialPreset preset)
 {
+    auto activeSceneNode = selectionService->selected();
     if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
 
     auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
@@ -1209,10 +1239,16 @@ void MainWindow::sceneTreeItemChanged(QTreeWidgetItem* item,int column)
 
 void MainWindow::sceneNodeSelected(iris::SceneNodePtr sceneNode)
 {
-    if (inSceneNodeSelected) return;
-    struct Guard { bool &f; Guard(bool &v) : f(v) { f = true; } ~Guard() { f = false; } } guard(inSceneNodeSelected);
-    activeSceneNode = sceneNode;
+    selectionService->select(sceneNode);
+}
 
+iris::SceneNodePtr MainWindow::selectedSceneNode() const
+{
+    return selectionService->selected();
+}
+
+void MainWindow::applySelectionToUi(iris::SceneNodePtr sceneNode)
+{
     sceneView->setSelectedNode(sceneNode);
     this->sceneNodePropertiesWidget->setSceneNode(sceneNode);
     this->sceneHierarchyWidget->setSelectedNode(sceneNode);
@@ -1873,7 +1909,7 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
         }
     }
 
-    if (!!activeSceneNode) {
+    if (auto activeSceneNode = selectionService->selected()) {
         activeSceneNode->addChild(sceneNode);
     } else {
         scene->getRootNode()->addChild(sceneNode);
@@ -1918,7 +1954,7 @@ void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool 
     }
 
     auto cmd = new AddSceneNodeCommand(scene->getRootNode(), sceneNode);
-    UiManager::pushUndoStack(cmd);
+    undoService->push(cmd);
 }
 
 void MainWindow::repopulateSceneTree()
@@ -1928,7 +1964,7 @@ void MainWindow::repopulateSceneTree()
 
 void MainWindow::duplicateNode()
 {
-    duplicateSceneNode(activeSceneNode);
+    duplicateSceneNode(selectionService->selected());
 }
 
 iris::SceneNodePtr MainWindow::duplicateSceneNode(iris::SceneNodePtr source)
@@ -1941,13 +1977,14 @@ iris::SceneNodePtr MainWindow::duplicateSceneNode(iris::SceneNodePtr source)
     // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
     // refreshes the hierarchy and selects it — the manual addChild+repopulate
     // this slot used to do, minus the missing undo entry.
-    UiManager::pushUndoStack(new AddSceneNodeCommand(source->parent, node));
+    undoService->push(new AddSceneNodeCommand(source->parent, node));
 	sceneView->endResourceLoad();
     return node;
 }
 
 void MainWindow::createMaterial()
 {
+	auto activeSceneNode = selectionService->selected();
 	if (!!activeSceneNode) {
         QJsonObject materialDef;
 		// (nick) the material version gets updated during writing so
@@ -2159,7 +2196,7 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
 void MainWindow::deleteNode()
 {
-    deleteSceneNode(activeSceneNode);
+    deleteSceneNode(selectionService->selected());
 }
 
 bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
@@ -2178,7 +2215,7 @@ bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
     // asset is gone (SCRIPTING_SPEC §1.2).
     auto cmd = new DeleteSceneNodeCommand(node->parent, node,
                                           node->isBuiltIn ? db : nullptr, node->getGUID());
-    UiManager::pushUndoStack(cmd);
+    undoService->push(cmd);
     return true;
 }
 
@@ -2715,34 +2752,34 @@ void MainWindow::setupViewPort()
     connect(restartBtn, &QPushButton::pressed, [this]() {
         playBtn->setToolTip("Pause the scene");
         playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-        UiManager::restartScene();
+        playbackService->restartScene();
     });
 
     connect(playBtn, &QPushButton::pressed, [this]() {
-        if (UiManager::isScenePlaying) {
+        if (playbackService->isPlaying()) {
             playBtn->setToolTip("Play the scene");
             playBtn->setIcon(QIcon(":/icons/g_play.svg"));
-            UiManager::pauseScene();
+            playbackService->pauseScene();
         } else {
             playBtn->setToolTip("Pause the scene");
             playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-            UiManager::playScene();
+            playbackService->playScene();
         }
     });
 
     connect(stopBtn, &QPushButton::pressed, [this]() {
         playBtn->setToolTip("Play the scene");
         playBtn->setIcon(QIcon(":/icons/g_play.svg"));
-        UiManager::stopScene();
+        playbackService->stopScene();
     });
 
 	connect(playSimBtn, &QPushButton::pressed, [this]() {
-		UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
-		
+		playbackService->setSimulationRunning(!playbackService->isSimulationRunning());
+
         QVariantMap options;
 
-		if (UiManager::isSimulationRunning) {
-			UiManager::startPhysicsSimulation();
+		if (playbackService->isSimulationRunning()) {
+			playbackService->startSimulation();
 
             playSimBtn->setText("Stop Simulation");
 			playSimBtn->setToolTip("Pause physics simulation");
@@ -2752,7 +2789,7 @@ void MainWindow::setupViewPort()
             playSimBtn->setIcon(fontIcons->icon(fa::stop, options));
 		}
 		else {
-            UiManager::restartPhysicsSimulation();
+            playbackService->restartSimulation();
 
             playSimBtn->setText("Simulate Physics");
 			playSimBtn->setToolTip("Simulate physics only");
@@ -2762,7 +2799,7 @@ void MainWindow::setupViewPort()
             playSimBtn->setIcon(fontIcons->icon(fa::play, options));
 		}
 
-        if (!!activeSceneNode) sceneNodeSelected(activeSceneNode);
+        if (auto sel = selectedSceneNode()) sceneNodeSelected(sel);
 	});
 
     playerControls->setLayout(playerControlsLayout);
@@ -3306,12 +3343,12 @@ void MainWindow::updateSceneSettings()
 
 void MainWindow::undo()
 {
-    if (undoStack->canUndo()) undoStack->undo();
+    undoService->undo();
 }
 
 void MainWindow::redo()
 {
-    if (undoStack->canRedo()) undoStack->redo();
+    undoService->redo();
 }
 
 void MainWindow::takeScreenshot()
@@ -3347,7 +3384,7 @@ void MainWindow::toggleWidgets(bool state)
 
 void MainWindow::showProjectManagerInternal()
 {
-    if (UiManager::isUndoStackDirty()) {
+    if (undoService->isDirty()) {
         QMessageBox::StandardButton option;
         option = QMessageBox::question(this,
                                        "Unsaved Changes",
@@ -3361,7 +3398,7 @@ void MainWindow::showProjectManagerInternal()
         }
     }
 
-    if (UiManager::isScenePlaying) enterEditMode();
+    if (playbackService->isPlaying()) enterEditMode();
     hide();
     pmContainer->populateDesktop(true);
     pmContainer->cleanupOnClose();
@@ -3416,7 +3453,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
     assetWidget->trigger();
 
-    UiManager::clearUndoStack();
+    undoService->clear();
     UiManager::updateWindowTitle();
 	updateTopMenuStates(WindowSpaces::EDITOR);
 }
@@ -3467,9 +3504,9 @@ void MainWindow::scaleGizmo()
 
 void MainWindow::onPlaySceneButton()
 {
-	UiManager::isSimulationRunning = !UiManager::isSimulationRunning;
+	playbackService->setSimulationRunning(!playbackService->isSimulationRunning());
 
-    if (UiManager::isScenePlaying) {
+    if (playbackService->isPlaying()) {
         enterEditMode();
 		//UiManager::restartPhysicsSimulation();
 		sceneView->stopPlayingScene();
@@ -3480,14 +3517,21 @@ void MainWindow::onPlaySceneButton()
 		sceneView->startPlayingScene();
     }
 
-	if (!!activeSceneNode) sceneNodeSelected(activeSceneNode);
+	if (auto sel = selectedSceneNode()) sceneNodeSelected(sel);
 }
 
 void MainWindow::enterEditMode()
 {
-    UiManager::isScenePlaying = false;
-    UiManager::enterEditMode();
-    
+    playbackService->enterEditMode();   // chrome follows via applyEditModeUi()
+}
+
+void MainWindow::enterPlayMode()
+{
+    playbackService->enterPlayMode();   // chrome follows via applyPlayModeUi()
+}
+
+void MainWindow::applyEditModeUi()
+{
     playSceneBtn->setText("Play Scene");
     playSceneBtn->setToolTip("Play scene");
 	shaderGraph->setAssetWidgetDatabase(db);
@@ -3497,11 +3541,8 @@ void MainWindow::enterEditMode()
     playSceneBtn->setIcon(fontIcons->icon(fa::play, options));
 }
 
-void MainWindow::enterPlayMode()
+void MainWindow::applyPlayModeUi()
 {
-    UiManager::isScenePlaying = true;
-    UiManager::enterPlayMode();
-    
     playSceneBtn->setEnabled(true);
     playSceneBtn->setText("Stop playing");
     playSceneBtn->setToolTip("Stop playing");

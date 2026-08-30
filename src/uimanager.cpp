@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "globals.h"
 #include "core/project.h"
 #include "editor/ieditorviewport.h"
+#include "services/undoservice.h"
 
 #include <QUndoStack>
 #include <QUndoCommand>
@@ -25,8 +26,7 @@ IEditorViewport *UiManager::sceneViewWidget = Q_NULLPTR;
 SceneHierarchyWidget *UiManager::sceneHierarchyWidget = Q_NULLPTR;
 SceneNodePropertiesWidget *UiManager::propertyWidget = Q_NULLPTR;
 
-QUndoStack *UiManager::undoStack = Q_NULLPTR;
-bool UiManager::scriptMacroOpen = false;
+UndoService *UiManager::undoService = Q_NULLPTR;
 SceneMode UiManager::sceneMode = SceneMode::EditMode;
 
 bool UiManager::isSceneOpen = false;
@@ -126,36 +126,36 @@ void UiManager::updateWindowTitle()
 
 bool UiManager::isUndoStackDirty()
 {
-    return !UiManager::undoStack->isClean();
+    return undoService->isDirty();
 }
 
 bool UiManager::getUndoStackCount()
 {
-	return UiManager::undoStack->count();
+	return undoService->count();
+}
+
+QUndoStack *UiManager::getUndoStack()
+{
+    return undoService ? undoService->stack() : Q_NULLPTR;
 }
 
 void UiManager::clearUndoStack()
 {
-    // Clearing inside an open macro corrupts QUndoStack's macro accounting
-    // ("endMacro(): no matching beginMacro()"); a script run stays one undo
-    // step instead, which is the scripting contract anyway.
-    if (scriptMacroOpen) return;
-    UiManager::undoStack->clear();
+    undoService->clear();
 }
 
-void UiManager::setUndoStack(QUndoStack *undoStack)
+void UiManager::setUndoService(UndoService *service)
 {
-    UiManager::undoStack = undoStack;
+    UiManager::undoService = service;
 }
 
 void UiManager::pushUndoStack(QUndoCommand *command)
 {
-    UiManager::undoStack->push(command);
-//    UiManager::mainWindow->setWindowTitle("Jahshaka* - " + Globals::project->getFileName());
+    undoService->push(command);
 }
 
 // not really ever used...
 void UiManager::popUndoStack()
 {
-    UiManager::undoStack->undo();
+    undoService->stack()->undo();
 }
