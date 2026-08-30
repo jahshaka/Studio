@@ -23,7 +23,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/core/irisutils.h"
 #include "shell/mainwindow.h"
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "viewport/ieditorviewport.h"
 #include "bridge/enginehost.h"
 #include "io/scenewriter.h"
@@ -253,7 +254,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
             return true;
         }
 
-        UiManager::pushUndoStack(new ReparentSceneNodeCommand(dragged, target));
+        if (mainWindow) mainWindow->studioServices()->undo->push(new ReparentSceneNodeCommand(dragged, target));
         // The command repopulated the tree from the document. Consume the event
         // so QTreeWidget's own InternalMove does not run on the rebuilt tree.
         dropEventPtr->setDropAction(Qt::IgnoreAction);
@@ -457,7 +458,7 @@ void SceneHierarchyWidget::duplicateNode()
 
 void SceneHierarchyWidget::focusOnNode()
 {
-	UiManager::sceneViewWidget->focusOnNode(selectedNode);
+	if (mainWindow && mainWindow->viewport()) mainWindow->viewport()->focusOnNode(selectedNode);
 }
 
 void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)

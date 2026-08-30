@@ -10,7 +10,7 @@
 
 #if(EFFECT_BUILD_AS_LIB)
 #include "data/database/database.h"
-//#include "../uimanager.h"
+
 //#include "../globals.h"
 //#include "../core/guidmanager.h"
 //#include "../../irisgl/src/core/irisutils.h"

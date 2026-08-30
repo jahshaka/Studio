@@ -91,7 +91,6 @@ For more information see the LICENSE file
 #include "viewport/editorcameracontroller.h"
 #include "data/settingsmanager.h"
 #include "ui/dialogs/preferencesdialog.h"
-#include "ui/dialogs/preferences/worldsettings.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "ui/dialogs/aboutdialog.h"
 
@@ -106,7 +105,6 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "io/materialreader.h"
-#include "shell/uimanager.h"
 #include "data/database/database.h"
 
 #include "commands/addscenenodecommand.h"
@@ -161,7 +159,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	
 	settings = SettingsManager::getDefaultManager();
 
-    UiManager::mainWindow = this;
+
 
     QFont font;
     font.setFamily(font.defaultFamily());
@@ -207,8 +205,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptHost->projectManager = pmContainer;
 	scriptHost->undoStack = undoStack;
 	scriptHost->services = services;
-	scriptHost->projectOpen = []() {
-		return UiManager::isSceneOpen && !Globals::project->getProjectGuid().isEmpty();
+	scriptHost->projectOpen = [this]() {
+		return projectService->isSceneOpen() && !Globals::project->getProjectGuid().isEmpty();
 	};
 	scriptHost->engineReady = [this]() {
 		return EngineHost::instance().isRunning() && sceneView->isInitialized();
@@ -422,7 +420,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     bool closing = false;
 	bool autoSave = settings->getValue("auto_save", true).toBool();
 
-	if (autoSave && UiManager::isSceneOpen) {
+	if (autoSave && projectService->isSceneOpen()) {
 		saveScene();
 		closing = true;
 		event->accept();
@@ -501,16 +499,16 @@ void MainWindow::setupServices()
 {
     // The service layer (APP_ARCHITECTURE_AUDIT §3.3). The shell constructs
     // the services, wires their signals to its widgets, and hands the
-    // aggregate to the scripting host. UiManager's undo statics forward to
-    // UndoService until the hub dissolves (audit §9, Phase 4).
+    // aggregate to the scripting host. Phase 4 dissolved the UiManager hub:
+    // the services own the state their statics used to hold.
     undoService = new UndoService(undoStack);
-    UiManager::setUndoService(undoService);
 
     selectionService = new SelectionService(this);
     connect(selectionService, &SelectionService::selectionChanged,
             this, &MainWindow::applySelectionToUi);
 
     playbackService = new PlaybackService(this);
+    playbackService->setViewport(sceneView);
     connect(playbackService, &PlaybackService::editModeEntered,
             this, &MainWindow::applyEditModeUi);
     connect(playbackService, &PlaybackService::playModeEntered,
@@ -525,6 +523,19 @@ void MainWindow::setupServices()
                                             [this]() { return scene; }, this);
     connect(sceneEditService, &SceneEditService::hierarchyChanged, this, [this]() {
         sceneHierarchyWidget->repopulateTree();
+    });
+    // The undo commands' refresh notifications (Phase 4: was
+    // UiManager::sceneHierarchyWidget / ::propertyWidget reach-ins).
+    connect(sceneEditService, &SceneEditService::nodeInserted, this,
+            [this](const iris::SceneNodePtr &node) {
+        if (sceneHierarchyWidget) sceneHierarchyWidget->insertChild(node);
+    });
+    connect(sceneEditService, &SceneEditService::nodeRemoved, this,
+            [this](const iris::SceneNodePtr &node) {
+        if (sceneHierarchyWidget) sceneHierarchyWidget->removeChild(node);
+    });
+    connect(sceneEditService, &SceneEditService::transformRefreshRequested, this, [this]() {
+        if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->refreshTransform();
     });
     connect(sceneEditService, &SceneEditService::assetViewRefreshRequested, this, [this]() {
         assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
@@ -544,33 +555,43 @@ void MainWindow::setupServices()
     services->sceneEdit = sceneEditService;
     services->thumbnails = thumbnailService;
     services->assets = assetService;
+
+    // Commands raise their refreshes through the aggregate (stamped at push);
+    // the viewport's gizmos push through the same aggregate.
+    undoService->setServices(services);
+    if (sceneView) sceneView->setServices(services);
+    if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->setServices(services);
+    if (_assetView) _assetView->setServices(services);
+    if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
+    if (shaderGraph) shaderGraph->setSceneOpenProbe(
+        [this]() { return projectService->isSceneOpen(); });
 }
 
 void MainWindow::setupUndoRedo()
 {
     undoStack = new QUndoStack(this);
-    UiManager::mainWindow = this;
+
 
     connect(ui->actionUndo, &QAction::triggered, [this]() {
         undo();
-        UiManager::updateWindowTitle();
+        updateWindowTitle();
     });
 
     connect(ui->actionEditUndo, &QAction::triggered, [this]() {
         undo();
-        UiManager::updateWindowTitle();
+        updateWindowTitle();
     });
 
     ui->actionEditUndo->setShortcuts(QKeySequence::Undo);
 
     connect(ui->actionRedo, &QAction::triggered, [this]() {
         redo();
-        UiManager::updateWindowTitle();
+        updateWindowTitle();
     });
 
     connect(ui->actionEditRedo, &QAction::triggered, [this]() {
         redo();
-        UiManager::updateWindowTitle();
+        updateWindowTitle();
     });
 
     ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
@@ -612,7 +633,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
     previousSpace = currentSpace;
     switch (currentSpace = space) {
         case WindowSpaces::DESKTOP: {
-			if (UiManager::isSceneOpen) {
+			if (projectService->isSceneOpen()) {
 				//if (settings->getValue("auto_save", true).toBool()) saveScene();
 				//saveScene();
 				if (sceneView->isInitialized())
@@ -640,7 +661,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			this->sceneView->setWindowSpace(space);
             playSceneBtn->show();
             this->enterEditMode();
-            UiManager::sceneMode = SceneMode::EditMode;
+            playbackService->setSceneMode(SceneMode::EditMode);
 
             assetWidget->refresh();
 			isSceneOpen = true;
@@ -655,7 +676,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
             toolBar->setVisible(false);
 
 			this->sceneView->setWindowSpace(space);
-            UiManager::sceneMode = SceneMode::PlayMode;
+            playbackService->setSceneMode(SceneMode::PlayMode);
             playSceneBtn->hide();
             this->enterPlayMode();
 			playerView->begin();
@@ -670,7 +691,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			static_cast<AssetView*>(ui->stackedWidget->currentWidget())->spaceSplits();
     		toggleWidgets(false);
     		toolBar->setVisible(false);
-			if (UiManager::isSceneOpen) {
+			if (projectService->isSceneOpen()) {
 				playSceneBtn->hide();
 			}
     		
@@ -698,7 +719,7 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			ui->stackedWidget->setCurrentIndex(5);
 			toggleWidgets(false);
 			toolBar->setVisible(false);
-			if (UiManager::isSceneOpen) playSceneBtn->hide();
+			if (projectService->isSceneOpen()) playSceneBtn->hide();
 			break;
 		}
 
@@ -734,7 +755,7 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
 	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
 
-	if (UiManager::isSceneOpen) {
+	if (projectService->isSceneOpen()) {
 		editor_menu->setEnabled(true);
 		editor_menu->setCursor(Qt::PointingHandCursor);
 		player_menu->setEnabled(true);
@@ -773,13 +794,13 @@ void MainWindow::openProject(bool playMode)
         removeScene();
 
     EditorData* editorData = Q_NULLPTR;
-    UiManager::updateWindowTitle();
+    updateWindowTitle();
 
 	iris::PostProcessManagerPtr postMan;
     auto scene = projectService->readProjectScene(&editorData, postMan);
 
-    UiManager::playMode = playMode;
-    UiManager::isSceneOpen = true;
+    playbackService->setPlayerMode(playMode);
+    projectService->setSceneOpen(true);
     ui->actionClose->setDisabled(false);
     setScene(scene);
 
@@ -797,7 +818,7 @@ void MainWindow::openProject(bool playMode)
 
 	undoService->resetSavedCount();
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
-	updateTopMenuStates(UiManager::playMode ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
+	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 
 	// highlight root node
 	sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
@@ -830,13 +851,13 @@ void MainWindow::closeProject()
             }
         }
 
-        if (UiManager::isSceneOpen) {
+        if (projectService->isSceneOpen()) {
             if (settings->getValue("auto_save", true).toBool()) saveScene();
         }
 
         scene->getPhysicsEnvironment()->destroyPhysicsWorld();
 
-        //UiManager::stopPhysicsSimulation();
+        //playbackService->stopSimulation();
         playSimBtn->setText("Simulate Physics");
         playSimBtn->setToolTip("Simulate physics only");
 
@@ -846,14 +867,14 @@ void MainWindow::closeProject()
         playSimBtn->setIcon(fontIcons->icon(fa::play, options));
     }
 
-    UiManager::isSceneOpen = false;
-    UiManager::isScenePlaying = false;
+    projectService->setSceneOpen(false);
+    playbackService->setPlaying(false);
     ui->actionClose->setDisabled(false);
 
     undoService->clear();
     AssetManager::clearAssetList();
 
-    UiManager::mainWindow->setWindowTitle(originalTitle);
+    setWindowTitle(originalTitle);
 
     scene->cleanup();
     scene.clear();
@@ -1339,8 +1360,7 @@ void MainWindow::setupDockWidgets()
     sceneHierarchyDock->setObjectName(QStringLiteral("sceneHierarchyWidget"));
     sceneHierarchyDock->setWidget(sceneHierarchyWidget);
     sceneHierarchyWidget->setMainWindow(this);
-
-    UiManager::sceneHierarchyWidget = sceneHierarchyWidget;
+    if (sceneView) sceneView->setHierarchyDragSource(sceneHierarchyWidget->getWidget());
 
     connect(sceneHierarchyWidget,   SIGNAL(sceneNodeSelected(iris::SceneNodePtr)),
             this,                   SLOT(sceneNodeSelected(iris::SceneNodePtr)));
@@ -1356,7 +1376,6 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
     sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
-	UiManager::propertyWidget = sceneNodePropertiesWidget;
 
     QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
@@ -1428,7 +1447,6 @@ void MainWindow::setupDockWidgets()
     animationDock = new QDockWidget("Timeline", viewPort);
     animationDock->setObjectName(QStringLiteral("animationDock"));
     animationWidget = new AnimationWidget;
-    UiManager::setAnimationWidget(animationWidget);
 
     QWidget *animationDockContents = new QWidget;
     QGridLayout *animationLayout = new QGridLayout(animationDockContents);
@@ -1810,7 +1828,6 @@ void MainWindow::setupViewPort()
     sceneView->setMainWindow(this);
     sceneView->setDatabase(db);
     Globals::sceneViewWidget = sceneView;
-    UiManager::setSceneViewWidget(sceneView);
 
 	// The player page: PlayerWidget gets an EnginePlayerView (a second engine
 	// Scene mirroring the same document), or none in headless runs.
@@ -1818,6 +1835,7 @@ void MainWindow::setupViewPort()
 	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		playerBackend = createEnginePlayerView(host.engine(), host.driver(), viewPort);
+		playerBackend->setEditorViewport(sceneView);
 	}
 	playerView = new PlayerWidget(viewPort, playerBackend);
 
@@ -2110,13 +2128,13 @@ void MainWindow::setupShortcuts()
 
     shortcut = new QShortcut(QKeySequence("ctrl+2"), this);
     connect(shortcut, &QShortcut::activated, [=]() {
-        if (UiManager::isSceneOpen)
+        if (projectService->isSceneOpen())
             this->switchSpace(WindowSpaces::PLAYER);
     });
 
     shortcut = new QShortcut(QKeySequence("ctrl+3"), this);
     connect(shortcut, &QShortcut::activated, [=]() {
-        if (UiManager::isSceneOpen)
+        if (projectService->isSceneOpen())
             this->switchSpace(WindowSpaces::EDITOR);
     });
 
@@ -2132,7 +2150,7 @@ void MainWindow::setupShortcuts()
 
     shortcut = new QShortcut(QKeySequence("ctrl+tab"), this);
     connect(shortcut, &QShortcut::activated, [=]() {
-        if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) && !UiManager::isSceneOpen)
+        if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) && !projectService->isSceneOpen())
             return;
 
         this->switchSpace(previousSpace);
@@ -2298,7 +2316,7 @@ void MainWindow::exitApp()
 
 void MainWindow::updateSceneSettings()
 {
-	if (UiManager::isSceneOpen || !!scene) {
+	if (projectService->isSceneOpen() || !!scene) {
 		scene->setOutlineWidth(prefsDialog->worldSettings->outlineWidth);
 		scene->setOutlineColor(prefsDialog->worldSettings->outlineColor);
 	}
@@ -2309,6 +2327,12 @@ void MainWindow::updateSceneSettings()
 void MainWindow::undo()
 {
     undoService->undo();
+}
+
+void MainWindow::updateWindowTitle()
+{
+    // (was UiManager::updateWindowTitle — window chrome belongs to the shell)
+    setWindowTitle(QString("%1 - %2").arg(originalTitle).arg(Globals::project->getProjectName()));
 }
 
 void MainWindow::redo()
@@ -2403,13 +2427,13 @@ void MainWindow::endEngineSelftest()
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)
 {
-    if (UiManager::isSceneOpen) closeProject();
+    if (projectService->isSceneOpen()) closeProject();
 
 	// this is to ensure the editor's context is created
 	switchSpace(WindowSpaces::EDITOR);
 
     newScene();
-    UiManager::isSceneOpen = true;
+    projectService->setSceneOpen(true);
     ui->actionClose->setDisabled(false);
 
     saveScene(filename, projectPath);
@@ -2417,7 +2441,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     assetWidget->trigger();
 
     undoService->clear();
-    UiManager::updateWindowTitle();
+    updateWindowTitle();
 	updateTopMenuStates(WindowSpaces::EDITOR);
 }
 
@@ -2478,12 +2502,12 @@ void MainWindow::onPlaySceneButton()
 
     if (playbackService->isPlaying()) {
         enterEditMode();
-		//UiManager::restartPhysicsSimulation();
+		//playbackService->restartSimulation();
 		sceneView->stopPlayingScene();
     }
     else {
         enterPlayMode();
-		//UiManager::startPhysicsSimulation();
+		//playbackService->startSimulation();
 		sceneView->startPlayingScene();
     }
 

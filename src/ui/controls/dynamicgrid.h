@@ -30,7 +30,7 @@ public:
     enum class LayoutMode { Rows, Freeform };
 
     explicit DynamicGrid(QWidget *parent = Q_NULLPTR);
-    void addToGridView(ProjectTileData tileData, int count);
+    void addToGridView(ProjectTileData tileData, int count, bool highlight = false);
 
     void setLayoutMode(LayoutMode mode);
     LayoutMode layoutMode() const { return mode; }

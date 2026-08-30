@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <QListWidget>
 #include <QMainWindow>
 #include <QWidget>
@@ -63,6 +64,12 @@ public:
     void newNodeGraph(QString *shaderName = Q_NULLPTR, int *templateType = Q_NULLPTR, QString *templateName = Q_NULLPTR);
 	
 	void setAssetView(AssetView* assetView) { this->assetView = assetView; }
+	/// Injected by the shell: is a project scene open? Forwarded to the
+	/// module's widgets (Phase 4: was UiManager::isSceneOpen).
+	void setSceneOpenProbe(std::function<bool()> probe);
+private:
+	std::function<bool()> mSceneOpenProbe;
+public:
 
 	// Engine viewport mode: Studio hands in the engine-rendered Display preview
 	// (core/materialpreviewwidget.h). Docks it, un-hides the Display dock and

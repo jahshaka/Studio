@@ -22,8 +22,9 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "shell/uimanager.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "services/services.h"
+#include "services/sceneeditservice.h"
 #include "viewport/gizmomeshes.h"
 
 #define DEFAULT_SNAP_LENGTH (1.0f)
@@ -267,7 +268,7 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDi
 	
 	//selectedNode->setLocalPos(localTarget);
 	selectedNode->setGlobalPos(targetPos);
-	UiManager::propertyWidget->refreshTransform();
+	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
 bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)

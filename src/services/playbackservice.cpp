@@ -11,71 +11,63 @@ For more information see the LICENSE file
 
 #include "services/playbackservice.h"
 
+#include "viewport/ieditorviewport.h"
+
 void PlaybackService::enterEditMode()
 {
-    UiManager::isScenePlaying = false;
-    UiManager::enterEditMode();
+    playing = false;
+    mode = SceneMode::EditMode;
     emit editModeEntered();
 }
 
 void PlaybackService::enterPlayMode()
 {
-    UiManager::isScenePlaying = true;
-    UiManager::enterPlayMode();
+    playing = true;
+    mode = SceneMode::PlayMode;
     emit playModeEntered();
-}
-
-bool PlaybackService::isPlaying() const
-{
-    return UiManager::isScenePlaying;
-}
-
-SceneMode PlaybackService::sceneMode() const
-{
-    return UiManager::sceneMode;
 }
 
 void PlaybackService::playScene()
 {
-    UiManager::playScene();
+    playing = true;
+    mode = SceneMode::PlayMode;
+    if (viewport) viewport->startPlayingScene();
 }
 
 void PlaybackService::pauseScene()
 {
-    UiManager::pauseScene();
+    playing = false;
+    mode = SceneMode::PlayMode;
+    if (viewport) viewport->pausePlayingScene();
 }
 
 void PlaybackService::restartScene()
 {
-    UiManager::restartScene();
+    playing = true;
+    mode = SceneMode::PlayMode;
+    if (viewport) {
+        viewport->stopPlayingScene();
+        viewport->startPlayingScene();
+    }
 }
 
 void PlaybackService::stopScene()
 {
-    UiManager::stopScene();
+    playing = false;
+    if (viewport) viewport->stopPlayingScene();
 }
 
 void PlaybackService::startSimulation()
 {
-    UiManager::startPhysicsSimulation();
+    if (viewport) viewport->startPhysicsSimulation();
 }
 
 void PlaybackService::restartSimulation()
 {
-    UiManager::restartPhysicsSimulation();
+    if (viewport) viewport->restartPhysicsSimulation();
 }
 
 void PlaybackService::stopSimulation()
 {
-    UiManager::stopPhysicsSimulation();
-}
-
-bool PlaybackService::isSimulationRunning() const
-{
-    return UiManager::isSimulationRunning;
-}
-
-void PlaybackService::setSimulationRunning(bool running)
-{
-    UiManager::isSimulationRunning = running;
+    if (viewport) viewport->stopPhysicsSimulation();
 }

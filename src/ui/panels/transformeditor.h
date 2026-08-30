@@ -25,6 +25,8 @@ namespace iris
 class DragSpinBox;
 class QPushButton;
 
+struct StudioServices;
+
 class TransformEditor : public QWidget
 {
     Q_OBJECT
@@ -37,6 +39,8 @@ public:
      * @param sceneNode
      */
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    /// Undo pushes go through the services (Phase 4: was UiManager's statics).
+    void setServices(StudioServices *s) { services = s; }
 
     void refreshUi();
 
@@ -68,6 +72,7 @@ private:
                 double perPixelStep);
     DragSpinBox* createField(const QString& objectName, double perPixelStep);
 
+    StudioServices *services = nullptr;
     QSharedPointer<iris::SceneNode> sceneNode;
     QSharedPointer<iris::SceneNode> defaultStateNode;
 

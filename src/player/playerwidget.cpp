@@ -73,7 +73,7 @@ void PlayerWidget::createUI()
 	connect(restartBtn, &QPushButton::pressed, [playBtn]() {
 		playBtn->setToolTip("Pause the scene");
 		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-		//UiManager::restartScene();
+
 	});
     */
 

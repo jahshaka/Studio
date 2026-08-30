@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <QListWidget>
 #include <QSize>
 #include <QVariantAnimation>
@@ -21,6 +22,9 @@ public:
 	void dropEvent(QDropEvent *event) override;
     bool shaderContextMenuAllowed = false;
 	bool addToProjectMenuAllowed = false;
+	/// Injected by the module window: is a project scene open? (Phase 4:
+	/// was UiManager::isSceneOpen). Null-safe: no probe = treated as closed.
+	std::function<bool()> sceneOpenProbe;
 
 	QSize itemSize;
 	int numberOfItemPerRow;

@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "ui/pages/projectmanager.h"
-#include "shell/uimanager.h"
 
 DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 {
@@ -52,9 +51,8 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 //    setStyleSheet("border: 1px solid yellow");
 }
 
-void DynamicGrid::addToGridView(ProjectTileData tileData, int count)
+void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highlight)
 {
-    bool highlight = UiManager::isSceneOpen && tileData.guid == Globals::project->getProjectGuid();
     ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, iconSize, gridWidget, highlight);
 
     originalItems.push_back(gameGridItem);

@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <QWidget>
 #include <QLayout>
 #include <QLabel>
@@ -28,6 +29,9 @@ class ShaderAssetWidget : public QWidget
 {
 	Q_OBJECT
 public:
+	/// Injected by the module window: is a project scene open? (Phase 4:
+	/// was UiManager::isSceneOpen). Null-safe: no probe = treated as closed.
+	std::function<bool()> sceneOpenProbe;
 	ShaderAssetWidget(Database *handle = Q_NULLPTR);
 	~ShaderAssetWidget();
 

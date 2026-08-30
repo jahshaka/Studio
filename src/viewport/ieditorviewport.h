@@ -22,11 +22,12 @@
 
 class QWidget;
 class MainWindow;
+struct StudioServices;
 class Database;
 class EditorData;
 class Gizmo;
 enum WindowSpaces : int;      // mainwindow.h
-enum class SceneMode;         // uimanager.h
+enum class SceneMode;         // playbackservice.h
 
 /// Signals a viewport emits. A separate QObject so the interface itself stays a
 /// plain abstract class (QOpenGLWidget and QWidget cannot both be an interface base).
@@ -54,6 +55,12 @@ public:
     virtual EditorViewportEvents *events() = 0;
 
     virtual void setMainWindow(MainWindow *window) = 0;
+    /// The widget whose drags mean "reparent inside the hierarchy panel" —
+    /// the viewport ignores those. Optional; headless viewports don't care.
+    virtual void setHierarchyDragSource(QWidget *) {}
+    /// The service aggregate the viewport's tools (gizmos) push undo commands
+    /// and refresh notifications through. Optional; headless viewports don't care.
+    virtual void setServices(StudioServices *) {}
     virtual void setDatabase(Database *db) = 0;
 
     // ---- document ----

@@ -16,7 +16,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
 
 
@@ -76,7 +77,8 @@ void Gizmo::createUndoAction()
 	selectedNode->setLocalPos(oldPos);
 	selectedNode->setLocalRot(oldRot);
 	selectedNode->setLocalScale(oldScale);
-	UiManager::pushUndoStack(new TransformSceneNodeCommand(selectedNode, newPos, newRot, newScale));
+	if (services && services->undo)
+		services->undo->push(new TransformSceneNodeCommand(selectedNode, newPos, newRot, newScale));
 }
 
 QVector3D Gizmo::snap(QVector3D pos, float gridSize)

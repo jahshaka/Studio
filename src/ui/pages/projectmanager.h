@@ -64,7 +64,9 @@ public:
     void cleanupOnClose();
 
 	ModelData loadAiSceneFromModel(const QPair<QString, QString> asset);
-	MainWindow *mainWindow;
+	MainWindow *mainWindow = nullptr;
+	/// Is this tile the project whose scene is open right now? (highlight rule)
+	bool isOpenProjectTile(const QString &guid) const;
 
     int getCurrentDesktop() const { return currentDesktop; }
 

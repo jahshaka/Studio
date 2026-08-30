@@ -11,7 +11,6 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui_preferencesdialog.h"
 #include <QListWidgetItem>
-#include "ui/dialogs/preferences/worldsettings.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
@@ -48,6 +47,11 @@ void PreferencesDialog::saveSettings()
 {
 	worldSettings->saveSettings();
 	close();
+}
+
+void PreferencesDialog::wireEditor(IEditorViewport *viewport, MainWindow *mainWindow)
+{
+    if (worldSettings) worldSettings->wireEditor(viewport, mainWindow);
 }
 
 PreferencesDialog::~PreferencesDialog()

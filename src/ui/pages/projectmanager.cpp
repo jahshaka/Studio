@@ -42,7 +42,8 @@ For more information see the LICENSE file
 #include "shell/globals.h"
 #include "ui/controls/itemgridwidget.h"
 #include "shell/mainwindow.h"
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/projectservice.h"
 
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -241,7 +242,7 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	}
 
     // If we're opening a new scene, close the old one first
-    if (UiManager::isSceneOpen) mainWindow->closeProject();
+    if (mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
 
 	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
@@ -587,7 +588,7 @@ void ProjectManager::addImportedTileToDesktop(const QString &guid)
 		i++;
 	}
 
-	dynamicGrid->addToGridView(importedScene, i - 1);
+	dynamicGrid->addToGridView(importedScene, i - 1, isOpenProjectTile(importedScene.guid));
 
 	checkForEmptyState();
 
@@ -600,7 +601,7 @@ void ProjectManager::populateDesktop(bool reset)
 
     int i = 0;
     foreach (const ProjectTileData &record, db->fetchProjects(currentDesktop)) {
-        dynamicGrid->addToGridView(record, i);
+        dynamicGrid->addToGridView(record, i, isOpenProjectTile(record.guid));
         i++;
     }
 
@@ -895,4 +896,11 @@ void ProjectManager::loadProjectAssetsSync()
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)
 {
 	dynamicGrid->updateTile(id, arr);
+}
+
+bool ProjectManager::isOpenProjectTile(const QString &guid) const
+{
+    return mainWindow && mainWindow->studioServices() && mainWindow->studioServices()->project
+        && mainWindow->studioServices()->project->isSceneOpen()
+        && guid == Globals::project->getProjectGuid();
 }

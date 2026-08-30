@@ -94,7 +94,14 @@ public:
     /// Screenshot -> scene thumbnail + desktop tile.
     void updateCurrentSceneThumbnail();
 
+    /// Whether a project's scene is currently open in the editor (was
+    /// UiManager::isSceneOpen — Phase 4 moved the state into the service
+    /// that owns the open/close flow).
+    bool isSceneOpen() const { return sceneOpen; }
+    void setSceneOpen(bool open) { sceneOpen = open; }
+
 private:
+    bool sceneOpen = false;
     Database *db;
     Project *project;
     ProjectManager *projectManager;

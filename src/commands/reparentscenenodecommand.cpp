@@ -10,9 +10,10 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/reparentscenenodecommand.h"
-#include "shell/uimanager.h"
-#include "shell/mainwindow.h"
-#include "ui/panels/scenehierarchywidget.h"
+
+#include "services/services.h"
+#include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
 
 ReparentSceneNodeCommand::ReparentSceneNodeCommand(iris::SceneNodePtr sceneNode,
                                                    iris::SceneNodePtr newParent)
@@ -27,14 +28,14 @@ void ReparentSceneNodeCommand::undo()
 {
     if (!sceneNode || !oldParent) return;
     oldParent->addChild(sceneNode, true);      // keepTransform: world pose preserved
-    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->repopulateTree();
-    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(sceneNode);
+    if (services && services->sceneEdit) services->sceneEdit->notifyHierarchyChanged();
+    if (services && services->selection) services->selection->select(sceneNode);
 }
 
 void ReparentSceneNodeCommand::redo()
 {
     if (!sceneNode || !newParent) return;
     newParent->addChild(sceneNode, true);
-    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->repopulateTree();
-    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(sceneNode);
+    if (services && services->sceneEdit) services->sceneEdit->notifyHierarchyChanged();
+    if (services && services->selection) services->selection->select(sceneNode);
 }

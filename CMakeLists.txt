@@ -53,7 +53,6 @@ set(SRCS
     src/ui/controls/colorpickerwidget.cpp 
     src/ui/dialogs/preferencesdialog.cpp 
     src/ui/dialogs/aboutdialog.cpp 
-    src/ui/dialogs/preferences/worldsettings.cpp 
     src/ui/dialogs/preferences/worldsettingswidget.cpp 
 	src/ui/dialogs/customdialog.cpp
 	src/ui/dialogs/custompopup.cpp
@@ -149,7 +148,6 @@ set(SRCS
     src/io/assetmanager.cpp 
     src/ui/controls/assetpickerwidget.cpp 
     src/ui/panels/timeline/keyframelabel.cpp 
-    src/shell/uimanager.cpp 
     src/ui/panels/timeline/keyframecurvewidget.cpp 
     src/ui/dialogs/getnamedialog.cpp 
     src/ui/panels/timeline/createanimationwidget.cpp 
@@ -206,7 +204,6 @@ set(HEADERS
     src/ui/controls/colorpickerwidget.h 
     src/ui/dialogs/preferencesdialog.h 
     src/ui/dialogs/aboutdialog.h 
-    src/ui/dialogs/preferences/worldsettings.h 
     src/ui/dialogs/preferences/worldsettingswidget.h 
     src/ui/dialogs/customdialog.h
     src/ui/dialogs/custompopup.h
@@ -316,7 +313,6 @@ set(HEADERS
     src/ui/controls/assetpickerwidget.h 
     src/data/constants.h 
     src/ui/panels/timeline/keyframelabel.h 
-    src/shell/uimanager.h 
     src/ui/panels/timeline/keyframecurvewidget.h 
     src/ui/panels/timeline/animationwidgetdata.h 
     src/ui/dialogs/getnamedialog.h 
@@ -375,8 +371,8 @@ set(WIDGETS
     src/ui/controls/colorvaluewidget.ui 
     src/ui/controls/colorpickerwidget.ui 
     src/ui/dialogs/preferencesdialog.ui 
-    src/ui/dialogs/aboutdialog.ui 
     src/ui/dialogs/preferences/worldsettings.ui 
+    src/ui/dialogs/aboutdialog.ui 
     src/ui/dialogs/infodialog.ui 
     src/ui/dialogs/loadmeshdialog.ui 
     src/ui/panels/timeline/animationwidget.ui 

@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include <QLayout>
 #include <QMenu>
 #include "data/project.h"
-#include "shell/uimanager.h"
 
 QVariantAnimation* ListWidget::anim = Q_NULLPTR;
 
@@ -207,7 +206,7 @@ void ListWidget::customContextMenu(QPoint pos)
 			});
 
             menu.addActions({actionRename,actionEdit,actionExport,actionDelete});
-			if (UiManager::isSceneOpen && addToProjectMenuAllowed) menu.addAction(actionProject);
+			if (sceneOpenProbe && sceneOpenProbe() && addToProjectMenuAllowed) menu.addAction(actionProject);
             menu.exec(this->mapToGlobal(pos));
         }else{
             auto actionCreate = new QAction("Create Shader");

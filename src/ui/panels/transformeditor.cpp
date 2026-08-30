@@ -18,7 +18,8 @@ For more information see the LICENSE file
 #include "ui/controls/dragspinbox.h"
 
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "commands/transformscenenodecommand.h"
 
 namespace {
@@ -212,7 +213,8 @@ void TransformEditor::onScrubFinished(bool cancelled)
     sceneNode->setLocalPos(scrubStartPos);
     sceneNode->setLocalRot(scrubStartRot);
     sceneNode->setLocalScale(scrubStartScale);
-    UiManager::pushUndoStack(new TransformSceneNodeCommand(sceneNode, newPos, newRot, newScale));
+    if (services && services->undo)
+        services->undo->push(new TransformSceneNodeCommand(sceneNode, newPos, newRot, newScale));
 }
 
 void TransformEditor::xPosChanged(double value)

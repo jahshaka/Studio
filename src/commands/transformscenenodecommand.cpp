@@ -10,11 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include <QQuaternion>
+
 #include "commands/transformscenenodecommand.h"
+
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "shell/uimanager.h"
-#include "ui/panels/scenenodepropertieswidget.h"
+#include "services/services.h"
+#include "services/sceneeditservice.h"
 
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform)
 {
@@ -47,14 +49,14 @@ TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node,
 	this->oldScale = oldScale;
 }
 
-// UiManager::propertyWidget is null-checked (like ReparentSceneNodeCommand, the
-// headless-safe template): scripts push this command with no UI docks built.
+// `services` is null-checked (the headless-safe contract): scripts push this
+// command with no UI wired, and the notification simply has no listeners.
 void TransformSceneNodeCommand::undo()
 {
 	sceneNode->setLocalPos(oldPos);
 	sceneNode->setLocalRot(oldRot);
 	sceneNode->setLocalScale(oldScale);
-	if (UiManager::propertyWidget) UiManager::propertyWidget->refreshTransform();
+	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
 void TransformSceneNodeCommand::redo()
@@ -62,5 +64,5 @@ void TransformSceneNodeCommand::redo()
 	sceneNode->setLocalPos(newPos);
 	sceneNode->setLocalRot(newRot);
 	sceneNode->setLocalScale(newScale);
-	if (UiManager::propertyWidget) UiManager::propertyWidget->refreshTransform();
+	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }

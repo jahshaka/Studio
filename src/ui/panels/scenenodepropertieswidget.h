@@ -33,6 +33,7 @@ class MeshPropertyWidget;
 class PhysicsPropertyWidget;
 class DemoPane;
 class IEditorViewport;
+struct StudioServices;
 class Database;
 
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
@@ -59,6 +60,7 @@ public:
     void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
     void setAssetItem(QListWidgetItem *item);
 	void setSceneView(IEditorViewport *sceneView);
+	void setServices(StudioServices *services);
 
     /**
      * Updates material properties if active scene node is a mesh
@@ -76,6 +78,7 @@ public slots:
 	void acceptCubemapTexturesFromSkyPresets(QStringList guids);
 
 private:
+	StudioServices *services = nullptr;
     void clearLayout(QLayout*);
 
 private:

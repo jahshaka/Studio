@@ -28,6 +28,7 @@ namespace iris {
 
 class PropertyWidget;
 class Database;
+struct StudioServices;
 
 /**
  *  Displays properties for materials
@@ -58,6 +59,7 @@ public:
     void forceShaderRefresh(const QString&);
     void setWidgetProperties();
 
+    void setServices(StudioServices *s) { services = s; }
     void setDatabase(Database *db) {
         this->db = db;
     }
@@ -80,6 +82,7 @@ private:
     // for undo/redo
     QVariant startValue;
     Database *db;
+    StudioServices *services = nullptr;
     QString meshNodeGuid;
     QMap<QString, QString> existingTextures;
 };

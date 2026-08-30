@@ -10,11 +10,12 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/deletescenenodecommand.h"
+
 #include "data/database/database.h"
-#include "shell/uimanager.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "shell/mainwindow.h"
-#include "ui/panels/scenehierarchywidget.h"
+#include "services/services.h"
+#include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
 
 DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode,
                                                Database *db, const QString &assetGuid)
@@ -34,20 +35,20 @@ DeleteSceneNodeCommand::~DeleteSceneNodeCommand()
         db->deleteAsset(assetGuid);
 }
 
-// The UiManager statics are null-checked (like ReparentSceneNodeCommand, the
-// headless-safe template): scripts push these commands with no UI docks built.
+// `services` is null-checked (the headless-safe contract): scripts push these
+// commands with no UI wired, and the notifications simply have no listeners.
 void DeleteSceneNodeCommand::undo()
 {
     nodeDeleted = false;
     parentNode->insertChild(position, sceneNode, false);
-    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->insertChild(sceneNode);
-    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(sceneNode);
+    if (services && services->sceneEdit) services->sceneEdit->notifyNodeInserted(sceneNode);
+    if (services && services->selection) services->selection->select(sceneNode);
 }
 
 void DeleteSceneNodeCommand::redo()
 {
     nodeDeleted = true;
-    if (UiManager::sceneHierarchyWidget) UiManager::sceneHierarchyWidget->removeChild(sceneNode);
+    if (services && services->sceneEdit) services->sceneEdit->notifyNodeRemoved(sceneNode);
     sceneNode->removeFromParent();// important that this is done after!
-    if (UiManager::mainWindow) UiManager::mainWindow->sceneNodeSelected(iris::SceneNodePtr());
+    if (services && services->selection) services->selection->select(iris::SceneNodePtr());
 }

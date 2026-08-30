@@ -1,15 +1,17 @@
-// Link stubs: the gizmo classes reach into Studio's undo stack and property panel
-// from createUndoAction(). The test never drags, so none of this is exercised.
+// Link stubs: the gizmo classes push undo commands through the services from
+// createUndoAction(). The test never drags (and wires no services), so none of
+// this is exercised — the command is a do-nothing stand-in.
 #include <QUndoCommand>
 #include "irisgl/irisglfwd.h"
-#include "shell/uimanager.h"
 #include "commands/transformscenenodecommand.h"
-#include "ui/panels/scenenodepropertieswidget.h"
 
-SceneNodePropertiesWidget *UiManager::propertyWidget = nullptr;
-void UiManager::pushUndoStack(QUndoCommand *cmd) { delete cmd; }
-void SceneNodePropertiesWidget::refreshTransform() {}
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr, QVector3D, QQuaternion, QVector3D) {}
-
 void TransformSceneNodeCommand::undo() {}
 void TransformSceneNodeCommand::redo() {}
+
+// The gizmos notify through the services; the test wires none, but the
+// linker still wants the symbols.
+#include "services/undoservice.h"
+#include "services/sceneeditservice.h"
+void UndoService::push(QUndoCommand *cmd) { delete cmd; }
+void SceneEditService::notifyTransformChanged() {}

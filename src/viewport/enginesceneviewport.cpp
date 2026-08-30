@@ -25,7 +25,6 @@
 #include <QDir>
 #include "data/constants.h"
 #include "shell/mainwindow.h"
-#include "shell/uimanager.h"
 #include "shell/globals.h"
 #include "data/project.h"
 #include "data/database/database.h"
@@ -60,6 +59,7 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
     mFreeCam  = new EditorCameraController(this);
     mOrbitCam = new OrbitalCameraController(this);
     mPlayback = new PlayBack();
+    mPlayback->setEditorViewport(this);
     mPlayback->init();                 // GL-free init: physics, animation, controllers
     resetEditorCam();
     setCameraController(mFreeCam);
@@ -189,7 +189,7 @@ static QMap<int, QVariant> dragRoleData(const QMimeData *mime)
 
 void EngineSceneViewport::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (UiManager::sceneHierarchyWidget && event->source() == UiManager::sceneHierarchyWidget->getWidget()) {
+    if (mHierarchyDragSource && event->source() == mHierarchyDragSource) {
         event->ignore();
         return;
     }
@@ -584,4 +584,12 @@ IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine
                                            EngineRenderDriver *driver, QWidget *parent)
 {
     return new EngineSceneViewport(engine, driver, parent);
+}
+
+void EngineSceneViewport::setServices(StudioServices *services)
+{
+    // The gizmos raise undo pushes / refreshes through the aggregate.
+    if (mTranslateGizmo) mTranslateGizmo->setServices(services);
+    if (mRotateGizmo)    mRotateGizmo->setServices(services);
+    if (mScaleGizmo)     mScaleGizmo->setServices(services);
 }

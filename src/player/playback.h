@@ -42,8 +42,14 @@ struct PlayBackNodeTransform
 	}
 };
 
+class IEditorViewport;
+
 class PlayBack
 {
+	/// The editor viewport when one exists (editor and player share the
+	/// document); null in headless tests. Was UiManager::sceneViewWidget.
+	IEditorViewport* editorViewport = nullptr;
+
 	QMatrix4x4 savedCameraMatrix;
 	CameraControllerBase* camController;
 	PlayerMouseController* mouseController;
@@ -61,6 +67,8 @@ class PlayBack
 	QMap<QString, PlayBackNodeTransform> nodeTransforms;
 public:
 	bool isScenePlaying() { return _isPlaying; }
+
+	void setEditorViewport(IEditorViewport* viewport) { editorViewport = viewport; }
 
 	PlayBack();
 	/// Physics, animation and the camera controllers run here; the engine's

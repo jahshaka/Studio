@@ -26,7 +26,6 @@ For more information see the LICENSE file
 #include "ui/panels/timeline/keyframelabeltreewidget.h"
 #include "ui/panels/timeline/keyframelabel.h"
 #include "ui/panels/timeline/animationwidgetdata.h"
-#include "shell/uimanager.h"
 #include "ui/panels/timeline/animationwidget.h"
 #include <QMenu>
 #include <math.h>

@@ -16,6 +16,7 @@
 
 class EngineRenderDriver;
 class EnginePlayerScene;
+class IEditorViewport;
 
 class EnginePlayerView : public EngineViewWidget
 {
@@ -34,6 +35,11 @@ public:
     void stopScene();
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }
+
+    /// The editor viewport, when one exists (the play camera is the editor
+    /// camera and PlayBack falls back to the shared document through it).
+    /// Wired by the shell; null in headless runs. Was UiManager::sceneViewWidget.
+    void setEditorViewport(IEditorViewport *viewport);
 
     /// Steps the player and pushes document -> engine. Called before every frame.
     void syncFrame();
@@ -57,6 +63,7 @@ private:
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
     EngineRenderDriver *mDriver = nullptr;
     std::unique_ptr<EnginePlayerScene> mScene;
+    IEditorViewport *mEditorViewport = nullptr;
     iris::ScenePtr mDocument;
     QElapsedTimer mFrameTimer;
     bool mActive = false;

@@ -387,6 +387,7 @@ public slots:
     void updateSceneSettings();
 
     void undo();
+    void updateWindowTitle();
     void redo();
 
     void takeScreenshot();

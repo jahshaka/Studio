@@ -114,7 +114,22 @@ public:
     void exportNodeTo(const iris::SceneNodePtr &node, ModelTypes modelType,
                       const QString &filePath);
 
+    // Refresh notifications the undo commands raise (Phase 4: the commands'
+    // widget-refresh statics became these signals; the shell connects them to
+    // its panels). Public emit-wrappers because QUndoCommands are not QObjects.
+    void notifyNodeInserted(const iris::SceneNodePtr &node);
+    void notifyNodeRemoved(const iris::SceneNodePtr &node);
+    void notifyHierarchyChanged();
+    void notifyTransformChanged();
+
 signals:
+    /// An undo command inserted/removed a node — the hierarchy panel should
+    /// add/remove the matching row.
+    void nodeInserted(const iris::SceneNodePtr &node);
+    void nodeRemoved(const iris::SceneNodePtr &node);
+    /// A node's transform changed outside the properties panel — it should
+    /// re-read the selection's transform.
+    void transformRefreshRequested();
     /// The scene tree changed outside an undo command (addNodeToActiveNode).
     void hierarchyChanged();
     /// A material asset was created — the asset browser should re-list.

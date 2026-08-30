@@ -2,7 +2,6 @@
 #include <QTimer>
 #include <QElapsedTimer>
 #include "data/constants.h"
-#include "shell/uimanager.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/SceneGraph.h"
@@ -63,8 +62,7 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 
 	// The editor viewport and the player share one document; fall back to our
 	// own pointer when there is no editor viewport (headless tests).
-	auto scene = UiManager::sceneViewWidget ? UiManager::sceneViewWidget->getScene() : this->scene;
-	//auto renderer = UiManager::sceneViewWidget->getRenderer();
+	auto scene = editorViewport ? editorViewport->getScene() : this->scene;
 
 	if (camController->getCamera() != scene->camera)
 		irisLog("Controller mismatch!");

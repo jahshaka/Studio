@@ -75,6 +75,11 @@ SceneEditService::SceneEditService(Database *db,
 {
 }
 
+void SceneEditService::notifyNodeInserted(const iris::SceneNodePtr &node) { emit nodeInserted(node); }
+void SceneEditService::notifyNodeRemoved(const iris::SceneNodePtr &node) { emit nodeRemoved(node); }
+void SceneEditService::notifyHierarchyChanged() { emit hierarchyChanged(); }
+void SceneEditService::notifyTransformChanged() { emit transformRefreshRequested(); }
+
 void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QString &name)
 {
     const QString nodeGuid = GUIDManager::generateGUID();

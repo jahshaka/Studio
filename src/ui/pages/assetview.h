@@ -67,6 +67,7 @@ class AssetViewGrid;
 class AssetGridItem;
 class IAssetViewer;
 class Database;
+struct StudioServices;
 class SettingsManager;
 class PreferencesDialog;
 
@@ -97,6 +98,8 @@ public:
 	/// `previewViewer` (optional) is the page's preview viewer; null means the
 	/// legacy AssetViewer. MainWindow passes the engine one in engine mode.
 	AssetView(Database *handle, QWidget *parent = Q_NULLPTR, IAssetViewer *previewViewer = nullptr);
+	/// Phase 4: scene-open checks go through the services, not ambient statics.
+	void setServices(StudioServices *s) { services = s; }
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
@@ -124,6 +127,7 @@ private:
         QJsonObject &mat);
 
 	Database *db;
+	StudioServices *services = nullptr;
 	QSplitter *_splitter;
 	QWidget *_filterBar;
 	QWidget *_navPane;

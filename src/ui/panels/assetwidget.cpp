@@ -42,7 +42,6 @@ For more information see the LICENSE file
 #include "ui/pages/assetview.h"
 #include "data/constants.h"
 #include "shell/globals.h"
-#include "shell/uimanager.h"
 
 #include "shell/mainwindow.h"
 #include "data/database/database.h"

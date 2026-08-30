@@ -21,11 +21,11 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "shell/uimanager.h"
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "shell/uimanager.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "services/services.h"
+#include "services/sceneeditservice.h"
 #include "viewport/gizmomeshes.h"
 
 #define DEFAULT_SNAP_LENGTH 10
@@ -268,7 +268,7 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 	else
 		selectedNode->setLocalRot(nodeStartRot * rot);
 
-	UiManager::propertyWidget->refreshTransform();
+	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
 bool RotationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)

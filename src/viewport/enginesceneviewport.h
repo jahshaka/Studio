@@ -41,6 +41,8 @@ public:
     QWidget *asWidget() override { return this; }
     EditorViewportEvents *events() override { return &mEvents; }
     void setMainWindow(MainWindow *window) override { mMainWindow = window; }
+    void setHierarchyDragSource(QWidget *source) override { mHierarchyDragSource = source; }
+    void setServices(StudioServices *services) override;
     void setDatabase(Database *db) override { mDatabase = db; }
 
     void setScene(iris::ScenePtr scene) override;
@@ -151,6 +153,7 @@ private:
     std::unique_ptr<SceneMirror> mMirror;
     EditorViewportEvents mEvents;
     MainWindow *mMainWindow = nullptr;
+    QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;
     iris::ScenePtr mScene;
     iris::SceneNodePtr mSelectedNode;

@@ -15,7 +15,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 
 
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/playbackservice.h"
 
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
@@ -149,6 +150,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView = new MaterialPropertyWidget();
                     materialPropView->setPanelTitle("Material");
                     materialPropView->setDatabase(db);
+                    materialPropView->setServices(services);
                     materialPropView->expand();
 
                     physicsPropView->setParent(this);
@@ -159,7 +161,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     meshPropView->setSceneNode(sceneNode);
                     materialPropView->setSceneNode(sceneNode);
 
-                    if (!UiManager::isSimulationRunning) {
+                    if (!(services && services->playback && services->playback->isSimulationRunning())) {
                         widgetPropertyLayout->addWidget(physicsPropView);
                     }
 
@@ -225,6 +227,12 @@ void SceneNodePropertiesWidget::refreshTransform()
 void SceneNodePropertiesWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
+}
+
+void SceneNodePropertiesWidget::setServices(StudioServices *services)
+{
+    this->services = services;
+    if (transformWidget) transformWidget->setServices(services);
 }
 
 void SceneNodePropertiesWidget::setDatabase(Database *db)

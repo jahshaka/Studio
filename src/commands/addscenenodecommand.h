@@ -12,13 +12,11 @@ For more information see the LICENSE file
 #ifndef ADDSCENENODECOMMAND_H
 #define ADDSCENENODECOMMAND_H
 
-#include <QUndoCommand>
+#include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
 
-class MainWindow;
-class SceneHierarchyWidget;
 
-class AddSceneNodeCommand : public QUndoCommand
+class AddSceneNodeCommand : public StudioCommand
 {
     //iris::ScenePtr scene;
     iris::SceneNodePtr parentNode;

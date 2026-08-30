@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
 #include "ui/dialogs/preferencesdialog.h"
-#include "ui/dialogs/preferences/worldsettings.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 
 #include "irisgl/core/irisutils.h"
@@ -58,7 +57,8 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/projectservice.h"
 #include "ui/controls/assetviewgrid.h"
 #include "ui/controls/assetgriditem.h"
 #include "services/assethelper.h"
@@ -729,7 +729,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	connect(fastGrid, &AssetViewGrid::selectedTileToAdd, [=](AssetGridItem *gridItem) {
 		if (!gridItem->metadata.isEmpty()) {
-			if (UiManager::isSceneOpen) {
+			if (services && services->project && services->project->isSceneOpen()) {
 				selectedGridItem = gridItem;
 				addAssetItemToProject(gridItem);
 				selectedGridItem = Q_NULLPTR;
@@ -751,7 +751,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 		if (!gridItem->metadata.isEmpty()) {
 
-			if (UiManager::isSceneOpen) addToProject->setEnabled(true);
+			if (services && services->project && services->project->isSceneOpen()) addToProject->setEnabled(true);
 			deleteFromLibrary->setEnabled(true);
 
 			renameWidget->setVisible(true);

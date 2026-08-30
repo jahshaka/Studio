@@ -12,14 +12,12 @@ For more information see the LICENSE file
 #ifndef DELETESCENENODECOMMAND_H
 #define DELETESCENENODECOMMAND_H
 
-#include <QUndoCommand>
+#include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
 
-class MainWindow;
-class SceneHierarchyWidget;
 class Database;
 
-class DeleteSceneNodeCommand : public QUndoCommand
+class DeleteSceneNodeCommand : public StudioCommand
 {
     iris::SceneNodePtr parentNode;
     iris::SceneNodePtr sceneNode;

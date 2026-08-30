@@ -19,7 +19,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/sceneeditservice.h"
 #include "viewport/gizmomeshes.h"
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/mathhelper.h"
@@ -271,7 +272,7 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 	}
 
 	selectedNode->setLocalScale(startScale + diff);
-	UiManager::propertyWidget->refreshTransform();
+	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
 bool ScaleGizmo::isHit(QVector3D rayPos, QVector3D rayDir)

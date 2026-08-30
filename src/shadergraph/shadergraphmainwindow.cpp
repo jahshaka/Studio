@@ -66,7 +66,6 @@ For more information see the LICENSE file
 #if(EFFECT_BUILD_AS_LIB)
 #include "data/database/database.h"
 #include "services/assethelper.h"
-#include "shell/uimanager.h"
 #include "shell/globals.h"
 #include "data/guidmanager.h"
 #include "irisgl/core/irisutils.h"
@@ -779,6 +778,8 @@ void MainWindow::configureAssetsDock()
 	tabWidget = new QTabWidget;
 	presets = new ListWidget;
 	effects = new ListWidget;
+	presets->sceneOpenProbe = mSceneOpenProbe;
+	effects->sceneOpenProbe = mSceneOpenProbe;
 	effects->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     effects->shaderContextMenuAllowed = true;
 
@@ -1082,6 +1083,7 @@ void MainWindow::configureUI()
 
 #if(EFFECT_BUILD_AS_LIB)
 	assetWidget = new ShaderAssetWidget;
+	assetWidget->sceneOpenProbe = mSceneOpenProbe;
 	//addDockWidget(Qt::LeftDockWidgetArea, projectDock, Qt::Vertical);
 #endif
 	addDockWidget(Qt::LeftDockWidgetArea, assetsDock, Qt::Vertical);
@@ -1308,6 +1310,7 @@ void MainWindow::addTabs()
 {
 	for (int i = 0; i < (int)NodeCategory::PlaceHolder; i++) {
 		auto wid = new ListWidget;
+		wid->sceneOpenProbe = mSceneOpenProbe;
 		wid ->setIconSize({ 40,40 });
 		tabbedWidget->addTab(wid, NodeModel::getEnumString(static_cast<NodeCategory>(i)));
 	}
@@ -1359,6 +1362,14 @@ void MainWindow::updateAssetDock()
 #endif
 }
 
+
+void MainWindow::setSceneOpenProbe(std::function<bool()> probe)
+{
+	mSceneOpenProbe = probe;
+	if (presets) presets->sceneOpenProbe = probe;
+	if (effects) effects->sceneOpenProbe = probe;
+	if (assetWidget) assetWidget->sceneOpenProbe = probe;
+}
 
 void MainWindow::setAssetWidgetDatabase(Database * db)
 {

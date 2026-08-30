@@ -32,7 +32,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/properties/property.h"
 
-#include "shell/uimanager.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "commands/changematerialpropertycommand.h"
 
 #include "io/scenewriter.h"
@@ -267,5 +268,6 @@ void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 
 void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
 {
-    UiManager::pushUndoStack(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
+    if (services && services->undo)
+        services->undo->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
 }

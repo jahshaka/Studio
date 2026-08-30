@@ -14,19 +14,22 @@ For more information see the LICENSE file
 
 // PlaybackService — the play/edit state machine (APP_ARCHITECTURE_AUDIT §3.3).
 //
-// The one API for entering/leaving play mode, driving scene playback and the
-// in-place physics simulation. The play-button chrome is the shell's business:
-// it connects to the mode signals.
-//
-// Transitional (audit §9, Phase 4): the authoritative state still lives in
-// UiManager's statics — 31 files read those variables directly and converting
-// them is the hub-dissolution phase's job. This service is the mediator every
-// NEW call site uses; when Phase 4 flips the storage into the service, only
-// this .cpp changes.
+// OWNS the playback state (Phase 4 flipped the storage out of UiManager's
+// statics and deleted the hub): playing/paused, edit-vs-play mode, the
+// player-tab flag and the in-place physics simulation flag. Scene playback
+// drives the injected viewport; the play-button chrome is the shell's
+// business — it connects to the mode signals.
 
 #include <QObject>
 
-#include "shell/uimanager.h"   // SceneMode + the transitional state storage
+class IEditorViewport;
+
+/// Which half of the shared editor/player pair is active.
+enum class SceneMode
+{
+    EditMode,
+    PlayMode
+};
 
 class PlaybackService : public QObject
 {
@@ -35,15 +38,25 @@ class PlaybackService : public QObject
 public:
     explicit PlaybackService(QObject *parent = nullptr) : QObject(parent) {}
 
+    /// The viewport playback drives. Wired by the shell once the viewport
+    /// exists; nullable (headless hosts have none).
+    void setViewport(IEditorViewport *viewport) { this->viewport = viewport; }
+
     /// State halves of MainWindow::enterEditMode/enterPlayMode — the chrome
     /// (button text/icon) is applied by the shell on the signals.
     void enterEditMode();
     void enterPlayMode();
 
-    bool isPlaying() const;
-    SceneMode sceneMode() const;
+    bool isPlaying() const { return playing; }
+    void setPlaying(bool p) { playing = p; }
+    SceneMode sceneMode() const { return mode; }
+    void setSceneMode(SceneMode m) { mode = m; }
 
-    // Scene playback (drives the viewport through UiManager for now).
+    /// True while the PLAYER tab (not the editor's play-in-place) is active.
+    bool isPlayerMode() const { return playerMode; }
+    void setPlayerMode(bool on) { playerMode = on; }
+
+    // Scene playback (drives the viewport).
     void playScene();
     void pauseScene();
     void restartScene();
@@ -53,14 +66,19 @@ public:
     void startSimulation();
     void restartSimulation();
     void stopSimulation();
-    bool isSimulationRunning() const;
-    void setSimulationRunning(bool running);
+    bool isSimulationRunning() const { return simulationRunning; }
+    void setSimulationRunning(bool running) { simulationRunning = running; }
 
 signals:
     void editModeEntered();
     void playModeEntered();
 
 private:
+    IEditorViewport *viewport = nullptr;
+    bool playing = false;
+    bool playerMode = false;
+    bool simulationRunning = false;
+    SceneMode mode = SceneMode::EditMode;
 };
 
 #endif // PLAYBACKSERVICE_H

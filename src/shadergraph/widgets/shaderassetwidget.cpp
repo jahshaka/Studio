@@ -26,7 +26,6 @@ For more information see the LICENSE file
 #include "../shadergraphmainwindow.h"
 #if(EFFECT_BUILD_AS_LIB)
 #include "io/assetmanager.h"
-#include "shell/uimanager.h"
 #include "shell/globals.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -152,7 +151,7 @@ void ShaderAssetWidget::addItem(const AssetRecord & assetData)
 void ShaderAssetWidget::setUpDatabase(Database * db)
 {
 	//remove noWidget if preset and add assetViewWidget
-	if (UiManager::isSceneOpen) {
+	if (sceneOpenProbe && sceneOpenProbe()) {
 		this->db = db;
 		updateAssetView(Globals::project->getProjectGuid());
 		assetItemShader.selectedGuid = Globals::project->getProjectGuid();
@@ -167,7 +166,7 @@ void ShaderAssetWidget::refresh()
 
 void ShaderAssetWidget::setWidgetToBeShown()
 {
-	if (UiManager::isSceneOpen) {
+	if (sceneOpenProbe && sceneOpenProbe()) {
 		stackWidget->setCurrentIndex(0);
 	}
 	else {

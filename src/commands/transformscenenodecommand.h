@@ -13,11 +13,11 @@ For more information see the LICENSE file
 #define TRANSFRORMSCENENODECOMMAND_H
 
 #include <QQuaternion>
-#include <QUndoCommand>
+#include "commands/studiocommand.h"
 #include <QMatrix4x4>
 #include "irisgl/irisglfwd.h"
 
-class TransformSceneNodeCommand : public QUndoCommand
+class TransformSceneNodeCommand : public StudioCommand
 {
     //QMatrix4x4 oldTransform;
     //QMatrix4x4 newTransform;

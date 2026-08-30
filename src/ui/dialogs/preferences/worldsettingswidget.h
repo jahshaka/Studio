@@ -15,12 +15,19 @@ For more information see the LICENSE file
 class SettingsManager;
 class Database;
 
+class IEditorViewport;
+class MainWindow;
+
 class WorldSettingsWidget : public QWidget
 {
     Q_OBJECT
     SettingsManager *settings;
 
 public:
+    /// Wired by the shell once the viewport exists (Phase 4: was UiManager).
+    void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow) {
+        this->editorViewport = viewport; this->mainWindow = mainWindow;
+    }
     explicit WorldSettingsWidget(Database *db, SettingsManager* settings);
     ~WorldSettingsWidget();
 
@@ -37,6 +44,8 @@ public:
 
 
 private:
+    IEditorViewport *editorViewport = nullptr;
+    MainWindow *mainWindow = nullptr;
 	QPushButton * viewport;
 	QPushButton * editor;
 	QPushButton * content;

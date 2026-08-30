@@ -19,12 +19,9 @@ For more information see the LICENSE file
 // a script run stays one undo step), and the saved-count bookkeeping the
 // close-confirmation dialog reads. QObject-free and headless-safe.
 //
-// Transitional: UiManager's undo statics forward here so the 31 files that
-// still call UiManager::pushUndoStack() keep working until Phase 4 deletes
-// the hub (audit §9).
-
 class QUndoStack;
 class QUndoCommand;
+struct StudioServices;
 
 class UndoService
 {
@@ -34,6 +31,11 @@ public:
     explicit UndoService(QUndoStack *stack);
 
     QUndoStack *stack() const { return mStack; }
+
+    /// The aggregate stamped onto every StudioCommand at push time so
+    /// commands can raise UI refreshes without ambient statics (Phase 4).
+    /// Nullable — headless hosts never set it.
+    void setServices(StudioServices *services) { mServices = services; }
 
     void push(QUndoCommand *command);
     /// Undoes the last completed step if there is one (MainWindow::undo's guard).
@@ -60,6 +62,7 @@ public:
 
 private:
     QUndoStack *mStack = nullptr;
+    StudioServices *mServices = nullptr;
     bool mScriptMacroOpen = false;
     int  mSavedCount = 0;
 };

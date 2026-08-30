@@ -11,7 +11,6 @@
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginehost.h"
 #include "viewport/ieditorviewport.h"
-#include "shell/uimanager.h"
 #include "viewport/keyboardstate.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -40,7 +39,13 @@ EnginePlayerView::~EnginePlayerView()
 
 iris::CameraNodePtr EnginePlayerView::editorCamera() const
 {
-    return UiManager::sceneViewWidget ? UiManager::sceneViewWidget->editorCamera() : iris::CameraNodePtr();
+    return mEditorViewport ? mEditorViewport->editorCamera() : iris::CameraNodePtr();
+}
+
+void EnginePlayerView::setEditorViewport(IEditorViewport *viewport)
+{
+    mEditorViewport = viewport;
+    if (mScene && mScene->playback()) mScene->playback()->setEditorViewport(viewport);
 }
 
 void EnginePlayerView::setScene(iris::ScenePtr scene)

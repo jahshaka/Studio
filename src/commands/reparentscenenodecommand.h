@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef REPARENTSCENENODECOMMAND_H
 #define REPARENTSCENENODECOMMAND_H
 
-#include <QUndoCommand>
+#include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -20,7 +20,7 @@ For more information see the LICENSE file
 /// keeping its WORLD pose — addChild(keepTransform = true) recomputes the local
 /// transform against the new parent. Undo restores the original parent the same
 /// way, so the node ends up exactly where it visually was throughout.
-class ReparentSceneNodeCommand : public QUndoCommand
+class ReparentSceneNodeCommand : public StudioCommand
 {
     iris::SceneNodePtr sceneNode;
     iris::SceneNodePtr oldParent;

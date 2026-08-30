@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "services/projectservice.h"
 #include "services/services.h"
-#include "shell/uimanager.h"
 #include "ui/pages/projectmanager.h"
 
 QVector<VerbInfo> ProjectApi::verbs() const
@@ -105,11 +104,11 @@ bool ProjectApi::open(const QString &guidOrName)
         return false;
     }
 
-    if (Globals::project->getProjectGuid() == guid && UiManager::isSceneOpen) {
+    if (Globals::project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
     }
-    if (UiManager::isSceneOpen) host.mainWindow->closeProject();
+    if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
     // Point the current project + synchronous preload, then the reader half.
     host.services->project->prepareOpen(guid, name);
@@ -147,7 +146,7 @@ bool ProjectApi::remove(const QString &guid)
 {
     if (!host.db || !host.services || !host.services->project)
         return fail("project: not available in this session");
-    if (UiManager::isSceneOpen && Globals::project->getProjectGuid() == guid)
+    if (host.services->project->isSceneOpen() && Globals::project->getProjectGuid() == guid)
         return fail("project.remove: this project is open — project.close() first");
 
     QString name;

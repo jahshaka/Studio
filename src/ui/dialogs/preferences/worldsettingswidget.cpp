@@ -28,7 +28,10 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "shell/globals.h"
-#include "shell/uimanager.h"
+#include "viewport/ieditorviewport.h"
+#include "shell/mainwindow.h"
+#include "services/services.h"
+#include "services/projectservice.h"
 #include "viewport/ieditorviewport.h"
 #include "shell/mainwindow.h"
 #include "ui/style/stylesheet.h"
@@ -231,12 +234,12 @@ void WorldSettingsWidget::outlineColorChanged(QColor color)
 void WorldSettingsWidget::showFpsChanged(bool show)
 {
     showFps = show;
-    if (UiManager::sceneViewWidget) UiManager::sceneViewWidget->setShowFps(show);
+    if (editorViewport) editorViewport->setShowFps(show);
 }
 
 void WorldSettingsWidget::setShowPerspectiveLabel(bool show)
 {
-	if (UiManager::sceneViewWidget) UiManager::sceneViewWidget->setShowPerspeciveLabel(show);
+	if (editorViewport) editorViewport->setShowPerspeciveLabel(show);
 }
 
 void WorldSettingsWidget::enableAutoSave(bool state)
@@ -413,7 +416,7 @@ void WorldSettingsWidget::configureEditor()
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
 	autoUpdates->setChecked(settings->getValue("automatic_updates", true).toBool());
 	// showFps is the persisted "show_fps" setting (SceneViewWidget reads it from there too).
-	viewportProjection->setChecked( UiManager::sceneViewWidget ? settings->getValue("show_fps", false).toBool() : false);
+	viewportProjection->setChecked(editorViewport ? settings->getValue("show_fps", false).toBool() : false);
 	
 	// mouse control options
 	QStringList list;
@@ -621,7 +624,7 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		);
 
 		if (option == QMessageBox::Yes) {
-			if (UiManager::isSceneOpen) UiManager::mainWindow->closeProject();
+			if (mainWindow && mainWindow->studioServices()->project->isSceneOpen()) mainWindow->closeProject();
 			db->wipeDatabase();
 			QMessageBox::information(this, "Restart", "Database cleared, Jahshaka will now restart!", QMessageBox::Ok);
 			qApp->quit();

@@ -1,19 +1,15 @@
-// Link stubs: PlayBack's controllers reach into Studio's globals (UiManager, the
-// undo stack). The test drives the mouse controller only; none of this is exercised.
+// Link stubs: PlayBack's controllers can push undo commands through the
+// services. The test drives the mouse controller only; none of this is
+// exercised, so the command is a do-nothing stand-in.
 #include <QUndoCommand>
 #include "irisgl/irisglfwd.h"
-#include "shell/uimanager.h"
 #include "commands/transformscenenodecommand.h"
 
-IEditorViewport *UiManager::sceneViewWidget = nullptr;
-SceneMode UiManager::sceneMode = SceneMode::PlayMode;
-bool UiManager::isSimulationRunning = false;
-void UiManager::pushUndoStack(QUndoCommand *cmd) { delete cmd; }
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr, QVector3D, QQuaternion, QVector3D) {}
 void TransformSceneNodeCommand::undo() {}
 void TransformSceneNodeCommand::redo() {}
 
-// SettingsManager's inline constructor (src/core/settingsmanager.h:47) resolves its
+// SettingsManager's inline constructor (src/data/settingsmanager.h) resolves its
 // settings file against Globals::appWorkingDir. Nothing else in Globals is reached.
 #include "shell/globals.h"
 QString Globals::appWorkingDir;

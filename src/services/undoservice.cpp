@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "services/undoservice.h"
 
+#include "commands/studiocommand.h"
+
 #include <QUndoStack>
 
 UndoService::UndoService(QUndoStack *stack) : mStack(stack)
@@ -19,6 +21,10 @@ UndoService::UndoService(QUndoStack *stack) : mStack(stack)
 
 void UndoService::push(QUndoCommand *command)
 {
+    // Stamp before mStack->push — QUndoStack runs the command's first redo()
+    // inside push(), and the refresh notifications need the services then.
+    if (auto studioCommand = dynamic_cast<StudioCommand *>(command))
+        studioCommand->setServices(mServices);
     mStack->push(command);
 }
 

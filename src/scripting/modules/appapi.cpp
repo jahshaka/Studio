@@ -9,10 +9,11 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/services.h"
+#include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
 
 #include "shell/mainwindow.h"
-#include "shell/uimanager.h"
 #include "ui/pages/projectmanager.h"
 
 QVector<VerbInfo> AppApi::verbs() const
@@ -47,7 +48,8 @@ bool AppApi::space(const QString &name)
     else if (s == "publish")                     space = WindowSpaces::PUBLISH;
     else return fail(QStringLiteral("app.space: unknown space '%1' (desktop, player, editor, materials, assets, publish)").arg(name));
 
-    if ((space == WindowSpaces::PLAYER || space == WindowSpaces::EDITOR) && !UiManager::isSceneOpen)
+    const bool sceneOpen = host.services && host.services->project && host.services->project->isSceneOpen();
+    if ((space == WindowSpaces::PLAYER || space == WindowSpaces::EDITOR) && !sceneOpen)
         return fail(QStringLiteral("app.space: '%1' needs an open project").arg(s));
 
     host.mainWindow->switchSpace(space);

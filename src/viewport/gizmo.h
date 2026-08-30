@@ -121,9 +121,15 @@ struct GizmoDrawItem
     QColor colour;
 };
 
+struct StudioServices;
+
 class Gizmo
 {
 protected:
+	/// Undo pushes and transform-refresh notifications go through the
+	/// services (Phase 4: was UiManager's statics). Nullable in tests.
+	StudioServices* services = nullptr;
+
 	iris::SceneNodePtr selectedNode;
 	GizmoTransformSpace transformSpace;
 	float gizmoScale;
@@ -133,6 +139,7 @@ protected:
 
 public:
 	Gizmo();
+	void setServices(StudioServices* s) { services = s; }
 	virtual void updateSize(iris::CameraNodePtr camera);
 	float getGizmoScale();
 

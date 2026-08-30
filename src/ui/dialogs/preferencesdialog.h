@@ -22,8 +22,9 @@ namespace Ui {
 
 class QListWidgetItem;
 class SettingsManager;
-class WorldSettings;
 class WorldSettingsWidget;
+class IEditorViewport;
+class MainWindow;
 class Database;
 
 class PreferencesDialog : public QDialog
@@ -42,9 +43,10 @@ protected:
 
 public:
     explicit PreferencesDialog(QWidget* parent, Database *db, SettingsManager* settings);
+    /// Forwards the editor wiring to the world-settings page (Phase 4).
+    void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow);
     ~PreferencesDialog();
 
-	//WorldSettings* worldSettings;
 	WorldSettingsWidget* worldSettings;
 	Database *db;
 
