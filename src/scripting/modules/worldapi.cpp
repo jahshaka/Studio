@@ -21,6 +21,8 @@ For more information see the LICENSE file
 #include "../../globals.h"
 #include "../../io/scenewriter.h"
 #include "../../mainwindow.h"
+#include "../../services/sceneeditservice.h"
+#include "../../services/services.h"
 #include "../../irisgl/src/graphics/texture2d.h"
 
 using namespace scriptmod;
@@ -54,7 +56,7 @@ QVector<VerbInfo> WorldApi::verbs() const
 
 iris::ScenePtr WorldApi::sceneOrFail(const QString &verb)
 {
-    auto scene = host.mainWindow ? host.mainWindow->getScene() : iris::ScenePtr();
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene() : iris::ScenePtr();
     if (!scene) fail(QStringLiteral("%1: no scene is open").arg(verb));
     return scene;
 }

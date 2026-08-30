@@ -93,6 +93,7 @@ class UndoService;
 class SelectionService;
 class PlaybackService;
 class ProjectService;
+class SceneEditService;
 // class SceneNodePropertiesWidget;
 
 class AssetModelPanel;
@@ -552,6 +553,7 @@ private:
     SelectionService *selectionService = nullptr;
     PlaybackService *playbackService = nullptr;
     ProjectService *projectService = nullptr;
+    SceneEditService *sceneEditService = nullptr;
 
     // scripting (SCRIPTING_SPEC §2): the host struct must outlive the engine
     struct ScriptHost *scriptHost = nullptr;

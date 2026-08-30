@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../../commands/reparentscenenodecommand.h"
 #include "../../commands/transfrormscenenodecommand.h"
 #include "../../mainwindow.h"
+#include "../../services/sceneeditservice.h"
 #include "../../services/services.h"
 #include "../../services/undoservice.h"
 
@@ -49,7 +50,8 @@ QVector<VerbInfo> NodeApi::verbs() const
 
 iris::SceneNodePtr NodeApi::nodeOrFail(const QString &id, const QString &verb)
 {
-    auto scene = host.mainWindow ? host.mainWindow->getScene() : iris::ScenePtr();
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                              : iris::ScenePtr();
     if (!scene) {
         fail(QStringLiteral("%1: no scene is open").arg(verb));
         return iris::SceneNodePtr();
@@ -63,7 +65,7 @@ bool NodeApi::remove(const QString &id)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.remove"));
     if (!node) return false;
-    if (!host.mainWindow->deleteSceneNode(node))
+    if (!host.services->sceneEdit->deleteNode(node))
         return fail(QStringLiteral("node.remove: '%1' is not removable").arg(node->getName()));
     return true;
 }
@@ -72,7 +74,7 @@ QString NodeApi::duplicate(const QString &id)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.duplicate"));
     if (!node) return QString();
-    auto copy = host.mainWindow->duplicateSceneNode(node);
+    auto copy = host.services->sceneEdit->duplicateNode(node);
     if (!copy) {
         fail(QStringLiteral("node.duplicate: '%1' is not duplicable").arg(node->getName()));
         return QString();

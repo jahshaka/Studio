@@ -29,6 +29,8 @@ For more information see the LICENSE file
 #include "../../io/assetmanager.h"
 #include "../../io/materialpresetreader.h"
 #include "../../mainwindow.h"
+#include "../../services/sceneeditservice.h"
+#include "../../services/selectionservice.h"
 #include "../../services/services.h"
 #include "../../services/undoservice.h"
 #include "../../irisgl/src/core/irisutils.h"
@@ -202,7 +204,7 @@ QVector<VerbInfo> MaterialApi::verbs() const
 
 iris::MeshNodePtr MaterialApi::meshNodeOrFail(const QString &nodeId, const QString &verb)
 {
-    auto scene = host.mainWindow ? host.mainWindow->getScene() : iris::ScenePtr();
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene() : iris::ScenePtr();
     if (!scene) {
         fail(QStringLiteral("%1: no scene is open").arg(verb));
         return iris::MeshNodePtr();
@@ -233,9 +235,9 @@ bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
     if (!match)
         return fail(QStringLiteral("material.apply: no preset named or guid '%1' (materials.presets() lists them)").arg(presetOrGuid));
 
-    // The delegate targets the selection — select the node, then apply.
-    host.mainWindow->sceneNodeSelected(meshNode);
-    host.mainWindow->applyMaterialPreset(*match);
+    // The service targets the selection — select the node, then apply.
+    host.services->selection->select(meshNode);
+    host.services->sceneEdit->applyMaterialPreset(*match);
     return true;
 }
 
@@ -479,7 +481,7 @@ bool GraphApi::toMaterial(const QString &nodeId)
 {
     auto graph = graphOrFail(QStringLiteral("graph.toMaterial"));
     if (!graph) return false;
-    auto scene = host.mainWindow ? host.mainWindow->getScene() : iris::ScenePtr();
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene() : iris::ScenePtr();
     if (!scene) return fail("graph.toMaterial: no scene is open");
     auto node = findNodeByGuid(scene->getRootNode(), nodeId);
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh)

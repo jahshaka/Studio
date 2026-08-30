@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include "../../commands/reparentscenenodecommand.h"
 #include "../../commands/transfrormscenenodecommand.h"
 #include "../../mainwindow.h"
+#include "../../services/sceneeditservice.h"
+#include "../../services/selectionservice.h"
 #include "../../services/services.h"
 #include "../../services/undoservice.h"
 
@@ -58,7 +60,8 @@ QVector<VerbInfo> SceneApi::verbs() const
 
 iris::ScenePtr SceneApi::sceneOrFail()
 {
-    auto scene = host.mainWindow ? host.mainWindow->getScene() : iris::ScenePtr();
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                              : iris::ScenePtr();
     if (!scene) fail("scene: no scene is open — project.open() or project.create() first");
     return scene;
 }
@@ -100,7 +103,7 @@ QString SceneApi::root()
 bool SceneApi::applyOptions(const iris::SceneNodePtr &node, const QVariantMap &options, const QString &verb)
 {
     if (options.contains("parent")) {
-        auto scene = host.mainWindow->getScene();
+        auto scene = host.services->sceneEdit->scene();
         auto parent = findNodeByGuid(scene->getRootNode(), options.value("parent").toString());
         if (!parent)
             return fail(QStringLiteral("%1: no node with id '%2' for parent").arg(verb, options.value("parent").toString()));
@@ -122,7 +125,7 @@ QString SceneApi::finishAdd(const QVariantMap &options, const QString &verb)
 {
     // The add-verb funnel selects the new node (AddSceneNodeCommand::redo);
     // callers deselected beforehand so a silent failure reads as "no node".
-    auto node = host.mainWindow->selectedSceneNode();
+    auto node = host.services->selection->selected();
     if (!node) {
         fail(QStringLiteral("%1: the node was not created").arg(verb));
         return QString();
@@ -144,8 +147,8 @@ QString SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
         return QString();
     }
 
-    host.mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    host.mainWindow->addPrimitiveObject(normalized);
+    host.services->selection->select(iris::SceneNodePtr());
+    host.services->sceneEdit->addPrimitive(normalized);
     return finishAdd(options, QStringLiteral("scene.addPrimitive"));
 }
 
@@ -154,11 +157,11 @@ QString SceneApi::addLight(const QString &type, const QVariantMap &options)
     if (!sceneOrFail()) return QString();
     const QString t = type.trimmed().toLower();
 
-    host.mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    if (t == "point")            host.mainWindow->addPointLight();
-    else if (t == "spot")        host.mainWindow->addSpotLight();
-    else if (t == "directional") host.mainWindow->addDirectionalLight();
-    else if (t == "area")        host.mainWindow->addAreaLight();
+    host.services->selection->select(iris::SceneNodePtr());
+    if (t == "point")            host.services->sceneEdit->addPointLight();
+    else if (t == "spot")        host.services->sceneEdit->addSpotLight();
+    else if (t == "directional") host.services->sceneEdit->addDirectionalLight();
+    else if (t == "area")        host.services->sceneEdit->addAreaLight();
     else {
         fail(QStringLiteral("scene.addLight: unknown type '%1' (point, spot, directional, area)").arg(type));
         return QString();
@@ -169,8 +172,8 @@ QString SceneApi::addLight(const QString &type, const QVariantMap &options)
 QString SceneApi::addEmpty(const QVariantMap &options)
 {
     if (!sceneOrFail()) return QString();
-    host.mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    host.mainWindow->addEmpty();
+    host.services->selection->select(iris::SceneNodePtr());
+    host.services->sceneEdit->addEmpty();
     return finishAdd(options, QStringLiteral("scene.addEmpty"));
 }
 
@@ -182,7 +185,7 @@ QString SceneApi::addMesh(const QString &path, const QVariantMap &options)
         fail(QStringLiteral("scene.addMesh: no such file '%1'").arg(path));
         return QString();
     }
-    host.mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    host.mainWindow->addMesh(path, true, vecFromJs(options.value("position")));
+    host.services->selection->select(iris::SceneNodePtr());
+    host.services->sceneEdit->addMesh(path, true, vecFromJs(options.value("position")));
     return finishAdd(options, QStringLiteral("scene.addMesh"));
 }

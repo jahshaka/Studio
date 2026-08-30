@@ -33,6 +33,9 @@ For more information see the LICENSE file
 #include "../../io/materialreader.hpp"
 #include "../../io/scenereader.h"
 #include "../../mainwindow.h"
+#include "../../services/sceneeditservice.h"
+#include "../../services/selectionservice.h"
+#include "../../services/services.h"
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../irisgl/src/materials/custommaterial.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
@@ -307,10 +310,10 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
     }
 
     const bool hasPosition = options.contains("position");
-    host.mainWindow->sceneNodeSelected(iris::SceneNodePtr());
-    host.mainWindow->addMaterialMesh(QString(), hasPosition,
-                                     vecFromJs(options.value("position")), guid, record.name);
-    auto node = host.mainWindow->selectedSceneNode();
+    host.services->selection->select(iris::SceneNodePtr());
+    host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
+                                              vecFromJs(options.value("position")), guid, record.name);
+    auto node = host.services->selection->selected();
     if (!node) {
         fail("assets.addToScene: the asset could not be instantiated");
         return QString();

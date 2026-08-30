@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "../../mainwindow.h"
 #include "../../services/services.h"
 #include "../../services/playbackservice.h"
+#include "../../services/sceneeditservice.h"
 #include "../../services/selectionservice.h"
 #include "../../services/undoservice.h"
 
@@ -67,9 +68,9 @@ QVector<VerbInfo> EditorApi::verbs() const
 
 bool EditorApi::select(const QVariant &id)
 {
-    if (!host.services || !host.services->selection || !host.mainWindow)
+    if (!host.services || !host.services->selection || !host.services->sceneEdit)
         return fail("editor: not available in this session");
-    auto scene = host.mainWindow->getScene();
+    auto scene = host.services->sceneEdit->scene();
     if (!scene) return fail("editor.select: no scene is open");
 
     const QString guid = id.toString();

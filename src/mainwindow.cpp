@@ -158,6 +158,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
+#include "services/sceneeditservice.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -589,11 +590,25 @@ void MainWindow::setupServices()
                                         sceneView, undoService,
                                         [this]() { return scene; });
 
+    sceneEditService = new SceneEditService(db, Globals::project, undoService,
+                                            selectionService, sceneView,
+                                            [this]() { return scene; }, this);
+    connect(sceneEditService, &SceneEditService::hierarchyChanged, this, [this]() {
+        sceneHierarchyWidget->repopulateTree();
+    });
+    connect(sceneEditService, &SceneEditService::assetViewRefreshRequested, this, [this]() {
+        assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
+    });
+    connect(sceneEditService, &SceneEditService::materialApplied, this, [this](const QString &type) {
+        sceneNodePropertiesWidget->refreshMaterial(type);
+    });
+
     services = new StudioServices;
     services->undo = undoService;
     services->selection = selectionService;
     services->playback = playbackService;
     services->project = projectService;
+    services->sceneEdit = sceneEditService;
 }
 
 void MainWindow::setupUndoRedo()
@@ -943,148 +958,7 @@ void MainWindow::applyMaterialPreset(QString guid)
 
 void MainWindow::applyMaterialPreset(MaterialPreset preset)
 {
-    auto activeSceneNode = selectionService->selected();
-    if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
-
-    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
-
-    // Both branches build into `mat` and then share the registration tail below -
-    // writing matgen.material, creating the asset entry, requesting a thumbnail
-    // and copying textures are all material-type agnostic.
-    iris::MaterialPtr mat;
-
-    // A PBR preset builds a PbrMaterial; anything else takes the legacy
-    // CustomMaterial path, so existing presets behave exactly as before.
-    if (preset.type.compare("PBR", Qt::CaseInsensitive) == 0) {
-        auto pbr = iris::PbrMaterial::create();
-
-        pbr->setValue("baseColor",           preset.baseColor);
-        pbr->setValue("metallic",            preset.metallic);
-        pbr->setValue("roughness",           preset.roughness);
-        pbr->setValue("roughnessLowerBound", preset.roughnessLowerBound);
-        pbr->setValue("roughnessUpperBound", preset.roughnessUpperBound);
-        pbr->setValue("normalFactor",        preset.pbrNormalFactor);
-        pbr->setValue("occlusionFactor",     preset.occlusionFactor);
-        pbr->setValue("emissiveColor",       preset.emissiveColor);
-        pbr->setValue("emissiveIntensity",   preset.emissiveIntensity);
-        pbr->setValue("textureScale",        preset.textureScale);
-        pbr->setValue("alphaMode",           preset.alphaMode);
-        pbr->setValue("alpha",               preset.alpha);
-        pbr->setValue("alphaCutoff",         preset.alphaCutoff);
-
-        pbr->setValue("baseColorMap",  preset.baseColorMap);
-        pbr->setValue("metallicMap",   preset.metallicMap);
-        pbr->setValue("roughnessMap",  preset.roughnessMap);
-        pbr->setValue("normalMap",     preset.pbrNormalMap);
-        pbr->setValue("occlusionMap",  preset.occlusionMap);
-        pbr->setValue("emissiveMap",   preset.emissiveMap);
-
-        mat = pbr;
-    }
-    else {
-
-    auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-
-    m->setValue("diffuseTexture", preset.diffuseTexture);
-    m->setValue("specularTexture", preset.specularTexture);
-    m->setValue("normalTexture", preset.normalTexture);
-    m->setValue("reflectionTexture", preset.reflectionTexture);
-
-    m->setValue("ambientColor", preset.ambientColor);
-    m->setValue("diffuseColor", preset.diffuseColor);
-    m->setValue("specularColor", preset.specularColor);
-
-    m->setValue("shininess", preset.shininess);
-    m->setValue("normalIntensity", preset.normalIntensity);
-    m->setValue("reflectionInfluence", preset.reflectionInfluence);
-    m->setValue("textureScale", preset.textureScale);
-
-    mat = m;
-    }
-
-    meshNode->setMaterial(mat);
-
-    QJsonObject material;
-    SceneWriter::writeSceneNodeMaterial(material, mat);
-
-    // Remove previous material dependencies
-    //auto objectGuid = db->fetchMeshObject(
-    //    meshNode->getGUID(),
-    //    static_cast<int>(ModelTypes::Object),
-    //    static_cast<int>(ModelTypes::Mesh)
-    //);
-
-    //db->removeDependenciesByType(objectGuid, ModelTypes::Texture);
-
-    QFile jsonFile(QDir(Globals::project->getProjectFolder()).filePath("matgen.material"));
-    jsonFile.open(QFile::WriteOnly);
-    jsonFile.write(QJsonDocument(material).toJson());
-
-    auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Presets", "folders")) {
-        if (!db->createFolder("Presets", Globals::project->getProjectGuid(), fguid, false)) return;
-    }
-
-    QString guid = db->createAssetEntry(
-        GUIDManager::generateGUID(),
-        preset.name,
-        static_cast<int>(ModelTypes::Material),
-        fguid,
-        QString(),
-        QString(),
-        QByteArray(),
-        QByteArray(),
-        QJsonDocument(material).toJson()
-    );
-
-    ThumbnailGenerator::getSingleton()->requestThumbnail(
-        ThumbnailRequestType::Material, QDir(Globals::project->getProjectFolder()).filePath("matgen.material"), guid
-    );
-
-    assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
-
-    for (const auto &prop : mat->properties) {
-        if (prop->type == iris::PropertyType::Texture) {
-            auto file = prop->getValue().toString();
-            if (file.isEmpty()) continue;
-            QFile::copy(
-                file,
-                QDir(Globals::project->getProjectFolder()).filePath(QFileInfo(file).fileName())
-            );
-
-            QString fileGuid = db->createAssetEntry(
-                GUIDManager::generateGUID(),
-                QFileInfo(file).fileName(),
-                static_cast<int>(ModelTypes::Texture),
-                fguid,
-                QString(),
-                QString(),
-                QByteArray(),
-                QByteArray(),
-                QByteArray()
-            );
-
-            db->createDependency(
-                static_cast<int>(ModelTypes::Material),
-                static_cast<int>(ModelTypes::Texture),
-                guid,
-                fileGuid,
-                Globals::project->getProjectGuid()
-            );
-        }
-    }
-
-    db->createDependency(
-        static_cast<int>(ModelTypes::Object),
-        static_cast<int>(ModelTypes::Material),
-        meshNode->getGUID(),
-        guid,
-        Globals::project->getProjectGuid()
-    );
-
-    // TODO: update node's material without updating the whole ui
-    this->sceneNodePropertiesWidget->refreshMaterial(preset.type);
+    sceneEditService->applyMaterialPreset(preset);
 }
 
 void MainWindow::favoriteItem(QListWidgetItem *item)
@@ -1196,471 +1070,103 @@ void MainWindow::setSceneAnimTime(float time)
 
 void MainWindow::addPlane()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/plane.obj",
-        "Plane",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addPlane();
 }
 
 void MainWindow::addGround()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/models/ground.obj",
-        "Ground",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addGround();
 }
 
 void MainWindow::addCone()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/cone.obj",
-        "Cone",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addCone();
 }
 
 void MainWindow::addCapsule()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/capsule.obj",
-        "Plane",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addCapsule();
 }
 
 void MainWindow::addCube()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/cube.obj",
-        "Cube",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addCube();
 }
 
 void MainWindow::addTorus()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/torus.obj",
-        "Torus",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addTorus();
 }
 
 void MainWindow::addSphere()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/sphere.obj",
-        "Sphere",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addSphere();
 }
 
 void MainWindow::addCylinder()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/cylinder.obj",
-        "Cylinder",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addCylinder();
 }
 
 void MainWindow::addPyramid()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/pyramid.obj",
-        "Pyramid",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addPyramid();
 }
 
 void MainWindow::addSponge()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/sponge.obj",
-        "Sponge",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addSponge();
 }
 
 void MainWindow::addTeapot()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/teapot.obj",
-        "Teapot",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addTeapot();
 }
 
 void MainWindow::addSteps()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/steps.obj",
-        "Steps",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addSteps();
 }
 
 void MainWindow::addGear()
 {
-    this->sceneView->beginResourceLoad();
-    const QString nodeGuid = GUIDManager::generateGUID();
-    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
-        ":/content/primitives/gear.obj",
-        "Gear",
-        nodeGuid
-    );
-    QJsonObject props;
-    props["type"] = "builtin";
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-    addNodeToScene(node);
+    sceneEditService->addGear();
 }
 
 void MainWindow::addPointLight()
 {
-    this->sceneView->beginResourceLoad();
-    auto node = iris::LightNode::create();
-    node->setLightType(iris::LightType::Point);
-    node->icon = iris::Texture2D::load(":/icons/bulb.png");
-    node->setName("Point Light");
-    node->intensity = 1.0f;
-    node->distance = 40.0f;
-    addNodeToScene(node);
+    sceneEditService->addPointLight();
 }
 
 void MainWindow::addSpotLight()
 {
-    this->sceneView->beginResourceLoad();
-    auto node = iris::LightNode::create();
-    node->setLightType(iris::LightType::Spot);
-    node->icon = iris::Texture2D::load(":/icons/spotlight.png");
-    node->setName("Spot Light");
-    addNodeToScene(node);
+    sceneEditService->addSpotLight();
 }
 
 
 void MainWindow::addDirectionalLight()
 {
-    this->sceneView->beginResourceLoad();
-    auto node = iris::LightNode::create();
-    node->shadowMap->shadowType = iris::ShadowMapType::Soft;
-    node->setLightType(iris::LightType::Directional);
-    node->icon = iris::Texture2D::load(":/icons/light.png");   // the sun glyph
-    node->setName("Directional Light");
-    addNodeToScene(node);
+    sceneEditService->addDirectionalLight();
 }
 
 void MainWindow::addAreaLight()
 {
-    // Engine viewport only (the menu entry is hidden in legacy mode): Ogre-Next's
-    // rectangular area lights. No bundled icon glyph — SceneMirror draws one.
-    this->sceneView->beginResourceLoad();
-    auto node = iris::LightNode::create();
-    node->setLightType(iris::LightType::Area);
-    node->setName("Area Light");
-    node->intensity = 1.0f;
-    node->distance = 10.0f;
-    node->rectWidth = 1.0f;
-    node->rectHeight = 1.0f;
-    addNodeToScene(node);
+    sceneEditService->addAreaLight();
 }
 
 void MainWindow::addEmpty()
 {
-    this->sceneView->beginResourceLoad();
-    auto node = iris::SceneNode::create();
-    node->setName("Empty");
-    addNodeToScene(node);
+    sceneEditService->addEmpty();
 }
 
 void MainWindow::addViewer()
 {
-    this->sceneView->beginResourceLoad();
-    auto node = iris::ViewerNode::create();
-    node->setName("Avatar");
-    addNodeToScene(node);
-
-	// Set all other controllers to false
-	for (auto node : scene->getRootNode()->children) {
-		if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-			node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
-		}
-	}
-
-	node->setActiveCharacterController(true);
-	scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
+    sceneEditService->addViewer();
 }
 
 void MainWindow::addParticleSystem()
 {
-    this->sceneView->beginResourceLoad();
-    auto node = iris::ParticleSystemNode::create();
-    node->setName("Particle System");
-
-    auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Systems", "folders")) {
-        if (!db->createFolder("Systems", Globals::project->getProjectGuid(), fguid, false)) return;
-    }
-
-    auto nodeGuid = GUIDManager::generateGUID();
-    node->setGUID(nodeGuid);
-    QJsonObject props;
-    db->createAssetEntry(
-        nodeGuid, node->getName(),
-        static_cast<int>(ModelTypes::ParticleSystem),
-        fguid,
-        QString(),
-        QString(),
-        QByteArray(),
-        QJsonDocument(props).toJson(),
-        QByteArray(),
-        QByteArray()
-    );
-
-    // if we reached this far, the project dir has already been created
-    // we can copy some default assets to each project here
-    QFile::copy(IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
-        QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg"));
-
-    auto thumb = ThumbnailManager::createThumbnail(
-        IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"), 72, 72);
-
-    QByteArray thumbnailBytes;
-    QBuffer buffer(&thumbnailBytes);
-    buffer.open(QIODevice::WriteOnly);
-    QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
-
-    const QString tileGuid = GUIDManager::generateGUID();
-    const QString assetGuid = db->createAssetEntry(tileGuid,
-        "Glowing Particle.jpg",
-        static_cast<int>(ModelTypes::Texture),
-        Globals::project->getProjectGuid(),
-        QString(),
-        QString(),
-        thumbnailBytes);
-
-    db->createDependency(
-        static_cast<int>(ModelTypes::ParticleSystem),
-        static_cast<int>(ModelTypes::Texture),
-        nodeGuid, assetGuid,
-        Globals::project->getProjectGuid()
-    );
-
-    {
-        QString texPath = QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg");
-        node->setTexture(iris::Texture2D::load(texPath));
-    }
-
-    auto assetTexture = new AssetTexture;
-    assetTexture->fileName = "Glowing Particle.jpg";
-    assetTexture->assetGuid = assetGuid;
-    assetTexture->path = QDir(Globals::project->getProjectFolder()).filePath("Glowing Particle.jpg");
-    AssetManager::addAsset(assetTexture);
-
-    addNodeToScene(node);
+    sceneEditService->addParticleSystem();
 }
 
 void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
@@ -1674,134 +1180,22 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 
     if (filename.isEmpty()) return;
 
-    iris::SceneSource *ssource = new iris::SceneSource();
-
-    this->sceneView->beginResourceLoad();
-    auto node = iris::MeshNode::loadAsSceneFragment(filename, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-    {
-        auto mat = iris::CustomMaterial::create();
-        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
-        mat->setValue("diffuseColor", data.diffuseColor);
-        mat->setValue("specularColor", data.specularColor);
-        mat->setValue("ambientColor", data.ambientColor);
-        mat->setValue("emissionColor", data.emissionColor);
-
-        mat->setValue("shininess", data.shininess);
-
-        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-            mat->setValue("diffuseTexture", data.diffuseTexture);
-
-        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-            mat->setValue("specularTexture", data.specularTexture);
-
-        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
-            mat->setValue("normalTexture", data.normalTexture);
-
-        return mat;
-    }, ssource);
-
-    // model file may be invalid so null gets returned
-    if (!node) return;
-
-    // rename animation sources to relative paths
-    auto relPath = QDir(Globals::project->folderPath).relativeFilePath(filename);
-    for (auto anim : node->getAnimations()) {
-        if (!!anim->skeletalAnimation)
-            anim->skeletalAnimation->source = relPath;
-    }
-
-    node->setLocalPos(position);
-
-    // todo: load material data
-    addNodeToScene(node, ignore);
+    sceneEditService->addMesh(filename, ignore, position);
 }
 
 void MainWindow::addPrimitiveObject(const QString &text)
 {
-    if (text == "Plane")    addPlane();
-    if (text == "Cone")     addCone();
-    if (text == "Cube")     addCube();
-    if (text == "Cylinder") addCylinder();
-    if (text == "Sphere")   addSphere();
-    if (text == "Torus")    addTorus();
-    if (text == "Capsule")  addCapsule();
-    if (text == "Gear")     addGear();
-    if (text == "Pyramid")  addPyramid();
-    if (text == "Teapot")   addTeapot();
-    if (text == "Sponge")   addSponge();
-    if (text == "Steps")    addSteps();
+    sceneEditService->addPrimitive(text);
 }
 
 void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
 {
-    auto document = QJsonDocument::fromJson(db->fetchAssetData(guid)).object();
-
-    auto reader = new SceneReader;
-    reader->setDatabaseHandle(db);
-    reader->setBaseDirectory(Globals::project->getProjectFolder());
-    this->sceneView->beginResourceLoad();
-    iris::SceneNodePtr node = reader->readSceneNode(document);
-    this->sceneView->endResourceLoad();
-    delete reader;
-
-	// rename animation sources to relative paths
-	QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-	auto relPath = QDir(Globals::project->folderPath).relativeFilePath(db->fetchAsset(meshGuid).name);
-	for (auto anim : node->getAnimations()) if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
-
-	// Honour the drop position (the viewport computed where the cursor hit the
-	// scene) — legacy addMesh does the same; without this every dropped asset
-	// landed at the asset's authored origin (ASSET_ADD_AUDIT D1).
-	node->setLocalPos(position);
-
-	addNodeToScene(node, ignore);
+    sceneEditService->addMaterialMesh(path, ignore, position, guid, assetName);
 }
 
 void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName)
 {
-    this->sceneView->beginResourceLoad();
-
-    QJsonObject pDefs;
-    QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
-    while (iterator != AssetManager::getAssets().constEnd()) {
-        if ((*iterator)->assetGuid == guid) pDefs = (*iterator)->getValue().toJsonObject();
-        ++iterator;
-    }
-
-    //if (!node) return; 
-
-    auto particleNode = iris::ParticleSystemNode::create();
-
-    particleNode->setGUID(pDefs["guid"].toString());
-    particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
-    particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
-    particleNode->setDissipation(pDefs["dissipate"].toBool());
-    particleNode->setDissipationInv(pDefs["dissipateInv"].toBool());
-    particleNode->setRandomRotation(pDefs["randomRotation"].toBool());
-    particleNode->setGravity((float) pDefs["gravityComplement"].toDouble(1.0f));
-    particleNode->setBlendMode(pDefs["blendMode"].toBool());
-    particleNode->setLife((float) pDefs["lifeLength"].toDouble(1.0f));
-    particleNode->setName(pDefs["name"].toString());
-    particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
-    {
-        auto textureGuid = pDefs["texture"].toString();
-        auto texPath = IrisUtils::join(
-            Globals::project->getProjectFolder(),
-            db->fetchAsset(textureGuid).name
-        );
-        particleNode->setTexture(iris::Texture2D::load(texPath));
-    }
-    particleNode->setVisible(pDefs["visible"].toBool(true));
-
-    //return particleNode; 
-
-    particleNode->setPickable(true);
-    particleNode->setGUID(guid);
-    particleNode->setName(assetName);
-    particleNode->setLocalPos(position);
-
-    addNodeToScene(particleNode, ignore);
+    sceneEditService->addAssetParticleSystem(ignore, position, guid, assetName);
 }
 
 void MainWindow::addDragPlaceholder()
@@ -1823,30 +1217,7 @@ void MainWindow::addDragPlaceholder()
  */
 void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
 {
-    if (!scene) {
-        //todo: set alert that a scene needs to be set before this can be done
-    }
-
-    // apply default material
-    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-
-        if (!meshNode->getMaterial()) {
-            // The engine viewport authors PBR only; legacy keeps its old default.
-            if (EngineHost::viewportBackend() == ViewportBackend::Engine)
-                meshNode->setMaterial(iris::PbrMaterial::create());
-            else
-                meshNode->setMaterial(iris::DefaultMaterial::create());
-        }
-    }
-
-    if (auto activeSceneNode = selectionService->selected()) {
-        activeSceneNode->addChild(sceneNode);
-    } else {
-        scene->getRootNode()->addChild(sceneNode);
-    }
-
-    this->sceneHierarchyWidget->repopulateTree();
+    sceneEditService->addNodeToActiveNode(sceneNode);
 }
 
 /**
@@ -1856,36 +1227,7 @@ void MainWindow::addNodeToActiveNode(QSharedPointer<iris::SceneNode> sceneNode)
  */
 void MainWindow::addNodeToScene(QSharedPointer<iris::SceneNode> sceneNode, bool ignore)
 {
-    if (!scene) {
-        // @TODO: set alert that a scene needs to be set before this can be done
-        return;
-    }
-
-    // @TODO: add this to a constants file
-    if (!ignore) {
-        const float spawnDist = 10.0f;
-        auto offset = sceneView->editorCamera()->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
-        offset += sceneView->editorCamera()->getLocalPos();
-        sceneNode->setLocalPos(offset);
-    }
-
-    // apply default material to mesh nodes if there is none
-    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
-        if (!meshNode->getMaterial()) {
-            if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
-                // The engine viewport authors PBR only.
-                meshNode->setMaterial(iris::PbrMaterial::create());
-            } else {
-                auto mat = iris::CustomMaterial::create();
-                mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-                meshNode->setMaterial(mat);
-            }
-        }
-    }
-
-    auto cmd = new AddSceneNodeCommand(scene->getRootNode(), sceneNode);
-    undoService->push(cmd);
+    sceneEditService->addNodeToScene(sceneNode, ignore);
 }
 
 void MainWindow::repopulateSceneTree()
@@ -1900,123 +1242,13 @@ void MainWindow::duplicateNode()
 
 iris::SceneNodePtr MainWindow::duplicateSceneNode(iris::SceneNodePtr source)
 {
-    if (!scene) return iris::SceneNodePtr();
-    if (!source || !source->isDuplicable()) return iris::SceneNodePtr();
-
-	sceneView->beginResourceLoad();
-    auto node = source->duplicate();
-    // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
-    // refreshes the hierarchy and selects it — the manual addChild+repopulate
-    // this slot used to do, minus the missing undo entry.
-    undoService->push(new AddSceneNodeCommand(source->parent, node));
-	sceneView->endResourceLoad();
-    return node;
+    return sceneEditService->duplicateNode(source);
 }
 
 void MainWindow::createMaterial()
 {
-	auto activeSceneNode = selectionService->selected();
-	if (!!activeSceneNode) {
-        QJsonObject materialDef;
-		// (nick) the material version gets updated during writing so
-		// it's safe to assume we're working the v2 material structure
-		SceneWriter::writeSceneNodeMaterial(
-			materialDef,
-			activeSceneNode.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>()
-		);
-
-		// materialDef will be mutated
-		// it's only used to generate a file for the thumbnail
-		auto materialDefOriginal = materialDef;
-
-		// replace material guid with texture name
-		auto materialValues = materialDef["values"].toObject();
-        for (const auto &key : materialValues.keys()) {
-			if (materialValues[key].isString())
-            {
-				auto texName = db->fetchAsset(materialValues[key].toString()).name;
-				if (texName.isEmpty())
-					continue;
-				materialValues[key] = texName;
-			}
-		}
-		materialDef["values"] = materialValues;
-
-		QJsonDocument saveDoc;
-		//saveDoc.setObject(materialDef);
-		saveDoc.setObject(materialDefOriginal);
-
-        QString fileName = IrisUtils::join(
-            Globals::project->getProjectFolder(),
-            IrisUtils::buildFileName(activeSceneNode.staticCast<iris::MeshNode>()->getName(), "material")
-        );
-
-        QFile file(fileName);
-        file.open(QFile::WriteOnly);
-        file.write(saveDoc.toJson());
-        file.close();
-
-		// WRITE TO DATABASE
-		const QString assetGuid = GUIDManager::generateGUID();
-        QByteArray binaryMat = QJsonDocument(materialDefOriginal).toJson();
-		db->createAssetEntry(
-            assetGuid,
-			QFileInfo(fileName).fileName(),
-			static_cast<int>(ModelTypes::Material),
-			assetWidget->assetItem.selectedGuid,
-            QString(),
-            QString(),
-			QByteArray(),
-			QByteArray(),
-			QByteArray(),
-			binaryMat
-		);
-
-		ThumbnailGenerator::getSingleton()->requestThumbnail(
-			ThumbnailRequestType::Material, fileName, assetGuid
-		);
-
-		assetWidget->updateAssetView(assetWidget->assetItem.selectedGuid);
-
-
-		MaterialReader reader;
-		auto material = reader.parseMaterial(materialDefOriginal, db);
-
-		// Actually create the material and add shader as it's dependency
-		db->createDependency(
-			static_cast<int>(ModelTypes::Material),
-			static_cast<int>(ModelTypes::Shader),
-			assetGuid, material->getGuid(),
-			Globals::project->getProjectGuid());
-
-		// Add all its textures as dependencies too
-		auto values = materialDefOriginal["values"].toObject();
-		for (const auto &prop : material->properties) {
-			if (prop->type == iris::PropertyType::Texture) {
-				if (!values.value(prop->name).toString().isEmpty()) {
-					db->createDependency(
-						static_cast<int>(ModelTypes::Material),
-						static_cast<int>(ModelTypes::Texture),
-						assetGuid, values.value(prop->name).toString(),
-						Globals::project->getProjectGuid()
-					);
-				}
-			}
-		}
-
-		auto assetMat = new AssetMaterial;
-		assetMat->assetGuid = assetGuid;
-		assetMat->setValue(QVariant::fromValue(material));
-		AssetManager::addAsset(assetMat);
-
-		// it's assumed that the thumbnail rendering will
-		// be finished by the time this is executed
-		QFile::remove(fileName);
-    }
-    else {
-        qDebug() << "Need an active scenenode!";
-        return;
-    }
+    sceneEditService->createMaterialFromNode(selectionService->selected(),
+                                             assetWidget->assetItem.selectedGuid);
 }
 
 void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
@@ -2040,89 +1272,7 @@ void MainWindow::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType
 
     if (filePath.isEmpty() || filePath.isNull()) return;
 
-    // Construct a temporary dir to place all the files that will be packaged
-    QTemporaryDir temporaryDir;
-    if (!temporaryDir.isValid()) return;
-
-    const QString writePath = temporaryDir.path();
-
-    // Create a blob containing the necessary tables and rows that are needed to recreate the asset
-    // Assets are exported AS IS with their guids, these are changed when being reimported 
-    db->createBlobFromNode(node, QDir(writePath).filePath("asset.db"));
-
-    QDir tempDir(writePath);
-    tempDir.mkpath("assets");
-
-    // The manifest contains a single string telling the asset type
-    // This helps with some preliminary checks to avoid reading the db and encountering blobs etc
-    QFile manifest(QDir(writePath).filePath(".manifest"));
-    if (manifest.open(QIODevice::ReadWrite)) {
-        QTextStream stream(&manifest);
-        stream << Project::ModelTypesAsString[static_cast<int>(modelType)];
-    }
-    manifest.close();
-
-    // Collect all assets that will be exported and copy these to the temporary directory
-    QStringList assetGuids = AssetHelper::getChildGuids(node);
-
-    for (const auto &guid : assetGuids) {
-        for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-            auto asset = db->fetchAsset(assetGuid);
-            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
-            QFileInfo assetInfo(assetPath);
-            if (assetInfo.exists()) {
-                QFile::copy(
-                    IrisUtils::join(assetPath),
-                    IrisUtils::join(writePath, "assets", assetInfo.fileName())
-                );
-            }
-        }
-    }
-
-    // Get all the files and directories in the temporary directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(
-        writePath,
-        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden,
-        QDirIterator::Subdirectories
-    );
-
-    // Create a zipped archive containing
-    // - A manifest (might be hidden when extracted on some platforms)
-    // - A sqlite blob
-    // - An assets folder containing textures, models, files etc
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // close our now exported file
-    zip_close(zip);
+    sceneEditService->exportNodeTo(node, modelType, filePath);
 }
 
 void MainWindow::deleteNode()
@@ -2132,22 +1282,7 @@ void MainWindow::deleteNode()
 
 bool MainWindow::deleteSceneNode(iris::SceneNodePtr node)
 {
-    if (!node) return false;
-    // TODO - do a deps check here as well
-    // TODO - gray/disable delete button if a node isn't removable
-    if (node->isRootNode() || !node->isRemovable()) return false;
-
-    if (node->sceneNodeType == iris::SceneNodeType::Viewer) {
-        scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(node->getGUID());
-    }
-
-    // The command owns the asset-row cleanup: the row is deleted only when the
-    // delete becomes permanent, so undo no longer resurrects a node whose DB
-    // asset is gone (SCRIPTING_SPEC §1.2).
-    auto cmd = new DeleteSceneNodeCommand(node->parent, node,
-                                          node->isBuiltIn ? db : nullptr, node->getGUID());
-    undoService->push(cmd);
-    return true;
+    return sceneEditService->deleteNode(node);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
