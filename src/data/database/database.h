@@ -129,6 +129,8 @@ public:
 	bool updateAssetViewFilter(const QString& guid, const int& filter);
 	bool updateProjectDesktop(const QString &guid, int desktop);
 	bool updateProjectPosition(const QString &guid, float x, float y);
+	// slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex}
+	bool updateProjectSliderPos(const QString &guid, int row, int index);
 	void updateSchema();
 	bool updateMetadataVersion(const QString &version);
 
