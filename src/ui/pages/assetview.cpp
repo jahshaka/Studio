@@ -54,6 +54,9 @@ For more information see the LICENSE file
 #include <QDesktopServices>
 #include <QTemporaryDir>
 #include <QProgressDialog>
+#include <QAudioOutput>
+#include <QMediaPlayer>
+#include <QSlider>
 
 #include "data/constants.h"
 #include "data/settingsmanager.h"
@@ -65,6 +68,7 @@ For more information see the LICENSE file
 #include "ui/controls/assetgriditem.h"
 #include "ui/controls/drawertreewidget.h"
 #include "services/assethelper.h"
+#include "services/assetimporter.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "services/thumbnailgenerator.h"
@@ -97,12 +101,8 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 					list << fileInfo.absoluteFilePath();
 				}
 
-				if (QFileInfo(list.front()).suffix() == "jaf") {
-					importJahModel(list.front());
-				}
-                else {
-                    importModel(list.front());
-                }
+				// Every URL imports (the old path took only the first).
+				importFiles(list);
 
 				break;
 			}
@@ -211,6 +211,7 @@ void AssetView::closeViewer()
 void AssetView::clearViewer()
 {
 	viewer->clearScene();
+	stopAudioPreview();
 	if (assetNodeTree) assetNodeTree->clear();
 }
 
@@ -242,11 +243,15 @@ void AssetView::populateAssetNodeTree(const QString &guid, int assetType)
 QString AssetView::getAssetType(int id)
 {
 	switch (id) {
-		case static_cast<int>(ModelTypes::Shader):		return "Shader";		break;
-		case static_cast<int>(ModelTypes::Material):	return "Material";		break;
-		case static_cast<int>(ModelTypes::Texture):		return "Texture";		break;
-		case static_cast<int>(ModelTypes::Object):		return "Object";		break;
-		case static_cast<int>(ModelTypes::Sky):			return "Sky";		break;
+		case static_cast<int>(ModelTypes::Shader):			return "Shader";			break;
+		case static_cast<int>(ModelTypes::Material):		return "Material";			break;
+		case static_cast<int>(ModelTypes::Texture):			return "Texture";			break;
+		case static_cast<int>(ModelTypes::Object):			return "Object";			break;
+		case static_cast<int>(ModelTypes::Sky):				return "Sky";				break;
+		case static_cast<int>(ModelTypes::Music):			return "Audio";				break;
+		case static_cast<int>(ModelTypes::Mesh):			return "Mesh";				break;
+		case static_cast<int>(ModelTypes::File):			return "File";				break;
+		case static_cast<int>(ModelTypes::ParticleSystem):	return "Particle System";	break;
 		default: return "Undefined"; break;
 	}
 }
@@ -279,6 +284,63 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     imgl->addWidget(assetImageCanvas);
     imgl->setAlignment(Qt::AlignCenter);
     assetImageViewer->setLayout(imgl);
+
+    // Page 2 of the viewers stack: the audio preview (ASSET_DRAWERS_SPEC §3) —
+    // filename, play/pause, seek, time. Qt Multimedia was already linked; this
+    // is its first real playback consumer.
+    assetAudioViewer = new QWidget;
+    mediaPlayer = new QMediaPlayer(this);
+    audioOutput = new QAudioOutput(this);
+    mediaPlayer->setAudioOutput(audioOutput);
+
+    audioNameLabel = new QLabel;
+    audioNameLabel->setAlignment(Qt::AlignCenter);
+    audioNameLabel->setStyleSheet("font-size: 14px; color: #EEEEEE;");
+    audioPlayButton = new QPushButton(tr("Play"));
+    audioPlayButton->setFixedWidth(64);
+    audioPlayButton->setCursor(Qt::PointingHandCursor);
+    audioSeekSlider = new QSlider(Qt::Horizontal);
+    audioSeekSlider->setRange(0, 0);
+    audioTimeLabel = new QLabel("0:00 / 0:00");
+    audioTimeLabel->setStyleSheet("color: #BABABA;");
+
+    auto audioControls = new QHBoxLayout;
+    audioControls->addWidget(audioPlayButton);
+    audioControls->addWidget(audioSeekSlider);
+    audioControls->addWidget(audioTimeLabel);
+
+    auto audioLayout = new QVBoxLayout;
+    audioLayout->addStretch();
+    audioLayout->addWidget(audioNameLabel);
+    audioLayout->addSpacing(12);
+    audioLayout->addLayout(audioControls);
+    audioLayout->addStretch();
+    audioLayout->setContentsMargins(48, 0, 48, 0);
+    assetAudioViewer->setLayout(audioLayout);
+
+    const auto formatTime = [](qint64 ms) {
+        const qint64 secs = ms / 1000;
+        return QStringLiteral("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
+    };
+
+    connect(audioPlayButton, &QPushButton::clicked, this, [this]() {
+        if (mediaPlayer->playbackState() == QMediaPlayer::PlayingState) mediaPlayer->pause();
+        else mediaPlayer->play();
+    });
+    connect(mediaPlayer, &QMediaPlayer::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
+        audioPlayButton->setText(state == QMediaPlayer::PlayingState ? tr("Pause") : tr("Play"));
+    });
+    connect(mediaPlayer, &QMediaPlayer::durationChanged, this, [this](qint64 duration) {
+        audioSeekSlider->setRange(0, static_cast<int>(duration));
+    });
+    connect(mediaPlayer, &QMediaPlayer::positionChanged, this, [this, formatTime](qint64 position) {
+        if (!audioSeekSlider->isSliderDown())
+            audioSeekSlider->setValue(static_cast<int>(position));
+        audioTimeLabel->setText(formatTime(position) + " / " + formatTime(mediaPlayer->duration()));
+    });
+    connect(audioSeekSlider, &QSlider::sliderMoved, this, [this](int position) {
+        mediaPlayer->setPosition(position);
+    });
 
     settings = SettingsManager::getDefaultManager();
 	//prefsDialog = new PreferencesDialog(this, db, settings);
@@ -684,6 +746,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     connect(fastGrid, &AssetViewGrid::selectedTile, [&](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
+		stopAudioPreview();   // switching tiles/pages stops playback (§3)
 
 		renameWidget->setVisible(false);
 		tagWidget->setVisible(false);
@@ -822,7 +885,27 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
                 );
 
                 QPixmap image(assetPath);
-                assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+                // Null-pixmap guard (§3): scaling a null pixmap warns and
+                // leaves the last image on the canvas.
+                if (image.isNull()) {
+                    assetImageCanvas->setPixmap(QPixmap());
+                    assetImageCanvas->setText(tr("No preview available"));
+                }
+                else {
+                    assetImageCanvas->setText(QString());
+                    assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
+                }
+            }
+
+            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Music)) {
+                // Page 2 + autoplay (§3).
+                auto assetPath = IrisUtils::join(
+                    QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
+                    "AssetStore",
+                    gridItem->metadata["guid"].toString(),
+                    db->fetchAsset(gridItem->metadata["guid"].toString()).name
+                );
+                showAudioPreview(assetPath, gridItem->metadata["name"].toString());
             }
 
 			selectedGridItem = gridItem;
@@ -888,17 +971,20 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	});
 
 	connect(browseButton, &QPushButton::pressed, [=]() {
-        filename = QFileDialog::getOpenFileName(this,
-                                                "Load Mesh",
-                                                QString(),
-                                                "Mesh Files (*.obj *.fbx *.3ds *.jaf *.gltf *.glb)");
+		// Built from the type lists so a new library type extends the dialog
+		// automatically (§3). The old filter's phantom *.3ds is gone
+		// (3ds was never in MODEL_EXTS).
+		QStringList patterns;
+		for (const auto &ext : Constants::MODEL_EXTS) patterns << "*." + ext;
+		for (const auto &ext : Constants::IMAGE_EXTS) patterns << "*." + ext;
+		for (const auto &ext : Constants::AUDIO_EXTS) patterns << "*." + ext;
+		patterns << "*." + Constants::ASSET_EXT;
 
-        if (QFileInfo(filename).suffix() == "jaf") {
-            importJahModel(filename);
-        }
-        else {
-            importModel(filename);
-        }
+		const auto files = QFileDialog::getOpenFileNames(this,
+		                                                 tr("Import Assets"),
+		                                                 QString(),
+		                                                 tr("Assets (%1)").arg(patterns.join(' ')));
+		importFiles(files);
 	});
 
 	assetDropPad->setLayout(assetDropPadLayout);
@@ -988,6 +1074,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     viewers->addWidget(viewer->asWidget());
     viewers->addWidget(assetImageViewer);
+    viewers->addWidget(assetAudioViewer);
     viewersWidget->setLayout(viewers);
 
 	//split->addWidget(viewer);
@@ -1757,6 +1844,88 @@ void AssetView::importModel(const QString &fileName, bool jfx)
     addToLibrary(main_guid, jfx);
 }
 
+// THE import dispatch (ASSET_DRAWERS_SPEC §3): drop pad and browse dialog both
+// land here; one switch keyed on ModelTypes decides each file's path, so a new
+// library type (Video, …) is one case — here and in AssetImporter::importFile.
+void AssetView::importFiles(const QStringList &fileNames)
+{
+	for (const auto &fileName : fileNames) {
+		if (fileName.isEmpty()) continue;
+
+		if (QFileInfo(fileName).suffix().toLower() == Constants::ASSET_EXT) {
+			importJahModel(fileName);
+			continue;
+		}
+
+		const ModelTypes type =
+		    AssetHelper::getAssetTypeFromExtension(QFileInfo(fileName).suffix().toLower());
+		switch (type) {
+		case ModelTypes::Texture:
+		case ModelTypes::Music:
+			importImageOrAudio(fileName);
+			break;
+		default:
+			// Meshes and everything they reference: the viewer-driven path.
+			importModel(fileName);
+			break;
+		}
+	}
+}
+
+int AssetView::selectedDrawerId() const
+{
+	const int id = treeWidget->currentItem()
+	    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1;
+	return id > 0 ? id : 0;   // root/none selected -> Uncategorized
+}
+
+void AssetView::importImageOrAudio(const QString &fileName)
+{
+	// The same service the assets.importFile verb runs (§4: UI calls the
+	// verb's path) — the row, the store copy and the thumbnail happen there.
+	const auto result = AssetImporter::importFile(fileName, db, project, selectedDrawerId());
+	if (!result.ok()) {
+		QMessageBox::warning(this, tr("Import failed"), result.error);
+		return;
+	}
+
+	const auto record = db->fetchAsset(result.objectGuid);
+
+	QJsonObject object;
+	object["icon_url"] = "";
+	object["guid"] = record.guid;
+	object["name"] = record.name;
+	object["type"] = record.type;
+	object["collection"] = record.collection;
+	object["collection_name"] = drawerName(record.collection);
+	object["author"] = record.author;
+	object["license"] = record.license;
+
+	QImage thumbnail;
+	thumbnail.loadFromData(record.thumbnail, "PNG");
+
+	auto gridItem = new AssetGridItem(object, thumbnail, QJsonObject(), QJsonObject());
+	wireTile(gridItem);
+	fastGrid->addTo(gridItem, 0);
+	QApplication::processEvents();
+	fastGrid->updateGridColumns(fastGrid->lastWidth);
+	filterFromSelection();
+}
+
+void AssetView::stopAudioPreview()
+{
+	if (mediaPlayer) mediaPlayer->stop();
+}
+
+void AssetView::showAudioPreview(const QString &filePath, const QString &displayName)
+{
+	viewers->setCurrentIndex(2);
+	audioNameLabel->setText(displayName);
+	audioSeekSlider->setValue(0);
+	mediaPlayer->setSource(QUrl::fromLocalFile(filePath));
+	mediaPlayer->play();   // double-click a Music tile -> page 2 + autoplay (§3)
+}
+
 void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
                                                        QStringList &textureList,
                                                        QJsonObject &mat)
@@ -2113,6 +2282,16 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 			AssetManager::addAsset(assetTexture);
 		}
 
+		if (jafType == ModelTypes::Music) {
+			// §3: imported audio becomes selectable in the World panel's
+			// Background Ambience combo (it lists the project's Music assets).
+			auto assetMusic = new AssetMusic;
+			assetMusic->fileName = newFileInfo.fileName();
+			assetMusic->assetGuid = placeHolderGuid;
+			assetMusic->path = fileToCopyTo;
+			AssetManager::addAsset(assetMusic);
+		}
+
         if (jafType == ModelTypes::Mesh) {
             auto ssource = new iris::SceneSource();
             // load mesh as scene
@@ -2154,6 +2333,9 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	else if (aType == static_cast<int>(ModelTypes::Texture)) {
 		jafType = ModelTypes::Texture;
 	}
+	else if (aType == static_cast<int>(ModelTypes::Music)) {
+		jafType = ModelTypes::Music;
+	}
     else if (aType == static_cast<int>(ModelTypes::Shader)) {
         jafType = ModelTypes::Shader;
     }
@@ -2187,9 +2369,9 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
         }
     }
 
-    if (jafType == ModelTypes::Texture) {
+    if (jafType == ModelTypes::Texture || jafType == ModelTypes::Music) {
         for (auto &asset : AssetManager::getAssets()) {
-            if (asset->assetGuid == placeHolderGuid && asset->type == ModelTypes::Texture) {
+            if (asset->assetGuid == placeHolderGuid && asset->type == jafType) {
                 asset->assetGuid = guidReturned;
             }
         }

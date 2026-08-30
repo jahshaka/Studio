@@ -25,6 +25,9 @@ class QComboBox;
 class QTreeWidgetItem;
 class QFocusEvent;
 class ProgressDialog;
+class QSlider;
+class QMediaPlayer;
+class QAudioOutput;
 
 #include <QTreeWidget>
 #include <QPushButton>
@@ -112,8 +115,18 @@ public:
 	void importJahModel(const QString &filename, bool addToLibrary = true);
 	void importJahBundle(const QString &filename);
 	void importModel(const QString &filename, bool jfx = false);
+	/// THE import dispatch (ASSET_DRAWERS_SPEC §3): every path (drop pad,
+	/// browse dialog) lands here; one switch keyed on ModelTypes per file.
+	void importFiles(const QStringList &fileNames);
 
 private:
+	/// Images/audio: the headless AssetImporter service plus a grid tile.
+	void importImageOrAudio(const QString &fileName);
+	/// The drawer new imports are filed in: the selected drawer, else
+	/// Uncategorized (§3).
+	int selectedDrawerId() const;
+	void stopAudioPreview();
+	void showAudioPreview(const QString &filePath, const QString &displayName);
 	// Drawers (ASSET_DRAWERS_SPEC §1/§2). The tree rebuild is the single
 	// source of truth for what the left column shows.
 	void rebuildDrawerTree();
@@ -206,6 +219,16 @@ private:
 
     QWidget *assetImageViewer;
     QLabel *assetImageCanvas;
+
+    // Page 2 of the viewers stack: the audio preview (§3) — filename,
+    // play/pause, seek, time. QMediaPlayer + QAudioOutput (Qt Multimedia).
+    QWidget *assetAudioViewer;
+    QLabel *audioNameLabel;
+    QPushButton *audioPlayButton;
+    QSlider *audioSeekSlider;
+    QLabel *audioTimeLabel;
+    QMediaPlayer *mediaPlayer;
+    QAudioOutput *audioOutput;
 
     QWidget *viewersWidget;
     QStackedLayout *viewers;

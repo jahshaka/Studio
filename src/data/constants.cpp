@@ -41,8 +41,8 @@ namespace Contants
     QString DB_THUMBS_TABLE   = "thumbnails";
 	QString DB_ASSETS_TABLE	= "assets";
 
-    QList<QString> AUDIO_EXTS   = { "mp3", "wav" };
-    QList<QString> IMAGE_EXTS   = { "png", "jpg" };
+    QList<QString> AUDIO_EXTS   = { "mp3", "wav", "ogg", "flac" };
+    QList<QString> IMAGE_EXTS   = { "png", "jpg", "jpeg", "bmp", "tga" };
     QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "blend", "glb", "gltf"};
     QList<QString> WHITELIST    = { "txt", "frag", "vert", "vs", "fs", "mtl"};
 	QString SHADER_EXT		    = "shader";
