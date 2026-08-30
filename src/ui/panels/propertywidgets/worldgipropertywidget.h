@@ -19,14 +19,15 @@ For more information see the LICENSE file
 
 class ComboBoxWidget;
 class HFloatSliderWidget;
+class CheckBoxWidget;
 
 /**
  * World-panel "Global Illumination" section: how light bounces around the
  * scene. A mode dropdown plus only the controls the chosen mode actually uses
- * (rebuilt on change, like the sky panel). Bounced Light (Instant Radiosity)
- * is live; the voxel modes are announced but honestly marked coming soon —
- * only their bounces + bounds settings are editable (they serialize today).
- * Rendered by the engine viewport; the legacy viewport ignores it.
+ * (rebuilt on change, like the sky panel). All three modes are live in the
+ * engine viewport: Bounced Light (Instant Radiosity), Voxel Lighting (voxel
+ * cone tracing over the bounds) and Voxel + Reflections (VCT plus a
+ * parallax-corrected reflection-probe grid, blended by distance).
  */
 class WorldGiPropertyWidget : public AccordianBladeWidget
 {
@@ -43,6 +44,8 @@ protected slots:
     void onBouncesChanged(float value);
     void onBoundsMinChanged(QVector3D value);
     void onBoundsMaxChanged(QVector3D value);
+    void onPccGridChanged(QVector3D value);
+    void onAutoRefreshChanged(bool value);
 
 private:
     void rebuild();
@@ -54,6 +57,8 @@ private:
     HFloatSliderWidget *bounces = nullptr;
     Widget3D *boundsMin = nullptr;
     Widget3D *boundsMax = nullptr;
+    Widget3D *pccGrid = nullptr;
+    CheckBoxWidget *autoRefresh = nullptr;
 };
 
 #endif // WORLDGIPROPERTYWIDGET_H

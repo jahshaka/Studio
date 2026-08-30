@@ -292,6 +292,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giLightGuid = sceneObj["giLight"].toString();
         scene->giNumBounces = qBound(1, sceneObj["giNumBounces"].toInt(1), 4);
         scene->giAutoRefresh = sceneObj["giAutoRefresh"].toBool(true);
+        if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
+            scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
 	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));

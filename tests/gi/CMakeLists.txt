@@ -1,8 +1,9 @@
 # Global illumination test — headless, framework-free, links JahshakaEngine ONLY.
-# Proves Instant Radiosity end to end: a red wall lit by a near-horizontal
-# directional light must bounce red onto a floor the direct light only grazes,
-# and turning GI off must restore the original pixels. Same runtime requirements
-# as tests/engine (reachable DISPLAY, Vulkan driver or lavapipe).
+# Proves Instant Radiosity, VCT and the VCT+PCC hybrid end to end: a red wall
+# lit by a near-horizontal directional light must bounce red onto a floor the
+# direct light only grazes, and turning GI off must restore the original pixels.
+# Same runtime requirements as tests/engine (reachable DISPLAY, Vulkan driver
+# or lavapipe).
 add_executable(test_gi test_gi.cpp)
 set_target_properties(test_gi PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -15,6 +16,6 @@ target_compile_definitions(test_gi PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi PRIVATE JahshakaEngine)
 add_dependencies(test_gi JahshakaEngineMedia)
-add_test(NAME gi.instant_radiosity COMMAND test_gi
+add_test(NAME gi.modes COMMAND test_gi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.instant_radiosity PROPERTIES TIMEOUT 600 LABELS "engine")
+set_tests_properties(gi.modes PROPERTIES TIMEOUT 600 LABELS "engine")

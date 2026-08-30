@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 
+#include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
@@ -55,8 +56,8 @@ void WorldGiPropertyWidget::rebuild()
     modeSelector = this->addComboBox("Mode");
     modeSelector->addItem("Off");
     modeSelector->addItem("Bounced Light");
-    modeSelector->addItem("Voxel Lighting (coming soon)");
-    modeSelector->addItem("Voxel + Reflections (coming soon)");
+    modeSelector->addItem("Voxel Lighting");
+    modeSelector->addItem("Voxel + Reflections");
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
             this, &WorldGiPropertyWidget::modeChanged);
@@ -98,16 +99,17 @@ void WorldGiPropertyWidget::rebuild()
 
     case iris::GiMode::VCT:
     case iris::GiMode::VCT_PCC_HYBRID: {
-        // Honest placeholder: the voxel modes are not rendered yet. Only the
-        // settings that already serialize (bounces + bounds) are editable.
-        this->addLabel("Status", "Coming soon - not rendered yet");
-
+        // Voxel Lighting: the scene is voxelized over the bounds and every
+        // surface cone-traces bounced light and reflections out of the volume.
+        // Voxel + Reflections adds a grid of reflection probes blended with the
+        // cone-traced reflections by distance. Live in the engine viewport.
         quality = this->addComboBox("Quality");
-        quality->addItem("Low");
-        quality->addItem("Medium");
-        quality->addItem("High");
+        quality->addItem("Low");        // 32^3 voxels, 128px probes
+        quality->addItem("Medium");     // 64^3, 256px
+        quality->addItem("High");       // 128^3, 512px
         quality->setCurrentIndex(qBound(0, static_cast<int>(scene->giQuality), 2));
-        quality->setEnabled(false);   // takes effect when voxel lighting lands
+        connect(quality, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+                this, &WorldGiPropertyWidget::onQualityChanged);
 
         bounces = this->addFloatValueSlider("Light Bounces", 1.0f, 4.0f,
                                             float(scene->giNumBounces));
@@ -120,6 +122,16 @@ void WorldGiPropertyWidget::rebuild()
                                            scene->giBoundsMax.y(), scene->giBoundsMax.z());
         connect(boundsMin, &Widget3D::valueChanged, this, &WorldGiPropertyWidget::onBoundsMinChanged);
         connect(boundsMax, &Widget3D::valueChanged, this, &WorldGiPropertyWidget::onBoundsMaxChanged);
+
+        if (scene->giMode == iris::GiMode::VCT_PCC_HYBRID) {
+            this->addLabel("Reflection Probes", "Probe counts along each axis of the bounds");
+            pccGrid = this->addVector3Widget("", scene->giPccGrid.x(),
+                                             scene->giPccGrid.y(), scene->giPccGrid.z());
+            connect(pccGrid, &Widget3D::valueChanged, this, &WorldGiPropertyWidget::onPccGridChanged);
+        }
+
+        autoRefresh = this->addCheckBox("Auto Refresh", scene->giAutoRefresh);
+        connect(autoRefresh, SIGNAL(valueChanged(bool)), SLOT(onAutoRefreshChanged(bool)));
         break;
     }
     }
@@ -156,4 +168,17 @@ void WorldGiPropertyWidget::onBoundsMinChanged(QVector3D value)
 void WorldGiPropertyWidget::onBoundsMaxChanged(QVector3D value)
 {
     if (!!scene) scene->giBoundsMax = value;
+}
+
+void WorldGiPropertyWidget::onPccGridChanged(QVector3D value)
+{
+    if (!!scene)
+        scene->giPccGrid = QVector3D(qBound(1, qRound(value.x()), 8),
+                                     qBound(1, qRound(value.y()), 8),
+                                     qBound(1, qRound(value.z()), 8));
+}
+
+void WorldGiPropertyWidget::onAutoRefreshChanged(bool value)
+{
+    if (!!scene) scene->giAutoRefresh = value;
 }

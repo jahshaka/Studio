@@ -41,8 +41,8 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "shadows", "world.shadows({enabled}) -> bool",
           "Toggles shadow rendering.",
           Needs::Document },
-        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, autoRefresh}) -> bool",
-          "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto).",
+        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh}) -> bool",
+          "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only).",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, sunPosX, sunPosY, sunPosZ}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project).",
@@ -123,6 +123,11 @@ bool WorldApi::gi(const QVariantMap &params)
         scene->giBoundsMin = vecFromJs(params.value("boundsMin"), scene->giBoundsMin);
     if (params.contains("boundsMax"))
         scene->giBoundsMax = vecFromJs(params.value("boundsMax"), scene->giBoundsMax);
+    if (params.contains("pccGrid")) {
+        const QVector3D g = vecFromJs(params.value("pccGrid"), scene->giPccGrid);
+        scene->giPccGrid = QVector3D(qBound(1, qRound(g.x()), 8), qBound(1, qRound(g.y()), 8),
+                                     qBound(1, qRound(g.z()), 8));
+    }
     if (params.contains("autoRefresh"))
         scene->giAutoRefresh = params.value("autoRefresh").toBool();
     return true;
@@ -274,6 +279,7 @@ QVariantMap WorldApi::get()
                              { "light", scene->giLightGuid },
                              { "boundsMin", vecToJs(scene->giBoundsMin) },
                              { "boundsMax", vecToJs(scene->giBoundsMax) },
+                             { "pccGrid", vecToJs(scene->giPccGrid) },
                              { "autoRefresh", scene->giAutoRefresh } };
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);

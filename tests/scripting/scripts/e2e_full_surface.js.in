@@ -22,9 +22,16 @@ assert(w.ambient === "#404040", "ambient round-trips");
 assert(w.fog.enabled === true && near(w.fog.start, 50) && near(w.fog.end, 150), "fog round-trips");
 assert(near(w.gravity, 12), "gravity round-trips");
 assert(w.gi.mode === "instant_radiosity" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
-// Back off: leaving Instant Radiosity live through the asset/thumbnail churn
-// below trips heap corruption in Ogre's InstantRadiosity teardown (engine-side
-// interaction, filed as a follow-up — not a scripting behaviour).
+world.gi({ mode: "vct_pcc_hybrid", pccGrid: { x: 2, y: 1, z: 2 },
+           boundsMin: { x: -5, y: 0, z: -5 }, boundsMax: { x: 5, y: 4, z: 5 } });
+var g = world.get().gi;
+assert(g.mode === "vct_pcc_hybrid" && g.pccGrid.x === 2 && g.pccGrid.y === 1 && g.pccGrid.z === 2,
+       "vct hybrid mode + pccGrid round-trip");
+assert(near(g.boundsMin.x, -5) && near(g.boundsMax.y, 4), "gi bounds round-trip");
+// Back off so the asset/thumbnail churn below runs without GI rebuilds. (The
+// old heap corruption from leaving IR live through churn is fixed — the GI
+// caches are now freed BEFORE a mesh/texture dies, gi.modes churn-asserts it —
+// but GI-off keeps this surface test cheap and independent of GI state.)
 world.gi({ mode: "off" });
 
 world.sky("color", { color: "#204060" });

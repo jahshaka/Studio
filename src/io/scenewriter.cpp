@@ -141,6 +141,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giLight"] = scene->giLightGuid;
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giAutoRefresh"] = scene->giAutoRefresh;
+    sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
 	
     QJsonObject rootNodeObj;
     writeSceneNode(rootNodeObj,scene->getRootNode());
