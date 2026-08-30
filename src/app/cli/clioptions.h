@@ -28,6 +28,10 @@ struct CliOptions
     bool headlessScript = false;
     /// --dump-api-docs <file.md>: write the registry-generated verb reference.
     QString dumpDocsPath;
+    /// --mcp-port=N: serve MCP on 127.0.0.1:N for this run (implies enabled;
+    /// the session token is printed to stdout). With --headless: offscreen,
+    /// document verbs only; otherwise windowed with the engine viewport up.
+    quint16 mcpPort = 0;
 
     static CliOptions parse(int argc, char *argv[]);
 

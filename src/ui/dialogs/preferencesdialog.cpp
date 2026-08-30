@@ -11,7 +11,9 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui_preferencesdialog.h"
 #include <QListWidgetItem>
+#include <QTabWidget>
 #include "ui/dialogs/preferences/worldsettingswidget.h"
+#include "ui/dialogs/preferences/mcpsettingswidget.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
 #include "ui/dialogs/aboutdialog.h"
@@ -40,18 +42,29 @@ void PreferencesDialog::setupPages()
 {
     // can we elimate this to be more permanent? why (was/is) this dynamic really?
     worldSettings = new WorldSettingsWidget(db, settings);
-    ui->worldLayout->addWidget(worldSettings);
+    mcpSettings = new McpSettingsWidget(settings);
+
+    auto *tabs = new QTabWidget(this);
+    tabs->addTab(worldSettings, "General");
+    tabs->addTab(mcpSettings, "Claude / MCP");
+    ui->worldLayout->addWidget(tabs);
 }
 
 void PreferencesDialog::saveSettings()
 {
 	worldSettings->saveSettings();
+	if (mcpSettings) mcpSettings->saveSettings();
 	close();
 }
 
 void PreferencesDialog::wireEditor(IEditorViewport *viewport, MainWindow *mainWindow)
 {
     if (worldSettings) worldSettings->wireEditor(viewport, mainWindow);
+}
+
+void PreferencesDialog::wireMcp(McpServer *server, MainWindow *mainWindow)
+{
+    if (mcpSettings) mcpSettings->wireMcp(server, mainWindow);
 }
 
 PreferencesDialog::~PreferencesDialog()

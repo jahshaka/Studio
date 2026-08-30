@@ -23,6 +23,8 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) o.scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt());
+        else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) o.mcpPort = quint16(QByteArray(argv[++i]).toUInt());
         else if (qstrncmp(argv[i], "--viewport", 10) == 0) {
             // Accepted for compatibility; the engine viewport is the only
             // renderer since the legacy GL viewport was deleted (step 14).
@@ -35,7 +37,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
 
 void CliOptions::applyPlatformPolicy() const
 {
-    if ((headlessScript && !scriptPath.isEmpty()) || !dumpDocsPath.isEmpty())
+    if ((headlessScript && (!scriptPath.isEmpty() || mcpPort > 0)) || !dumpDocsPath.isEmpty())
         qputenv("QT_QPA_PLATFORM", "offscreen");
 
     // The engine (Ogre-Next) has no Wayland backend: xcb, always — unless the

@@ -28,4 +28,10 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
 /// output — generated, never hand-edited). Returns the process exit code.
 int runDumpApiDocs(MainWindow &window, const QString &outPath);
 
+/// --mcp-port=N [--headless] (CLAUDE_EDITOR_SPEC.md phase 1): boot like a
+/// script run (windowed = engine viewport up; headless = document verbs only),
+/// start the MCP server on 127.0.0.1:port, print the session token + connect
+/// line to stdout, and serve until the app quits.
+int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool headless);
+
 #endif // SCRIPTRUNNER_H

@@ -165,6 +165,9 @@ int main(int argc, char *argv[])
     if (!cli.scriptPath.isEmpty())
         return runScriptFile(window, app, cli.scriptPath, cli.headlessScript);
 
+    if (cli.mcpPort > 0)
+        return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
+
     //window.setAttribute(Qt::WA_DontShowOnScreen);
     //window.show();
     //window.grabOpenGLContextHack();

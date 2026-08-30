@@ -31,6 +31,10 @@ public:
     /// Runs a script file through the engine, echoing into the log.
     void runFile(const QString &path);
 
+    /// Appends an informational host line to the log (e.g. the MCP server's
+    /// copyable connect command).
+    void announce(const QString &text);
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
