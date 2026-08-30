@@ -29,12 +29,11 @@ For more information see the LICENSE file
 
 ProjectService::ProjectService(Database *db,
                                Project *project,
-                               ProjectManager *projectManager,
                                SettingsManager *settings,
                                IEditorViewport *viewport,
                                UndoService *undo,
                                std::function<iris::ScenePtr()> sceneProvider)
-    : db(db), project(project), projectManager(projectManager), settings(settings),
+    : db(db), project(project), projectManager(nullptr), settings(settings),
       viewport(viewport), undo(undo), sceneProvider(std::move(sceneProvider))
 {
 }

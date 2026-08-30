@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "scripting/modules/materialsapi.h"
+#include "modules/materials/api/materialsapi.h"
 
 #include <QDir>
 #include <QFile>

@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include "scripting/modules/appapi.h"
 #include "scripting/modules/assetsapi.h"
 #include "scripting/modules/editorapi.h"
-#include "scripting/modules/materialsapi.h"
 #include "scripting/modules/nodeapi.h"
 #include "scripting/modules/projectapi.h"
 #include "scripting/modules/sceneapi.h"
@@ -31,11 +30,7 @@ void registerStudioModules(ScriptEngine &engine)
     engine.addModule(new AppApi(host));
     engine.addModule(new WorldApi(host));
     engine.addModule(new AssetsApi(host));
-
-    auto *graphApi = new GraphApi(host);
-    auto *materialsApi = new MaterialsApi(host);
-    materialsApi->setGraphModule(graphApi);
-    engine.addModule(materialsApi);
-    engine.addModule(new MaterialApi(host));
-    engine.addModule(graphApi);
+    // The materials/material/graph verbs are the materials module's — the
+    // shell's module loop calls MaterialsModule::registerApi right after this
+    // (audit §6.3.4), keeping the registry order unchanged.
 }

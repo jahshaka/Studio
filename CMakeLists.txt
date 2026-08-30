@@ -48,6 +48,9 @@ set(downloaderProject downloader)
 
 set(SRCS
     src/app/main.cpp
+    src/app/cli/clioptions.cpp
+    src/app/cli/scriptrunner.cpp
+    src/app/cli/selftestrunner.cpp
     src/shell/mainwindow.cpp 
     src/ui/controls/colorvaluewidget.cpp 
     src/ui/controls/colorpickerwidget.cpp 
@@ -86,7 +89,9 @@ set(SRCS
     src/scripting/modules/appapi.cpp
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
-    src/scripting/modules/materialsapi.cpp
+    src/modules/materials/api/materialsapi.cpp
+    src/modules/materials/materialsmodule.cpp
+    src/modules/publish/publishmodule.cpp
     src/scripting/modules/studiomodules.cpp
     src/services/assetimporter.cpp
     src/services/assetservice.h
@@ -243,7 +248,10 @@ set(HEADERS
     src/scripting/modules/appapi.h
     src/scripting/modules/worldapi.h
     src/scripting/modules/assetsapi.h
-    src/scripting/modules/materialsapi.h
+    src/modules/materials/api/materialsapi.h
+    src/modules/materials/materialsmodule.h
+    src/modules/publish/publishmodule.h
+    src/modules/studiomodule.h
     src/scripting/modules/studiomodules.h
     src/services/services.h
     src/services/assetimporter.h
@@ -505,6 +513,9 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "R
 source_group("Resources" FILES ${QRCS} ${WIDGETS} ${BUNDLE_ICON})
 
 add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/app/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON}
+    src/app/cli/clioptions.h
+    src/app/cli/scriptrunner.h
+    src/app/cli/selftestrunner.h
     src/app/versionsplashscreen.h src/app/versionsplashscreen.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})

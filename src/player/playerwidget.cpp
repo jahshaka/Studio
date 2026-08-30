@@ -80,19 +80,17 @@ void PlayerWidget::createUI()
 	connect(playBtn, &QPushButton::pressed, [this]() {
         onPlayScene();
 	});
-	/*
-	connect(stopBtn, &QPushButton::pressed, [playBtn, this]() {
-		playerView->stopScene();
-	});
-	*/
 	playerControls->setLayout(playerControlsLayout);
-
-	playerView->asWidget()->setParent(this);
 
 	auto mainLayout = new QVBoxLayout();
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
-	mainLayout->addWidget(playerView->asWidget(), 1);
+	// Headless runs (--headless scripts, --dump-api-docs) have no player
+	// backend; the page is just the controls strip then.
+	if (playerView) {
+		playerView->asWidget()->setParent(this);
+		mainLayout->addWidget(playerView->asWidget(), 1);
+	}
 	mainLayout->addWidget(playerControls, 0);
 
 	this->setLayout(mainLayout);
@@ -100,16 +98,17 @@ void PlayerWidget::createUI()
 
 void PlayerWidget::setScene(iris::ScenePtr scene)
 {
-	this->playerView->setScene(scene);
+	if (playerView) playerView->setScene(scene);
 }
 
 void PlayerWidget::begin()
 {
-	playerView->start();
+	if (playerView) playerView->start();
 }
 
 void PlayerWidget::end()
 {
+	if (!playerView) return;
 	playerView->end();
 	if (playerView->isScenePlaying()) {
 		playerView->stopScene();
@@ -119,6 +118,7 @@ void PlayerWidget::end()
 
 void PlayerWidget::onPlayScene()
 {
+    if (!playerView) return;
     if (playerView->isScenePlaying()) {
         playerView->stopScene();
         playBtn->setIcon(playIcon);

@@ -8,8 +8,8 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
-#include "shell/mainwindow.h"
-//#include "ui_mainwindow.h"
+#include "modules/materials/effectspage.h"
+#include <QActionGroup>
 #include "graph/graphnode.h"
 #include <QMouseEvent>
 #include <QApplication>

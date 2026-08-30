@@ -29,14 +29,16 @@ For more information see the LICENSE file
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "data/project.h"
-#include "modules/materials/effectspage.h"
 
 namespace Ui {
     class MainWindow;
 }
 
 class AssetView;
-class ShaderGraph;
+namespace materials { class EffectsPage; }
+class StudioModule;
+class MaterialsModule;
+class PublishModule;
 
 class QPushButton;
 class QStandardItem;
@@ -542,7 +544,10 @@ private:
 	QtAwesome *fontIcons;
 
 	bool isSceneOpen = false;
-	materials::EffectsPage *shaderGraph;
+	materials::EffectsPage *shaderGraph = nullptr;   // the materials module's page
+	QVector<StudioModule*> modules;                  // audit §6.2: the shell's module list
+	MaterialsModule *materialsModule = nullptr;
+	PublishModule *publishModule = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.

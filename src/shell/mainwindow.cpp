@@ -134,6 +134,9 @@ For more information see the LICENSE file
 #include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "modules/materials/effectspage.h"
+#include "modules/materials/materialsmodule.h"
+#include "modules/publish/publishmodule.h"
+#include "modules/studiomodule.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
@@ -194,12 +197,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	fontIcons->initFontAwesome();
 
     setupViewPort();
+	setupUndoRedo();
+	// Services before pages: pages and modules are constructed against the
+	// service layer (audit §6.2 — ModuleHost carries it).
+	setupServices();
     setupDesktop();
     setupToolBar();
     setupDockWidgets();
     setupShortcuts();
-	setupUndoRedo();
-	setupServices();
 
 	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
 	// dock starts hidden — Ctrl+` toggles it in the editor space.
@@ -220,6 +225,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
 	scriptEngine = new ScriptEngine(*scriptHost, this);
 	registerStudioModules(*scriptEngine);
+	for (auto *module : modules) module->registerApi(*scriptEngine);
 
 	scriptConsole = new ScriptConsole(scriptEngine);
 	scriptConsoleDock = new QDockWidget("Script Console", viewPort);
@@ -519,7 +525,7 @@ void MainWindow::setupServices()
     connect(playbackService, &PlaybackService::playModeEntered,
             this, &MainWindow::applyPlayModeUi);
 
-    projectService = new ProjectService(db, project, pmContainer, settings,
+    projectService = new ProjectService(db, project, settings,
                                         sceneView, undoService,
                                         [this]() { return scene; });
 
@@ -565,22 +571,11 @@ void MainWindow::setupServices()
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
     undoService->setServices(services);
-    if (sceneView) sceneView->setServices(services);
-    if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->setServices(services);
-    if (_assetView) _assetView->setServices(services);
+    if (sceneView) { sceneView->setServices(services); sceneView->setProject(project); }
     if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
-    if (assetWidget) assetWidget->setEventBus(services->eventBus);
-    if (shaderGraph) shaderGraph->setSceneOpenProbe(
-        [this]() { return projectService->isSceneOpen(); });
-
-    // The live Project, injected into everything that used to reach for the
-    // Globals::project static (Phase 4).
-    if (assetWidget) assetWidget->setProject(project);
-    if (_assetView) _assetView->setProject(project);
-    if (sceneView) sceneView->setProject(project);
-    if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->setProject(project);
-    if (shaderGraph) shaderGraph->setProject(project);
     ThumbnailGenerator::getSingleton()->setProject(project);
+    // Pages, panels and modules are constructed AFTER the services and wired
+    // at their creation sites (setupDesktop / setupDockWidgets).
     // SceneWriter's two project reads live in static methods (see scenewriter.h),
     // so the pointer rides a class static wired once, like its Database handle.
     SceneWriter::setProject(project);
@@ -1392,6 +1387,8 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
     sceneNodePropertiesWidget->setSceneView(sceneView);
     sceneNodePropertiesWidget->setDatabase(db);
+    sceneNodePropertiesWidget->setServices(services);
+    sceneNodePropertiesWidget->setProject(project);
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
     sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
@@ -1450,6 +1447,8 @@ void MainWindow::setupDockWidgets()
     assetDock->setObjectName(QStringLiteral("assetDock"));
     assetWidget = new AssetWidget(db, viewPort);
     assetWidget->setMainWindow(this);
+    assetWidget->setEventBus(services->eventBus);
+    assetWidget->setProject(project);
     assetWidget->setAcceptDrops(true);
     assetWidget->installEventFilter(this);
 
@@ -1901,6 +1900,7 @@ void MainWindow::setupDesktop()
 {
 	pmContainer = new ProjectManager(db, project, this);
 	pmContainer->mainWindow = this;
+	projectService->setProjectManager(pmContainer);
 	// The Assets page: AssetView gets an EngineAssetViewer (a third engine
 	// Scene with its own preview document), or none in headless runs.
 	IAssetViewer *assetBackend = nullptr;
@@ -1910,41 +1910,35 @@ void MainWindow::setupDesktop()
 	}
 	_assetView = new AssetView(db, this, assetBackend);
 	_assetView->installEventFilter(this);
+	_assetView->setServices(services);
+	_assetView->setProject(project);
 
 	ui->stackedWidget->addWidget(pmContainer);
 	
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
 	//ui->stackedWidget->addWidget(new QWidget(this));
-	shaderGraph = new materials::EffectsPage(this,db);
-	shaderGraph->setAssetView(_assetView);
-	// The Display dock gets an engine-rendered preview (its own engine Scene +
-	// preview document).
-	if (EngineHost::instance().isRunning()) {
-		auto &host = EngineHost::instance();
-		shaderGraph->setEnginePreview(new EngineMaterialPreview(host.engine(), host.driver(), shaderGraph));
-	}
-	ui->stackedWidget->addWidget(shaderGraph);
-	ui->stackedWidget->addWidget(playerView);
+	// The modules (audit §6.2): the shell constructs them against the full
+	// host context and drives pages through the one interface. Stack order is
+	// load-bearing (WindowSpaces indexes): EFFECT = 3, PLAYER = 4, PUBLISH = 5.
+	ModuleHost moduleHost;
+	moduleHost.db = db;
+	moduleHost.settings = settings;
+	moduleHost.viewport = sceneView;
+	moduleHost.engine = &EngineHost::instance();
+	moduleHost.services = services;
+	moduleHost.project = project;
+	moduleHost.shellWidget = this;
+	materialsModule = new MaterialsModule;
+	publishModule = new PublishModule;
+	modules = { materialsModule, publishModule };
+	for (auto *module : modules) module->initialize(moduleHost);
+	materialsModule->setAssetView(_assetView);
 
-	// Publish space (page 5): a stub for future scene publishing targets.
-	publishView = new QWidget(this);
-	publishView->setObjectName("publishView");
-	publishView->setStyleSheet("#publishView { background: #1e1e1e; }");
-	{
-		auto vl = new QVBoxLayout(publishView);
-		auto title = new QLabel("Publish");
-		title->setAlignment(Qt::AlignCenter);
-		title->setStyleSheet("font-size: 32px; font-weight: 500; color: rgba(255, 255, 255, 0.92); background: transparent;");
-		auto subtitle = new QLabel("Coming soon: publish your scene to the web, Unreal, and more.");
-		subtitle->setAlignment(Qt::AlignCenter);
-		subtitle->setStyleSheet("font-size: 15px; color: rgba(255, 255, 255, 0.55); background: transparent;");
-		vl->addStretch();
-		vl->addWidget(title);
-		vl->addSpacing(8);
-		vl->addWidget(subtitle);
-		vl->addStretch();
-	}
+	shaderGraph = materialsModule->effectsPage();
+	ui->stackedWidget->addWidget(materialsModule->createPage());
+	ui->stackedWidget->addWidget(playerView);
+	publishView = publishModule->createPage();
 	ui->stackedWidget->addWidget(publishView);
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));

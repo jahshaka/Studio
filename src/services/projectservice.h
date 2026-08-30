@@ -43,11 +43,15 @@ class ProjectService
 public:
     ProjectService(Database *db,
                    Project *project,
-                   ProjectManager *projectManager,
                    SettingsManager *settings,
                    IEditorViewport *viewport,
                    UndoService *undo,
                    std::function<iris::ScenePtr()> sceneProvider);
+
+    /// The desktop page arrives after the services (the shell builds services
+    /// first so pages and modules can be constructed against them); wired as
+    /// soon as the page exists.
+    void setProjectManager(ProjectManager *pm) { projectManager = pm; }
 
     /// The user's projects root (default_directory setting or Documents).
     QString projectsRoot() const;
