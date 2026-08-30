@@ -157,6 +157,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
+#include "services/projectservice.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -584,10 +585,15 @@ void MainWindow::setupServices()
     connect(playbackService, &PlaybackService::playModeEntered,
             this, &MainWindow::applyPlayModeUi);
 
+    projectService = new ProjectService(db, Globals::project, pmContainer, settings,
+                                        sceneView, undoService,
+                                        [this]() { return scene; });
+
     services = new StudioServices;
     services->undo = undoService;
     services->selection = selectionService;
     services->playback = playbackService;
+    services->project = projectService;
 }
 
 void MainWindow::setupUndoRedo()
@@ -797,85 +803,18 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 
 void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 {
-	SceneWriter writer;
-	auto renderer = sceneView->getRenderer();
-	auto sceneObject = writer.getSceneObject(projectPath,
-											 this->scene,
-											 renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
-											 sceneView->isInitialized() ? sceneView->getEditorData() : nullptr);
-
-	// Headless (scripted project.create): the viewport never initialized — the
-	// legacy widget's takeScreenshot would touch a GL context that isn't there.
-	QByteArray thumb;
-	if (sceneView->isInitialized()) {
-		auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
-		QBuffer buffer(&thumb);
-		buffer.open(QIODevice::WriteOnly);
-		img.save(&buffer, "PNG");
-	}
-
-	db->updateProject(sceneObject, thumb);
-
-	undoService->markSaved();
+	Q_UNUSED(filename);
+	projectService->saveInitialScene(projectPath);
 }
 
 bool MainWindow::saveProjectBlob()
 {
-	// The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveScene() this NEVER
-	// silently no-ops: the scene lives only in the DB projects table, and a
-	// scripted or headless save must actually write it. The thumbnail is
-	// refreshed only when a viewport can render one (and kept otherwise).
-	if (!scene || Globals::project->getProjectGuid().isEmpty()) return false;
-
-	SceneWriter writer;
-	auto renderer = sceneView ? sceneView->getRenderer() : iris::ForwardRendererPtr();
-	auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
-									  scene,
-									  renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
-									  (sceneView && sceneView->isInitialized()) ? sceneView->getEditorData() : nullptr);
-
-	bool ok;
-	if (sceneView && sceneView->isInitialized()) {
-		auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
-		QByteArray thumb;
-		QBuffer buffer(&thumb);
-		buffer.open(QIODevice::WriteOnly);
-		img.save(&buffer, "PNG");
-		ok = db->updateProject(blob, thumb);
-		pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
-	} else {
-		ok = db->updateProjectBlob(blob);
-	}
-
-	undoService->markSaved();
-	return ok;
+	return projectService->saveProjectBlob();
 }
 
 void MainWindow::saveScene()
 {
-	// if the sceneView isnt initialized then the scene was never
-	// opened in edit mode. This also means no renderer was initialized.
-	// There's no need to save (nick)
-	if (!sceneView->isInitialized())
-		return;
-
-	SceneWriter writer;
-    auto renderer = sceneView->getRenderer();
-    auto blob = writer.getSceneObject(Globals::project->getProjectFolder(),
-                                      scene,
-                                      renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
-                                      sceneView->getEditorData());
-
-    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
-    QByteArray thumb;
-    QBuffer buffer(&thumb);
-    buffer.open(QIODevice::WriteOnly);
-    img.save(&buffer, "PNG");
-
-    db->updateProject(blob, thumb);
-	pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
-
-	undoService->markSaved();
+	projectService->saveOpenScene();
 }
 
 void MainWindow::openProject(bool playMode)
@@ -884,20 +823,12 @@ void MainWindow::openProject(bool playMode)
         removeScene();
 
     makeLoadingGLContextCurrent();
-    std::unique_ptr<SceneReader> reader(new SceneReader);
-	reader->setDatabaseHandle(db);
 
     EditorData* editorData = Q_NULLPTR;
     UiManager::updateWindowTitle();
 
-    //auto postMan = sceneView->getRenderer()->getPostProcessManager();
-    //postMan->clearPostProcesses();
-
-	auto postMan = iris::PostProcessManagerPtr();
-    auto scene = reader->readScene(Globals::project->getProjectFolder(),
-                                   db->getSceneBlobGlobal(),
-                                   postMan,
-                                   &editorData);
+	iris::PostProcessManagerPtr postMan;
+    auto scene = projectService->readProjectScene(&editorData, postMan);
 
     UiManager::playMode = playMode;
     UiManager::isSceneOpen = true;
@@ -2245,14 +2176,7 @@ void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
 
 void MainWindow::updateCurrentSceneThumbnail()
 {
-    auto img = sceneView->takeScreenshot(Constants::TILE_SIZE * 2);
-    QByteArray thumb;
-    QBuffer buffer(&thumb);
-    buffer.open(QIODevice::WriteOnly);
-    img.save(&buffer, "PNG");
-
-    db->updateSceneThumbnail(Globals::project->getProjectGuid(), thumb);
-    pmContainer->updateTile(Globals::project->getProjectGuid(), thumb);
+    projectService->updateCurrentSceneThumbnail();
 }
 
 /*

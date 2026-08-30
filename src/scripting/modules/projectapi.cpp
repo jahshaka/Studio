@@ -15,13 +15,12 @@ For more information see the LICENSE file
 #include <QJSEngine>
 #include <QStandardPaths>
 
-#include "../../constants.h"
 #include "../../core/database/database.h"
-#include "../../core/guidmanager.h"
 #include "../../core/project.h"
-#include "../../core/settingsmanager.h"
 #include "../../globals.h"
 #include "../../mainwindow.h"
+#include "../../services/projectservice.h"
+#include "../../services/services.h"
 #include "../../uimanager.h"
 #include "../../widgets/projectmanager.h"
 
@@ -61,67 +60,41 @@ QVector<VerbInfo> ProjectApi::verbs() const
     };
 }
 
-QString ProjectApi::projectsRoot() const
-{
-    const auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                       + Constants::PROJECT_FOLDER;
-    return SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
-}
-
 QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
 {
-    const auto projects = host.db->fetchProjects(0);
-    // guid match first (guids are unique; names may not be)
-    for (const auto &p : projects) {
-        if (p.guid == guidOrName) {
-            if (nameOut) *nameOut = p.name;
-            return p.guid;
-        }
-    }
-    QString found, foundName;
     int hits = 0;
-    for (const auto &p : projects) {
-        if (p.name == guidOrName) { found = p.guid; foundName = p.name; ++hits; }
-    }
+    const QString guid =
+        host.services->project->resolveProjectGuid(guidOrName, nameOut, &hits);
     if (hits > 1) {
         fail(QStringLiteral("project: name '%1' matches %2 projects — use the guid").arg(guidOrName).arg(hits));
         return QString();
     }
-    if (nameOut) *nameOut = foundName;
-    return found;
+    return guid;
 }
 
 QString ProjectApi::create(const QString &name)
 {
-    if (!host.mainWindow || !host.db || !host.projectManager) { fail("project: not available in this session"); return QString(); }
+    if (!host.mainWindow || !host.services || !host.services->project) { fail("project: not available in this session"); return QString(); }
     if (name.trimmed().isEmpty()) { fail("project.create: a non-empty name is required"); return QString(); }
 
-    // The ProjectManager::newProject flow minus the dialog (SCRIPTING_SPEC §1.1):
-    // guid, Globals::project, folder, DB row, desktop — then MainWindow::newProject
-    // builds the default scene and saves it, so the row never carries the empty
-    // scene blob (the crash window the census flagged).
-    const QString guid = GUIDManager::generateGUID();
-    const QString fullProjectPath = QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid);
-
-    Globals::project->setProjectPath(fullProjectPath, name.trimmed());
-    Globals::project->setProjectGuid(guid);
-
-    QDir projectDir(fullProjectPath);
-    if (!projectDir.exists()) projectDir.mkpath(".");
-
-    if (!host.db->createProject(guid, name.trimmed())) {
+    // The data half (guid, current project, folder, DB row, desktop) is
+    // ProjectService's; MainWindow::newProject then builds the default scene
+    // and saves it, so the row never carries the empty scene blob (the crash
+    // window the census flagged).
+    const QString guid = host.services->project->createProjectShell(name);
+    if (guid.isEmpty()) {
         fail("project.create: the database rejected the project row");
         return QString();
     }
-    host.db->updateProjectDesktop(guid, host.projectManager->getCurrentDesktop());
 
-    host.mainWindow->newProject(name.trimmed(), fullProjectPath);
+    host.mainWindow->newProject(name.trimmed(), Globals::project->getProjectFolder());
     return guid;
 }
 
 bool ProjectApi::open(const QString &guidOrName)
 {
-    if (!host.mainWindow || !host.db || !host.projectManager) return fail("project: not available in this session");
+    if (!host.mainWindow || !host.services || !host.services->project)
+        return fail("project: not available in this session");
 
     QString name;
     const QString guid = resolveGuid(guidOrName, &name);
@@ -138,12 +111,8 @@ bool ProjectApi::open(const QString &guidOrName)
     }
     if (UiManager::isSceneOpen) host.mainWindow->closeProject();
 
-    Globals::project->setProjectPath(
-        QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid), name);
-    Globals::project->setProjectGuid(guid);
-
-    // Synchronous preload (no modal dialog, no QtConcurrent) then the reader half.
-    host.projectManager->loadProjectAssetsSync();
+    // Point the current project + synchronous preload, then the reader half.
+    host.services->project->prepareOpen(guid, name);
     host.mainWindow->openProject(false);
     return true;
 }
@@ -151,7 +120,7 @@ bool ProjectApi::open(const QString &guidOrName)
 bool ProjectApi::save()
 {
     if (!requireProject()) return false;
-    if (!host.mainWindow->saveProjectBlob())
+    if (!host.services || !host.services->project || !host.services->project->saveProjectBlob())
         return fail("project.save: the blob save failed");
     return true;
 }
@@ -176,7 +145,8 @@ bool ProjectApi::rename(const QString &guid, const QString &newName)
 
 bool ProjectApi::remove(const QString &guid)
 {
-    if (!host.db) return fail("project: not available in this session");
+    if (!host.db || !host.services || !host.services->project)
+        return fail("project: not available in this session");
     if (UiManager::isSceneOpen && Globals::project->getProjectGuid() == guid)
         return fail("project.remove: this project is open — project.close() first");
 
@@ -184,17 +154,10 @@ bool ProjectApi::remove(const QString &guid)
     if (resolveGuid(guid, &name) != guid)
         return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
 
-    // Folder first (like the widget), then the DB rows — but through the
-    // guid-parameterised deleteProject: Globals::project is NOT mutated (§1.6.1).
-    QDir dirToRemove(QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid));
-    if (dirToRemove.exists() && !dirToRemove.removeRecursively())
+    // Folder first (like the widget), then the DB rows — through the
+    // guid-parameterised service: Globals::project is NOT mutated (§1.6.1).
+    if (!host.services->project->removeProject(guid))
         return fail("project.remove: could not remove the project folder");
-
-    host.db->deleteProject(guid);
-    host.db->deleteFolderAndDependencies(guid);
-    host.db->deleteAssetAndDependencies(guid);
-
-    if (host.projectManager) host.projectManager->populateDesktop(true);
     return true;
 }
 

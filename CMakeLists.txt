@@ -80,6 +80,7 @@ set(SRCS
     src/scripting/modules/materialsapi.cpp
     src/scripting/services/assetimporter.cpp
     src/scripting/modules/studiomodules.cpp
+    src/services/projectservice.cpp
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
     src/services/playbackservice.cpp
@@ -252,6 +253,7 @@ set(HEADERS
     src/scripting/services/assetimporter.h
     src/scripting/modules/studiomodules.h
     src/services/services.h
+    src/services/projectservice.h
     src/services/undoservice.h
     src/services/selectionservice.h
     src/services/playbackservice.h

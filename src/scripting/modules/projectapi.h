@@ -47,7 +47,6 @@ public:
 
 private:
     QString resolveGuid(const QString &guidOrName, QString *nameOut = nullptr);
-    QString projectsRoot() const;
 };
 
 #endif // SCRIPTING_PROJECTAPI_H
