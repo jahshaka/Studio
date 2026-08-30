@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
+#include "services/videoutils.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
@@ -69,6 +70,7 @@ int typeFromName(const QString &name)
     const QString n = name.trimmed().toLower();
     if (n == "material") return static_cast<int>(ModelTypes::Material);
     if (n == "texture") return static_cast<int>(ModelTypes::Texture);
+    if (n == "video") return static_cast<int>(ModelTypes::Video);
     if (n == "sky") return static_cast<int>(ModelTypes::Sky);
     if (n == "object" || n == "model") return static_cast<int>(ModelTypes::Object);
     if (n == "mesh") return static_cast<int>(ModelTypes::Mesh);
@@ -94,13 +96,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized).",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}",
-          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
+          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
           Needs::Document },
         { "import", "assets.import(path) -> guid",
           "Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable.",
           Needs::Document },
         { "importFile", "assets.importFile(path, drawerId?) -> guid",
-          "Imports any library-supported file (models, images, audio) into the asset store, optionally filed in a drawer. Images/audio are headless-safe. NOT undoable.",
+          "Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable.",
           Needs::Document },
         { "drawers", "assets.drawers() -> [{id, name, parent}]",
           "The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0.",
@@ -133,7 +135,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
-          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file and audio/file rows reset to their type icon (document-only).",
+          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
@@ -504,6 +506,13 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         return host.db->updateAssetThumbnail(
             guid, AssetHelper::makeBlobFromPixmap(
                       QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"))));
+    }
+    if (record.type == static_cast<int>(ModelTypes::Video)) {
+        // First-second frame re-grab; VideoUtils falls back to the film icon
+        // when decode fails, so this always writes something sensible.
+        const QPixmap thumb =
+            VideoUtils::thumbnailFor(IrisUtils::join(storeFolderFor(guid), record.name));
+        return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(thumb));
     }
     if (record.type == static_cast<int>(ModelTypes::File)) {
         return host.db->updateAssetThumbnail(

@@ -28,6 +28,9 @@ class ProgressDialog;
 class QSlider;
 class QMediaPlayer;
 class QAudioOutput;
+class QScrollArea;
+class VideoPreviewWidget;
+class WaveformWidget;
 
 #include <QTreeWidget>
 #include <QPushButton>
@@ -135,13 +138,24 @@ public:
 	void importFiles(const QStringList &fileNames);
 
 private:
-	/// Images/audio: the headless AssetImporter service plus a grid tile.
+	/// Images/audio/video: the headless AssetImporter service plus a grid tile.
 	void importImageOrAudio(const QString &fileName);
 	/// The drawer new imports are filed in: the selected drawer, else
 	/// Uncategorized (§3).
 	int selectedDrawerId() const;
-	void stopAudioPreview();
-	void showAudioPreview(const QString &filePath, const QString &displayName);
+	/// Stops BOTH media players (audio + video). Every selection change and
+	/// page switch lands here (ASSET_MEDIA_SPEC §2: viewers stop/clear).
+	void stopMediaPreviews();
+	void showAudioPreview(const QString &guid, const QString &filePath,
+	                      const QString &displayName);
+	void showVideoPreview(const QString &filePath, const QString &displayName);
+	void showImagePreview(const QString &filePath);
+	void showFilePlaceholder(const QString &displayName);
+	/// Waveform peaks for the audio preview: cached in the row's properties
+	/// JSON under "waveform", computed on QtConcurrent the first time.
+	void loadWaveform(const QString &guid, const QString &filePath);
+	/// Image viewer fit/1:1/zoom (§2): rescales the canvas pixmap.
+	void applyImageZoom();
 	// Drawers (ASSET_DRAWERS_SPEC §1/§2). The tree rebuild is the single
 	// source of truth for what the left column shows.
 	void rebuildDrawerTree();
@@ -233,11 +247,20 @@ private:
 	QString searchTerm;
 	QLineEdit *le;
 
+    // Image page (PreviewPage::Image): scrollable canvas with fit / 1:1 /
+    // wheel zoom (ASSET_MEDIA_SPEC §2).
     QWidget *assetImageViewer;
     QLabel *assetImageCanvas;
+    QScrollArea *imageScroll = nullptr;
+    QPushButton *imageFitButton = nullptr;
+    QPushButton *imageActualButton = nullptr;
+    QLabel *imageZoomLabel = nullptr;
+    QPixmap imageOriginal;
+    bool imageFitMode = true;
+    double imageZoom = 1.0;
 
-    // Page 2 of the viewers stack: the audio preview (§3) — filename,
-    // play/pause, seek, time. QMediaPlayer + QAudioOutput (Qt Multimedia).
+    // Audio page (PreviewPage::Audio): filename, waveform (click-to-seek,
+    // playhead), play/pause, seek, time. QMediaPlayer + QAudioOutput.
     QWidget *assetAudioViewer;
     QLabel *audioNameLabel;
     QPushButton *audioPlayButton;
@@ -245,6 +268,16 @@ private:
     QLabel *audioTimeLabel;
     QMediaPlayer *mediaPlayer;
     QAudioOutput *audioOutput;
+    WaveformWidget *waveform = nullptr;
+    QString waveformGuid;   // the guid the waveform (or its pending decode) is for
+
+    // Video page (PreviewPage::Video) — ASSET_MEDIA_SPEC §2.
+    VideoPreviewWidget *assetVideoViewer = nullptr;
+
+    // Placeholder page (PreviewPage::Placeholder): icon + name for File rows.
+    QWidget *assetFileViewer = nullptr;
+    QLabel *fileIconLabel = nullptr;
+    QLabel *fileNameLabel = nullptr;
 
     QWidget *viewersWidget;
     QStackedLayout *viewers;

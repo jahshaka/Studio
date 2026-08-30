@@ -42,6 +42,7 @@ namespace Contants
 	QString DB_ASSETS_TABLE	= "assets";
 
     QList<QString> AUDIO_EXTS   = { "mp3", "wav", "ogg", "flac" };
+    QList<QString> VIDEO_EXTS   = { "mp4", "mov", "webm", "mkv" };
     QList<QString> IMAGE_EXTS   = { "png", "jpg", "jpeg", "bmp", "tga" };
     QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "blend", "glb", "gltf"};
     QList<QString> WHITELIST    = { "txt", "frag", "vert", "vs", "fs", "mtl"};

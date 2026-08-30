@@ -161,6 +161,9 @@ ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
 	else if (Constants::AUDIO_EXTS.contains(fileSuffix)) {
 		return ModelTypes::Music;
 	}
+	else if (Constants::VIDEO_EXTS.contains(fileSuffix)) {
+		return ModelTypes::Video;
+	}
     else if (fileSuffix == Constants::SHADER_EXT) {
         return ModelTypes::Shader;
     }

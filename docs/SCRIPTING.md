@@ -101,9 +101,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | verb | needs | description |
 |---|---|---|
 | `assets.list({scope: 'store'\|'project', type}) -> [{guid, name, type, drawer}]` | document | Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized). |
-| `assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}` | document | Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). |
+| `assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}` | document | Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). |
 | `assets.import(path) -> guid` | document | Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable. |
-| `assets.importFile(path, drawerId?) -> guid` | document | Imports any library-supported file (models, images, audio) into the asset store, optionally filed in a drawer. Images/audio are headless-safe. NOT undoable. |
+| `assets.importFile(path, drawerId?) -> guid` | document | Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. |
 | `assets.drawers() -> [{id, name, parent}]` | document | The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0. |
 | `assets.createDrawer(name, parentId?) -> id` | document | Creates a drawer, optionally nested under an existing one (default: top level). Returns the new drawer's id. |
 | `assets.renameDrawer(id, name) -> bool` | document | Renames a drawer. The virtual root (-1) is not renamable. |
@@ -114,7 +114,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `assets.addToScene(guid, {position}) -> nodeId` | document | Instantiates a project object asset into the scene (undoable, like a drag from the asset browser). |
 | `assets.builtins() -> [{guid, name, kind}]` | document | The reserved built-ins: primitives, materials and shaders with their reserved guids. Guids collide across kinds — always pair guid with kind. |
 | `assets.remove(guid, {keepShared: true}) -> bool` | document | Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo. |
-| `assets.refreshThumbnail(guid) -> bool` | document | Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file and audio/file rows reset to their type icon (document-only). |
+| `assets.refreshThumbnail(guid) -> bool` | document | Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only). |
 | `assets.dependencies(guid) -> [guid]` | document | The asset plus all its dependencies, recursively. |
 
 ## materials

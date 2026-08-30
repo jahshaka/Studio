@@ -98,6 +98,8 @@ set(SRCS
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/assetmetadata.cpp
+    src/services/audiopeaks.cpp
+    src/services/videoutils.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
     src/services/sceneeditservice.cpp
@@ -188,6 +190,8 @@ set(SRCS
     src/ui/controls/assetviewgrid.cpp
     src/ui/controls/assetgriditem.cpp
     src/ui/controls/drawertreewidget.cpp
+    src/ui/controls/videopreviewwidget.cpp
+    src/ui/controls/waveformwidget.cpp
     src/data/constants.cpp
     src/app/updatechecker.cpp
     src/ui/dialogs/softwareupdatedialog.cpp
@@ -267,6 +271,8 @@ set(HEADERS
     src/services/services.h
     src/services/assetimporter.h
     src/services/assetmetadata.h
+    src/services/audiopeaks.h
+    src/services/videoutils.h
     src/services/projectservice.h
     src/services/sceneeditservice.h
     src/services/thumbnailservice.h
@@ -354,6 +360,7 @@ set(HEADERS
     src/services/thumbnailgenerator.h 
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
+    src/ui/pages/previewrouter.h
     src/ui/pages/iassetviewer.h
     src/ui/pages/headlessassetviewer.h
     src/bridge/engineassetscene.h
@@ -363,6 +370,8 @@ set(HEADERS
     src/ui/controls/assetviewgrid.h
     src/ui/controls/assetgriditem.h
     src/ui/controls/drawertreewidget.h
+    src/ui/controls/videopreviewwidget.h
+    src/ui/controls/waveformwidget.h
     src/app/breakpad.h
     src/app/updatechecker.h
     src/ui/dialogs/softwareupdatedialog.h

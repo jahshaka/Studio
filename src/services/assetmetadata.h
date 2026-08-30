@@ -29,6 +29,10 @@ struct aiScene;
 // Everything here is pure file/aiScene inspection: no GPU, no engine, no Qt
 // widgets — safe to run on a QtConcurrent worker thread. Only ensure() talks
 // to the Database (call it from the thread that owns the connection).
+// EXCEPTION — video (ASSET_MEDIA_SPEC §1): the rich fields come from
+// QMediaPlayer (ffmpeg backend), which is GUI-thread-only; forVideoFile
+// degrades to format/fileSize on a worker thread, and ensure() refuses to
+// persist that degraded block so a later GUI-thread call can still enrich.
 //
 // Blocks by kind (every block: format = lowercase source extension,
 // fileSize = bytes of the primary file):
@@ -36,6 +40,8 @@ struct aiScene;
 //   image: width, height
 //   audio: duration (ms), sampleRate, channels, bitsPerSample (wav only —
 //          other containers get format/fileSize)
+//   video: duration (ms), width, height, frameRate, videoCodec (whatever
+//          the container reports; GUI thread only — see above)
 //   file:  format/fileSize only (shaders, materials, skies, particles, misc)
 class AssetMetadata
 {
@@ -50,6 +56,7 @@ public:
 
     static QJsonObject forImageFile(const QString &filePath);   // header-only decode
     static QJsonObject forAudioFile(const QString &filePath);   // RIFF parse for wav
+    static QJsonObject forVideoFile(const QString &filePath);   // QMediaPlayer probe (GUI thread)
     static QJsonObject forGenericFile(const QString &filePath);
 
     // Dispatches on the asset row's ModelTypes over its store folder

@@ -88,3 +88,18 @@ set_tests_properties(scripting.e2e.metadata PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 120)
+
+# Video assets (ASSET_MEDIA_SPEC §1): importFile(mp4) → Video row + frame-grab
+# thumbnail + probed metadata block. Qt Multimedia's ffmpeg backend decodes
+# with no display (verified under QT_QPA_PLATFORM=offscreen), so this runs
+# --headless like the drawers/metadata suites.
+configure_file(scripts/e2e_video.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-video)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.video
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_video.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.video PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
