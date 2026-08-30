@@ -3,7 +3,8 @@
 # SnapSettings the gizmos and grid read. Links only the services under test.
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(test_shortcut_registry test_shortcut_registry.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/shortcutregistry.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/shortcutregistry.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp)
 set_target_properties(test_shortcut_registry PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_shortcut_registry PRIVATE
     ${CMAKE_SOURCE_DIR}

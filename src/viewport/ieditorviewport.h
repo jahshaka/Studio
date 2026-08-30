@@ -76,6 +76,9 @@ public:
     /// F: frames the current selection (no-op without one). Only the engine
     /// viewport implements it (EDITOR_SHORTCUTS_SPEC §2).
     virtual void focusOnSelection() {}
+    /// End: drops the selection onto the first scene surface below it (y=0
+    /// plane fallback), undoable. Only the engine viewport implements it.
+    virtual bool snapSelectionToFloor() { return false; }
 
     // ---- editor camera ----
     virtual iris::CameraNodePtr editorCamera() = 0;

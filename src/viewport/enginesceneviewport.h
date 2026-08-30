@@ -52,6 +52,7 @@ public:
     void clearSelectedNode() override;
     void focusOnNode(iris::SceneNodePtr sceneNode) override;
     void focusOnSelection() override;
+    bool snapSelectionToFloor() override;
 
     iris::CameraNodePtr editorCamera() override { return mEditorCam; }
     void setEditorCamera(iris::CameraNodePtr camera) override;
@@ -166,6 +167,8 @@ private:
     std::unique_ptr<SceneMirror> mMirror;
     EditorViewportEvents mEvents;
     MainWindow *mMainWindow = nullptr;
+    StudioServices *mServices = nullptr;      // undo + scene-edit for Alt+drag / snap-to-floor
+    bool mAltDragMacroOpen = false;           // duplicate+move rides one undo macro
     QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)

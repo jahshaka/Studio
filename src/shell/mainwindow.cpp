@@ -149,6 +149,7 @@ For more information see the LICENSE file
 
 #include "services/services.h"
 #include "services/shortcutregistry.h"
+#include "viewport/snapsettings.h"
 #include "services/subscriber.h"
 #include "services/undoservice.h"
 #include "services/selectionservice.h"
@@ -169,6 +170,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->setupUi(this);
 
 	settings = SettingsManager::getDefaultManager();
+	SnapSettings::bindSettings(settings->settings);   // snap sizes persist beside the shortcuts
 
 
 
@@ -2156,8 +2158,15 @@ void MainWindow::setupShortcuts()
                     playerView->onPlayScene();
             });
 
-    // ---- snapping (the sizes and steppers land with SnapSettings) ----
+    // ---- snapping (SnapSettings, EDITOR_SHORTCUTS_SPEC §4) ----
+    reg.add("snap.decrease", "Decrease Snap / Grid Size", "Snapping", QKeySequence(Qt::Key_BracketLeft),
+            this, [this]() { stepSnapSize(-1); });
+    reg.add("snap.increase", "Increase Snap / Grid Size", "Snapping", QKeySequence(Qt::Key_BracketRight),
+            this, [this]() { stepSnapSize(+1); });
+    reg.add("snap.floor", "Snap Selection To Floor", "Snapping", QKeySequence(Qt::Key_End), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->snapSelectionToFloor(); });
     reg.addFixed("snap.relative", "Snap While Dragging", "Snapping", "Ctrl (hold)");
+    reg.addFixed("snap.altdrag", "Duplicate While Dragging", "Snapping", "Alt + drag gizmo");
 
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
@@ -2183,6 +2192,35 @@ void MainWindow::setupShortcuts()
                     return;
                 this->switchSpace(previousSpace);
             });
+}
+
+// [ / ]: steps the ACTIVE gizmo's snap size through its step list — the
+// translate size is also the ground grid's spacing, which re-spaces live.
+// A toast over the viewport shows the new value (EDITOR_SHORTCUTS_SPEC §4).
+void MainWindow::stepSnapSize(int direction)
+{
+    if (currentSpace != WindowSpaces::EDITOR) return;
+    const QString mode = sceneView->gizmoMode();
+    QString text;
+    if (mode == "rotate") {
+        SnapSettings::setRotateSize(SnapSettings::stepped(SnapSettings::rotateSteps(),
+                                                          SnapSettings::rotateSize(), direction));
+        text = QString("Rotate snap: %1\xc2\xb0").arg(double(SnapSettings::rotateSize()));
+    } else if (mode == "scale") {
+        SnapSettings::setScaleSize(SnapSettings::stepped(SnapSettings::scaleSteps(),
+                                                         SnapSettings::scaleSize(), direction));
+        text = QString("Scale snap: %1").arg(double(SnapSettings::scaleSize()));
+    } else {
+        SnapSettings::setTranslateSize(SnapSettings::stepped(SnapSettings::translateSteps(),
+                                                             SnapSettings::translateSize(), direction));
+        text = QString("Move / grid snap: %1").arg(double(SnapSettings::translateSize()));
+    }
+    if (!snapToast) snapToast = new Toast(this);
+    snapToast->showToast("Snap Size", text, 0, QPoint(), QRect());   // auto-hides
+    snapToast->adjustSize();
+    QWidget *vp = sceneView->asWidget();
+    const QPoint top = vp->mapToGlobal(QPoint(vp->width() / 2, 24));
+    snapToast->move(top - QPoint(snapToast->width() / 2, 0));
 }
 
 // Space: translate -> rotate -> scale -> translate (Unreal's mode cycle).

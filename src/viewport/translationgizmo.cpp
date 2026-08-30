@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "viewport/gizmomeshes.h"
 
-#define DEFAULT_SNAP_LENGTH (1.0f)
+#include "viewport/snapsettings.h"
 #define CENTER_CIRCLE_RADIUS (0.015f)
 
 TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
@@ -256,7 +256,7 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDi
 	auto mods = QApplication::keyboardModifiers();
 	if (mods.testFlag(Qt::ControlModifier)) {
 		float length = diff.length();
-		float snapLength = Gizmo::snap(length, DEFAULT_SNAP_LENGTH);
+		float snapLength = Gizmo::snap(length, SnapSettings::translateSize());
 		diff = diff.normalized() * snapLength;
 	}
 

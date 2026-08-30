@@ -15,6 +15,7 @@
 #include <cstdio>
 
 #include "services/shortcutregistry.h"
+#include "viewport/snapsettings.h"
 
 static int failures = 0;
 #define CHECK(cond, name)                                                  \
@@ -93,6 +94,51 @@ int main(int argc, char **argv)
         QSettings ini(iniPath, QSettings::IniFormat);
         CHECK(!ini.contains("shortcut/tool.translate") && !ini.contains("shortcut/tool.rotate"),
               "defaults leave no override keys behind");
+    }
+
+    // ================= SnapSettings (phase C) =================
+    // Unbound: pure defaults — the values the gizmos' Ctrl-snap reads
+    // (Gizmo::snap(value, SnapSettings::xxxSize())) and the grid's spacing.
+    {
+        SnapSettings::bindSettings(nullptr);
+        SnapSettings::reset();
+        CHECK(SnapSettings::translateSize() == 1.0f, "translate snap defaults to 1.0");
+        CHECK(SnapSettings::rotateSize() == 10.0f, "rotate snap defaults to 10 degrees");
+        CHECK(SnapSettings::scaleSize() == 0.25f, "scale snap defaults to 0.25");
+
+        SnapSettings::setTranslateSize(0.0f);
+        CHECK(SnapSettings::translateSize() == 0.01f, "translate snap clamps up from 0");
+        SnapSettings::setTranslateSize(1000.0f);
+        CHECK(SnapSettings::translateSize() == 100.0f, "translate snap clamps down from 1000");
+
+        // [ / ] stepping through the spec's list 0.1/0.25/0.5/1/5/10
+        const auto &ts = SnapSettings::translateSteps();
+        CHECK(SnapSettings::stepped(ts, 1.0f, +1) == 5.0f, "step up from 1 -> 5");
+        CHECK(SnapSettings::stepped(ts, 1.0f, -1) == 0.5f, "step down from 1 -> 0.5");
+        CHECK(SnapSettings::stepped(ts, 10.0f, +1) == 10.0f, "step up clamps at the top");
+        CHECK(SnapSettings::stepped(ts, 0.1f, -1) == 0.1f, "step down clamps at the bottom");
+        CHECK(SnapSettings::stepped(ts, 0.7f, +1) == 1.0f, "off-list value steps to the next step");
+        CHECK(SnapSettings::stepped(ts, 0.7f, -1) == 0.5f, "off-list value steps to the previous step");
+    }
+
+    // Persistence round-trip through a bound QSettings.
+    {
+        QSettings ini(iniPath, QSettings::IniFormat);
+        SnapSettings::bindSettings(&ini);
+        SnapSettings::setTranslateSize(0.5f);
+        SnapSettings::setRotateSize(45.0f);
+        ini.sync();
+    }
+    {
+        QSettings ini(iniPath, QSettings::IniFormat);
+        SnapSettings::bindSettings(&ini);
+        CHECK(SnapSettings::translateSize() == 0.5f, "translate snap persists");
+        CHECK(SnapSettings::rotateSize() == 45.0f, "rotate snap persists");
+        CHECK(SnapSettings::scaleSize() == 0.25f, "unset scale snap stays default");
+        SnapSettings::reset();
+        CHECK(SnapSettings::translateSize() == 1.0f && !ini.contains("snap/translate"),
+              "reset restores defaults and clears the store");
+        SnapSettings::bindSettings(nullptr);
     }
 
     std::printf(failures ? "FAILED (%d)\n" : "ALL PASSED\n", failures);

@@ -18,6 +18,7 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "viewport/ieditorviewport.h"
+#include "viewport/snapsettings.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/playbackservice.h"
@@ -50,6 +51,15 @@ QVector<VerbInfo> EditorApi::verbs() const
           Needs::Engine },
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
+          Needs::Engine },
+        { "snapSize", "editor.snapSize() -> number",
+          "The translate snap size (world units) — also the ground grid's spacing. Editor-global, persisted.",
+          Needs::Document },
+        { "setSnapSize", "editor.setSnapSize(size) -> bool",
+          "Sets the translate snap / grid size ([ and ] step it in the viewport). Refuses size <= 0; clamped to 0.01..100.",
+          Needs::Document },
+        { "snapToFloor", "editor.snapToFloor() -> bool",
+          "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
           Needs::Engine },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
@@ -153,6 +163,27 @@ bool EditorApi::isGameView()
 {
     if (!requireEngine()) return false;
     return host.viewport->isGameView();
+}
+
+double EditorApi::snapSize()
+{
+    return double(SnapSettings::translateSize());
+}
+
+bool EditorApi::setSnapSize(double size)
+{
+    if (size <= 0.0)
+        return fail("editor.setSnapSize: size must be > 0");
+    SnapSettings::setTranslateSize(float(size));
+    return true;
+}
+
+bool EditorApi::snapToFloor()
+{
+    if (!requireEngine()) return false;
+    if (!host.services || !host.services->selection || !host.services->selection->selected())
+        return fail("editor.snapToFloor: nothing is selected");
+    return host.viewport->snapSelectionToFloor();
 }
 
 bool EditorApi::undo()

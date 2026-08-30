@@ -58,4 +58,29 @@ editor.frame(2);   // a frame renders fine with every helper hidden
 assert(editor.gameView(false), "gameView(false)");
 assert(editor.isGameView() === false, "isGameView reads back false");
 
+// ---- snap size (phase C): editor-global, persisted, drives the grid ----
+assert(near(editor.snapSize(), 1.0, 1e-4), "snap size defaults to 1.0");
+assert(editor.setSnapSize(0.5), "setSnapSize(0.5)");
+assert(near(editor.snapSize(), 0.5, 1e-4), "snap size reads back 0.5");
+var badSnapRefused = false;
+try { editor.setSnapSize(0); } catch (e) { badSnapRefused = true; }
+assert(badSnapRefused, "setSnapSize(0) refused");
+assert(near(editor.snapSize(), 0.5, 1e-4), "refused set left the value alone");
+assert(editor.setSnapSize(1.0), "snap size restored to 1.0");
+
+// ---- snapToFloor (phase C): the framed cube at y=60 lands on the ground ----
+editor.select(cube);
+var before2 = node.info(cube).position.y;
+assert(near(before2, 60, 1e-2), "cube still at y=60");
+assert(editor.snapToFloor(), "snapToFloor");
+var after2 = node.info(cube).position.y;
+assert(after2 < 3 && after2 > -0.01,
+    "cube dropped from y=60 to rest on the floor (y=" + after2 + ")");
+assert(editor.snapToFloor(), "second snapToFloor is a no-op");
+assert(near(node.info(cube).position.y, after2, 1e-3), "already-floored cube stays put");
+
+editor.select(null);
+try { editor.snapToFloor(); throw new Error("snapToFloor without selection must throw"); }
+catch (e) { assert(String(e).indexOf("selected") >= 0, "snapToFloor refuses with nothing selected"); }
+
 console.log("editor_controls: verbs verified");

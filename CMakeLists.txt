@@ -114,7 +114,8 @@ set(SRCS
     src/ui/controls/dragspinbox.cpp 
     src/ui/panels/scenehierarchywidget.cpp 
     src/viewport/cameracontrollerbase.cpp 
-    src/viewport/gizmo.cpp 
+    src/viewport/gizmo.cpp
+    src/viewport/snapsettings.cpp
     src/viewport/gizmomeshes.cpp 
     src/viewport/translationgizmo.cpp 
     src/viewport/scalegizmo.cpp 

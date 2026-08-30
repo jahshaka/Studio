@@ -539,6 +539,8 @@ private:
     QAction *wireCheckAction;
     QAction *physicsCheckAction;
     QAction *gridCheckAction = nullptr;
+    class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
+    void stepSnapSize(int direction);
     // F11 immersive fullscreen restore state (EDITOR_SHORTCUTS_SPEC §3)
     bool immersiveFullscreen = false;
     bool preFullscreenMaximized = false;

@@ -36,6 +36,9 @@ public:
     Q_INVOKABLE bool focusSelection();
     Q_INVOKABLE bool gameView(bool enabled);
     Q_INVOKABLE bool isGameView();
+    Q_INVOKABLE double snapSize();
+    Q_INVOKABLE bool setSnapSize(double size);
+    Q_INVOKABLE bool snapToFloor();
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     Q_INVOKABLE bool play();

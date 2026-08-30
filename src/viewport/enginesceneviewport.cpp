@@ -37,6 +37,12 @@
 
 #include "viewport/enginerenderdriver.h"
 #include "viewport/previewframing.h"
+#include "viewport/snapsettings.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "services/sceneeditservice.h"
+#include "commands/transformscenenodecommand.h"
+#include <QUndoStack>
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/editordata.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -289,6 +295,20 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
         const bool haveRay = mouseRay(rayPos, rayDir, viewDir);
         // A hit on the active gizmo starts a drag and keeps the selection.
         if (haveRay && mSelectedNode && mGizmo && mGizmo->isHit(rayPos, rayDir)) {
+            // Alt+drag duplicates first, then drags the COPY — one undo macro
+            // covers duplicate + move (EDITOR_SHORTCUTS_SPEC §4).
+            if ((e->modifiers() & Qt::AltModifier) && mServices && mServices->sceneEdit &&
+                mServices->undo && mServices->undo->stack() && mSelectedNode->isDuplicable()) {
+                mServices->undo->stack()->beginMacro(QStringLiteral("Duplicate + Move"));
+                iris::SceneNodePtr copy = mServices->sceneEdit->duplicateNode(mSelectedNode);
+                if (copy) {
+                    mAltDragMacroOpen = true;
+                    setSelectedNode(copy);              // re-points the gizmo too
+                    emit mEvents.sceneNodeSelected(copy);
+                } else {
+                    mServices->undo->stack()->endMacro();
+                }
+            }
             mGizmo->startDragging(rayPos, rayDir, viewDir);
         } else {
             iris::SceneNodePtr picked = pickAt(e->position(), true);
@@ -319,6 +339,13 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
     e->accept();
     if (mPlaying && mPlayback) { mPlayback->mouseReleaseEvent(e); return; }
     if (e->button() == Qt::LeftButton && mGizmo && mGizmo->isDragging()) mGizmo->endDragging();
+    // The Alt+drag macro closes AFTER endDragging pushed its transform command,
+    // so duplicate + move undo as one step.
+    if (e->button() == Qt::LeftButton && mAltDragMacroOpen) {
+        mAltDragMacroOpen = false;
+        if (mServices && mServices->undo && mServices->undo->stack())
+            mServices->undo->stack()->endMacro();
+    }
     if (mCamController) mCamController->onMouseUp(e->button());
 }
 
@@ -579,7 +606,8 @@ void EngineSceneViewport::syncFrame()
         if (highlight && ((mScene && highlight == mScene->getRootNode()) || highlight->isBuiltIn))
             highlight.reset();
         mMirror->setHighlightedNode(highlight);
-        mMirror->setGrid(mShowGrid && helpers && !mPlaying, 1.0f);   // spacing follows SnapSettings in phase C
+        // Grid spacing = the translate snap size ([ and ] re-space it live).
+        mMirror->setGrid(mShowGrid && helpers && !mPlaying, SnapSettings::translateSize());
         mMirror->sync();
     }
     if (mGizmo && mEditorCam && mSelectedNode) mGizmo->updateSize(mEditorCam);
@@ -669,8 +697,56 @@ IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine
 
 void EngineSceneViewport::setServices(StudioServices *services)
 {
-    // The gizmos raise undo pushes / refreshes through the aggregate.
+    // The gizmos raise undo pushes / refreshes through the aggregate; the
+    // viewport itself needs it for Alt+drag duplicate and End snap-to-floor.
+    mServices = services;
     if (mTranslateGizmo) mTranslateGizmo->setServices(services);
     if (mRotateGizmo)    mRotateGizmo->setServices(services);
     if (mScaleGizmo)     mScaleGizmo->setServices(services);
+}
+
+// End / editor.snapToFloor(): drop the selection straight down onto the first
+// scene surface BELOW its bounds; no hit means the y=0 ground plane (the
+// dropPositionAt convention). Undoable (EDITOR_SHORTCUTS_SPEC §4).
+bool EngineSceneViewport::snapSelectionToFloor()
+{
+    if (!mSelectedNode || !mScene) return false;
+    mSelectedNode->update(0.0f);
+
+    const iris::AABB bounds = preview::worldBoundingBox(mSelectedNode);
+    const bool hasBounds = bounds.getMin().x() <= bounds.getMax().x();
+    const QVector3D pos = mSelectedNode->getGlobalPosition();
+    const float bottom = hasBounds ? bounds.getMin().y() : pos.y();
+    const QVector3D centre = hasBounds ? bounds.getCenter() : pos;
+
+    // Straight down from just under the selection's own bounds, so its own
+    // meshes can never be the hit.
+    const QVector3D start(centre.x(), bottom - 0.001f, centre.z());
+    const QVector3D end = start + QVector3D(0.0f, -10000.0f, 0.0f);
+    const auto hits = ScenePicker::pickAll(mScene, start, end, start, true, false, false);
+    float targetY = 0.0f;                       // fallback: the y = 0 plane
+    bool found = false;
+    for (const auto &h : hits) {
+        if (!h.node) continue;
+        bool own = false;                       // ignore the selection's own subtree
+        for (iris::SceneNode *n = h.node.data(); n; n = n->parent.data())
+            if (n == mSelectedNode.data()) { own = true; break; }
+        if (own) continue;
+        if (!found || h.hitPoint.y() > targetY) { targetY = h.hitPoint.y(); found = true; }
+    }
+
+    const float delta = targetY - bottom;
+    if (std::abs(delta) < 1e-5f) return true;   // already on the floor
+
+    const QVector3D oldLocalPos = mSelectedNode->getLocalPos();
+    const QQuaternion rot = mSelectedNode->getLocalRot();
+    const QVector3D scale = mSelectedNode->getLocalScale();
+    mSelectedNode->setGlobalPos(pos + QVector3D(0.0f, delta, 0.0f));
+    const QVector3D newLocalPos = mSelectedNode->getLocalPos();
+    if (mServices && mServices->undo) {
+        mServices->undo->push(new TransformSceneNodeCommand(mSelectedNode,
+                                                            oldLocalPos, rot, scale,
+                                                            newLocalPos, rot, scale));
+    }
+    return true;
 }

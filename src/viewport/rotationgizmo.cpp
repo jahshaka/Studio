@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "viewport/gizmomeshes.h"
 
-#define DEFAULT_SNAP_LENGTH 10
+#include "viewport/snapsettings.h"
 
 RotationHandle::RotationHandle(Gizmo* gizmo, GizmoAxis axis)
 {
@@ -244,7 +244,7 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 	auto diff = startAngle - hitAngle;
 	auto mods = QApplication::keyboardModifiers();
 	if (mods.testFlag(Qt::ControlModifier)) {
-		diff = Gizmo::snap(diff, DEFAULT_SNAP_LENGTH);
+		diff = Gizmo::snap(diff, SnapSettings::rotateSize());
 	}
 
 	QQuaternion rot;

@@ -12,11 +12,13 @@ For more information see the LICENSE file
 #ifndef TOAST_H
 #define TOAST_H
 
+#include <QFrame>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QWidget>
 
-class Toast : QFrame
+class Toast : public QFrame   // was private inheritance — accidental; callers
+                              // could never position or size the toast
 {
     Q_OBJECT
 

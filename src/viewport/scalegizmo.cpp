@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "ui/panels/scenenodepropertieswidget.h"
 #include "ui/panels/propertywidgets/transformpropertywidget.h"
 
-#define DEFAULT_SNAP_LENGTH (1.0f)
+#include "viewport/snapsettings.h"
 #define CENTER_CIRCLE_RADIUS (0.015f)
 
 ScaleHandle::ScaleHandle(Gizmo* gizmo, GizmoAxis axis)
@@ -237,7 +237,7 @@ void ScaleGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 	auto mods = QApplication::keyboardModifiers();
 	if (mods.testFlag(Qt::ControlModifier)) {
 		float length = diff.length();
-		float snapLength = Gizmo::snap(length, DEFAULT_SNAP_LENGTH);
+		float snapLength = Gizmo::snap(length, SnapSettings::scaleSize());
 		diff = diff.normalized() * snapLength;
 	}
 

@@ -62,6 +62,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `editor.focusSelection() -> bool` | engine | Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. |
 | `editor.gameView(enabled) -> bool` | engine | Game View (the G key): hides every in-viewport editor helper — grid, light wires, selection outline, gizmo. Docks stay; not persisted. |
 | `editor.isGameView() -> bool` | engine | Whether Game View is active. |
+| `editor.snapSize() -> number` | document | The translate snap size (world units) — also the ground grid's spacing. Editor-global, persisted. |
+| `editor.setSnapSize(size) -> bool` | document | Sets the translate snap / grid size ([ and ] step it in the viewport). Refuses size <= 0; clamped to 0.01..100. |
+| `editor.snapToFloor() -> bool` | engine | Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable. |
 | `editor.undo() -> bool` | document | Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script. |
 | `editor.redo() -> bool` | document | Redoes the last undone step. |
 | `editor.play() -> bool` | document | Enters play mode (PlayBack drives physics, animations and controllers in place). |
