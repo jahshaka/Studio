@@ -87,6 +87,7 @@ set(SRCS
     src/scripting/modules/nodeapi.cpp
     src/scripting/modules/editorapi.cpp
     src/scripting/modules/appapi.cpp
+    src/scripting/modules/desktopapi.cpp
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
     src/modules/materials/api/materialsapi.cpp
@@ -255,6 +256,7 @@ set(HEADERS
     src/scripting/modules/nodeapi.h
     src/scripting/modules/editorapi.h
     src/scripting/modules/appapi.h
+    src/scripting/modules/desktopapi.h
     src/scripting/modules/worldapi.h
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h

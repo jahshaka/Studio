@@ -82,6 +82,15 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `app.desktop(n=0) -> current` | window | Switches to desktop 1-4; app.desktop() just returns the current one. |
 | `app.space(name) -> bool` | window | Switches the main window space: desktop, player, editor, materials, assets, publish. player and editor need an open project. |
 
+## desktop
+
+| verb | needs | description |
+|---|---|---|
+| `desktop.viewMode() -> mode` | window | Returns the current desktop's view mode: 'rows', 'freeform' or 'sliders' (persisted per desktop). |
+| `desktop.setViewMode(mode) -> bool` | window | Sets the current desktop's view mode: 'rows', 'freeform' or 'sliders'. Persists per desktop; switching is lossless (each mode keeps its own layout). |
+| `desktop.moveTile(guid, row, index=-1) -> bool` | window | Sliders mode: moves the project tile into filmstrip row 1..N at the insert index (0-based within the row; -1 appends). Tiles after the index shift right. The assignment persists. |
+| `desktop.tiles() -> [{guid, name, row, index}]` | window | Lists the current desktop's tiles with their slider assignment (row 1..N, index 0-based; -1/-1 when never assigned). |
+
 ## world
 
 | verb | needs | description |
