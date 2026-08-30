@@ -1,8 +1,8 @@
-// Stand-ins for src/shadergraph/core/texturemanager.cpp, which drags the
+// Stand-ins for src/modules/materials/core/texturemanager.cpp, which drags the
 // Studio database and main window into the link. The nodes compiled into this
 // test only touch createTexture/removeTexture/getSingleton and
 // GraphTexture::setImage; none of the database-backed methods are reachable.
-#include "shadergraph/core/texturemanager.h"
+#include "modules/materials/core/texturemanager.h"
 
 TextureManager* TextureManager::instance = nullptr;
 

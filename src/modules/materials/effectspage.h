@@ -37,15 +37,12 @@ class AssetView;
 
 class QTimer;
 
-namespace shadergraph
+namespace materials
 {
 Q_NAMESPACE
 
 class IMaterialPreviewWidget;
 
-namespace Ui {
-class MainWindow;
-}
 
 struct nodeListModel {
 	QString name;
@@ -55,12 +52,12 @@ struct nodeListModel {
 
 };
 
-class MainWindow : public QMainWindow
+class EffectsPage : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    explicit MainWindow( QWidget *parent = Q_NULLPTR, Database *database = Q_NULLPTR);
+    explicit EffectsPage( QWidget *parent = Q_NULLPTR, Database *database = Q_NULLPTR);
     void setNodeGraph(NodeGraph* graph);
     void newNodeGraph(QString *shaderName = Q_NULLPTR, int *templateType = Q_NULLPTR, QString *templateName = Q_NULLPTR);
 	
@@ -88,7 +85,7 @@ public:
 	void loadGraph(QString guid);
 	static QString genGUID();
 
-    ~MainWindow();
+    ~EffectsPage();
 
 	QList<NodeGraphPreset> list;
 	QListWidgetItem *currentProjectShader = Q_NULLPTR;
@@ -154,7 +151,6 @@ private:
 	void schedulePreviewUpdate();
 	void updateEnginePreviewMaterial();
 
-    Ui::MainWindow *ui;
     GraphNodeScene* scene;
 	IMaterialPreviewWidget *enginePreview = nullptr;
 	QMainWindow *displayWindow = nullptr;   // the Display dock's inner window (menus + preview)

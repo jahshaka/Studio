@@ -11,9 +11,9 @@ using namespace jahshaka::engine;
 
 namespace {
 
-PreviewMesh toPreviewMesh(shadergraph::IMaterialPreviewWidget::Model model)
+PreviewMesh toPreviewMesh(materials::IMaterialPreviewWidget::Model model)
 {
-    using Model = shadergraph::IMaterialPreviewWidget::Model;
+    using Model = materials::IMaterialPreviewWidget::Model;
     switch (model) {
     case Model::Sphere:   return PreviewMesh::Sphere;
     case Model::Cube:     return PreviewMesh::Cube;

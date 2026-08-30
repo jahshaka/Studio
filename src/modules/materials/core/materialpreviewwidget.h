@@ -15,7 +15,7 @@ For more information see the LICENSE file
 // In engine viewport mode the GL SceneWidget must never be realized (a live
 // QOpenGLWidget freezes the whole window on xcb), so Studio builds an
 // engine-rendered preview widget instead and hands it to this module through
-// this interface (MainWindow::setEnginePreview). The module never sees the
+// this interface (EffectsPage::setEnginePreview). The module never sees the
 // engine: it pushes the graph's evaluated iris::PbrMaterial, the primitive
 // choice and the background colour, nothing else. Pure Qt + iris types here —
 // no engine, no GL, no Ogre.
@@ -24,7 +24,7 @@ For more information see the LICENSE file
 
 class QWidget;
 
-namespace shadergraph
+namespace materials
 {
 
 class IMaterialPreviewWidget

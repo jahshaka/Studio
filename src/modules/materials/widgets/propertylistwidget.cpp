@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "../propertywidgets/texturepropertywidget.h"
 #include "../models/properties.h"
 #include "../graph/nodegraph.h"
-#include "../shadergraphmainwindow.h"
+#include "../effectspage.h"
 
 PropertyListWidget::PropertyListWidget(QWidget *parent) :
     QWidget(parent)

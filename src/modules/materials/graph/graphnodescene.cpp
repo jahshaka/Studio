@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QShortcut>
 
-#include <shadergraph/dialogs/searchdialog.h>
+#include "modules/materials/dialogs/searchdialog.h"
 
 
 

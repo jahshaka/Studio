@@ -25,7 +25,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/irisutils.h"
 //#include "irisgl/src/core/property.h"
-#include "shadergraph/core/materialhelper.h"
+#include "modules/materials/core/materialhelper.h"
 
 /*
 V1 Material Spec:

@@ -425,7 +425,7 @@ endif()
 set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
-include(IncludeShaderGraph)
+include(IncludeMaterialsModule)
 
 set (QRCS
     ${CMAKE_SOURCE_DIR}/app/fonts.qrc

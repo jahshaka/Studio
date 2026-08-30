@@ -38,13 +38,13 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
-#include "shadergraph/core/materialhelper.h"
-#include "shadergraph/core/pbrgraphevaluator.h"
-#include "shadergraph/graph/nodegraph.h"
-#include "shadergraph/models/libraryv1.h"
-#include "shadergraph/models/nodemodel.h"
-#include "shadergraph/models/socketmodel.h"
-#include "shadergraph/nodes/pbrmasternode.h"
+#include "modules/materials/core/materialhelper.h"
+#include "modules/materials/core/pbrgraphevaluator.h"
+#include "modules/materials/graph/nodegraph.h"
+#include "modules/materials/models/libraryv1.h"
+#include "modules/materials/models/nodemodel.h"
+#include "modules/materials/models/socketmodel.h"
+#include "modules/materials/nodes/pbrmasternode.h"
 
 using namespace scriptmod;
 

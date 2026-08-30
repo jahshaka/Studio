@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <QDirIterator>
 
-#include "../shadergraphmainwindow.h"
+#include "../effectspage.h"
 #if(EFFECT_BUILD_AS_LIB)
 #include "io/assetmanager.h"
 #include "data/database/database.h"
@@ -493,7 +493,7 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 	
 	item->setSizeHint(currentSize);
 
-	const QString targetGuid = shadergraph::MainWindow::genGUID();
+	const QString targetGuid = materials::EffectsPage::genGUID();
 
 	
 	assetItemShader.wItem = item;
@@ -525,7 +525,7 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 				QDirIterator it(assetFolder);
 
 				while (it.hasNext()) {
-					auto imgGuid = shadergraph::MainWindow::genGUID();
+					auto imgGuid = materials::EffectsPage::genGUID();
 					auto fileName = it.next();
 					auto splitted = fileName.split('/');
 					if (splitted.back() == '.' || splitted.back() == "..") continue;

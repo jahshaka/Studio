@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "data/project.h"
-#include "shadergraph/shadergraphmainwindow.h"
+#include "modules/materials/effectspage.h"
 
 namespace Ui {
     class MainWindow;
@@ -542,7 +542,7 @@ private:
 	QtAwesome *fontIcons;
 
 	bool isSceneOpen = false;
-	shadergraph::MainWindow *shaderGraph;
+	materials::EffectsPage *shaderGraph;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.

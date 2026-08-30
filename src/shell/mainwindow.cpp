@@ -133,7 +133,7 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/charactercontroller.h"
 #include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
 
-#include "shadergraph/shadergraphmainwindow.h"
+#include "modules/materials/effectspage.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
@@ -1916,7 +1916,7 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(viewPort);
 	ui->stackedWidget->addWidget(_assetView);
 	//ui->stackedWidget->addWidget(new QWidget(this));
-	shaderGraph = new shadergraph::MainWindow(this,db);
+	shaderGraph = new materials::EffectsPage(this,db);
 	shaderGraph->setAssetView(_assetView);
 	// The Display dock gets an engine-rendered preview (its own engine Scene +
 	// preview document).

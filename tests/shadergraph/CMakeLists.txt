@@ -6,17 +6,17 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 add_executable(test_pbr_evaluator
     test_pbr_evaluator.cpp
     test_stubs.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/generator/shadercontext.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/graph/nodegraph.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/models/connectionmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/models/library.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/models/nodemodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/models/properties.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/models/socketmodel.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/nodes/pbrmasternode.cpp
-    ${CMAKE_SOURCE_DIR}/src/shadergraph/nodes/test.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)

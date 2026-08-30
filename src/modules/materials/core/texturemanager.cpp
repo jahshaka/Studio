@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "texturemanager.h"
-#include "../shadergraphmainwindow.h"
+#include "../effectspage.h"
 #include "data/project.h"
 
 TextureManager* TextureManager::instance = 0;
@@ -129,7 +129,7 @@ GraphTexture* TextureManager::importTexture(QString path)
 		"AssetStore"
 	);
 
-	auto texGuid = shadergraph::MainWindow::genGUID();
+	auto texGuid = materials::EffectsPage::genGUID();
 
 	const QString assetFolder = QDir(assetPath).filePath(texGuid);
 	QDir().mkpath(assetFolder);

@@ -7,7 +7,7 @@
 // renders the preview primitive into this widget's native window from its own
 // engine Scene, which mirrors the preview document. Studio constructs it and
 // hands it to the shadergraph module through IMaterialPreviewWidget
-// (src/shadergraph/core/materialpreviewwidget.h), so the module never links
+// (src/modules/materials/core/materialpreviewwidget.h), so the module never links
 // engine code. Syncs on EngineRenderDriver::beforeFrame and renders only
 // while visible; left/right drag orbits, wheel zooms. Never includes Ogre or GL.
 #include <memory>
@@ -15,11 +15,11 @@
 #include <QPointF>
 #include "viewport/engineviewwidget.h"
 #include "bridge/enginematerialpreviewscene.h"
-#include "shadergraph/core/materialpreviewwidget.h"
+#include "modules/materials/core/materialpreviewwidget.h"
 
 class EngineRenderDriver;
 
-class EngineMaterialPreview : public EngineViewWidget, public shadergraph::IMaterialPreviewWidget
+class EngineMaterialPreview : public EngineViewWidget, public materials::IMaterialPreviewWidget
 {
     Q_OBJECT
 public:

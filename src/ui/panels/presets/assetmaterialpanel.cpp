@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "io/assetmanager.h"
 #include "shell/mainwindow.h"
-#include "shadergraph/core/materialhelper.h"
+#include "modules/materials/core/materialhelper.h"
 
 #include "io/scenewriter.h"
 

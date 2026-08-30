@@ -7,7 +7,7 @@
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assethelper.h"
-#include "src/shadergraph/core/materialhelper.h"
+#include "modules/materials/core/materialhelper.h"
 
 class Exporter
 {

@@ -11,7 +11,7 @@ For more information see the LICENSE file
 #include "createnewdialog.h"
 #include <QLayout>
 #include <QPainter>
-#include "../shadergraphmainwindow.h"
+#include "../effectspage.h"
 #include <QDebug>
 #include <QButtonGroup>
 #include <QGraphicsEffect>

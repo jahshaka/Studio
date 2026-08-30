@@ -15,12 +15,12 @@
 #include <cmath>
 #include <cstdio>
 
-#include "shadergraph/graph/nodegraph.h"
-#include "shadergraph/nodes/pbrmasternode.h"
-#include "shadergraph/nodes/test.h" // FloatNodeModel, ColorPickerNode, PropertyNode, SurfaceMasterNode
-#include "shadergraph/models/properties.h"
-#include "shadergraph/models/library.h"
-#include "shadergraph/core/pbrgraphevaluator.h"
+#include "modules/materials/graph/nodegraph.h"
+#include "modules/materials/nodes/pbrmasternode.h"
+#include "modules/materials/nodes/test.h" // FloatNodeModel, ColorPickerNode, PropertyNode, SurfaceMasterNode
+#include "modules/materials/models/properties.h"
+#include "modules/materials/models/library.h"
+#include "modules/materials/core/pbrgraphevaluator.h"
 
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/texture2d.h"

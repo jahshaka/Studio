@@ -83,7 +83,7 @@ For more information see the LICENSE file
 #include "zip.h"
 #include "core/exporter.h"
 
-namespace shadergraph
+namespace materials
 {
 
 	enum class ShaderWorkspace {
@@ -92,7 +92,7 @@ namespace shadergraph
 		Projects = 2
 	};
 
-MainWindow::MainWindow( QWidget *parent, Database *database) :
+EffectsPage::EffectsPage( QWidget *parent, Database *database) :
     QMainWindow(parent)
 {
 	stack = new QUndoStack;
@@ -102,7 +102,7 @@ MainWindow::MainWindow( QWidget *parent, Database *database) :
 	previewUpdateTimer = new QTimer(this);
 	previewUpdateTimer->setSingleShot(true);
 	previewUpdateTimer->setInterval(150);
-	connect(previewUpdateTimer, &QTimer::timeout, this, &MainWindow::updateEnginePreviewMaterial);
+	connect(previewUpdateTimer, &QTimer::timeout, this, &EffectsPage::updateEnginePreviewMaterial);
 	fontIcons = new QtAwesome;
 	fontIcons->initFontAwesome();
 	configureUI();
@@ -129,7 +129,7 @@ MainWindow::MainWindow( QWidget *parent, Database *database) :
 	assetView = nullptr;
 }
 
-void MainWindow::setNodeGraph(NodeGraph *graph)
+void EffectsPage::setNodeGraph(NodeGraph *graph)
 {
 	TextureManager::getSingleton()->clearTextures();
 
@@ -156,7 +156,7 @@ void MainWindow::setNodeGraph(NodeGraph *graph)
 	
 }
 
-void MainWindow::newNodeGraph(QString *shaderName, int *templateType, QString *templateName)
+void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *templateName)
 {
     auto graph = new NodeGraph;
 	graph->setNodeLibrary(new LibraryV1());
@@ -167,7 +167,7 @@ void MainWindow::newNodeGraph(QString *shaderName, int *templateType, QString *t
     setNodeGraph(graph);
 }
 
-void MainWindow::refreshShaderGraph()
+void EffectsPage::refreshShaderGraph()
 {
 #if(EFFECT_BUILD_AS_LIB)
 	assetWidget->refresh();
@@ -175,12 +175,12 @@ void MainWindow::refreshShaderGraph()
 	setCurrentShaderItem();
 }
 
-MainWindow::~MainWindow()
+EffectsPage::~EffectsPage()
 {
     
 }
 
-void MainWindow::saveShader()
+void EffectsPage::saveShader()
 {
 	if (currentShaderInformation.GUID == "") {
 		saveDefaultShader();
@@ -225,12 +225,12 @@ void MainWindow::saveShader()
 	}
 }
 
-void MainWindow::saveDefaultShader()
+void EffectsPage::saveDefaultShader()
 {
 	bool shouldSaveGraph = createNewGraph(false);
 }
 
-void MainWindow::loadShadersFromDisk()
+void EffectsPage::loadShadersFromDisk()
 {
 	// create constants for this
     auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/Materials/MyFx/");
@@ -261,7 +261,7 @@ void MainWindow::loadShadersFromDisk()
 	
 }
 
-void MainWindow::saveMaterialFile(QString filename, TexturePropertyWidget* widget)
+void EffectsPage::saveMaterialFile(QString filename, TexturePropertyWidget* widget)
 {
 	
 #if(EFFECT_BUILD_AS_LIB)
@@ -282,7 +282,7 @@ void MainWindow::saveMaterialFile(QString filename, TexturePropertyWidget* widge
 #endif
 }
 
-void MainWindow::deleteMaterialFile(QString filename)
+void EffectsPage::deleteMaterialFile(QString filename)
 {
 #if(EFFECT_BUILD_AS_LIB)
 
@@ -292,7 +292,7 @@ void MainWindow::deleteMaterialFile(QString filename)
 #endif
 }
 
-QString MainWindow::genGUID()
+QString EffectsPage::genGUID()
 {
 	auto id = QUuid::createUuid();
 	auto guid = id.toString().remove(0, 1);
@@ -300,7 +300,7 @@ QString MainWindow::genGUID()
 	return guid;
 }
 
-void MainWindow::importGraph()
+void EffectsPage::importGraph()
 {
     QString path = QFileDialog::getOpenFileName(this, "Choose file name","material.json","Material File (*.jaf)");
 	if (path == "") return;
@@ -309,7 +309,7 @@ void MainWindow::importGraph()
 	//importGraphFromFilePath(path);
 }
 
-void MainWindow::importEffect(QString fileName)
+void EffectsPage::importEffect(QString fileName)
 {
 	QFileInfo entryInfo(fileName);
 
@@ -422,7 +422,7 @@ void MainWindow::importEffect(QString fileName)
 	this->updateAssetDock();
 }
 
-NodeGraph* MainWindow::importGraphFromFilePath(QString filePath, bool assign)
+NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 {
 	QFile file(filePath);
 	file.open(QIODevice::ReadOnly | QIODevice::Text);
@@ -441,7 +441,7 @@ NodeGraph* MainWindow::importGraphFromFilePath(QString filePath, bool assign)
 	return graph;
 }
 
-void MainWindow::loadGraph(QString guid)
+void EffectsPage::loadGraph(QString guid)
 {
 	auto progressDialog = new ProgressDialog;
 	
@@ -493,7 +493,7 @@ void MainWindow::loadGraph(QString guid)
 	progressDialog->close();
 }
 
-void MainWindow::exportEffect(QString guid)
+void EffectsPage::exportEffect(QString guid)
 {
 	const QString assetName = dataBase->fetchAsset(guid).name;
 
@@ -583,7 +583,7 @@ void MainWindow::exportEffect(QString guid)
 }
 
 // keeping this around for standalone (nick)
-void MainWindow::exportGraph()
+void EffectsPage::exportGraph()
 {
 	QString path = QFileDialog::getSaveFileName(this, "Choose file name", "effect.effect", "Material File (*.effect)");
 
@@ -610,7 +610,7 @@ void MainWindow::exportGraph()
 
 }
 
-void MainWindow::restoreGraphPositions(const QJsonObject &data)
+void EffectsPage::restoreGraphPositions(const QJsonObject &data)
 {
     auto scene = data["scene"].toObject();
     auto nodeList = scene["nodes"].toArray();
@@ -624,7 +624,7 @@ void MainWindow::restoreGraphPositions(const QJsonObject &data)
     }
 }
 
-bool MainWindow::deleteShader(QString guid)
+bool EffectsPage::deleteShader(QString guid)
 {
 
     auto item = selectCorrectItemFromDrop(guid);
@@ -667,7 +667,7 @@ bool MainWindow::deleteShader(QString guid)
 }
 
 
-void MainWindow::configureStyleSheet()
+void EffectsPage::configureStyleSheet()
 {
 	setStyleSheet(
 		"QMainWindow::separator {width: 10px;h eight: 0px; margin: -3.5px; padding: 0px; border: 0px solid black; background: rgba(19, 19, 19, 1);}"
@@ -737,7 +737,7 @@ void MainWindow::configureStyleSheet()
 }
 
 
-void MainWindow::configureProjectDock()
+void EffectsPage::configureProjectDock()
 {
 #if(EFFECT_BUILD_AS_LIB)
 	auto widget = new QWidget;
@@ -766,7 +766,7 @@ void MainWindow::configureProjectDock()
 }
 
 
-void MainWindow::configureAssetsDock()
+void EffectsPage::configureAssetsDock()
 {
 	auto holder = new QWidget;
 	auto layout = new QVBoxLayout;
@@ -946,7 +946,7 @@ void MainWindow::configureAssetsDock()
 	updateAssetDock();
 }
 
-void MainWindow::createShader(NodeGraphPreset preset, bool loadNewGraph)
+void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 {
 	QString newShader;
 	newShader = preset.title;
@@ -1005,7 +1005,7 @@ void MainWindow::createShader(NodeGraphPreset preset, bool loadNewGraph)
 	saveShader();
 }
 
-void MainWindow::loadGraphFromTemplate(NodeGraphPreset preset)
+void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
 {
     propertyListWidget->clearPropertyList();
     currentShaderInformation.GUID = "";
@@ -1025,13 +1025,13 @@ void MainWindow::loadGraphFromTemplate(NodeGraphPreset preset)
 
 }
 
-void MainWindow::setCurrentShaderItem()
+void EffectsPage::setCurrentShaderItem()
 {
  	if (scene->currentlyEditing)
 		currentProjectShader = selectCorrectItemFromDrop(scene->currentlyEditing->data(MODEL_GUID_ROLE).toString());
 }
 
-QByteArray MainWindow::fetchAsset(QString string)
+QByteArray EffectsPage::fetchAsset(QString string)
 {
 #if(EFFECT_BUILD_AS_LIB)
 	return dataBase->fetchAssetData(string);
@@ -1045,7 +1045,7 @@ QByteArray MainWindow::fetchAsset(QString string)
 	return QByteArray();
 }
 
-void MainWindow::configureUI()
+void EffectsPage::configureUI()
 {
 	nodeTray = new QDockWidget("Library");
 	centralWidget = new QWidget();
@@ -1169,7 +1169,7 @@ void MainWindow::configureUI()
 	
 }
 
-void MainWindow::configureToolbar()
+void EffectsPage::configureToolbar()
 {
 	QVariantMap options;
 	options.insert("color", QColor(255, 255, 255));
@@ -1259,9 +1259,9 @@ void MainWindow::configureToolbar()
 
 	this->addToolBar(toolBar);
 
-	connect(actionSave, &QAction::triggered, this, &MainWindow::saveShader);
-	connect(exportBtn, &QAction::triggered, this, &MainWindow::exportGraph);
-	connect(importBtn, &QAction::triggered, this, &MainWindow::importGraph);
+	connect(actionSave, &QAction::triggered, this, &EffectsPage::saveShader);
+	connect(exportBtn, &QAction::triggered, this, &EffectsPage::exportGraph);
+	connect(importBtn, &QAction::triggered, this, &EffectsPage::importGraph);
 	connect(addBtn, &QAction::triggered, this, [=]() {
 		createNewGraph(true);
 	});
@@ -1283,7 +1283,7 @@ void MainWindow::configureToolbar()
 	);
 }
 
-void MainWindow::generateTileNode()
+void EffectsPage::generateTileNode()
 {
 	QSize currentSize(90, 90);
 
@@ -1305,7 +1305,7 @@ void MainWindow::generateTileNode()
 	}
 }
 
-void MainWindow::addTabs()
+void EffectsPage::addTabs()
 {
 	for (int i = 0; i < (int)NodeCategory::PlaceHolder; i++) {
 		auto wid = new ListWidget;
@@ -1315,13 +1315,13 @@ void MainWindow::addTabs()
 	}
 }
 
-void MainWindow::setNodeLibraryItem(QListWidgetItem *item, NodeLibraryItem *tile)
+void EffectsPage::setNodeLibraryItem(QListWidgetItem *item, NodeLibraryItem *tile)
 {
 	auto wid = static_cast<QListWidget*>(tabbedWidget->widget(static_cast<int>(tile->nodeCategory)));
 	wid->addItem(item);
 }
 
-bool MainWindow::createNewGraph(bool loadNewGraph)
+bool EffectsPage::createNewGraph(bool loadNewGraph)
 {
 	CreateNewDialog node(loadNewGraph);
 	node.exec();
@@ -1334,7 +1334,7 @@ bool MainWindow::createNewGraph(bool loadNewGraph)
 	return false;
 }
 
-void MainWindow::updateAssetDock()
+void EffectsPage::updateAssetDock()
 {
 	effects->clear();
 #if(EFFECT_BUILD_AS_LIB)
@@ -1362,13 +1362,13 @@ void MainWindow::updateAssetDock()
 }
 
 
-void MainWindow::setProject(Project *project)
+void EffectsPage::setProject(Project *project)
 {
 	mProject = project;
 	if (assetWidget) assetWidget->project = project;
 }
 
-void MainWindow::setSceneOpenProbe(std::function<bool()> probe)
+void EffectsPage::setSceneOpenProbe(std::function<bool()> probe)
 {
 	mSceneOpenProbe = probe;
 	if (presets) presets->sceneOpenProbe = probe;
@@ -1376,7 +1376,7 @@ void MainWindow::setSceneOpenProbe(std::function<bool()> probe)
 	if (assetWidget) assetWidget->sceneOpenProbe = probe;
 }
 
-void MainWindow::setAssetWidgetDatabase(Database * db)
+void EffectsPage::setAssetWidgetDatabase(Database * db)
 {
 #if(EFFECT_BUILD_AS_LIB)
 	TextureManager::getSingleton()->setDatabase(db);
@@ -1384,7 +1384,7 @@ void MainWindow::setAssetWidgetDatabase(Database * db)
 #endif
 }
 
-void MainWindow::renameShader()
+void EffectsPage::renameShader()
 {
 #if(EFFECT_BUILD_AS_LIB)
 	dataBase->renameAsset(currentProjectShader->data(MODEL_GUID_ROLE).toString(), currentProjectShader->data(Qt::DisplayRole).toString());
@@ -1399,7 +1399,7 @@ void MainWindow::renameShader()
 	oldName = currentProjectShader->data(Qt::DisplayRole).toString();
 }
 
-bool MainWindow::eventFilter(QObject * watched, QEvent * event)
+bool EffectsPage::eventFilter(QObject * watched, QEvent * event)
 {
 
 	if (watched == propertyListWidget) {
@@ -1446,7 +1446,7 @@ bool MainWindow::eventFilter(QObject * watched, QEvent * event)
 	return QObject::eventFilter(watched, event);
 }
 
-GraphNodeScene *MainWindow::createNewScene()
+GraphNodeScene *EffectsPage::createNewScene()
 {
     auto scene = new GraphNodeScene(this);
 	scene->setUndoRedoStack(stack);
@@ -1483,7 +1483,7 @@ GraphNodeScene *MainWindow::createNewScene()
     return scene;
 }
 
-void MainWindow::regenerateShader()
+void EffectsPage::regenerateShader()
 {
 	ShaderGenerator shaderGen;
 	shaderGen.generateShader(graph);
@@ -1504,7 +1504,7 @@ void MainWindow::regenerateShader()
 	schedulePreviewUpdate();
 }
 
-void MainWindow::setEnginePreview(IMaterialPreviewWidget *preview)
+void EffectsPage::setEnginePreview(IMaterialPreviewWidget *preview)
 {
 	enginePreview = preview;
 	if (!preview) return;
@@ -1518,12 +1518,12 @@ void MainWindow::setEnginePreview(IMaterialPreviewWidget *preview)
 	schedulePreviewUpdate();
 }
 
-void MainWindow::schedulePreviewUpdate()
+void EffectsPage::schedulePreviewUpdate()
 {
 	if (enginePreview && previewUpdateTimer) previewUpdateTimer->start();
 }
 
-void MainWindow::updateEnginePreviewMaterial()
+void EffectsPage::updateEnginePreviewMaterial()
 {
 	if (!enginePreview || !graph) return;
 	// CPU evaluation (Option B): unsupported nodes fall back to the material's
@@ -1532,7 +1532,7 @@ void MainWindow::updateEnginePreviewMaterial()
 	if (material) enginePreview->setPreviewMaterial(material);
 }
 
-QListWidgetItem * MainWindow::selectCorrectItemFromDrop(QString guid)
+QListWidgetItem * EffectsPage::selectCorrectItemFromDrop(QString guid)
 {
 
 	for (int i = 0; i < effects->count(); i++)
@@ -1555,7 +1555,7 @@ QListWidgetItem * MainWindow::selectCorrectItemFromDrop(QString guid)
     return nullptr;
 }
 
-int MainWindow::selectCorrectTabForItem(QString guid)
+int EffectsPage::selectCorrectTabForItem(QString guid)
 {
 	for (int i = 0; i < effects->count(); i++)
 	{
@@ -1571,14 +1571,14 @@ int MainWindow::selectCorrectTabForItem(QString guid)
 	return 0;
 }
 
-void MainWindow::updateMaterialThumbnail(QString shaderGuid, QString materialGuid)
+void EffectsPage::updateMaterialThumbnail(QString shaderGuid, QString materialGuid)
 {
 	auto assetThumbnails = dataBase->fetchAssetThumbnails({ shaderGuid });
 	auto assetThumbnail = assetThumbnails[0].thumbnail;
 	dataBase->updateAssetThumbnail(materialGuid, assetThumbnail);
 }
 
-void MainWindow::generateMaterialInProjectFromShader(QString guid)
+void EffectsPage::generateMaterialInProjectFromShader(QString guid)
 {
 	QJsonObject matDef; 
 	writeMaterial(matDef, guid);
@@ -1661,7 +1661,7 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
     dataBase->updateAssetAsset(guid, doc.toJson());
 }
 
-void MainWindow::updateMaterialFromShader(QString guid)
+void EffectsPage::updateMaterialFromShader(QString guid)
 {
 	bool tryas = true;
     QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
@@ -1709,7 +1709,7 @@ void MainWindow::updateMaterialFromShader(QString guid)
 
 }
 
-void MainWindow::writeMaterial(QJsonObject& matObj, QString guid)
+void EffectsPage::writeMaterial(QJsonObject& matObj, QString guid)
 {
 	auto name = dataBase->fetchAsset(guid).name;
 	matObj["name"] = name;
@@ -1718,7 +1718,7 @@ void MainWindow::writeMaterial(QJsonObject& matObj, QString guid)
 	matObj["values"] = writeMaterialValuesFromShader(guid);
 }
 
-QJsonObject MainWindow::writeMaterialValuesFromShader(QString guid)
+QJsonObject EffectsPage::writeMaterialValuesFromShader(QString guid)
 {
     QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
 	auto graphObj = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
@@ -1757,7 +1757,7 @@ QJsonObject MainWindow::writeMaterialValuesFromShader(QString guid)
 	return valuesObj;
 }
 
-void MainWindow::configureConnections()
+void EffectsPage::configureConnections()
 {
 #if(EFFECT_BUILD_AS_LIB)
 	connect(assetWidget, &ShaderAssetWidget::loadToGraph, [=](QListWidgetItem * item) {
@@ -1860,7 +1860,7 @@ void MainWindow::configureConnections()
 
 }
 
-void MainWindow::editingFinishedOnListItem()
+void EffectsPage::editingFinishedOnListItem()
 {
     QListWidgetItem *item = selectCorrectItemFromDrop(pressedShaderInfo.GUID);
     auto oldName = pressedShaderInfo.name;
@@ -1910,7 +1910,7 @@ void MainWindow::editingFinishedOnListItem()
 	pressedShaderInfo = shaderInfo();
 }
 
-void MainWindow::addMenuToSceneWidget()
+void EffectsPage::addMenuToSceneWidget()
 {
 	QMenu *modelMenu = new QMenu("Model");
 	QMenu *backgroundMenu = new QMenu("Background");
