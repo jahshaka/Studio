@@ -20,6 +20,7 @@
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/particle.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "bridge/scenemirror.h"
 
 using namespace jahshaka::engine;
@@ -56,8 +57,7 @@ int main(int argc, char **argv)
     CHECK(view && target, "offscreen view + engine scene");
     if (!view || !target) return 1;
     view->setScene(target);
-    view->setCameraPosition(Vec3(0, 0.8f, 6.0f));
-    view->lookAt(Vec3(0, 0.8f, 0));
+    enginetest::testCameraLookAt(view, Vec3(0, 0.8f, 6.0f), Vec3(0, 0.8f, 0));
     Image img;
 
     // ---- Part 1: the engine verbs, no document ----

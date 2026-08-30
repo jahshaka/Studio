@@ -8,6 +8,7 @@
 //
 // Separate executable on purpose: the main suite shares one Engine per process.
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -37,11 +38,10 @@ static bool runOnce(int iteration) {
     if (!v || !s) return false;
     v->setScene(s);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
-    NodeId cube = s->addTestCube(Colour(0.9f, 0.3f, 0.1f), 0.2f, 0.6f);
-    s->setNodeScale(cube, Vec3(1.2f, 1.2f, 1.2f));
-    v->setCameraPosition(Vec3(2.2f, 1.8f, 2.6f));
-    v->lookAt(Vec3(0, 0, 0));
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    NodeId cube = enginetest::addTestCube(s, Colour(0.9f, 0.3f, 0.1f), 0.2f, 0.6f);
+    enginetest::setNodeScale(s, cube, Vec3(1.2f, 1.2f, 1.2f));
+    enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
     for (int i = 0; i < 3; ++i) e->renderOneFrame();
 
     Image img;

@@ -71,6 +71,10 @@ inline NodeId addTestCube(Scene *s, const Colour &albedo, float metalness, float
     p.roughness = roughness;
     const MaterialId mat = s->createPbrMaterial(p);
     if (!mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
+    // Start from a clean pose: the registry is keyed by Scene*, and a destroyed
+    // Engine's Scene address can be reused by the next one (test_engine_recreate),
+    // which would otherwise leave a stale transform under the same NodeId.
+    poseRegistry()[s][node] = NodePose{};
     return node;
 }
 

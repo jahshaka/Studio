@@ -29,6 +29,7 @@
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "bridge/scenemirror.h"
 
 using namespace jahshaka::engine;
@@ -66,8 +67,7 @@ int main(int argc, char **argv)
     if (!view || !target) return 1;
     view->setScene(target);
     target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    view->setCameraPosition(Vec3(2.2f, 1.8f, 2.6f));
-    view->lookAt(Vec3(0, 0, 0));
+    enginetest::testCameraLookAt(view, Vec3(2.2f, 1.8f, 2.6f), Vec3(0, 0, 0));
 
     // ---- the document ----
     auto doc = iris::Scene::create();

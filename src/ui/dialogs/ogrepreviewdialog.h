@@ -30,6 +30,10 @@ private:
     jahshaka::engine::Scene *mEffectsScene = nullptr;
     jahshaka::engine::NodeId mCube  = 0;
     jahshaka::engine::NodeId mCube2 = 0;
+    // Spin accumulators: the engine takes absolute transforms (setNodeTransform),
+    // so the per-tick incremental rotation is composed here.
+    jahshaka::engine::Quat mCubeRot;
+    jahshaka::engine::Quat mCube2Rot;
     EngineViewWidget *mEditorView  = nullptr;
     EngineViewWidget *mEffectsView = nullptr;
     QLabel *mStatus = nullptr;

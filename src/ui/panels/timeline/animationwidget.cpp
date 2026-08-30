@@ -188,9 +188,21 @@ void AnimationWidget::buildPropertiesMenu()
     auto menu = new QMenu();
     int index = 0;
     for (auto prop : nodeProperties) {
+        const int propIndex = index++;
+        // Only the three types createPropertyAnim() and addPropertyKey() can
+        // build a keyframe track for. The document nodes reflect bool/int/string
+        // fields too (name, visible, lightType, meshPath...) and choosing one
+        // here would hit createPropertyAnim's Q_ASSERT(false) default branch and
+        // then use an uninitialised PropertyAnim*. Keeps the menu exactly what it
+        // listed before the reflection was widened.
+        if (prop->type != iris::PropertyType::Float &&
+            prop->type != iris::PropertyType::Vec3 &&
+            prop->type != iris::PropertyType::Color)
+            continue;
+
         auto action = new QAction();
         action->setText(prop->name);
-        action->setData(index++);
+        action->setData(propIndex);
 
         menu->addAction(action);
     }

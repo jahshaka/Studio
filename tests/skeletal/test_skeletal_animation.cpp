@@ -30,6 +30,7 @@
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 #include "bridge/scenemirror.h"
 
 using namespace jahshaka::engine;
@@ -107,8 +108,7 @@ int main(int argc, char **argv)
         View *view = engine->createOffscreenView("dyn", 96, 96, Colour(0, 0, 1));
         Scene *s = engine->createScene("dyn");
         view->setScene(s);
-        view->setCameraPosition(Vec3(0, 0, 5));
-        view->lookAt(Vec3(0, 0, 0));
+        enginetest::testCameraLookAt(view, Vec3(0, 0, 5), Vec3(0, 0, 0));
 
         MeshData quad;
         quad.positions = { -1,-1,0,  1,-1,0,  1,1,0,  -1,1,0 };

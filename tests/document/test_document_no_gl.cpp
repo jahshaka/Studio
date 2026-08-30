@@ -11,6 +11,9 @@
 #include <QGuiApplication>
 #include <QOpenGLContext>
 #include <QImage>
+#include <QSet>
+#include <QStringList>
+#include <QVariant>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -21,6 +24,10 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/viewernode.h"
+#include "irisgl/core/properties/property.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/texture2d.h"
@@ -130,6 +137,126 @@ int main(int argc, char **argv)
         env->stopPhysics();
         CHECK(!env->isSimulating(), "stop: simulation flag cleared");
         physScene.reset(); body.reset();
+    }
+
+    // --- Reflection round-trip (IRISGL_ARCHITECTURE_AUDIT 3.1): every field the
+    // node types newly reflect must be reachable through all three methods —
+    // advertised by getProperties(), written by setPropertyValue(), read back
+    // unchanged by getPropertyValue(). Document-only; no engine, no GL.
+    {
+        auto names = [](iris::SceneNodePtr n) {
+            QSet<QString> out;
+            const auto props = n->getProperties();
+            for (auto *p : props) { out.insert(p->name); delete p; }
+            return out;
+        };
+        auto advertises = [&](iris::SceneNodePtr n, const QStringList &keys, const QString &what) {
+            const QSet<QString> have = names(n);
+            QStringList missing;
+            for (const auto &k : keys) if (!have.contains(k)) missing << k;
+            CHECK(missing.isEmpty(),
+                  qPrintable(QString("%1: getProperties() advertises %2 (missing: %3)")
+                                 .arg(what).arg(keys.join(", ")).arg(missing.join(", "))));
+        };
+        auto roundTrip = [](iris::SceneNodePtr n, const QString &key, const QVariant &v,
+                            const QString &what) {
+            const bool set = n->setPropertyValue(key, v);
+            const QVariant back = n->getPropertyValue(key);
+            CHECK(set && back.isValid() && back.toString() == v.toString(),
+                  qPrintable(QString("%1: %2 round-trips (wrote %3, read %4)")
+                                 .arg(what).arg(key).arg(v.toString()).arg(back.toString())));
+        };
+        auto readOnly = [](iris::SceneNodePtr n, const QString &key, const QVariant &v,
+                           const QString &what) {
+            const QVariant before = n->getPropertyValue(key);
+            const bool set = n->setPropertyValue(key, v);
+            CHECK(!set && n->getPropertyValue(key).isValid() &&
+                      n->getPropertyValue(key).toString() == before.toString(),
+                  qPrintable(QString("%1: %2 is readable but refuses writes").arg(what).arg(key)));
+        };
+
+        // SceneNode
+        auto plain = iris::SceneNode::create();
+        advertises(plain, { "name", "visible", "castShadow", "pickable" }, "SceneNode");
+        roundTrip(plain, "name", QString("renamed"), "SceneNode");
+        roundTrip(plain, "visible", false, "SceneNode");
+        roundTrip(plain, "castShadow", false, "SceneNode");
+        roundTrip(plain, "pickable", false, "SceneNode");
+        CHECK(!plain->getPropertyValue("noSuchProperty").isValid(),
+              "SceneNode: unknown property reads as an invalid QVariant");
+        CHECK(!plain->setPropertyValue("noSuchProperty", 1),
+              "SceneNode: unknown property refuses writes");
+
+        // LightNode
+        auto refLight = iris::LightNode::create();
+        advertises(refLight, { "lightType", "shadowColor", "shadowAlpha", "shadowMapType",
+                               "shadowMapResolution", "shadowBias", "doubleSided",
+                               "accurate", "iconSize", "name", "visible" }, "LightNode");
+        roundTrip(refLight, "lightType", int(iris::LightType::Spot), "LightNode");
+        roundTrip(refLight, "shadowAlpha", 0.25f, "LightNode");
+        roundTrip(refLight, "shadowMapType", int(iris::ShadowMapType::VerySoft), "LightNode");
+        roundTrip(refLight, "shadowMapResolution", 1024, "LightNode");
+        roundTrip(refLight, "shadowBias", 0.05f, "LightNode");
+        roundTrip(refLight, "doubleSided", true, "LightNode");
+        roundTrip(refLight, "accurate", true, "LightNode");
+        roundTrip(refLight, "iconSize", 1.5f, "LightNode");
+        refLight->setPropertyValue("shadowColor", QColor(10, 20, 30));
+        CHECK(refLight->getPropertyValue("shadowColor").value<QColor>() == QColor(10, 20, 30),
+              "LightNode: shadowColor round-trips");
+        CHECK(refLight->getPropertyValue("intensity").isValid(),
+              "LightNode: the pre-existing keys still resolve");
+
+        // MeshNode — meshPath/meshIndex are deliberately read-only
+        auto refMesh = iris::MeshNode::create();
+        refMesh->setMesh(QString(":assets/models/sky.obj"));
+        advertises(refMesh, { "meshPath", "meshIndex", "faceCullingMode", "name" }, "MeshNode");
+        roundTrip(refMesh, "faceCullingMode", int(iris::FaceCullingMode::Front), "MeshNode");
+        readOnly(refMesh, "meshPath", QString("/somewhere/else.obj"), "MeshNode");
+        readOnly(refMesh, "meshIndex", 7, "MeshNode");
+        CHECK(refMesh->getPropertyValue("meshPath").toString() == QString(":assets/models/sky.obj"),
+              "MeshNode: meshPath reads the loaded path");
+
+        // CameraNode
+        auto refCam = iris::CameraNode::create();
+        advertises(refCam, { "aspectRatio", "angle", "nearClip", "farClip", "orthoSize",
+                             "projMode", "vrViewScale" }, "CameraNode");
+        roundTrip(refCam, "aspectRatio", 1.5f, "CameraNode");
+        roundTrip(refCam, "angle", 60.0f, "CameraNode");
+        roundTrip(refCam, "nearClip", 0.25f, "CameraNode");
+        roundTrip(refCam, "farClip", 250.0f, "CameraNode");
+        roundTrip(refCam, "orthoSize", 4.0f, "CameraNode");
+        roundTrip(refCam, "vrViewScale", 3.0f, "CameraNode");
+        roundTrip(refCam, "projMode", int(iris::CameraProjection::Orthogonal), "CameraNode");
+        CHECK(refCam->isPerspective == false,
+              "CameraNode: setting projMode keeps isPerspective in lock-step");
+
+        // ParticleSystemNode — exactly the keys SceneWriter::writeParticleData writes
+        auto refParticles = iris::ParticleSystemNode::create();
+        advertises(refParticles, { "particlesPerSecond", "particleScale", "dissipate",
+                                   "dissipateInv", "gravityComplement", "randomRotation",
+                                   "blendMode", "lifeLength", "speed", "texture", "visible" },
+                   "ParticleSystemNode");
+        roundTrip(refParticles, "particlesPerSecond", 48.0f, "ParticleSystemNode");
+        roundTrip(refParticles, "particleScale", 2.0f, "ParticleSystemNode");
+        roundTrip(refParticles, "gravityComplement", 0.5f, "ParticleSystemNode");
+        roundTrip(refParticles, "lifeLength", 3.0f, "ParticleSystemNode");
+        roundTrip(refParticles, "speed", 7.0f, "ParticleSystemNode");
+        roundTrip(refParticles, "dissipate", false, "ParticleSystemNode");
+        roundTrip(refParticles, "dissipateInv", true, "ParticleSystemNode");
+        roundTrip(refParticles, "randomRotation", false, "ParticleSystemNode");
+        roundTrip(refParticles, "blendMode", false, "ParticleSystemNode");
+        readOnly(refParticles, "texture", QString("/some/other.png"), "ParticleSystemNode");
+
+        // ViewerNode
+        auto refViewer = iris::ViewerNode::create();
+        advertises(refViewer, { "viewScale", "activeCharacterController" }, "ViewerNode");
+        roundTrip(refViewer, "viewScale", 3.5f, "ViewerNode");
+        roundTrip(refViewer, "activeCharacterController", true, "ViewerNode");
+        CHECK(qFuzzyCompare(refViewer->getLocalScale().x(), 3.5f),
+              "ViewerNode: viewScale also drives the node scale (its own setter)");
+
+        plain.reset(); refLight.reset(); refMesh.reset(); refCam.reset();
+        refParticles.reset(); refViewer.reset();
     }
 
     // --- Teardown with no GL must not crash either

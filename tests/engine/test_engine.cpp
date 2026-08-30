@@ -4,6 +4,7 @@
 // through createOffscreenView + readPixels; nothing here opens a window.
 // Framework-free on purpose: nothing to fetch, nothing to install.
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <algorithm>
 #include <cmath>
@@ -105,14 +106,13 @@ Px corner(const Image &img) { return px(img, 2, 2); }
 /// The spike's scene: lit metallic cube, camera looking at it from (2.2,1.8,2.6).
 NodeId populate(Scene *s, const Colour &albedo) {
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
-    NodeId cube = s->addTestCube(albedo, 0.2f, 0.6f);
-    s->setNodeScale(cube, Vec3(1.2f, 1.2f, 1.2f));
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    NodeId cube = enginetest::addTestCube(s, albedo, 0.2f, 0.6f);
+    enginetest::setNodeScale(s, cube, Vec3(1.2f, 1.2f, 1.2f));
     return cube;
 }
 void aim(View *v) {
-    v->setCameraPosition(Vec3(2.2f, 1.8f, 2.6f));
-    v->lookAt(Vec3(0.0f, 0.0f, 0.0f));
+    enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
 }
 void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
@@ -257,7 +257,7 @@ void remove_node_then_render() {
     CHECK_MSG(near(c, kBlue), "centre is the background once the cube is gone");
 
     // Ids are never reused.
-    const NodeId again = s->addTestCube(kOrange, 0.2f, 0.6f);
+    const NodeId again = enginetest::addTestCube(s, kOrange, 0.2f, 0.6f);
     CHECK(again != cube && again != 0);
 }
 
@@ -629,7 +629,7 @@ void mesh_from_buffers_renders() {
     Scene *s = fx.scene("mesh-scene");            REQUIRE(s);
     v->setScene(s); aim(v);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     MeshId mesh = s->createMesh(unitCubeData());
     CHECK_MSG(mesh != 0, "%s", s == nullptr ? "" : fx.e->lastError().c_str());
     PbrParams p; p.albedo = kOrange; p.roughness = 0.6f;
@@ -658,7 +658,7 @@ void hierarchy_transform_propagates() {
     Scene *s = fx.scene("hier-scene");            REQUIRE(s);
     v->setScene(s); aim(v);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     MeshId mesh = s->createMesh(unitCubeData());
     PbrParams p; p.albedo = kOrange;
     MaterialId mat = s->createPbrMaterial(p);
@@ -699,7 +699,7 @@ void material_and_mesh_lifetime() {
     Scene *s = fx.scene("mat-scene");            REQUIRE(s);
     v->setScene(s); aim(v);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     MeshId mesh = s->createMesh(unitCubeData());
     PbrParams p; p.albedo = kOrange;
     MaterialId mat = s->createPbrMaterial(p);
@@ -788,8 +788,7 @@ void area_light_lights_the_wall() {
     View *v = fx.view("area-view", 96, 96, kBlue); REQUIRE(v);
     Scene *s = fx.scene("area-scene");            REQUIRE(s);
     v->setScene(s);
-    v->setCameraPosition(Vec3(0, 0, 5));
-    v->lookAt(Vec3(0, 0, 0));
+    enginetest::testCameraLookAt(v, Vec3(0, 0, 5), Vec3(0, 0, 0));
     s->setAmbient(Colour(0.02f, 0.02f, 0.02f), Colour(0.02f, 0.02f, 0.02f));
     MeshId mesh = s->createMesh(unitCubeData());
     PbrParams p; p.albedo = Colour(0.9f, 0.9f, 0.9f); p.roughness = 0.8f;
@@ -843,7 +842,7 @@ void overlay_lines_draw_on_top() {
     Scene *s = fx.scene("overlay-scene");            REQUIRE(s);
     v->setScene(s); aim(v);
     s->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     MeshId cubeMesh = s->createMesh(unitCubeData());
     PbrParams p; p.albedo = kOrange;
     MaterialId pbr = s->createPbrMaterial(p);
@@ -911,7 +910,7 @@ void pbr_alpha_blend_mixes_with_background() {
     Scene *s = fx.scene("blend-scene");            REQUIRE(s);
     v->setScene(s); aim(v);
     s->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     MeshId mesh = s->createMesh(unitCubeData());
     PbrParams p; p.albedo = kOrange; p.roughness = 0.8f;
     MaterialId mat = s->createPbrMaterial(p);
@@ -949,7 +948,7 @@ void pbr_alpha_cutout_discards_below_cutoff() {
     Scene *s = fx.scene("cutout-scene");            REQUIRE(s);
     v->setScene(s); aim(v);
     s->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
-    s->addDirectionalLight(Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
     MeshId mesh = s->createMesh(unitCubeData());
     PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 0.8f;
     MaterialId mat = s->createPbrMaterial(p);
@@ -1023,10 +1022,10 @@ void fog_fades_distant_surfaces_to_fog_colour() {
     // ±0.5 test cube): its faces fill every pixel around the near cube. Measured
     // eye distance of that backdrop is >= ~8.2 (the cube's near corner passes
     // close to the camera), so with fogEnd = 7 it is fully fogged everywhere.
-    NodeId farNode = s->addTestCube(kCyan, 0.0f, 0.6f);
+    NodeId farNode = enginetest::addTestCube(s, kCyan, 0.0f, 0.6f);
     REQUIRE(farNode != 0);
-    s->setNodePosition(farNode, Vec3(-28.6f, -23.4f, -33.8f));
-    s->setNodeScale(farNode, Vec3(60.0f, 60.0f, 60.0f));
+    enginetest::setNodePosition(s, farNode, Vec3(-28.6f, -23.4f, -33.8f));
+    enginetest::setNodeScale(s, farNode, Vec3(60.0f, 60.0f, 60.0f));
 
     const Colour kMagenta(1.0f, 0.0f, 1.0f);   // 0/1 channels: sRGB-invariant
     Image img;

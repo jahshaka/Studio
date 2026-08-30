@@ -10,6 +10,7 @@
 //   3. rotating the light away from the wall + refresh removes the bounce;
 //   4. the unimplemented VCT mode is accepted but renders exactly like off.
 #include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
 
 #include <cmath>
 #include <cstdio>
@@ -49,14 +50,14 @@ int main()
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
 
     // Floor: white, rough, spanning x/z around the origin.
-    const NodeId floor = s->addTestCube(Colour(1.0f, 1.0f, 1.0f), 0.0f, 0.9f);
-    s->setNodePosition(floor, Vec3(0.0f, -0.05f, 0.0f));
-    s->setNodeScale(floor, Vec3(14.0f, 0.1f, 14.0f));
+    const NodeId floor = enginetest::addTestCube(s, Colour(1.0f, 1.0f, 1.0f), 0.0f, 0.9f);
+    enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.05f, 0.0f));
+    enginetest::setNodeScale(s, floor, Vec3(14.0f, 0.1f, 14.0f));
 
     // Wall: strongly red, facing +Z, behind the floor's far edge.
-    const NodeId wall = s->addTestCube(Colour(1.0f, 0.05f, 0.05f), 0.0f, 0.9f);
-    s->setNodePosition(wall, Vec3(0.0f, 3.0f, -3.0f));
-    s->setNodeScale(wall, Vec3(12.0f, 6.0f, 0.3f));
+    const NodeId wall = enginetest::addTestCube(s, Colour(1.0f, 0.05f, 0.05f), 0.0f, 0.9f);
+    enginetest::setNodePosition(s, wall, Vec3(0.0f, 3.0f, -3.0f));
+    enginetest::setNodeScale(s, wall, Vec3(12.0f, 6.0f, 0.3f));
 
     // Directional light. Engine convention: lights shine down the node's -Y, so
     // a +80 degree pitch about X sends it towards -Z (at the wall), dipping just
@@ -74,8 +75,7 @@ int main()
 
     // Camera: above the floor in front of the wall, looking down at the patch
     // of floor the bounce should tint.
-    view->setCameraPosition(Vec3(0.0f, 4.0f, 6.0f));
-    view->lookAt(Vec3(0.0f, 0.0f, -0.5f));
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 4.0f, 6.0f), Vec3(0.0f, 0.0f, -0.5f));
 
     render(engine.get());
     Image img;
