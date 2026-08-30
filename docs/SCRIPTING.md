@@ -90,8 +90,15 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 
 | verb | needs | description |
 |---|---|---|
-| `assets.list({scope: 'store'\|'project', type}) -> [{guid, name, type}]` | document | Store assets (default) or the open project's assets, optionally filtered by type name. |
+| `assets.list({scope: 'store'\|'project', type}) -> [{guid, name, type, drawer}]` | document | Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized). |
 | `assets.import(path) -> guid` | document | Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable. |
+| `assets.importFile(path, drawerId?) -> guid` | document | Imports any library-supported file (models, images, audio) into the asset store, optionally filed in a drawer. Images/audio are headless-safe. NOT undoable. |
+| `assets.drawers() -> [{id, name, parent}]` | document | The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0. |
+| `assets.createDrawer(name, parentId?) -> id` | document | Creates a drawer, optionally nested under an existing one (default: top level). Returns the new drawer's id. |
+| `assets.renameDrawer(id, name) -> bool` | document | Renames a drawer. The virtual root (-1) is not renamable. |
+| `assets.deleteDrawer(id) -> bool` | document | Deletes a drawer and its sub-drawers; the subtree's assets move to Uncategorized. Drawer 0 and the root are refused. |
+| `assets.moveDrawer(id, parentId) -> bool` | document | Reparents a drawer (parentId -1 = top level). Cycles are refused. |
+| `assets.moveToDrawer(guid, id) -> bool` | document | Files a store asset in a drawer (0 = Uncategorized). |
 | `assets.addToProject(storeGuid) -> guid` | document | Copies a store asset (files + DB rows + dependencies, fresh guids) into the open project; returns the project-side guid. NOT undoable. |
 | `assets.addToScene(guid, {position}) -> nodeId` | document | Instantiates a project object asset into the scene (undoable, like a drag from the asset browser). |
 | `assets.builtins() -> [{guid, name, kind}]` | document | The reserved built-ins: primitives, materials and shaders with their reserved guids. Guids collide across kinds — always pair guid with kind. |

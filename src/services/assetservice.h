@@ -38,6 +38,14 @@ public:
         return AssetImporter::importMesh(filePath, db, project);
     }
 
+    /// Imports any library-supported file (models, images, audio) into the
+    /// global asset store, optionally filed in a drawer (ASSET_DRAWERS_SPEC
+    /// §3). Images/audio are headless-safe.
+    AssetImporter::Result importFile(const QString &filePath, int drawerId = -1)
+    {
+        return AssetImporter::importFile(filePath, db, project, drawerId);
+    }
+
 private:
     Database *db;
     Project *project;   // the live Project (Phase 4: was Globals::project)

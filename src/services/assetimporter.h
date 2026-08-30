@@ -49,6 +49,15 @@ public:
     /// Project whose guid stamps the created asset rows (Phase 4: was the
     /// Globals::project static).
     static Result importMesh(const QString &filePath, Database *db, Project *project);
+
+    /// Imports any library-supported file into the global asset store: ONE
+    /// dispatch keyed on ModelTypes (ASSET_DRAWERS_SPEC §3). Images (Texture)
+    /// and audio (Music) get an AssetsView row at the file's guid — thumbnail
+    /// from the image itself / the music icon — and are headless-safe; meshes
+    /// delegate to importMesh. `drawerId` files the asset (> 0; else it stays
+    /// in Uncategorized). Returns the library guid in Result::objectGuid.
+    static Result importFile(const QString &filePath, Database *db, Project *project,
+                             int drawerId = -1);
 };
 
 #endif // SERVICES_ASSETIMPORTER_H

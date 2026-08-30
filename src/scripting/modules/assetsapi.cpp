@@ -88,11 +88,32 @@ QString storeFolderFor(const QString &guid)
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project', type}) -> [{guid, name, type}]",
-          "Store assets (default) or the open project's assets, optionally filtered by type name.",
+        { "list", "assets.list({scope: 'store'|'project', type}) -> [{guid, name, type, drawer}]",
+          "Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized).",
           Needs::Document },
         { "import", "assets.import(path) -> guid",
           "Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable.",
+          Needs::Document },
+        { "importFile", "assets.importFile(path, drawerId?) -> guid",
+          "Imports any library-supported file (models, images, audio) into the asset store, optionally filed in a drawer. Images/audio are headless-safe. NOT undoable.",
+          Needs::Document },
+        { "drawers", "assets.drawers() -> [{id, name, parent}]",
+          "The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0.",
+          Needs::Document },
+        { "createDrawer", "assets.createDrawer(name, parentId?) -> id",
+          "Creates a drawer, optionally nested under an existing one (default: top level). Returns the new drawer's id.",
+          Needs::Document },
+        { "renameDrawer", "assets.renameDrawer(id, name) -> bool",
+          "Renames a drawer. The virtual root (-1) is not renamable.",
+          Needs::Document },
+        { "deleteDrawer", "assets.deleteDrawer(id) -> bool",
+          "Deletes a drawer and its sub-drawers; the subtree's assets move to Uncategorized. Drawer 0 and the root are refused.",
+          Needs::Document },
+        { "moveDrawer", "assets.moveDrawer(id, parentId) -> bool",
+          "Reparents a drawer (parentId -1 = top level). Cycles are refused.",
+          Needs::Document },
+        { "moveToDrawer", "assets.moveToDrawer(guid, id) -> bool",
+          "Files a store asset in a drawer (0 = Uncategorized).",
           Needs::Document },
         { "addToProject", "assets.addToProject(storeGuid) -> guid",
           "Copies a store asset (files + DB rows + dependencies, fresh guids) into the open project; returns the project-side guid. NOT undoable.",
@@ -142,7 +163,8 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         if (typeFilter >= 0 && record.type != typeFilter) continue;
         out.append(QVariantMap{ { "guid", record.guid },
                                 { "name", record.name },
-                                { "type", typeName(record.type) } });
+                                { "type", typeName(record.type) },
+                                { "drawer", record.collection } });
     }
     return out;
 }
@@ -158,6 +180,84 @@ QString AssetsApi::import(const QString &path)
     // Best effort thumbnail when the engine is up; headless-doc runs skip it.
     if (host.isEngineReady()) refreshThumbnail(result.objectGuid);
     return result.objectGuid;
+}
+
+QString AssetsApi::importFile(const QString &path, int drawerId)
+{
+    if (!host.services || !host.services->assets) { fail("assets: not available in this session"); return QString(); }
+    const auto result = host.services->assets->importFile(path, drawerId);
+    if (!result.ok()) {
+        fail(QStringLiteral("assets.importFile: %1").arg(result.error));
+        return QString();
+    }
+    if (!result.error.isEmpty()) {   // imported, but the drawer filing failed
+        fail(QStringLiteral("assets.importFile: %1").arg(result.error));
+        return QString();
+    }
+    // Meshes get their preview render when the engine is up (like assets.import).
+    if (host.isEngineReady() && host.db
+        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
+        refreshThumbnail(result.objectGuid);
+    return result.objectGuid;
+}
+
+QVariantList AssetsApi::drawers()
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    for (const auto &coll : host.db->fetchCollections())
+        out.append(QVariantMap{ { "id", coll.id },
+                                { "name", coll.name },
+                                { "parent", coll.parent } });
+    return out;
+}
+
+int AssetsApi::createDrawer(const QString &name, int parentId)
+{
+    if (!host.db) { fail("assets: not available in this session"); return -1; }
+    if (name.trimmed().isEmpty()) { fail("assets.createDrawer: the name is empty"); return -1; }
+    const int id = host.db->createCollection(name.trimmed(), parentId);
+    if (id < 0) fail(QStringLiteral("assets.createDrawer: no drawer with id %1 to nest under").arg(parentId));
+    return id;
+}
+
+bool AssetsApi::renameDrawer(int id, const QString &name)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (name.trimmed().isEmpty()) return fail("assets.renameDrawer: the name is empty");
+    if (id < 0 || host.db->fetchCollectionSubtree(id).isEmpty())
+        return fail(QStringLiteral("assets.renameDrawer: no drawer with id %1").arg(id));
+    return host.db->renameCollection(id, name.trimmed());
+}
+
+bool AssetsApi::deleteDrawer(int id)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (id <= 0)
+        return fail("assets.deleteDrawer: the root and Uncategorized are not deletable");
+    if (host.db->fetchCollectionSubtree(id).isEmpty())
+        return fail(QStringLiteral("assets.deleteDrawer: no drawer with id %1").arg(id));
+    return host.db->deleteCollection(id);
+}
+
+bool AssetsApi::moveDrawer(int id, int parentId)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (!host.db->setCollectionParent(id, parentId))
+        return fail(QStringLiteral("assets.moveDrawer: cannot move drawer %1 under %2 "
+                                   "(unknown drawer, or the move would create a cycle)")
+                        .arg(id).arg(parentId));
+    return true;
+}
+
+bool AssetsApi::moveToDrawer(const QString &guid, int id)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (host.db->fetchAsset(guid).guid.isEmpty())
+        return fail(QStringLiteral("assets.moveToDrawer: no asset with guid '%1'").arg(guid));
+    if (id != 0 && host.db->fetchCollectionSubtree(id).isEmpty())
+        return fail(QStringLiteral("assets.moveToDrawer: no drawer with id %1").arg(id));
+    return host.db->switchAssetCollection(id, guid);
 }
 
 QString AssetsApi::addToProject(const QString &guid)

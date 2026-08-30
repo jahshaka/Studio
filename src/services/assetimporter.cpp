@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
+#include "services/thumbnailmanager.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
@@ -152,5 +153,77 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     result.objectGuid = mainGuid;
     result.meshGuid = meshGuid;
     result.node = node;
+    return result;
+}
+
+AssetImporter::Result AssetImporter::importFile(const QString &filePath, Database *db,
+                                                Project *project, int drawerId)
+{
+    Result result;
+    if (!db) { result.error = "no database"; return result; }
+
+    const QFileInfo sourceInfo(filePath);
+    if (!sourceInfo.exists() || !sourceInfo.isFile()) {
+        result.error = QStringLiteral("no such file '%1'").arg(filePath);
+        return result;
+    }
+
+    // THE per-type import dispatch (ASSET_DRAWERS_SPEC §3): new library types
+    // (Video, …) are one case here, not a new code path.
+    const ModelTypes type = AssetHelper::getAssetTypeFromExtension(sourceInfo.suffix().toLower());
+    switch (type) {
+    case ModelTypes::Mesh:
+        result = importMesh(filePath, db, project);
+        break;
+
+    case ModelTypes::Texture:
+    case ModelTypes::Music: {
+        // One row at the file's guid, view_filter AssetsView — a first-class
+        // library asset, not the Editor-filtered ghost the old path made.
+        const QString guid = GUIDManager::generateGUID();
+        const QString storeRoot = IrisUtils::join(
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore");
+        const QString assetFolder = QDir(storeRoot).filePath(guid);
+        QDir().mkpath(assetFolder);
+
+        const QString copied = IrisUtils::join(assetFolder, sourceInfo.fileName());
+        if (!QFile::copy(filePath, copied)) {
+            result.error = QStringLiteral("could not copy '%1' into the asset store").arg(filePath);
+            return result;
+        }
+
+        // Tile thumbnail: the image itself, or the music icon (waveforms later).
+        QPixmap thumbnail;
+        if (type == ModelTypes::Texture) {
+            auto thumb = ThumbnailManager::createThumbnail(copied, 256, 256);
+            if (thumb && thumb->thumb) thumbnail = QPixmap::fromImage(*thumb->thumb);
+        }
+        else {
+            thumbnail = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+        }
+
+        db->createAssetEntry(guid, sourceInfo.fileName(), static_cast<int>(type),
+                             QString(), project ? project->getProjectGuid() : QString(),
+                             QString(), QString(), AssetHelper::makeBlobFromPixmap(thumbnail),
+                             QByteArray(), QByteArray(), QByteArray(),
+                             AssetViewFilter::AssetsView);
+        result.objectGuid = guid;
+        break;
+    }
+
+    default:
+        result.error = QStringLiteral("'%1' is not an importable library file "
+                                      "(models, images or audio)").arg(sourceInfo.fileName());
+        return result;
+    }
+
+    // File it in the requested drawer; rows default to Uncategorized (0).
+    if (result.ok() && drawerId > 0) {
+        if (db->fetchCollectionSubtree(drawerId).isEmpty())
+            result.error = QStringLiteral("imported, but drawer %1 does not exist").arg(drawerId);
+        else
+            db->switchAssetCollection(drawerId, result.objectGuid);
+    }
+
     return result;
 }

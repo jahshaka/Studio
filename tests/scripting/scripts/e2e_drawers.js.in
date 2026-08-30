@@ -1,0 +1,89 @@
+// scripting.e2e.drawers — ASSET_DRAWERS_SPEC.md §4/§5 end-to-end proof.
+//
+// Runs the real app binary with --script --headless (every drawer verb is a
+// document verb) and HOME redirected to a scratch dir — a fresh JahLibrary.db,
+// never the user's. Round-trips the drawer verbs and proves importFile makes
+// first-class AssetsView library rows for images and audio.
+// Throwing exits non-zero.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function drawerById(id) {
+    var all = assets.drawers();
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+}
+function assetByGuid(guid) {
+    var all = assets.list({ scope: "store" });
+    for (var i = 0; i < all.length; i++) if (all[i].guid === guid) return all[i];
+    return null;
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+// ---- the seeded state ----
+var seeded = drawerById(0);
+assert(seeded !== null && seeded.parent === -1, "Uncategorized (drawer 0) exists at top level");
+
+// ---- drawer CRUD round-trip ----
+// unique names: the scratch HOME (and its DB) persists across ctest reruns
+var stamp = Date.now();
+var props = assets.createDrawer("Props " + stamp);
+assert(props > 0, "assets.createDrawer -> " + props);
+var weapons = assets.createDrawer("Weapons " + stamp, props);
+assert(weapons > 0, "assets.createDrawer nested -> " + weapons);
+assert(drawerById(weapons).parent === props, "nested drawer lists its parent");
+
+assert(assets.renameDrawer(weapons, "Weaponry " + stamp), "assets.renameDrawer");
+assert(drawerById(weapons).name === "Weaponry " + stamp, "rename round-trips");
+
+// moves + cycle rejection
+var scenery = assets.createDrawer("Scenery " + stamp);
+assert(assets.moveDrawer(weapons, scenery), "assets.moveDrawer reparents");
+assert(drawerById(weapons).parent === scenery, "move round-trips");
+assert(assets.moveDrawer(weapons, props), "move back");
+mustThrow(function () { assets.moveDrawer(props, weapons); },
+          "cycle move throws (drawer under its own child)");
+mustThrow(function () { assets.moveDrawer(props, props); }, "self-parent throws");
+mustThrow(function () { assets.deleteDrawer(0); }, "deleting Uncategorized throws");
+mustThrow(function () { assets.renameDrawer(-1, "Nope"); }, "renaming the root throws");
+mustThrow(function () { assets.createDrawer("Orphan", 424242); },
+          "creating under an unknown drawer throws");
+
+// ---- importFile: images and audio become real library rows ----
+var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(png.length > 10, "assets.importFile(png) -> " + png);
+var pngRow = assetByGuid(png);
+assert(pngRow !== null, "png row is in the AssetsView listing (not a ghost)");
+assert(pngRow.type === "texture", "png imported as texture");
+assert(pngRow.drawer === 0, "png defaults to Uncategorized");
+
+var wav = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav", weapons);
+assert(wav.length > 10, "assets.importFile(wav, drawer) -> " + wav);
+var wavRow = assetByGuid(wav);
+assert(wavRow !== null, "wav row is in the AssetsView listing");
+assert(wavRow.type === "music", "wav imported as music");
+assert(wavRow.drawer === weapons, "wav filed straight into the drawer");
+
+mustThrow(function () { assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/no_such.png"); },
+          "importFile of a missing file throws");
+
+// ---- moveToDrawer ----
+assert(assets.moveToDrawer(png, weapons), "assets.moveToDrawer");
+assert(assetByGuid(png).drawer === weapons, "moveToDrawer round-trips");
+mustThrow(function () { assets.moveToDrawer(png, 424242); }, "move to unknown drawer throws");
+mustThrow(function () { assets.moveToDrawer("not-a-guid", 0); }, "move of unknown asset throws");
+
+// ---- deleteDrawer reassigns the subtree's assets to Uncategorized ----
+assert(assets.deleteDrawer(props), "assets.deleteDrawer (whole branch)");
+assert(drawerById(props) === null && drawerById(weapons) === null, "branch rows removed");
+assert(drawerById(scenery) !== null, "unrelated drawer untouched");
+assert(assetByGuid(png).drawer === 0, "png fell back to Uncategorized");
+assert(assetByGuid(wav).drawer === 0, "wav fell back to Uncategorized");
+
+console.log("e2e drawers: all checks passed");
