@@ -328,6 +328,7 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, QVector
 
     auto reader = new SceneReader;
     reader->setDatabaseHandle(db);
+    reader->setProject(project);
     reader->setBaseDirectory(project->getProjectFolder());
     iris::SceneNodePtr node = reader->readSceneNode(document);
     delete reader;
@@ -681,6 +682,7 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
 
 
         MaterialReader reader;
+        reader.setProject(project);
         auto material = reader.parseMaterial(materialDefOriginal, db);
 
         // Actually create the material and add shader as it's dependency

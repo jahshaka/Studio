@@ -27,7 +27,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "shell/globals.h"
 #include "io/scenereader.h"
 
 WorldPropertyWidget::WorldPropertyWidget()
@@ -66,7 +65,7 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         ambientColor->setColorValue(scene->ambientColor);
 		worldGravity->setValue(scene->gravity);
 
-		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), Globals::project->getProjectGuid());
+		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), project->getProjectGuid());
 
 		if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
 		else ambientMusicSelector->show();
@@ -108,7 +107,7 @@ void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
 	auto currentGuid = ambientMusicSelector->getCurrentItemData();
 	auto asset = db->fetchAsset(currentGuid);
 	auto name = asset.name;
-	QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), name);
+	QString fullPathToAudio = IrisUtils::join(project->getProjectFolder(), name);
 
 	// Start playing here
 	scene->ambientMusicGuid = currentGuid;

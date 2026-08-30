@@ -5,8 +5,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 add_executable(test_desktops_db test_desktops_db.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    # database.cpp's link closure (Globals, Project, guids, asset helpers)
-    ${CMAKE_SOURCE_DIR}/src/shell/globals.cpp
+    # database.cpp's link closure (Project, guids, asset helpers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp

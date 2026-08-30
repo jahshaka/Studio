@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/assethelper.h"
 #include "data/project.h"
-#include "shell/globals.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
@@ -31,7 +30,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
-AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Database *db)
+AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Database *db,
+                                               Project *project)
 {
     Result result;
     if (!db) { result.error = "no database"; return result; }
@@ -65,7 +65,7 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     const QString meshGuid = GUIDManager::generateGUID();
     db->createAssetEntry(meshGuid, sourceInfo.fileName(),
                          static_cast<int>(ModelTypes::Mesh), mainGuid,
-                         Globals::project->getProjectGuid());
+                         project->getProjectGuid());
 
     // Assimp load + texture discovery (no DB rows, no file copies inside).
     QStringList textureNames, texturePaths;
@@ -92,7 +92,7 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
         TexEntry entry{ texInfo.fileName(), GUIDManager::generateGUID() };
         db->createAssetEntry(entry.guid, entry.fileName,
                              static_cast<int>(ModelTypes::Texture), mainGuid,
-                             Globals::project->getProjectGuid());
+                             project->getProjectGuid());
         textures.append(entry);
     }
 
@@ -128,7 +128,7 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     // The Object row — the only row with view_filter AssetsView, parent = root.
     db->createAssetEntry(mainGuid, sourceInfo.baseName(),
                          static_cast<int>(ModelTypes::Object), QString(),
-                         Globals::project->getProjectGuid(),
+                         project->getProjectGuid(),
                          QString(), QString(), QByteArray(), QByteArray(), QByteArray(),
                          QJsonDocument(blob).toJson(), AssetViewFilter::AssetsView);
 

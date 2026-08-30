@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "irisgl/core/irisutils.h"
-#include "shell/globals.h"
 #include <QMimeData>
 #include <QDrag>
 #include <QStandardItemModel>
@@ -70,7 +69,7 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();
-		changeMap(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
+		changeMap(IrisUtils::join(project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
 	event->acceptProposedAction();

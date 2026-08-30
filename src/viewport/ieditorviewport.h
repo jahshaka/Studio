@@ -24,6 +24,7 @@ class QWidget;
 class MainWindow;
 struct StudioServices;
 class Database;
+class Project;
 class EditorData;
 class Gizmo;
 enum WindowSpaces : int;      // mainwindow.h
@@ -62,6 +63,9 @@ public:
     /// and refresh notifications through. Optional; headless viewports don't care.
     virtual void setServices(StudioServices *) {}
     virtual void setDatabase(Database *db) = 0;
+    /// The one live Project (Phase 4: was the Globals::project static). Optional;
+    /// only the engine viewport's drag-drop paths read it.
+    virtual void setProject(Project *) {}
 
     // ---- document ----
     virtual void setScene(iris::ScenePtr scene) = 0;

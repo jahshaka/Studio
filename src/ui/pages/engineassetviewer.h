@@ -20,6 +20,7 @@
 
 class EngineRenderDriver;
 class EngineAssetScene;
+class Project;
 class ProgressDialog;
 namespace iris { class SceneSource; }
 
@@ -33,6 +34,7 @@ public:
 
     QWidget *asWidget() override { return this; }
     void setDatabase(Database *db) override { mDb = db; }
+    void setProject(Project *project) override { mProject = project; }
     iris::SceneSource *sceneSource() override { return mSource; }
     void clearScene() override;
     void changeBackdrop(unsigned int id) override;
@@ -80,6 +82,7 @@ private:
     EngineRenderDriver *mDriver = nullptr;
     std::unique_ptr<EngineAssetScene> mScene;
     Database *mDb = nullptr;
+    Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::SceneSource *mSource = nullptr;
     ProgressDialog *mProgress = nullptr;
     QMap<QString, iris::SceneNodePtr> mCachedAssets;

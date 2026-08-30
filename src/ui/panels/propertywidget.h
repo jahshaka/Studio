@@ -28,6 +28,8 @@ class FilePickerWidget;
 
 class BaseWidget;
 
+class Project;
+
 class PropertyWidget : public QWidget, iris::PropertyListener
 {
     Q_OBJECT
@@ -35,6 +37,11 @@ class PropertyWidget : public QWidget, iris::PropertyListener
 public:
     explicit PropertyWidget(QWidget *parent = 0);
     ~PropertyWidget();
+
+    /// The one live Project (Phase 4: was the Globals::project static). Set by
+    /// AccordianBladeWidget::addPropertyWidget(); forwarded to the texture
+    /// pickers this widget builds.
+    Project *project = nullptr;
 
     void addProperty(const iris::Property*);
     void setProperties(QList<iris::Property*>);

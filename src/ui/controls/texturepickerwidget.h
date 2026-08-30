@@ -21,6 +21,8 @@ namespace Ui {
 	class TexturePickerWidget;
 }
 
+class Project;
+
 class TexturePickerWidget : public BaseWidget
 {
 	Q_OBJECT
@@ -35,6 +37,10 @@ private slots:
 public:
 	int index;
 	QString filename, filePath, textureGuid;
+
+	/// The one live Project (Phase 4: was the Globals::project static). Set by
+	/// the panel that builds this control; read by dropEvent().
+	Project *project = nullptr;
 
 	explicit TexturePickerWidget(QWidget *parent = 0);
 	~TexturePickerWidget();

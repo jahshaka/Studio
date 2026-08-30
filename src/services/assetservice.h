@@ -24,21 +24,23 @@ For more information see the LICENSE file
 #include "services/assetimporter.h"
 
 class Database;
+class Project;
 
 class AssetService
 {
 public:
-    explicit AssetService(Database *db) : db(db) {}
+    AssetService(Database *db, Project *project) : db(db), project(project) {}
 
     /// Imports a mesh file (obj/fbx/dae/blend/glb/gltf) into the global asset
     /// store. Pure document/DB work — safe headless.
     AssetImporter::Result importMesh(const QString &filePath)
     {
-        return AssetImporter::importMesh(filePath, db);
+        return AssetImporter::importMesh(filePath, db, project);
     }
 
 private:
     Database *db;
+    Project *project;   // the live Project (Phase 4: was Globals::project)
 };
 
 #endif // ASSETSERVICE_H

@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QMap>
 
-#include "shell/globals.h"
 #include "data/project.h"
 
 #include "irisgl/irisglfwd.h"
@@ -46,6 +45,11 @@ class SceneReader : public AssetIOBase
 	// without a handle, and createMesh/readMaterial dereference it
 	// (ASSETS_AUDIT.md finding 6 — that was live UB).
 	Database *handle = nullptr;
+
+	// The live Project, injected by every construction site (Phase 4: was the
+	// Globals::project static, which assetDirectory's member initialiser also
+	// read). Never left indeterminate for the same reason as `handle`.
+	Project *project = nullptr;
     // We can choose to load assets from a flat file or from those already cached
     // TODO - also cache assets in the viewer
 public:
@@ -53,7 +57,16 @@ public:
 		this->handle = db;
 	}
 
-    QString assetDirectory = Globals::project->getProjectFolder();
+	/// Injecting the project also seeds assetDirectory, which used to be
+	/// initialised from Globals::project in its member initialiser. The
+	/// isEmpty() guard reproduces the old initialiser-then-setBaseDirectory
+	/// ordering whichever order the two setters are called in.
+	void setProject(Project *p) {
+		project = p;
+		if (p && assetDirectory.isEmpty()) assetDirectory = p->getProjectFolder();
+	}
+
+    QString assetDirectory;
     bool useAlternativeLocation;
     void setBaseDirectory(const QString &location) {
         assetDirectory = location;

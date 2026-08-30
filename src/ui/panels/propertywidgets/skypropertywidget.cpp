@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/skypropertywidget.h"
+#include "data/project.h"
 #include "irisgl/core/irisutils.h"
 
 
@@ -21,7 +22,6 @@ For more information see the LICENSE file
 #include "ui/controls/checkboxwidget.h"
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 
-#include "shell/globals.h"
 #include "data/database/database.h"
 #include "services/subscriber.h"
 #include "io/scenewriter.h"
@@ -150,14 +150,14 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 
 			connect(equiTexture, &TexturePickerWidget::valueChanged, this, [this](QString value) {
 				// Remember that asset names are unique (auto incremented) so this is fine
-				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), Globals::project->getProjectGuid());
+				QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), project->getProjectGuid());
 				db->removeDependenciesByType(skyGuid, ModelTypes::Texture);
 				if (!assetGuid.isEmpty()) {
 					db->createDependency(
 						static_cast<int>(ModelTypes::Sky),
 						static_cast<int>(ModelTypes::Texture),
 						skyGuid, assetGuid,
-						Globals::project->getProjectGuid()
+						project->getProjectGuid()
 					);
 
 					onEquiTextureChanged(assetGuid);
@@ -224,7 +224,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 {
 	// Normally there'd be a check for if value is empty here but in that case we can clear the guid
-	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), Globals::project->getProjectGuid());
+	QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(value).fileName(), project->getProjectGuid());
 	db->deleteDependency(skyGuid, guid);
 	// Remember that asset names are unique (auto incremented) so this is fine
 	if (!assetGuid.isEmpty()) {
@@ -233,7 +233,7 @@ void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
 			static_cast<int>(ModelTypes::Texture),
 			skyGuid,
 			assetGuid,
-			Globals::project->getProjectGuid()
+			project->getProjectGuid()
 		);
 	}
 
@@ -337,14 +337,14 @@ void SkyPropertyWidget::updateAssetAndKeys()
     db->updateAssetAsset(skyGuid, QJsonDocument(skyProperties).toJson());
     db->updateAssetProperties(skyGuid, QJsonDocument(properties).toJson());
 	// Not really used but keep around for now, the intent is clear (iKlsR)
-	emit Globals::eventSubscriber->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
+	if (eventBus) emit eventBus->updateAssetSkyItemFromSkyPropertyWidget(skyGuid, currentSky);
 }
 
 void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (!guid.isEmpty()) {
 		equiSkyDefinition.insert("equiSkyGuid", guid);
-        auto image = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(guid).name);
+        auto image = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(guid).name);
         equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
         scene->setSkyTexture(iris::Texture2D::load(image, false));
     }
@@ -352,12 +352,12 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
-	auto front = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["front"].toString()).name);
-	auto back = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["back"].toString()).name);
-	auto left = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["left"].toString()).name);
-	auto right = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["right"].toString()).name);
-	auto top = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["top"].toString()).name);
-	auto bottom = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(skyDataDefinition["bottom"].toString()).name);
+	auto front = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["front"].toString()).name);
+	auto back = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["back"].toString()).name);
+	auto left = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["left"].toString()).name);
+	auto right = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["right"].toString()).name);
+	auto top = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["top"].toString()).name);
+	auto bottom = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["bottom"].toString()).name);
 
 	cubeMapDefinition.insert("front", skyDataDefinition["front"].toString());
 	cubeMapDefinition.insert("back", skyDataDefinition["back"].toString());
@@ -391,8 +391,8 @@ void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
 	auto vert = materialDefinition.value("vertexShader").toString();
 	auto frag = materialDefinition.value("fragmentShader").toString();
 
-	auto vPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(vert).name);
-	auto fPath = IrisUtils::join(Globals::project->getProjectFolder(), db->fetchAsset(frag).name);
+	auto vPath = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(vert).name);
+	auto fPath = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(frag).name);
 
 	//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
 }

@@ -26,13 +26,24 @@ For more information see the LICENSE file
 
 class EditorData;
 class Database;	// this is a temp way to get this working, remove later
+class Project;
 
 class SceneWriter : public AssetIOBase
 {
 	static Database *handle;
+
+	// The live Project (Phase 4: was the Globals::project static). Static to
+	// mirror `handle` above: both project reads live in *static* writer methods
+	// (writeParticleData / writeSceneNodeMaterial) that a dozen call sites
+	// invoke unqualified, so there is no instance to hang it off. Wired once by
+	// the shell in MainWindow::setupServices.
+	static Project *projectHandle;
 public:
 	void setDatabaseHandle(Database *db) {
 		this->handle = db;
+	}
+	static void setProject(Project *p) {
+		projectHandle = p;
 	}
     void writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan, EditorData* ediorData = nullptr);
     QByteArray getSceneObject(QString projectPath,

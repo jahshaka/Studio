@@ -116,6 +116,7 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker(const QString& name)
 TexturePickerWidget* AccordianBladeWidget::addTexturePicker(const QString& name)
 {
     auto texpicker = new TexturePickerWidget();
+    texpicker->project = project;
     texpicker->ui->label->setText(name);
 
     minimum_height += texpicker->height() + stretch;
@@ -166,6 +167,7 @@ Widget4D * AccordianBladeWidget::addVector4Widget(const QString &, float xValue,
 CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QStringList list)
 {
 	auto widget = new CubeMapWidget();
+	widget->project = project;
 	widget->addCubeMapImages(list);
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
@@ -175,6 +177,7 @@ CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QStringList list)
 CubeMapWidget* AccordianBladeWidget::addCubeMapWidget()
 {
 	auto widget = new CubeMapWidget(this);
+	widget->project = project;
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
 	return widget;
@@ -188,6 +191,7 @@ CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QString top, QString botto
 PropertyWidget *AccordianBladeWidget::addPropertyWidget()
 {
     PropertyWidget *props = new PropertyWidget;
+    props->project = project;
     ui->contentpane->layout()->addWidget(props);
     return props;
 }

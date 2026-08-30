@@ -68,6 +68,7 @@ class AssetGridItem;
 class IAssetViewer;
 class Database;
 struct StudioServices;
+class Project;
 class SettingsManager;
 class PreferencesDialog;
 
@@ -100,6 +101,10 @@ public:
 	AssetView(Database *handle, QWidget *parent = Q_NULLPTR, IAssetViewer *previewViewer = nullptr);
 	/// Phase 4: scene-open checks go through the services, not ambient statics.
 	void setServices(StudioServices *s) { services = s; }
+	/// The one live Project, wired by the shell in MainWindow::setupServices
+	/// (Phase 4: was the Globals::project static). Forwarded to the preview
+	/// viewer, which reads it for relative animation paths.
+	void setProject(Project *p);
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
@@ -127,6 +132,7 @@ private:
         QJsonObject &mat);
 
 	Database *db;
+	Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
 	StudioServices *services = nullptr;
 	QSplitter *_splitter;
 	QWidget *_filterBar;

@@ -76,10 +76,17 @@ protected:
 	void mousePressEvent(QMouseEvent*) override;
 };
 
+class Project;
+
 class CubeMapWidget : public QWidget {
 	Q_OBJECT
 public:
 	CubeMapWidget(QWidget *parent = Q_NULLPTR);
+
+	/// The one live Project (Phase 4: was the Globals::project static). Set by
+	/// the panel that builds this control; the buttons read it through their
+	/// `parent` back-pointer in dropEvent().
+	Project *project = nullptr;
 	QGridLayout* layout;
 	void addTopImage(QString topImagePath);
 	void addBottomImage(QString bottomImagePath);

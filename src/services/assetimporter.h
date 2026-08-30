@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class Database;
+class Project;
 
 class AssetImporter
 {
@@ -44,8 +45,10 @@ public:
     };
 
     /// Imports a mesh file (obj/fbx/dae/blend/glb/gltf) into the global asset
-    /// store. Pure document/DB work — safe headless.
-    static Result importMesh(const QString &filePath, Database *db);
+    /// store. Pure document/DB work — safe headless. `project` is the live
+    /// Project whose guid stamps the created asset rows (Phase 4: was the
+    /// Globals::project static).
+    static Result importMesh(const QString &filePath, Database *db, Project *project);
 };
 
 #endif // SERVICES_ASSETIMPORTER_H

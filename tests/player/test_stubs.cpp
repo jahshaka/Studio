@@ -8,8 +8,3 @@
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr, QVector3D, QQuaternion, QVector3D) {}
 void TransformSceneNodeCommand::undo() {}
 void TransformSceneNodeCommand::redo() {}
-
-// SettingsManager's inline constructor (src/data/settingsmanager.h) resolves its
-// settings file against Globals::appWorkingDir. Nothing else in Globals is reached.
-#include "shell/globals.h"
-QString Globals::appWorkingDir;

@@ -5,13 +5,16 @@
 #include <QString>
 #include "zip.h"
 #include "data/database/database.h"
+#include "data/project.h"
 #include "services/assethelper.h"
 #include "src/shadergraph/core/materialhelper.h"
 
 class Exporter
 {
 public:
-	static void exportShaderAsMaterial(Database* dataBase, QString shaderGuid, QString filePath)
+	/// `project` is the one live Project whose guid stamps the created asset
+	/// rows (Phase 4: was the Globals::project static).
+	static void exportShaderAsMaterial(Database* dataBase, Project* project, QString shaderGuid, QString filePath)
 	{
 		QTemporaryDir temporaryDir;
 		if (!temporaryDir.isValid()) return;
@@ -19,7 +22,7 @@ public:
 		const QString writePath = temporaryDir.path();
 
 		//const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-		auto materialGuid = generateMaterialFromShader(shaderGuid, dataBase, writePath);
+		auto materialGuid = generateMaterialFromShader(shaderGuid, dataBase, project, writePath);
 		dataBase->createBlobFromAsset(materialGuid, QDir(writePath).filePath("asset.db"));
 
 		QDir tempDir(writePath);
@@ -34,7 +37,7 @@ public:
 
 		for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(materialGuid, dataBase)) {
 			auto asset = dataBase->fetchAsset(assetGuid);
-			//auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+			//auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
 			auto assetPath = getAssetPath(asset);
 			QFileInfo assetInfo(assetPath);
 			if (assetInfo.exists()) {
@@ -86,7 +89,7 @@ public:
 		zip_close(zip);
 	}
 
-	static QString generateMaterialFromShader(QString shaderGuid, Database* dataBase, QString tempPath)
+	static QString generateMaterialFromShader(QString shaderGuid, Database* dataBase, Project* project, QString tempPath)
 	{
 		QJsonObject matDef;
 		writeMaterial(matDef, shaderGuid, dataBase);
@@ -117,7 +120,7 @@ public:
 			QFileInfo(fileName).fileName(),
 			static_cast<int>(ModelTypes::Material),
 			QString(),
-			Globals::project->getProjectGuid(),
+			project->getProjectGuid(),
 			QString(),
 			QString(),
 			QByteArray(),
@@ -130,6 +133,7 @@ public:
 		//updateMaterialThumbnail(guid, assetGuid);
 
 		MaterialReader reader;
+		reader.setProject(project);
 		auto material = reader.parseMaterial(matDef, dataBase);
 
 		// Actually create the material and add shader as it's dependency
@@ -137,7 +141,7 @@ public:
 			static_cast<int>(ModelTypes::Material),
 			static_cast<int>(ModelTypes::Shader),
 			assetGuid, shaderGuid,
-			Globals::project->getProjectGuid());
+			project->getProjectGuid());
 
 		// Add all its textures as dependencies too
 		auto values = matDef["values"].toObject();
@@ -149,7 +153,7 @@ public:
 						static_cast<int>(ModelTypes::Material),
 						static_cast<int>(ModelTypes::Texture),
 						assetGuid, values.value(prop->name).toString(),
-						Globals::project->getProjectGuid()
+						project->getProjectGuid()
 					);
 
 				}

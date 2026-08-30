@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "ui_texturepickerwidget.h"
 #include "ui/controls/filepickerwidget.h"
 #include "ui_filepickerwidget.h"
-#include "shell/globals.h"
 #include <QDir>
 #include "data/database/database.h"
 
@@ -67,6 +66,7 @@ CheckBoxWidget* PropertyWidget::addCheckBox(const QString& title)
 TexturePickerWidget* PropertyWidget::addTexturePicker(const QString& name)
 {
     auto texpicker = new TexturePickerWidget();
+    texpicker->project = project;
     texpicker->ui->label->setText(name);
     progressiveHeight += texpicker->height() + stretch;
 

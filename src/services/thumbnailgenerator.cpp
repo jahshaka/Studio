@@ -119,11 +119,12 @@ iris::MaterialPtr ThumbnailGenerator::previewMaterialFor(iris::MaterialPtr mater
 QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
 {
     if (request.type == ThumbnailRequestType::ImportedMesh) {
-        if (!db || !Globals::project) return QImage();
+        if (!db || !project) return QImage();
         QJsonDocument document = QJsonDocument::fromJson(db->fetchAssetData(request.id));
         SceneReader reader;
         reader.setDatabaseHandle(db);
-        reader.setBaseDirectory(IrisUtils::join(Globals::project->getProjectFolder()));
+        reader.setProject(project);
+        reader.setBaseDirectory(IrisUtils::join(project->getProjectFolder()));
         QJsonObject objectHierarchy = document.object();
         auto node = reader.readSceneNode(objectHierarchy);
         if (!node) return QImage();
@@ -147,6 +148,7 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         MaterialReader reader;
+        reader.setProject(project);
         auto material = reader.parseMaterial(doc.object(), db);
         return engineRenderer->renderMaterial(previewMaterialFor(material.staticCast<iris::Material>()), size);
     }

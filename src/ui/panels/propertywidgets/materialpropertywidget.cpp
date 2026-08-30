@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
+#include "data/project.h"
 
 #include <QJsonObject>
 #include <QDirIterator>
@@ -38,7 +39,6 @@ For more information see the LICENSE file
 
 #include "io/scenewriter.h"
 
-#include "shell/globals.h"
 #include "data/database/database.h"
 #include "io/materialreader.h"
 
@@ -153,6 +153,7 @@ void MaterialPropertyWidget::materialChanged(int index)
     clearPanel(this->layout());
 
 	MaterialReader reader;
+	reader.setProject(project);
 	material = reader.createMaterialFromShaderGuid(materialSelector->getCurrentItemData(), db);
     material->setName(materialSelector->getCurrentItem());
     material->setGuid(materialSelector->getCurrentItemData());
@@ -184,7 +185,7 @@ void MaterialPropertyWidget::materialChanged(int index)
             static_cast<int>(ModelTypes::Object),
             static_cast<int>(ModelTypes::Shader),
             meshNodeGuid, materialSelector->getCurrentItemData(),
-            Globals::project->getProjectGuid()
+            project->getProjectGuid()
         );
     }
 
@@ -193,7 +194,7 @@ void MaterialPropertyWidget::materialChanged(int index)
 		if (prop->type == (iris::PropertyType::Texture)) {
 			auto guid = prop->getValue().toString();
 			auto asset = db->fetchAsset(guid).name;
-			auto path = QDir(Globals::project->getProjectFolder()).filePath(asset);
+			auto path = QDir(project->getProjectFolder()).filePath(asset);
 			if(QFile::exists(path))
 				material->setValue(prop->name, path);
 		}
@@ -243,11 +244,11 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
         
         // HANDLE CASE where the widget isn't deselected
 
-        QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), Globals::project->getProjectGuid());
+        QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), project->getProjectGuid());
         if (assetGuid.isEmpty()) {
             db->deleteDependency(
                 meshNodeGuid,
-                db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName(), Globals::project->getProjectGuid())
+                db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName(), project->getProjectGuid())
             );
         }
         else {
@@ -255,7 +256,7 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
                 static_cast<int>(ModelTypes::Object),
                 static_cast<int>(ModelTypes::Texture),
                 meshNodeGuid, assetGuid,
-                Globals::project->getProjectGuid()
+                project->getProjectGuid()
             );
         }
     }

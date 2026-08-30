@@ -129,6 +129,7 @@ enum class Widget
 #include "irisgl/document/assets/texture2d.h"
 
 class Database;
+class Project;
 class MainWindow : public QMainWindow
 {
 
@@ -464,6 +465,13 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+
+    /// The one live Project instance, owned by the shell and injected into
+    /// everything that needs it (Phase 4: was the Globals::project static).
+    /// Created first thing in the constructor, then mutated in place
+    /// (setProjectPath/setProjectGuid) for the process lifetime.
+    Project *project = nullptr;
+
     ProjectManager *pmContainer;
 
     QUndoStack* undoStack;

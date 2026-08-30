@@ -18,7 +18,6 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
 #include "data/project.h"
-#include "shell/globals.h"
 #include "io/scenewriter.h"
 #include "shell/mainwindow.h"
 #include "services/sceneeditservice.h"
@@ -131,17 +130,17 @@ bool WorldApi::gi(const QVariantMap &params)
 
 bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut)
 {
-    if (!host.db || !Globals::project) return false;
+    if (!host.db || !host.project) return false;
     const QString value = ref.toString();
     if (value.isEmpty()) return false;
 
     // guid first (assets are guid-keyed), then by file name like the sky panel
     QString guid;
     if (!host.db->fetchAsset(value).guid.isEmpty()) guid = value;
-    else guid = host.db->fetchAssetGUIDByName(QFileInfo(value).fileName(), Globals::project->getProjectGuid());
+    else guid = host.db->fetchAssetGUIDByName(QFileInfo(value).fileName(), host.project->getProjectGuid());
     if (guid.isEmpty()) return false;
 
-    const QString path = QDir(Globals::project->getProjectFolder())
+    const QString path = QDir(host.project->getProjectFolder())
                              .filePath(host.db->fetchAsset(guid).name);
     if (!QFileInfo::exists(path)) return false;
     guidOut = guid;
@@ -216,7 +215,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         // dependency bookkeeping, exactly like the sky panel
         host.db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
         host.db->createDependency(static_cast<int>(ModelTypes::Sky), static_cast<int>(ModelTypes::Texture),
-                                  scene->skyGuid, guid, Globals::project->getProjectGuid());
+                                  scene->skyGuid, guid, host.project->getProjectGuid());
     } else if (t == "cubemap") {
         if (!requireProject()) return false;
         static const char *faces[] = { "front", "back", "left", "right", "top", "bottom" };
@@ -245,7 +244,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         for (const char *face : faces) {
             if (!guids.value(face).isEmpty())
                 host.db->createDependency(static_cast<int>(ModelTypes::Sky), static_cast<int>(ModelTypes::Texture),
-                                          scene->skyGuid, guids.value(face), Globals::project->getProjectGuid());
+                                          scene->skyGuid, guids.value(face), host.project->getProjectGuid());
         }
     } else {
         return fail(QStringLiteral("world.sky: unknown type '%1' (color, gradient, realistic, equirectangular, cubemap)").arg(type));

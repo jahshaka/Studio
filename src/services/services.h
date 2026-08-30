@@ -27,6 +27,7 @@ For more information see the LICENSE file
 // can hand it) and UI-free: widget side effects happen in the shell, driven by
 // the QObject services' signals.
 
+class Subscriber;
 class UndoService;
 class SelectionService;
 class PlaybackService;
@@ -44,6 +45,10 @@ struct StudioServices
     SceneEditService *sceneEdit  = nullptr;
     ThumbnailService *thumbnails = nullptr;
     AssetService     *assets     = nullptr;
+
+    /// UI event bus (sky-asset updates between panels). Owned by the shell;
+    /// was the Globals::eventSubscriber static (Phase 4 injected it).
+    Subscriber       *eventBus   = nullptr;
 };
 
 #endif // SERVICES_H

@@ -25,7 +25,6 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "commands/changematerialpropertycommand.h"
 #include "bridge/enginehost.h"
-#include "shell/globals.h"
 #include "io/assetmanager.h"
 #include "io/materialpresetreader.h"
 #include "shell/mainwindow.h"
@@ -103,7 +102,7 @@ QString MaterialsApi::createGraph(const QString &name)
     if (name.trimmed().isEmpty()) { fail("materials.createGraph: a name is required"); return QString(); }
 
     // ShaderAssetWidget::createShader minus the QListWidget bookkeeping.
-    const QString parentFolder = Globals::project->getProjectGuid();
+    const QString parentFolder = host.project->getProjectGuid();
     QString shaderName = name.trimmed();
     const QStringList existing = host.db->fetchAssetNameByParent(parentFolder);
     int increment = 1;
@@ -113,7 +112,7 @@ QString MaterialsApi::createGraph(const QString &name)
     const QString assetGuid = GUIDManager::generateGUID();
     host.db->createAssetEntry(assetGuid, IrisUtils::buildFileName(shaderName, "shader"),
                               static_cast<int>(ModelTypes::Shader), parentFolder,
-                              Globals::project->getProjectGuid());
+                              host.project->getProjectGuid());
 
     // A minimal graph with a PbrMaterial master — the current Effects format
     // (the old ShaderTemplate.shader predates the graph and cannot be reopened
@@ -135,7 +134,7 @@ QString MaterialsApi::createGraph(const QString &name)
     auto assetShader = new AssetMaterial;
     assetShader->fileName = shaderName;
     assetShader->assetGuid = assetGuid;
-    assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(),
+    assetShader->path = IrisUtils::join(host.project->getProjectFolder(),
                                         IrisUtils::buildFileName(shaderName, "shader"));
     assetShader->setValue(QVariant::fromValue(definition));
     AssetManager::addAsset(assetShader);
@@ -271,7 +270,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 const auto record = host.db->fetchAsset(ref);
                 if (record.guid.isEmpty())
                     return fail(QStringLiteral("material.set: no texture file or asset '%1'").arg(ref));
-                newValue = QDir(Globals::project->getProjectFolder()).filePath(record.name);
+                newValue = QDir(host.project->getProjectFolder()).filePath(record.name);
             }
         }
 

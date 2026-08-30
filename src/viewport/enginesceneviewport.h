@@ -44,6 +44,7 @@ public:
     void setHierarchyDragSource(QWidget *source) override { mHierarchyDragSource = source; }
     void setServices(StudioServices *services) override;
     void setDatabase(Database *db) override { mDatabase = db; }
+    void setProject(Project *project) override { mProject = project; }
 
     void setScene(iris::ScenePtr scene) override;
     iris::ScenePtr getScene() override { return mScene; }
@@ -155,6 +156,7 @@ private:
     MainWindow *mMainWindow = nullptr;
     QWidget *mHierarchyDragSource = nullptr;   // drags from the hierarchy tree are reparents, not spawns
     Database *mDatabase = nullptr;
+    Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::ScenePtr mScene;
     iris::SceneNodePtr mSelectedNode;
     iris::CameraNodePtr mEditorCam;

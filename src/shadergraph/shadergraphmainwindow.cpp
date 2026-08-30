@@ -66,7 +66,6 @@ For more information see the LICENSE file
 #if(EFFECT_BUILD_AS_LIB)
 #include "data/database/database.h"
 #include "services/assethelper.h"
-#include "shell/globals.h"
 #include "data/guidmanager.h"
 #include "irisgl/core/irisutils.h"
 #include "io/assetmanager.h"
@@ -377,7 +376,7 @@ void MainWindow::importEffect(QString fileName)
 			guidCompareMap,
 			records,
 			AssetViewFilter::Effects,
-			Globals::project->getProjectGuid());
+			mProject->getProjectGuid());
 
 		const QString assetFolder = QDir(assetPath).filePath(guid);
 		QDir().mkpath(assetFolder);
@@ -513,7 +512,7 @@ void MainWindow::exportEffect(QString guid)
 
 	const QString writePath = temporaryDir.path();
 
-	Exporter::exportShaderAsMaterial(dataBase, guid, filePath);
+	Exporter::exportShaderAsMaterial(dataBase, mProject, guid, filePath);
 	return;
 
 	//const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
@@ -532,7 +531,7 @@ void MainWindow::exportEffect(QString guid)
 
 	for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, dataBase)) {
 		auto asset = dataBase->fetchAsset(assetGuid);
-		auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+		auto assetPath = QDir(mProject->getProjectFolder()).filePath(asset.name);
 		QFileInfo assetInfo(assetPath);
 		if (assetInfo.exists()) {
 			QFile::copy(
@@ -998,7 +997,7 @@ void MainWindow::createShader(NodeGraphPreset preset, bool loadNewGraph)
 	auto assetShader = new AssetMaterial;
 	assetShader->fileName = newShader;
 	assetShader->assetGuid = assetGuid;
-	assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
+	assetShader->path = IrisUtils::join(mProject->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
 	assetShader->setValue(QVariant::fromValue(MaterialHelper::createMaterialFromShaderGraph(graph)));
     dataBase->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
 	AssetManager::addAsset(assetShader);
@@ -1363,6 +1362,12 @@ void MainWindow::updateAssetDock()
 }
 
 
+void MainWindow::setProject(Project *project)
+{
+	mProject = project;
+	if (assetWidget) assetWidget->project = project;
+}
+
 void MainWindow::setSceneOpenProbe(std::function<bool()> probe)
 {
 	mSceneOpenProbe = probe;
@@ -1586,7 +1591,7 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 	saveDoc.setObject(matDef);
 
 	QString fileName = IrisUtils::join(
-		Globals::project->getProjectFolder(),
+		mProject->getProjectFolder(),
 		IrisUtils::buildFileName(matDef["name"].toString(), "material")
 	);
 
@@ -1602,8 +1607,8 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 		assetGuid,
 		QFileInfo(fileName).fileName(),
 		static_cast<int>(ModelTypes::Material),
-		Globals::project->getProjectGuid(),
-		Globals::project->getProjectGuid(),
+		mProject->getProjectGuid(),
+		mProject->getProjectGuid(),
 		QString(),
 		QString(),
 		QByteArray(),
@@ -1616,6 +1621,7 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 	updateMaterialThumbnail(guid, assetGuid);
 
 	MaterialReader reader;
+	reader.setProject(mProject);
 	auto material = reader.parseMaterial(matDef, dataBase);
 
 	// Actually create the material and add shader as it's dependency
@@ -1623,7 +1629,7 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 		static_cast<int>(ModelTypes::Material),
 		static_cast<int>(ModelTypes::Shader),
 		assetGuid, guid,
-		Globals::project->getProjectGuid());
+		mProject->getProjectGuid());
 
 	// Add all its textures as dependencies too
 	auto values = matDef["values"].toObject();
@@ -1634,7 +1640,7 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 					static_cast<int>(ModelTypes::Material),
 					static_cast<int>(ModelTypes::Texture),
 					assetGuid, values.value(prop->name).toString(),
-					Globals::project->getProjectGuid()
+					mProject->getProjectGuid()
 				);
 			}
 		}
@@ -1665,6 +1671,7 @@ void MainWindow::updateMaterialFromShader(QString guid)
 	materialDef["values"] = writeMaterialValuesFromShader(guid);
 	
 	MaterialReader reader;
+	reader.setProject(mProject);
 	auto material = reader.parseMaterial(materialDef, dataBase);
 
 	if (!dataBase->checkIfDependencyExists(graphObj->materialGuid, guid)) {
@@ -1672,7 +1679,7 @@ void MainWindow::updateMaterialFromShader(QString guid)
 			static_cast<int>(ModelTypes::Material),
 			static_cast<int>(ModelTypes::Shader),
 			graphObj->materialGuid, guid,
-			Globals::project->getProjectGuid());
+			mProject->getProjectGuid());
 	}
 
 	//create dependency for textures if they dont exists
@@ -1686,7 +1693,7 @@ void MainWindow::updateMaterialFromShader(QString guid)
 						static_cast<int>(ModelTypes::Material),
 						static_cast<int>(ModelTypes::Texture),
 						graphObj->materialGuid, values.value(prop->name).toString(),
-						Globals::project->getProjectGuid()
+						mProject->getProjectGuid()
 					);
 				}
 			}

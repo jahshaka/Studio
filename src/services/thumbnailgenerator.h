@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 
 class QTimer;
+class Project;
 class EngineThumbnailRenderer;
 
 enum class ThumbnailRequestType
@@ -72,6 +73,14 @@ public:
     Database *db;
     void setDatabase(Database *db) {
         this->db = db;
+    }
+
+    /// The live Project (Phase 4: was the Globals::project static). Nullable —
+    /// the ImportedMesh path already null-checked it and returns an empty
+    /// QImage when it is not set.
+    Project *project = nullptr;
+    void setProject(Project *p) {
+        this->project = p;
     }
 
     /// True when thumbnails are rendered through the engine on the main thread.

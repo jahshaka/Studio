@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/constants.h"
 #include <irisgl/IrisGL.h>
-#include "shell/globals.h"
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"
@@ -1073,7 +1072,6 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
 			data.view_filter = record.value(12).toInt();
         }
 
-        Globals::assetNames.insert(data.guid, data.name);
 
         tileData.push_back(data);
     }
@@ -1202,7 +1200,6 @@ QVector<AssetRecord> Database::fetchAssetsByCollection(const int &collection_id)
             data.type = record.value(4).toInt();
         }
 
-        Globals::assetNames.insert(data.guid, data.name);
 
         tileData.push_back(data);
     }

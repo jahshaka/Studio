@@ -53,10 +53,10 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QProgressDialog>
 
-#include "shell/globals.h"
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
+#include "data/project.h"
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "ui/controls/assetviewgrid.h"
@@ -245,6 +245,12 @@ QString AssetView::getAssetType(int id)
 		case static_cast<int>(ModelTypes::Sky):			return "Sky";		break;
 		default: return "Undefined"; break;
 	}
+}
+
+void AssetView::setProject(Project *p)
+{
+	project = p;
+	if (viewer) viewer->setProject(p);
 }
 
 AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewViewer) : db(handle), QWidget(parent)
@@ -1169,7 +1175,7 @@ void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
                             guidCompareMap,
                             records,
 							AssetViewFilter::AssetsView,
-							Globals::project->getProjectGuid());
+							project->getProjectGuid());
 
         const QString assetFolder = QDir(assetPath).filePath(guid);
         QDir().mkpath(assetFolder);
@@ -1306,7 +1312,7 @@ void AssetView::importJahBundle(const QString &fileName)
             QMap<QString, QString>(),
             guidCompareMap,
             records,
-            Globals::project->getProjectGuid()
+            project->getProjectGuid()
         );
 
         QMap<QString, QString> guidsToReplace;
@@ -1505,7 +1511,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
         QFileInfo entryInfo(entry.path);
 
         if (entryInfo.isDir()) {
-            db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid, Globals::project->getProjectGuid());
+            db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid, project->getProjectGuid());
         }
         else {
             ModelTypes type;
@@ -1543,7 +1549,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                asset->fileName,
                                                                static_cast<int>(asset->type),
                                                                entry.parent_guid,
-                                                               Globals::project->getProjectGuid(),
+                                                               project->getProjectGuid(),
                                                                QString(),
                                                                QString(),
                                                                AssetHelper::makeBlobFromPixmap(thumbnail));
@@ -1701,7 +1707,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                            dt.path,
                                                                            static_cast<int>(ModelTypes::Texture),
                                                                            main_guid,
-                                                                           Globals::project->getProjectGuid(),
+                                                                           project->getProjectGuid(),
                                                                            QString(),
                                                                            QString(),
                                                                            AssetHelper::makeBlobFromPixmap(thumbnail));
@@ -1761,7 +1767,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                     QFileInfo(asset->fileName).baseName(),
                                                                     static_cast<int>(ModelTypes::Object),
                                                                     QString(),
-                                                                    Globals::project->getProjectGuid(),
+                                                                    project->getProjectGuid(),
                                                                     QString(),
                                                                     QString(),
                                                                     AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(assetSnapshot)),
@@ -2020,7 +2026,6 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
     }
     object["license"] = "CCBY";
 
-    Globals::assetNames.insert(main_guid, object["name"].toString());
 
 //    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + Constants::ASSET_FOLDER;
 
@@ -2144,7 +2149,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	// get the current project working directory
 	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
 	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectGuid());
+	auto pDir = IrisUtils::join(defaultProjectDirectory, project->getProjectGuid());
 
 	QString guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
@@ -2169,7 +2174,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
         QFileInfo fileInfo(file);
 		ModelTypes jafType = AssetHelper::getAssetTypeFromExtension(fileInfo.suffix().toLower());
 
-        QString pathToCopyTo = Globals::project->getProjectFolder();
+        QString pathToCopyTo = project->getProjectFolder();
         QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
 
         int increment = 1;
@@ -2267,9 +2272,9 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 
     QString guidReturned = db->copyAsset(
         jafType, guid, newNames,
-        oldAssetRecords, Globals::project->getProjectGuid(),
+        oldAssetRecords, project->getProjectGuid(),
 		AssetViewFilter::Editor,
-		Globals::project->getProjectGuid()
+		project->getProjectGuid()
     );
 
     for (auto &asset : AssetManager::getAssets()) {
@@ -2343,6 +2348,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
         QJsonObject matObject = matDoc.object();
 
 		MaterialReader reader;
+		reader.setProject(project);
 		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
 
         auto assetMat = new AssetMaterial;

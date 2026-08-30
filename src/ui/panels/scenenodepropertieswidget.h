@@ -35,6 +35,7 @@ class DemoPane;
 class IEditorViewport;
 struct StudioServices;
 class Database;
+class Project;
 
 // These are special and a kind of hack since this widget was never really designed to work with non scenenode types
 class ShaderPropertyWidget;
@@ -71,6 +72,11 @@ public:
 
     void setDatabase(Database*);
 
+    /// Forwards the one live Project to every property panel that reads it
+    /// (Phase 4: was the Globals::project static). Panels created lazily
+    /// (materialPropView) get it at construction.
+    void setProject(Project*);
+
 	WorldSkyPropertyWidget *worldSkyPropView;
 	WorldGiPropertyWidget *worldGiPropView;
 
@@ -79,6 +85,7 @@ public slots:
 
 private:
 	StudioServices *services = nullptr;
+	Project *project = nullptr;
     void clearLayout(QLayout*);
 
 private:

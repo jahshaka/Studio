@@ -144,7 +144,7 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 				QString materialName = db->fetchAsset(texGuid).name;
 				QString textureStr;
 
-				if (textureSource == TextureSource::Project) textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+				if (textureSource == TextureSource::Project) textureStr = IrisUtils::join(project->getProjectFolder(), materialName);
 				else textureStr = IrisUtils::join(globalSourceFolder, materialName);
 
 				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
@@ -186,7 +186,7 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* 
 		auto shader = db->fetchAssetData(shaderGuid);
         QJsonObject shaderDefinition = QJsonDocument::fromJson(shader).object();
 
-		if (textureSource == TextureSource::Project) globalSourceFolder = Globals::project->getProjectFolder();
+		if (textureSource == TextureSource::Project) globalSourceFolder = project->getProjectFolder();
 
 		if (!shaderDefinition.isEmpty()) {
 			auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());

@@ -19,7 +19,6 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 
-#include "shell/globals.h"
 #include "data/guidmanager.h"
 
 #include <QResource>
@@ -118,9 +117,9 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
 		QString newFileName = skyName + "_" + fileInfo.fileName();
 		newNames.append(newFileName);
 
-		if (db->checkIfRecordExists("name", newFileName, "assets", false, Globals::project->getProjectGuid())) {
+		if (db->checkIfRecordExists("name", newFileName, "assets", false, project->getProjectGuid())) {
 			importAssetsFirst = true;
-			guids.append(db->fetchAssetGUIDByName(newFileName, Globals::project->getProjectGuid()));
+			guids.append(db->fetchAssetGUIDByName(newFileName, project->getProjectGuid()));
 		}
 	}
 
@@ -133,15 +132,15 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
 		QFileInfo fileInfo(file);
 		QString newFileName = skyName + "_" + fileInfo.fileName();
 
-		QString fileToCopyTo = IrisUtils::join(Globals::project->getProjectFolder(), newFileName);
+		QString fileToCopyTo = IrisUtils::join(project->getProjectFolder(), newFileName);
 
 		bool copyFile = QFile::copy(fileInfo.absoluteFilePath(), fileToCopyTo);
 
 		const QString guid = db->createAssetEntry(GUIDManager::generateGUID(),
 								newFileName,
 								static_cast<int>(ModelTypes::Texture),
-								Globals::project->getProjectGuid(),
-								Globals::project->getProjectGuid());
+								project->getProjectGuid(),
+								project->getProjectGuid());
 
 		guids.append(guid);
 	}

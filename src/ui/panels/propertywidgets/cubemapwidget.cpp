@@ -11,9 +11,9 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 #include "irisgl/core/irisutils.h"
+#include "data/project.h"
 #include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
-#include "shell/globals.h"
 #include "ui/style/stylesheet.h"
 #include <QPainter>
 #include <QMimeData>
@@ -267,7 +267,7 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 	// extend getting guid to filepicker dialog...
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
 		textureGuid = roleDataMap.value(3).toString();
-		setImage(IrisUtils::join(Globals::project->getProjectFolder(), roleDataMap.value(1).toString()));
+		setImage(IrisUtils::join(parent->project->getProjectFolder(), roleDataMap.value(1).toString()));
 	}
 
 	event->acceptProposedAction();

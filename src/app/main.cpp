@@ -36,7 +36,6 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "ui/dialogs/infodialog.h"
 #include "scripting/scriptengine.h"
-#include "shell/globals.h"
 #include "data/constants.h"
 #include "app/updatechecker.h"
 #include "app/upgrader.h"
@@ -286,7 +285,6 @@ int main(int argc, char *argv[])
 
     splash.show();
 
-    Globals::appWorkingDir = QApplication::applicationDirPath();
     app.processEvents();
     //app.setOverrideCursor( QCursor( Qt::BlankCursor ) );
 

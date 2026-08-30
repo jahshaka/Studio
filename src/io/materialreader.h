@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class Database;
+class Project;
 enum class TextureSource
 {
 	Project,
@@ -36,9 +37,14 @@ class MaterialReader : public AssetIOBase
 {
 	TextureSource textureSource;
 	QString globalSourceFolder;
+
+	// The live Project, injected by every construction site (Phase 4: was the
+	// Globals::project static). Only read when textureSource == Project.
+	Project *project = nullptr;
 public:
     MaterialReader(TextureSource texSrc = TextureSource::Project, QString globalSourceFolder = "");
 	void setSource(TextureSource texSrc, QString globalSrcFolder);
+	void setProject(Project *p) { project = p; }
 
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();

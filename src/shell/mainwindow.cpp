@@ -81,7 +81,6 @@ For more information see the LICENSE file
 #include "ui/dialogs/loadmeshdialog.h"
 #include "ui/panels/timeline/nodekeyframeanimation.h"
 #include "ui/panels/timeline/nodekeyframe.h"
-#include "shell/globals.h"
 
 #include "ui/panels/timeline/animationwidget.h"
 
@@ -145,6 +144,7 @@ For more information see the LICENSE file
 #include "scripting/modules/studiomodules.h"
 
 #include "services/services.h"
+#include "services/subscriber.h"
 #include "services/undoservice.h"
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
@@ -155,8 +155,13 @@ For more information see the LICENSE file
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
+    // The one live Project instance (Phase 4: was Globals::project, a static
+    // initialised with the same call). Must exist before any setup*() runs —
+    // ProjectManager reads it during construction.
+    project = Project::createNew();
+
     ui->setupUi(this);
-	
+
 	settings = SettingsManager::getDefaultManager();
 
 
@@ -201,12 +206,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	scriptHost = new ScriptHost;
 	scriptHost->mainWindow = this;
 	scriptHost->db = db;
+	scriptHost->project = project;
 	scriptHost->viewport = sceneView;
 	scriptHost->projectManager = pmContainer;
 	scriptHost->undoStack = undoStack;
 	scriptHost->services = services;
 	scriptHost->projectOpen = [this]() {
-		return projectService->isSceneOpen() && !Globals::project->getProjectGuid().isEmpty();
+		return projectService->isSceneOpen() && !project->getProjectGuid().isEmpty();
 	};
 	scriptHost->engineReady = [this]() {
 		return EngineHost::instance().isRunning() && sceneView->isInitialized();
@@ -265,8 +271,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
     db->createAssetEntry(
         nodeGuid, node->getName(),
         static_cast<int>(ModelTypes::Object),
-        Globals::project->getProjectGuid(),
-        Globals::project->getProjectGuid(),
+        project->getProjectGuid(),
+        project->getProjectGuid(),
         QString(),
         QString(),
         QByteArray(),
@@ -292,7 +298,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	// if we reached this far, the project dir has already been created
 	// we can copy some default assets to each project here
 	QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
-		QDir(Globals::project->getProjectFolder()).filePath("Tile.png"));
+		QDir(project->getProjectFolder()).filePath("Tile.png"));
 
 	auto thumb = ThumbnailManager::createThumbnail(
 		IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
@@ -306,8 +312,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	const QString assetGuid = db->createAssetEntry(tileGuid,
 												   "Tile.png",
 												   static_cast<int>(ModelTypes::Texture),
-												   Globals::project->getProjectGuid(),
-												   Globals::project->getProjectGuid(),
+												   project->getProjectGuid(),
+												   project->getProjectGuid(),
                                                    QString(),
                                                    QString(), 
 												   thumbnailBytes);
@@ -316,18 +322,18 @@ iris::ScenePtr MainWindow::createDefaultScene()
         static_cast<int>(ModelTypes::Object),
         static_cast<int>(ModelTypes::Texture),
         nodeGuid, assetGuid,
-        Globals::project->getProjectGuid()
+        project->getProjectGuid()
     );
 
     auto assetTexture = new AssetTexture;
     assetTexture->fileName = "Tile.png";
     assetTexture->assetGuid = assetGuid;
-    assetTexture->path = QDir(Globals::project->getProjectFolder()).filePath("Tile.png");
+    assetTexture->path = QDir(project->getProjectFolder()).filePath("Tile.png");
     AssetManager::addAsset(assetTexture);
 
     auto m = iris::CustomMaterial::create();
     m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", QDir(Globals::project->getProjectFolder()).filePath("Tile.png"));
+    m->setValue("diffuseTexture", QDir(project->getProjectFolder()).filePath("Tile.png"));
     m->setValue("textureScale", 4.f);
     node->setMaterial(m);
 
@@ -492,7 +498,6 @@ void MainWindow::setupProjectDB()
 	if (db->initializeDatabase(path)) {
 		db->createAllTables();
 	}
-	Globals::db = db;
 }
 
 void MainWindow::setupServices()
@@ -514,11 +519,11 @@ void MainWindow::setupServices()
     connect(playbackService, &PlaybackService::playModeEntered,
             this, &MainWindow::applyPlayModeUi);
 
-    projectService = new ProjectService(db, Globals::project, pmContainer, settings,
+    projectService = new ProjectService(db, project, pmContainer, settings,
                                         sceneView, undoService,
                                         [this]() { return scene; });
 
-    sceneEditService = new SceneEditService(db, Globals::project, undoService,
+    sceneEditService = new SceneEditService(db, project, undoService,
                                             selectionService, sceneView,
                                             [this]() { return scene; }, this);
     connect(sceneEditService, &SceneEditService::hierarchyChanged, this, [this]() {
@@ -544,10 +549,11 @@ void MainWindow::setupServices()
         sceneNodePropertiesWidget->refreshMaterial(type);
     });
 
-    thumbnailService = new ThumbnailService(db, Globals::project);
-    assetService = new AssetService(db);
+    thumbnailService = new ThumbnailService(db, project);
+    assetService = new AssetService(db, project);
 
     services = new StudioServices;
+    services->eventBus = new Subscriber(this);
     services->undo = undoService;
     services->selection = selectionService;
     services->playback = playbackService;
@@ -563,8 +569,21 @@ void MainWindow::setupServices()
     if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->setServices(services);
     if (_assetView) _assetView->setServices(services);
     if (prefsDialog) prefsDialog->wireEditor(sceneView, this);
+    if (assetWidget) assetWidget->setEventBus(services->eventBus);
     if (shaderGraph) shaderGraph->setSceneOpenProbe(
         [this]() { return projectService->isSceneOpen(); });
+
+    // The live Project, injected into everything that used to reach for the
+    // Globals::project static (Phase 4).
+    if (assetWidget) assetWidget->setProject(project);
+    if (_assetView) _assetView->setProject(project);
+    if (sceneView) sceneView->setProject(project);
+    if (sceneNodePropertiesWidget) sceneNodePropertiesWidget->setProject(project);
+    if (shaderGraph) shaderGraph->setProject(project);
+    ThumbnailGenerator::getSingleton()->setProject(project);
+    // SceneWriter's two project reads live in static methods (see scenewriter.h),
+    // so the pointer rides a class static wired once, like its Database handle.
+    SceneWriter::setProject(project);
 }
 
 void MainWindow::setupUndoRedo()
@@ -1266,7 +1285,7 @@ void MainWindow::exportSceneAsZip()
     auto filePath = QFileDialog::getSaveFileName(
                         this,
                         "Choose export path",
-                        QString("%1_export").arg(Globals::project->getProjectName()),
+                        QString("%1_export").arg(project->getProjectName()),
                         "Supported Export Formats (*.zip)"
                     );
 
@@ -1277,13 +1296,13 @@ void MainWindow::exportSceneAsZip()
     // and saving that as a blob which can be put into the zip as bytes (iKlsR)
     // prepare our export database with the current scene, use the os temp location and remove after
     db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation),
-                          Globals::project->getProjectGuid());
+                          project->getProjectGuid());
 
     // get the current project working directory
     auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
                                  Constants::PROJECT_FOLDER);
     auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-    auto pDir = IrisUtils::join(defaultProjectDirectory, "Projects", Globals::project->getProjectGuid());
+    auto pDir = IrisUtils::join(defaultProjectDirectory, "Projects", project->getProjectGuid());
 
     // get all the files and directories in the project working directory
     QDir workingProjectDirectory(pDir);
@@ -1322,11 +1341,11 @@ void MainWindow::exportSceneAsZip()
     }
 
     // finally add our exported scene
-    zip_entry_open(zip, QString(Globals::project->getProjectGuid() + ".db").toStdString().c_str());
+    zip_entry_open(zip, QString(project->getProjectGuid() + ".db").toStdString().c_str());
     zip_entry_fwrite(
         zip,
         QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(Globals::project->getProjectGuid() + ".db").toStdString().c_str()
+            .filePath(project->getProjectGuid() + ".db").toStdString().c_str()
     );
     zip_entry_close(zip);
 
@@ -1347,7 +1366,7 @@ void MainWindow::exportSceneAsZip()
     QDir tempFile;
     tempFile.remove(
         QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(Globals::project->getProjectGuid() + ".db")
+            .filePath(project->getProjectGuid() + ".db")
                 );
 }
 
@@ -1400,6 +1419,7 @@ void MainWindow::setupDockWidgets()
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
 	skyPresets->setDatabase(db);
+	skyPresets->setProject(project);
 
 	connect(skyPresets, &SkyPresets::changeSceneCubemap,
 			sceneNodePropertiesWidget, &SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets);
@@ -1827,7 +1847,6 @@ void MainWindow::setupViewPort()
     sceneView->asWidget()->setFocus();
     sceneView->setMainWindow(this);
     sceneView->setDatabase(db);
-    Globals::sceneViewWidget = sceneView;
 
 	// The player page: PlayerWidget gets an EnginePlayerView (a second engine
 	// Scene mirroring the same document), or none in headless runs.
@@ -1880,7 +1899,7 @@ void MainWindow::setupViewPort()
 
 void MainWindow::setupDesktop()
 {
-	pmContainer = new ProjectManager(db, this);
+	pmContainer = new ProjectManager(db, project, this);
 	pmContainer->mainWindow = this;
 	// The Assets page: AssetView gets an EngineAssetViewer (a third engine
 	// Scene with its own preview document), or none in headless runs.
@@ -2332,7 +2351,7 @@ void MainWindow::undo()
 void MainWindow::updateWindowTitle()
 {
     // (was UiManager::updateWindowTitle — window chrome belongs to the shell)
-    setWindowTitle(QString("%1 - %2").arg(originalTitle).arg(Globals::project->getProjectName()));
+    setWindowTitle(QString("%1 - %2").arg(originalTitle).arg(project->getProjectName()));
 }
 
 void MainWindow::redo()

@@ -21,6 +21,7 @@ class SkyPresets;
 class QListWidgetItem;
 class MainWindow;
 class Database;
+class Project;
 
 class SkyPresets : public QWidget
 {
@@ -42,6 +43,13 @@ public:
 	void setDatabase(Database *db)
 	{
 		this->db = db;
+	}
+
+	/// The one live Project (Phase 4: was the Globals::project static).
+	Project *project = nullptr;
+	void setProject(Project *p)
+	{
+		this->project = p;
 	}
 
 protected slots:

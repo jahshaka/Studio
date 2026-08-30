@@ -41,7 +41,6 @@ For more information see the LICENSE file
 
 #include "ui/pages/assetview.h"
 #include "data/constants.h"
-#include "shell/globals.h"
 
 #include "shell/mainwindow.h"
 #include "data/database/database.h"
@@ -127,9 +126,6 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ThumbnailGenerator::getSingleton()->setDatabase(db);
 	connect(ThumbnailGenerator::getSingleton(),   SIGNAL(thumbnailComplete(ThumbnailResult*)),
 		    this,                                 SLOT(onThumbnailResult(ThumbnailResult*)));
-
-	connect(Globals::eventSubscriber,	&Subscriber::updateAssetSkyItemFromSkyPropertyWidget,
-			this,						&AssetWidget::updateAssetSkyItemFromSkyPropertyWidget);
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setSpacing(0);
@@ -377,7 +373,7 @@ void AssetWidget::trigger()
 			//			if (prop->type == iris::PropertyType::Texture) {
 			//				if (!prop->getValue().toString().isEmpty()) {
 			//					mat->setValue(prop->name,
-			//						IrisUtils::join(Globals::project->getProjectFolder(), "Textures",
+			//						IrisUtils::join(project->getProjectFolder(), "Textures",
 			//							db->fetchAsset(prop->getValue().toString()).name));
 			//				}
 			//			}
@@ -480,6 +476,13 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 	SceneWriter::writeSceneNodeMaterial(mat, material, false);
 }
 
+void AssetWidget::setEventBus(Subscriber *bus)
+{
+	// (Phase 4: was a Globals::eventSubscriber connect in the constructor.)
+	if (bus) connect(bus,	&Subscriber::updateAssetSkyItemFromSkyPropertyWidget,
+	                 this,	&AssetWidget::updateAssetSkyItemFromSkyPropertyWidget);
+}
+
 AssetWidget::~AssetWidget()
 {
 	delete ui;
@@ -490,24 +493,24 @@ void AssetWidget::populateAssetTree(bool initialRun)
 	auto rootTreeItem = new QTreeWidgetItem();
 	rootTreeItem->setText(0, "Assets");
 	rootTreeItem->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
-	rootTreeItem->setData(0, MODEL_GUID_ROLE, Globals::project->getProjectGuid());
-	updateTree(rootTreeItem, Globals::project->getProjectGuid());
+	rootTreeItem->setData(0, MODEL_GUID_ROLE, project->getProjectGuid());
+	updateTree(rootTreeItem, project->getProjectGuid());
 
 	ui->assetTree->clear();
 	ui->assetTree->addTopLevelItem(rootTreeItem);
 	ui->assetTree->expandItem(rootTreeItem);
 
 	if (initialRun) {
-		updateAssetView(Globals::project->getProjectGuid(), activeFilter, showDependencies);
+		updateAssetView(project->getProjectGuid(), activeFilter, showDependencies);
 		rootTreeItem->setSelected(true);
 		assetItem.item = rootTreeItem;
-		assetItem.selectedGuid = Globals::project->getProjectGuid();
+		assetItem.selectedGuid = project->getProjectGuid();
 	}
 }
 
 void AssetWidget::updateTree(QTreeWidgetItem *parent, QString path)
 {
-	for (const auto &folder : db->fetchChildFolders(path, Globals::project->getProjectGuid())) {
+	for (const auto &folder : db->fetchChildFolders(path, project->getProjectGuid())) {
 		auto item = new QTreeWidgetItem();
 		item->setIcon(0, QIcon(":/icons/icons8-folder-72.png"));
 		item->setData(0, Qt::DisplayRole, folder.name);
@@ -660,12 +663,12 @@ void AssetWidget::updateAssetView(const QString &path, int filter, bool showDepe
 	ui->assetView->clear();
 
     if (filter > 0) {
-        for (const auto &asset : db->fetchChildAssets(path, Globals::project->getProjectGuid(), filter, showDependencies)) addItem(asset);
+        for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies)) addItem(asset);
     }
     else {
-        for (const auto &folder : db->fetchChildFolders(path, Globals::project->getProjectGuid())) addItem(folder);
-        for (const auto &asset : db->fetchChildAssets(path, Globals::project->getProjectGuid(), filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
-        addCrumbs(db->fetchCrumbTrail(path, Globals::project->getProjectGuid()));
+        for (const auto &folder : db->fetchChildFolders(path, project->getProjectGuid())) addItem(folder);
+        for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), filter, showDependencies)) addItem(asset);  /* TODO : irk this out */
+        addCrumbs(db->fetchCrumbTrail(path, project->getProjectGuid()));
     }
 
     goUpOneControl->setEnabled(false);
@@ -876,7 +879,7 @@ void AssetWidget::exportSky()
     for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db))
     {
         auto asset = db->fetchAsset(assetGuid);
-        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
         QFileInfo assetInfo(assetPath);
         if (assetInfo.exists())
         {
@@ -1072,7 +1075,7 @@ void AssetWidget::assetViewDblClicked(QListWidgetItem *item)
         //if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Texture)) {
         //    QDesktopServices::openUrl(QUrl(
         //        IrisUtils::join(
-        //            Globals::project->getProjectFolder(), "Textures",
+        //            project->getProjectFolder(), "Textures",
         //            db->fetchAsset(item->data(MODEL_GUID_ROLE).toString()).name
         //        )
         //    ));
@@ -1198,7 +1201,7 @@ void AssetWidget::exportTexture()
 
     for (const auto &asset : fullFileList) {
         QFile::copy(
-            IrisUtils::join(Globals::project->getProjectFolder(), asset),
+            IrisUtils::join(project->getProjectFolder(), asset),
             IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
         );
     }
@@ -1296,7 +1299,7 @@ void AssetWidget::exportMaterial()
 
 	for (const auto &asset : fullFileList) {
 		QFile::copy(
-			IrisUtils::join(Globals::project->getProjectFolder(), asset),
+			IrisUtils::join(project->getProjectFolder(), asset),
 			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
 		);
 	}
@@ -1368,7 +1371,7 @@ void AssetWidget::exportMaterialPreview()
     QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
 
     QString fileName = IrisUtils::join(
-        Globals::project->getProjectFolder(),
+        project->getProjectFolder(),
         IrisUtils::buildFileName(db->fetchAsset(assetGuid).name, "material")
     );
 
@@ -1417,7 +1420,7 @@ void AssetWidget::exportShader()
 
     for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
         auto asset = db->fetchAsset(assetGuid);
-        auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+        auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
         QFileInfo assetInfo(assetPath);
         if (assetInfo.exists()) {
             QFile::copy(
@@ -1510,7 +1513,7 @@ void AssetWidget::exportAssetPack()
 
         for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
             auto asset = db->fetchAsset(assetGuid);
-            auto assetPath = QDir(Globals::project->getProjectFolder()).filePath(asset.name);
+            auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
             QFileInfo assetInfo(assetPath);
 
             if (assetInfo.exists()) {
@@ -1585,18 +1588,18 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
         if (assetItem.wItem->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
 			QString newFileName = IrisUtils::buildFileName(newName, QFileInfo(oldName).suffix());
             db->renameAsset(guid, newFileName);
-			QFile assetToRename(QDir(Globals::project->getProjectFolder()).filePath(oldName));
+			QFile assetToRename(QDir(project->getProjectFolder()).filePath(oldName));
 			//if (!assetToRename.exists()) return;
-			if (!assetToRename.rename(QDir(Globals::project->getProjectFolder()).filePath(newFileName))) {
+			if (!assetToRename.rename(QDir(project->getProjectFolder()).filePath(newFileName))) {
 				if (rename(
-					QDir(Globals::project->getProjectFolder()).filePath(oldName).toStdString().c_str(),
-					QDir(Globals::project->getProjectFolder()).filePath(newFileName).toStdString().c_str()
+					QDir(project->getProjectFolder()).filePath(oldName).toStdString().c_str(),
+					QDir(project->getProjectFolder()).filePath(newFileName).toStdString().c_str()
 				)) {
 					for (auto &asset : AssetManager::getAssets()) {
                         if (asset->assetGuid == guid) {
                             asset->fileName = newFileName;
                             if (!asset->path.isEmpty()) {
-                                asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                                asset->path = QDir(project->getProjectFolder()).filePath(newFileName);
                             }
                         }
 					}
@@ -1607,7 +1610,7 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
                     if (asset->assetGuid == guid) {
                         asset->fileName = newFileName;
                         if (!asset->path.isEmpty()) {
-                            asset->path = QDir(Globals::project->getProjectFolder()).filePath(newFileName);
+                            asset->path = QDir(project->getProjectFolder()).filePath(newFileName);
                         }
                     }
                 }
@@ -1636,7 +1639,7 @@ void AssetWidget::deleteItem()
 	// Delete folder and contents
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
 		for (const auto &files : db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+			auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
 			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 		}
 	}
@@ -1669,7 +1672,7 @@ void AssetWidget::deleteItem()
         if (assetWithDeps.isEmpty()) {
             // do a normal delete and return
             for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-                auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+                auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
                 if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
             }
 
@@ -1756,7 +1759,7 @@ void AssetWidget::deleteItem()
                 dialog.close();
 
                 for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-                    auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+                    auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
                     if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
                 }
 
@@ -1777,7 +1780,7 @@ void AssetWidget::deleteItem()
                         db->deleteAsset(itemGuid);
                         db->deleteDependency(item->data(MODEL_GUID_ROLE).toString(), itemGuid);
 
-                        auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(db->fetchAsset(itemGuid).name));
+                        auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(db->fetchAsset(itemGuid).name));
                         if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
                     }
                 }
@@ -1854,7 +1857,7 @@ void AssetWidget::createShader()
 						 IrisUtils::buildFileName(shaderName, "shader"),
 						 static_cast<int>(ModelTypes::Shader),
 					     assetItem.selectedGuid,
-						 Globals::project->getProjectGuid(),
+						 project->getProjectGuid(),
 						 QByteArray());
 
 	item->setText(shaderName);
@@ -1870,7 +1873,7 @@ void AssetWidget::createShader()
     auto assetShader = new AssetShader;
     assetShader->fileName = IrisUtils::buildFileName(shaderName, "shader");
     assetShader->assetGuid = assetGuid;
-    //assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
+    //assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
     assetShader->setValue(QVariant::fromValue(shaderDefinition));
 
     // Write to project dir, and update the path to that location
@@ -1913,8 +1916,8 @@ void AssetWidget::createSky()
 		assetGuid,
 		"Sky",
 		static_cast<int>(ModelTypes::Sky),
-		Globals::project->getProjectGuid(),
-		Globals::project->getProjectGuid(),
+		project->getProjectGuid(),
+		project->getProjectGuid(),
 		QString(),
 		QString(),
 		AssetHelper::makeBlobFromPixmap(QPixmap(":/icons/icons8-file-sky.png")),
@@ -1956,7 +1959,7 @@ void AssetWidget::createFolder()
 	const QString parent = item->data(MODEL_PARENT_ROLE).toString();
 
 	//// Create a new database entry for the new folder
-	db->createFolder(folderName, parent, guid, Globals::project->getProjectGuid());
+	db->createFolder(folderName, parent, guid, project->getProjectGuid());
 
 	// Update the tree browser
 	QTreeWidgetItem *child = ui->assetTree->currentItem();
@@ -2075,7 +2078,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                 QFileInfo fileInfo(file);
                 ModelTypes jafType = AssetHelper::getAssetTypeFromExtension(fileInfo.suffix().toLower());
 
-                // QString pathToCopyTo = Globals::project->getProjectFolder();
+                // QString pathToCopyTo = project->getProjectFolder();
                 // QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
 
                 // int increment = 1;
@@ -2180,7 +2183,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                 guidCompareMap,
                 oldAssetRecords,
 				AssetViewFilter::Editor,
-                Globals::project->getProjectGuid(),
+                project->getProjectGuid(),
                 assetItem.selectedGuid
             );
 
@@ -2237,6 +2240,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                 QJsonObject matObject = matDoc.object();
 
 				MaterialReader reader;
+				reader.setProject(project);
 				auto material = reader.parseMaterial(matObject, db);
 				/*
                 iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
@@ -2284,7 +2288,7 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                     }
                     else if (prop->type == iris::PropertyType::Texture) {
                         QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-                        QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+                        QString textureStr = IrisUtils::join(project->getProjectFolder(), materialName);
                         material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
                     }
                     else {
@@ -2343,7 +2347,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 		QFileInfo entryInfo(entry.path);
 
 		if (entryInfo.isDir()) {
-			db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid, Globals::project->getProjectGuid());
+			db->createFolder(entryInfo.baseName(), entry.parent_guid, entry.guid, project->getProjectGuid());
 		}
 		else {
 			QString fileName;
@@ -2359,7 +2363,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 			asset->thumbnail = thumbnail;
 
             if (asset->type != ModelTypes::Undefined) {
-                // QString pathToCopyTo = Globals::project->getProjectFolder();
+                // QString pathToCopyTo = project->getProjectFolder();
                 // QString fileToCopyTo = IrisUtils::join(pathToCopyTo, asset->fileName);
 
                 // int increment = 1;
@@ -2394,7 +2398,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
                                                                asset->fileName,
                                                                static_cast<int>(asset->type),
                                                                entry.parent_guid,
-                                                               Globals::project->getProjectGuid(),
+                                                               project->getProjectGuid(),
                                                                QString(),
                                                                QString(),
                                                                AssetHelper::makeBlobFromPixmap(thumbnail));
@@ -2467,7 +2471,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
 							db->createDependency(
                                 static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
-                                assetGuid, image.guid, Globals::project->getProjectGuid()
+                                assetGuid, image.guid, project->getProjectGuid()
                             );
                         }
                     }
@@ -2488,7 +2492,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 						}
 						else if (prop->type == iris::PropertyType::Texture) {
 							QString materialName = db->fetchAsset(matObject.value(prop->name).toString()).name;
-							QString textureStr = IrisUtils::join(Globals::project->getProjectFolder(), materialName);
+							QString textureStr = IrisUtils::join(project->getProjectFolder(), materialName);
 							material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
 						}
 						else {
@@ -2555,7 +2559,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 																	QFileInfo(asset->fileName).baseName(),
 																	static_cast<int>(ModelTypes::Object),
 																	entry.parent_guid,
-                                                                    Globals::project->getProjectGuid(),
+                                                                    project->getProjectGuid(),
                                                                     QString(),
                                                                     QString(),
                                                                     QByteArray(),
@@ -2580,7 +2584,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 						if (texturesToCopy.contains(QFileInfo(image.path).fileName())) {
 							db->createDependency(
                                 static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
-                                objectGuid, image.guid, Globals::project->getProjectGuid()
+                                objectGuid, image.guid, project->getProjectGuid()
                             );
 						}
 					}
@@ -2588,7 +2592,7 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 					// Insert a dependency for the mesh to the object
 					db->createDependency(
                         static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
-                        objectGuid, assetGuid, Globals::project->getProjectGuid()
+                        objectGuid, assetGuid, project->getProjectGuid()
                     );
 					// Remove the thumbnail from the object asset
 					db->updateAssetAsset(assetGuid, QByteArray());

@@ -17,7 +17,6 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"
-#include "shell/globals.h"
 #include "shell/mainwindow.h"
 #include "services/projectservice.h"
 #include "services/services.h"
@@ -86,7 +85,7 @@ QString ProjectApi::create(const QString &name)
         return QString();
     }
 
-    host.mainWindow->newProject(name.trimmed(), Globals::project->getProjectFolder());
+    host.mainWindow->newProject(name.trimmed(), host.project->getProjectFolder());
     return guid;
 }
 
@@ -104,7 +103,7 @@ bool ProjectApi::open(const QString &guidOrName)
         return false;
     }
 
-    if (Globals::project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
+    if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
         host.mainWindow->switchSpace(WindowSpaces::EDITOR);
         return true;
     }
@@ -137,8 +136,8 @@ bool ProjectApi::rename(const QString &guid, const QString &newName)
     if (newName.trimmed().isEmpty()) return fail("project.rename: a non-empty name is required");
     if (!host.db->renameProject(guid, newName.trimmed()))
         return fail(QStringLiteral("project.rename: no project with guid '%1'").arg(guid));
-    if (Globals::project->getProjectGuid() == guid)
-        Globals::project->setProjectPath(Globals::project->getProjectFolder(), newName.trimmed());
+    if (host.project->getProjectGuid() == guid)
+        host.project->setProjectPath(host.project->getProjectFolder(), newName.trimmed());
     return true;
 }
 
@@ -146,7 +145,7 @@ bool ProjectApi::remove(const QString &guid)
 {
     if (!host.db || !host.services || !host.services->project)
         return fail("project: not available in this session");
-    if (host.services->project->isSceneOpen() && Globals::project->getProjectGuid() == guid)
+    if (host.services->project->isSceneOpen() && host.project->getProjectGuid() == guid)
         return fail("project.remove: this project is open — project.close() first");
 
     QString name;
@@ -154,7 +153,7 @@ bool ProjectApi::remove(const QString &guid)
         return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
 
     // Folder first (like the widget), then the DB rows — through the
-    // guid-parameterised service: Globals::project is NOT mutated (§1.6.1).
+    // guid-parameterised service: host.project is NOT mutated (§1.6.1).
     if (!host.services->project->removeProject(guid))
         return fail("project.remove: could not remove the project folder");
     return true;
@@ -198,8 +197,8 @@ QVariant ProjectApi::current()
 {
     if (!host.isProjectOpen()) return QVariant();
     QVariantMap m;
-    m["guid"] = Globals::project->getProjectGuid();
-    m["name"] = Globals::project->getProjectName();
-    m["folder"] = Globals::project->getProjectFolder();
+    m["guid"] = host.project->getProjectGuid();
+    m["name"] = host.project->getProjectName();
+    m["folder"] = host.project->getProjectFolder();
     return m;
 }

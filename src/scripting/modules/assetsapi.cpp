@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include "bridge/enginethumbnailrenderer.h"
 #include "viewport/ieditorviewport.h"
 #include "bridge/enginehost.h"
-#include "shell/globals.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "io/scenereader.h"
@@ -133,7 +132,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         records = host.db->fetchAssetsForAssetView();
     } else if (scope == "project") {
         if (!requireProject()) return out;
-        records = host.db->fetchChildAssets(Globals::project->getProjectGuid(), Globals::project->getProjectGuid(), -1, true);
+        records = host.db->fetchChildAssets(host.project->getProjectGuid(), host.project->getProjectGuid(), -1, true);
     } else {
         fail("assets.list: scope must be 'store' or 'project'");
         return out;
@@ -178,7 +177,7 @@ QString AssetsApi::addToProject(const QString &guid)
     // register them in AssetManager, then Database::copyAsset clones the rows.
     const QDir sourceDir(storeFolderFor(guid));
     const auto files = sourceDir.entryInfoList(QDir::Files);
-    const QString projectFolder = Globals::project->getProjectFolder();
+    const QString projectFolder = host.project->getProjectFolder();
     const QString placeHolderGuid = GUIDManager::generateGUID();
     QVector<QPair<QString, QString>> copied;   // original name -> new name
 
@@ -245,9 +244,9 @@ QString AssetsApi::addToProject(const QString &guid)
 
     QVector<AssetRecord> newRecords;
     const QString newGuid = host.db->copyAsset(jafType, guid, newNames, newRecords,
-                                               Globals::project->getProjectGuid(),
+                                               host.project->getProjectGuid(),
                                                AssetViewFilter::Editor,
-                                               Globals::project->getProjectGuid());
+                                               host.project->getProjectGuid());
 
     // Post-copy registrations, per type (the widget's tail).
     for (auto &asset : AssetManager::getAssets()) {
@@ -270,6 +269,7 @@ QString AssetsApi::addToProject(const QString &guid)
     if (jafType == ModelTypes::Material) {
         auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(newGuid)).object();
         MaterialReader reader;
+        reader.setProject(host.project);
         auto material = reader.parseMaterial(matObject, host.db);
         auto asset = new AssetMaterial;
         asset->assetGuid = newGuid;
@@ -382,9 +382,10 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         if (!node) {
             SceneReader reader;
             reader.setDatabaseHandle(host.db);
+            reader.setProject(host.project);
             const QString storeDir = storeFolderFor(guid);
-            reader.setBaseDirectory(QDir(storeDir).exists() && Globals::project
-                                        ? storeDir : Globals::project->getProjectFolder());
+            reader.setBaseDirectory(QDir(storeDir).exists() && host.project
+                                        ? storeDir : host.project->getProjectFolder());
             auto blob = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
             node = reader.readSceneNode(blob);
         }
@@ -393,6 +394,7 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
     } else if (record.type == static_cast<int>(ModelTypes::Material)) {
         auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
         MaterialReader reader;
+        reader.setProject(host.project);
         image = renderer.renderMaterial(reader.parseMaterial(matObject, host.db), QSize(512, 512));
     } else {
         renderer.release();

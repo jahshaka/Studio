@@ -30,6 +30,7 @@ class GraphNodeScene;
 class NodeGraph;
 class NodeLibraryItem;
 class Database;
+class Project;
 class TexturePropertyWidget;
 class UndoRedo;
 class AssetView;
@@ -67,8 +68,12 @@ public:
 	/// Injected by the shell: is a project scene open? Forwarded to the
 	/// module's widgets (Phase 4: was UiManager::isSceneOpen).
 	void setSceneOpenProbe(std::function<bool()> probe);
+	/// Injected by the shell: the one live Project (Phase 4: was the
+	/// Globals::project static). Forwarded to the module's asset widget.
+	void setProject(Project *project);
 private:
 	std::function<bool()> mSceneOpenProbe;
+	Project *mProject = nullptr;
 public:
 
 	// Engine viewport mode: Studio hands in the engine-rendered Display preview

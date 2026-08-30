@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "shaderassetwidget.h"
+#include "data/project.h"
 #include <QMenu>
 #include <QEvent>
 #include <QMouseEvent>
@@ -26,7 +27,6 @@ For more information see the LICENSE file
 #include "../shadergraphmainwindow.h"
 #if(EFFECT_BUILD_AS_LIB)
 #include "io/assetmanager.h"
-#include "shell/globals.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #endif
@@ -93,7 +93,7 @@ void ShaderAssetWidget::updateAssetView(const QString & path)
 {
 	assetViewWidget->clear();
 
-	for (const auto &asset : db->fetchChildAssets(path, Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Shader))) 
+	for (const auto &asset : db->fetchChildAssets(path, project->getProjectGuid(), static_cast<int>(ModelTypes::Shader))) 
 		addItem(asset);
 
 	setWidgetToBeShown();
@@ -153,15 +153,15 @@ void ShaderAssetWidget::setUpDatabase(Database * db)
 	//remove noWidget if preset and add assetViewWidget
 	if (sceneOpenProbe && sceneOpenProbe()) {
 		this->db = db;
-		updateAssetView(Globals::project->getProjectGuid());
-		assetItemShader.selectedGuid = Globals::project->getProjectGuid();
+		updateAssetView(project->getProjectGuid());
+		assetItemShader.selectedGuid = project->getProjectGuid();
 		
 	}
 }
 
 void ShaderAssetWidget::refresh()
 {
-	updateAssetView(Globals::project->getProjectGuid());
+	updateAssetView(project->getProjectGuid());
 }
 
 void ShaderAssetWidget::setWidgetToBeShown()
@@ -202,7 +202,7 @@ void ShaderAssetWidget::deleteShader(QString guid)
 	// Delete folder and contents
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_FOLDER) {
 		for (const auto &files : db->deleteFolderAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-			auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+			auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
 			if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 		}
 	}
@@ -235,7 +235,7 @@ void ShaderAssetWidget::deleteShader(QString guid)
 		if (assetWithDeps.isEmpty()) {
 			// do a normal delete and return
 			for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+				auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
 				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 			}
 
@@ -321,7 +321,7 @@ void ShaderAssetWidget::deleteShader(QString guid)
 				dialog.close();
 
 				for (const auto &files : db->deleteAssetAndDependencies(item->data(MODEL_GUID_ROLE).toString())) {
-					auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+					auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
 					if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 				}
 
@@ -341,7 +341,7 @@ void ShaderAssetWidget::deleteShader(QString guid)
 						db->deleteAsset(itemGuid);
 						db->deleteDependency(item->data(MODEL_GUID_ROLE).toString(), itemGuid);
 
-						auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(db->fetchAsset(itemGuid).name));
+						auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(db->fetchAsset(itemGuid).name));
 						if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 					}
 				}
@@ -425,7 +425,7 @@ void ShaderAssetWidget::createFolder()
 	const QString parent = item->data(MODEL_PARENT_ROLE).toString();
 
 	//// Create a new database entry for the new folder
-	db->createFolder(folderName, parent, guid, Globals::project->getProjectGuid());
+	db->createFolder(folderName, parent, guid, project->getProjectGuid());
 
 	// We could just addItem but this is by choice and also so we can order folders first
 	updateAssetView(assetItemShader.selectedGuid);
@@ -463,7 +463,7 @@ void ShaderAssetWidget::createShader(QString *shaderName)
 		IrisUtils::buildFileName(newShader, "shader"),
 		static_cast<int>(ModelTypes::Shader),
 		assetItemShader.selectedGuid,
-		Globals::project->getProjectGuid(),
+		project->getProjectGuid(),
 		QByteArray());
 
 	item->setText(newShader);
@@ -479,7 +479,7 @@ void ShaderAssetWidget::createShader(QString *shaderName)
 	auto assetShader = new AssetMaterial;
 	assetShader->fileName = newShader;// IrisUtils::buildFileName(newShader, "material");
 	assetShader->assetGuid = assetGuid;
-	assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
+	assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
 	assetShader->setValue(QVariant::fromValue(shaderDefinition));
 
     db->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
@@ -540,10 +540,10 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 					//assigns the guid for the file name and the original extension
 					auto newName = value +'.'+ spl.back();
 
-					QFile::copy(file.fileName(), Globals::project->getProjectFolder()+'/'+ newName);
+					QFile::copy(file.fileName(), project->getProjectFolder()+'/'+ newName);
 					
-					db->createAssetEntry(Globals::project->getProjectGuid(), imgGuid, newName, static_cast<int>(ModelTypes::Texture));
-					db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::Texture), targetGuid, imgGuid, Globals::project->getProjectGuid());
+					db->createAssetEntry(project->getProjectGuid(), imgGuid, newName, static_cast<int>(ModelTypes::Texture));
+					db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::Texture), targetGuid, imgGuid, project->getProjectGuid());
 
 				}
 			}
@@ -557,8 +557,8 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 	db->createAssetEntry(targetGuid,
 		sourceRecord.name,
 		static_cast<int>(ModelTypes::Shader),
-		Globals::project->getProjectGuid(),
-		Globals::project->getProjectGuid());
+		project->getProjectGuid(),
+		project->getProjectGuid());
 
 	
     db->updateAssetAsset(targetGuid, updatedDoc.toJson());
@@ -571,7 +571,7 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 	auto assetShader = new AssetShader;
 	assetShader->fileName = shaderName;//  IrisUtils::buildFileName(shaderName, "material");
 	assetShader->assetGuid = targetGuid;
-	assetShader->path = IrisUtils::join(Globals::project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
+	assetShader->path = IrisUtils::join(project->getProjectFolder(), IrisUtils::buildFileName(shaderName, "shader"));
 
 	//auto assetData = db->fetchAssetData(targetGuid);
     auto matObj = QJsonDocument::fromJson(sourceData).object();

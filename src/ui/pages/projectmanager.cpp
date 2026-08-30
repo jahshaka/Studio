@@ -39,7 +39,6 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "ui/controls/dynamicgrid.h"
-#include "shell/globals.h"
 #include "ui/controls/itemgridwidget.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
@@ -57,10 +56,12 @@ For more information see the LICENSE file
 #include "ui/dialogs/customdialog.h"
 #include "ui/style/stylesheet.h"
 
-ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::ProjectManager)
+ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *parent)
+    : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
     db = handle;
+    this->project = project;
 
 #ifdef Q_OS_WIN32
 	// setAttribute(Qt::WA_PaintOnScreen, true);
@@ -86,37 +87,37 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		progressDialog->setValue(40);
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), Globals::project->getProjectGuid())) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), project->getProjectGuid())) {
             auto assetFile = new AssetFile;
             assetFile->fileName = asset.name;
             assetFile->assetGuid = asset.guid;
-            assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+            assetFile->path = IrisUtils::join(project->getProjectFolder(), asset.name);
             AssetManager::addAsset(assetFile);
         }
 
-        //for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::CubeMap), Globals::project->getProjectGuid())) {
+        //for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::CubeMap), project->getProjectGuid())) {
         //    QJsonDocument mapDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
         //    QJsonObject mapObject = mapDefinition.object();
 
         //    auto assetCubeMap = new AssetCubeMap;
         //    assetCubeMap->fileName = asset.name;
         //    assetCubeMap->assetGuid = asset.guid;
-        //    // assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+        //    // assetFile->path = IrisUtils::join(project->getProjectFolder(), asset.name);
         //    assetCubeMap->setValue(mapObject);
         //    AssetManager::addAsset(assetCubeMap);
         //}
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), Globals::project->getProjectGuid())) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), project->getProjectGuid())) {
             auto assetTexture = new AssetTexture;
             assetTexture->fileName = asset.name;
             assetTexture->assetGuid = asset.guid;
-            assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+            assetTexture->path = IrisUtils::join(project->getProjectFolder(), asset.name);
             AssetManager::addAsset(assetTexture);
         }
 
 		progressDialog->setValue(60);
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), Globals::project->getProjectGuid())) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), project->getProjectGuid())) {
             QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
             QJsonObject shaderObject = shaderDefinition.object();
 
@@ -129,7 +130,7 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		progressDialog->setValue(70);
 
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), Globals::project->getProjectGuid())) {
+        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), project->getProjectGuid())) {
             QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
             QJsonObject particleObject = particleDefinition.object();
 
@@ -144,12 +145,13 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 
 		// Materials
 		for (const auto &asset :
-			db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
+			db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
 		{
             QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 			QJsonObject matObject = matDoc.object();
 
 			MaterialReader reader;
+			reader.setProject(project);
 			iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
 			//qDebug() << matObject;
 			//iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
@@ -235,7 +237,7 @@ ProjectManager::~ProjectManager()
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-	if (Globals::project->getProjectGuid() == widget->tileData.guid) {
+	if (project->getProjectGuid() == widget->tileData.guid) {
 		    mainWindow->switchSpace(WindowSpaces::EDITOR);
 
 		return;
@@ -247,11 +249,11 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 	auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-	Globals::project->setProjectPath(
+	project->setProjectPath(
         QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
         widget->tileData.name
     );
-	Globals::project->setProjectGuid(widget->tileData.guid);
+	project->setProjectGuid(widget->tileData.guid);
 
 	this->openInPlayMode = playMode;
 
@@ -360,8 +362,8 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     // Update files that reference guids
 
     if (shouldOpen) {
-        Globals::project->setProjectPath(pDir, worldName);
-        Globals::project->setProjectGuid(importGuid);
+        project->setProjectPath(pDir, worldName);
+        project->setProjectGuid(importGuid);
         loadProjectAssets();
 	}
 	else {
@@ -380,11 +382,11 @@ void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
     auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
     auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 
-    Globals::project->setProjectPath(
+    project->setProjectPath(
         QDir(QDir(projectFolder).filePath("Projects")).filePath(widget->tileData.guid),
         widget->tileData.name
     );
-    Globals::project->setProjectGuid(widget->tileData.guid);
+    project->setProjectGuid(widget->tileData.guid);
 
     emit exportProject();
 }
@@ -406,7 +408,7 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 {
     Q_UNUSED(widget);
     emit closeProject();
-    Globals::project->setProjectGuid(QString());
+    project->setProjectGuid(QString());
 }
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
@@ -423,18 +425,18 @@ void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
         QDir dirToRemove(QDir(projectFolder + "/Projects").filePath(widget->tileData.guid));
         if (dirToRemove.removeRecursively()) {
             dynamicGrid->deleteTile(widget);
-            Globals::project->setProjectGuid(widget->tileData.guid);
-            db->deleteProject(Globals::project->getProjectGuid());
+            project->setProjectGuid(widget->tileData.guid);
+            db->deleteProject(project->getProjectGuid());
 
 			// Delete folder and contents
-			for (const auto &files : db->deleteFolderAndDependencies(Globals::project->getProjectGuid())) {
-				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+			for (const auto &files : db->deleteFolderAndDependencies(project->getProjectGuid())) {
+				auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
 				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 			}
 
 			// Delete asset and dependencies
-			for (const auto &files : db->deleteAssetAndDependencies(Globals::project->getProjectGuid())) {
-				auto file = QFileInfo(QDir(Globals::project->getProjectFolder()).filePath(files));
+			for (const auto &files : db->deleteAssetAndDependencies(project->getProjectGuid())) {
+				auto file = QFileInfo(QDir(project->getProjectFolder()).filePath(files));
 				if (file.isFile() && file.exists()) QFile(file.absoluteFilePath()).remove();
 			}
 
@@ -642,8 +644,8 @@ void ProjectManager::newProject()
 	if (!projectName.isEmpty() || !projectName.isNull()) {
 		auto fullProjectPath = QDir(QDir(projectPath).filePath("Projects")).filePath(projectGuid);
 
-		Globals::project->setProjectPath(fullProjectPath, projectName);
-		Globals::project->setProjectGuid(projectGuid);
+		project->setProjectPath(fullProjectPath, projectName);
+		project->setProjectGuid(projectGuid);
 
 		// make a dir and the default subfolders
 		QDir projectDir(fullProjectPath);
@@ -795,9 +797,9 @@ void ProjectManager::loadProjectAssets()
 	progressDialog->setLabelText(tr("Collecting assets..."));
 
 	// TODO - if we are only loading a couple assets, just do it sequentially
-	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
+	for (const auto &asset : db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
 		assetsToLoad.append(
-			AssetList(QDir(Globals::project->getProjectFolder()).filePath(asset.name),
+			AssetList(QDir(project->getProjectFolder()).filePath(asset.name),
 			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)))
 		);
 	}
@@ -827,9 +829,9 @@ void ProjectManager::loadProjectAssetsSync()
 
 
 	// Meshes
-	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
+	for (const auto &asset : db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
 		auto item = loadAiSceneFromModel(
-			AssetList(QDir(Globals::project->getProjectFolder()).filePath(asset.name),
+			AssetList(QDir(project->getProjectFolder()).filePath(asset.name),
 			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh))));
 		AssetObject *model = new AssetObject(
 			new AssimpObject(item.data, item.path), item.path, QFileInfo(item.path).fileName()
@@ -838,23 +840,23 @@ void ProjectManager::loadProjectAssetsSync()
 		AssetManager::addAsset(model);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), Globals::project->getProjectGuid())) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), project->getProjectGuid())) {
 		auto assetFile = new AssetFile;
 		assetFile->fileName = asset.name;
 		assetFile->assetGuid = asset.guid;
-		assetFile->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+		assetFile->path = IrisUtils::join(project->getProjectFolder(), asset.name);
 		AssetManager::addAsset(assetFile);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), Globals::project->getProjectGuid())) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), project->getProjectGuid())) {
 		auto assetTexture = new AssetTexture;
 		assetTexture->fileName = asset.name;
 		assetTexture->assetGuid = asset.guid;
-		assetTexture->path = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+		assetTexture->path = IrisUtils::join(project->getProjectFolder(), asset.name);
 		AssetManager::addAsset(assetTexture);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), Globals::project->getProjectGuid())) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), project->getProjectGuid())) {
 		QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 		QJsonObject shaderObject = shaderDefinition.object();
 
@@ -865,7 +867,7 @@ void ProjectManager::loadProjectAssetsSync()
 		AssetManager::addAsset(assetShader);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), Globals::project->getProjectGuid())) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), project->getProjectGuid())) {
 		QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 		QJsonObject particleObject = particleDefinition.object();
 
@@ -878,12 +880,13 @@ void ProjectManager::loadProjectAssetsSync()
 
 	// Materials
 	for (const auto &asset :
-		db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
+		db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
 	{
 		QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
 		QJsonObject matObject = matDoc.object();
 
 		MaterialReader reader;
+		reader.setProject(project);
 		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
 
 		auto assetMat = new AssetMaterial;
@@ -902,5 +905,5 @@ bool ProjectManager::isOpenProjectTile(const QString &guid) const
 {
     return mainWindow && mainWindow->studioServices() && mainWindow->studioServices()->project
         && mainWindow->studioServices()->project->isSceneOpen()
-        && guid == Globals::project->getProjectGuid();
+        && guid == project->getProjectGuid();
 }

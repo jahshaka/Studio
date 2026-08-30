@@ -16,7 +16,6 @@
 #include "bridge/enginethumbnailrenderer.h"
 #include "bridge/enginehost.h"
 #include "data/constants.h"
-#include "shell/globals.h"
 #include "data/project.h"
 #include "data/database/database.h"
 #include "io/scenereader.h"
@@ -240,13 +239,14 @@ iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QS
 
     SceneReader reader;
     reader.setDatabaseHandle(mDb);   // resolves mesh and texture GUIDs to store files
+    reader.setProject(mProject);
     reader.setBaseDirectory(assetFolder(guid));
     iris::SceneNodePtr node = reader.readSceneNode(objectHierarchy);
     if (!node) return node;
 
     // rename animation sources to relative paths
-    if (Globals::project) {
-        auto relativePath = QDir(Globals::project->folderPath).relativeFilePath(path);
+    if (mProject) {
+        auto relativePath = QDir(mProject->folderPath).relativeFilePath(path);
         for (auto anim : node->getAnimations()) {
             if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relativePath;
         }
@@ -259,6 +259,7 @@ iris::MaterialPtr EngineAssetViewer::readJafMaterial(const QString &guid)
     if (!mDb) return iris::MaterialPtr();
     QJsonObject matObject = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
     MaterialReader reader(TextureSource::GlobalAssets, assetFolder(guid));
+    reader.setProject(mProject);
     return reader.parseMaterial(matObject, mDb);
 }
 

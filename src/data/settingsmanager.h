@@ -12,12 +12,12 @@ For more information see the LICENSE file
 #ifndef SETTINGSMANAGER_H
 #define SETTINGSMANAGER_H
 
+#include <QCoreApplication>
 #include <QSettings>
 #include <QVariant>
 #include <QDir>
 #include <QStandardPaths>
 #include <QApplication>
-#include "shell/globals.h"
 
 class SettingsManager
 {
@@ -44,7 +44,7 @@ public:
 #ifdef BUILD_AS_LIB 
 		loadSettings(QDir(QApplication::applicationDirPath()).filePath(fileName));
 #else
-		loadSettings(QDir(Globals::appWorkingDir).filePath(fileName));
+		loadSettings(QDir(QCoreApplication::applicationDirPath()).filePath(fileName));
 #endif
 
 #else

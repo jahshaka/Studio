@@ -27,7 +27,6 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 
 #include "data/constants.h"
-#include "shell/globals.h"
 #include "viewport/ieditorviewport.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"

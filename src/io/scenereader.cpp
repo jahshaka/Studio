@@ -25,7 +25,6 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "data/guidmanager.h"
 
-#include "shell/globals.h"
 #include "data/constants.h"
 #include "data/database/database.h"
 
@@ -156,7 +155,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	scene->setAmbientMusicVolume(volume);
 	auto asset = handle->fetchAsset(scene->ambientMusicGuid);
 	if (!asset.name.isEmpty()) {
-		QString fullPathToAudio = IrisUtils::join(Globals::project->getProjectFolder(), asset.name);
+		QString fullPathToAudio = IrisUtils::join(project->getProjectFolder(), asset.name);
 		scene->setAmbientMusic(fullPathToAudio);
 		scene->startPlayingAmbientMusic();
 	}
@@ -191,7 +190,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 
 		case iris::SkyType::EQUIRECTANGULAR: {
 			QString textureGuid = scene->skyData.value("Equirectangular").value("equiSkyGuid").toString();
-			auto image = IrisUtils::join(Globals::project->getProjectFolder(), handle->fetchAsset(textureGuid).name);
+			auto image = IrisUtils::join(project->getProjectFolder(), handle->fetchAsset(textureGuid).name);
 			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
 			break;
 		}
@@ -207,7 +206,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 
 			QVector<QString> sides = { front, back, top, bottom, left, right };
 			for (int i = 0; i < sides.count(); ++i) {
-				QString path = IrisUtils::join(Globals::project->getProjectFolder(), sides[i]);
+				QString path = IrisUtils::join(project->getProjectFolder(), sides[i]);
 				sides[i] = QFileInfo(path).isFile() ? path : QString();
 			}
 
@@ -694,7 +693,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 					if (!assetName.isEmpty()) {
 						path = useAlternativeLocation
 							? QDir(assetDirectory).filePath(assetName)
-							: IrisUtils::join(Globals::project->getProjectFolder(), assetName);
+							: IrisUtils::join(project->getProjectFolder(), assetName);
 					}
 				}
 				if (path.isEmpty()) path = getAbsolutePath(stored);
@@ -713,6 +712,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 {
 	MaterialReader reader;
+	reader.setProject(project);
 	if (useAlternativeLocation) reader.setSource(TextureSource::GlobalAssets, assetDirectory);
     if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
 

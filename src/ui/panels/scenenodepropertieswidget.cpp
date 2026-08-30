@@ -150,6 +150,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView = new MaterialPropertyWidget();
                     materialPropView->setPanelTitle("Material");
                     materialPropView->setDatabase(db);
+                    materialPropView->setProject(project);
                     materialPropView->setServices(services);
                     materialPropView->expand();
 
@@ -227,17 +228,34 @@ void SceneNodePropertiesWidget::refreshTransform()
 void SceneNodePropertiesWidget::setSceneView(IEditorViewport *sceneView)
 {
     this->sceneView = sceneView;
+    if (worldSkyPropView) worldSkyPropView->wireViewportEvents(sceneView);
 }
 
 void SceneNodePropertiesWidget::setServices(StudioServices *services)
 {
     this->services = services;
     if (transformWidget) transformWidget->setServices(services);
+    if (skyPropView) skyPropView->eventBus = services ? services->eventBus : nullptr;
 }
 
 void SceneNodePropertiesWidget::setDatabase(Database *db)
 {
     this->db = db;
+}
+
+void SceneNodePropertiesWidget::setProject(Project *project)
+{
+    // Phase 4: every panel that used to read the Globals::project static now
+    // carries the pointer (AccordianBladeWidget::project, which its add*()
+    // helpers forward to the controls they build).
+    this->project = project;
+    if (worldPropView)    worldPropView->setProject(project);
+    if (skyPropView)      skyPropView->setProject(project);
+    if (worldSkyPropView) worldSkyPropView->setProject(project);
+    if (emitterPropView)  emitterPropView->setProject(project);
+    if (shaderPropView)   shaderPropView->setProject(project);
+    // materialPropView is created on demand in setSceneNode() and gets the
+    // pointer there (the member is not null-initialised).
 }
 
 void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList guids)

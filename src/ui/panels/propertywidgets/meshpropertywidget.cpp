@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
 #include "ui/controls/filepickerwidget.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "shell/globals.h"
 #include "ui/controls/comboboxwidget.h"
 
 MeshPropertyWidget::MeshPropertyWidget()
@@ -35,9 +34,7 @@ MeshPropertyWidget::~MeshPropertyWidget()
 
 void MeshPropertyWidget::onMeshPathChanged(const QString &path)
 {
-    //Globals::sceneViewWidget->makeCurrent();
     //meshNode->setMesh(path);
-    //Globals::sceneViewWidget->doneCurrent();
 }
 
 void MeshPropertyWidget::onCullModeChanged(const QString& cullMode)

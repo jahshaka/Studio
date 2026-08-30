@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/shaderpropertywidget.h"
+#include "data/project.h"
 
 #include <QDirIterator>
 #include <QJsonDocument>
@@ -18,7 +19,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 
 #include "data/constants.h"
-#include "shell/globals.h"
 
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
@@ -70,7 +70,7 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
                         static_cast<int>(ModelTypes::File),
                         asset->assetGuid,
                         vertexShader,
-                        Globals::project->getProjectGuid()
+                        project->getProjectGuid()
                     );
 
                     db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toJson());
@@ -82,7 +82,7 @@ void ShaderPropertyWidget::onShaderFileChanged(int index)
                         static_cast<int>(ModelTypes::File),
                         asset->assetGuid,
                         fragmentShader,
-                        Globals::project->getProjectGuid()
+                        project->getProjectGuid()
                     );
 
                     db->updateAssetAsset(asset->assetGuid, QJsonDocument(shaderObject).toJson());
@@ -108,13 +108,13 @@ void ShaderPropertyWidget::onVertexShaderFileChanged(int index)
             jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
             jsonFile.write(QJsonDocument(shaderObject).toJson());
 
-            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, Globals::project->getProjectGuid())) {
+            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, project->getProjectGuid())) {
                 db->createDependency(
                     static_cast<int>(ModelTypes::Shader),
                     static_cast<int>(ModelTypes::File),
                     asset->assetGuid,
                     vertexShader,
-                    Globals::project->getProjectGuid()
+                    project->getProjectGuid()
                 );
             }
             else {
@@ -144,13 +144,13 @@ void ShaderPropertyWidget::onFragmentShaderFileChanged(int index)
             jsonFile.open(QIODevice::Truncate | QFile::WriteOnly);
             jsonFile.write(QJsonDocument(shaderObject).toJson());
 
-            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, Globals::project->getProjectGuid())) {
+            if (db->checkIfRecordExists("depender", asset->assetGuid, "dependencies", false, project->getProjectGuid())) {
                 db->createDependency(
                     static_cast<int>(ModelTypes::Shader),
                     static_cast<int>(ModelTypes::File),
                     asset->assetGuid,
                     fragmentShader,
-                    Globals::project->getProjectGuid()
+                    project->getProjectGuid()
                 );
             }
             else {

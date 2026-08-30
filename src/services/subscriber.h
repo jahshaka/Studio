@@ -22,7 +22,7 @@ class Subscriber : public QObject
 	Q_OBJECT
 
 public:
-	Subscriber() = default;
+	explicit Subscriber(QObject *parent = nullptr) : QObject(parent) {}
 
 signals:
 	void updateAssetSkyItemFromSkyPropertyWidget(const QString &guid, iris::SkyType skyType);

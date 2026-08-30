@@ -15,6 +15,7 @@
 
 class QWidget;
 class Database;
+class Project;
 namespace iris { class SceneSource; }
 
 class IAssetViewer
@@ -25,6 +26,9 @@ public:
     /// The widget AssetView lays out (page 0 of its viewer stack).
     virtual QWidget *asWidget() = 0;
     virtual void setDatabase(Database *db) = 0;
+    /// The one live Project (Phase 4: was the Globals::project static). Defaulted
+    /// to a no-op: only the engine viewer reads it (relative animation paths).
+    virtual void setProject(Project *) {}
 
     /// The assimp import of the last loadModel() — AssetView reads its textures.
     virtual iris::SceneSource *sceneSource() = 0;

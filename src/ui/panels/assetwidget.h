@@ -17,6 +17,8 @@ namespace Ui {
 }
 
 class Database;
+class Project;
+class Subscriber;
 
 #include <QListWidget>
 #include <QTreeWidgetItem>
@@ -218,6 +220,12 @@ class AssetWidget : public QWidget
 
 public:
     explicit AssetWidget(Database *handle, QWidget *parent = Q_NULLPTR);
+    /// Wired by the shell (Phase 4: the Globals::eventSubscriber bus is injected).
+    void setEventBus(Subscriber *bus);
+    /// The one live Project, wired by the shell in MainWindow::setupServices
+    /// (Phase 4: was the Globals::project static). Nothing on the construction
+    /// path reads it — the first reads happen on user interaction.
+    void setProject(Project *p) { project = p; }
     ~AssetWidget();
 
 	AssetItem assetItem;
@@ -313,6 +321,7 @@ private:
     QPoint startPos;
 
     Database *db;
+    Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
 	ProgressDialog *progressDialog;
 
     QString currentPath;

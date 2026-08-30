@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
+#include "data/project.h"
 
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
 #include "ui/controls/texturepickerwidget.h"
@@ -26,7 +27,6 @@ For more information see the LICENSE file
 
 #include <QJsonObject> 
 
-#include "shell/globals.h" 
 #include "io/scenewriter.h" 
 
 EmitterPropertyWidget::EmitterPropertyWidget()
@@ -101,7 +101,7 @@ void EmitterPropertyWidget::onBillboardImageChanged(QString image)
                 static_cast<int>(ModelTypes::ParticleSystem),
                 static_cast<int>(ModelTypes::Texture),
                 ps->getGUID(), textureGuid,
-                Globals::project->getProjectGuid()
+                project->getProjectGuid()
             );
         }
     }

@@ -46,6 +46,7 @@ struct ModelData {
 
 class SettingsManager;
 class MainWindow;
+class Project;
 
 using AssetList = QPair<QString, QString>;
 
@@ -54,7 +55,11 @@ class ProjectManager : public QWidget
     Q_OBJECT
 
 public:
-    ProjectManager(Database *handle, QWidget *parent = nullptr);
+    /// `project` is the one live Project instance, owned by the shell
+    /// (Phase 4: was the Globals::project static). A constructor parameter
+    /// because populateDesktop() runs during construction and reaches it
+    /// through isOpenProjectTile().
+    ProjectManager(Database *handle, Project *project, QWidget *parent = nullptr);
     ~ProjectManager();
 
 	void updateTile(const QString &id, const QByteArray &arr);
@@ -137,6 +142,7 @@ private:
     QString searchTerm;
 
     Database *db;
+    Project *project;
 
     QPointer<QFutureWatcher<QVector<ModelData>>> futureWatcher;
 	QPointer<ProgressDialog> progressDialog;

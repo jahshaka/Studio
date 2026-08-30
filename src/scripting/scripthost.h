@@ -21,12 +21,13 @@ For more information see the LICENSE file
 //
 // The precondition probes are std::functions rather than direct Globals/UiManager
 // reads so the scripting core has NO Studio dependencies: the app wires them to
-// Globals::project + UiManager, tests wire them to whatever they are testing.
+// the live project + services, tests wire them to whatever they are testing.
 
 #include <functional>
 
 class MainWindow;
 class Database;
+class Project;
 class IEditorViewport;
 class ProjectManager;
 class QUndoStack;
@@ -36,6 +37,10 @@ struct ScriptHost
 {
     MainWindow      *mainWindow = nullptr;
     Database        *db = nullptr;
+    /// The one live Project instance (Phase 4: was the Globals::project
+    /// static). NULLABLE: hosts that drive only the scripting core leave it
+    /// unset, so verbs that touch it must null-check (the modules do).
+    Project         *project = nullptr;
     IEditorViewport *viewport = nullptr;        // editor viewport, if one exists
     ProjectManager  *projectManager = nullptr;
     QUndoStack      *undoStack = nullptr;       // for one-undo-step-per-script macros
@@ -46,7 +51,7 @@ struct ScriptHost
     /// this is a forward declaration only).
     StudioServices  *services = nullptr;
 
-    /// True when a project is open (a scene is loaded and Globals::project has a
+    /// True when a project is open (a scene is loaded and `project` has a
     /// guid). Unset = false: verbs that requireProject() fail cleanly.
     std::function<bool()> projectOpen;
 

@@ -100,6 +100,11 @@ public:
     bool isSceneOpen() const { return sceneOpen; }
     void setSceneOpen(bool open) { sceneOpen = open; }
 
+    /// The one live Project instance (Phase 4: was the Globals::project
+    /// static). Constructed by the shell and mutated in place — every holder
+    /// of the aggregate reads the same object.
+    Project *current() const { return project; }
+
 private:
     bool sceneOpen = false;
     Database *db;

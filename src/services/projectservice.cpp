@@ -118,6 +118,7 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
 {
     std::unique_ptr<SceneReader> reader(new SceneReader);
     reader->setDatabaseHandle(db);
+    reader->setProject(project);
 
     postMan = iris::PostProcessManagerPtr();
     return reader->readScene(project->getProjectFolder(),

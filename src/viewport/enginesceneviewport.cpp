@@ -25,7 +25,6 @@
 #include <QDir>
 #include "data/constants.h"
 #include "shell/mainwindow.h"
-#include "shell/globals.h"
 #include "data/project.h"
 #include "data/database/database.h"
 #include "io/assetmanager.h"
@@ -246,7 +245,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
             emit mEvents.addPrimitive(Constants::Reserved::DefaultPrimitives.value(role.value(3).toString()));
             return;
         }
-        emit mEvents.addDroppedMesh(QDir(Globals::project->getProjectFolder()).filePath(role.value(2).toString()),
+        emit mEvents.addDroppedMesh(QDir(mProject->getProjectFolder()).filePath(role.value(2).toString()),
                                     true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
     } else if (type == static_cast<int>(ModelTypes::Material)) {
         if (mDragPreviewNode && mMainWindow) {
@@ -259,7 +258,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         if (node && node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto mat = node.staticCast<iris::MeshNode>()->getMaterial().dynamicCast<iris::CustomMaterial>();
             if (mat && !mat->firstTextureSlot().isEmpty()) {
-                mat->setValue(mat->firstTextureSlot(), QDir(Globals::project->getProjectFolder()).filePath(role.value(1).toString()));
+                mat->setValue(mat->firstTextureSlot(), QDir(mProject->getProjectFolder()).filePath(role.value(1).toString()));
                 if (mMainWindow) mMainWindow->sceneNodeSelected(node);
             }
         }

@@ -67,7 +67,6 @@ set(SRCS
     src/data/settingsmanager.cpp 
     src/viewport/editorcameracontroller.cpp 
     src/ui/dialogs/infodialog.cpp 
-    src/shell/globals.cpp 
     src/viewport/engineviewwidget.cpp
     src/bridge/scenemirror.cpp
     src/viewport/enginesceneviewport.cpp
@@ -221,7 +220,6 @@ set(HEADERS
     src/data/project.h 
     src/data/settingsmanager.h 
     src/viewport/editorcameracontroller.h 
-    src/shell/globals.h 
     src/viewport/engineviewwidget.h
     src/bridge/scenemirror.h
     src/viewport/enginesceneviewport.h

@@ -34,11 +34,15 @@ namespace iris {
     class LightNode;
 }
 
+class Subscriber;
+
 class SkyPropertyWidget: public AccordianBladeWidget
 {
     Q_OBJECT
 
 public:
+	/// Injected by the properties panel (Phase 4: was Globals::eventSubscriber).
+	Subscriber *eventBus = nullptr;
     SkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);

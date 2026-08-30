@@ -34,6 +34,8 @@ class CubeMapWidget;
 
 #include <QLayout>
 
+class Project;
+
 class AccordianBladeWidget : public QWidget
 {
     Q_OBJECT
@@ -60,6 +62,12 @@ public:
 	CubeMapWidget*			addCubeMapWidget(QString top, QString bottom, QString left, QString front, QString right, QString back);
 
     PropertyWidget*         addPropertyWidget();
+
+    /// The one live Project (Phase 4: was the Globals::project static). Set by
+    /// whoever creates the panel; the add*() helpers above forward it to the
+    /// controls they build, which read it in their drop handlers.
+    Project *project = nullptr;
+    virtual void setProject(Project *p) { project = p; }
 
     void setPanelTitle(const QString&);
     void collapse();

@@ -25,6 +25,7 @@ struct AssetItemShader {
 
 
 class Database;
+class Project;
 class ShaderAssetWidget : public QWidget
 {
 	Q_OBJECT
@@ -32,6 +33,9 @@ public:
 	/// Injected by the module window: is a project scene open? (Phase 4:
 	/// was UiManager::isSceneOpen). Null-safe: no probe = treated as closed.
 	std::function<bool()> sceneOpenProbe;
+	/// The one live Project, injected by the shadergraph window (Phase 4: was
+	/// the Globals::project static).
+	Project *project = nullptr;
 	ShaderAssetWidget(Database *handle = Q_NULLPTR);
 	~ShaderAssetWidget();
 

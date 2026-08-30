@@ -34,11 +34,14 @@ namespace iris {
     class LightNode;
 }
 
+class IEditorViewport;
+
 class WorldSkyPropertyWidget: public AccordianBladeWidget
 {
     Q_OBJECT
 
 public:
+	void wireViewportEvents(IEditorViewport *viewport);
     WorldSkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
