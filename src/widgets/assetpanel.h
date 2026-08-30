@@ -22,7 +22,10 @@ For more information see the LICENSE file
 
 #include "core/project.h"
 #include "core/database/database.h"
-#include "mainwindow.h"
+
+// Forward declaration only: including mainwindow.h at header scope poisoned
+// every includer with the whole shell (audit §7.4); the panels hold a pointer.
+class MainWindow;
 
 struct DefaultModel
 {

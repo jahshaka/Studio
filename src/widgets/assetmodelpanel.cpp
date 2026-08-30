@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include "core/guidmanager.h"
 #include "io/materialpresetreader.h"
 #include "mainwindow.h"
+#include "../services/sceneeditservice.h"
+#include "../services/services.h"
 
 AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
 {
@@ -266,18 +268,9 @@ void AssetModelPanel::addObjectToScene(QModelIndex itemIndex)
     auto item = listView->item(itemIndex.row());
     auto text = item->text();
 
-    if (text == "Plane")    mainWindow->addPlane();
-    if (text == "Cone")     mainWindow->addCone();
-    if (text == "Cube")     mainWindow->addCube();
-    if (text == "Cylinder") mainWindow->addCylinder();
-    if (text == "Sphere")   mainWindow->addSphere();
-    if (text == "Torus")    mainWindow->addTorus();
-    if (text == "Capsule")  mainWindow->addCapsule();
-    if (text == "Gear")     mainWindow->addGear();
-    if (text == "Pyramid")  mainWindow->addPyramid();
-    if (text == "Teapot")   mainWindow->addTeapot();
-    if (text == "Sponge")   mainWindow->addSponge();
-    if (text == "Steps")    mainWindow->addSteps();
+    // The audit's emblematic reroute (§7.5): the panel calls the service verb
+    // that is also the scripting registry's scene.addPrimitive.
+    mainWindow->studioServices()->sceneEdit->addPrimitive(text);
 }
 
 void AssetModelPanel::removeFavorite(const QString &assetGuid)
