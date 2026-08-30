@@ -78,10 +78,12 @@ set(SRCS
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
     src/scripting/modules/materialsapi.cpp
-    src/scripting/services/assetimporter.cpp
     src/scripting/modules/studiomodules.cpp
+    src/services/assetimporter.cpp
+    src/services/assetservice.h
     src/services/projectservice.cpp
     src/services/sceneeditservice.cpp
+    src/services/thumbnailservice.cpp
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
     src/services/playbackservice.cpp
@@ -251,11 +253,12 @@ set(HEADERS
     src/scripting/modules/worldapi.h
     src/scripting/modules/assetsapi.h
     src/scripting/modules/materialsapi.h
-    src/scripting/services/assetimporter.h
     src/scripting/modules/studiomodules.h
     src/services/services.h
+    src/services/assetimporter.h
     src/services/projectservice.h
     src/services/sceneeditservice.h
+    src/services/thumbnailservice.h
     src/services/undoservice.h
     src/services/selectionservice.h
     src/services/playbackservice.h

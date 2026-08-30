@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 
 #include "moduleshared.h"
-#include "../services/assetimporter.h"
+#include "../../services/assetservice.h"
 #include "../../constants.h"
 #include "../../core/assethelper.h"
 #include "../../core/database/database.h"
@@ -150,8 +150,8 @@ QVariantList AssetsApi::list(const QVariantMap &options)
 
 QString AssetsApi::import(const QString &path)
 {
-    if (!host.db) { fail("assets: not available in this session"); return QString(); }
-    const auto result = AssetImporter::importMesh(path, host.db);
+    if (!host.services || !host.services->assets) { fail("assets: not available in this session"); return QString(); }
+    const auto result = host.services->assets->importMesh(path);
     if (!result.ok()) {
         fail(QStringLiteral("assets.import: %1").arg(result.error));
         return QString();

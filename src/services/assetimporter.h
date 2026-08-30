@@ -9,11 +9,12 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#ifndef SCRIPTING_ASSETIMPORTER_H
-#define SCRIPTING_ASSETIMPORTER_H
+#ifndef SERVICES_ASSETIMPORTER_H
+#define SERVICES_ASSETIMPORTER_H
 
 // AssetImporter — the headless mesh-import service (SCRIPTING_SPEC §1.3,
-// extracted from AssetView::importModel's mesh branch).
+// extracted from AssetView::importModel's mesh branch; moved from
+// src/scripting/services/ to the app service layer in audit §9 Phase 1).
 //
 // Same store layout and DB contract as the widget: one guid names the Object
 // row, the AssetStore/<guid> folder and the parent of every member row; the
@@ -47,4 +48,4 @@ public:
     static Result importMesh(const QString &filePath, Database *db);
 };
 
-#endif // SCRIPTING_ASSETIMPORTER_H
+#endif // SERVICES_ASSETIMPORTER_H

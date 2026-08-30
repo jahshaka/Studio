@@ -18,12 +18,12 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <functional>
 
-#include "../../constants.h"
-#include "../../core/assethelper.h"
-#include "../../core/database/database.h"
-#include "../../core/guidmanager.h"
-#include "../../io/assetmanager.h"
-#include "../../io/scenewriter.h"
+#include "../constants.h"
+#include "../core/assethelper.h"
+#include "../core/database/database.h"
+#include "../core/guidmanager.h"
+#include "../io/assetmanager.h"
+#include "../io/scenewriter.h"
 #include "../../irisgl/src/core/irisutils.h"
 #include "../../irisgl/src/core/property.h"
 #include "../../irisgl/src/materials/custommaterial.h"

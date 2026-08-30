@@ -159,6 +159,8 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
 #include "services/sceneeditservice.h"
+#include "services/thumbnailservice.h"
+#include "services/assetservice.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -603,12 +605,17 @@ void MainWindow::setupServices()
         sceneNodePropertiesWidget->refreshMaterial(type);
     });
 
+    thumbnailService = new ThumbnailService(db, Globals::project);
+    assetService = new AssetService(db);
+
     services = new StudioServices;
     services->undo = undoService;
     services->selection = selectionService;
     services->playback = playbackService;
     services->project = projectService;
     services->sceneEdit = sceneEditService;
+    services->thumbnails = thumbnailService;
+    services->assets = assetService;
 }
 
 void MainWindow::setupUndoRedo()
@@ -975,29 +982,13 @@ void MainWindow::favoriteItem(QListWidgetItem *item)
 
 void MainWindow::refreshThumbnail(const QString &guid)
 {
-    QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-    auto assetName = db->fetchAsset(meshGuid).name;
-
-    ThumbnailGenerator::getSingleton()->requestThumbnail(
-        ThumbnailRequestType::ImportedMesh,
-        QDir(Globals::project->getProjectFolder()).filePath(assetName),
-        guid
-    );
+    thumbnailService->refreshObjectThumbnail(guid);
 }
 
 void MainWindow::refreshThumbnail(QListWidgetItem *item)
 {
     if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
-        QString itemGuid = item->data(MODEL_GUID_ROLE).toString();
-        QString meshGuid = db->fetchObjectMesh(itemGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-
-        auto assetName = db->fetchAsset(meshGuid).name;
-
-        ThumbnailGenerator::getSingleton()->requestThumbnail(
-            ThumbnailRequestType::ImportedMesh,
-            QDir(Globals::project->getProjectFolder()).filePath(assetName),
-            item->data(MODEL_GUID_ROLE).toString()
-        );
+        thumbnailService->refreshObjectThumbnail(item->data(MODEL_GUID_ROLE).toString());
     }
 }
 
