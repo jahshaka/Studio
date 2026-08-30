@@ -402,7 +402,8 @@ void ItemGridWidget::mousePressEvent(QMouseEvent *event)
         emit singleClicked(this);
     }
 
-    if (event->button() == Qt::LeftButton && freeformDraggable) {
+    // a press on a tile always starts a tile drag — never a row pan (sliders)
+    if (event->button() == Qt::LeftButton && (freeformDraggable || sliderDraggable)) {
         dragging = false;
         dragStartGlobal = event->globalPosition().toPoint();
         dragStartTilePos = pos();
@@ -413,7 +414,7 @@ void ItemGridWidget::mouseMoveEvent(QMouseEvent *event)
 {
     QWidget::mouseMoveEvent(event);
 
-    if (!freeformDraggable || !(event->buttons() & Qt::LeftButton)) return;
+    if (!(freeformDraggable || sliderDraggable) || !(event->buttons() & Qt::LeftButton)) return;
 
     const QPoint delta = event->globalPosition().toPoint() - dragStartGlobal;
     if (!dragging && delta.manhattanLength() < QApplication::startDragDistance()) return;
@@ -439,6 +440,14 @@ void ItemGridWidget::mouseReleaseEvent(QMouseEvent *event)
 
     if (event->button() == Qt::LeftButton && dragging) {
         dragging = false;
+
+        // sliders: the drop position decides {row, insert index}; DynamicGrid
+        // resolves it. Never touch the freeform normX/normY — the freeform
+        // layout must survive a stay in slider mode untouched (lossless rule).
+        if (sliderDraggable) {
+            emit tileMoved(this);
+            return;
+        }
 
         // store position normalized to the canvas so window resizes keep placement
         QWidget *canvas = parentWidget();
@@ -488,6 +497,20 @@ void ItemGridWidget::projectContextMenu(const QPoint &pos)
         connect(moveAction, &QAction::triggered, this, [this, i]() {
             emit moveToDesktopFromWidget(this, i);
         });
+    }
+
+    // Sliders (DESKTOP_SLIDER_SPEC.md): re-file this tile onto another
+    // filmstrip row (current row disabled). Only offered in slider mode.
+    if (sliderRowCount > 0) {
+        QMenu *rowMenu = menu.addMenu("Move to row");
+        rowMenu->setStyleSheet(menu.styleSheet());
+        for (int r = 0; r < sliderRowCount; ++r) {
+            QAction *rowAction = rowMenu->addAction(QString("Row %1").arg(r + 1));
+            rowAction->setEnabled(!(hasSliderPos && r == sliderRow));
+            connect(rowAction, &QAction::triggered, this, [this, r]() {
+                emit moveToRowFromWidget(this, r);
+            });
+        }
     }
 
     menu.exec(mapToGlobal(pos));

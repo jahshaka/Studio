@@ -53,6 +53,16 @@ public:
     qreal normX = 0.0;              // 0..1 across the desktop canvas minus the tile size
     qreal normY = 0.0;
 
+    // Slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip state, kept in sync by
+    // DynamicGrid. sliderRowCount > 0 means the desktop is in Sliders mode
+    // (enables the Move-to-row submenu); a press on the tile starts a tile
+    // drag — never a row pan (that is the canvas's empty-space gesture).
+    bool sliderDraggable = false;
+    bool hasSliderPos = false;      // {row, index} assignment exists (DB or seeded)
+    int  sliderRow = 0;             // 0-based filmstrip row
+    int  sliderIndex = 0;           // 0-based order within the row
+    int  sliderRowCount = 0;
+
 	void updateTile(const QByteArray &arr);
 
     void setTileSize(QSize size, QSize iSize);
@@ -104,7 +114,8 @@ signals:
     void closeFromWidget(ItemGridWidget*);
     void deleteFromWidget(ItemGridWidget*);
     void moveToDesktopFromWidget(ItemGridWidget*, int desktop);
-    void tileMoved(ItemGridWidget*);    // freeform drag ended; normX/normY updated
+    void moveToRowFromWidget(ItemGridWidget*, int row);     // sliders: 0-based target row
+    void tileMoved(ItemGridWidget*);    // freeform drag ended (normX/normY updated) or slider drop
 
 private:
 //    QWidget *gameGridItem;

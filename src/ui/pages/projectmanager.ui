@@ -454,7 +454,7 @@ QComboBox::down-arrow:!enabled {
          </size>
         </property>
         <property name="toolTip">
-         <string>Desktop layout: sequential rows or freeform (drag tiles anywhere)</string>
+         <string>Desktop layout: sequential rows, freeform (drag tiles anywhere), or sliders (filmstrip rows)</string>
         </property>
         <property name="text">
          <string>Rows ▾</string>
