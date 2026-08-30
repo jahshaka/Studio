@@ -25,7 +25,6 @@
 #endif
 
 class QMenuBar;
-class SceneWidget;
 class GraphNodeScene;
 class NodeGraph;
 class NodeLibraryItem;
@@ -145,7 +144,6 @@ private:
 
     Ui::MainWindow *ui;
     GraphNodeScene* scene;
-    SceneWidget* sceneWidget;
 	IMaterialPreviewWidget *enginePreview = nullptr;
 	QMainWindow *displayWindow = nullptr;   // the Display dock's inner window (menus + preview)
 	QTimer *previewUpdateTimer = nullptr;   // ~150ms debounce: slider drags evaluate once, not per pixel

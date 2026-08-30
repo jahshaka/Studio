@@ -5,56 +5,9 @@
 #include <QGraphicsProxyWidget>
 #include <QIcon>
 #include <QWindow>
-#include <irisgl/IrisGL.h>
 #include <QTimer>
 
 class NodeGraph;
-
-class CustomRenderWidget : public iris::RenderWidget
-{
-	iris::MeshPtr mesh;
-	iris::ShaderPtr shader;
-	iris::MaterialPtr mat;
-
-	iris::FontPtr font;
-	float fps;
-
-	iris::VertexBufferPtr vertexBuffer;
-	iris::Texture2DPtr tex;
-
-	iris::CameraNodePtr cam;
-
-	QString vertString;
-	QString fragString;
-
-	float renderTime;
-	QList<iris::LightNodePtr> lights;
-
-	bool dragging;
-	QPoint lastMousePos;
-	QQuaternion rot;
-	float scale;
-
-	NodeGraph* graph = nullptr;
-public:
-	CustomRenderWidget();
-
-	void start();
-
-	void update(float dt);
-
-	void render();
-
-	void updateShader(QString shaderCode);
-
-	void resetRenderTime();
-
-	void passNodeGraphUniforms();
-	void setNodeGraph(NodeGraph* graph);
-
-	QString assetPath(QString relPath);
-};
-
 enum class GraphicsItemType : int
 {
 	Node = QGraphicsItem::UserType + 1,
@@ -90,7 +43,6 @@ public:
 	QString nodeId;
 	QColor titleColor;
 	QIcon icon;
-	CustomRenderWidget* previewWidget;
 	QTimer updateTimer;
 	NodeGraph* nodeGraph;
 	NodeModel* model;

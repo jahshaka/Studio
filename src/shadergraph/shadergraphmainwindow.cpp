@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QButtonGroup>
 #include <QDebug>
 #include <QDrag>
-#include "widgets/scenewidget.h"
 #include "../engine/enginehost.h"
 #include "core/materialpreviewwidget.h"
 #include "irisgl/src/materials/pbrmaterial.h"   // complete type: PbrMaterialPtr -> MaterialPtr upcast
@@ -52,10 +51,8 @@ For more information see the LICENSE file
 #include "propertywidgets/basepropertywidget.h"
 #include "dialogs/searchdialog.h"
 #include "widgets/listwidget.h"
-#include "widgets/scenewidget.h"
 #include "core/project.h"
 #include "core/texturemanager.h"
-#include "assets.h"
 #include "propertywidgets/texturepropertywidget.h"
 #include "widgets/assetview.h"
 #include "misc/stylesheet.h"
@@ -102,7 +99,6 @@ MainWindow::MainWindow( QWidget *parent, Database *database) :
 {
 	stack = new QUndoStack;
 	scene = nullptr;
-	sceneWidget = new SceneWidget();
 	// Debounce for the engine preview: one evaluation per burst of edits
 	// (regenerateShader fires per value change while a slider drags).
 	previewUpdateTimer = new QTimer(this);
@@ -132,7 +128,6 @@ MainWindow::MainWindow( QWidget *parent, Database *database) :
 	setMinimumSize(300, 400);
     loadShadersFromDisk();
 
-	Assets::load();
 	assetView = nullptr;
 }
 
@@ -154,10 +149,7 @@ void MainWindow::setNodeGraph(NodeGraph *graph)
 
 	propertyListWidget->setNodeGraph(graph);
 
-	sceneWidget->setNodeGraph(graph);
-	sceneWidget->graphScene = newScene;
 	materialSettingsWidget->setMaterialSettings(graph->settings);
-	sceneWidget->setMaterialSettings(graph->settings);
 	propertyListWidget->setStack(stack);
 	stack->clear(); // clears stack, later to add seperate routes for each node addition
 	this->graph = graph;
@@ -202,11 +194,10 @@ void MainWindow::saveShader()
 	doc.setObject(matObj);
 	QString data = doc.toJson();
 
-	//take screenshot and save it to bytearray
+	// Thumbnail: the GL preview died with the legacy viewport; the engine
+	// preview has no offscreen capture surface here yet, so an empty thumbnail
+	// is stored (matches what engine mode effectively produced before step 14).
 	QByteArray arr;
-	QBuffer buffer(&arr);
-	buffer.open(QIODevice::WriteOnly);
-	sceneWidget->takeScreenshot(512, 512).save(&buffer, "PNG");
 
 #if(EFFECT_BUILD_AS_LIB)
     dataBase->updateAssetAsset(currentShaderInformation.GUID, doc.toJson());
@@ -1100,15 +1091,10 @@ void MainWindow::configureUI()
 	addDockWidget(Qt::RightDockWidgetArea, propertyWidget, Qt::Vertical);
 
 	displayWidget->setMinimumSize(400, 230);
-	// Engine viewport mode runs on xcb, where Qt cannot create a GL context.
-	// Realizing the GL preview (a QOpenGLWidget) there switches the whole
-	// top-level window to GL compositing and the page stops painting entirely
-	// (the stale previous frame stays on screen). Keep the dock hidden so the
-	// widget is never realized; the graph editor itself is raster and fine.
-	if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
-		displayWidget->hide();
-		displayWidget->toggleViewAction()->setEnabled(false);
-	}
+	// The dock stays hidden until Studio hands in the engine-rendered preview
+	// (setEnginePreview).
+	displayWidget->hide();
+	displayWidget->toggleViewAction()->setEnabled(false);
 	assetsDock->setMinimumWidth(330);
 
 	textWidget->setWidget(textEdit);
@@ -1174,7 +1160,6 @@ void MainWindow::configureUI()
 
 	//connect(materialSettingsWidget, SIGNAL(settingsChanged(MaterialSettings)), sceneWidget, SLOT(setMaterialSettings(MaterialSettings)));
 	connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged, [=](MaterialSettings value) {
-		sceneWidget->setMaterialSettings(value);
 	});
 	materialSettingsDock->setWidget(materialSettingsWidget);
 	propertyListWidget->installEventFilter(this);
@@ -1489,10 +1474,6 @@ void MainWindow::regenerateShader()
 	auto code = shaderGen.getFragmentShader();
 
 	textEdit->setPlainText(code);
-	sceneWidget->setVertexShader(shaderGen.getVertexShader());
-	sceneWidget->setFragmentShader(shaderGen.getFragmentShader());
-	sceneWidget->updateShader();
-	sceneWidget->resetRenderTime();
 
 	// assign previews
 	auto nodes = scene->getNodes();
@@ -1665,9 +1646,6 @@ void MainWindow::generateMaterialInProjectFromShader(QString guid)
 
 void MainWindow::updateMaterialFromShader(QString guid)
 {
-	// This ensures that a context is set
-	this->sceneWidget->makeCurrent();
-
 	bool tryas = true;
     QJsonObject obj = QJsonDocument::fromJson(fetchAsset(guid)).object();
 	auto graphObj = MaterialHelper::extractNodeGraphFromMaterialDefinition(obj);
@@ -1711,8 +1689,6 @@ void MainWindow::updateMaterialFromShader(QString guid)
 	assetMat->setValue(QVariant::fromValue(material));
 	AssetManager::replaceAssets(graphObj->materialGuid, assetMat);
 
-	// This ensures that a context is set
-	this->sceneWidget->doneCurrent();
 }
 
 void MainWindow::writeMaterial(QJsonObject& matObj, QString guid)
@@ -1936,40 +1912,31 @@ void MainWindow::addMenuToSceneWidget()
 	window->menuBar()->addMenu(backgroundMenu);
 	displayWidget->setWidget(window);
 	displayWindow = window;
-	// Engine viewport mode: the central slot stays empty until Studio hands in
-	// the engine-rendered preview (setEnginePreview). Docking the GL SceneWidget
-	// would realize a QOpenGLWidget on xcb, which freezes the whole window.
-	if (EngineHost::viewportBackend() != ViewportBackend::Engine)
-		window->setCentralWidget(sceneWidget);
+	// The central slot stays empty until Studio hands in the engine-rendered
+	// preview (setEnginePreview).
 
 	auto cubeAction = new QAction("Cube");
 	connect(cubeAction, &QAction::triggered, [=]() {
-		sceneWidget->setPreviewModel(PreviewModel::Cube);
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Cube);
 	});
 	auto planeAction = new QAction("Plane");
 	connect(planeAction, &QAction::triggered, [=]() {
-		sceneWidget->setPreviewModel(PreviewModel::Plane);
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Plane);
 	});
 	auto sphereAction = new QAction("Sphere");
 	connect(sphereAction, &QAction::triggered, [=]() {
-		sceneWidget->setPreviewModel(PreviewModel::Sphere);
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Sphere);
 	});
 	auto cylinderAction = new QAction("Cylinder");
 	connect(cylinderAction, &QAction::triggered, [=]() {
-		sceneWidget->setPreviewModel(PreviewModel::Cylinder);
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Cylinder);
 	});
 	auto capsuleAction = new QAction("Capsule");
 	connect(capsuleAction, &QAction::triggered, [=]() {
-		sceneWidget->setPreviewModel(PreviewModel::Capsule);
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Capsule);
 	});
 	auto torusAction = new QAction("Torus");
 	connect(torusAction, &QAction::triggered, [=]() {
-		sceneWidget->setPreviewModel(PreviewModel::Torus);
 		if (enginePreview) enginePreview->setPreviewModel(IMaterialPreviewWidget::Model::Torus);
 	});
 
@@ -1983,20 +1950,17 @@ void MainWindow::addMenuToSceneWidget()
 
 	auto whiteAction = new QAction("White");
 	connect(whiteAction, &QAction::triggered, [=]() {
-		sceneWidget->setClearColor(QColor(255, 255, 255));
 		if (enginePreview) enginePreview->setPreviewBackground(QColor(255, 255, 255));
 	});
 
 	auto grayAction = new QAction("Gray");
 	connect(grayAction, &QAction::triggered, [=]() {
-		sceneWidget->setClearColor(QColor(125, 125, 125));
 		if (enginePreview) enginePreview->setPreviewBackground(QColor(125, 125, 125));
 	});
 
 
 	auto blackAction = new QAction("Black");
 	connect(blackAction, &QAction::triggered, [=]() {
-		sceneWidget->setClearColor(QColor(0, 0, 0));
 		if (enginePreview) enginePreview->setPreviewBackground(QColor(0, 0, 0));
 	});
 	backgroundMenu->addActions({ whiteAction, grayAction, blackAction});

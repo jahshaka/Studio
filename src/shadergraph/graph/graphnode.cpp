@@ -21,179 +21,11 @@ For more information see the LICENSE file
 #include <QTimer>
 #include <qmath.h>
 
-#include <irisgl/IrisGL.h>
-#include <irisgl/Graphics.h>
 #include "nodegraph.h"
 #include "graphnodescene.h"
 #include "../core/texturemanager.h"
 #include "../core/materialhelper.h"
 #include "../models/socketmodel.h"
-#include "../assets.h"
-//#include "irisgl/src/graphics/graphicshelper.h"
-#include "../widgets/scenewidget.h"
-#include "../../engine/enginehost.h"
-
-CustomRenderWidget::CustomRenderWidget() :
-	iris::RenderWidget(nullptr)
-{
-
-}
-
-QString CustomRenderWidget::assetPath(QString relPath)
-{
-	return QDir::cleanPath(QDir::currentPath() + QDir::separator() + relPath);
-}
-
-void CustomRenderWidget::start()
-{
-	//targetFPS = 0;
-
-	scale = 1.0;
-
-	iris::VertexLayout layout;
-	layout.addAttrib(iris::VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float) * 3);
-	//vertexBuffer->setData()
-
-	cam = iris::CameraNode::create();
-	cam->setLocalPos(QVector3D(2, 0, 3));
-	cam->lookAt(QVector3D(0, 0, 0));
-	cam->nearClip = 1.0;
-	cam->farClip = 5.0f;
-	/*
-	shader = iris::Shader::load(
-	":assets/shaders/color.vert",
-	":assets/shaders/color.frag");
-	*/
-
-	//mesh = iris::Mesh::loadMesh(MaterialHelper::assetPath("lowpoly_sphere.obj"));
-	mesh = shadergraph::Assets::sphereMesh;
-	//mat = iris::DefaultMaterial::create();
-
-	font = iris::Font::create(device);
-
-	vertString = iris::GraphicsHelper::loadAndProcessShader(MaterialHelper::assetPath("preview.vert"));
-	fragString = iris::GraphicsHelper::loadAndProcessShader(MaterialHelper::assetPath("preview.frag"));
-	updateShader("void preview(inout PreviewMaterial preview){}");
-
-	renderTime = 0;
-
-	lights.clear();
-
-	// setup lights
-	auto main = iris::LightNode::create();
-	main->setLightType(iris::LightType::Point);
-	main->setLocalPos(QVector3D(-3, 0, 3));
-	main->setVisible(true);
-	main->color = QColor(255, 255, 255);
-	main->intensity = 0.8f;
-	lights.append(main);
-}
-
-void CustomRenderWidget::update(float dt)
-{
-	fps = 1.0 / dt;
-	renderTime += dt;
-}
-
-void CustomRenderWidget::render()
-{
-	auto vpWidth = (int)(width() * devicePixelRatioF());
-	auto vpHeight = (int)(height() * devicePixelRatioF());
-
-	cam->aspectRatio = vpWidth / vpHeight;
-	cam->update(0.016f);
-
-	//device->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, QColor(qMin((int)(renderTime*0.1f * 255), 255), 0, 0));
-	device->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, QColor(128, 128, 128, 255));
-
-	device->setBlendState(iris::BlendState::createOpaque());
-	device->setDepthState(iris::DepthState());
-
-	auto& graphics = device;
-	device->setViewport(QRect(0, 0, vpWidth, vpHeight));
-	device->setShader(shader);
-	device->setShaderUniform("u_viewMatrix", cam->viewMatrix);
-	device->setShaderUniform("u_projMatrix", cam->projMatrix);
-	QMatrix4x4 world;
-	world.setToIdentity();
-	world.rotate(rot);
-	world.scale(scale);
-
-	device->setShaderUniform("u_worldMatrix", world);
-	device->setShaderUniform("u_normalMatrix", world.normalMatrix());
-	device->setShaderUniform("color", QVector4D(0.0, 0.0, 0.0, 1.0));
-	device->setShaderUniform("u_textureScale", 1.0f);
-
-	graphics->setShaderUniform("u_eyePos", cam->getLocalPos());
-	graphics->setShaderUniform("u_sceneAmbient", QVector3D(0, 0, 0));
-	graphics->setShaderUniform("u_time", SceneWidget::getRenderTime());
-
-	// pass textures
-	auto texMan = TextureManager::getSingleton();
-	texMan->loadUnloadedTextures();
-	int i = 0;
-	for (auto tex : texMan->textures) {
-		graphics->setTexture(i, tex->texture);
-		graphics->setShaderUniform(tex->uniformName, i);
-		i++;
-	}
-
-	passNodeGraphUniforms();
-
-    graphics->setShaderUniform("u_lightCount", static_cast<int>(lights.size()));
-
-	mesh->draw(device);
-}
-
-void CustomRenderWidget::updateShader(QString shaderCode)
-{
-	shader = iris::Shader::create(
-		vertString,
-		fragString + shaderCode);
-
-	//qDebug() << "-------- PREVIEW SHADER --------";
-	//qDebug().noquote() << fragString + shaderCode;
-	//qDebug() << "-------- PREVIEW SHADER --------";
-}
-
-void CustomRenderWidget::resetRenderTime()
-{
-	renderTime = 0;
-}
-
-void CustomRenderWidget::passNodeGraphUniforms()
-{
-	if (graph == nullptr)
-		return;
-
-	for (auto prop : graph->properties) {
-		switch (prop->type) {
-		case PropertyType::Bool:
-			device->setShaderUniform(prop->getUniformName(), prop->getValue().toBool());
-			break;
-		case PropertyType::Int:
-			device->setShaderUniform(prop->getUniformName(), prop->getValue().toInt());
-			break;
-		case PropertyType::Float:
-			device->setShaderUniform(prop->getUniformName(), prop->getValue().toFloat());
-			break;
-		case PropertyType::Vec2:
-			device->setShaderUniform(prop->getUniformName(), prop->getValue().value<QVector2D>());
-			break;
-		case PropertyType::Vec3:
-			device->setShaderUniform(prop->getUniformName(), prop->getValue().value<QVector3D>());
-			break;
-		case PropertyType::Vec4:
-			device->setShaderUniform(prop->getUniformName(), prop->getValue().value<QVector4D>());
-			break;
-		}
-	}
-}
-
-void CustomRenderWidget::setNodeGraph(NodeGraph *graph)
-{
-	this->graph = graph;
-}
 
 long GraphNode::pressedZValue = 0;
 GraphNode::GraphNode(QGraphicsItem* parent) :
@@ -226,7 +58,6 @@ GraphNode::GraphNode(QGraphicsItem* parent) :
 
 	// preview widget
 	proxyPreviewWidget = nullptr;
-	previewWidget = nullptr;
 	model = nullptr;
 
 	pressedZValue++;
@@ -400,42 +231,19 @@ void GraphNode::layout()
 
 void GraphNode::setPreviewShader(QString shader)
 {
-	if (this->previewWidget != nullptr) {
-		this->previewWidget->updateShader(shader);
-		this->update();
-	}
+	// The per-node GL preview died with the legacy viewport (step 14).
+	Q_UNUSED(shader);
 }
 
 void GraphNode::enablePreviewWidget()
 {
-	// Engine viewport mode runs on xcb, where realizing any QOpenGLWidget flips
-	// the whole top-level window to GL compositing and painting stops (Qt cannot
-	// create a GL context there). Skip the per-node GL preview; the graph itself
-	// is raster. setPreviewShader/setNodeGraph already tolerate a null preview.
-	if (EngineHost::viewportBackend() == ViewportBackend::Engine)
-		return;
-	proxyPreviewWidget = new QGraphicsProxyWidget(this);
-	previewWidget = new CustomRenderWidget();
-	proxyPreviewWidget->setWidget(previewWidget);
-	proxyPreviewWidget->setGeometry(QRectF(0, 260, 160, 160));
-
-	if (this->nodeGraph)	previewWidget->setNodeGraph(nodeGraph);
-
-	QObject::connect(&updateTimer, &QTimer::timeout, [this]()
-	{
-		proxyPreviewWidget->update();
-	});
-	updateTimer.start(1000 / 30);
-
-	layout();
+	// The per-node GL preview died with the legacy viewport (step 14); the
+	// graph item itself is raster and the Display dock shows the engine preview.
 }
 
 void GraphNode::setNodeGraph(NodeGraph* graph)
 {
 	this->nodeGraph = graph;
-	if (this->previewWidget) {
-		this->previewWidget->setNodeGraph(graph);
-	}
 }
 
 void GraphNode::paint(QPainter *painter,

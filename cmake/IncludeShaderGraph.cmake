@@ -68,12 +68,10 @@ set(SRCS
 	src/shadergraph/widgets/listwidget.cpp
 	src/shadergraph/widgets/materialsettingswidget.cpp
 	src/shadergraph/widgets/propertylistwidget.cpp
-	src/shadergraph/widgets/scenewidget.cpp
 	src/shadergraph/widgets/shaderlistwidget.cpp
 	src/shadergraph/widgets/shaderassetwidget.cpp
 	src/shadergraph/widgets/treewidget.cpp
 
-	src/shadergraph/assets.cpp
 	#graphtest.cpp
 	src/shadergraph/shadergraph.cpp
 	src/shadergraph/shadergraphmainwindow.cpp
@@ -135,12 +133,10 @@ set(HEADERS
 	src/shadergraph/widgets/listwidget.h
 	src/shadergraph/widgets/materialsettingswidget.h
 	src/shadergraph/widgets/propertylistwidget.h
-	src/shadergraph/widgets/scenewidget.h
 	src/shadergraph/widgets/shaderlistwidget.h
 	src/shadergraph/widgets/shaderassetwidget.h
 	src/shadergraph/widgets/treewidget.h
 
-	src/shadergraph/assets.h
 	#graphtest.h
 	src/shadergraph/shadergraph.h
 	src/shadergraph/shadergraphmainwindow.h
