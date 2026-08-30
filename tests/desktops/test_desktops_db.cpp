@@ -13,8 +13,8 @@
 #include <cmath>
 #include <cstdio>
 
-#include "core/database/database.h"
-#include "core/project.h"
+#include "data/database/database.h"
+#include "data/project.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)

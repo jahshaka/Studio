@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define SCENEWRITER_H
 
 #include <QSharedPointer>
-#include "assetiobase.h"
+#include "io/assetiobase.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>

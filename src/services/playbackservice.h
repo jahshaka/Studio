@@ -26,7 +26,7 @@ For more information see the LICENSE file
 
 #include <QObject>
 
-#include "../uimanager.h"   // SceneMode + the transitional state storage
+#include "shell/uimanager.h"   // SceneMode + the transitional state storage
 
 class PlaybackService : public QObject
 {

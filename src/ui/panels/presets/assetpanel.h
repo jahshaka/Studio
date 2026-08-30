@@ -20,8 +20,8 @@ For more information see the LICENSE file
 #include <QApplication>
 #include <QStyledItemDelegate>
 
-#include "core/project.h"
-#include "core/database/database.h"
+#include "data/project.h"
+#include "data/database/database.h"
 
 // Forward declaration only: including mainwindow.h at header scope poisoned
 // every includer with the whole shell (audit §7.4); the panels hold a pointer.

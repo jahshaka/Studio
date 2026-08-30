@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "assetmanager.h"
+#include "io/assetmanager.h"
 
 QVector<Asset*> AssetManager::assets;
 

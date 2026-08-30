@@ -20,7 +20,7 @@
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/particle.h"
 #include "jahshaka/engine/Engine.h"
-#include "engine/scenemirror.h"
+#include "bridge/scenemirror.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;

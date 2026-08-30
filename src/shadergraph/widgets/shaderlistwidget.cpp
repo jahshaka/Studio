@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QUuid>
 
-#include "src/core/project.h"
+#include "data/project.h"
 
 
 ShaderListWidget::ShaderListWidget() : ListWidget()

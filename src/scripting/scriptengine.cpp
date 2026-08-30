@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "scriptengine.h"
+#include "scripting/scriptengine.h"
 
 #include <QFileInfo>
 #include <QJSValueIterator>

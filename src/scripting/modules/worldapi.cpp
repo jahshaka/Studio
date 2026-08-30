@@ -9,20 +9,20 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "worldapi.h"
+#include "scripting/modules/worldapi.h"
 
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonObject>
 
-#include "moduleshared.h"
-#include "../../core/database/database.h"
-#include "../../core/project.h"
-#include "../../globals.h"
-#include "../../io/scenewriter.h"
-#include "../../mainwindow.h"
-#include "../../services/sceneeditservice.h"
-#include "../../services/services.h"
+#include "scripting/modules/moduleshared.h"
+#include "data/database/database.h"
+#include "data/project.h"
+#include "shell/globals.h"
+#include "io/scenewriter.h"
+#include "shell/mainwindow.h"
+#include "services/sceneeditservice.h"
+#include "services/services.h"
 #include "irisgl/document/assets/texture2d.h"
 
 using namespace scriptmod;

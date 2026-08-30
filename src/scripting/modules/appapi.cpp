@@ -9,10 +9,10 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "appapi.h"
+#include "scripting/modules/appapi.h"
 
-#include "../../mainwindow.h"
-#include "../../uimanager.h"
+#include "shell/mainwindow.h"
+#include "shell/uimanager.h"
 #include "ui/pages/projectmanager.h"
 
 QVector<VerbInfo> AppApi::verbs() const

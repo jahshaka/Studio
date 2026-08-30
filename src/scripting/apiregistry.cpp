@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "apiregistry.h"
+#include "scripting/apiregistry.h"
 
 #include <QJSEngine>
 #include <QJsonObject>

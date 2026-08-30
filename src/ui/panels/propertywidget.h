@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include "irisgl/core/properties/property.h"
-#include "src/shadergraph//propertywidgets/propertywidgetbase.h"
+#include "shadergraph/propertywidgets/propertywidgetbase.h"
 
 namespace Ui {
     class PropertyWidget;

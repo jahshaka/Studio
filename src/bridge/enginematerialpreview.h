@@ -15,7 +15,7 @@
 #include <QPointF>
 #include "viewport/engineviewwidget.h"
 #include "bridge/enginematerialpreviewscene.h"
-#include "../shadergraph/core/materialpreviewwidget.h"
+#include "shadergraph/core/materialpreviewwidget.h"
 
 class EngineRenderDriver;
 

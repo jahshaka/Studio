@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
 #include "ui/controls/filepickerwidget.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "globals.h"
+#include "shell/globals.h"
 #include "ui/controls/comboboxwidget.h"
 
 MeshPropertyWidget::MeshPropertyWidget()

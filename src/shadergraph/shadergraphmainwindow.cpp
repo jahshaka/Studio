@@ -8,7 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
-#include "mainwindow.h"
+#include "shell/mainwindow.h"
 //#include "ui_mainwindow.h"
 #include "graph/graphnode.h"
 #include <QMouseEvent>
@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QButtonGroup>
 #include <QDebug>
 #include <QDrag>
-#include "../engine/enginehost.h"
+#include "bridge/enginehost.h"
 #include "core/materialpreviewwidget.h"
 #include "irisgl/document/materials/pbrmaterial.h"   // complete type: PbrMaterialPtr -> MaterialPtr upcast
 #include <QTimer>
@@ -51,11 +51,11 @@ For more information see the LICENSE file
 #include "propertywidgets/basepropertywidget.h"
 #include "dialogs/searchdialog.h"
 #include "widgets/listwidget.h"
-#include "core/project.h"
+#include "data/project.h"
 #include "core/texturemanager.h"
 #include "propertywidgets/texturepropertywidget.h"
 #include "ui/pages/assetview.h"
-#include "misc/stylesheet.h"
+#include "ui/style/stylesheet.h"
 
 #include <QMainWindow>
 #include <QStandardPaths>
@@ -64,19 +64,19 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 
 #if(EFFECT_BUILD_AS_LIB)
-#include "../core/database/database.h"
-#include "../core/assethelper.h"
-#include "../uimanager.h"
-#include "../globals.h"
-#include "../core/guidmanager.h"
+#include "data/database/database.h"
+#include "services/assethelper.h"
+#include "shell/uimanager.h"
+#include "shell/globals.h"
+#include "data/guidmanager.h"
 #include "irisgl/core/irisutils.h"
-#include "../io/assetmanager.h"
-#include "../dialogs/progressdialog.h"
+#include "io/assetmanager.h"
+#include "ui/dialogs/progressdialog.h"
 #else
 #include <QUuid>
 #endif
 
-#include "io/materialreader.hpp"
+#include "io/materialreader.h"
 #include "io/scenewriter.h"
 
 #include "core/undoredo.h"

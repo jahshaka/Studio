@@ -21,8 +21,8 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QLayout>
 #include <QMenu>
-#include "src/core/project.h"
-#include "../../uimanager.h"
+#include "data/project.h"
+#include "shell/uimanager.h"
 
 QVariantAnimation* ListWidget::anim = Q_NULLPTR;
 

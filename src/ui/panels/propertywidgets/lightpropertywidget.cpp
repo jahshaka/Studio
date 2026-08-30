@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 
-#include "engine/enginehost.h"
+#include "bridge/enginehost.h"
 
 
 LightPropertyWidget::LightPropertyWidget(QWidget* parent):

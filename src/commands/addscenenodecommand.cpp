@@ -9,10 +9,10 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "addscenenodecommand.h"
-#include "../uimanager.h"
+#include "commands/addscenenodecommand.h"
+#include "shell/uimanager.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "../mainwindow.h"
+#include "shell/mainwindow.h"
 #include "ui/panels/scenehierarchywidget.h"
 
 

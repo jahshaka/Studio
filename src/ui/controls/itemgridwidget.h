@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QLineEdit>
 
-#include "core/project.h"
+#include "data/project.h"
 
 class ItemGridWidget : public QWidget
 {

@@ -17,7 +17,7 @@ add_executable(test_pbr_evaluator
     ${CMAKE_SOURCE_DIR}/src/shadergraph/models/socketmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/shadergraph/nodes/pbrmasternode.cpp
     ${CMAKE_SOURCE_DIR}/src/shadergraph/nodes/test.cpp
-    ${CMAKE_SOURCE_DIR}/src/misc/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_pbr_evaluator PROPERTIES
@@ -37,6 +37,7 @@ set_tests_properties(shadergraph.pbr_evaluator PROPERTIES ENVIRONMENT "QT_QPA_PL
 
 # Fuzzy matcher for the tab-search node palette: pure QString logic.
 add_executable(test_fuzzy_search test_fuzzy_search.cpp)
+target_include_directories(test_fuzzy_search PRIVATE ${CMAKE_SOURCE_DIR}/src)
 set_target_properties(test_fuzzy_search PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

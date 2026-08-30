@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 
-#include "apimodule.h"
+#include "scripting/apimodule.h"
 
 class QJSEngine;
 

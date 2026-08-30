@@ -30,7 +30,7 @@ For more information see the LICENSE file
 #include <QVector3D>
 
 #include "irisgl/irisglfwd.h"
-#include "../core/project.h"   // ModelTypes
+#include "data/project.h"   // ModelTypes
 
 #include <functional>
 

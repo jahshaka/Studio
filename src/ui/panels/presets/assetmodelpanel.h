@@ -17,8 +17,8 @@ For more information see the LICENSE file
 #include <QListWidgetItem>
 
 #include "ui/panels/presets/assetpanel.h"
-#include "core/project.h"
-#include "core/database/database.h"
+#include "data/project.h"
+#include "data/database/database.h"
 
 class MainWindow;
 

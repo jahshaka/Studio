@@ -1,20 +1,20 @@
 # Multiple-desktops storage tests (DESKTOPS_SPEC.md): builds the REAL
-# src/core/database/database.cpp against a throwaway SQLite file — migration,
+# src/data/database/database.cpp against a throwaway SQLite file — migration,
 # desktop filter, move round-trip, freeform position round-trip. Headless
 # (offscreen platform); never touches the user's live JahLibrary.db.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 add_executable(test_desktops_db test_desktops_db.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     # database.cpp's link closure (Globals, Project, guids, asset helpers)
-    ${CMAKE_SOURCE_DIR}/src/globals.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/guidmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/subscriber.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/shell/globals.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
-    ${CMAKE_SOURCE_DIR}/src/constants.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_desktops_db PROPERTIES AUTOMOC ON)
 target_include_directories(test_desktops_db PRIVATE
     ${CMAKE_SOURCE_DIR}

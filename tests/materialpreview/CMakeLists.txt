@@ -6,7 +6,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_engine_material_preview test_engine_material_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginematerialpreviewscene.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/scenemirror.cpp)
+    ${CMAKE_SOURCE_DIR}/src/bridge/scenemirror.cpp)
 set_target_properties(test_engine_material_preview PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")

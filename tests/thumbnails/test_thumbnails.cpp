@@ -14,7 +14,7 @@
 #include "irisgl/document/assets/mesh.h"          // MeshMaterialData
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
-#include "editor/enginethumbnailrenderer.h"
+#include "bridge/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
 
 using namespace jahshaka::engine;

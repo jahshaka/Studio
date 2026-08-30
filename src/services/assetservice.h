@@ -21,7 +21,7 @@ For more information see the LICENSE file
 
 #include <QString>
 
-#include "assetimporter.h"
+#include "services/assetimporter.h"
 
 class Database;
 

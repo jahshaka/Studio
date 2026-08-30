@@ -2,8 +2,8 @@
 // from createUndoAction(). The test never drags, so none of this is exercised.
 #include <QUndoCommand>
 #include "irisgl/irisglfwd.h"
-#include "uimanager.h"
-#include "commands/transfrormscenenodecommand.h"
+#include "shell/uimanager.h"
+#include "commands/transformscenenodecommand.h"
 #include "ui/panels/scenenodepropertieswidget.h"
 
 SceneNodePropertiesWidget *UiManager::propertyWidget = nullptr;

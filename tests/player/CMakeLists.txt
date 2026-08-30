@@ -8,10 +8,10 @@ add_executable(test_engine_player test_engine_player.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/player/engineplayerscene.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
-    ${CMAKE_SOURCE_DIR}/src/editor/cameracontrollerbase.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/keyboardstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/settingsmanager.cpp
-    ${CMAKE_SOURCE_DIR}/src/engine/scenemirror.cpp)
+    ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/scenemirror.cpp)
 set_target_properties(test_engine_player PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")

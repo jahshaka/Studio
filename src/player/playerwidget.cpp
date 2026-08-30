@@ -15,8 +15,8 @@ For more information see the LICENSE file
 #include <QIcon>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include "playerwidget.h"
-#include "engineplayerview.h"
+#include "player/playerwidget.h"
+#include "player/engineplayerview.h"
 
 
 PlayerWidget::PlayerWidget(QWidget* parent, EnginePlayerView* view) :

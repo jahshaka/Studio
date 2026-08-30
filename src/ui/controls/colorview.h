@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include <qwindowdefs_win.h>
 #endif
 
-#include "misc/stylesheet.h"
+#include "ui/style/stylesheet.h"
 
 
 class SliderMoveToMouseClickPositionStyle : public QProxyStyle

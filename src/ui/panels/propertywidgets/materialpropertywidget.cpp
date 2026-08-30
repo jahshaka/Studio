@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include "ui/controls/labelwidget.h"
 #include "ui/panels/propertywidget.h"
 
-#include "constants.h"
+#include "data/constants.h"
 #include "io/assetiobase.h"
 
 #include "irisgl/document/assets/texture2d.h"
@@ -32,14 +32,14 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/properties/property.h"
 
-#include "uimanager.h"
+#include "shell/uimanager.h"
 #include "commands/changematerialpropertycommand.h"
 
 #include "io/scenewriter.h"
 
-#include "globals.h"
-#include "core/database/database.h"
-#include "io/materialreader.hpp"
+#include "shell/globals.h"
+#include "data/database/database.h"
+#include "io/materialreader.h"
 
 iris::MaterialPtr MaterialPropertyWidget::currentMaterial() const
 {

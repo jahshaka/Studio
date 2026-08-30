@@ -17,12 +17,12 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/meshnode.h"
 
-#include "constants.h"
-#include "globals.h"
+#include "data/constants.h"
+#include "shell/globals.h"
 
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
-#include "core/database/database.h"
+#include "data/database/database.h"
 #include "io/assetmanager.h"
 
 ShaderPropertyWidget::ShaderPropertyWidget()

@@ -10,11 +10,11 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
-#include "editor/translationgizmo.h"
-#include "editor/rotationgizmo.h"
-#include "editor/scalegizmo.h"
-#include "editor/gizmooverlay.h"
-#include "engine/scenemirror.h"
+#include "viewport/translationgizmo.h"
+#include "viewport/rotationgizmo.h"
+#include "viewport/scalegizmo.h"
+#include "viewport/gizmooverlay.h"
+#include "bridge/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 
 using namespace jahshaka::engine;

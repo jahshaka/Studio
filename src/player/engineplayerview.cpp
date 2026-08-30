@@ -1,18 +1,18 @@
-#include "engineplayerview.h"
+#include "player/engineplayerview.h"
 
 #include <algorithm>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QKeyEvent>
 #include <QShowEvent>
-#include "engineplayerscene.h"
-#include "playback.h"
-#include "playermousecontroller.h"
+#include "player/engineplayerscene.h"
+#include "player/playback.h"
+#include "player/playermousecontroller.h"
 #include "viewport/enginerenderdriver.h"
-#include "../engine/enginehost.h"
-#include "../editor/ieditorviewport.h"
-#include "../uimanager.h"
-#include "../core/keyboardstate.h"
+#include "bridge/enginehost.h"
+#include "viewport/ieditorviewport.h"
+#include "shell/uimanager.h"
+#include "viewport/keyboardstate.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
 

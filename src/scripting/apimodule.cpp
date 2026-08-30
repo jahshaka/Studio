@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "apimodule.h"
+#include "scripting/apimodule.h"
 
 #include <QJSEngine>
 

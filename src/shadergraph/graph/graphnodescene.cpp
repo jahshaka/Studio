@@ -11,7 +11,7 @@ For more information see the LICENSE file
 #include "graphnodescene.h"
 #include "nodestyle.h"
 #include "../nodes/test.h"
-#include "core/project.h"
+#include "data/project.h"
 
 #include <QApplication>
 #include <QClipboard>

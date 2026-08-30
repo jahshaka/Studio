@@ -9,15 +9,15 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "nodeapi.h"
+#include "scripting/modules/nodeapi.h"
 
-#include "moduleshared.h"
-#include "../../commands/reparentscenenodecommand.h"
-#include "../../commands/transfrormscenenodecommand.h"
-#include "../../mainwindow.h"
-#include "../../services/sceneeditservice.h"
-#include "../../services/services.h"
-#include "../../services/undoservice.h"
+#include "scripting/modules/moduleshared.h"
+#include "commands/reparentscenenodecommand.h"
+#include "commands/transformscenenodecommand.h"
+#include "shell/mainwindow.h"
+#include "services/sceneeditservice.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 
 using namespace scriptmod;
 

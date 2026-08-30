@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include <QQuaternion>
 #include <QSharedPointer>
-#include "assetiobase.h"
+#include "io/assetiobase.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -20,16 +20,16 @@ For more information see the LICENSE file
 #include <QJsonValueRef>
 #include <QJsonDocument>
 
-#include "materialreader.hpp"
-#include "scenereader.h"
-#include "assetmanager.h"
-#include "core/guidmanager.h"
+#include "io/materialreader.h"
+#include "io/scenereader.h"
+#include "io/assetmanager.h"
+#include "data/guidmanager.h"
 
-#include "globals.h"
-#include "constants.h"
-#include "core/database/database.h"
+#include "shell/globals.h"
+#include "data/constants.h"
+#include "data/database/database.h"
 
-#include "editor/editordata.h"
+#include "viewport/editordata.h"
 
 #include "irisgl/Graphics.h"
 #include "irisgl/Animation.h"
@@ -45,8 +45,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/materials/custommaterial.h"
 
-#include "materialreader.hpp"
-#include "../core/guidmanager.h"
+#include "io/materialreader.h"
+#include "data/guidmanager.h"
 
 iris::ScenePtr SceneReader::readScene(const QString &projectPath,
                                       const QByteArray &sceneBlob,

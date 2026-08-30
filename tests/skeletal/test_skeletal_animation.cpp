@@ -30,7 +30,7 @@
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "jahshaka/engine/Engine.h"
-#include "engine/scenemirror.h"
+#include "bridge/scenemirror.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;

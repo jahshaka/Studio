@@ -21,9 +21,9 @@ For more information see the LICENSE file
 #include "ui/controls/checkboxwidget.h"
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 
-#include "globals.h"
-#include "core/database/database.h"
-#include "core/subscriber.h"
+#include "shell/globals.h"
+#include "data/database/database.h"
+#include "services/subscriber.h"
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 #include "io/assetmanager.h"

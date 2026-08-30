@@ -21,7 +21,7 @@
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "bridge/engineassetscene.h"
-#include "editor/previewframing.h"
+#include "viewport/previewframing.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;

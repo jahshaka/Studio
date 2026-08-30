@@ -9,22 +9,22 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "projectservice.h"
+#include "services/projectservice.h"
 
 #include <QBuffer>
 #include <QDir>
 #include <QStandardPaths>
 
-#include "../constants.h"
-#include "../core/database/database.h"
-#include "../core/guidmanager.h"
-#include "../core/project.h"
-#include "../core/settingsmanager.h"
-#include "../editor/ieditorviewport.h"
-#include "../io/scenereader.h"
-#include "../io/scenewriter.h"
+#include "data/constants.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
+#include "data/project.h"
+#include "data/settingsmanager.h"
+#include "viewport/ieditorviewport.h"
+#include "io/scenereader.h"
+#include "io/scenewriter.h"
 #include "ui/pages/projectmanager.h"
-#include "undoservice.h"
+#include "services/undoservice.h"
 
 
 ProjectService::ProjectService(Database *db,

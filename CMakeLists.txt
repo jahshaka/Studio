@@ -34,9 +34,7 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/panels/propertywidgets
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/controls
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dialogs
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dialogs/preferences
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dialogs
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dialogs/preferences)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dialogs/preferences)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -49,40 +47,40 @@ add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/downloa
 set(downloaderProject downloader)
 
 set(SRCS
-    src/main.cpp
-    src/mainwindow.cpp 
+    src/app/main.cpp
+    src/shell/mainwindow.cpp 
     src/ui/controls/colorvaluewidget.cpp 
     src/ui/controls/colorpickerwidget.cpp 
-    src/dialogs/preferencesdialog.cpp 
-    src/dialogs/aboutdialog.cpp 
-    src/dialogs/preferences/worldsettings.cpp 
-    src/dialogs/preferences/worldsettingswidget.cpp 
-	src/dialogs/customdialog.cpp
-	src/dialogs/custompopup.cpp
-    src/dialogs/loadmeshdialog.cpp 
+    src/ui/dialogs/preferencesdialog.cpp 
+    src/ui/dialogs/aboutdialog.cpp 
+    src/ui/dialogs/preferences/worldsettings.cpp 
+    src/ui/dialogs/preferences/worldsettingswidget.cpp 
+	src/ui/dialogs/customdialog.cpp
+	src/ui/dialogs/custompopup.cpp
+    src/ui/dialogs/loadmeshdialog.cpp 
     src/ui/panels/timeline/animationwidget.cpp 
     src/ui/panels/timeline/keyframelabelwidget.cpp 
     src/ui/panels/timeline/keyframewidget.cpp 
     src/ui/panels/timeline/maintimelinewidget.cpp 
     src/ui/panels/timeline/timelinewidget.cpp 
-    src/core/nodekeyframeanimation.cpp 
-    src/core/project.cpp 
-    src/core/settingsmanager.cpp 
-    src/editor/editorcameracontroller.cpp 
-    src/dialogs/infodialog.cpp 
-    src/globals.cpp 
+    src/ui/panels/timeline/nodekeyframeanimation.cpp 
+    src/data/project.cpp 
+    src/data/settingsmanager.cpp 
+    src/viewport/editorcameracontroller.cpp 
+    src/ui/dialogs/infodialog.cpp 
+    src/shell/globals.cpp 
     src/viewport/engineviewwidget.cpp
-    src/engine/scenemirror.cpp
+    src/bridge/scenemirror.cpp
     src/viewport/enginesceneviewport.cpp
-    src/editor/scenepicker.cpp
-    src/editor/gizmooverlay.cpp
+    src/viewport/scenepicker.cpp
+    src/viewport/gizmooverlay.cpp
     src/viewport/enginerenderdriver.cpp
-    src/dialogs/ogrepreviewdialog.cpp
-    src/engine/enginehost.cpp
+    src/ui/dialogs/ogrepreviewdialog.cpp
+    src/bridge/enginehost.cpp
     src/scripting/apimodule.cpp
     src/scripting/apiregistry.cpp
     src/scripting/scriptengine.cpp
-    src/scripting/scriptconsole.cpp
+    src/ui/panels/scriptconsole.cpp
     src/scripting/modules/projectapi.cpp
     src/scripting/modules/sceneapi.cpp
     src/scripting/modules/nodeapi.cpp
@@ -107,14 +105,14 @@ set(SRCS
     src/ui/panels/transformeditor.cpp 
     src/ui/controls/dragspinbox.cpp 
     src/ui/panels/scenehierarchywidget.cpp 
-    src/editor/cameracontrollerbase.cpp 
-    src/editor/gizmo.cpp 
-    src/editor/gizmomeshes.cpp 
-    src/editor/translationgizmo.cpp 
-    src/editor/scalegizmo.cpp 
-    src/editor/rotationgizmo.cpp 
+    src/viewport/cameracontrollerbase.cpp 
+    src/viewport/gizmo.cpp 
+    src/viewport/gizmomeshes.cpp 
+    src/viewport/translationgizmo.cpp 
+    src/viewport/scalegizmo.cpp 
+    src/viewport/rotationgizmo.cpp 
     src/ui/panels/presets/skypresets.cpp 
-    src/editor/orbitalcameracontroller.cpp 
+    src/viewport/orbitalcameracontroller.cpp 
     src/ui/panels/scenenodepropertieswidget.cpp 
     src/ui/panels/propertywidgets/lightpropertywidget.cpp 
     src/ui/panels/propertywidgets/materialpropertywidget.cpp 
@@ -125,12 +123,12 @@ set(SRCS
     src/ui/panels/propertywidgets/physicspropertywidget.cpp 
     src/ui/panels/propertywidgets/cubemapwidget.cpp 
     src/io/scenewriter.cpp 
-    src/core/thumbnailmanager.cpp 
+    src/services/thumbnailmanager.cpp 
     src/ui/panels/propertywidgets/fogpropertywidget.cpp 
     src/io/assetiobase.cpp 
     src/io/materialpresetreader.cpp 
     src/ui/panels/timeline/keyframelabeltreewidget.cpp 
-    src/core/keyboardstate.cpp 
+    src/viewport/keyboardstate.cpp 
     src/io/scenereader.cpp 
     src/ui/panels/propertywidgets/emitterpropertywidget.cpp 
     src/ui/panels/propertywidgets/nodepropertywidget.cpp
@@ -146,32 +144,32 @@ set(SRCS
     src/ui/panels/propertywidgets/shaderpropertywidget.cpp 
     src/ui/panels/propertywidget.cpp 
     src/ui/panels/propertywidgets/scenepropertywidget.cpp
-    src/dialogs/newprojectdialog.cpp 
+    src/ui/dialogs/newprojectdialog.cpp 
     src/ui/panels/assetwidget.cpp 
     src/io/assetmanager.cpp 
     src/ui/controls/assetpickerwidget.cpp 
     src/ui/panels/timeline/keyframelabel.cpp 
-    src/uimanager.cpp 
+    src/shell/uimanager.cpp 
     src/ui/panels/timeline/keyframecurvewidget.cpp 
-    src/dialogs/getnamedialog.cpp 
+    src/ui/dialogs/getnamedialog.cpp 
     src/ui/panels/timeline/createanimationwidget.cpp 
-    src/core/database/database.cpp 
-    src/core/database/projectdatabase.cpp 
-    src/core/guidmanager.cpp 
-    src/commands/transfrormscenenodecommand.cpp 
+    src/data/database/database.cpp 
+    src/data/database/projectdatabase.cpp 
+    src/data/guidmanager.cpp 
+    src/commands/transformscenenodecommand.cpp 
     src/commands/changematerialpropertycommand.cpp 
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp
-    src/dialogs/progressdialog.cpp 
+    src/ui/dialogs/progressdialog.cpp 
     src/ui/dialogs/screenshotwidget.cpp 
     src/ui/pages/projectmanager.cpp 
     src/ui/controls/dynamicgrid.cpp 
     src/ui/controls/itemgridwidget.cpp 
-    src/dialogs/renameprojectdialog.cpp 
-    src/editor/thumbnailgenerator.cpp 
-    src/editor/enginethumbnailrenderer.cpp 
-    src/dialogs/donatedialog.cpp
+    src/ui/dialogs/renameprojectdialog.cpp 
+    src/services/thumbnailgenerator.cpp 
+    src/bridge/enginethumbnailrenderer.cpp 
+    src/ui/dialogs/donatedialog.cpp
     src/ui/pages/assetview.cpp
     src/ui/pages/assetview.cpp
     src/bridge/engineassetscene.cpp
@@ -180,21 +178,20 @@ set(SRCS
     src/bridge/enginematerialpreview.cpp
     src/ui/controls/assetviewgrid.cpp
     src/ui/controls/assetgriditem.cpp
-    src/constants.cpp
-    src/misc/updatechecker.cpp
-    src/dialogs/softwareupdatedialog.cpp
-    src/core/assethelper.cpp
-    src/core/subscriber.cpp
-    src/core/scenenodehelper.cpp
-    src/misc/upgrader.cpp
-    src/misc/QtAwesome.cpp
-    src/misc/QtAwesomeAnim.cpp
-    src/misc/stylesheet.cpp
+    src/data/constants.cpp
+    src/app/updatechecker.cpp
+    src/ui/dialogs/softwareupdatedialog.cpp
+    src/services/assethelper.cpp
+    src/services/subscriber.cpp
+    src/services/scenenodehelper.cpp
+    src/app/upgrader.cpp
+    thirdparty/qtawesome/QtAwesome.cpp
+    thirdparty/qtawesome/QtAwesomeAnim.cpp
+    src/ui/style/stylesheet.cpp
     src/ui/controls/colorview.cpp
-    src/dialogs/toast.cpp
-    src/helpers/tooltip.cpp
-    src/helpers/dialoghelper.cpp
-    src/subclass/switch.cpp
+    src/ui/dialogs/toast.cpp
+    src/ui/controls/tooltip.cpp
+    src/ui/dialogs/dialoghelper.cpp
     # player
     src/player/playerwidget.cpp
     src/player/engineplayerscene.cpp
@@ -204,47 +201,45 @@ set(SRCS
 )
 
 set(HEADERS
-    src/mainwindow.h 
+    src/shell/mainwindow.h 
     src/ui/controls/colorvaluewidget.h 
     src/ui/controls/colorpickerwidget.h 
-    src/helpers/settingshelper.h 
-    src/dialogs/preferencesdialog.h 
-    src/dialogs/aboutdialog.h 
-    src/dialogs/preferences/worldsettings.h 
-    src/dialogs/preferences/worldsettingswidget.h 
-    src/dialogs/customdialog.h
-    src/dialogs/custompopup.h
-    src/helpers/collisionhelper.h 
-    src/dialogs/infodialog.h 
-    src/dialogs/loadmeshdialog.h 
+    src/ui/dialogs/preferencesdialog.h 
+    src/ui/dialogs/aboutdialog.h 
+    src/ui/dialogs/preferences/worldsettings.h 
+    src/ui/dialogs/preferences/worldsettingswidget.h 
+    src/ui/dialogs/customdialog.h
+    src/ui/dialogs/custompopup.h
+    src/services/collisionhelper.h 
+    src/ui/dialogs/infodialog.h 
+    src/ui/dialogs/loadmeshdialog.h 
     src/ui/panels/timeline/animationwidget.h 
     src/ui/panels/timeline/keyframelabelwidget.h 
     src/ui/panels/timeline/keyframewidget.h
     src/ui/panels/timeline/maintimelinewidget.h
     src/ui/panels/timeline/timelinewidget.h 
-    src/core/keyframeanimation.h 
-    src/core/keyframes.h 
-    src/core/nodekeyframe.h 
-    src/core/nodekeyframeanimation.h 
-    src/core/project.h 
-    src/core/settingsmanager.h 
-    src/editor/editorcameracontroller.h 
-    src/globals.h 
+    src/ui/panels/timeline/timelinekeys.h 
+    src/ui/panels/timeline/nodekeyframe.h 
+    src/ui/panels/timeline/nodekeyframeanimation.h 
+    src/data/project.h 
+    src/data/settingsmanager.h 
+    src/viewport/editorcameracontroller.h 
+    src/shell/globals.h 
     src/viewport/engineviewwidget.h
-    src/engine/scenemirror.h
+    src/bridge/scenemirror.h
     src/viewport/enginesceneviewport.h
-    src/editor/headlesseditorviewport.h
-    src/editor/ieditorviewport.h
-    src/editor/scenepicker.h
-    src/editor/gizmooverlay.h
+    src/viewport/headlesseditorviewport.h
+    src/viewport/ieditorviewport.h
+    src/viewport/scenepicker.h
+    src/viewport/gizmooverlay.h
     src/viewport/enginerenderdriver.h
-    src/dialogs/ogrepreviewdialog.h
-    src/engine/enginehost.h
+    src/ui/dialogs/ogrepreviewdialog.h
+    src/bridge/enginehost.h
     src/scripting/scripthost.h
     src/scripting/apimodule.h
     src/scripting/apiregistry.h
     src/scripting/scriptengine.h
-    src/scripting/scriptconsole.h
+    src/ui/panels/scriptconsole.h
     src/scripting/modules/moduleshared.h
     src/scripting/modules/projectapi.h
     src/scripting/modules/sceneapi.h
@@ -271,8 +266,8 @@ set(HEADERS
     src/ui/panels/transformeditor.h 
     src/ui/controls/dragspinbox.h 
     src/ui/panels/scenehierarchywidget.h 
-    src/editor/orbitalcameracontroller.h 
-    src/editor/cameracontrollerbase.h 
+    src/viewport/orbitalcameracontroller.h 
+    src/viewport/cameracontrollerbase.h 
     src/ui/panels/presets/skypresets.h 
     src/ui/panels/propertywidgets/transformpropertywidget.h 
     src/ui/panels/propertywidgets/lightpropertywidget.h 
@@ -287,21 +282,20 @@ set(HEADERS
     src/io/scenewriter.h 
     src/io/scenereader.h 
     src/ui/panels/propertywidgets/scenepropertywidget.h 
-    src/core/thumbnailmanager.h 
+    src/services/thumbnailmanager.h 
     src/ui/panels/propertywidgets/fogpropertywidget.h 
-    src/core/meshmanager.h 
     src/io/assetiobase.h 
-    src/core/materialpreset.h 
+    src/data/materialpreset.h 
     src/io/materialpresetreader.h 
     src/ui/panels/timeline/keyframelabeltreewidget.h 
     src/io/materialpresetreader.h 
-    src/editor/gizmo.h 
-    src/editor/gizmomeshes.h 
-    src/editor/translationgizmo.h 
-    src/editor/rotationgizmo.h 
-    src/editor/scalegizmo.h 
-    src/core/keyboardstate.h 
-    src/editor/editordata.h 
+    src/viewport/gizmo.h 
+    src/viewport/gizmomeshes.h 
+    src/viewport/translationgizmo.h 
+    src/viewport/rotationgizmo.h 
+    src/viewport/scalegizmo.h 
+    src/viewport/keyboardstate.h 
+    src/viewport/editordata.h 
     src/ui/panels/propertywidgets/emitterpropertywidget.h 
     src/ui/panels/propertywidgets/nodepropertywidget.h
     src/ui/controls/labelwidget.h
@@ -310,40 +304,39 @@ set(HEADERS
     src/ui/controls/comboboxwidget.h 
     src/ui/controls/hfloatsliderwidget.h 
     src/ui/controls/texturepickerwidget.h 
-    src/io/materialreader.hpp 
+    src/io/materialreader.h 
     src/ui/controls/filepickerwidget.h 
     src/ui/panels/propertywidgets/meshpropertywidget.h 
     src/ui/panels/propertywidgets/shaderpropertywidget.h 
     src/ui/panels/propertywidget.h 
     src/ui/controls/basewidget.h 
-    src/dialogs/newprojectdialog.h 
+    src/ui/dialogs/newprojectdialog.h 
     src/ui/panels/assetwidget.h 
     src/io/assetmanager.h 
     src/ui/controls/assetpickerwidget.h 
-    src/constants.h 
+    src/data/constants.h 
     src/ui/panels/timeline/keyframelabel.h 
-    src/uimanager.h 
+    src/shell/uimanager.h 
     src/ui/panels/timeline/keyframecurvewidget.h 
     src/ui/panels/timeline/animationwidgetdata.h 
-    src/dialogs/getnamedialog.h 
+    src/ui/dialogs/getnamedialog.h 
     src/ui/panels/timeline/createanimationwidget.h 
-    src/core/database/database.h 
-    src/core/database/projectdatabase.h 
-    src/core/guidmanager.h 
-    src/commands/transfrormscenenodecommand.h 
+    src/data/database/database.h 
+    src/data/database/projectdatabase.h 
+    src/data/guidmanager.h 
+    src/commands/transformscenenodecommand.h 
     src/commands/changematerialpropertycommand.h 
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h
-    src/dialogs/progressdialog.h 
-    src/commands/deleteanimationkeycommand.h 
+    src/ui/dialogs/progressdialog.h 
     src/ui/dialogs/screenshotwidget.h 
     src/ui/pages/projectmanager.h 
     src/ui/controls/dynamicgrid.h 
     src/ui/controls/itemgridwidget.h 
-    src/dialogs/renameprojectdialog.h 
-    src/editor/thumbnailgenerator.h 
-    src/dialogs/donatedialog.h
+    src/ui/dialogs/renameprojectdialog.h 
+    src/services/thumbnailgenerator.h 
+    src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
     src/ui/pages/iassetviewer.h
     src/ui/pages/headlessassetviewer.h
@@ -353,41 +346,39 @@ set(HEADERS
     src/bridge/enginematerialpreview.h
     src/ui/controls/assetviewgrid.h
     src/ui/controls/assetgriditem.h
-    src/breakpad/breakpad.h
-    src/misc/updatechecker.h
-    src/dialogs/softwareupdatedialog.h
-    src/core/assethelper.h
-    src/core/subscriber.h
-    src/core/scenenodehelper.h
-    src/misc/upgrader.h
-    src/misc/QtAwesome.h
-    src/misc/QtAwesomeAnim.h 
-    src/misc/stylesheet.h
+    src/app/breakpad.h
+    src/app/updatechecker.h
+    src/ui/dialogs/softwareupdatedialog.h
+    src/services/assethelper.h
+    src/services/subscriber.h
+    src/services/scenenodehelper.h
+    src/app/upgrader.h
+    thirdparty/qtawesome/QtAwesome.h
+    thirdparty/qtawesome/QtAwesomeAnim.h 
+    src/ui/style/stylesheet.h
     src/ui/controls/colorview.h
-    src/dialogs/toast.h
-    src/helpers/tooltip.h
-    src/helpers/dialoghelper.h
+    src/ui/dialogs/toast.h
+    src/ui/controls/tooltip.h
+    src/ui/dialogs/dialoghelper.h
 
     # player
-    src/subclass/switch.h
     src/player/playerwidget.h
     src/player/engineplayerscene.h
     src/player/engineplayerview.h
-    src/player/sceneplayer.h
     src/player/playermousecontroller.h
     src/player/playback.h
 )
 
 # Todo - trim these down to nothing eventually
 set(WIDGETS
-    src/mainwindow.ui 
+    src/shell/mainwindow.ui 
     src/ui/controls/colorvaluewidget.ui 
     src/ui/controls/colorpickerwidget.ui 
-    src/dialogs/preferencesdialog.ui 
-    src/dialogs/aboutdialog.ui 
-    src/dialogs/preferences/worldsettings.ui 
-    src/dialogs/infodialog.ui 
-    src/dialogs/loadmeshdialog.ui 
+    src/ui/dialogs/preferencesdialog.ui 
+    src/ui/dialogs/aboutdialog.ui 
+    src/ui/dialogs/preferences/worldsettings.ui 
+    src/ui/dialogs/infodialog.ui 
+    src/ui/dialogs/loadmeshdialog.ui 
     src/ui/panels/timeline/animationwidget.ui 
     src/ui/panels/timeline/maintimelinewidget.ui 
     src/ui/controls/accordionbladewidget.ui 
@@ -403,19 +394,19 @@ set(WIDGETS
     src/ui/controls/texturepickerwidget.ui 
     src/ui/controls/filepickerwidget.ui 
     src/ui/panels/propertywidget.ui 
-    src/dialogs/newprojectdialog.ui 
+    src/ui/dialogs/newprojectdialog.ui 
     src/ui/panels/assetwidget.ui 
     src/ui/controls/assetpickerwidget.ui 
     src/ui/panels/timeline/keyframelabel.ui 
     src/ui/panels/timeline/keyframecurvewidget.ui 
-    src/dialogs/getnamedialog.ui 
+    src/ui/dialogs/getnamedialog.ui 
     src/ui/panels/timeline/createanimationwidget.ui 
-    src/dialogs/progressdialog.ui 
+    src/ui/dialogs/progressdialog.ui 
     src/ui/dialogs/screenshotwidget.ui 
     src/ui/pages/projectmanager.ui 
-    src/dialogs/renameprojectdialog.ui 
-    src/dialogs/donate.ui
-    src/dialogs/softwareupdatedialog.ui
+    src/ui/dialogs/renameprojectdialog.ui 
+    src/ui/dialogs/donate.ui
+    src/ui/dialogs/softwareupdatedialog.ui
 )
 
 include(IncludeOgre)
@@ -428,7 +419,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINAR
 # Headless engine tests (tests/). include(CTest) defines BUILD_TESTING and calls
 # enable_testing() at top level, which add_test in a subdirectory requires.
 # Which editor viewport starts by default. Overridable at runtime with
-# --viewport=engine|legacy or env JAHSHAKA_VIEWPORT (see src/engine/enginehost.h).
+# --viewport=engine|legacy or env JAHSHAKA_VIEWPORT (see src/bridge/enginehost.h).
 option(JAHSHAKA_ENGINE_VIEWPORT "Default to the engine viewport" OFF)
 
 option(JAHSHAKA_BUILD_TESTS "Build the headless engine test suite" ON)
@@ -519,7 +510,7 @@ set_source_files_properties(${BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "R
 # https://stackoverflow.com/a/37211780/996468
 source_group("Resources" FILES ${QRCS} ${WIDGETS} ${BUNDLE_ICON})
 
-add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON}
+add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/app/main.cpp ${SRCS} ${HEADERS} ${QRCS} ${WIDGETS} app/winapp.rc ${BUNDLE_ICON}
     src/app/versionsplashscreen.h src/app/versionsplashscreen.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})

@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "changematerialpropertycommand.h"
+#include "commands/changematerialpropertycommand.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/materials/custommaterial.h"

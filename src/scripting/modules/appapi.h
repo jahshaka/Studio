@@ -15,7 +15,7 @@ For more information see the LICENSE file
 // app.* — window-level navigation (SCRIPTING_SPEC §1.1): spaces and desktops.
 // Wraps, doesn't extract — these are inherently window verbs.
 
-#include "../apimodule.h"
+#include "scripting/apimodule.h"
 
 class AppApi : public ApiModule
 {

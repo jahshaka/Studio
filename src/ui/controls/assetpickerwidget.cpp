@@ -11,8 +11,8 @@ For more information see the LICENSE file
 
 #include "ui/controls/assetpickerwidget.h"
 #include "ui_assetpickerwidget.h"
-#include "core/thumbnailmanager.h"
-#include "constants.h"
+#include "services/thumbnailmanager.h"
+#include "data/constants.h"
 
 AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     QDialog(parent),

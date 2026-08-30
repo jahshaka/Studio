@@ -9,17 +9,17 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "materialreader.hpp"
+#include "io/materialreader.h"
 #include "irisgl/irisgl.h"
 #include "irisgl/Graphics.h"
 #include <QMap>
-#include "../constants.h"
-#include "../io/assetmanager.h"
-#include "../core/database/database.h"
-#include "../core/guidmanager.h"
-#include "../core/thumbnailmanager.h"
-#include "../core/project.h"
-#include "../core/settingsmanager.h"
+#include "data/constants.h"
+#include "io/assetmanager.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
+#include "services/thumbnailmanager.h"
+#include "data/project.h"
+#include "data/settingsmanager.h"
 
 // iris includes
 #include "irisgl/document/materials/custommaterial.h"

@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "../models/library.h"
 #include "../core/texturemanager.h"
 #include "../propertywidgets/vectorpropertywidget.h"
-#include "src/misc/stylesheet.h"
+#include "ui/style/stylesheet.h"
 #include <QFileDialog>
 #include <QDebug>
 

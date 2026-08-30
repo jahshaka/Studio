@@ -8,8 +8,8 @@
 #include <QQuaternion>
 #include <QtMath>
 
-#include "engine/scenemirror.h"
-#include "../editor/previewframing.h"
+#include "bridge/scenemirror.h"
+#include "viewport/previewframing.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/geometry/boundingsphere.h"

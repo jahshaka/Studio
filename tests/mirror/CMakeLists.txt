@@ -1,7 +1,7 @@
 # SceneMirror tests: iris:: document -> engine, verified by pixels. Links IrisGL
 # (Qt) AND JahshakaEngine — the only suite that spans the boundary, on purpose.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_scene_mirror test_scene_mirror.cpp ${CMAKE_SOURCE_DIR}/src/engine/scenemirror.cpp)
+add_executable(test_scene_mirror test_scene_mirror.cpp ${CMAKE_SOURCE_DIR}/src/bridge/scenemirror.cpp)
 set_target_properties(test_scene_mirror PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

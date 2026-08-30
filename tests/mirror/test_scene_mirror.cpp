@@ -29,7 +29,7 @@
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
-#include "engine/scenemirror.h"
+#include "bridge/scenemirror.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;

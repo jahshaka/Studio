@@ -1,0 +1,22 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#include "shell/globals.h"
+#include "data/project.h"
+#include "viewport/ieditorviewport.h"
+
+float					Globals::animFrameTime =	0;
+QString					Globals::appWorkingDir =	QString();
+Project*				Globals::project =			Project::createNew();
+Database*				Globals::db =				nullptr;
+IEditorViewport*		Globals::sceneViewWidget =	nullptr;
+QMap<QString, QString>	Globals::assetNames =		QMap<QString, QString>();
+QPointer<Subscriber>    Globals::eventSubscriber =  QPointer<Subscriber>(new Subscriber);

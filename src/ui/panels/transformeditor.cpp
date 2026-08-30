@@ -18,8 +18,8 @@ For more information see the LICENSE file
 #include "ui/controls/dragspinbox.h"
 
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "uimanager.h"
-#include "commands/transfrormscenenodecommand.h"
+#include "shell/uimanager.h"
+#include "commands/transformscenenodecommand.h"
 
 namespace {
 // per-pixel scrub sensitivity

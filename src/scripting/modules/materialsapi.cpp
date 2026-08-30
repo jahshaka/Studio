@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "materialsapi.h"
+#include "scripting/modules/materialsapi.h"
 
 #include <QDir>
 #include <QFile>
@@ -17,35 +17,35 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "moduleshared.h"
-#include "../../constants.h"
-#include "../../core/database/database.h"
-#include "../../core/guidmanager.h"
-#include "../../core/materialpreset.h"
-#include "../../core/project.h"
-#include "../../commands/changematerialpropertycommand.h"
-#include "../../engine/enginehost.h"
-#include "../../globals.h"
-#include "../../io/assetmanager.h"
-#include "../../io/materialpresetreader.h"
-#include "../../mainwindow.h"
-#include "../../services/sceneeditservice.h"
-#include "../../services/selectionservice.h"
-#include "../../services/services.h"
-#include "../../services/undoservice.h"
+#include "scripting/modules/moduleshared.h"
+#include "data/constants.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
+#include "data/materialpreset.h"
+#include "data/project.h"
+#include "commands/changematerialpropertycommand.h"
+#include "bridge/enginehost.h"
+#include "shell/globals.h"
+#include "io/assetmanager.h"
+#include "io/materialpresetreader.h"
+#include "shell/mainwindow.h"
+#include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
-#include "../../shadergraph/core/materialhelper.h"
-#include "../../shadergraph/core/pbrgraphevaluator.h"
-#include "../../shadergraph/graph/nodegraph.h"
-#include "../../shadergraph/models/libraryv1.h"
-#include "../../shadergraph/models/nodemodel.h"
-#include "../../shadergraph/models/socketmodel.h"
-#include "../../shadergraph/nodes/pbrmasternode.h"
+#include "shadergraph/core/materialhelper.h"
+#include "shadergraph/core/pbrgraphevaluator.h"
+#include "shadergraph/graph/nodegraph.h"
+#include "shadergraph/models/libraryv1.h"
+#include "shadergraph/models/nodemodel.h"
+#include "shadergraph/models/socketmodel.h"
+#include "shadergraph/nodes/pbrmasternode.h"
 
 using namespace scriptmod;
 

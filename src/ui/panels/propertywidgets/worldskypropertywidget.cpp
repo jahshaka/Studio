@@ -22,15 +22,15 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 
-#include "globals.h"
-#include "core/database/database.h"
-#include "core/subscriber.h"
+#include "shell/globals.h"
+#include "data/database/database.h"
+#include "services/subscriber.h"
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 #include "io/assetmanager.h"
 
-#include "globals.h"
-#include "editor/ieditorviewport.h"
+#include "shell/globals.h"
+#include "viewport/ieditorviewport.h"
 
 namespace {
 // The "Material" sky was broken even in the legacy renderer (its handlers are

@@ -16,8 +16,8 @@ For more information see the LICENSE file
 #include <QListWidget>
 #include <QListWidgetItem>
 
-#include "core/project.h"
-#include "core/database/database.h"
+#include "data/project.h"
+#include "data/database/database.h"
 
 class MainWindow;
 

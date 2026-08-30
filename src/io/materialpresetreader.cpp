@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/document/materials/defaultmaterial.h"
-#include "materialpresetreader.h"
-#include "core/materialpreset.h"
+#include "io/materialpresetreader.h"
+#include "data/materialpreset.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>

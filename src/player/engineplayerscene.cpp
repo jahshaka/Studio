@@ -1,10 +1,10 @@
-#include "engineplayerscene.h"
+#include "player/engineplayerscene.h"
 
 #include <cstdint>
 #include <string>
-#include "engine/scenemirror.h"
-#include "playback.h"
-#include "playermousecontroller.h"
+#include "bridge/scenemirror.h"
+#include "player/playback.h"
+#include "player/playermousecontroller.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/cameranode.h"

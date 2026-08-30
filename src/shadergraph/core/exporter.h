@@ -4,8 +4,8 @@
 #include <QJsonDocument>
 #include <QString>
 #include "zip.h"
-#include "src/core/database/database.h"
-#include "src/core/assethelper.h"
+#include "data/database/database.h"
+#include "services/assethelper.h"
 #include "src/shadergraph/core/materialhelper.h"
 
 class Exporter

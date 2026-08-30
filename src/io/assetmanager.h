@@ -18,7 +18,7 @@ For more information see the LICENSE file
 
 #include <irisgl/Graphics.h>
 
-#include "core/project.h"
+#include "data/project.h"
 
 class aiScene;
 

@@ -2,8 +2,8 @@
 // undo stack). The test drives the mouse controller only; none of this is exercised.
 #include <QUndoCommand>
 #include "irisgl/irisglfwd.h"
-#include "uimanager.h"
-#include "commands/transfrormscenenodecommand.h"
+#include "shell/uimanager.h"
+#include "commands/transformscenenodecommand.h"
 
 IEditorViewport *UiManager::sceneViewWidget = nullptr;
 SceneMode UiManager::sceneMode = SceneMode::PlayMode;
@@ -15,5 +15,5 @@ void TransformSceneNodeCommand::redo() {}
 
 // SettingsManager's inline constructor (src/core/settingsmanager.h:47) resolves its
 // settings file against Globals::appWorkingDir. Nothing else in Globals is reached.
-#include "globals.h"
+#include "shell/globals.h"
 QString Globals::appWorkingDir;

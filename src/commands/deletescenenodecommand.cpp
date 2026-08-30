@@ -9,11 +9,11 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "deletescenenodecommand.h"
-#include "../core/database/database.h"
-#include "../uimanager.h"
+#include "commands/deletescenenodecommand.h"
+#include "data/database/database.h"
+#include "shell/uimanager.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "../mainwindow.h"
+#include "shell/mainwindow.h"
 #include "ui/panels/scenehierarchywidget.h"
 
 DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode,

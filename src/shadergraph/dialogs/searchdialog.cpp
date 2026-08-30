@@ -19,7 +19,7 @@ For more information see the LICENSE file
 
 #include "../models/libraryv1.h"
 #include "../models/properties.h"
-#include "src/core/project.h"
+#include "data/project.h"
 
 
 

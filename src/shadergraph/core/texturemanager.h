@@ -9,7 +9,7 @@
 #include <QMessageBox>
 
 #if(EFFECT_BUILD_AS_LIB)
-#include "../../core/database/database.h"
+#include "data/database/database.h"
 //#include "../uimanager.h"
 //#include "../globals.h"
 //#include "../core/guidmanager.h"

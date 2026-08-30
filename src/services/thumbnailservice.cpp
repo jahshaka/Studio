@@ -9,13 +9,13 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "thumbnailservice.h"
+#include "services/thumbnailservice.h"
 
 #include <QDir>
 
-#include "../core/database/database.h"
-#include "../core/project.h"
-#include "../editor/thumbnailgenerator.h"
+#include "data/database/database.h"
+#include "data/project.h"
+#include "services/thumbnailgenerator.h"
 
 ThumbnailService::ThumbnailService(Database *db, Project *project)
     : db(db), project(project)

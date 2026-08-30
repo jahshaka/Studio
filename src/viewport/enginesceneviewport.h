@@ -12,7 +12,7 @@
 // explicit no-ops here (documented per method).
 #include <memory>
 #include "viewport/engineviewwidget.h"
-#include "../editor/ieditorviewport.h"
+#include "viewport/ieditorviewport.h"
 #include "jahshaka/engine/Engine.h"
 
 class SceneMirror;

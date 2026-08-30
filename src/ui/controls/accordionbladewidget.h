@@ -30,7 +30,7 @@ class FilePickerWidget;
 class CubeMapWidget;
 // class PropertyWidget;
 #include "ui/panels/propertywidget.h"
-#include "src/shadergraph//propertywidgets/propertywidgetbase.h"
+#include "shadergraph/propertywidgets/propertywidgetbase.h"
 
 #include <QLayout>
 

@@ -13,11 +13,11 @@ For more information see the LICENSE file
 #include "ui_texturepickerwidget.h"
 #include "qfiledialog.h"
 #include <Qt>
-#include "core/project.h"
-#include "core/thumbnailmanager.h"
+#include "data/project.h"
+#include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "irisgl/core/irisutils.h"
-#include "globals.h"
+#include "shell/globals.h"
 #include <QMimeData>
 #include <QDrag>
 #include <QStandardItemModel>

@@ -9,19 +9,19 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "projectapi.h"
+#include "scripting/modules/projectapi.h"
 
 #include <QDir>
 #include <QJSEngine>
 #include <QStandardPaths>
 
-#include "../../core/database/database.h"
-#include "../../core/project.h"
-#include "../../globals.h"
-#include "../../mainwindow.h"
-#include "../../services/projectservice.h"
-#include "../../services/services.h"
-#include "../../uimanager.h"
+#include "data/database/database.h"
+#include "data/project.h"
+#include "shell/globals.h"
+#include "shell/mainwindow.h"
+#include "services/projectservice.h"
+#include "services/services.h"
+#include "shell/uimanager.h"
 #include "ui/pages/projectmanager.h"
 
 QVector<VerbInfo> ProjectApi::verbs() const

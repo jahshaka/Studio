@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include <QQuaternion>
 #include <QVector3D>
-#include "../editor/cameracontrollerbase.h"
+#include "viewport/cameracontrollerbase.h"
 
 // Local picking record (was defined by the deleted legacy SceneViewWidget).
 struct PickingResult

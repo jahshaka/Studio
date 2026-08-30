@@ -20,11 +20,11 @@ For more information see the LICENSE file
 
 #include "irisgl/core/irisutils.h"
 
-#include "constants.h"
-#include "core/materialpreset.h"
-#include "core/guidmanager.h"
+#include "data/constants.h"
+#include "data/materialpreset.h"
+#include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
-#include "mainwindow.h"
+#include "shell/mainwindow.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 

@@ -11,10 +11,10 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
 #include "irisgl/core/irisutils.h"
-#include "src/core/thumbnailmanager.h"
+#include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
-#include "globals.h"
-#include "misc/stylesheet.h"
+#include "shell/globals.h"
+#include "ui/style/stylesheet.h"
 #include <QPainter>
 #include <QMimeData>
 #include <QSharedPointer>

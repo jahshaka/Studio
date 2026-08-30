@@ -2,7 +2,7 @@
 # branch that pushes document-simulated particles into them, verified by pixels.
 # Links IrisGL (Qt) AND JahshakaEngine like the mirror suite.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_particles test_particles.cpp ${CMAKE_SOURCE_DIR}/src/engine/scenemirror.cpp)
+add_executable(test_particles test_particles.cpp ${CMAKE_SOURCE_DIR}/src/bridge/scenemirror.cpp)
 set_target_properties(test_particles PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

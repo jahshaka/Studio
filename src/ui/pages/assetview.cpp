@@ -13,11 +13,11 @@ For more information see the LICENSE file
 #include "ui/pages/iassetviewer.h"
 #include "ui/pages/headlessassetviewer.h"
 #include <QTimer>
-#include "dialogs/progressdialog.h"
-#include "core/settingsmanager.h"
-#include "dialogs/preferencesdialog.h"
-#include "dialogs/preferences/worldsettings.h"
-#include "dialogs/preferences/worldsettingswidget.h"
+#include "ui/dialogs/progressdialog.h"
+#include "data/settingsmanager.h"
+#include "ui/dialogs/preferencesdialog.h"
+#include "ui/dialogs/preferences/worldsettings.h"
+#include "ui/dialogs/preferences/worldsettingswidget.h"
 
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
@@ -54,24 +54,24 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QProgressDialog>
 
-#include "globals.h"
-#include "constants.h"
-#include "core/settingsmanager.h"
-#include "core/database/database.h"
-#include "uimanager.h"
+#include "shell/globals.h"
+#include "data/constants.h"
+#include "data/settingsmanager.h"
+#include "data/database/database.h"
+#include "shell/uimanager.h"
 #include "ui/controls/assetviewgrid.h"
 #include "ui/controls/assetgriditem.h"
-#include "core/assethelper.h"
+#include "services/assethelper.h"
 #include "io/assetmanager.h"
-#include "io/materialreader.hpp"
-#include "editor/thumbnailgenerator.h"
+#include "io/materialreader.h"
+#include "services/thumbnailgenerator.h"
 
-#include "core/guidmanager.h"
-#include "core/thumbnailmanager.h"
+#include "data/guidmanager.h"
+#include "services/thumbnailmanager.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 
-#include "dialogs/toast.h"
+#include "ui/dialogs/toast.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {

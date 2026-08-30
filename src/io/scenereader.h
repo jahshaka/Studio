@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define SCENEREADER_H
 
 #include <QSharedPointer>
-#include "assetiobase.h"
+#include "io/assetiobase.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -23,8 +23,8 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QMap>
 
-#include "globals.h"
-#include "core/project.h"
+#include "shell/globals.h"
+#include "data/project.h"
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scenenode.h"

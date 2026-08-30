@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QApplication>
 
-#include "dialogs/renameprojectdialog.h"
+#include "ui/dialogs/renameprojectdialog.h"
 
 ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
                                QSize size,

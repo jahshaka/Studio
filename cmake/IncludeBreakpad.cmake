@@ -12,7 +12,7 @@ if(USE_BREAKPAD)
 	add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/crash_handler)
 	add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/breakpad)
 
-	set(HEADERS ${HEADERS} src/breakpad/breakpad.h)
+	set(HEADERS ${HEADERS} src/app/breakpad.h)
 
 	add_definitions("-DUSE_BREAKPAD")
 

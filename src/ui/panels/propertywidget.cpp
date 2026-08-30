@@ -21,9 +21,9 @@ For more information see the LICENSE file
 #include "ui_texturepickerwidget.h"
 #include "ui/controls/filepickerwidget.h"
 #include "ui_filepickerwidget.h"
-#include "globals.h"
+#include "shell/globals.h"
 #include <QDir>
-#include "core/database/database.h"
+#include "data/database/database.h"
 
 PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::PropertyWidget)
 {

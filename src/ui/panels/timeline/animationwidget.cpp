@@ -33,7 +33,7 @@ For more information see the LICENSE file
 #include "ui/panels/timeline/keyframecurvewidget.h"
 #include "ui/panels/timeline/animationwidgetdata.h"
 #include "ui/panels/timeline/createanimationwidget.h"
-#include "dialogs/getnamedialog.h"
+#include "ui/dialogs/getnamedialog.h"
 
 
 AnimationWidget::AnimationWidget(QWidget *parent) :

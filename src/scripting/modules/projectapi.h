@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QVariantList>
 #include <QVariantMap>
 
-#include "../apimodule.h"
+#include "scripting/apimodule.h"
 
 class ProjectApi : public ApiModule
 {

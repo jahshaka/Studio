@@ -18,10 +18,10 @@ For more information see the LICENSE file
 #include <QDebug>
 
 #include "ui/controls/itemgridwidget.h"
-#include "constants.h"
-#include "core/settingsmanager.h"
+#include "data/constants.h"
+#include "data/settingsmanager.h"
 #include "ui/pages/projectmanager.h"
-#include "uimanager.h"
+#include "shell/uimanager.h"
 
 DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 {

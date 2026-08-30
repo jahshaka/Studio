@@ -1,14 +1,14 @@
-#include "playback.h"
+#include "player/playback.h"
 #include <QTimer>
 #include <QElapsedTimer>
-#include "constants.h"
-#include "uimanager.h"
-#include "editor/ieditorviewport.h"
+#include "data/constants.h"
+#include "shell/uimanager.h"
+#include "viewport/ieditorviewport.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/SceneGraph.h"
 #include "irisgl/Physics.h"
-#include "playermousecontroller.h"
-#include "src/core/keyboardstate.h"
+#include "player/playermousecontroller.h"
+#include "viewport/keyboardstate.h"
 
 PlayBack::PlayBack()
 {

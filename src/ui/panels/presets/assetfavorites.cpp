@@ -18,10 +18,10 @@ For more information see the LICENSE file
 #include <QApplication>
 
 #include "io/materialpresetreader.h"
-#include "core/materialpreset.h"
+#include "data/materialpreset.h"
 #include "irisgl/core/irisutils.h"
 
-#include "mainwindow.h"
+#include "shell/mainwindow.h"
 
 AssetFavorites::AssetFavorites(QWidget *parent) : QWidget(parent)
 {

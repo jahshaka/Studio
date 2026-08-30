@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "scenewriter.h"
+#include "io/scenewriter.h"
 
 #include <Qt>
 #include <QVector>
@@ -28,12 +28,12 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/postprocess.h"
 #include "irisgl/document/materials/postprocessmanager.h"
 
-#include "assetiobase.h"
-#include "constants.h"
-#include "core/database/database.h"
-#include "core/project.h"
-#include "globals.h"
-#include "editor/editordata.h"
+#include "io/assetiobase.h"
+#include "data/constants.h"
+#include "data/database/database.h"
+#include "data/project.h"
+#include "shell/globals.h"
+#include "viewport/editordata.h"
 
 Database *SceneWriter::handle = 0;
 

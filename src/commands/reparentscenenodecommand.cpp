@@ -9,9 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "reparentscenenodecommand.h"
-#include "../uimanager.h"
-#include "../mainwindow.h"
+#include "commands/reparentscenenodecommand.h"
+#include "shell/uimanager.h"
+#include "shell/mainwindow.h"
 #include "ui/panels/scenehierarchywidget.h"
 
 ReparentSceneNodeCommand::ReparentSceneNodeCommand(iris::SceneNodePtr sceneNode,

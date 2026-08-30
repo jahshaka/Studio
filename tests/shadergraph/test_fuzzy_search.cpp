@@ -1,7 +1,7 @@
 // CHECK-style tests for the tab-search fuzzy matcher (FuzzySearch::match).
 // Pure QString logic - no GL, no widgets, no engine.
 
-#include "../../src/shadergraph/dialogs/fuzzysearch.h"
+#include "shadergraph/dialogs/fuzzysearch.h"
 
 #include <cstdio>
 

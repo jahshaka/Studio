@@ -22,11 +22,11 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h" 
 #include "irisgl/document/materials/defaultmaterial.h" 
 
-#include "core/database/database.h" 
+#include "data/database/database.h" 
 
 #include <QJsonObject> 
 
-#include "globals.h" 
+#include "shell/globals.h" 
 #include "io/scenewriter.h" 
 
 EmitterPropertyWidget::EmitterPropertyWidget()

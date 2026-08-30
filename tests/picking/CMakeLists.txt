@@ -1,6 +1,6 @@
 # Document picking, no renderer.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_scene_picker test_scene_picker.cpp ${CMAKE_SOURCE_DIR}/src/editor/scenepicker.cpp)
+add_executable(test_scene_picker test_scene_picker.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scenepicker.cpp)
 set_target_properties(test_scene_picker PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17)
 target_include_directories(test_scene_picker PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src

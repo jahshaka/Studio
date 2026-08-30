@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define DYNAMICGRID_H
 
 #include <QScrollArea>
-#include "core/project.h"
+#include "data/project.h"
 
 class QGridLayout;
 class SettingsManager;

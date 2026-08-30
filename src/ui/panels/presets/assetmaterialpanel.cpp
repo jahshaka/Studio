@@ -21,13 +21,13 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 
-#include "constants.h"
-#include "core/guidmanager.h"
+#include "data/constants.h"
+#include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
-#include "engine/enginehost.h"
+#include "bridge/enginehost.h"
 #include "io/assetmanager.h"
-#include "mainwindow.h"
-#include "../src/shadergraph/core/materialhelper.h"
+#include "shell/mainwindow.h"
+#include "shadergraph/core/materialhelper.h"
 
 #include "io/scenewriter.h"
 

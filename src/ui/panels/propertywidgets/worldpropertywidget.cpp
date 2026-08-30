@@ -14,8 +14,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/core/irisutils.h"
 
-#include "core/project.h"
-#include "core/database/database.h"
+#include "data/project.h"
+#include "data/database/database.h"
 
 #include "ui/controls/texturepickerwidget.h"
 #include "ui/controls/colorvaluewidget.h"
@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "globals.h"
+#include "shell/globals.h"
 #include "io/scenereader.h"
 
 WorldPropertyWidget::WorldPropertyWidget()

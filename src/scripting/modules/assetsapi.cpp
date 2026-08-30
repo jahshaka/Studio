@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "assetsapi.h"
+#include "scripting/modules/assetsapi.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -18,24 +18,24 @@ For more information see the LICENSE file
 #include <QPixmap>
 #include <QStandardPaths>
 
-#include "moduleshared.h"
-#include "../../services/assetservice.h"
-#include "../../constants.h"
-#include "../../core/assethelper.h"
-#include "../../core/database/database.h"
-#include "../../core/guidmanager.h"
-#include "../../core/project.h"
-#include "../../editor/enginethumbnailrenderer.h"
-#include "../../editor/ieditorviewport.h"
-#include "../../engine/enginehost.h"
-#include "../../globals.h"
-#include "../../io/assetmanager.h"
-#include "../../io/materialreader.hpp"
-#include "../../io/scenereader.h"
-#include "../../mainwindow.h"
-#include "../../services/sceneeditservice.h"
-#include "../../services/selectionservice.h"
-#include "../../services/services.h"
+#include "scripting/modules/moduleshared.h"
+#include "services/assetservice.h"
+#include "data/constants.h"
+#include "services/assethelper.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
+#include "data/project.h"
+#include "bridge/enginethumbnailrenderer.h"
+#include "viewport/ieditorviewport.h"
+#include "bridge/enginehost.h"
+#include "shell/globals.h"
+#include "io/assetmanager.h"
+#include "io/materialreader.h"
+#include "io/scenereader.h"
+#include "shell/mainwindow.h"
+#include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
+#include "services/services.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"

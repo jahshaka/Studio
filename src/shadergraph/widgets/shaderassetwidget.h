@@ -9,7 +9,7 @@
 #include <QStackedWidget>
 #include "listwidget.h"
 #include "shaderlistwidget.h"
-#include "src/core/project.h"
+#include "data/project.h"
 
 
 //#include "../widgets/assetwidget.h"

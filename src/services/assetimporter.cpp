@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "assetimporter.h"
+#include "services/assetimporter.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -18,14 +18,14 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 #include <functional>
 
-#include "../constants.h"
-#include "../core/assethelper.h"
-#include "../core/project.h"
-#include "../globals.h"
-#include "../core/database/database.h"
-#include "../core/guidmanager.h"
-#include "../io/assetmanager.h"
-#include "../io/scenewriter.h"
+#include "data/constants.h"
+#include "services/assethelper.h"
+#include "data/project.h"
+#include "shell/globals.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
+#include "io/assetmanager.h"
+#include "io/scenewriter.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"

@@ -21,7 +21,7 @@ For more information see the LICENSE file
 
 #include <QJsonObject>
 
-#include "assetiobase.h"
+#include "io/assetiobase.h"
 
 QDir AssetIOBase::dir;
 

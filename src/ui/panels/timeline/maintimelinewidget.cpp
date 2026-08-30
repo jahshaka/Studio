@@ -11,8 +11,8 @@ For more information see the LICENSE file
 
 #include "ui/panels/timeline/maintimelinewidget.h"
 #include "ui_maintimelinewidget.h"
-#include "mainwindow.h"
-#include "globals.h"
+#include "shell/mainwindow.h"
+#include "shell/globals.h"
 
 #include <QTimer>
 #include <QElapsedTimer>

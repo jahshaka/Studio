@@ -15,13 +15,13 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 
 
-#include "uimanager.h"
+#include "shell/uimanager.h"
 
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
 #include "ui/panels/transformeditor.h"
 
-#include "core/database/database.h"
+#include "data/database/database.h"
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"

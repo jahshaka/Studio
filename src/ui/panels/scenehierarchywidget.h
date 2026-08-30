@@ -25,7 +25,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
-#include "core/project.h"
+#include "data/project.h"
 
 namespace Ui {
     class SceneHierarchyWidget;

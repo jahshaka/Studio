@@ -26,7 +26,7 @@ For more information see the LICENSE file
 #include <QObject>
 #include <QString>
 #include <QVector>
-#include "scripthost.h"
+#include "scripting/scripthost.h"
 
 /// What a verb needs to run (SCRIPTING_SPEC §2.2). Drives the headless matrix:
 /// Document verbs run under QT_QPA_PLATFORM=offscreen with no engine at all.

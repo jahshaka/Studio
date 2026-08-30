@@ -27,10 +27,10 @@ class Database;
 #include <QComboBox>
 
 #include "io/assetmanager.h"
-#include "dialogs/progressdialog.h"
-#include "editor/thumbnailgenerator.h"
-#include "core/project.h"
-#include "editor/ieditorviewport.h"
+#include "ui/dialogs/progressdialog.h"
+#include "services/thumbnailgenerator.h"
+#include "data/project.h"
+#include "viewport/ieditorviewport.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include <QButtonGroup>
 

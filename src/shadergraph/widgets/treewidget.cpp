@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "treewidget.h"
-#include "src/core/project.h"
+#include "data/project.h"
 #include <QHeaderView>
 #include <QScrollBar>
 

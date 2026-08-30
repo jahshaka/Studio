@@ -25,11 +25,11 @@ For more information see the LICENSE file
 
 #include "../shadergraphmainwindow.h"
 #if(EFFECT_BUILD_AS_LIB)
-#include "../../io/assetmanager.h"
-#include "../../uimanager.h"
-#include "../../globals.h"
-#include "../../core/database/database.h"
-#include "../../core/guidmanager.h"
+#include "io/assetmanager.h"
+#include "shell/uimanager.h"
+#include "shell/globals.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
 #endif
 
 ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()

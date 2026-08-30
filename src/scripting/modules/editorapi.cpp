@@ -9,21 +9,21 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "editorapi.h"
+#include "scripting/modules/editorapi.h"
 
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
 #include <QUndoStack>
 
-#include "moduleshared.h"
-#include "../../editor/ieditorviewport.h"
-#include "../../mainwindow.h"
-#include "../../services/services.h"
-#include "../../services/playbackservice.h"
-#include "../../services/sceneeditservice.h"
-#include "../../services/selectionservice.h"
-#include "../../services/undoservice.h"
+#include "scripting/modules/moduleshared.h"
+#include "viewport/ieditorviewport.h"
+#include "shell/mainwindow.h"
+#include "services/services.h"
+#include "services/playbackservice.h"
+#include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
+#include "services/undoservice.h"
 
 using namespace scriptmod;
 

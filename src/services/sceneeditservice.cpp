@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "sceneeditservice.h"
+#include "services/sceneeditservice.h"
 
 #include <QBuffer>
 #include <QDateTime>
@@ -41,24 +41,24 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 
-#include "../commands/addscenenodecommand.h"
-#include "../commands/deletescenenodecommand.h"
-#include "../constants.h"
-#include "../core/assethelper.h"
-#include "../core/database/database.h"
-#include "../core/guidmanager.h"
-#include "../core/materialpreset.h"
-#include "../core/scenenodehelper.h"
-#include "../core/thumbnailmanager.h"
-#include "../editor/ieditorviewport.h"
-#include "../editor/thumbnailgenerator.h"
-#include "../engine/enginehost.h"
-#include "../io/assetmanager.h"
-#include "../io/materialreader.hpp"
-#include "../io/scenereader.h"
-#include "../io/scenewriter.h"
-#include "selectionservice.h"
-#include "undoservice.h"
+#include "commands/addscenenodecommand.h"
+#include "commands/deletescenenodecommand.h"
+#include "data/constants.h"
+#include "services/assethelper.h"
+#include "data/database/database.h"
+#include "data/guidmanager.h"
+#include "data/materialpreset.h"
+#include "services/scenenodehelper.h"
+#include "services/thumbnailmanager.h"
+#include "viewport/ieditorviewport.h"
+#include "services/thumbnailgenerator.h"
+#include "bridge/enginehost.h"
+#include "io/assetmanager.h"
+#include "io/materialreader.h"
+#include "io/scenereader.h"
+#include "io/scenewriter.h"
+#include "services/selectionservice.h"
+#include "services/undoservice.h"
 
 #include "zip.h"
 

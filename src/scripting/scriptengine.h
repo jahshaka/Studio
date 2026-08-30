@@ -26,8 +26,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QVariant>
 
-#include "apiregistry.h"
-#include "scripthost.h"
+#include "scripting/apiregistry.h"
+#include "scripting/scripthost.h"
 
 struct ScriptResult
 {

@@ -22,10 +22,10 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/core/irisutils.h"
-#include "mainwindow.h"
-#include "uimanager.h"
-#include "editor/ieditorviewport.h"
-#include "engine/enginehost.h"
+#include "shell/mainwindow.h"
+#include "shell/uimanager.h"
+#include "viewport/ieditorviewport.h"
+#include "bridge/enginehost.h"
 #include "io/scenewriter.h"
 #include <qdialog.h>
 #include <qcombobox.h>

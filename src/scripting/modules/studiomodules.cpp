@@ -9,17 +9,17 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "studiomodules.h"
+#include "scripting/modules/studiomodules.h"
 
-#include "../scriptengine.h"
-#include "appapi.h"
-#include "assetsapi.h"
-#include "editorapi.h"
-#include "materialsapi.h"
-#include "nodeapi.h"
-#include "projectapi.h"
-#include "sceneapi.h"
-#include "worldapi.h"
+#include "scripting/scriptengine.h"
+#include "scripting/modules/appapi.h"
+#include "scripting/modules/assetsapi.h"
+#include "scripting/modules/editorapi.h"
+#include "scripting/modules/materialsapi.h"
+#include "scripting/modules/nodeapi.h"
+#include "scripting/modules/projectapi.h"
+#include "scripting/modules/sceneapi.h"
+#include "scripting/modules/worldapi.h"
 
 void registerStudioModules(ScriptEngine &engine)
 {

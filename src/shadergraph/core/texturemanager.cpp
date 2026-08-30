@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "texturemanager.h"
 #include "../shadergraphmainwindow.h"
-#include "../../globals.h"
-#include "src/core/project.h"
+#include "shell/globals.h"
+#include "data/project.h"
 
 TextureManager* TextureManager::instance = 0;
 

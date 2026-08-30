@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define MATERIALREADER_H
 
 #include <QSharedPointer>
-#include "assetiobase.h"
+#include "io/assetiobase.h"
 
 namespace iris {
     class Material;

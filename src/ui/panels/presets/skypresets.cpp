@@ -12,15 +12,15 @@ For more information see the LICENSE file
 #include "ui/panels/presets/skypresets.h"
 #include "ui_skypresets.h"
 
-#include "mainwindow.h"
+#include "shell/mainwindow.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/texture2d.h"
 
-#include "core/database/database.h"
+#include "data/database/database.h"
 
-#include "globals.h"
-#include "core/guidmanager.h"
+#include "shell/globals.h"
+#include "data/guidmanager.h"
 
 #include <QResource>
 
