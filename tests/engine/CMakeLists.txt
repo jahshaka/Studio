@@ -54,7 +54,7 @@ set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 600)
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
-    add_library(JahshakaEngineAsan STATIC ${CMAKE_SOURCE_DIR}/irisgl/engine/src/OgreEngine.cpp)
+    add_library(JahshakaEngineAsan STATIC ${JAHSHAKA_ENGINE_SOURCES})
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
     target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})
