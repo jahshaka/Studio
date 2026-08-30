@@ -198,6 +198,7 @@ set(SRCS
     thirdparty/qtawesome/QtAwesome.cpp
     thirdparty/qtawesome/QtAwesomeAnim.cpp
     src/ui/style/stylesheet.cpp
+    src/ui/style/thememanager.cpp
     src/ui/controls/colorview.cpp
     src/ui/dialogs/toast.cpp
     src/ui/controls/tooltip.cpp
@@ -373,6 +374,7 @@ set(HEADERS
     thirdparty/qtawesome/QtAwesome.h
     thirdparty/qtawesome/QtAwesomeAnim.h 
     src/ui/style/stylesheet.h
+    src/ui/style/thememanager.h
     src/ui/controls/colorview.h
     src/ui/dialogs/toast.h
     src/ui/controls/tooltip.h
@@ -445,7 +447,12 @@ if(JAHSHAKA_BUILD_TESTS)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif()
 
-set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml Qt6::HttpServer IrisGL JahshakaEngine ${OPENGL_LIBRARIES})
+# Qlementine (thirdparty/qlementine submodule, MIT © Olivier Cléro, pinned v1.4.2):
+# the app-wide QStyle that replaces the per-widget dark stylesheets. Library only —
+# QLEMENTINE_SANDBOX/QLEMENTINE_SHOWCASE stay off.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/qlementine)
+
+set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml Qt6::HttpServer IrisGL JahshakaEngine qlementine ${OPENGL_LIBRARIES})
 
 include(IncludeBreakpad)
 include(IncludeMaterialsModule)
@@ -455,7 +462,8 @@ set (QRCS
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
-    ${CMAKE_SOURCE_DIR}/app/shaders.qrc 
+    ${CMAKE_SOURCE_DIR}/app/shaders.qrc
+    ${CMAKE_SOURCE_DIR}/app/themes.qrc
 )
 
 # Disable compiler specific warnings if we are building with MSVC

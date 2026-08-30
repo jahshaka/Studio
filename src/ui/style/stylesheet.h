@@ -14,6 +14,13 @@ For more information see the LICENSE file
 class StyleSheet : public QObject
 {
 public:
+	// Qlementine kill switch: false (default) = the Qlementine QStyle owns all
+	// widget rendering and every getter below returns an empty sheet; true =
+	// the archived "Jahshaka Classic" theme, getters return their classic CSS.
+	// Set once at startup by ThemeManager::applyAtStartup.
+	static bool classicThemeActive();
+	static void setClassicThemeActive(bool active);
+
 	static const QString QPushButtonBlue();
 	static const QString QPushButtonBlueBig();
 	static const QString QPushButtonInvisible();

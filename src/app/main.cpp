@@ -45,6 +45,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
+#include "ui/style/thememanager.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
@@ -90,6 +91,11 @@ int main(int argc, char *argv[])
 	initializeBreakpad();
 #endif
 
+    // Apply the app theme (Qlementine Dark by default, archived Classic on
+    // request) BEFORE any widget exists — the Upgrader dialog and the engine
+    // preview dialog are the first widgets alive. See THEME_AUDIT.md §4.
+    ThemeManager::applyAtStartup(app);
+
     if (cli.enginePreviewOnly) {
         // No MainWindow, no IrisGL, no legacy GL context.
         OgrePreviewDialog preview;
@@ -118,16 +124,9 @@ int main(int argc, char *argv[])
     QDir assetDir(assetPath);
     if (!assetDir.exists()) assetDir.mkpath(assetPath);
 
-// use nicer font on platforms with poor defaults, Mac has really nice font rendering (iKlsR)
-#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
-    int id = QFontDatabase::addApplicationFont(":/fonts/DroidSans.ttf");
-    if (id != -1) {
-        QString family = QFontDatabase::applicationFontFamilies(id).at(0);
-        QFont monospace(family, Constants::UI_FONT_SIZE);
-        monospace.setStyleStrategy(QFont::PreferAntialias);
-        QApplication::setFont(monospace);
-    }
-#endif
+    // Fonts are a theme decision now: Classic sets DroidSans inside
+    // ThemeManager::applyAtStartup; Qlementine Dark uses the theme's own
+    // typography (Inter/Roboto Mono, bundled and applied by the style).
 
     VersionSplashScreen splash;
 

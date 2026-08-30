@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "shell/mainwindow.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 
 WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* settings) :
     QWidget(nullptr)
@@ -418,6 +419,27 @@ void WorldSettingsWidget::configureEditor()
 	layout->addLayout(alayout, 3, 1);
 	layout->addWidget(mouseControls, 4, 0);
 	layout->addWidget(mouseCon, 4, 1);
+
+	// Appearance: the app-wide theme (THEME_AUDIT.md). Qlementine Dark is the
+	// default; the classic per-widget stylesheets stay selectable, archived,
+	// for comparison while the old styling is cleaned out. Restart-on-change.
+	auto themeLabel = new QLabel("Theme :");
+	StyleSheet::setStyle({ themeLabel });
+	setSizePolicyForWidgets(themeLabel);
+	auto themeCombo = new QComboBox;
+	StyleSheet::setStyle({ themeCombo });
+	themeCombo->addItem("Qlementine Dark", ThemeManager::qlementineDarkId());
+	themeCombo->addItem("Jahshaka Classic (archived)", ThemeManager::classicId());
+	themeCombo->setCurrentIndex(ThemeManager::currentThemeId() == ThemeManager::classicId() ? 1 : 0);
+	auto themeNote = new QLabel("Takes effect after restart.");
+	themeNote->setStyleSheet(StyleSheet::MutedInfoText());
+	layout->addWidget(themeLabel, 5, 0);
+	layout->addWidget(themeCombo, 5, 1);
+	layout->addWidget(themeNote, 6, 1);
+	connect(themeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [themeCombo](int idx) {
+		ThemeManager::setThemeId(themeCombo->itemData(idx).toString());
+	});
+
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
 

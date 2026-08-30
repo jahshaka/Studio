@@ -4,3 +4,6 @@
 [submodule "irisgl"]
 	path = irisgl
 	url = https://github.com/jahshaka/IrisGL.git
+[submodule "thirdparty/qlementine"]
+	path = thirdparty/qlementine
+	url = https://github.com/oclero/qlementine.git

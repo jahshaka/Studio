@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>themes/jahshaka-dark.json</file>
+    </qresource>
+</RCC>
