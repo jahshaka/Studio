@@ -148,6 +148,7 @@ For more information see the LICENSE file
 #include "scripting/modules/studiomodules.h"
 
 #include "services/services.h"
+#include "services/shortcutregistry.h"
 #include "services/subscriber.h"
 #include "services/undoservice.h"
 #include "services/selectionservice.h"
@@ -207,6 +208,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupToolBar();
     setupDockWidgets();
     setupShortcuts();
+    prefsDialog->wireShortcuts(shortcutRegistry);
 
 	// scripting (SCRIPTING_SPEC §2): the host sees the live app; the console
 	// dock starts hidden — Ctrl+` toggles it in the editor space.
@@ -2090,80 +2092,87 @@ void MainWindow::setupToolBar()
 
 void MainWindow::setupShortcuts()
 {
-    // Translation, Rotation and Scaling gizmo shortcuts for
-    QShortcut *shortcut = new QShortcut(QKeySequence("t"),sceneView->asWidget());
-    connect(shortcut, SIGNAL(activated()), this, SLOT(translateGizmo()));
+    // EDITOR_SHORTCUTS_SPEC §1: every binding lives in the ShortcutRegistry —
+    // persisted overrides (jahsettings.ini "shortcut/<id>"), conflict-checked
+    // rebinding, and the generated Preferences → Shortcuts page. Inputs the
+    // shortcut system cannot express (RMB-held fly keys, held modifiers,
+    // Alt+drag) are registered as fixed rows for discoverability; their
+    // handling lives in the viewport's event code.
+    shortcutRegistry = new ShortcutRegistry(settings->settings, this);
+    ShortcutRegistry &reg = *shortcutRegistry;
 
-    shortcut = new QShortcut(QKeySequence("r"),sceneView->asWidget());
-    connect(shortcut, SIGNAL(activated()), this, SLOT(rotateGizmo()));
+    // ---- tools (Unreal keys: W/E/R; T kept as the historical translate key.
+    // While RMB is held these keys fly the camera — the viewport withholds
+    // them from the shortcut system, see EngineSceneViewport::event) ----
+    reg.add("tool.translate", "Translate Tool", "Tools", QKeySequence(Qt::Key_W), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) translateGizmo(); });
+    reg.add("tool.translate.alt", "Translate Tool (alias)", "Tools", QKeySequence(Qt::Key_T), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) translateGizmo(); });
+    reg.add("tool.rotate", "Rotate Tool", "Tools", QKeySequence(Qt::Key_E), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) rotateGizmo(); });
+    reg.add("tool.scale", "Scale Tool", "Tools", QKeySequence(Qt::Key_R), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) scaleGizmo(); });
+    reg.add("tool.cycle", "Cycle Gizmo Mode", "Tools", QKeySequence(Qt::Key_Space), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) cycleGizmoMode(); });
 
-    shortcut = new QShortcut(QKeySequence("alt+s"),sceneView->asWidget());
-    connect(shortcut, SIGNAL(activated()), this, SLOT(scaleGizmo()));
+    // ---- camera ----
+    reg.add("camera.focus", "Focus Selection", "Camera", QKeySequence(Qt::Key_F), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) sceneView->focusOnSelection(); });
+    reg.add("view.orthographic", "Orthographic Projection", "Camera", QKeySequence(Qt::Key_O), this,
+            [this]() { emit projectionChangeRequested(false); });
+    reg.add("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), this,
+            [this]() { emit projectionChangeRequested(true); });
+    reg.addFixed("camera.fly", "Fly Camera (free camera)", "Camera",
+                 "RMB (hold) + W/A/S/D + Q/E \xc2\xb7 Shift: 3x");
+    reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
 
-    // Save
-	shortcut = new QShortcut(QKeySequence("ctrl+s"), sceneView->asWidget());
-	connect(shortcut, SIGNAL(activated()), this, SLOT(saveScene()));
+    // ---- playback (Space is the gizmo cycle now — Unreal PIE puts play on
+    // Alt+P; the toolbar Play button is unchanged) ----
+    reg.add("play.toggle", "Play / Stop Scene", "Playback",
+            QKeySequence(Qt::ALT | Qt::Key_P), this, [this]() {
+                if (currentSpace == WindowSpaces::EDITOR)
+                    onPlaySceneButton();
+                else if (currentSpace == WindowSpaces::PLAYER)
+                    playerView->onPlayScene();
+            });
 
-	shortcut = new QShortcut(QKeySequence("o"), sceneView->asWidget());
-	connect(shortcut, &QShortcut::activated, [=]() {
-		emit projectionChangeRequested(false);
-	});
+    // ---- snapping (the sizes and steppers land with SnapSettings) ----
+    reg.addFixed("snap.relative", "Snap While Dragging", "Snapping", "Ctrl (hold)");
 
-	shortcut = new QShortcut(QKeySequence("p"), sceneView->asWidget());
-	connect(shortcut, &QShortcut::activated, [=]() {
-		emit projectionChangeRequested(true);
-	});
+    // ---- file / windows ----
+    reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
+            [this]() { saveScene(); });
+    reg.add("console.toggle", "Script Console", "Windows",
+            QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this, [this]() {
+                if (scriptConsoleDock) scriptConsoleDock->setVisible(!scriptConsoleDock->isVisible());
+            });
+    reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
+            [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
+    reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
+            [this]() { if (projectService->isSceneOpen()) this->switchSpace(WindowSpaces::PLAYER); });
+    reg.add("space.editor", "Editor Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_3), this,
+            [this]() { if (projectService->isSceneOpen()) this->switchSpace(WindowSpaces::EDITOR); });
+    reg.add("space.effects", "Effects Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_4), this,
+            [this]() { this->switchSpace(WindowSpaces::EFFECT); });
+    reg.add("space.assets", "Assets Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_5), this,
+            [this]() { this->switchSpace(WindowSpaces::ASSETS); });
+    reg.add("space.previous", "Previous Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_Tab), this,
+            [this]() {
+                if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) &&
+                    !projectService->isSceneOpen())
+                    return;
+                this->switchSpace(previousSpace);
+            });
+}
 
-
-    // Script console (editor space): Ctrl+` toggles the dock
-    shortcut = new QShortcut(QKeySequence("ctrl+`"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        if (scriptConsoleDock) scriptConsoleDock->setVisible(!scriptConsoleDock->isVisible());
-    });
-
-    // TAB SHORTCUTS
-    shortcut = new QShortcut(QKeySequence("ctrl+1"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        this->switchSpace(WindowSpaces::DESKTOP);
-    });
-
-    shortcut = new QShortcut(QKeySequence("ctrl+2"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        if (projectService->isSceneOpen())
-            this->switchSpace(WindowSpaces::PLAYER);
-    });
-
-    shortcut = new QShortcut(QKeySequence("ctrl+3"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        if (projectService->isSceneOpen())
-            this->switchSpace(WindowSpaces::EDITOR);
-    });
-
-    shortcut = new QShortcut(QKeySequence("ctrl+4"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        this->switchSpace(WindowSpaces::EFFECT);
-    });
-
-    shortcut = new QShortcut(QKeySequence("ctrl+5"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        this->switchSpace(WindowSpaces::ASSETS);
-    });
-
-    shortcut = new QShortcut(QKeySequence("ctrl+tab"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        if ((previousSpace == WindowSpaces::PLAYER || previousSpace == WindowSpaces::EDITOR) && !projectService->isSceneOpen())
-            return;
-
-        this->switchSpace(previousSpace);
-    });
-
-    shortcut = new QShortcut(QKeySequence("space"), this);
-    connect(shortcut, &QShortcut::activated, [=]() {
-        if (currentSpace == WindowSpaces::EDITOR)
-            onPlaySceneButton();
-        else if (currentSpace == WindowSpaces::PLAYER)
-            playerView->onPlayScene();
-    });
+// Space: translate -> rotate -> scale -> translate (Unreal's mode cycle).
+// Routed through the same slots the toolbar uses so the checked states follow.
+void MainWindow::cycleGizmoMode()
+{
+    const QString mode = sceneView->gizmoMode();
+    if (mode == "translate")   rotateGizmo();
+    else if (mode == "rotate") scaleGizmo();
+    else                       translateGizmo();
 }
 
 void MainWindow::toggleDockWidgets()

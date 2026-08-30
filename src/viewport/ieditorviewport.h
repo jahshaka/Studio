@@ -73,6 +73,9 @@ public:
     virtual void setSelectedNode(iris::SceneNodePtr sceneNode) = 0;
     virtual void clearSelectedNode() = 0;
     virtual void focusOnNode(iris::SceneNodePtr sceneNode) = 0;
+    /// F: frames the current selection (no-op without one). Only the engine
+    /// viewport implements it (EDITOR_SHORTCUTS_SPEC §2).
+    virtual void focusOnSelection() {}
 
     // ---- editor camera ----
     virtual iris::CameraNodePtr editorCamera() = 0;
@@ -93,6 +96,9 @@ public:
     /// The live gizmo, or null. The camera controllers use it to refuse camera
     /// drags while a gizmo drag is in progress.
     virtual Gizmo *activeGizmo() const { return nullptr; }
+    /// The active gizmo mode as a verb-friendly name: "translate" | "rotate" |
+    /// "scale" (editor.gizmoMode; also drives the Space mode cycle).
+    virtual QString gizmoMode() const { return QStringLiteral("translate"); }
     virtual void setGizmoLoc() = 0;
     virtual void setGizmoRot() = 0;
     virtual void setGizmoScale() = 0;

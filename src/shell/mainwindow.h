@@ -74,6 +74,7 @@ class PlayerWidget;
 
 class EditorCameraController;
 class SettingsManager;
+class ShortcutRegistry;
 class PreferencesDialog;
 class AboutDialog;
 
@@ -418,6 +419,7 @@ private slots:
     void translateGizmo();
     void rotateGizmo();
     void scaleGizmo();
+    void cycleGizmoMode();
 
     void onPlaySceneButton();
 
@@ -467,6 +469,7 @@ private:
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;
+    ShortcutRegistry* shortcutRegistry = nullptr;
     AboutDialog* aboutDialog;
 
     QActionGroup* transformGroup;

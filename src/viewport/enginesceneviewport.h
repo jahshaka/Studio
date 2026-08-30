@@ -51,6 +51,7 @@ public:
     void setSelectedNode(iris::SceneNodePtr sceneNode) override;
     void clearSelectedNode() override;
     void focusOnNode(iris::SceneNodePtr sceneNode) override;
+    void focusOnSelection() override;
 
     iris::CameraNodePtr editorCamera() override { return mEditorCam; }
     void setEditorCamera(iris::CameraNodePtr camera) override;
@@ -71,6 +72,7 @@ public:
     void setGizmoTransformToLocal() override;
     void setGizmoTransformToGlobal() override;
     Gizmo *activeGizmo() const override { return mGizmo; }
+    QString gizmoMode() const override;
 
     void startPlayingScene() override;            // play in place: PlayBack drives the document
     void pausePlayingScene() override;
@@ -123,6 +125,8 @@ protected:
     void dropEvent(QDropEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
+    void focusOutEvent(QFocusEvent *) override;
+    bool event(QEvent *) override;
 
 private:
     bool ensureEngineScene();

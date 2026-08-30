@@ -36,6 +36,7 @@
 #include <QQuaternion>
 
 #include "viewport/enginerenderdriver.h"
+#include "viewport/previewframing.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/editordata.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -338,13 +339,46 @@ void EngineSceneViewport::wheelEvent(QWheelEvent *e)
 void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
 {
     if (mPlaying && mPlayback) { mPlayback->keyPressEvent(e); return; }
+    // Auto-repeat presses would be harmless (the key is already in the held
+    // set) but auto-repeat RELEASES would clear it mid-hold — skip both.
+    if (e->isAutoRepeat()) return;
     if (mCamController) mCamController->onKeyPressed(static_cast<Qt::Key>(e->key()));
 }
 
 void EngineSceneViewport::keyReleaseEvent(QKeyEvent *e)
 {
     if (mPlaying && mPlayback) { mPlayback->keyReleaseEvent(e); return; }
+    if (e->isAutoRepeat()) return;
     if (mCamController) mCamController->keyReleaseEvent(e);
+}
+
+void EngineSceneViewport::focusOutEvent(QFocusEvent *e)
+{
+    // Keys released while another widget has focus never reach us — drop the
+    // held set so fly keys cannot stick down.
+    if (mCamController) mCamController->clearKeys();
+    EngineViewWidget::focusOutEvent(e);
+}
+
+bool EngineSceneViewport::event(QEvent *e)
+{
+    // The Unreal rule: while the right mouse button is held in free-camera
+    // mode, W/A/S/D/Q/E belong to the fly camera — accept the ShortcutOverride
+    // so the window-wide W/E/R gizmo shortcuts don't fire and the raw key
+    // events reach keyPressEvent instead (EDITOR_SHORTCUTS_SPEC §2).
+    if (e->type() == QEvent::ShortcutOverride && mCamController == mFreeCam &&
+        mFreeCam && mFreeCam->isFlying()) {
+        const int key = static_cast<QKeyEvent *>(e)->key();
+        switch (key) {
+        case Qt::Key_W: case Qt::Key_A: case Qt::Key_S: case Qt::Key_D:
+        case Qt::Key_Q: case Qt::Key_E: case Qt::Key_Shift:
+            e->accept();
+            return true;
+        default:
+            break;
+        }
+    }
+    return EngineViewWidget::event(e);
 }
 
 void EngineSceneViewport::setScene(iris::ScenePtr scene)
@@ -416,14 +450,49 @@ void EngineSceneViewport::clearSelectedNode()
     setSelectedNode(iris::SceneNodePtr());
 }
 
+// F / editor.focusSelection(): frame the node Unreal-style — keep the current
+// view direction, back off far enough for the node's world bounds to fill the
+// view (preview framing math), and adapt the far plane so a huge subject can
+// never clip away (EDITOR_SHORTCUTS_SPEC §2).
 void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
 {
     if (!sceneNode || !mEditorCam) return;
     sceneNode->update(0.0f);
-    const QVector3D target = sceneNode->getGlobalPosition();
-    const QVector3D dir = (mEditorCam->getGlobalPosition() - target).normalized();
-    mEditorCam->setLocalPos(target + dir * 5.0f);
+
+    QVector3D target = sceneNode->getGlobalPosition();
+    float radius = 1.0f;
+    const iris::AABB bounds = preview::worldBoundingBox(sceneNode);
+    if (bounds.getMin().x() <= bounds.getMax().x()) {   // non-empty (meshes exist)
+        target = bounds.getCenter();
+        radius = qMax(0.05f, bounds.getSize().length() * 0.5f);
+    }
+    const float dist = qMax(1.0f, preview::framingDistance(radius, mEditorCam->angle));
+
+    QVector3D dir = (mEditorCam->getGlobalPosition() - target).normalized();
+    if (dir.isNull()) dir = QVector3D(0.45f, 0.45f, 0.77f);
+    mEditorCam->setLocalPos(target + dir * dist);
     mEditorCam->lookAt(target);
+    float nearClip, farClip;
+    preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
+    mEditorCam->farClip = qMax(mEditorCam->farClip, farClip);
+    mEditorCam->update(0.0f);
+
+    // Resync the active controller with the moved camera (free cam re-derives
+    // yaw/pitch; the orbital cam re-derives its pivot and orbit distance).
+    if (mCamController == mOrbitCam && mOrbitCam) mOrbitCam->focusOnNode(sceneNode);
+    else if (mCamController) mCamController->setCamera(mEditorCam);
+}
+
+void EngineSceneViewport::focusOnSelection()
+{
+    if (mSelectedNode) focusOnNode(mSelectedNode);
+}
+
+QString EngineSceneViewport::gizmoMode() const
+{
+    if (mGizmo == mRotateGizmo) return QStringLiteral("rotate");
+    if (mGizmo == mScaleGizmo)  return QStringLiteral("scale");
+    return QStringLiteral("translate");
 }
 
 void EngineSceneViewport::setEditorCamera(iris::CameraNodePtr camera)

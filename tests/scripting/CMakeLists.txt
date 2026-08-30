@@ -43,6 +43,8 @@ endfunction()
 
 add_script_e2e(build_scene e2e_build_scene.js)
 add_script_e2e(undo_macro e2e_undo_macro.js)
+# EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
+add_script_e2e(editor_controls e2e_editor_controls.js)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.

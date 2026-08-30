@@ -104,6 +104,7 @@ set(SRCS
     src/services/thumbnailservice.cpp
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
+    src/services/shortcutregistry.cpp
     src/services/playbackservice.cpp
     src/ui/panels/presets/assetfavorites.cpp 
     src/ui/panels/presets/assetmodelpanel.cpp 
@@ -270,6 +271,7 @@ set(HEADERS
     src/services/thumbnailservice.h
     src/services/undoservice.h
     src/services/selectionservice.h
+    src/services/shortcutregistry.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetfavorites.h 
     src/ui/panels/presets/assetpanel.h 

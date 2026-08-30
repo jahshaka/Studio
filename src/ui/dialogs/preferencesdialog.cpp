@@ -67,6 +67,11 @@ void PreferencesDialog::wireMcp(McpServer *server, MainWindow *mainWindow)
     if (mcpSettings) mcpSettings->wireMcp(server, mainWindow);
 }
 
+void PreferencesDialog::wireShortcuts(ShortcutRegistry *registry)
+{
+    if (worldSettings) worldSettings->setShortcutRegistry(registry);
+}
+
 PreferencesDialog::~PreferencesDialog()
 {
     delete ui;

@@ -36,6 +36,9 @@ public:
     virtual void onMouseWheel(int val);
     virtual void onKeyPressed(Qt::Key key);
     virtual void onKeyReleased(Qt::Key key);
+    /// Drops any held-key state (focus lost, controller switched) so keys can
+    /// never stick down. Only the fly controller tracks keys today.
+    virtual void clearKeys() {}
     virtual void keyReleaseEvent(QKeyEvent *event);
     virtual void setMousePos(int x, int y);
 

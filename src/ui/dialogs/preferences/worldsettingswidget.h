@@ -17,6 +17,7 @@ class Database;
 
 class IEditorViewport;
 class MainWindow;
+class ShortcutRegistry;
 
 class WorldSettingsWidget : public QWidget
 {
@@ -28,6 +29,9 @@ public:
     void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow) {
         this->editorViewport = viewport; this->mainWindow = mainWindow;
     }
+    /// Wired by the shell once the registry exists — generates the Shortcuts
+    /// page from it (EDITOR_SHORTCUTS_SPEC §1; the old page was 11 stale labels).
+    void setShortcutRegistry(ShortcutRegistry *registry);
     explicit WorldSettingsWidget(Database *db, SettingsManager* settings);
     ~WorldSettingsWidget();
 
@@ -46,6 +50,8 @@ public:
 private:
     IEditorViewport *editorViewport = nullptr;
     MainWindow *mainWindow = nullptr;
+    ShortcutRegistry *shortcutRegistry = nullptr;
+    QWidget *shortcutsTable = nullptr;   // rebuilt whenever bindings change
 	QPushButton * viewport;
 	QPushButton * editor;
 	QPushButton * content;
@@ -90,6 +96,7 @@ private slots:
 
 public slots:
 	void saveSettings();
+	void rebuildShortcutsTable();
 
 };
 

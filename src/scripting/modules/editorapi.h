@@ -31,6 +31,9 @@ public:
 
     Q_INVOKABLE bool select(const QVariant &id = QVariant());
     Q_INVOKABLE QVariant selection();
+    Q_INVOKABLE QString gizmoMode();
+    Q_INVOKABLE bool setGizmoMode(const QString &mode);
+    Q_INVOKABLE bool focusSelection();
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     Q_INVOKABLE bool play();

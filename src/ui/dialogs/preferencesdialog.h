@@ -26,6 +26,7 @@ class WorldSettingsWidget;
 class McpSettingsWidget;
 class McpServer;
 class IEditorViewport;
+class ShortcutRegistry;
 class MainWindow;
 class Database;
 
@@ -49,6 +50,8 @@ public:
     void wireEditor(IEditorViewport *viewport, MainWindow *mainWindow);
     /// Forwards the MCP server to its settings page (created after the dialog).
     void wireMcp(McpServer *server, MainWindow *mainWindow);
+    /// Forwards the shortcut registry to the Shortcuts page (created after the dialog).
+    void wireShortcuts(ShortcutRegistry *registry);
     ~PreferencesDialog();
 
 	WorldSettingsWidget* worldSettings;

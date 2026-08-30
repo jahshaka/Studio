@@ -15,13 +15,17 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 
 #include <QFileDialog>
+#include <QKeySequenceEdit>
 #include <QListView>
 #include <QLabel>
+#include <QScrollArea>
 #include <QStandardPaths>
 #include <QStyledItemDelegate>
 #include <QButtonGroup>
 #include <QMessageBox>
 #include <QProcess>
+
+#include "services/shortcutregistry.h"
 
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
@@ -546,67 +550,118 @@ void WorldSettingsWidget::configureAbout()
 	layout->addWidget(view);
 }
 
+// The Shortcuts page is GENERATED from the ShortcutRegistry — one row per
+// action (label, current binding, per-row reset), read-only rows for inputs
+// the shortcut system cannot express, a Reset All button, and conflict
+// refusal on rebind (EDITOR_SHORTCUTS_SPEC §1). The old page was 11 static,
+// stale labels.
 void WorldSettingsWidget::configureShortcuts()
 {
-	auto layout = new QGridLayout;
+	auto layout = new QVBoxLayout;
+	layout->setContentsMargins(0, 0, 0, 0);
 	shortcutsWidget->setLayout(layout);
+	// Populated by setShortcutRegistry once the shell wires the registry in.
+}
+
+void WorldSettingsWidget::setShortcutRegistry(ShortcutRegistry *registry)
+{
+	if (!registry || shortcutRegistry == registry) return;
+	shortcutRegistry = registry;
+	// Rebuild QUEUED: a rebind lands from a QKeySequenceEdit signal — deleting
+	// the editor while it is signalling would crash.
+	connect(registry, &ShortcutRegistry::bindingsChanged,
+	        this, &WorldSettingsWidget::rebuildShortcutsTable, Qt::QueuedConnection);
+	rebuildShortcutsTable();
+}
+
+void WorldSettingsWidget::rebuildShortcutsTable()
+{
+	if (!shortcutRegistry || !shortcutsWidget || !shortcutsWidget->layout()) return;
+
+	delete shortcutsTable;
+	shortcutsTable = new QWidget;
+	shortcutsWidget->layout()->addWidget(shortcutsTable);
+
+	auto outer = new QVBoxLayout;
+	outer->setContentsMargins(0, 0, 0, 0);
+	shortcutsTable->setLayout(outer);
 
 	auto scrollArea = new QScrollArea;
-	auto widget = new QWidget;
-	auto holderLayout = new QVBoxLayout;
+	scrollArea->setWidgetResizable(true);
+	scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	auto content = new QWidget;
+	auto grid = new QGridLayout;
+	grid->setHorizontalSpacing(12);
+	grid->setVerticalSpacing(4);
+	content->setLayout(grid);
+	scrollArea->setWidget(content);
+	outer->addWidget(scrollArea);
 
-	scrollArea->setWidget(widget);
-	widget->setLayout(holderLayout);
+	int row = 0;
+	QString lastCategory;
+	for (const auto &e : shortcutRegistry->entries()) {
+		if (e.category != lastCategory) {
+			lastCategory = e.category;
+			auto header = new QLabel(e.category);
+			QFont f = header->font(); f.setBold(true); header->setFont(f);
+			StyleSheet::setStyle(header);
+			grid->addWidget(header, row, 0, 1, 3);
+			++row;
+		}
+		auto label = new QLabel(e.label);
+		StyleSheet::setStyle(label);
+		grid->addWidget(label, row, 0);
 
-	auto k1 = new QLabel("T");
-	auto v1 = new QLabel("Switch to translate tool");
-	auto k2 = new QLabel("R");
-	auto v2 = new QLabel("Switch to rotate tool");
-	auto k3 = new QLabel("S");
-	auto v3 = new QLabel("Switch to scale tool");
-	auto k4 = new QLabel("CRTL + S");
-	auto v4 = new QLabel("Saves scene");
-	auto k5 = new QLabel("CRTL (hold)");
-	auto v5 = new QLabel("Hold while moving objects to snap to grid");
-	auto k6 = new QLabel("X");
-	auto v6 = new QLabel("View from left");
-	auto k7 = new QLabel("CRTL + X");
-	auto v7 = new QLabel("View from right");
-	auto k8 = new QLabel("Y");
-	auto v8 = new QLabel("View from top");
-	auto k9 = new QLabel("CRTL + Y");
-	auto v9 = new QLabel("View from botom");
-	auto k10 = new QLabel("Z");
-	auto v10 = new QLabel("View from front");
-	auto k11 = new QLabel("CRTL + Z");
-	auto v11 = new QLabel("View from back");
-	
-	layout->addWidget(k1, 0, 0);
-	layout->addWidget(v1, 0, 1);
-	layout->addWidget(k2, 1, 0);
-	layout->addWidget(v2, 1, 1);
-	layout->addWidget(k3, 2, 0);
-	layout->addWidget(v3, 2, 1);
-	layout->addWidget(k4, 3, 0);
-	layout->addWidget(v4, 3, 1);
-	layout->addWidget(k5, 4, 0);
-	layout->addWidget(v5, 4, 1);
-	layout->addWidget(k6, 5, 0);
-	layout->addWidget(v6, 5, 1);
-	layout->addWidget(k7, 6, 0);
-	layout->addWidget(v7, 6, 1);
-	layout->addWidget(k8, 7, 0);
-	layout->addWidget(v8, 7, 1);
-	layout->addWidget(k9, 8, 0);
-	layout->addWidget(v9, 8, 1);
-	layout->addWidget(k10, 9, 0);
-	layout->addWidget(v10, 9, 1);
-	layout->addWidget(k11, 10, 0);
-	layout->addWidget(v11, 10, 1);
+		if (!e.fixedText.isEmpty()) {
+			auto fixed = new QLabel(e.fixedText);
+			fixed->setEnabled(false);
+			StyleSheet::setStyle(fixed);
+			grid->addWidget(fixed, row, 1);
+		} else {
+			auto edit = new QKeySequenceEdit(e.sequence);
+			edit->setMaximumSequenceLength(1);
+			edit->setClearButtonEnabled(true);
+			const QString id = e.id;
+			connect(edit, &QKeySequenceEdit::editingFinished, this, [this, edit, id]() {
+				const QKeySequence entered = edit->keySequence();
+				if (entered == shortcutRegistry->sequence(id)) return;   // unchanged
+				QString conflict;
+				if (!shortcutRegistry->setBinding(id, entered, &conflict)) {
+					QString holder = conflict;
+					for (const auto &other : shortcutRegistry->entries())
+						if (other.id == conflict) { holder = other.label; break; }
+					QMessageBox::warning(this, "Shortcut in use",
+					                     QString("\"%1\" is already bound to \"%2\".")
+					                         .arg(entered.toString(QKeySequence::NativeText), holder));
+					edit->setKeySequence(shortcutRegistry->sequence(id));
+				}
+				// On success bindingsChanged rebuilds the table (queued).
+			});
+			grid->addWidget(edit, row, 1);
 
-	layout->setRowStretch(layout->rowCount() + 1, 100);
+			auto reset = new QPushButton("Reset");
+			reset->setEnabled(e.sequence != e.defaultSequence);
+			connect(reset, &QPushButton::clicked, this, [this, id]() {
+				shortcutRegistry->resetBinding(id);
+			});
+			grid->addWidget(reset, row, 2);
+		}
+		++row;
+	}
+	grid->setColumnStretch(0, 60);
+	grid->setColumnStretch(1, 40);
+	grid->setRowStretch(row, 100);
 
-	StyleSheet::setStyle({k1,v1,k2,v2,k3,v3,k4,v4,k5,v5,k6,v6,k7,v7,k8,v8,k9,v9,k10,v10,k11,v11});
+	auto resetAll = new QPushButton("Reset All To Defaults");
+	connect(resetAll, &QPushButton::clicked, this, [this]() {
+		if (QMessageBox::question(this, "Reset shortcuts",
+		                          "Reset every shortcut to its default binding?") == QMessageBox::Yes)
+			shortcutRegistry->resetAll();
+	});
+	auto footer = new QHBoxLayout;
+	footer->addStretch();
+	footer->addWidget(resetAll);
+	outer->addLayout(footer);
 }
 
 void WorldSettingsWidget::configureDatabaseWidget()

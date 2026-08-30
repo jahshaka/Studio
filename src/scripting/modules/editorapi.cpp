@@ -36,6 +36,15 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "selection", "editor.selection() -> id | null",
           "The selected node's id, or null.",
           Needs::Document },
+        { "gizmoMode", "editor.gizmoMode() -> \"translate\" | \"rotate\" | \"scale\"",
+          "The active transform gizmo mode (W/E/R in the viewport; Space cycles).",
+          Needs::Engine },
+        { "setGizmoMode", "editor.setGizmoMode(\"translate\"|\"rotate\"|\"scale\") -> bool",
+          "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
+          Needs::Engine },
+        { "focusSelection", "editor.focusSelection() -> bool",
+          "Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept.",
+          Needs::Engine },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
           Needs::Document },
@@ -89,6 +98,42 @@ QVariant EditorApi::selection()
     if (!host.services || !host.services->selection) return QVariant();
     auto node = host.services->selection->selected();
     return node ? QVariant(node->getGUID()) : QVariant();
+}
+
+QString EditorApi::gizmoMode()
+{
+    if (!requireEngine()) return QString();
+    return host.viewport->gizmoMode();
+}
+
+bool EditorApi::setGizmoMode(const QString &mode)
+{
+    if (!requireEngine()) return false;
+    // Through MainWindow's slots when the shell exists so the toolbar's
+    // checked state follows (the same path the W/E/R keys take); straight to
+    // the viewport otherwise.
+    if (mode == "translate") {
+        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "translateGizmo");
+        else host.viewport->setGizmoLoc();
+    } else if (mode == "rotate") {
+        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "rotateGizmo");
+        else host.viewport->setGizmoRot();
+    } else if (mode == "scale") {
+        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "scaleGizmo");
+        else host.viewport->setGizmoScale();
+    } else {
+        return fail(QStringLiteral("editor.setGizmoMode: unknown mode '%1' (translate|rotate|scale)").arg(mode));
+    }
+    return true;
+}
+
+bool EditorApi::focusSelection()
+{
+    if (!requireEngine()) return false;
+    if (!host.services || !host.services->selection || !host.services->selection->selected())
+        return fail("editor.focusSelection: nothing is selected");
+    host.viewport->focusOnSelection();
+    return true;
 }
 
 bool EditorApi::undo()

@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #define EDITORCAMERACONTROLLER_H
 
 #include <QPoint>
+#include <QSet>
 #include <QVector3D>
 #include <QSharedPointer>
 #include "viewport/cameracontrollerbase.h"
@@ -28,7 +29,7 @@ class EditorCameraController : public CameraControllerBase
     QSharedPointer<iris::CameraNode> camera;
 
     float lookSpeed;
-    float linearSpeed;
+    float linearSpeed;   // fly speed in units/second (EDITOR_SHORTCUTS_SPEC §2)
 
     float yaw;
     float pitch;
@@ -36,6 +37,10 @@ class EditorCameraController : public CameraControllerBase
 	float orthoZoom;
 
 	IEditorViewport* sceneWidget;
+
+	/// Keys currently held (fed by the viewport's key events). Movement only
+	/// happens while the right mouse button is down — the Unreal fly rule.
+	QSet<int> heldKeys;
 
 public:
     EditorCameraController(IEditorViewport* sceneWidget);
@@ -59,14 +64,19 @@ public:
 
     void onMouseMove(int x,int y) override;
     void onMouseWheel(int delta) override;
-	void onKeyPressed(Qt::Key key);
-	void onKeyReleased(Qt::Key key);
+	void onKeyPressed(Qt::Key key) override;
+	void onKeyReleased(Qt::Key key) override;
+	void clearKeys() override;
 
     void updateCameraRot();
 
-    void update(float dt);
+    void update(float dt) override;
 
 	bool canLeftMouseDrag();
+
+	/// True while the fly keys should own W/A/S/D/Q/E (RMB held) — the viewport
+	/// uses this to withhold those keys from the shortcut system.
+	bool isFlying() const { return rightMouseDown; }
 };
 
 #endif // EDITORCAMERACONTROLLER_H

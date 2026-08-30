@@ -183,11 +183,11 @@ void OrbitalCameraController::keyReleaseEvent(QKeyEvent *event)
 			targetPitch = 90;
 			return;
 
-		case Qt::Key_Z: // back
-			targetYaw = -180;
-			targetPitch = 0;
-			return;
+		// NOTE: no Ctrl+Z case — it is undo everywhere (EDITOR_SHORTCUTS_SPEC:
+		// the old Ctrl+Z "view from back" collision with the undo shortcut is
+		// removed; the X/Y views keep their modifiers).
 		}
+		return;   // never let a Ctrl combo reach the plain view keys below
 	}
 	// gets the key being pressed
 	switch (event->key())

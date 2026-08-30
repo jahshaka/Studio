@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>
-#include "viewport/keyboardstate.h"
 #include "data/settingsmanager.h"
 #include "viewport/gizmo.h"
 #include "viewport/ieditorviewport.h"
@@ -28,7 +27,7 @@ EditorCameraController::EditorCameraController(IEditorViewport* sceneWidget):
 	CameraControllerBase()
 {
     lookSpeed = 200;
-    linearSpeed = 0.4f;
+    linearSpeed = 8.0f;   // fly speed, units/second (frame-rate independent)
 
     yaw = 0;
     pitch = 0;
@@ -186,14 +185,17 @@ void EditorCameraController::onMouseWheel(int delta)
 
 void EditorCameraController::onKeyPressed(Qt::Key key)
 {
-
+	heldKeys.insert(int(key));
 }
 
 void EditorCameraController::onKeyReleased(Qt::Key key)
 {
-	if (key == Qt::Key_X) {
-		//
-	}
+	heldKeys.remove(int(key));
+}
+
+void EditorCameraController::clearKeys()
+{
+	heldKeys.clear();
 }
 
 /**
@@ -209,29 +211,28 @@ void EditorCameraController::updateCameraRot()
     camera->update(0);
 }
 
+// Unreal-style fly: while the right mouse button is held, W/A/S/D move along
+// the view direction and the camera's right vector, Q/E move down/up the world
+// axis, Shift boosts 3x. Frame-rate independent (dt) — the dead KeyboardState
+// arrow-key path this replaces was never fed (EDITOR_SHORTCUTS_SPEC §2).
 void EditorCameraController::update(float dt)
 {
-    const QVector3D upVector(0, 1, 0);
-    auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
-    auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
-    auto z = QVector3D::crossProduct(upVector,x).normalized();
+    if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
 
-    auto camPos = camera->getLocalPos();
-    // left
-    if(KeyboardState::isKeyDown(Qt::Key_Left))
-        camPos -= x * linearSpeed;
+    const QVector3D worldUp(0, 1, 0);
+    const QVector3D forward = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
+    const QVector3D right = QVector3D::crossProduct(forward, worldUp).normalized();
 
-    // right
-    if(KeyboardState::isKeyDown(Qt::Key_Right))
-        camPos += x * linearSpeed;
+    QVector3D move;
+    if (heldKeys.contains(Qt::Key_W)) move += forward;
+    if (heldKeys.contains(Qt::Key_S)) move -= forward;
+    if (heldKeys.contains(Qt::Key_D)) move += right;
+    if (heldKeys.contains(Qt::Key_A)) move -= right;
+    if (heldKeys.contains(Qt::Key_E)) move += worldUp;
+    if (heldKeys.contains(Qt::Key_Q)) move -= worldUp;
+    if (move.isNull()) return;
 
-    // up
-    if(KeyboardState::isKeyDown(Qt::Key_Up))
-        camPos += z * linearSpeed;
-
-    // down
-    if(KeyboardState::isKeyDown(Qt::Key_Down))
-        camPos -= z * linearSpeed;
-
-    camera->setLocalPos(camPos);
+    const float boost = heldKeys.contains(Qt::Key_Shift) ? 3.0f : 1.0f;
+    camera->setLocalPos(camera->getLocalPos() + move.normalized() * linearSpeed * boost * dt);
+    camera->update(0);
 }

@@ -57,6 +57,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 |---|---|---|
 | `editor.select(id \| null) -> bool` | document | Selects a node everywhere (viewport, hierarchy, properties); null or no argument deselects. |
 | `editor.selection() -> id \| null` | document | The selected node's id, or null. |
+| `editor.gizmoMode() -> "translate" \| "rotate" \| "scale"` | engine | The active transform gizmo mode (W/E/R in the viewport; Space cycles). |
+| `editor.setGizmoMode("translate"\|"rotate"\|"scale") -> bool` | engine | Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons. |
+| `editor.focusSelection() -> bool` | engine | Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. |
 | `editor.undo() -> bool` | document | Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script. |
 | `editor.redo() -> bool` | document | Redoes the last undone step. |
 | `editor.play() -> bool` | document | Enters play mode (PlayBack drives physics, animations and controllers in place). |
