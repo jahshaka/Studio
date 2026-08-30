@@ -60,6 +60,10 @@ private:
 signals:
 	void gridCount(int);
     void selectedTile(AssetGridItem*);
+	/// Plain click: the tile becomes current for pane/button actions
+	/// WITHOUT loading anything into the preview (the tile flip kept
+	/// loading on double-click only).
+	void lightSelectedTile(AssetGridItem*);
 	void contextSelected(AssetGridItem*);
 	void selectedTileToAdd(AssetGridItem*);
 };

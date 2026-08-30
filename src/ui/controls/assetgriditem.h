@@ -87,6 +87,7 @@ signals:
 	void addAssetItemToProject(AssetGridItem*);
 	void moveAssetToDrawer(AssetGridItem*, int drawerId);
 	void removeAssetFromProject(AssetGridItem*);
+	void rebuildThumbnail(AssetGridItem*);
 
 private:
 	void startDrag();

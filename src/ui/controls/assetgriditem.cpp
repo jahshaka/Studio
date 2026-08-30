@@ -94,6 +94,12 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 	}
 	moveTo->setEnabled(!moveTo->isEmpty());
 
+	QAction rebuild("Rebuild Thumbnail", this);
+	connect(&rebuild, &QAction::triggered, this, [this]() {
+		emit rebuildThumbnail(this);
+	});
+	menu.addAction(&rebuild);
+
 	QAction remove("Delete", this);
 	connect(&remove, &QAction::triggered, this, [this]() {
 		emit removeAssetFromProject(this);

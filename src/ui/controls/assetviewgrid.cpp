@@ -46,6 +46,7 @@ void AssetViewGrid::addTo(AssetGridItem *item, int count, bool select)
 	connect(item, &AssetGridItem::singleClicked, [this](AssetGridItem *item) {
 		deselectAll();
 		item->highlight(true);
+		emit lightSelectedTile(item);
 	});
 
 	connect(item, &AssetGridItem::doubleClicked, [this](AssetGridItem *item) {
@@ -75,6 +76,7 @@ void AssetViewGrid::addTo(QJsonObject details, QImage image, int count, QJsonObj
 	connect(sampleWidget, &AssetGridItem::singleClicked, [this](AssetGridItem *item) {
 		deselectAll();
 		item->highlight(true);
+		emit lightSelectedTile(item);
 	});
 
 	connect(sampleWidget, &AssetGridItem::doubleClicked, [this](AssetGridItem *item) {

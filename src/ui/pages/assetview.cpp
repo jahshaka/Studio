@@ -57,6 +57,10 @@ For more information see the LICENSE file
 #include <QAudioOutput>
 #include <QMediaPlayer>
 #include <QSlider>
+#include <QFutureWatcher>
+#include <QLocale>
+#include <QPointer>
+#include <QtConcurrent>
 
 #include "data/constants.h"
 #include "data/settingsmanager.h"
@@ -69,6 +73,7 @@ For more information see the LICENSE file
 #include "ui/controls/drawertreewidget.h"
 #include "services/assethelper.h"
 #include "services/assetimporter.h"
+#include "services/assetmetadata.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "services/thumbnailgenerator.h"
@@ -266,6 +271,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 {
 	setParent(parent);
 	this->parent = parent;
+	// Was never initialized: the bottom-right buttons read it before any
+	// selection existed (UB on a garbage pointer once they got enabled).
+	selectedGridItem = nullptr;
 	_assetView = new QListWidget;
 	// The page's preview viewer: engine-backed, or the headless document-only
 	// stand-in when no engine view can exist.
@@ -753,6 +761,33 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		}
 	});
 
+	// Plain click (the tile flip keeps preview loading on double-click):
+	// the tile still becomes CURRENT — pane, rename/tags fields and the
+	// bottom-right buttons act on what the user just clicked. This is what
+	// made "Add to Project" look dead: the button read a selection plain
+	// clicks no longer set.
+	connect(fastGrid, &AssetViewGrid::lightSelectedTile, [this](AssetGridItem *gridItem) {
+		if (gridItem->metadata.isEmpty()) return;
+		selectedGridItem = gridItem;
+
+		fetchMetadata(gridItem);
+		populateAssetNodeTree(gridItem->metadata["guid"].toString(),
+		                      gridItem->metadata["type"].toInt());
+
+		renameModelField->setText(QFileInfo(gridItem->metadata["name"].toString()).baseName());
+		QString tags;
+		for (const auto childObj : gridItem->tags["tags"].toArray())
+			tags.append(childObj.toString() + ", ");
+		tags.chop(2);
+		tagModelField->setText(tags);
+
+		renameWidget->setVisible(true);
+		tagWidget->setVisible(true);
+		updateAsset->setVisible(true);
+		deleteFromLibrary->setEnabled(true);
+		updateAddToProjectButton();
+	});
+
     connect(fastGrid, &AssetViewGrid::selectedTile, [&](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
 		stopAudioPreview();   // switching tiles/pages stops playback (§3)
@@ -768,7 +803,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 		if (!gridItem->metadata.isEmpty()) {
 
-			if (services && services->project && services->project->isSceneOpen()) addToProject->setEnabled(true);
+			selectedGridItem = gridItem;
+			updateAddToProjectButton();
 			deleteFromLibrary->setEnabled(true);
 
 			renameWidget->setVisible(true);
@@ -972,7 +1008,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	});
 
 	connect(addToProject, &QPushButton::pressed, [this]() {
-		addAssetItemToProject(selectedGridItem);
+		if (selectedGridItem && !selectedGridItem->metadata.isEmpty())
+			addAssetItemToProject(selectedGridItem);
 	});
 
 	connect(deleteFromLibrary, &QPushButton::pressed, [this]() {
@@ -1016,6 +1053,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	metadataName->setSizePolicy(policy2);
 	metadataType = new QLabel("Type: ");
 	metadataType->setSizePolicy(policy2);
+	metadataDetails = new QLabel;
+	metadataDetails->setSizePolicy(policy2);
+	metadataDetails->setWordWrap(true);
+	metadataDetails->setVisible(false);
 	metadataAuthor = new QLabel("Author: ");
 	metadataAuthor->setSizePolicy(policy2);
 	metadataLicense = new QLabel("License: ");
@@ -1054,6 +1095,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	//l->addWidget(metadataName);
 	l->addWidget(metadataType);
+	l->addWidget(metadataDetails);
 	l->addWidget(metadataVisibility);
 	l->addWidget(metadataAuthor);
 	l->addWidget(metadataLicense);
@@ -1103,7 +1145,30 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     layout->addWidget(_splitter);
     setLayout(layout);
 
+	updateAddToProjectButton();   // initial disabled state carries its tooltip
+
 	setStyleSheet(StyleSheet::AssetViewPanel());
+}
+
+void AssetView::updateAddToProjectButton()
+{
+	const bool haveTile = selectedGridItem && !selectedGridItem->metadata.isEmpty();
+	const bool sceneOpen = services && services->project && services->project->isSceneOpen();
+	addToProject->setEnabled(haveTile && sceneOpen);
+	if (!haveTile)
+		addToProject->setToolTip(tr("Click an asset tile to select it first"));
+	else if (!sceneOpen)
+		addToProject->setToolTip(tr("Open a project to add assets to it"));
+	else
+		addToProject->setToolTip(tr("Add \"%1\" to the open project")
+		    .arg(QFileInfo(selectedGridItem->metadata["name"].toString()).baseName()));
+}
+
+void AssetView::showEvent(QShowEvent *event)
+{
+	QWidget::showEvent(event);
+	// The scene may have opened/closed since the page was last shown.
+	updateAddToProjectButton();
 }
 
 QString importProjectNameAV;
@@ -1524,6 +1589,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
     QList<directory_tuple> imagesInUse;
     QList<QString> imgaesUsedList;
     QString meshImportError;
+    QJsonObject mainModelStats;   // counts from the assimp scene of the main mesh
 
     foreach(const auto &entry, finalImportList) {
         QFileInfo entryInfo(entry.path);
@@ -1683,7 +1749,8 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                     auto scene = AssetHelper::extractTexturesAndMaterialFromMesh(asset->path,
                                                                                  texturesToCopy,
                                                                                  paths,
-                                                                                 hasEmbeddedTexture);
+                                                                                 hasEmbeddedTexture,
+                                                                                 &mainModelStats);
 
 
                     if (!scene) {
@@ -1848,7 +1915,11 @@ void AssetView::importModel(const QString &fileName, bool jfx)
     auto loadedSnapshot = viewer->takeScreenshot(512, 512);
     if (!loadedSnapshot.isNull())
         db->updateAssetThumbnail(main_guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(loadedSnapshot)));
-    db->updateAssetProperties(main_guid, QJsonDocument(viewer->getSceneProperties()).toJson());
+    // Camera props from the viewer + the "metadata" block counted from the
+    // assimp scene during this very import (ASSET_DRAWERS_SPEC addendum).
+    QJsonObject objectProperties = viewer->getSceneProperties();
+    if (!mainModelStats.isEmpty()) objectProperties["metadata"] = mainModelStats;
+    db->updateAssetProperties(main_guid, QJsonDocument(objectProperties).toJson());
 
     addToLibrary(main_guid, jfx);
 }
@@ -1913,7 +1984,11 @@ void AssetView::importImageOrAudio(const QString &fileName)
 	QImage thumbnail;
 	thumbnail.loadFromData(record.thumbnail, "PNG");
 
-	auto gridItem = new AssetGridItem(object, thumbnail, QJsonObject(), QJsonObject());
+	// The row's properties carry the freshly computed "metadata" block —
+	// hand it to the tile so the pane shows it without a backfill round-trip.
+	auto gridItem = new AssetGridItem(object, thumbnail,
+	                                  QJsonDocument::fromJson(record.properties).object(),
+	                                  QJsonObject());
 	wireTile(gridItem);
 	fastGrid->addTo(gridItem, 0);
 	QApplication::processEvents();
@@ -2161,6 +2236,69 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
 	//}
 }
 
+// ---- rich metadata formatting (ASSET_DRAWERS_SPEC addendum) ----
+
+static QString formatCount(qint64 n)
+{
+	return QLocale(QLocale::English).toString(n);   // 12,480
+}
+
+static QString formatBytes(qint64 bytes)
+{
+	if (bytes < 1024) return QString::number(bytes) + " B";
+	if (bytes < 1024 * 1024) return QString::number(bytes / 1024.0, 'f', 1) + " KB";
+	if (bytes < qint64(1024) * 1024 * 1024) return QString::number(bytes / (1024.0 * 1024.0), 'f', 1) + " MB";
+	return QString::number(bytes / (1024.0 * 1024.0 * 1024.0), 'f', 2) + " GB";
+}
+
+static QString formatDuration(qint64 ms)
+{
+	const qint64 totalSeconds = (ms + 500) / 1000;
+	return QStringLiteral("%1:%2").arg(totalSeconds / 60)
+	                              .arg(totalSeconds % 60, 2, 10, QChar('0'));   // 0:32
+}
+
+// The labeled list the pane shows under "Type:", per metadata kind.
+static QString metadataDetailsText(const QJsonObject &meta, const QDateTime &imported)
+{
+	QStringList lines;
+	const QString kind = meta["kind"].toString();
+	const QString format = meta["format"].toString();
+
+	if (!format.isEmpty())
+		lines << (kind == "model" ? QStringLiteral("Source: %1") : QStringLiteral("Format: %1"))
+		             .arg(format.toUpper());
+
+	if (kind == "model") {
+		lines << "Vertices: " + formatCount(meta["vertices"].toInteger());
+		lines << "Triangles: " + formatCount(meta["triangles"].toInteger());
+		if (meta["meshes"].toInt() > 1) lines << "Meshes: " + formatCount(meta["meshes"].toInt());
+		lines << "Materials: " + formatCount(meta["materials"].toInt());
+		lines << "Textures: " + formatCount(meta["textures"].toInt());
+	}
+	else if (kind == "image") {
+		if (meta.contains("width"))
+			lines << QStringLiteral("Resolution: %1×%2")   // 1920×1080
+			             .arg(meta["width"].toInt()).arg(meta["height"].toInt());
+	}
+	else if (kind == "audio") {
+		if (meta.contains("duration")) lines << "Duration: " + formatDuration(meta["duration"].toInteger());
+		if (meta.contains("sampleRate")) lines << "Sample Rate: " + formatCount(meta["sampleRate"].toInteger()) + " Hz";
+		if (meta.contains("channels")) {
+			const int channels = meta["channels"].toInt();
+			lines << "Channels: " + (channels == 1 ? QStringLiteral("Mono")
+			                       : channels == 2 ? QStringLiteral("Stereo")
+			                                       : QString::number(channels));
+		}
+	}
+
+	if (meta.contains("files")) lines << "Files: " + formatCount(meta["files"].toInt());
+	if (meta.contains("fileSize")) lines << "Size: " + formatBytes(meta["fileSize"].toInteger());
+	if (imported.isValid()) lines << "Imported: " + imported.toString("yyyy-MM-dd");
+
+	return lines.join('\n');
+}
+
 void AssetView::fetchMetadata(AssetGridItem *widget)
 {
 	if (!widget->metadata.isEmpty()) {
@@ -2168,6 +2306,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 
 		//metadataName->setVisible(true);
 		metadataType->setVisible(true);
+		metadataDetails->setVisible(true);
 		metadataVisibility->setVisible(true);
 		metadataAuthor->setVisible(true);
 		metadataLicense->setVisible(true);
@@ -2176,6 +2315,26 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 
 		//metadataName->setText("Name: " + QFileInfo(widget->metadata["name"].toString()).baseName());
 		metadataType->setText("Type: " + getAssetType(widget->metadata["type"].toInt()));
+
+		// The rich per-type block: import-time for new assets, lazily
+		// backfilled (worker thread + update-on-arrival) for old libraries.
+		{
+			const QString guid = widget->metadata["guid"].toString();
+			const auto record = db->fetchAsset(guid);
+			QJsonObject meta = widget->sceneProperties["metadata"].toObject();
+			if (meta.isEmpty()) {
+				// another session (or the verb) may have persisted it already
+				meta = QJsonDocument::fromJson(record.properties).object()["metadata"].toObject();
+				if (!meta.isEmpty()) widget->sceneProperties["metadata"] = meta;
+			}
+			if (!meta.isEmpty()) {
+				metadataDetails->setText(metadataDetailsText(meta, record.dateCreated));
+			}
+			else {
+				metadataDetails->setText(tr("Details: …"));
+				backfillMetadata(widget, guid, record.type);
+			}
+		}
 		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
 		metadataVisibility->setText("Public: " + pub);
 		metadataAuthor->setText("Author: " + widget->metadata["author"].toString());
@@ -2201,12 +2360,47 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 
 		//metadataName->setVisible(false);
 		metadataType->setVisible(false);
+		metadataDetails->setVisible(false);
 		metadataVisibility->setVisible(false);
 		metadataAuthor->setVisible(false);
 		metadataLicense->setVisible(false);
 		//metadataTags->setVisible(false);
         metadataWidget->setVisible(false);
 	}
+}
+
+void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int assetType)
+{
+	const QString folder = IrisUtils::join(AssetMetadata::storeRootPath(), guid);
+	QPointer<AssetGridItem> tile(widget);
+
+	auto *watcher = new QFutureWatcher<QJsonObject>(this);
+	connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [this, watcher, tile, guid]() {
+		watcher->deleteLater();
+		const QJsonObject meta = watcher->result();
+		if (meta.isEmpty()) {
+			// nothing on disk to describe (e.g. a built-in) — leave basics only
+			if (tile && selectedGridItem == tile) metadataDetails->setText(QString());
+			return;
+		}
+
+		// Persist on the UI thread (it owns the SQLite connection), guarded
+		// so a concurrent backfill (verb, second selection) wins only once.
+		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
+		if (!props.contains("metadata")) {
+			props["metadata"] = meta;
+			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
+		}
+
+		if (tile) {
+			tile->sceneProperties["metadata"] = props.contains("metadata")
+			                                        ? props["metadata"].toObject() : meta;
+			if (selectedGridItem == tile) fetchMetadata(tile);   // re-renders with data
+		}
+	});
+	// Pure file inspection (assimp / image header / wav header) — thread-safe.
+	watcher->setFuture(QtConcurrent::run(
+	    [assetType, folder]() { return AssetMetadata::computeForStore(assetType, folder); }));
 }
 
 void AssetView::addAssetItemToProject(AssetGridItem *item)
@@ -2605,6 +2799,86 @@ void AssetView::wireTile(AssetGridItem *gridItem)
 	connect(gridItem, &AssetGridItem::removeAssetFromProject, [this](AssetGridItem *item) {
 		removeAssetFromProject(item);
 	});
+
+	connect(gridItem, &AssetGridItem::rebuildThumbnail, [this](AssetGridItem *item) {
+		rebuildTileThumbnail(item);
+	});
+}
+
+void AssetView::rebuildTileThumbnail(AssetGridItem *item)
+{
+	if (!item || item->metadata.isEmpty()) return;
+	const QString guid = item->metadata["guid"].toString();
+	const auto record = db->fetchAsset(guid);
+	if (record.guid.isEmpty()) return;
+
+	const auto assetFolder = IrisUtils::join(
+	    QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
+	    Constants::ASSET_FOLDER, guid);
+
+	QPixmap pixmap;
+	switch (static_cast<ModelTypes>(record.type)) {
+	case ModelTypes::Texture: {
+		// straight from the source image, like the import path
+		auto thumb = ThumbnailManager::createThumbnail(IrisUtils::join(assetFolder, record.name), 256, 256);
+		if (thumb && thumb->thumb) pixmap = QPixmap::fromImage(*thumb->thumb);
+		break;
+	}
+	case ModelTypes::Music:
+		pixmap = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+		break;
+	case ModelTypes::Object:
+	case ModelTypes::ParticleSystem: {
+		// the import-time flow: load into the asset viewer, screenshot it —
+		// the same lit, textured render a fresh import stores today.
+		QString path;
+		for (const auto &file : QDir(assetFolder).entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
+			if (Constants::MODEL_EXTS.contains(file.suffix().toLower())) {
+				path = file.absoluteFilePath();
+				break;
+			}
+		}
+		viewers->setCurrentIndex(0);
+		viewer->loadJafModel(path, guid, false, true, false);
+		const QImage shot = viewer->takeScreenshot(512, 512);
+		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
+		break;
+	}
+	case ModelTypes::Material: {
+		viewers->setCurrentIndex(0);
+		viewer->loadJafMaterial(guid);
+		const QImage shot = viewer->takeScreenshot(512, 512);
+		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
+		break;
+	}
+	case ModelTypes::Shader: {
+		viewers->setCurrentIndex(0);
+		QMap<QString, QString> map;
+		viewer->loadJafShader(guid, map);
+		const QImage shot = viewer->takeScreenshot(512, 512);
+		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
+		break;
+	}
+	case ModelTypes::Sky: {
+		viewers->setCurrentIndex(0);
+		viewer->loadJafSky(guid);
+		const QImage shot = viewer->takeScreenshot(512, 512);
+		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
+		break;
+	}
+	default:
+		pixmap = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
+		break;
+	}
+
+	if (pixmap.isNull()) {
+		QMessageBox::warning(this, tr("Rebuild Thumbnail"),
+		                     tr("Could not rebuild this thumbnail."), QMessageBox::Ok);
+		return;
+	}
+
+	db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(pixmap));
+	item->setTile(pixmap);   // the tile updates live
 }
 
 void AssetView::clearLoadingTile()
@@ -2633,6 +2907,10 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 			renameWidget->setVisible(false);
 			tagWidget->setVisible(false);
 			updateAsset->setVisible(false);
+
+			if (selectedGridItem == item) selectedGridItem = nullptr;
+			updateAddToProjectButton();
+			deleteFromLibrary->setEnabled(false);
 
 			fetchMetadata(item);
 	        clearViewer();

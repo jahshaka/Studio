@@ -83,6 +83,11 @@ class AssetView : public QWidget
 
 public slots:
 	void fetchMetadata(AssetGridItem*);
+	/// Lazy metadata backfill for pre-metadata library rows: computes the
+	/// per-type block on a worker thread (assimp/header parse only, no GPU),
+	/// persists it into the row's properties JSON on arrival, refreshes the
+	/// pane if the tile is still selected.
+	void backfillMetadata(AssetGridItem *widget, const QString &guid, int assetType);
 
 	void addAssetItemToProject(AssetGridItem*);
 	void moveAssetToDrawer(AssetGridItem*, int drawerId);
@@ -111,6 +116,16 @@ public:
     void closeViewer();
 	void clearViewer();
 	QString getAssetType(int);
+	/// Keeps the bottom-right "Add to Project" button honest: enabled only
+	/// when a tile is current AND a project is open, with a tooltip saying
+	/// which condition is missing (it used to sit silently disabled after
+	/// the tile flip made plain clicks non-selecting).
+	void updateAddToProjectButton();
+	/// Tile right-click → Rebuild Thumbnail: re-renders and persists the
+	/// tile's thumbnail (3D types through the asset viewer screenshot path,
+	/// images via ThumbnailManager, audio/files back to their type icon).
+	void rebuildTileThumbnail(AssetGridItem *item);
+	void showEvent(QShowEvent *event) override;
 
 	void importJahModel(const QString &filename, bool addToLibrary = true);
 	void importJahBundle(const QString &filename);
@@ -205,6 +220,7 @@ private:
 	QLabel *metadataLicense;
 	QLabel *metadataAuthor;
 	QLabel *metadataTags;
+	QLabel *metadataDetails;   // rich per-type block (counts, resolution, size…)
     QWidget *metadataWidget;
     QHBoxLayout *metadataLayout;
     QPushButton *changeMetaCollection;
