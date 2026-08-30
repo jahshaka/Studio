@@ -13,6 +13,7 @@ equivalent packages.
 # Toolchain + Qt 6
 sudo apt-get install -y build-essential cmake ninja-build git \
      qt6-base-dev qt6-declarative-dev qt6-multimedia-dev qt6-svg-dev \
+     qt6-httpserver-dev qt6-websockets-dev \
      libqt6concurrent6 libqt6sql6-sqlite
 
 # Ogre-Next build dependencies — install ALL of these BEFORE configuring anything
@@ -26,6 +27,10 @@ sudo apt-get install -y libxrandr-dev libxaw7-dev rapidjson-dev libzzip-dev \
 
 A Vulkan-capable GPU and driver are required (`vulkaninfo` should succeed). CPU-only machines
 can still build and run the test suite via lavapipe (`mesa-vulkan-drivers`).
+
+`qt6-httpserver-dev` serves the in-app MCP endpoint (CLAUDE_EDITOR_SPEC phase 1);
+`qt6-websockets-dev` is its CMake-level dependency (Qt6HttpServerConfig requires
+Qt6WebSockets even though Jahshaka never opens a WebSocket).
 
 ## 2. Clone
 
