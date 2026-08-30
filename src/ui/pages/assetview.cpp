@@ -356,8 +356,14 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	auto addDrawerButton = new QPushButton("+");
 	addDrawerButton->setFixedSize(24, 24);
 	addDrawerButton->setCursor(Qt::PointingHandCursor);
-	addDrawerButton->setToolTip(tr("New drawer (under the selected drawer)"));
-	addDrawerButton->setStyleSheet("font-size: 14px; font-weight: bold;");
+	addDrawerButton->setToolTip(tr("New drawer"));
+	// Explicit style: the page-wide "QPushButton { padding: 8px 12px; }" rule
+	// left a 24px button ZERO content area — the + glyph was clipped away and
+	// the button invisible on the dark pane (owner-reported).
+	addDrawerButton->setStyleSheet(
+	    "QPushButton { background: #3498db; color: #FFFFFF; border-radius: 2px;"
+	    "              padding: 0; margin: 0; font-size: 16px; font-weight: bold; }"
+	    "QPushButton:hover { background: #4EA8E5; }");
 	headerLayout->addWidget(localAssetsLabel);
 	headerLayout->addStretch();
 	headerLayout->addWidget(addDrawerButton);
@@ -415,10 +421,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		rebuildDrawerTree();
 	});
 
+	// Owner spec change (smoke-test round): the + always creates a ROOT
+	// drawer — siblings of Uncategorized. Nesting is New Sub-Drawer's job.
 	connect(addDrawerButton, &QPushButton::clicked, [this]() {
-		const int parentId = treeWidget->currentItem()
-		    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1;
-		createDrawerUnder(parentId < 0 ? -1 : parentId);
+		createDrawerUnder(-1);
 	});
 
 	connect(treeWidget, &QTreeWidget::customContextMenuRequested, [this](const QPoint &pos) {
@@ -447,7 +453,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// Drops (both kinds) are requests — the database decides (cycle guard
 	// included), then the tree rebuilds from what it accepted.
 	connect(treeWidget, &DrawerTreeWidget::drawerMoveRequested, [this](int id, int parentId) {
-		if (db->setCollectionParent(id, parentId)) rebuildDrawerTree();
+		if (!db->setCollectionParent(id, parentId)) return;
+		rebuildDrawerTree();
+		// Land the selection on the drawer that moved, so the result is visible.
+		if (auto item = findDrawerItem(id)) treeWidget->setCurrentItem(item);
 	});
 
 	connect(treeWidget, &DrawerTreeWidget::assetMoveRequested, [this](const QString &guid, int drawerId) {
@@ -2451,6 +2460,11 @@ void AssetView::moveAssetToDrawer(AssetGridItem *item, int drawerId)
 	item->metadata["collection"] = drawerId;
 	item->metadata["collection_name"] = drawerName(drawerId);
 	if (selectedGridItem == item) fetchMetadata(item);
+
+	// The view follows the move (owner smoke-test: a successful move must be
+	// VISIBLE): select the target drawer and filter the grid to it, so the
+	// asset is seen arriving.
+	if (auto drawerItem = findDrawerItem(drawerId)) treeWidget->setCurrentItem(drawerItem);
 	filterFromSelection();
 }
 

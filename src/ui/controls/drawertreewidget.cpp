@@ -22,9 +22,12 @@ DrawerTreeWidget::DrawerTreeWidget(QWidget *parent) : QTreeWidget(parent)
 {
     setDragEnabled(true);
     setAcceptDrops(true);
-    setDropIndicatorShown(true);
     setDragDropMode(QAbstractItemView::DragDrop);
     setDefaultDropAction(Qt::MoveAction);
+    // The hovered row is highlighted through the selection instead — the
+    // indicator only shows when the BASE view accepts the drag, which it
+    // does not reliably do for our custom payload.
+    setDropIndicatorShown(false);
 }
 
 int DrawerTreeWidget::drawerId(const QTreeWidgetItem *item)
@@ -37,26 +40,44 @@ bool DrawerTreeWidget::isTileDrag(const QMimeData *mime) const
     return mime && mime->hasFormat(QStringLiteral("application/x-qabstractitemmodeldatalist"));
 }
 
-int DrawerTreeWidget::dropTargetId(const QPoint &pos, bool onItemOnly) const
+int DrawerTreeWidget::drawerDropParentId(const QPoint &pos) const
 {
     QTreeWidgetItem *item = itemAt(pos);
-    if (!item) return onItemOnly ? -2 : -1;   // empty space: top level (drawer moves only)
+    if (!item) return -1;   // empty space: top level
 
-    switch (dropIndicatorPosition()) {
-    case QAbstractItemView::OnItem:
-        return drawerId(item);
-    case QAbstractItemView::AboveItem:
-    case QAbstractItemView::BelowItem:
-        if (onItemOnly) return -2;
-        return drawerId(item->parent());
-    default:
-        return onItemOnly ? -2 : -1;
-    }
+    const QRect rect = visualItemRect(item);
+    const int margin = rect.height() / 4;
+    if (pos.y() < rect.top() + margin || pos.y() > rect.bottom() - margin)
+        return drawerId(item->parent());   // row edge: beside it, under its parent
+    return drawerId(item);                 // row middle: nest under it
+}
+
+int DrawerTreeWidget::tileDropTargetId(const QPoint &pos) const
+{
+    // Tiles land ON a drawer name (Uncategorized included), never the root —
+    // anywhere over the row counts, no between-rows dead zones.
+    const int id = drawerId(itemAt(pos));
+    return id >= 0 ? id : -2;
+}
+
+void DrawerTreeWidget::startDrag(Qt::DropActions supportedActions)
+{
+    // The drop handler must know WHICH drawer is being dragged even while the
+    // selection is busy highlighting drop targets — capture it up front.
+    mDraggedId = drawerId(currentItem());
+    QTreeWidget::startDrag(supportedActions);
+    mDraggedId = -2;
+}
+
+void DrawerTreeWidget::highlightTarget(const QPoint &pos)
+{
+    if (QTreeWidgetItem *item = itemAt(pos)) setCurrentItem(item);
 }
 
 void DrawerTreeWidget::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->source() == this || isTileDrag(event->mimeData())) {
+        mRestoreItem = currentItem();
         event->acceptProposedAction();
         return;
     }
@@ -65,20 +86,18 @@ void DrawerTreeWidget::dragEnterEvent(QDragEnterEvent *event)
 
 void DrawerTreeWidget::dragMoveEvent(QDragMoveEvent *event)
 {
-    // Let the base track the hover highlight/indicator, then veto bad targets.
-    QTreeWidget::dragMoveEvent(event);
-
     const QPoint pos = event->position().toPoint();
+
     if (event->source() == this) {
-        QTreeWidgetItem *dragged = currentItem();
-        // The root (-1) and Uncategorized (0) never move (flags block the drag
-        // too — this is belt and braces), and nothing nests under itself.
-        if (drawerId(dragged) <= 0) { event->ignore(); return; }
+        // The root (-1) and Uncategorized (0) never move (their flags block
+        // the drag too — this is belt and braces).
+        if (mDraggedId <= 0) { event->ignore(); return; }
+        highlightTarget(pos);
         event->acceptProposedAction();
     }
     else if (isTileDrag(event->mimeData())) {
-        // Tiles land ON a drawer name (Uncategorized included), never the root.
-        if (dropTargetId(pos, true) < 0) { event->ignore(); return; }
+        if (tileDropTargetId(pos) < 0) { event->ignore(); return; }
+        highlightTarget(pos);
         event->acceptProposedAction();
     }
     else {
@@ -86,23 +105,30 @@ void DrawerTreeWidget::dragMoveEvent(QDragMoveEvent *event)
     }
 }
 
+void DrawerTreeWidget::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    if (mRestoreItem) setCurrentItem(mRestoreItem);
+    mRestoreItem = nullptr;
+    QTreeWidget::dragLeaveEvent(event);
+}
+
 void DrawerTreeWidget::dropEvent(QDropEvent *event)
 {
     const QPoint pos = event->position().toPoint();
+    mRestoreItem = nullptr;
 
     if (event->source() == this) {
-        QTreeWidgetItem *dragged = currentItem();
-        const int id = drawerId(dragged);
-        const int parentId = dropTargetId(pos, false);
+        const int id = mDraggedId;
+        const int parentId = drawerDropParentId(pos);
         event->setDropAction(Qt::IgnoreAction);   // never let Qt move rows itself
         event->accept();
-        if (id > 0 && parentId != -2 && parentId != id)
+        if (id > 0 && parentId != id)
             emit drawerMoveRequested(id, parentId);
         return;
     }
 
     if (isTileDrag(event->mimeData())) {
-        const int target = dropTargetId(pos, true);
+        const int target = tileDropTargetId(pos);
         event->setDropAction(Qt::IgnoreAction);
         event->accept();
         if (target >= 0) {

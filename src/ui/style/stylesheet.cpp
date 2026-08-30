@@ -219,7 +219,7 @@ const QString StyleSheet::QMenuDark()
 		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
 		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
 		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item : disabled { color: #555; }"
+		"QMenu::item:disabled { color: #555; }"
 	);
 }
 
@@ -239,7 +239,7 @@ const QString StyleSheet::QMenuDarkPadded()
 		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
 		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 8px; margin: 0; }"
 		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
-		"QMenu::item : disabled { color: #555; }"
+		"QMenu::item:disabled { color: #555; }"
 	);
 }
 

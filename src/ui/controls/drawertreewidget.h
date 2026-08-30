@@ -20,6 +20,11 @@ For more information see the LICENSE file
 // and rebuilds), and dropping an asset tile on a drawer name asks for the
 // asset to be filed there. Tile drags carry the assetwidget mime
 // ("application/x-qabstractitemmodeldatalist", guid at role 3 — project.h).
+//
+// Drop targets are computed from row geometry, NOT dropIndicatorPosition()
+// (whose state depends on the base view accepting the drag — owner-verified
+// fragile). The hovered target row is highlighted by moving the selection,
+// restored if the drag leaves or is cancelled.
 
 #include <QTreeWidget>
 
@@ -40,16 +45,25 @@ signals:
     void assetMoveRequested(const QString &guid, int drawerId);
 
 protected:
+    void startDrag(Qt::DropActions supportedActions) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
 private:
     bool isTileDrag(const QMimeData *mime) const;
-    /// The drawer a drop at `pos` targets, honouring the drop indicator:
-    /// on an item = that drawer; between items = their parent; empty space =
-    /// the top level. `onItemOnly` restricts to direct hits (tile drops).
-    int dropTargetId(const QPoint &pos, bool onItemOnly) const;
+    /// The drawer a DRAWER drop at `pos` targets: the row's middle band nests
+    /// under that row; its top/bottom quarters mean "beside it" (its parent);
+    /// empty space is the top level.
+    int drawerDropParentId(const QPoint &pos) const;
+    /// The drawer a TILE drop at `pos` targets: the row under the cursor
+    /// (Uncategorized included), or -2 when there is none / it is the root.
+    int tileDropTargetId(const QPoint &pos) const;
+    void highlightTarget(const QPoint &pos);
+
+    int mDraggedId = -2;                        // captured when a drawer drag starts
+    QTreeWidgetItem *mRestoreItem = nullptr;    // selection before the drag came in
 };
 
 #endif // DRAWERTREEWIDGET_H
