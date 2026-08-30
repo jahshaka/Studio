@@ -147,6 +147,50 @@ int main()
           std::fabs(offFloor.g - baseFloor.g) < 0.02f,
           "turning GI off restores the original floor");
 
+    // ---- churn while IR is LIVE must not corrupt the heap ----------------
+    // Regression (owner crash, "double free or corruption" on scene switch):
+    // Ogre::InstantRadiosity caches mesh data by raw VAO pointer and images by
+    // TextureGpu*; destroying meshes/textures while IR is enabled left those
+    // caches dangling. The engine now flags and flushes them at frame time.
+    {
+        GiParams irAgain;
+        irAgain.mode = GiMode::InstantRadiosity;
+        irAgain.quality = GiQuality::Low;
+        CHECK(s->setGlobalIllumination(irAgain), "IR re-enabled for the churn test");
+        render(engine.get());
+        for (int round = 0; round < 4; ++round) {
+            // Create a mesh + texture, attach, render (IR builds over them),
+            // then destroy everything while IR stays enabled — the crash shape.
+            MeshData md;
+            const float P[] = {-.5f,-.5f,-.5f, .5f,-.5f,-.5f, .5f,.5f,-.5f, -.5f,.5f,-.5f,
+                               -.5f,-.5f,.5f, .5f,-.5f,.5f, .5f,.5f,.5f, -.5f,.5f,.5f};
+            md.positions.assign(P, P + 24);
+            const unsigned I[] = {0,1,2, 0,2,3, 4,6,5, 4,7,6, 0,4,5, 0,5,1,
+                                  3,2,6, 3,6,7, 1,5,6, 1,6,2, 0,3,7, 0,7,4};
+            md.indices.assign(I, I + 36);
+            MeshId m = s->createMesh(md);
+            unsigned char px[4 * 4 * 4];
+            for (unsigned i = 0; i < sizeof(px); ++i) px[i] = (unsigned char)(i * 7);
+            TextureId t = s->createTexture(4, 4, px, true);
+            PbrParams pp; pp.albedo = Colour(0.8f, 0.2f, 0.2f);
+            MaterialId mat = s->createPbrMaterial(pp);
+            s->setPbrTexture(mat, PbrTextureSlot::Albedo, t);
+            NodeId n = s->createNode();
+            s->attachMesh(n, m, mat);
+            s->setNodeTransform(n, Vec3(float(round) - 2.0f, 0.6f, 0), Quat(), Vec3(0.5f, 0.5f, 0.5f));
+            render(engine.get(), 2);
+            s->removeNode(n);
+            s->destroyMaterial(mat);
+            s->destroyTexture(t);
+            s->destroyMesh(m);
+            render(engine.get(), 2);   // the frame-time GI flush runs here
+        }
+        CHECK(true, "mesh/texture churn under live IR survived 4 rounds (no heap corruption)");
+        GiParams off2;
+        CHECK(s->setGlobalIllumination(off2), "IR off after churn (teardown clean)");
+        render(engine.get());
+    }
+
     // ---- VCT is accepted but honestly renders as off ---------------------
     GiParams vct;
     vct.mode = GiMode::Vct;
