@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include "../mainwindow.h"
 #include "../irisgl/src/scenegraph/scene.h"
-#include "../irisgl/src/materials/defaultskymaterial.h"
 #include "../irisgl/src/core/irisutils.h"
 #include "../irisgl/src/graphics/texture2d.h"
 

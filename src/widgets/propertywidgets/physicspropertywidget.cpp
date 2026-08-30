@@ -10,13 +10,13 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "physicspropertywidget.h"
+#include "../../editor/ieditorviewport.h"
 
 #include <QStandardItemModel>
 
 #include "irisgl/src/scenegraph/meshnode.h"
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/physics/environment.h"
-#include "../sceneviewwidget.h"
 #include "globals.h"
 #include "../checkboxwidget.h"
 #include "../hfloatsliderwidget.h"

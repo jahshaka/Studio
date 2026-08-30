@@ -10,8 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "worldskypropertywidget.h"
+#include "../../irisgl/src/core/irisutils.h"
 
-#include "irisgl/src/materials/defaultskymaterial.h"
 
 #include "../colorvaluewidget.h"
 #include "../colorpickerwidget.h"
@@ -233,8 +233,6 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 		}
 	}
 
-	scene->switchSkyTexture(scene->skyType);
-	scene->queueSkyCapture();
 }
 
 void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
@@ -265,7 +263,6 @@ void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int inde
 
 	if (!!scene) { 
 		setSkyMap(cubeMapDefinition); 
-		scene->queueSkyCapture(); 
 	}
 }
 
@@ -337,7 +334,6 @@ void WorldSkyPropertyWidget::updateAssetAndKeys()
 	}
 	}
 
-	scene->queueSkyCapture();
 }
 
 void WorldSkyPropertyWidget::setEquiMap(const QString &guid)
@@ -349,7 +345,6 @@ void WorldSkyPropertyWidget::setEquiMap(const QString &guid)
         scene->setSkyTexture(iris::Texture2D::load(image, false));
 		updateAssetAndKeys();
 
-		scene->queueSkyCapture();
     }
 }
 
@@ -388,7 +383,6 @@ void WorldSkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 		updateAssetAndKeys();
 	}
 
-	scene->queueSkyCapture();
 }
 
 void WorldSkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)

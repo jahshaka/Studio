@@ -31,8 +31,6 @@ public:
 
     /// Brackets mesh work AssetView does on the viewer's behalf. The legacy
     /// viewer makes its GL context current here; the engine viewer needs nothing.
-    virtual void beginLoad() = 0;
-    virtual void endLoad() = 0;
 
     /// Removes the previewed asset (keeps the lights and floor).
     virtual void clearScene() = 0;

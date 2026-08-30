@@ -77,7 +77,7 @@ void AssetMaterialPanel::addDefaultItems()
 
     // The engine viewport authors PBR only: legacy (non-PBR) presets are
     // deprecated there and hidden from the drawer. Legacy mode still shows both.
-    const bool pbrOnly = EngineHost::viewportBackend() == ViewportBackend::Engine;
+    const bool pbrOnly = true;   // engine viewport is the only renderer
     for (const auto &file : files) {
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
         if (pbrOnly && preset.type.compare("PBR", Qt::CaseInsensitive) != 0) continue;

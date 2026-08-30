@@ -17,8 +17,6 @@ For more information see the LICENSE file
 
 
 class Gizmo;
-class QOpenGLFunctions_3_2_Core;
-class QOpenGLShaderProgram;
 
 class TranslationHandle : public GizmoHandle
 {
@@ -48,8 +46,6 @@ class TranslationGizmo : public Gizmo
 	iris::MeshPtr circleMesh;
     QVector<iris::MeshPtr> handleMeshes;
 
-    QOpenGLShaderProgram* shader;
-	iris::ShaderPtr lineShader;
 
     QVector<TranslationHandle*> handles;
 
@@ -75,7 +71,6 @@ public:
 
 	// hitPos is the hit position of the hit handle
 	TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos);
-	void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 public:
 	QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) override;
 };

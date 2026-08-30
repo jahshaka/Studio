@@ -35,7 +35,6 @@ namespace Ui {
     class MainWindow;
 }
 
-class SurfaceView;
 class AssetView;
 class ShaderGraph;
 
@@ -60,7 +59,6 @@ class AnimationWidget;
 class TexturedPlaneLayerWidget;
 class WorldLayerWidget;
 class EndlessPlaneLayerWidget;
-class PostProcessesWidget;
 class DonateDialog;
 
 class MaterialWidget;
@@ -68,7 +66,6 @@ class TransformGizmo;
 class AdvancedTransformGizmo;
 class TransformWidget;
 
-class SceneViewWidget;
 class IEditorViewport;
 class SceneHierarchyWidget;
 class PlayerWidget;
@@ -104,7 +101,6 @@ class AssetMaterialPanel;
 
 #include "widgets/scenenodepropertieswidget.h"
 
-class QOpenGLFunctions_3_2_Core;
 
 enum class SceneNodeType;
 
@@ -135,7 +131,6 @@ enum class Widget
 class Database;
 class MainWindow : public QMainWindow
 {
-	friend class SceneViewWidget;
 
     Q_OBJECT
 
@@ -146,10 +141,9 @@ public:
     void setSceneAnimTime(float time);
     void stopAnimWidget();
 
-    void makeLoadingGLContextCurrent();
     void grabOpenGLContextHack();
 
-    /// The editor viewport (legacy SceneViewWidget or the engine-backed one).
+    /// The editor viewport (engine-backed, or the headless stand-in).
     IEditorViewport *viewport() { return sceneView; }
     /// --engine-selftest: show the editor page, build the default scene the way
     /// newScene() does and start the viewport. False (with a reason) if the engine
@@ -286,7 +280,6 @@ private:
     void setupFileMenu();
 
     //ui setup
-    void createPostProcessDockWidget();
     void setupLayerButtonMenu();
     void initLightLayerUi();
     void initTorusLayerUi();
@@ -384,7 +377,6 @@ public slots:
     void toggleWidgets(bool toggle);
 
     iris::ScenePtr createDefaultScene();
-    void initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*);
 
     void useFreeCamera();
     void useArcballCam();
@@ -430,11 +422,8 @@ private:
     void applyEditModeUi();
     void applyPlayModeUi();
 
-    QOpenGLContext* loadingContext;
-    QOffscreenSurface* loadingSurface;
 
     Ui::MainWindow *ui;
-    SurfaceView* surface;
     IEditorViewport* sceneView;
 	PlayerWidget* playerView;
 
@@ -457,8 +446,6 @@ private:
     EndlessPlaneLayerWidget* endlessPlaneLayerWidget;
     MaterialWidget* materialWidget;
     AnimationWidget* animWidget;
-    PostProcessesWidget* postProcessWidget;
-    QDockWidget* postProcessDockWidget;
 
     Qt::MouseButton mouseButton;
     QPoint mousePressPos;

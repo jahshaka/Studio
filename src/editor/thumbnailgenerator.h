@@ -17,12 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/materials/defaultmaterial.h"
 
-#include <QThread>
-#include <QOffscreenSurface>
-#include <QOpenGLContext>
-#include <QOpenGLFunctions_3_2_Core>
-#include <QMutex>
-#include <QSemaphore>
+#include <QObject>
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
@@ -58,67 +53,15 @@ struct ThumbnailResult
     QImage thumbnail;
 };
 
-class RenderThread : public QThread
+// Thumbnails are rendered on the MAIN thread through an offscreen engine View
+// (EngineThumbnailRenderer), at most one request per timer tick so the UI never
+// blocks. (The legacy GL RenderThread died at step 14; the queue contract —
+// requestThumbnail() in, thumbnailComplete() out — is unchanged.)
+class ThumbnailGenerator : public QObject
 {
     Q_OBJECT
-
 public:
-    QOffscreenSurface *surface;
-    QOpenGLContext *context;
-
-    iris::Texture2DPtr tex;
-    iris::RenderTargetPtr renderTarget;
-
-    iris::ForwardRendererPtr renderer;
-    iris::ScenePtr scene;
-    iris::SceneNodePtr sceneNode;
-
-	iris::MeshNodePtr materialNode;
-
-    iris::CameraNodePtr cam;
-    iris::CustomMaterialPtr material;
-
-    QMutex requestMutex;
-    QList<ThumbnailRequest> requests;
-    QSemaphore requestsAvailable;
-
-	iris::SceneSource *ssource;
-    bool shutdown;
-
-    void run() override;
-    void initScene();
-    void cleanupScene();
-    void requestThumbnail(const ThumbnailRequest& request);
-    void prepareScene(const ThumbnailRequest& request);
-
-	void createMaterial(QJsonObject &matObj, iris::CustomMaterialPtr mat);
-
-    Database *db;
-    void setDatabase(Database *db) {
-        this->db = db;
-    }
-
-signals:
-    void thumbnailComplete(ThumbnailResult* result);
-
-private:
-    float getBoundingRadius(iris::SceneNodePtr node);
-    void getBoundingSpheres(iris::SceneNodePtr node, QList<iris::BoundingSphere>& spheres);
-};
-
-// http://doc.qt.io/qt-5/qtquick-scenegraph-textureinthread-threadrenderer-cpp.html
-//
-// Two backends behind one contract (requestThumbnail() in, RenderThread's
-// thumbnailComplete() out, so no caller changes):
-//  - legacy viewport: the RenderThread above, its own GL context on a worker thread;
-//  - engine viewport (EngineHost): rendered on the MAIN thread through an offscreen
-//    engine View (EngineThumbnailRenderer), at most one request per timer tick so
-//    the UI never blocks. The RenderThread object still exists as the signal source
-//    but is never started.
-class ThumbnailGenerator
-{
-public:
-    RenderThread* renderThread;
+    ~ThumbnailGenerator() override;
     static ThumbnailGenerator* getSingleton();
     void requestThumbnail(ThumbnailRequestType type, QString path, QString id = "", bool preview = false,
                           QSize size = QSize(512, 512));
@@ -132,9 +75,12 @@ public:
     }
 
     /// True when thumbnails are rendered through the engine on the main thread.
-    bool usesEngine() const { return engineMode; }
-    /// Engine mode only: requests still waiting for a tick.
+    bool usesEngine() const { return true; }
+    /// Requests still waiting for a tick.
     int pendingCount() const { return pending.size(); }
+
+signals:
+    void thumbnailComplete(ThumbnailResult* result);
 
 private:
 	static ThumbnailGenerator* instance;
@@ -146,7 +92,6 @@ private:
     QImage renderEngineRequest(const ThumbnailRequest &request, QSize size);
     iris::MaterialPtr previewMaterialFor(iris::MaterialPtr material);
 
-    bool engineMode = false;
     QList<EngineRequest> pending;
     QTimer *tick = nullptr;
     std::unique_ptr<EngineThumbnailRenderer> engineRenderer;

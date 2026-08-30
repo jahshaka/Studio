@@ -32,7 +32,6 @@ For more information see the LICENSE file
 #include "irisgl/src/materials/defaultmaterial.h"
 #include "irisgl/src/materials/custommaterial.h"
 #include "irisgl/src/materials/pbrmaterial.h"
-#include "irisgl/src/graphics/forwardrenderer.h"
 #include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/graphics/texture2d.h"
 #include "irisgl/src/graphics/viewport.h"
@@ -49,18 +48,15 @@ For more information see the LICENSE file
 #include "engine/enginehost.h"
 #include "widgets/enginerenderdriver.h"
 #include "widgets/enginematerialpreview.h"
-#include "widgets/sceneviewwidget.h"
 #include "dialogs/donatedialog.h"
 #include "dialogs/custompopup.h"
 #include "core/assethelper.h"
 #include "core/scenenodehelper.h"
 
 #include <QFontDatabase>
-#include <QOpenGLContext>
 #include <qstandarditemmodel.h>
 #include <QKeyEvent>
 #include <QMessageBox>
-#include <QOpenGLDebugLogger>
 #include <QUndoStack>
 
 #include <QApplication>
@@ -83,7 +79,6 @@ For more information see the LICENSE file
 #include <QToolButton>
 
 #include "dialogs/loadmeshdialog.h"
-#include "core/surfaceview.h"
 #include "core/nodekeyframeanimation.h"
 #include "core/nodekeyframe.h"
 #include "globals.h"
@@ -103,9 +98,7 @@ For more information see the LICENSE file
 
 #include "helpers/collisionhelper.h"
 
-#include "widgets/sceneviewwidget.h"
 #include "core/materialpreset.h"
-#include "widgets/postprocesseswidget.h"
 
 #include "widgets/projectmanager.h"
 
@@ -146,7 +139,8 @@ For more information see the LICENSE file
 
 #include "shadergraph/shadergraphmainwindow.h"
 #include "../src/player/playerwidget.h"
-#include "../src/player/iplayerview.h"
+#include "../src/player/engineplayerview.h"
+#include "editor/headlesseditorviewport.h"
 
 #include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
@@ -187,7 +181,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	originalTitle = windowTitle();
 
 	setupProjectDB();
-	createPostProcessDockWidget();
 
     prefsDialog = new PreferencesDialog(nullptr, db, settings);
     aboutDialog = new AboutDialog();
@@ -219,8 +212,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		return UiManager::isSceneOpen && !Globals::project->getProjectGuid().isEmpty();
 	};
 	scriptHost->engineReady = [this]() {
-		return EngineHost::viewportBackend() == ViewportBackend::Engine
-			&& EngineHost::instance().isRunning() && sceneView->isInitialized();
+		return EngineHost::instance().isRunning() && sceneView->isInitialized();
 	};
 	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
 	scriptEngine = new ScriptEngine(*scriptHost, this);
@@ -238,28 +230,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
 	restoreState(settings->getValue("windowState", "").toByteArray());
 
-    loadingContext = nullptr;
-    loadingSurface = nullptr;
-    if (EngineHost::viewportBackend() == ViewportBackend::Legacy) {
-        // A GL context shared with the viewport's, made current while scenes load.
-        // The engine viewport needs none: the document is GL-free.
-        QSurfaceFormat format;
-        format.setDepthBufferSize(32);
-        format.setMajorVersion(3);
-        format.setMinorVersion(2);
-        format.setProfile(QSurfaceFormat::CoreProfile);
-        format.setRenderableType(QSurfaceFormat::OpenGL);
-
-        loadingContext = new QOpenGLContext();
-        loadingContext->setFormat(format);
-        auto globContext = QOpenGLContext::globalShareContext();
-        loadingContext->setShareContext(globContext);
-        loadingContext->create();
-
-        loadingSurface = new QOffscreenSurface();
-        loadingSurface->setFormat(format);
-        loadingSurface->create();
-    }
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -393,13 +363,6 @@ iris::ScenePtr MainWindow::createDefaultScene()
     return scene;
 }
 
-void MainWindow::initializeGraphics(SceneViewWidget *widget, QOpenGLFunctions_3_2_Core *gl)
-{
-    Q_UNUSED(gl);
-    if (auto renderer = widget->getRenderer())
-        postProcessWidget->setPostProcessMgr(renderer->getPostProcessManager());
-}
-
 void MainWindow::setSettingsManager(SettingsManager* settings)
 {
     this->settings = settings;
@@ -441,27 +404,10 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         case QEvent::MouseButtonPress: {
             dragging = true;
 
-            if (obj == surface) return handleMousePress(static_cast<QMouseEvent*>(event));
-
             if (obj == sceneContainer) {
                 QCoreApplication::sendEvent(sceneView->asWidget(), event);
             }
 
-            break;
-        }
-
-        case QEvent::MouseButtonRelease: {
-            if (obj == surface) return handleMouseRelease(static_cast<QMouseEvent*>(event));
-            break;
-        }
-
-        case QEvent::MouseMove: {
-            if (obj == surface) return handleMouseMove(static_cast<QMouseEvent*>(event));
-            break;
-        }
-
-        case QEvent::Wheel: {
-            if (obj == surface) return handleMouseWheel(static_cast<QWheelEvent*>(event));
             break;
         }
 
@@ -530,19 +476,6 @@ void MainWindow::setupFileMenu()
     connect(prefsDialog,            SIGNAL(PreferencesDialogClosed()), SLOT(updateSceneSettings()));
 }
 
-void MainWindow::createPostProcessDockWidget()
-{
-    postProcessDockWidget = new QDockWidget(this);
-    postProcessWidget = new PostProcessesWidget();
-    // postProcessWidget->setWindowTitle("Post Processes");
-    postProcessDockWidget->setWidget(postProcessWidget);
-    postProcessDockWidget->setWindowTitle("PostProcesses");
-    // postProcessDockWidget->setFloating(true);
-    postProcessDockWidget->setHidden(true);
-    this->addDockWidget(Qt::RightDockWidgetArea, postProcessDockWidget);
-
-}
-
 void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 {
 }
@@ -550,12 +483,6 @@ void MainWindow::sceneTreeCustomContextMenu(const QPoint& pos)
 void MainWindow::stopAnimWidget()
 {
     animWidget->stopAnimation();
-}
-
-void MainWindow::makeLoadingGLContextCurrent()
-{
-    if (loadingContext) loadingContext->makeCurrent(loadingSurface);
-    else sceneView->beginResourceLoad();   // engine viewport: no-op
 }
 
 void MainWindow::setupProjectDB()
@@ -846,8 +773,6 @@ void MainWindow::openProject(bool playMode)
 	if(!!scene)
         removeScene();
 
-    makeLoadingGLContextCurrent();
-
     EditorData* editorData = Q_NULLPTR;
     UiManager::updateWindowTitle();
 
@@ -859,10 +784,6 @@ void MainWindow::openProject(bool playMode)
     ui->actionClose->setDisabled(false);
     setScene(scene);
 
-    // use new post process that has fxaa by default
-    // TODO: remember to find a better replacement (Nick)
-    postProcessWidget->setPostProcessMgr(postMan);
-    this->sceneView->endResourceLoad();
 
     if (editorData != Q_NULLPTR) {
         sceneView->setEditorData(editorData);
@@ -1194,7 +1115,6 @@ void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString
 void MainWindow::addDragPlaceholder()
 {
     /*
-    this->sceneView->beginResourceLoad();
     auto node = iris::MeshNode::create();
     node->scale = QVector3D(.5f, .5f, .5f);
     node->setMesh(":app/content/primitives/arrow.obj");
@@ -1869,23 +1789,22 @@ void MainWindow::setupViewPort()
     viewPort->setWindowFlags(Qt::Widget);
     viewPort->setCentralWidget(container);
 
-    // The runtime switch (--viewport=engine|legacy): engine mode starts the one
-    // process-wide Engine and builds the engine-backed viewport; legacy mode is the
-    // IrisGL SceneViewWidget exactly as before. A failed engine start falls back to
-    // legacy so the window still comes up (with the reason on stderr).
+    // The engine viewport is the only renderer. When the engine cannot start
+    // (offscreen platform: --headless scripts, --dump-api-docs) a document-only
+    // stand-in serves the document verbs; nothing renders.
     sceneView = nullptr;
-    if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
+    {
         auto &host = EngineHost::instance();
         QString error;
         if (host.start(error)) {
             sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
             host.driver()->start(16);
         } else {
-            qCritical("Engine viewport unavailable, falling back to the legacy viewport: %s",
+            qCritical("Engine unavailable (%s): using the headless document-only viewport.",
                       qPrintable(error));
         }
     }
-    if (!sceneView) sceneView = new SceneViewWidget(viewPort);
+    if (!sceneView) sceneView = new HeadlessEditorViewport(viewPort);
     sceneView->asWidget()->setParent(viewPort);
     sceneView->asWidget()->setFocusPolicy(Qt::ClickFocus);
     sceneView->asWidget()->setFocus();
@@ -1894,10 +1813,10 @@ void MainWindow::setupViewPort()
     Globals::sceneViewWidget = sceneView;
     UiManager::setSceneViewWidget(sceneView);
 
-	// The player page: engine mode gives PlayerWidget an EnginePlayerView (a second
-	// engine Scene mirroring the same document); legacy keeps its own PlayerView.
-	IPlayerView *playerBackend = nullptr;
-	if (EngineHost::viewportBackend() == ViewportBackend::Engine && EngineHost::instance().isRunning()) {
+	// The player page: PlayerWidget gets an EnginePlayerView (a second engine
+	// Scene mirroring the same document), or none in headless runs.
+	EnginePlayerView *playerBackend = nullptr;
+	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		playerBackend = createEnginePlayerView(host.engine(), host.driver(), viewPort);
 	}
@@ -1924,12 +1843,6 @@ void MainWindow::setupViewPort()
         addAssetParticleSystem(v, pos, guid, name);
     });
 
-    // Legacy only: the IrisGL renderer's post-process manager for the post-process dock.
-    if (auto legacy = dynamic_cast<SceneViewWidget*>(sceneView)) {
-        connect(legacy,  SIGNAL(initializeGraphics(SceneViewWidget*, QOpenGLFunctions_3_2_Core*)),
-                this,    SLOT(initializeGraphics(SceneViewWidget*,   QOpenGLFunctions_3_2_Core*)));
-    }
-
     connect(events, &EditorViewportEvents::sceneNodeSelected,
             this,   qOverload<iris::SceneNodePtr>(&MainWindow::sceneNodeSelected));
 
@@ -1952,10 +1865,10 @@ void MainWindow::setupDesktop()
 {
 	pmContainer = new ProjectManager(db, this);
 	pmContainer->mainWindow = this;
-	// The Assets page: engine mode gives AssetView an EngineAssetViewer (a third
-	// engine Scene with its own preview document); legacy keeps its own AssetViewer.
+	// The Assets page: AssetView gets an EngineAssetViewer (a third engine
+	// Scene with its own preview document), or none in headless runs.
 	IAssetViewer *assetBackend = nullptr;
-	if (EngineHost::viewportBackend() == ViewportBackend::Engine && EngineHost::instance().isRunning()) {
+	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		assetBackend = createEngineAssetViewer(host.engine(), host.driver(), this);
 	}
@@ -1969,9 +1882,9 @@ void MainWindow::setupDesktop()
 	//ui->stackedWidget->addWidget(new QWidget(this));
 	shaderGraph = new shadergraph::MainWindow(this,db);
 	shaderGraph->setAssetView(_assetView);
-	// Engine mode: the Display dock gets an engine-rendered preview (its own
-	// engine Scene + preview document); the GL SceneWidget is never realized.
-	if (EngineHost::viewportBackend() == ViewportBackend::Engine && EngineHost::instance().isRunning()) {
+	// The Display dock gets an engine-rendered preview (its own engine Scene +
+	// preview document).
+	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		shaderGraph->setEnginePreview(new EngineMaterialPreview(host.engine(), host.driver(), shaderGraph));
 	}
@@ -2459,17 +2372,15 @@ void MainWindow::showProjectManagerInternal()
 
 void MainWindow::newScene()
 {
-    this->sceneView->beginResourceLoad();
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
-    this->sceneView->endResourceLoad();
 }
 
 bool MainWindow::beginEngineSelftest(QString &why)
 {
-    if (EngineHost::viewportBackend() != ViewportBackend::Engine || !EngineHost::instance().isRunning()) {
-        why = "the engine viewport is not in use (engine failed to start?)";
+    if (!EngineHost::instance().isRunning()) {
+        why = "the engine is not running (engine failed to start?)";
         return false;
     }
     // The editor page of the stacked widget; showing it gives the viewport its

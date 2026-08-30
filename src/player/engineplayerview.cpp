@@ -138,7 +138,7 @@ void EnginePlayerView::focusOutEvent(QFocusEvent *)
     KeyboardState::reset();
 }
 
-IPlayerView *createEnginePlayerView(const std::shared_ptr<Engine> &engine,
+EnginePlayerView *createEnginePlayerView(const std::shared_ptr<Engine> &engine,
                                     EngineRenderDriver *driver, QWidget *parent)
 {
     return new EnginePlayerView(engine, driver, parent);

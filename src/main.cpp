@@ -183,13 +183,7 @@ int main(int argc, char *argv[])
 {
     GetGitCommitHash();
 
-    // --engine-preview: start ONLY the new engine, skipping the legacy Qt-GL editor.
-    //
-    // The two renderers need different Qt platforms and cannot coexist yet:
-    // the legacy viewport requires wayland (xcb gives it no GL context and the app
-    // dies with "versionFunctions: No OpenGL context"), while Ogre-Next has no
-    // Wayland backend and needs xcb. This mode is the transition path — it becomes
-    // the normal startup once the editor viewport moves onto the engine.
+    // --engine-preview: start ONLY the engine preview dialog, no MainWindow.
     bool enginePreviewOnly = false;
     // --engine-selftest <out.png>: engine viewport, default scene, one screenshot, exit.
     QString selftestPng;
@@ -203,71 +197,31 @@ int main(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--script") == 0 && i + 1 < argc) scriptPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrcmp(argv[i], "--headless") == 0) headlessScript = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrncmp(argv[i], "--viewport", 10) == 0) {
+            // Accepted for compatibility; the engine viewport is the only
+            // renderer since the legacy GL viewport was deleted (step 14).
+            if (qstrcmp(argv[i], "--viewport=legacy") == 0)
+                qWarning("--viewport=legacy: the legacy GL viewport was removed; using the engine viewport.");
+        }
     }
 
-    // --viewport=engine|legacy (env JAHSHAKA_VIEWPORT, CMake JAHSHAKA_ENGINE_VIEWPORT):
-    // which editor viewport MainWindow builds. Engine mode needs xcb (Ogre has no
-    // Wayland backend) and must not set up the legacy GL defaults; legacy mode is
-    // exactly the behaviour before the switch existed.
-    ViewportBackend backend = EngineHost::resolveViewportBackend(argc, argv);
-    if (!selftestPng.isEmpty()) backend = ViewportBackend::Engine;
-    // A non-headless script run needs the engine viewport (frame/screenshot verbs);
-    // headless/docs runs go offscreen — the engine host then fails to start and
-    // MainWindow falls back to the legacy viewport, which is fine: only
-    // Document-class verbs are meaningful there.
-    if (!scriptPath.isEmpty() && !headlessScript) backend = ViewportBackend::Engine;
     if ((headlessScript && !scriptPath.isEmpty()) || !dumpDocsPath.isEmpty())
         qputenv("QT_QPA_PLATFORM", "offscreen");
-    EngineHost::setViewportBackend(backend);
-    const bool engineViewport = backend == ViewportBackend::Engine;
 
-    // Only force xcb when the user has not chosen a platform themselves.
-    if ((enginePreviewOnly || engineViewport) && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+    // The engine (Ogre-Next) has no Wayland backend: xcb, always — unless the
+    // user chose a platform themselves (or a headless run went offscreen above).
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "xcb");
 
-#ifdef Q_OS_LINUX
-    // Only force xcb if the user hasn't chosen a platform, and use EGL rather
-    // than GLX: under GLX, making an offscreen context current on a background
-    // thread (the thumbnail render thread) fails with the NVIDIA driver.
-    // Don't force xcb. On this stack QOpenGLWidget only renders under the
-    // native wayland platform: xcb+GLX fails to make the context current,
-    // and xcb+EGL makes it current but renders nothing.
-    if (!enginePreviewOnly && !engineViewport && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) {
-        if (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
-            qputenv("QT_QPA_PLATFORM", "wayland");
-        else
-            qputenv("QT_QPA_PLATFORM", "xcb");
-    }
-#endif
-
-    // Fixes issue on osx where the SceneView widget shows up blank
-    // Causes freezing on linux for some reason (Nick)
-#if defined(Q_OS_MAC) || defined(Q_OS_LINUX)
-    if (!engineViewport) {
-        QSurfaceFormat format;
-        format.setDepthBufferSize(32);
-        format.setMajorVersion(3);
-        format.setMinorVersion(2);
-        format.setProfile(QSurfaceFormat::CoreProfile);
-        // Without this the EGL paths hand back an OpenGL ES context and the
-        // 3.2 Core function resolver returns null.
-        format.setRenderableType(QSurfaceFormat::OpenGL);
-        QSurfaceFormat::setDefaultFormat(format);
-    }
-#endif
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-	QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
-    // The engine viewport creates no Qt GL context; the legacy one needs the shared
-    // context for its loading/thumbnail contexts.
-    if (!engineViewport) QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
-    // Engine mode embeds a native render window (WA_NativeWindow). Without this
+    // The editor embeds a native render window (WA_NativeWindow). Without this
     // attribute Qt silently promotes EVERY sibling widget to a native X window, and
     // on xcb the page-switch mapping of those windows desyncs: QStackedWidget said
     // index 3 / shadergraph visible, while at X level the editor page stayed mapped
     // and the Materials page never appeared (verified with xwininfo map states).
-    if (engineViewport) QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
+    QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
 

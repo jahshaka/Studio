@@ -10,6 +10,10 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "assetview.h"
+#include "iassetviewer.h"
+#include "headlessassetviewer.h"
+#include <QTimer>
+#include "../dialogs/progressdialog.h"
 #include "core/settingsmanager.h"
 #include "dialogs/preferencesdialog.h"
 #include "dialogs/preferences/worldsettings.h"
@@ -57,7 +61,6 @@ For more information see the LICENSE file
 #include "../uimanager.h"
 #include "assetviewgrid.h"
 #include "assetgriditem.h"
-#include "assetviewer.h"
 #include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.hpp"
@@ -249,9 +252,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	setParent(parent);
 	this->parent = parent;
 	_assetView = new QListWidget;
-	// The page's preview viewer: the engine one when MainWindow hands one in
-	// (engine mode), otherwise the legacy QOpenGLWidget viewer.
-	viewer = previewViewer ? previewViewer : new AssetViewer(this);
+	// The page's preview viewer: engine-backed, or the headless document-only
+	// stand-in when no engine view can exist.
+	viewer = previewViewer ? previewViewer : new HeadlessAssetViewer(this);
     viewer->setDatabase(db);
 
     viewersWidget = new QWidget;
@@ -1650,7 +1653,6 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
                 if (asset->type == ModelTypes::Mesh) {
                     QStringList texturesToCopy;
-                    viewer->beginLoad();
 
                     bool hasEmbeddedTexture(false);
                     QStringList paths;
@@ -1659,7 +1661,6 @@ void AssetView::importModel(const QString &fileName, bool jfx)
                                                                                  paths,
                                                                                  hasEmbeddedTexture);
 
-                    viewer->endLoad();
 
                     if (!scene) {
                         // assimp could not import the model (e.g. a Draco-compressed
@@ -2208,7 +2209,6 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 		}
 
         if (jafType == ModelTypes::Mesh) {
-            this->viewer->beginLoad();
             auto ssource = new iris::SceneSource();
             // load mesh as scene
             auto node = iris::MeshNode::loadAsSceneFragment(
@@ -2220,7 +2220,6 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 
                 return mat;
             }, ssource);
-            this->viewer->endLoad();
 
             QVariant variant = QVariant::fromValue(node);
             auto nodeAsset = new AssetNodeObject;

@@ -182,7 +182,6 @@ QString AssetsApi::addToProject(const QString &guid)
     const QString placeHolderGuid = GUIDManager::generateGUID();
     QVector<QPair<QString, QString>> copied;   // original name -> new name
 
-    if (host.viewport) host.viewport->beginResourceLoad();
     for (const auto &file : files) {
         QString newName = file.fileName();
         int increment = 1;
@@ -228,8 +227,6 @@ QString AssetsApi::addToProject(const QString &guid)
             }
         }
     }
-    if (host.viewport) host.viewport->endResourceLoad();
-
     QMap<QString, QString> newNames;
     for (const auto &pair : copied) newNames.insert(pair.first, pair.second);
 

@@ -45,7 +45,6 @@ public:
 
     virtual void postUpdate(float dt){}
 
-    virtual void renderUi(iris::GraphicsDevicePtr device, iris::SpriteBatchPtr batch) {}
 
     void resetMouseStates();
 

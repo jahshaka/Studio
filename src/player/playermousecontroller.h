@@ -13,10 +13,21 @@ For more information see the LICENSE file
 #define PLAYERMOUSECONTROLLER_H
 
 #include "irisglfwd.h"
+#include "irisgl/src/graphics/viewport.h"
+#include "irisgl/src/scenegraph/scene.h"
 #include <QQuaternion>
 #include <QVector3D>
 #include "../editor/cameracontrollerbase.h"
-#include "../widgets/sceneviewwidget.h"
+
+// Local picking record (was defined by the deleted legacy SceneViewWidget).
+struct PickingResult
+{
+    iris::SceneNodePtr hitNode;
+    QVector3D hitPoint;
+
+    // this is often used for comparisons so it's not necessary to find the root
+    float distanceFromCameraSqrd;
+};
 
 class PlayerMouseController : public CameraControllerBase
 {

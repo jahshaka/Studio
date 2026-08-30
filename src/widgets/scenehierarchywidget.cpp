@@ -24,8 +24,8 @@ For more information see the LICENSE file
 #include "irisgl/src/core/irisutils.h"
 #include "mainwindow.h"
 #include "uimanager.h"
+#include "editor/ieditorviewport.h"
 #include "engine/enginehost.h"
-#include "widgets/sceneviewwidget.h"
 #include "io/scenewriter.h"
 #include <qdialog.h>
 #include <qcombobox.h>
@@ -165,13 +165,9 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     lightMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addDirectionalLight()));
 
-    // Area lights exist only in the engine renderer (Ogre-Next LT_AREA_*);
-    // the legacy forward renderer has no code path for them.
-    if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
-        action = new QAction("Area", this);
-        lightMenu->addAction(action);
-        connect(action, SIGNAL(triggered()), mainWindow, SLOT(addAreaLight()));
-    }
+    action = new QAction("Area", this);
+    lightMenu->addAction(action);
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addAreaLight()));
 
     action = new QAction("Empty", this);
     addMenu->addAction(action);

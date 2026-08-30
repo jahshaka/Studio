@@ -54,7 +54,6 @@ For more information see the LICENSE file
 #include "core/assethelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
-#include "widgets/sceneviewwidget.h"
 #include "core/subscriber.h"
 #include "core/materialpreset.h"
 #include "io/materialpresetreader.h"
@@ -127,8 +126,8 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	// viewport, from the main thread. Either way the generator needs the database
 	// for asset/material lookups (the legacy viewport also sets it, later).
 	ThumbnailGenerator::getSingleton()->setDatabase(db);
-	connect(ThumbnailGenerator::getSingleton()->renderThread,   SIGNAL(thumbnailComplete(ThumbnailResult*)),
-		    this,                                               SLOT(onThumbnailResult(ThumbnailResult*)));
+	connect(ThumbnailGenerator::getSingleton(),   SIGNAL(thumbnailComplete(ThumbnailResult*)),
+		    this,                                 SLOT(onThumbnailResult(ThumbnailResult*)));
 
 	connect(Globals::eventSubscriber,	&Subscriber::updateAssetSkyItemFromSkyPropertyWidget,
 			this,						&AssetWidget::updateAssetSkyItemFromSkyPropertyWidget);
@@ -310,7 +309,6 @@ void AssetWidget::trigger()
     auto reader = new MaterialPresetReader();
 
     // needs opengl context so we have to call this after the window is shown...
-    sceneView->beginResourceLoad();
     for (const auto &file : files) {
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
 
@@ -337,12 +335,10 @@ void AssetWidget::trigger()
         assetMat->setValue(QVariant::fromValue(m));
         AssetManager::addAsset(assetMat);
     }
-    sceneView->endResourceLoad();
 
 	// It's important that this gets called after a project has been loaded (iKlsR)
 	populateAssetTree(true);
 
-	sceneView->beginResourceLoad();
 	for (auto &asset : AssetManager::getAssets()) {
 		if (asset->type == ModelTypes::Object) {
 			// Not every Object asset holds an AssimpObject: add-to-project registers
@@ -408,7 +404,6 @@ void AssetWidget::trigger()
 			asset = nodeAsset;
 		}
 	}
-	sceneView->endResourceLoad();
 }
 
 void AssetWidget::refresh()
@@ -2119,7 +2114,6 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                 }
 
                 if (jafType == ModelTypes::Mesh) {
-                    this->sceneView->beginResourceLoad();
                     auto ssource = new iris::SceneSource();
                     // load mesh as scene
                     auto node = iris::MeshNode::loadAsSceneFragment(
@@ -2130,7 +2124,6 @@ void AssetWidget::importJafAssets(const QList<directory_tupleA> &fileNames)
                         mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
                         return mat;
                     }, ssource);
-                    this->sceneView->endResourceLoad();
 
                     // Add to persistent store
                     QVariant variant = QVariant::fromValue(node);
@@ -2512,14 +2505,12 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 
                 if (asset->type == ModelTypes::Mesh) {
                     QStringList texturesToCopy;
-                    this->sceneView->beginResourceLoad();
                     bool hasEmbeddedTexture(false);
                     QStringList paths;
                     auto scene = AssetHelper::extractTexturesAndMaterialFromMesh(asset->path,
                                                                                  texturesToCopy,
                                                                                  paths,
                                                                                  hasEmbeddedTexture);
-                    this->sceneView->endResourceLoad();
 
 					QString preObjectGuid = GUIDManager::generateGUID();
 

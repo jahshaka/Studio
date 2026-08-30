@@ -18,8 +18,8 @@ For more information see the LICENSE file
 #include <math.h>
 #include "../core/keyboardstate.h"
 #include "../core/settingsmanager.h"
-#include "../widgets/sceneviewwidget.h"
 #include "../editor/gizmo.h"
+#include "ieditorviewport.h"
 
 #include <QDebug>
 using namespace iris;
@@ -159,15 +159,11 @@ void EditorCameraController::onMouseMove(int x,int y)
 bool EditorCameraController::canLeftMouseDrag()
 {
 	
-	bool gizmoDragging = false;
-	// Gizmos are drawn by the legacy viewport only (IrisGL); the engine viewport has none yet.
-	if (auto legacy = dynamic_cast<SceneViewWidget*>(sceneWidget)) {
-		auto gizmo = legacy->getActiveGizmo();
-		if (gizmo != nullptr) {
-			if (gizmo->isDragging())
-				gizmoDragging = true;
-		}
-	}
+	// Refuse camera drags while a gizmo drag is in progress (step-14 fix: the
+	// old guard dynamic_cast to the deleted legacy widget and was dead in
+	// engine mode, letting the camera pan mid-gizmo-drag).
+	auto gizmo = sceneWidget ? sceneWidget->activeGizmo() : nullptr;
+	bool gizmoDragging = gizmo && gizmo->isDragging();
 
 	return (leftMouseDown && // left mouse must be down
 		settings->getValue("mouse_controls", "default").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode

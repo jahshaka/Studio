@@ -77,7 +77,6 @@ SceneEditService::SceneEditService(Database *db,
 
 void SceneEditService::addBuiltinPrimitive(const QString &meshPath, const QString &name)
 {
-    viewport->beginResourceLoad();
     const QString nodeGuid = GUIDManager::generateGUID();
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(meshPath, name, nodeGuid);
     QJsonObject props;
@@ -131,7 +130,6 @@ void SceneEditService::addPrimitive(const QString &text)
 
 void SceneEditService::addPointLight()
 {
-    viewport->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Point);
     node->icon = iris::Texture2D::load(":/icons/bulb.png");
@@ -143,7 +141,6 @@ void SceneEditService::addPointLight()
 
 void SceneEditService::addSpotLight()
 {
-    viewport->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Spot);
     node->icon = iris::Texture2D::load(":/icons/spotlight.png");
@@ -153,7 +150,6 @@ void SceneEditService::addSpotLight()
 
 void SceneEditService::addDirectionalLight()
 {
-    viewport->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->shadowMap->shadowType = iris::ShadowMapType::Soft;
     node->setLightType(iris::LightType::Directional);
@@ -166,7 +162,6 @@ void SceneEditService::addAreaLight()
 {
     // Engine viewport only (the menu entry is hidden in legacy mode): Ogre-Next's
     // rectangular area lights. No bundled icon glyph — SceneMirror draws one.
-    viewport->beginResourceLoad();
     auto node = iris::LightNode::create();
     node->setLightType(iris::LightType::Area);
     node->setName("Area Light");
@@ -179,7 +174,6 @@ void SceneEditService::addAreaLight()
 
 void SceneEditService::addEmpty()
 {
-    viewport->beginResourceLoad();
     auto node = iris::SceneNode::create();
     node->setName("Empty");
     addNodeToScene(node);
@@ -187,7 +181,6 @@ void SceneEditService::addEmpty()
 
 void SceneEditService::addViewer()
 {
-    viewport->beginResourceLoad();
     auto node = iris::ViewerNode::create();
     node->setName("Avatar");
     addNodeToScene(node);
@@ -207,7 +200,6 @@ void SceneEditService::addViewer()
 
 void SceneEditService::addParticleSystem()
 {
-    viewport->beginResourceLoad();
     auto node = iris::ParticleSystemNode::create();
     node->setName("Particle System");
 
@@ -282,7 +274,6 @@ void SceneEditService::addMesh(const QString &path, bool ignore, QVector3D posit
 
     iris::SceneSource *ssource = new iris::SceneSource();
 
-    viewport->beginResourceLoad();
     auto node = iris::MeshNode::loadAsSceneFragment(path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
@@ -333,9 +324,7 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, QVector
     auto reader = new SceneReader;
     reader->setDatabaseHandle(db);
     reader->setBaseDirectory(project->getProjectFolder());
-    viewport->beginResourceLoad();
     iris::SceneNodePtr node = reader->readSceneNode(document);
-    viewport->endResourceLoad();
     delete reader;
 
     // rename animation sources to relative paths
@@ -354,7 +343,6 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, QVector
 void SceneEditService::addAssetParticleSystem(bool ignore, QVector3D position, QString guid,
                                               QString assetName)
 {
-    viewport->beginResourceLoad();
 
     QJsonObject pDefs;
     QVector<Asset*>::const_iterator iterator = AssetManager::getAssets().constBegin();
@@ -406,11 +394,8 @@ void SceneEditService::addNodeToActiveNode(iris::SceneNodePtr sceneNode)
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
 
         if (!meshNode->getMaterial()) {
-            // The engine viewport authors PBR only; legacy keeps its old default.
-            if (EngineHost::viewportBackend() == ViewportBackend::Engine)
-                meshNode->setMaterial(iris::PbrMaterial::create());
-            else
-                meshNode->setMaterial(iris::DefaultMaterial::create());
+            // The engine viewport authors PBR only.
+            meshNode->setMaterial(iris::PbrMaterial::create());
         }
     }
 
@@ -443,14 +428,8 @@ void SceneEditService::addNodeToScene(iris::SceneNodePtr sceneNode, bool ignore)
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
         auto meshNode = sceneNode.staticCast<iris::MeshNode>();
         if (!meshNode->getMaterial()) {
-            if (EngineHost::viewportBackend() == ViewportBackend::Engine) {
-                // The engine viewport authors PBR only.
-                meshNode->setMaterial(iris::PbrMaterial::create());
-            } else {
-                auto mat = iris::CustomMaterial::create();
-                mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-                meshNode->setMaterial(mat);
-            }
+            // The engine viewport authors PBR only.
+            meshNode->setMaterial(iris::PbrMaterial::create());
         }
     }
 
@@ -483,13 +462,11 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     if (!scene()) return iris::SceneNodePtr();
     if (!source || !source->isDuplicable()) return iris::SceneNodePtr();
 
-    viewport->beginResourceLoad();
     auto node = source->duplicate();
     // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
     // refreshes the hierarchy and selects it — the manual addChild+repopulate
     // this slot used to do, minus the missing undo entry.
     undo->push(new AddSceneNodeCommand(source->parent, node));
-    viewport->endResourceLoad();
     return node;
 }
 

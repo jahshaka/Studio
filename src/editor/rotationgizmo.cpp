@@ -11,19 +11,16 @@ For more information see the LICENSE file
 
 #include <QQuaternion>
 #include "rotationgizmo.h"
-#include <QOpenGLFunctions_3_2_Core>
-#include <QOpenGLShaderProgram>
-#include <QOpenGLContext>
 #include <QApplication>
 
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/vertexlayout.h"
+#include "irisgl/src/graphics/vertexbuffer.h"
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/cameranode.h"
-#include "irisgl/src/graphics/graphicshelper.h"
-#include "irisgl/src/graphics/graphicsdevice.h"
-#include "irisgl/src/graphics/shader.h"
 #include "uimanager.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/src/math/mathhelper.h"
@@ -172,14 +169,7 @@ void RotationGizmo::loadAssets()
 	handleMeshes.append(GizmoMeshes::rotationRing(GizmoAxis::Z));
 	screenRingMesh = GizmoMeshes::screenRing();
 
-	// No GL context (engine viewport, tests): the legacy render() path is never used.
-	shader = !QOpenGLContext::currentContext() ? nullptr : iris::GraphicsHelper::loadShader(
-		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
-		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
 
-	lineShader = iris::Shader::load(
-		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo_line.vert"),
-		IrisUtils::getAbsoluteAssetPath("app/shaders/color.frag"));
 
 	// create circle
 	QVector<float> points;
@@ -194,7 +184,7 @@ void RotationGizmo::loadAssets()
 	}
 
 	iris::VertexLayout layout;
-	layout.addAttrib(iris::VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float) * 3);
+	layout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3, sizeof(float) * 3);
 
 	auto vb = iris::VertexBuffer::create(layout);
 	vb->setData((void*)points.constData(), points.size() * sizeof(float));
@@ -316,69 +306,6 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 	}
 
 	return closestHandle;
-}
-
-void RotationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
-{
-	if (!shader) return;
-	device->clear(GL_DEPTH_BUFFER_BIT);
-	shader->bind();
-
-	shader->setUniformValue("u_viewMatrix", viewMatrix);
-	shader->setUniformValue("u_projMatrix", projMatrix);
-	shader->setUniformValue("showHalf", true);
-	device->setBlendState(iris::BlendState::AlphaBlend);
-
-	if (dragging) {
-		for (int i = 0; i < 3; i++) {
-			if (handles[i] == draggedHandle) {
-				//auto transform = this->getTransform();
-				auto transform = Gizmo::getTransform();
-				transform.scale(getGizmoScale() * handles[i]->handleScale);
-				//shader->setUniformValue("color", handles[i]->getHandleColor());
-				shader->setUniformValue("color", QColor(255, 255, 0));
-				shader->setUniformValue("u_worldMatrix", transform);
-				//handles[i]->draw(gl, shader);
-				handleMeshes[i]->draw(device);
-			}
-		}
-	}
-	else
-	{
-		float hitAngle;
-		auto hitHandle = getHitHandle(rayPos, rayDir, hitAngle);
-		for (int i = 0; i < 3; i++) {
-			auto transform = Gizmo::getTransform();
-			transform.scale(getGizmoScale() * handles[i]->handleScale);
-			shader->setUniformValue("u_worldMatrix", transform);
-			//handles[i]->draw(gl, shader);
-
-			if (handles[i] == hitHandle)
-				shader->setUniformValue("color", QColor(255, 255, 0));
-			else
-				shader->setUniformValue("color", handles[i]->getHandleColor());
-			handleMeshes[i]->draw(device);
-		}
-
-		//shader->setUniformValue("showHalf", false);
-		device->setShader(lineShader);
-		device->setShaderUniform("u_viewMatrix", viewMatrix);
-		device->setShaderUniform("u_projMatrix", projMatrix);
-
-		auto transform = Gizmo::getTransform();
-		//transform.scale(getGizmoScale());
-		device->setShaderUniform("u_worldMatrix", transform);
-		device->setShaderUniform("color", QColor(255, 255, 255));
-		device->setShaderUniform("scale", getGizmoScale() * 0.1f);
-		circleMesh->draw(device);
-
-		device->setShaderUniform("color", QColor(40, 40, 40));
-		device->setShaderUniform("scale", getGizmoScale() * 0.085f);
-		circleMesh->draw(device);
-	}
-
-	shader->release();
-	device->setBlendState(iris::BlendState::Opaque);
 }
 
 QMatrix4x4 RotationGizmo::getTransform()

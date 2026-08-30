@@ -41,7 +41,6 @@ protected slots:
 private:
     QStringList vertexShaders;
     QStringList fragmentShaders;
-    iris::ShaderPtr shader;
 
     CheckBoxWidget *allowBuiltinShaders;
 	ComboBoxWidget *vertexShaderCombo;

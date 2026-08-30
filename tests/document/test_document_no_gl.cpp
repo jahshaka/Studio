@@ -25,7 +25,6 @@
 #include "graphics/shadowmap.h"
 #include "graphics/texture2d.h"
 #include "materials/defaultmaterial.h"
-#include "materials/defaultskymaterial.h"
 #include "physics/environment.h"
 #include "physics/physicsproperties.h"
 // The reparent command's cycle guard is header-only document logic (its
@@ -45,16 +44,13 @@ int main(int argc, char **argv)
     auto scene = iris::Scene::create();
     CHECK(!!scene, "iris::Scene constructed without GL");
     CHECK(!!scene->getRootNode(), "scene has a root node");
-    CHECK(!!scene->skyMesh, "sky mesh loaded (CPU-side, buffers not uploaded)");
-    CHECK(!!scene->skyMaterial, "sky material created (shader compiles lazily)");
+    CHECK(scene->skyType == iris::SkyType::SINGLE_COLOR, "sky defaults to single colour (document field)");
 
     // --- LightNode: previously created a ShadowMap -> QOpenGLTexture in its ctor
     auto light = iris::LightNode::create();
     CHECK(!!light, "iris::LightNode constructed without GL");
     CHECK(light->shadowMap != nullptr, "light has a ShadowMap object");
-    CHECK(!!light->shadowMap->shadowTexture, "shadow texture object exists");
-    CHECK(light->shadowMap->shadowTexture->isDeferred(), "shadow texture creation is DEFERRED (no GL yet)");
-    CHECK(light->shadowMap->shadowTexture->getWidth() == 2048, "deferred texture still reports its size");
+    CHECK(light->shadowMap->resolution == 2048, "shadow map settings carry a resolution (document data)");
     scene->getRootNode()->addChild(light);
 
     // --- MeshNode + mesh from a bundled OBJ: previously fine on CPU, buffers upload at draw
@@ -72,13 +68,7 @@ int main(int argc, char **argv)
     QImage img(8, 8, QImage::Format_RGBA8888); img.fill(Qt::red);
     auto tex = iris::Texture2D::create(img);
     CHECK(!!tex, "Texture2D::create(QImage) without GL returns an object");
-    CHECK(tex->isDeferred(), "texture is deferred");
-    CHECK(tex->getWidth() == 8 && tex->getHeight() == 8, "deferred texture reports image size");
-    CHECK(tex->getTextureId() == 0, "getTextureId() is 0 (no GL) instead of crashing");
-    tex->bind();            // must be a harmless no-op
-    tex->bind(3);
-    CHECK(true, "bind() without GL is a no-op");
-    CHECK(!tex->ensureCreated(), "ensureCreated() reports false while no context exists");
+    CHECK(tex->getWidth() == 8 && tex->getHeight() == 8, "texture asset reports image size");
 
     // --- Cubemap: previously returned null with no context (silently dropping the sky)
     auto cube = iris::Texture2D::createCubeMap(":assets/models/sky.obj", ":x", ":x", ":x", ":x", ":x");

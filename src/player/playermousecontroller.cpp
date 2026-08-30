@@ -11,9 +11,7 @@ For more information see the LICENSE file
 
 #include <QQuaternion>
 #include "playermousecontroller.h"
-#include "../editor/animationpath.h"
 #include "../core/keyboardstate.h"
-#include "../widgets/sceneviewwidget.h"
 #include <irisgl/SceneGraph.h>
 #include <irisgl/Physics.h>
 #include <irisgl/Graphics.h>

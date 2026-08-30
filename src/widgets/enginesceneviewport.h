@@ -67,7 +67,7 @@ public:
     void setGizmoScale() override;
     void setGizmoTransformToLocal() override;
     void setGizmoTransformToGlobal() override;
-    Gizmo *activeGizmo() const { return mGizmo; }
+    Gizmo *activeGizmo() const override { return mGizmo; }
 
     void startPlayingScene() override;            // play in place: PlayBack drives the document
     void pausePlayingScene() override;
@@ -94,9 +94,6 @@ public:
     bool isInitialized() override { return view() != nullptr; }
     void cleanup() override;
 
-    void beginResourceLoad() override {}          // the document is GL-free
-    void endResourceLoad() override {}
-    iris::ForwardRendererPtr getRenderer() const override { return iris::ForwardRendererPtr(); }
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
     void syncFrame();

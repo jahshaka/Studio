@@ -24,6 +24,7 @@ class QWidget;
 class MainWindow;
 class Database;
 class EditorData;
+class Gizmo;
 enum WindowSpaces : int;      // mainwindow.h
 enum class SceneMode;         // uimanager.h
 
@@ -78,6 +79,9 @@ public:
     virtual void enterPlayerMode() = 0;
 
     // ---- gizmos ----
+    /// The live gizmo, or null. The camera controllers use it to refuse camera
+    /// drags while a gizmo drag is in progress.
+    virtual Gizmo *activeGizmo() const { return nullptr; }
     virtual void setGizmoLoc() = 0;
     virtual void setGizmoRot() = 0;
     virtual void setGizmoScale() = 0;
@@ -119,15 +123,6 @@ public:
     virtual void end() = 0;
     virtual bool isInitialized() = 0;
     virtual void cleanup() = 0;
-
-    // ---- LEGACY ONLY: retire with SceneViewWidget ----
-    /// The legacy viewport needs its GL context current while Studio loads meshes and
-    /// textures (SceneReader, node creation). The engine viewport needs nothing: the
-    /// document is GL-free. Replaces the 40 makeCurrent()/doneCurrent() calls.
-    virtual void beginResourceLoad() = 0;
-    virtual void endResourceLoad() = 0;
-    /// The IrisGL renderer, or null on the engine viewport. Callers must null-check.
-    virtual iris::ForwardRendererPtr getRenderer() const = 0;
 };
 
 #endif // IEDITORVIEWPORT_H

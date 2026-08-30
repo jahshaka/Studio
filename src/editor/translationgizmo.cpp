@@ -11,19 +11,16 @@ For more information see the LICENSE file
 
 #include <QQuaternion>
 #include "translationgizmo.h"
-#include <QOpenGLFunctions_3_2_Core>
-#include <QOpenGLShaderProgram>
-#include <QOpenGLContext>
 #include <QApplication>
 
+#include "irisgl/src/graphics/mesh.h"
+#include "irisgl/src/graphics/vertexlayout.h"
+#include "irisgl/src/graphics/vertexbuffer.h"
 #include "irisgl/src/math/intersectionhelper.h"
 #include "irisgl/src/math/mathhelper.h"
 #include "irisgl/src/core/irisutils.h"
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/scenegraph/cameranode.h"
-#include "irisgl/src/graphics/graphicsdevice.h"
-#include "irisgl/src/graphics/graphicshelper.h"
-#include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/math/mathhelper.h"
 #include "../uimanager.h"
 #include "../widgets/scenenodepropertieswidget.h"
@@ -191,16 +188,7 @@ void TranslationGizmo::loadAssets()
 
 	centerMesh = GizmoMeshes::centerSphere();
 
-	// No GL context (engine viewport, tests): the legacy render() path is never used.
-	shader = !QOpenGLContext::currentContext() ? nullptr : iris::GraphicsHelper::loadShader(
-		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.vert"),
-		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo.frag"));
-
-	lineShader = iris::Shader::load(
-		IrisUtils::getAbsoluteAssetPath("app/shaders/gizmo_line.vert"),
-		IrisUtils::getAbsoluteAssetPath("app/shaders/color.frag"));
-
-	// create circle
+	// create circle (kept CPU-side; unused by the engine path today)
 	QVector<float> points;
 	for (float i = 0; i < 360; i += 1) {
 		auto x = qCos(qDegreesToRadians(i));
@@ -213,7 +201,7 @@ void TranslationGizmo::loadAssets()
 	}
 
 	iris::VertexLayout layout;
-	layout.addAttrib(iris::VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float) * 3);
+	layout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3, sizeof(float) * 3);
 
 	auto vb = iris::VertexBuffer::create(layout);
 	vb->setData((void*)points.constData(), points.size() * sizeof(float));
@@ -319,74 +307,6 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 	}
 
 	return closestHandle;
-}
-
-void TranslationGizmo::render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix)
-{
-	if (!shader) return;
-	device->clear(GL_DEPTH_BUFFER_BIT);
-
-	shader->bind();
-
-	shader->setUniformValue("u_viewMatrix", viewMatrix);
-	shader->setUniformValue("u_projMatrix", projMatrix);
-	shader->setUniformValue("showHalf", false);
-
-	if (dragging) {
-		for (int i = 0; i < handles.size(); i++) {
-			if (handles[i] == draggedHandle) {
-				auto transform = this->getTransform();
-				//transform.scale(getGizmoScale() * handles[i]->handleRadius);
-				transform.scale(getGizmoScale() * handles[i]->handleScale);
-				shader->setUniformValue("color", QColor(255, 255, 0));
-				shader->setUniformValue("u_worldMatrix", transform);
-
-				handleMeshes[i]->draw(device);
-			}
-		}
-	}
-	else {
-		QVector3D hitPos;
-		auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
-
-		//for (int i = 0; i < 3; i++) {
-			for (int i = 0; i < handles.size(); i++) {
-				auto transform = this->getTransform();
-				//transform.scale(getGizmoScale() * handles[i]->handleRadius);
-				transform.scale(getGizmoScale() * handles[i]->handleScale);
-				//shader->setUniformValue("color", handles[i]->getHandleColor());
-				shader->setUniformValue("u_worldMatrix", transform);
-
-				if (handles[i] == hitHandle)
-					shader->setUniformValue("color", QColor(255, 255, 0));
-				else
-					shader->setUniformValue("color", handles[i]->getHandleColor());
-				handleMeshes[i]->draw(device);
-			}
-		//}
-
-		if (hitHandle && hitHandle->axis == GizmoAxis::Center)
-			shader->setUniformValue("color", QColor(255, 255, 0));
-		else
-			shader->setUniformValue("color", QColor(255, 255, 255));
-		//centerMesh->draw(device);
-
-		device->setShader(lineShader);
-		device->setShaderUniform("u_viewMatrix", viewMatrix);
-		device->setShaderUniform("u_projMatrix", projMatrix);
-
-		auto transform = Gizmo::getTransform();
-		//transform.scale(getGizmoScale());
-		device->setShaderUniform("u_worldMatrix", transform);
-		if (hitHandle && hitHandle->axis == GizmoAxis::Center)
-			shader->setUniformValue("color", QColor(255, 255, 0));
-		else
-			shader->setUniformValue("color", QColor(255, 255, 255));
-		device->setShaderUniform("scale", getGizmoScale() * CENTER_CIRCLE_RADIUS);
-		circleMesh->draw(device);
-	}
-
-	shader->release();
 }
 
 QVector<GizmoDrawItem> TranslationGizmo::drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)

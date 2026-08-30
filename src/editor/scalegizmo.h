@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #define SCALEGIZMO_H
 
 #include "gizmo.h"
-#include "irisgl/src/graphics/graphicshelper.h"
 
 class ScaleHandle : public GizmoHandle
 {
@@ -38,7 +37,6 @@ class ScaleGizmo : public Gizmo
 	iris::MeshPtr centerMesh;
 	QVector<iris::MeshPtr> handleMeshes;
 
-	QOpenGLShaderProgram* shader;
 
 	QVector<ScaleHandle*> handles;
 
@@ -74,7 +72,6 @@ public:
 
 	// hitPos is the hit position of the hit handle
 	ScaleHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos);
-	void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 public:
 	QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) override;
 };

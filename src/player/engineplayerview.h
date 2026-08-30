@@ -11,13 +11,13 @@
 #include <memory>
 #include <QElapsedTimer>
 #include "../widgets/engineviewwidget.h"
-#include "iplayerview.h"
+#include "irisgl/src/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
 class EngineRenderDriver;
 class EnginePlayerScene;
 
-class EnginePlayerView : public EngineViewWidget, public IPlayerView
+class EnginePlayerView : public EngineViewWidget
 {
     Q_OBJECT
 public:
@@ -25,13 +25,13 @@ public:
                      EngineRenderDriver *driver, QWidget *parent = nullptr);
     ~EnginePlayerView() override;
 
-    QWidget *asWidget() override { return this; }
-    void setScene(iris::ScenePtr scene) override;
-    void start() override;
-    void end() override;
-    bool isScenePlaying() override;
-    void playScene() override;
-    void stopScene() override;
+    QWidget *asWidget() { return this; }
+    void setScene(iris::ScenePtr scene);
+    void start();
+    void end();
+    bool isScenePlaying();
+    void playScene();
+    void stopScene();
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }
 

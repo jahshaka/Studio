@@ -61,7 +61,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 	// Per-light shadow colour/transparency have no engine equivalent (Ogre-Next's
 	// PBR pipeline has no per-light shadow tint — and legacy's own PBR shader
 	// ignored the colour too). Hide the controls in engine mode; legacy keeps them.
-	mShadowTintSupported = EngineHost::viewportBackend() != ViewportBackend::Engine;
+	mShadowTintSupported = false;  // engine viewport: HlmsPbs has no shadow tint
 	if (!mShadowTintSupported) {
 		shadowAlpha->hide();
 		shadowColor->hide();
@@ -69,7 +69,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 	// The legacy renderer never shadowed point lights, so the panel hid their
 	// shadow controls. The engine renders point shadows (focused/DPSM maps), so
 	// in engine mode Shadow Type and Size stay available for point lights too.
-	mPointShadowsSupported = EngineHost::viewportBackend() == ViewportBackend::Engine;
+	mPointShadowsSupported = true;
 
     connect(lightColor->getPicker(),SIGNAL(onColorChanged(QColor)),this,SLOT(lightColorChanged(QColor)));
     connect(lightColor->getPicker(),SIGNAL(onSetColor(QColor)),this,SLOT(lightColorChanged(QColor)));

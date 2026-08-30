@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scenenode.h"
 
-#include "sceneviewwidget.h"
 
 #include "uimanager.h"
 

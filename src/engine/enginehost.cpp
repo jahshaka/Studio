@@ -8,13 +8,6 @@
 
 using namespace jahshaka::engine;
 
-#ifndef JAHSHAKA_ENGINE_VIEWPORT_DEFAULT
-#define JAHSHAKA_ENGINE_VIEWPORT_DEFAULT 0
-#endif
-
-ViewportBackend EngineHost::sBackend =
-    JAHSHAKA_ENGINE_VIEWPORT_DEFAULT ? ViewportBackend::Engine : ViewportBackend::Legacy;
-
 EngineHost &EngineHost::instance()
 {
     static EngineHost host;
@@ -24,28 +17,6 @@ EngineHost &EngineHost::instance()
 EngineHost::~EngineHost()
 {
     shutdown();
-}
-
-static bool parseBackend(const QByteArray &value, ViewportBackend &out)
-{
-    const QByteArray v = value.trimmed().toLower();
-    if (v == "engine") { out = ViewportBackend::Engine; return true; }
-    if (v == "legacy") { out = ViewportBackend::Legacy; return true; }
-    return false;
-}
-
-ViewportBackend EngineHost::resolveViewportBackend(int argc, char **argv)
-{
-    ViewportBackend backend = sBackend;   // compile-time default
-    ViewportBackend parsed;
-    if (parseBackend(qgetenv("JAHSHAKA_VIEWPORT"), parsed)) backend = parsed;
-    for (int i = 1; i < argc; ++i) {
-        if (std::strncmp(argv[i], "--viewport=", 11) == 0 && parseBackend(argv[i] + 11, parsed))
-            backend = parsed;
-        else if (std::strcmp(argv[i], "--viewport") == 0 && i + 1 < argc && parseBackend(argv[i + 1], parsed))
-            backend = parsed;
-    }
-    return backend;
 }
 
 EngineConfig EngineHost::resolveConfig()

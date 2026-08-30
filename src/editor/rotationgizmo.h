@@ -15,7 +15,6 @@ For more information see the LICENSE file
 //#include "gizmoinstance.h"
 #include <QQuaternion>
 #include "gizmo.h"
-#include "irisgl/src/graphics/graphicshelper.h"
 #include <QMatrix4x4>
 
 class RotationHandle : public GizmoHandle
@@ -45,8 +44,6 @@ class RotationGizmo : public Gizmo
 	iris::MeshPtr screenRingMesh;   // camera-facing outer ring (visual only)
 	QVector<iris::MeshPtr> handleMeshes;
 
-	QOpenGLShaderProgram* shader;
-	iris::ShaderPtr lineShader;
 
 	RotationHandle* handles[3];
 
@@ -73,7 +70,6 @@ public:
 
 	// hitPos is the hit position of the hit handle
 	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
-	virtual void render(iris::GraphicsDevicePtr device, QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QMatrix4x4& viewMatrix, QMatrix4x4& projMatrix);
 
 	QMatrix4x4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;

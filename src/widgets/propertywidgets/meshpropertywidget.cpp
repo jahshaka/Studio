@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "../filepickerwidget.h"
 #include "../../irisgl/src/scenegraph/meshnode.h"
 #include "../../globals.h"
-#include "../sceneviewwidget.h"
 #include "../comboboxwidget.h"
 
 MeshPropertyWidget::MeshPropertyWidget()

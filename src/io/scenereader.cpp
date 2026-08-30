@@ -30,7 +30,6 @@ For more information see the LICENSE file
 #include "core/database/database.h"
 
 #include "editor/editordata.h"
-#include "materials/jahdefaultmaterial.h"
 
 #include "irisgl/Graphics.h"
 #include "irisgl/Animation.h"
@@ -39,17 +38,12 @@ For more information see the LICENSE file
 #include "irisgl/src/graphics/postprocess.h"
 #include "irisgl/src/graphics/postprocessmanager.h"
 
-#include "../irisgl/src/postprocesses/bloompostprocess.h"
-#include "../irisgl/src/postprocesses/coloroverlaypostprocess.h"
-#include "../irisgl/src/postprocesses/greyscalepostprocess.h"
-#include "../irisgl/src/postprocesses/materialpostprocess.h"
-#include "../irisgl/src/postprocesses/radialblurpostprocess.h"
-#include "../irisgl/src/postprocesses/ssaopostprocess.h"
 #include "../irisgl/src/postprocesses/fxaapostprocess.h"
 
 #include "irisgl/src/physics/physicsproperties.h"
 #include "irisgl/src/physics/physicshelper.h"
 #include "irisgl/src/materials/pbrmaterial.h"
+#include "irisgl/src/materials/custommaterial.h"
 
 #include "materialreader.hpp"
 #include "../core/guidmanager.h"
@@ -257,7 +251,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         default: break;
     }
 
-    scene->switchSkyTexture(scene->skyType);
 
     scene->fogColor = this->readColor(sceneObj["fogColor"].toObject());
     scene->fogStart = sceneObj["fogStart"].toDouble(100);

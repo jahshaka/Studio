@@ -13,7 +13,6 @@ For more information see the LICENSE file
 
 #include "irisgl/src/scenegraph/scene.h"
 #include "irisgl/src/core/irisutils.h"
-#include "irisgl/src/materials/defaultskymaterial.h"
 
 #include "core/project.h"
 #include "core/database/database.h"

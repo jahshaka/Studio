@@ -3,11 +3,10 @@
 #include <QElapsedTimer>
 #include "constants.h"
 #include "uimanager.h"
-#include "widgets/sceneviewwidget.h"
-#include "irisgl/Graphics.h"
+#include "editor/ieditorviewport.h"
+#include "irisgl/src/graphics/viewport.h"
 #include "irisgl/SceneGraph.h"
 #include "irisgl/Physics.h"
-#include "irisgl/Content.h"
 #include "playermousecontroller.h"
 #include "src/core/keyboardstate.h"
 
@@ -18,25 +17,14 @@ PlayBack::PlayBack()
 	this->setRestoreCameraTransform(true);
 }
 
-void PlayBack::init(iris::ForwardRendererPtr renderer)
-{
-	this->renderer = renderer;
-	renderer->setScene(scene);
-
-	animTime = 0;
-}
-
 void PlayBack::init()
 {
-	renderer.reset();
 	animTime = 0;
 }
 
 void PlayBack::setScene(iris::ScenePtr scene)
 {
 	this->scene = scene;
-	if (renderer)
-		renderer->setScene(scene);
 
 	mouseController->setScene(scene);
 	mouseController->setCamera(scene->getCamera());
@@ -93,16 +81,6 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 	}
 
 	camController->postUpdate(dt);
-}
-
-void PlayBack::renderScene(iris::Viewport& viewport, float dt)
-{
-	update(viewport, dt);
-
-	renderer->getGraphicsDevice()->clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
-	                                     QColor::fromRgbF(.1f, .1f, .1f, .4f));
-
-	renderer->renderScene(dt, &viewport);
 }
 
 void PlayBack::saveNodeTransforms()

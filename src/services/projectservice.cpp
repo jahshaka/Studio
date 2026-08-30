@@ -26,7 +26,6 @@ For more information see the LICENSE file
 #include "../widgets/projectmanager.h"
 #include "undoservice.h"
 
-#include "irisgl/src/graphics/forwardrenderer.h"
 
 ProjectService::ProjectService(Database *db,
                                Project *project,
@@ -137,10 +136,9 @@ bool ProjectService::saveProjectBlob()
     if (!scene || project->getProjectGuid().isEmpty()) return false;
 
     SceneWriter writer;
-    auto renderer = viewport ? viewport->getRenderer() : iris::ForwardRendererPtr();
     auto blob = writer.getSceneObject(project->getProjectFolder(),
                                       scene,
-                                      renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
+                                      iris::PostProcessManagerPtr(),
                                       (viewport && viewport->isInitialized()) ? viewport->getEditorData() : nullptr);
 
     bool ok;
@@ -168,10 +166,9 @@ void ProjectService::saveOpenScene()
     if (!viewport->isInitialized()) return;
 
     SceneWriter writer;
-    auto renderer = viewport->getRenderer();
     auto blob = writer.getSceneObject(project->getProjectFolder(),
                                       sceneProvider(),
-                                      renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
+                                      iris::PostProcessManagerPtr(),
                                       viewport->getEditorData());
 
     auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
@@ -189,10 +186,9 @@ void ProjectService::saveOpenScene()
 void ProjectService::saveInitialScene(const QString &projectPath)
 {
     SceneWriter writer;
-    auto renderer = viewport->getRenderer();
     auto sceneObject = writer.getSceneObject(projectPath,
                                              sceneProvider(),
-                                             renderer ? renderer->getPostProcessManager() : iris::PostProcessManagerPtr(),
+                                             iris::PostProcessManagerPtr(),
                                              viewport->isInitialized() ? viewport->getEditorData() : nullptr);
 
     // Headless (scripted project.create): the viewport never initialized — the

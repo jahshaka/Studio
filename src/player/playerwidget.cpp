@@ -16,12 +16,10 @@ For more information see the LICENSE file
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include "playerwidget.h"
-#include "iplayerview.h"
-#include "playerview.h"
-#include "irisgl/IrisGL.h"
+#include "engineplayerview.h"
 
 
-PlayerWidget::PlayerWidget(QWidget* parent, IPlayerView* view) :
+PlayerWidget::PlayerWidget(QWidget* parent, EnginePlayerView* view) :
 	QWidget(parent), playerView(view)
 {
 	createUI();
@@ -89,7 +87,6 @@ void PlayerWidget::createUI()
 	*/
 	playerControls->setLayout(playerControlsLayout);
 
-	if (!playerView) playerView = new PlayerView(this);
 	playerView->asWidget()->setParent(this);
 
 	auto mainLayout = new QVBoxLayout();

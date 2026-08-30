@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QtMath>
 
 #include "irisgl/src/graphics/mesh.h"
-#include "irisgl/src/graphics/graphicsdevice.h"
+#include "irisgl/src/graphics/vertexbuffer.h"
 #include "irisgl/src/graphics/vertexlayout.h"
 
 namespace
@@ -71,13 +71,13 @@ struct Builder
         auto mesh = iris::Mesh::create();
 
         iris::VertexLayout posLayout;
-        posLayout.addAttrib(iris::VertexAttribUsage::Position, GL_FLOAT, 3, sizeof(float) * 3);
+        posLayout.addAttrib(iris::VertexAttribUsage::Position, iris::AttribTypeFloat, 3, sizeof(float) * 3);
         auto pb = iris::VertexBuffer::create(posLayout);
         pb->setData((void *)pos.constData(), pos.size() * sizeof(float));
         mesh->addVertexBuffer(pb);
 
         iris::VertexLayout nrmLayout;
-        nrmLayout.addAttrib(iris::VertexAttribUsage::Normal, GL_FLOAT, 3, sizeof(float) * 3);
+        nrmLayout.addAttrib(iris::VertexAttribUsage::Normal, iris::AttribTypeFloat, 3, sizeof(float) * 3);
         auto nb = iris::VertexBuffer::create(nrmLayout);
         nb->setData((void *)nrm.constData(), nrm.size() * sizeof(float));
         mesh->addVertexBuffer(nb);

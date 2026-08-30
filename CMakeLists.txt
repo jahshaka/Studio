@@ -53,11 +53,9 @@ set(SRCS
     src/core/nodekeyframeanimation.cpp 
     src/core/project.cpp 
     src/core/settingsmanager.cpp 
-    src/core/surfaceview.cpp 
     src/editor/editorcameracontroller.cpp 
     src/dialogs/infodialog.cpp 
     src/globals.cpp 
-    src/widgets/sceneviewwidget.cpp 
     src/widgets/engineviewwidget.cpp
     src/engine/scenemirror.cpp
     src/widgets/enginesceneviewport.cpp
@@ -133,9 +131,7 @@ set(SRCS
     src/widgets/propertywidgets/meshpropertywidget.cpp
     src/widgets/propertywidgets/shaderpropertywidget.cpp 
     src/widgets/propertywidget.cpp 
-    src/widgets/propertywidgets/postprocesspropertywidget.cpp 
     src/widgets/propertywidgets/scenepropertywidget.cpp
-    src/widgets/postprocesseswidget.cpp 
     src/dialogs/newprojectdialog.cpp 
     src/widgets/assetwidget.cpp 
     src/io/assetmanager.cpp 
@@ -161,21 +157,15 @@ set(SRCS
     src/dialogs/renameprojectdialog.cpp 
     src/editor/thumbnailgenerator.cpp 
     src/editor/enginethumbnailrenderer.cpp 
-    src/widgets/mainwindowviewport.cpp 
-    src/editor/viewercontroller.cpp 
     src/dialogs/donatedialog.cpp
     src/widgets/assetview.cpp
     src/widgets/assetview.cpp
-    src/widgets/assetviewer.cpp
     src/widgets/engineassetscene.cpp
     src/widgets/engineassetviewer.cpp
     src/widgets/enginematerialpreviewscene.cpp
     src/widgets/enginematerialpreview.cpp
     src/widgets/assetviewgrid.cpp
     src/widgets/assetgriditem.cpp
-    src/editor/outlinerenderer.cpp
-    src/editor/viewermaterial.cpp
-    src/editor/animationpath.cpp
     src/constants.cpp
     src/misc/updatechecker.cpp
     src/dialogs/softwareupdatedialog.cpp
@@ -193,7 +183,6 @@ set(SRCS
     src/subclass/switch.cpp
     # player
     src/player/playerwidget.cpp
-    src/player/playerview.cpp
     src/player/engineplayerscene.cpp
     src/player/engineplayerview.cpp
     src/player/playermousecontroller.cpp
@@ -226,13 +215,12 @@ set(HEADERS
     src/core/nodekeyframeanimation.h 
     src/core/project.h 
     src/core/settingsmanager.h 
-    src/core/surfaceview.h 
     src/editor/editorcameracontroller.h 
     src/globals.h 
-    src/widgets/sceneviewwidget.h 
     src/widgets/engineviewwidget.h
     src/engine/scenemirror.h
     src/widgets/enginesceneviewport.h
+    src/editor/headlesseditorviewport.h
     src/editor/ieditorviewport.h
     src/editor/scenepicker.h
     src/editor/gizmooverlay.h
@@ -299,7 +287,6 @@ set(HEADERS
     src/editor/translationgizmo.h 
     src/editor/rotationgizmo.h 
     src/editor/scalegizmo.h 
-    src/editor/gizmoinstance.h 
     src/core/keyboardstate.h 
     src/editor/editordata.h 
     src/widgets/propertywidgets/emitterpropertywidget.h 
@@ -317,8 +304,6 @@ set(HEADERS
     src/widgets/propertywidgets/shaderpropertywidget.h 
     src/widgets/propertywidget.h 
     src/widgets/basewidget.h 
-    src/widgets/propertywidgets/postprocesspropertywidget.h 
-    src/widgets/postprocesseswidget.h 
     src/dialogs/newprojectdialog.h 
     src/widgets/assetwidget.h 
     src/io/assetmanager.h 
@@ -346,12 +331,10 @@ set(HEADERS
     src/widgets/itemgridwidget.hpp 
     src/dialogs/renameprojectdialog.h 
     src/editor/thumbnailgenerator.h 
-    src/widgets/mainwindowviewport.h 
-    src/editor/viewercontroller.h 
     src/dialogs/donatedialog.h
     src/widgets/assetview.h
-    src/widgets/assetviewer.h
     src/widgets/iassetviewer.h
+    src/widgets/headlessassetviewer.h
     src/widgets/engineassetscene.h
     src/widgets/engineassetviewer.h
     src/widgets/enginematerialpreviewscene.h
@@ -359,13 +342,8 @@ set(HEADERS
     src/widgets/assetviewgrid.h
     src/widgets/assetgriditem.h
     src/breakpad/breakpad.h
-    src/materials/jahdefaultmaterial.h
-    src/editor/outlinerenderer.h 
-    src/editor/viewermaterial.h
-    src/editor/animationpath.h
     src/misc/updatechecker.h
     src/dialogs/softwareupdatedialog.h
-    src/editor/animationpath.h
     src/core/assethelper.h
     src/core/subscriber.h
     src/core/scenenodehelper.h
@@ -381,8 +359,6 @@ set(HEADERS
     # player
     src/subclass/switch.h
     src/player/playerwidget.h
-    src/player/playerview.h
-    src/player/iplayerview.h
     src/player/engineplayerscene.h
     src/player/engineplayerview.h
     src/player/sceneplayer.h
@@ -415,7 +391,6 @@ set(WIDGETS
     src/widgets/texturepickerwidget.ui 
     src/widgets/filepickerwidget.ui 
     src/widgets/propertywidget.ui 
-    src/widgets/postprocesseswidget.ui 
     src/dialogs/newprojectdialog.ui 
     src/widgets/assetwidget.ui 
     src/widgets/assetpickerwidget.ui 

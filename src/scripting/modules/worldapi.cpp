@@ -251,8 +251,6 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         return fail(QStringLiteral("world.sky: unknown type '%1' (color, gradient, realistic, equirectangular, cubemap)").arg(type));
     }
 
-    scene->switchSkyTexture(scene->skyType);
-    scene->queueSkyCapture();
     return true;
 }
 

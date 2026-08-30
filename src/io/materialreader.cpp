@@ -23,6 +23,7 @@ For more information see the LICENSE file
 
 // iris includes
 #include "irisgl/src/materials/custommaterial.h"
+#include "irisgl/src/core/irisutils.h"
 //#include "irisgl/src/core/property.h"
 #include "shadergraph/core/materialhelper.h"
 

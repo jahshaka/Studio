@@ -25,11 +25,12 @@ For more information see the LICENSE file
 
 #include "core/database/database.h"
 #include "core/settingsmanager.h"
-#include "widgets/sceneviewwidget.h"
 
 #include "constants.h"
 #include "globals.h"
 #include "uimanager.h"
+#include "editor/ieditorviewport.h"
+#include "mainwindow.h"
 #include "../../misc/stylesheet.h"
 
 WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* settings) :

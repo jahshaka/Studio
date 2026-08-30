@@ -30,7 +30,6 @@ For more information see the LICENSE file
 #include <QThread>
 #include <QTreeWidgetItem>
 #include <QStyledItemDelegate>
-#include <QOpenGLContext>
 #include <QOffscreenSurface>
 
 #include "irisgl/src/assimp/include/assimp/Importer.hpp"
@@ -74,7 +73,6 @@ ProjectManager::ProjectManager(Database *handle, QWidget *parent) : QWidget(pare
 		progressDialog->setRange(0, 100);
 		progressDialog->setLabelText(tr("Caching assets..."));
 
-        mainWindow->makeLoadingGLContextCurrent();
 		// Meshes
 		// Note - this would be the perfect place to attach materials as well but we can't access the opengl context
 		for (const auto &item : futureWatcher->result()) {
@@ -826,7 +824,6 @@ void ProjectManager::loadProjectAssetsSync()
 	// QtConcurrent map, the modal progress dialog and the fileToOpen signal.
 	AssetManager::clearAssetList();
 
-	mainWindow->makeLoadingGLContextCurrent();
 
 	// Meshes
 	for (const auto &asset : db->fetchFilteredAssets(Globals::project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {

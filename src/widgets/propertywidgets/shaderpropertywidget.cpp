@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include "irisgl/src/graphics/shader.h"
 #include "irisgl/src/scenegraph/meshnode.h"
 
 #include "constants.h"
@@ -23,7 +22,6 @@ For more information see the LICENSE file
 
 #include "../checkboxwidget.h"
 #include "../comboboxwidget.h"
-#include "../sceneviewwidget.h"
 #include "core/database/database.h"
 #include "io/assetmanager.h"
 
@@ -33,7 +31,6 @@ ShaderPropertyWidget::ShaderPropertyWidget()
 	vertexShaderCombo   = addComboBox("Vertex Shader");
 	fragmentShaderCombo = addComboBox("Fragment Shader");
 
-	shader = iris::ShaderPtr();
 
     QDirIterator it(":/assets/shaders", QDirIterator::Subdirectories);
     while (it.hasNext()) builtinShaders.append(it.next());

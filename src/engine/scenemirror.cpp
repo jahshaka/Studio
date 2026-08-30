@@ -18,7 +18,7 @@
 #include "graphics/mesh.h"
 #include "graphics/skeleton.h"
 #include "graphics/vertexlayout.h"
-#include "graphics/graphicsdevice.h"   // VertexBuffer / IndexBuffer (CPU copies)
+#include "graphics/vertexbuffer.h"     // VertexBuffer / IndexBuffer (CPU copies)
 #include "graphics/material.h"
 #include "materials/pbrmaterial.h"
 #include "materials/defaultmaterial.h"

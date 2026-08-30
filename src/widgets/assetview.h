@@ -36,7 +36,6 @@ class ProgressDialog;
 #include <QScrollArea>
 #include <qdebug.h>
 #include <QLabel>
-#include <QOpenGLWidget>
 #include <QButtonGroup>
 #include <QStackedLayout>
 
@@ -128,7 +127,6 @@ private:
 	QSplitter *_splitter;
 	QWidget *_filterBar;
 	QWidget *_navPane;
-	QOpenGLWidget *_assetPreview;
 	QWidget *_previewPane;
 	QWidget *_viewPane;
 	QWidget *_metadataPane;

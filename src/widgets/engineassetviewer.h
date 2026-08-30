@@ -34,8 +34,6 @@ public:
     QWidget *asWidget() override { return this; }
     void setDatabase(Database *db) override { mDb = db; }
     iris::SceneSource *sceneSource() override { return mSource; }
-    void beginLoad() override {}
-    void endLoad() override {}
     void clearScene() override;
     void changeBackdrop(unsigned int id) override;
     iris::SceneNodePtr cachedAsset(const QString &guid) override { return mCachedAssets.value(guid); }

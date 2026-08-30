@@ -25,7 +25,7 @@
 #include "graphics/mesh.h"
 #include "graphics/skeleton.h"
 #include "graphics/vertexlayout.h"
-#include "graphics/graphicsdevice.h"
+#include "graphics/vertexbuffer.h"
 #include "animation/animation.h"
 #include "animation/skeletalanimation.h"
 #include "materials/defaultmaterial.h"
@@ -62,7 +62,7 @@ static iris::MeshPtr buildArmMesh()
     auto mesh = iris::Mesh::create();
     auto addBuf = [&mesh](iris::VertexAttribUsage usage, const float *data, int floats, int comps) {
         iris::VertexLayout layout;
-        layout.addAttrib(usage, GL_FLOAT, comps, comps * int(sizeof(float)));
+        layout.addAttrib(usage, iris::AttribTypeFloat, comps, comps * int(sizeof(float)));
         auto vb = iris::VertexBuffer::create(layout);
         vb->setData(const_cast<float *>(data), unsigned(floats * sizeof(float)));
         mesh->addVertexBuffer(vb);

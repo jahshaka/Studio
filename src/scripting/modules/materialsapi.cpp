@@ -56,7 +56,7 @@ QVector<MaterialPreset> loadPresets()
     QVector<MaterialPreset> presets;
     const QDir dir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
     MaterialPresetReader reader;
-    const bool pbrOnly = EngineHost::viewportBackend() == ViewportBackend::Engine;
+    const bool pbrOnly = true;   // engine viewport is the only renderer
     for (const auto &file : dir.entryInfoList(QStringList(), QDir::Files)) {
         auto preset = reader.readMaterialPreset(file.absoluteFilePath());
         if (pbrOnly && preset.type.compare("PBR", Qt::CaseInsensitive) != 0) continue;
