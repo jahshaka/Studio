@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QFileDialog>
 #include <QKeySequenceEdit>
 #include <QListView>
+#include <QSpinBox>
 #include <QLabel>
 #include <QScrollArea>
 #include <QStandardPaths>
@@ -54,6 +55,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 
 
 	viewport = new QPushButton("Viewport");
+	desktopBtn = new QPushButton("Desktop");
 	editor = new QPushButton("Editor");
 	content = new QPushButton("Content");
 	mining = new QPushButton("Mining");
@@ -63,6 +65,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	database = new QPushButton("Database");
 
 	viewport->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
+	desktopBtn->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	editor->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	content->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
 	mining->setStyleSheet(StyleSheet::QPushButtonGroupedBig());
@@ -73,6 +76,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 
 	auto buttonGroup = new QButtonGroup;
 	buttonGroup->addButton(viewport);
+	buttonGroup->addButton(desktopBtn);
 	buttonGroup->addButton(editor);
 	buttonGroup->addButton(content);
 	buttonGroup->addButton(mining);
@@ -84,6 +88,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	for (auto btn : buttonGroup->buttons()) btn->setCheckable(true);
 
 	viewportWidget	= new QWidget;
+	desktopWidget	= new QWidget;
 	editorWidget 	= new QWidget;
 	contentWidget	= new QWidget;
 	miningWidget	= new QWidget;
@@ -108,6 +113,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 
 	auto buttonLayout = new QVBoxLayout;
 	buttonLayout->addWidget(viewport);
+	buttonLayout->addWidget(desktopBtn);
 	buttonLayout->addWidget(editor);
 	buttonLayout->addWidget(content);
 	//buttonLayout->addWidget(mining);
@@ -129,6 +135,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	stack->addWidget(aboutWidget);
 	stack->addWidget(shortcutsWidget);
 	stack->addWidget(databaseWidget);
+	stack->addWidget(desktopWidget);    // appended: existing indexes 0-7 are wired below
 
 	configureViewport();
 	configureEditor();
@@ -136,6 +143,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	configureAbout();
 	configureShortcuts();
 	configureDatabaseWidget();
+	configureDesktop();
 
 	connect(viewport, &QPushButton::clicked, [=]() { stack->setCurrentIndex(0); });
 	connect(editor, &QPushButton::clicked, [=]() { stack->setCurrentIndex(1); });
@@ -145,6 +153,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	connect(about, &QPushButton::clicked, [=]() { stack->setCurrentIndex(5); });
 	connect(shortcuts, &QPushButton::clicked, [=]() { stack->setCurrentIndex(6); });
 	connect(database, &QPushButton::clicked, [=]() { stack->setCurrentIndex(7); });
+	connect(desktopBtn, &QPushButton::clicked, [=]() { stack->setCurrentIndex(8); });
 
 
  //   connect(ui->browseProject,  SIGNAL(pressed()),              SLOT(changeDefaultDirectory()));
@@ -358,6 +367,39 @@ void WorldSettingsWidget::configureViewport()
 	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
 	connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(enableAutoSave(bool)));
 
+}
+
+void WorldSettingsWidget::configureDesktop()
+{
+	// Desktop section (DESKTOP_SLIDER_SPEC.md): how many filmstrip rows the
+	// Sliders view mode stacks. Per user (jahsettings.ini), not per desktop;
+	// applied the next time a sliders desktop lays out (populate/mode switch).
+	auto layout = new QGridLayout;
+	desktopWidget->setLayout(layout);
+
+	auto sliderRowsLabel = new QLabel("Slider Rows :");
+	setSizePolicyForWidgets(sliderRowsLabel);
+
+	auto spinbox = new QSpinBox;
+	spinbox->setRange(2, 10);
+	spinbox->setToolTip("Number of filmstrip rows in the desktop's Sliders view mode (2-10)");
+
+	StyleSheet::setStyle({ sliderRowsLabel, spinbox });
+
+	layout->addWidget(sliderRowsLabel, 0, 0);
+	layout->addWidget(spinbox, 0, 2);
+
+	layout->setColumnStretch(1, 50);
+	layout->setRowStretch(layout->rowCount() + 1, 100);
+
+	spinbox->setValue(qBound(2, settings->getValue("slider_rows", 6).toInt(), 10));
+
+	connect(spinbox, SIGNAL(valueChanged(int)), this, SLOT(sliderRowsChanged(int)));
+}
+
+void WorldSettingsWidget::sliderRowsChanged(int rows)
+{
+	settings->setValue("slider_rows", rows);
 }
 
 void WorldSettingsWidget::configureEditor()
