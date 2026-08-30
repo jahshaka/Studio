@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include "../editor/ieditorviewport.h"
 #include "../io/scenereader.h"
 #include "../io/scenewriter.h"
-#include "../widgets/projectmanager.h"
+#include "ui/pages/projectmanager.h"
 #include "undoservice.h"
 
 

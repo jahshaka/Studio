@@ -18,7 +18,7 @@
 class QDoubleSpinBox;
 
 #if(EFFECT_BUILD_AS_LIB)
-#include "../../widgets/colorpickerwidget.h"
+#include "ui/controls/colorpickerwidget.h"
 #endif
 
 class SurfaceMasterNode : public NodeModel

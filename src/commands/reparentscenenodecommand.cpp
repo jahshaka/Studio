@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "reparentscenenodecommand.h"
 #include "../uimanager.h"
 #include "../mainwindow.h"
-#include "../widgets/scenehierarchywidget.h"
+#include "ui/panels/scenehierarchywidget.h"
 
 ReparentSceneNodeCommand::ReparentSceneNodeCommand(iris::SceneNodePtr sceneNode,
                                                    iris::SceneNodePtr newParent)

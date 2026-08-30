@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "core/project.h"
 #include "core/texturemanager.h"
 #include "propertywidgets/texturepropertywidget.h"
-#include "widgets/assetview.h"
+#include "ui/pages/assetview.h"
 #include "misc/stylesheet.h"
 
 #include <QMainWindow>

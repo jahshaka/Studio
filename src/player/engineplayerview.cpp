@@ -8,7 +8,7 @@
 #include "engineplayerscene.h"
 #include "playback.h"
 #include "playermousecontroller.h"
-#include "../widgets/enginerenderdriver.h"
+#include "viewport/enginerenderdriver.h"
 #include "../engine/enginehost.h"
 #include "../editor/ieditorviewport.h"
 #include "../uimanager.h"

@@ -46,8 +46,8 @@ For more information see the LICENSE file
 #include "core/thumbnailmanager.h"
 #include "dialogs/ogrepreviewdialog.h"
 #include "engine/enginehost.h"
-#include "widgets/enginerenderdriver.h"
-#include "widgets/enginematerialpreview.h"
+#include "viewport/enginerenderdriver.h"
+#include "bridge/enginematerialpreview.h"
 #include "dialogs/donatedialog.h"
 #include "dialogs/custompopup.h"
 #include "core/assethelper.h"
@@ -83,11 +83,10 @@ For more information see the LICENSE file
 #include "core/nodekeyframe.h"
 #include "globals.h"
 
-#include "widgets/animationwidget.h"
+#include "ui/panels/timeline/animationwidget.h"
 
-#include "widgets/layertreewidget.h"
 #include "core/project.h"
-#include "widgets/accordianbladewidget.h"
+#include "ui/controls/accordionbladewidget.h"
 
 #include "editor/editorcameracontroller.h"
 #include "core/settingsmanager.h"
@@ -100,7 +99,7 @@ For more information see the LICENSE file
 
 #include "core/materialpreset.h"
 
-#include "widgets/projectmanager.h"
+#include "ui/pages/projectmanager.h"
 
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
@@ -113,21 +112,21 @@ For more information see the LICENSE file
 #include "commands/addscenenodecommand.h"
 #include "commands/deletescenenodecommand.h"
 
-#include "widgets/screenshotwidget.h"
+#include "ui/dialogs/screenshotwidget.h"
 #include "editor/editordata.h"
-#include "widgets/assetwidget.h"
+#include "ui/panels/assetwidget.h"
 
 #include "../src/dialogs/newprojectdialog.h"
 
-#include "../src/widgets/scenehierarchywidget.h"
-#include "../src/widgets/scenenodepropertieswidget.h"
+#include "ui/panels/scenehierarchywidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
 
-#include "../src/widgets/skypresets.h"
+#include "ui/panels/presets/skypresets.h"
 
-#include "widgets/assetmodelpanel.h"
-#include "widgets/assetmaterialpanel.h"
+#include "ui/panels/presets/assetmodelpanel.h"
+#include "ui/panels/presets/assetmaterialpanel.h"
 
-#include "../src/widgets/assetview.h"
+#include "ui/pages/assetview.h"
 #include "dialogs/toast.h"
 
 #include "zip.h"

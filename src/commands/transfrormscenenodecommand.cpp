@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/core/math/mathhelper.h"
 #include "../uimanager.h"
-#include "../widgets/scenenodepropertieswidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
 
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform)
 {

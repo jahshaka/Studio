@@ -1,6 +1,6 @@
 #include "ogrepreviewdialog.h"
-#include "../widgets/engineviewwidget.h"
-#include "../widgets/enginerenderdriver.h"
+#include "viewport/engineviewwidget.h"
+#include "viewport/enginerenderdriver.h"
 #include "../engine/enginehost.h"
 
 #include <QVBoxLayout>

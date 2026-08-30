@@ -1,0 +1,41 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#ifndef MESHPROPERTYWIDGET_H
+#define MESHPROPERTYWIDGET_H
+
+#include <QWidget>
+#include <QSharedPointer>
+
+#include "irisgl/irisglfwd.h"
+#include "ui/controls/accordionbladewidget.h"
+
+class MeshPropertyWidget : public AccordianBladeWidget
+{
+    Q_OBJECT
+
+public:
+    MeshPropertyWidget();
+    ~MeshPropertyWidget();
+
+    void setSceneNode(iris::SceneNodePtr sceneNode);
+
+protected slots:
+    void onMeshPathChanged(const QString&);
+	void onCullModeChanged(const QString&);
+
+private:
+    QSharedPointer<iris::MeshNode> meshNode;
+    FilePickerWidget* meshPicker;
+	ComboBoxWidget* faceCullMode;
+};
+
+#endif // MESHPROPERTYWIDGET_H

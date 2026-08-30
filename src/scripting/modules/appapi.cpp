@@ -13,7 +13,7 @@ For more information see the LICENSE file
 
 #include "../../mainwindow.h"
 #include "../../uimanager.h"
-#include "../../widgets/projectmanager.h"
+#include "ui/pages/projectmanager.h"
 
 QVector<VerbInfo> AppApi::verbs() const
 {

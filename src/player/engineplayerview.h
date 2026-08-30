@@ -10,7 +10,7 @@
 // only while the page is shown (View::setEnabled). Never includes Ogre or GL.
 #include <memory>
 #include <QElapsedTimer>
-#include "../widgets/engineviewwidget.h"
+#include "viewport/engineviewwidget.h"
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 

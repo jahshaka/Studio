@@ -20,7 +20,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "jahshaka/engine/Engine.h"
-#include "widgets/engineassetscene.h"
+#include "bridge/engineassetscene.h"
 #include "editor/previewframing.h"
 
 using namespace jahshaka::engine;

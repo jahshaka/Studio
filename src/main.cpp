@@ -42,7 +42,7 @@ For more information see the LICENSE file
 #include "misc/upgrader.h"
 #include "dialogs/softwareupdatedialog.h"
 #include "helpers/tooltip.h"
-#include "widgets/versionsplashscreen.h"
+#include "app/versionsplashscreen.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible

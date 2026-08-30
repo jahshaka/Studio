@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #include "../uimanager.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "../mainwindow.h"
-#include "../widgets/scenehierarchywidget.h"
+#include "ui/panels/scenehierarchywidget.h"
 
 
 AddSceneNodeCommand::AddSceneNodeCommand(iris::SceneNodePtr parentNode, iris::SceneNodePtr sceneNode)

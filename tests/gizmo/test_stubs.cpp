@@ -4,7 +4,7 @@
 #include "irisgl/irisglfwd.h"
 #include "uimanager.h"
 #include "commands/transfrormscenenodecommand.h"
-#include "widgets/scenenodepropertieswidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
 
 SceneNodePropertiesWidget *UiManager::propertyWidget = nullptr;
 void UiManager::pushUndoStack(QUndoCommand *cmd) { delete cmd; }

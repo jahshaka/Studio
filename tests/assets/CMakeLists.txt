@@ -5,7 +5,7 @@
 # (relative to the executable) resolves.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_engine_asset_viewer test_engine_asset_viewer.cpp
-    ${CMAKE_SOURCE_DIR}/src/widgets/engineassetscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/engineassetscene.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/scenemirror.cpp)
 set_target_properties(test_engine_asset_viewer PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

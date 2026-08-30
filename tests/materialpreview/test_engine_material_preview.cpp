@@ -17,7 +17,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "jahshaka/engine/Engine.h"
-#include "widgets/enginematerialpreviewscene.h"
+#include "bridge/enginematerialpreviewscene.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;

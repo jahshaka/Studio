@@ -18,8 +18,8 @@ add_executable(test_pbr_evaluator
     ${CMAKE_SOURCE_DIR}/src/shadergraph/nodes/pbrmasternode.cpp
     ${CMAKE_SOURCE_DIR}/src/shadergraph/nodes/test.cpp
     ${CMAKE_SOURCE_DIR}/src/misc/stylesheet.cpp
-    ${CMAKE_SOURCE_DIR}/src/widgets/colorpickerwidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/widgets/colorview.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
 set_target_properties(test_pbr_evaluator PROPERTIES
     CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

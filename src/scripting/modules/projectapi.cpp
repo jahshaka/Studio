@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "../../services/projectservice.h"
 #include "../../services/services.h"
 #include "../../uimanager.h"
-#include "../../widgets/projectmanager.h"
+#include "ui/pages/projectmanager.h"
 
 QVector<VerbInfo> ProjectApi::verbs() const
 {

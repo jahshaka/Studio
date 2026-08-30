@@ -25,7 +25,7 @@ For more information see the LICENSE file
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/core/math/mathhelper.h"
 #include "uimanager.h"
-#include "../widgets/scenenodepropertieswidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
 #include "gizmomeshes.h"
 
 #define DEFAULT_SNAP_LENGTH 10

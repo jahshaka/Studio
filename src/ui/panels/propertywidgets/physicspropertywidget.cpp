@@ -1,0 +1,220 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#include "ui/panels/propertywidgets/physicspropertywidget.h"
+#include "editor/ieditorviewport.h"
+
+#include <QStandardItemModel>
+
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/physics/environment.h"
+#include "globals.h"
+#include "ui/controls/checkboxwidget.h"
+#include "ui/controls/hfloatsliderwidget.h"
+#include "ui/controls/comboboxwidget.h"
+
+#include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
+#include "BulletCollision/CollisionShapes/btConvexHullShape.h"
+#include "BulletCollision/CollisionShapes/btShapeHull.h"
+#include "irisgl/document/physics/physicshelper.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+
+using namespace iris;
+
+PhysicsPropertyWidget::PhysicsPropertyWidget()
+{
+    physicsTypes.insert(static_cast<int>(PhysicsType::None), "None");
+    physicsTypes.insert(static_cast<int>(PhysicsType::Static), "Static (Inanimate)");
+    physicsTypes.insert(static_cast<int>(PhysicsType::RigidBody), "Rigid Body (Dynamic)");
+    //physicsTypes.insert(static_cast<int>(PhysicsType::SoftBody), "Soft Body");
+
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::None), "None");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Compound), "Compound");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Plane), "Plane");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Sphere), "Sphere");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::Cube), "Cube");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::ConvexHull), "Convex Hull (Recommended)");
+    physicsShapes.insert(static_cast<int>(PhysicsCollisionShape::TriangleMesh), "Triangle Mesh");
+
+    physicsTypeSelector = this->addComboBox("Physics Type");
+    QMap<int, QString>::const_iterator ptIter;
+    for (ptIter = physicsTypes.constBegin(); ptIter != physicsTypes.constEnd(); ++ptIter) {
+        physicsTypeSelector->addItem(ptIter.value(), ptIter.key());
+    }
+
+    physicsShapeSelector = this->addComboBox("Collision Shape");
+    QMap<int, QString>::const_iterator psIter;
+    for (psIter = physicsShapes.constBegin(); psIter != physicsShapes.constEnd(); ++psIter) {
+        physicsShapeSelector->addItem(psIter.value(), psIter.key());
+    }
+
+    isVisible = this->addCheckBox("Visible", true);
+    massValue = this->addFloatValueSlider("Object Mass", 0.f, 100.f, 1.f);
+    frictionValue = this->addFloatValueSlider("Object Friction", 0.f, 1.f, .5f);
+    marginValue = this->addFloatValueSlider("Collision Margin", .01f, 1.f, .1f);
+    bouncinessValue = this->addFloatValueSlider("Bounciness", 0.f, 1.f, .1f);
+
+    connect(isVisible, &CheckBoxWidget::valueChanged, this, &PhysicsPropertyWidget::onVisibilityChanged);
+    connect(massValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMassChanged);
+    connect(marginValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onMarginChanged);
+    connect(frictionValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onFrictionChanged);
+    connect(bouncinessValue, &HFloatSliderWidget::valueChanged, this, &PhysicsPropertyWidget::onBouncinessChanged);
+    connect(physicsShapeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
+        this, &PhysicsPropertyWidget::onPhysicsShapeChanged);
+    connect(physicsTypeSelector, static_cast<void (ComboBoxWidget::*)(int)>(&ComboBoxWidget::currentIndexChanged),
+        this, &PhysicsPropertyWidget::onPhysicsTypeChanged);
+}
+
+PhysicsPropertyWidget::~PhysicsPropertyWidget()
+{
+
+}
+
+void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
+{
+    if (!!sceneNode) {
+        this->sceneNode = sceneNode;
+
+        auto disabledItems = QVector<int>();
+        QStandardItemModel *model = qobject_cast<QStandardItemModel*>(physicsShapeSelector->getWidget()->model());
+
+        if (sceneNode->getSceneNodeType() == iris::SceneNodeType::Empty) {
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::Cube));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::Sphere));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::Plane));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::ConvexHull));
+            disabledItems.append(static_cast<int>(PhysicsCollisionShape::TriangleMesh));
+		}
+
+        for (int index = 0; index < physicsShapeSelector->getWidget()->count(); ++index) {
+            model->item(index)->setEnabled(!disabledItems.contains(index));
+        }
+
+        isVisible->setValue(sceneNode->physicsProperty.isVisible);
+        massValue->setValue(sceneNode->physicsProperty.objectMass);
+		frictionValue->setValue(sceneNode->physicsProperty.objectFriction);
+        marginValue->setValue(sceneNode->physicsProperty.objectCollisionMargin);
+        bouncinessValue->setValue(sceneNode->physicsProperty.objectRestitution);
+        
+        physicsShapeSelector->setCurrentText(physicsShapes.value(static_cast<int>(sceneNode->physicsProperty.shape)));
+        physicsTypeSelector->setCurrentText(physicsTypes.value(static_cast<int>(sceneNode->physicsProperty.type)));
+
+    } else {
+        this->sceneNode.clear();
+    }
+}
+
+void PhysicsPropertyWidget::setSceneView(IEditorViewport *sceneView)
+{
+    this->sceneView = sceneView;
+}
+
+void PhysicsPropertyWidget::onPhysicsShapeChanged(int index)
+{
+    currentBody = sceneView->getScene()->getPhysicsEnvironment()->hashBodies.value(sceneNode->getGUID());
+
+    int shape = physicsShapeSelector->getItemData(index).toInt();
+
+    iris::PhysicsProperty physicsProperties;
+    physicsProperties.isStatic = (massValue->getValue() == 0) ? true : false;
+    physicsProperties.objectCollisionMargin = marginValue->getValue();
+    physicsProperties.objectMass = massValue->getValue();
+    physicsProperties.objectFriction = frictionValue->getValue();
+    physicsProperties.objectRestitution = bouncinessValue->getValue();
+    physicsProperties.shape = static_cast<iris::PhysicsCollisionShape>(shape);
+
+    this->sceneNode->physicsProperty.shape = static_cast<iris::PhysicsCollisionShape>(shape);
+
+    // Can I change shape of a rigid body after it created in Bullet3D?
+    // https://gamedev.stackexchange.com/a/11956/16598
+    //if (currentBody) {
+    //    currentBody->setMotionState(motionState);
+    //    currentBody->setMassProps(mass, inertia);
+    //    shape->calculateLocalInertia(mass, inertia);
+    //    currentBody->setCollisionShape(shape);
+    //    currentBody->setRestitution(bounciness);
+    //    currentBody->setCenterOfMassTransform(transform);
+    //    currentBody->updateInertiaTensor();
+    //}
+
+    this->sceneNode->isPhysicsBody = true;
+}
+
+void PhysicsPropertyWidget::onPhysicsTypeChanged(int index)
+{
+    int type = physicsTypeSelector->getItemData(index).toInt();
+
+    float mass = 0.0;
+
+    iris::PhysicsProperty physicsProperties;
+
+    if (type == static_cast<int>(iris::PhysicsType::None)) {
+        this->sceneNode->isPhysicsBody = false;
+        this->sceneNode->physicsProperty.type = PhysicsType::None;
+        return;
+    }
+
+    if (type == static_cast<int>(iris::PhysicsType::Static)) {
+        mass = .0f;
+        massValue->setValue(mass);
+        physicsProperties.objectMass = massValue->getValue();
+        this->sceneNode->physicsProperty.type = PhysicsType::Static;
+    }
+
+    if (type == static_cast<int>(iris::PhysicsType::RigidBody)) {
+        mass = massValue->getValue();
+        massValue->setValue(mass);
+        physicsProperties.objectMass = mass;
+        this->sceneNode->physicsProperty.type = PhysicsType::RigidBody;
+    }
+
+    physicsProperties.isStatic = (massValue->getValue() == 0) ? true : false;
+    physicsProperties.objectCollisionMargin = marginValue->getValue();
+    physicsProperties.objectRestitution = bouncinessValue->getValue();
+    physicsProperties.type = static_cast<iris::PhysicsType>(type);
+
+    this->sceneNode->isPhysicsBody = true;
+
+    this->sceneNode->physicsProperty = physicsProperties;
+
+    //btRigidBody *body = iris::PhysicsHelper::createPhysicsBody(sceneNode, physicsProperties);
+    //if (!body) {
+    //    qWarning("Failed to create a rigid body from object");
+    //    return;
+    //};
+
+}
+
+void PhysicsPropertyWidget::onVisibilityChanged(bool value)
+{
+    if (sceneNode) isVisible->setValue(sceneNode->physicsProperty.isVisible = value);
+}
+
+void PhysicsPropertyWidget::onMassChanged(float value)
+{
+    if (sceneNode) massValue->setValue(sceneNode->physicsProperty.objectMass = value);
+}
+
+void PhysicsPropertyWidget::onMarginChanged(float value)
+{
+    if (sceneNode) marginValue->setValue(sceneNode->physicsProperty.objectCollisionMargin = value);
+}
+
+void PhysicsPropertyWidget::onFrictionChanged(float value)
+{
+	if (sceneNode) frictionValue->setValue(sceneNode->physicsProperty.objectFriction = value);
+}
+
+void PhysicsPropertyWidget::onBouncinessChanged(float value)
+{
+    if (sceneNode) bouncinessValue->setValue(sceneNode->physicsProperty.objectRestitution = value);
+}

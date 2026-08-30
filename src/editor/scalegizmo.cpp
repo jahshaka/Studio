@@ -23,8 +23,8 @@ For more information see the LICENSE file
 #include "gizmomeshes.h"
 #include "../commands/transfrormscenenodecommand.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "../widgets/scenenodepropertieswidget.h"
-#include "../widgets/propertywidgets/transformpropertywidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
+#include "ui/panels/propertywidgets/transformpropertywidget.h"
 
 #define DEFAULT_SNAP_LENGTH (1.0f)
 #define CENTER_CIRCLE_RADIUS (0.015f)

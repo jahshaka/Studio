@@ -99,7 +99,7 @@ class AssetModelPanel;
 class AssetMaterialPanel;
 
 
-#include "widgets/scenenodepropertieswidget.h"
+#include "ui/panels/scenenodepropertieswidget.h"
 
 
 enum class SceneNodeType;
