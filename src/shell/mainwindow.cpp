@@ -155,6 +155,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
+#include "ui/style/stylesheet.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -618,10 +619,10 @@ WindowSpaces MainWindow::getWindowSpace()
 
 void MainWindow::deselectViewports()
 {
-	editor_menu->setStyleSheet("color: #444; border-color: #111");
+	editor_menu->setStyleSheet(StyleSheet::TopMenuDisabled());
 	editor_menu->setDisabled(true);
 	editor_menu->setCursor(Qt::ArrowCursor);
-	player_menu->setStyleSheet("color: #444; border-color: #111");
+	player_menu->setStyleSheet(StyleSheet::TopMenuDisabled());
 	player_menu->setDisabled(true);
 	player_menu->setCursor(Qt::ArrowCursor);
 }
@@ -745,9 +746,9 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
 void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 {
-	const QString disabledMenu = "color: #444; border-color: #111";
-	const QString selectedMenu = "border-color: #3498db";
-	const QString unselectedMenu = "border-color: #111";
+	const QString disabledMenu = StyleSheet::TopMenuDisabled();
+	const QString selectedMenu = StyleSheet::TopMenuSelected();
+	const QString unselectedMenu = StyleSheet::TopMenuUnselected();
 
 	if (activeSpace == WindowSpaces::EDITOR)
 		toolBar->setVisible(true);
@@ -1484,14 +1485,7 @@ void MainWindow::setupDockWidgets()
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
 
-	viewPort->setStyleSheet(
-		"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
-		"QMenu::item{padding: 2px 5px 2px 20px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
-	//	"QMenu::indicator{ width : 13; height : 10; border-radius: 3px; background: rgba(53,53,53,.9);}"
-		//"QMenu::indicator:checked{background: rgba(40,128, 185,.9);}"
-	);
+	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
 
 void MainWindow::setupViewPort()
@@ -1541,8 +1535,7 @@ void MainWindow::setupViewPort()
 #else
     header_image_path = IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.svg");
 #endif
-    QString style("image: url(%1);");
-    jlogo->setStyleSheet(style.arg(header_image_path));
+    jlogo->setStyleSheet(StyleSheet::MainWindowHeaderLogo(header_image_path));
 
 	help = new QPushButton;
 	help->setObjectName("helpButton");
@@ -1552,15 +1545,7 @@ void MainWindow::setupViewPort()
 	help->setFont(fontIcons->font(28));
 	help->setCursor(Qt::PointingHandCursor);
 
-	help->setStyleSheet(
-		"#helpButton { qproperty-icon: url(\"\");"
-		"qproperty-iconSize: 48px 48px;"
-		"background: transparent;"
-		"color: rgba(255,255,255,.9);"
-		"background-repeat: no-repeat; }"
-		"#helpButton::hover {color: rgba(255, 255, 255, 1); }"
-		
-	);
+	help->setStyleSheet(StyleSheet::HelpButton());
 
     connect(help, &QPushButton::pressed, []() {
         QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn"));
@@ -1575,14 +1560,7 @@ void MainWindow::setupViewPort()
 	prefs->setFont(fontIcons->font(28));
 	prefs->setCursor(Qt::PointingHandCursor);
 
-	prefs->setStyleSheet(
-		"#prefsButton { qproperty-icon: url(\"\");"
-		"qproperty-iconSize: 48px 48px;"
-		"background: transparent;"
-		"color: rgba(255,255,255,.9);"
-		"background-repeat: no-repeat; }"
-		"#prefsButton::hover { color: rgba(255, 255, 255, 1); }"
-	);
+	prefs->setStyleSheet(StyleSheet::PrefsButton());
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
 
@@ -1624,7 +1602,7 @@ void MainWindow::setupViewPort()
     auto screenShotBtn = new QPushButton;
     screenShotBtn->setToolTip("Take a screenshot of the scene");
     screenShotBtn->setToolTipDuration(-1);
-    screenShotBtn->setStyleSheet("background: transparent");
+    screenShotBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
     screenShotBtn->setIcon(QIcon(":/icons/icons8-camera-48.png"));
 	screenShotBtn->setIconSize(QSize(16,17));
 
@@ -1633,10 +1611,7 @@ void MainWindow::setupViewPort()
         "padding: 0 8px 0 0; margin: 0"
     );
     wireFramesMenu = new QMenu;
-	wireFramesMenu->setStyleSheet("QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
-		"QMenu::item{padding: 2px 5px 2px 20px;	}"
-		"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
-		"QMenu::item:selected{	background: rgba(40,128, 185,.9);}");
+	wireFramesMenu->setStyleSheet(StyleSheet::QMenuFlat());
 
     wireCheckAction = new QAction(QIcon(), "Light Bounds");
     wireCheckAction->setCheckable(true);
@@ -1696,13 +1671,13 @@ void MainWindow::setupViewPort()
     auto controlBarLayout = new QHBoxLayout;
     playSceneBtn = new QPushButton(fontIcons->icon(fa::play), "Play scene");
     playSceneBtn->setToolTip("Play all animations in the scene");
-    playSceneBtn->setStyleSheet("background: transparent");
+    playSceneBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
     options.insert("color", QColor(52, 152, 219));
     options.insert("color-active", QColor(52, 152, 219));
 	playSimBtn = new QPushButton(fontIcons->icon(fa::play, options), "Simulate physics");
 	playSimBtn->setToolTip("Simulate physics only");
-	playSimBtn->setStyleSheet("background: transparent");
+	playSimBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
 	cameraView = new QPushButton;
 	cameraView->setStyleSheet("QPushButton{background:rgba(0,0,0,0);}");	
@@ -1719,7 +1694,7 @@ void MainWindow::setupViewPort()
 #endif // QT_DEBUG
 
     controlBar->setLayout(controlBarLayout);
-    controlBar->setStyleSheet("#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }");
+    controlBar->setStyleSheet(StyleSheet::ControlBar());
 
     playerControls = new QWidget;
     playerControls->setStyleSheet("background: #1A1A1A");
@@ -1730,7 +1705,7 @@ void MainWindow::setupViewPort()
     restartBtn->setCursor(Qt::PointingHandCursor);
     restartBtn->setToolTip("Restart playback");
     restartBtn->setToolTipDuration(-1);
-    restartBtn->setStyleSheet("background: transparent");
+    restartBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
     restartBtn->setIcon(QIcon(":/icons/rotate-to-right.svg"));
     restartBtn->setIconSize(QSize(16, 16));
 
@@ -1738,7 +1713,7 @@ void MainWindow::setupViewPort()
     playBtn->setCursor(Qt::PointingHandCursor);
     playBtn->setToolTip("Play the scene");
     playBtn->setToolTipDuration(-1);
-    playBtn->setStyleSheet("background: transparent");
+    playBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
     playBtn->setIcon(QIcon(":/icons/g_play.svg"));
     playBtn->setIconSize(QSize(24, 24));
 
@@ -1746,7 +1721,7 @@ void MainWindow::setupViewPort()
     stopBtn->setCursor(Qt::PointingHandCursor);
     stopBtn->setToolTip("Stop playback");
     stopBtn->setToolTipDuration(-1);
-    stopBtn->setStyleSheet("background: transparent");
+    stopBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
     stopBtn->setIcon(QIcon(":/icons/g_stop.svg"));
     stopBtn->setIconSize(QSize(16, 16));
 
@@ -2183,13 +2158,7 @@ void MainWindow::toggleDockWidgets()
 	QDialog *d = new QDialog(this);
 	d->setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::Popup);
 
-	d->setStyleSheet(
-		"QDialog { border: 1px solid black; background: #1E1E1E; }"
-		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
-		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
-		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
-		
-	);
+	d->setStyleSheet(StyleSheet::DockToggleDialog());
 
 	QVBoxLayout *dl = new QVBoxLayout;
 	dl->setContentsMargins(20, 10, 20, 16);

@@ -208,6 +208,487 @@ const QString StyleSheet::QMenu()
 	);
 }
 
+/* -------------------------------------------------------------------------
+   Blocks centralized from the widgets that used to carry them inline.
+   The CSS text is byte-identical to what those call sites passed before.
+   ------------------------------------------------------------------------- */
+
+const QString StyleSheet::QMenuDark()
+{
+	return QString(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
+}
+
+const QString StyleSheet::QMenuDarkGrid()
+{
+	return QString(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
+		"QMenu::item:disabled { color: #555; }"
+	);
+}
+
+const QString StyleSheet::QMenuDarkPadded()
+{
+	return QString(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 8px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
+		"QMenu::item : disabled { color: #555; }"
+	);
+}
+
+const QString StyleSheet::QMenuFlat()
+{
+	return QString(
+			"QMenu{	background: rgba(26,26,26,.9); color: rgba(250,250, 250,.9);}"
+			"QMenu::item{padding: 2px 5px 2px 20px;	}"
+			"QMenu::item:hover{	background: rgba(40,128, 185,.9);}"
+			"QMenu::item:selected{	background: rgba(40,128, 185,.9);}"
+		//	"QMenu::indicator{ width : 13; height : 10; border-radius: 3px; background: rgba(53,53,53,.9);}"
+			//"QMenu::indicator:checked{background: rgba(40,128, 185,.9);}"
+	);
+}
+
+const QString StyleSheet::AssetWidgetFilterPane()
+{
+	return QString(
+		"#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
+		"QLabel { font-size: 12px; margin-right: 8px; }"
+		"QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
+		"QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 24px; min-width: 64px; border: 1px solid #111;}"
+		"QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
+		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+		"QComboBox QAbstractItemView::item { min-height: 28px; selection-background-color: #404040; color: #cecece; }"
+		"QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
+		"QComboBox QAbstractItemView::item:selected { background: #404040; }"
+	);
+}
+
+const QString StyleSheet::AssetWidgetPanel()
+{
+	return QString(
+		"QWidget#headerTEMP { background: #1A1A1A;}"
+		"QWidget#Switcher { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
+		"QWidget#Switcher QPushButton { background-color: #333; padding: 4px 16px; }"
+		"QWidget#DirControl { background: #1A1A1A; }"
+		"QWidget#Switcher QPushButton:checked { background: #2980b9; }"
+		"QWidget#BreadCrumb { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
+		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
+		"									border-right: 1px solid black; color: #999; }"
+		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
+		"QWidget#FilterWidget QPushButton:checked { color: white; background: #2980b9; }"
+		"QWidget#assetTree { background: #202020; border: 0; }"
+		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
+		"QSplitter::handle { width: 1px; background: #151515; }"
+		"QLineEdit { border: 0; background: #292929; color: #EEE; padding: 4px 8px; selection-background-color: #404040; color: #EEE; }"
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
+		"QWidget#assetView { alternate-background-color: #222; selection-background-color: transparent; }"
+		"QListView::item:selected { background-color: #303030; }"
+		"QListView::item:hover { background-color: #292929; }"
+		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
+		"QTreeWidget::branch { background-color: #202020; }"
+		"QTreeWidget::branch:hover { background-color: #303030; }"
+		"QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
+		"QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
+		"QTreeWidget::branch:selected { background-color: #404040; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040;"
+		"								background: #404040; outline: none; padding: 5px 0; }"
+		/* Important, this is set for when the widget loses focus to fill the left gap */
+		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
+		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
+		"QTreeWidget::item { padding: 5px 0; }"
+		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
+		"QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
+		"QPushButton:hover{ background-color: #555; }"
+		"QPushButton:pressed{ background-color: #444; }"
+		"QPushButton:disabled{ color: #444; }"
+	);
+}
+
+const QString StyleSheet::AssetWidgetTagDialog()
+{
+	return QString(
+		"* { color: #EEE; }"
+		"QDialog { background: #202020; padding: 4px; }"
+		"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
+		"QPushButton:hover { background: #555; color: #EEE; }"
+		"QPushButton:pressed { background: #333; color: #EEE; }"
+		"QListWidget { show-decoration-selected: 1; background: #202020; border: 0; outline: 0 }"
+		"QListWidget::item:selected { background-color: #191919; }"
+		"QListWidget::item:selected:active { background-color: #191919; }"
+		"QListWidget::item { padding: 5px 0; }"
+		"QListWidget::item:hover { background: #303030; }"
+		"QListWidget::item:disabled { background: #202020; color: #888; }"
+		"QListWidget::item:disabled:hover { background: #202020; color: #888; }"
+		"QListWidget::item:hover:!active { background: #202020; color: #888; }"
+		"QListWidget { spacing: 0 5px; }"
+		"QListWidget::indicator { width: 18px; height: 18px; }"
+		"QListWidget::indicator::unchecked { image: url(:/icons/check-unchecked.png); }"
+		"QListWidget::indicator::checked { image: url(:/icons/check-checked.png); }"
+		"QListWidget::indicator::disabled { image: url(:/icons/check-disabled.png); }"
+	);
+}
+
+const QString StyleSheet::AssetViewCollectionDialog()
+{
+	return QString(
+		"QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
+		                        "QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
+		                        "QPushButton:hover { background: #51a1d6; }"
+		                        "QDialog { background: #1a1a1a; }"
+	);
+}
+
+const QString StyleSheet::AssetViewSearchField()
+{
+	return QString(
+		"border: 1px solid #1E1E1E; border-radius: 1px; "
+		"font-size: 12px; background: #3B3B3B; padding: 6px 4px;"
+	);
+}
+
+const QString StyleSheet::AssetViewFilterPane()
+{
+	return QString(
+		"#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
+		"QLabel { font-size: 12px; margin-right: 8px; }"
+		"QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
+		"QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 30px; min-width: 72px; border: 1px solid #111;}"
+		"QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
+		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+		"QComboBox QAbstractItemView::item { min-height: 24px; selection-background-color: #404040; color: #cecece; }"
+		"QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
+		"QComboBox QAbstractItemView::item:selected { background: #404040; }"
+	);
+}
+
+const QString StyleSheet::AssetViewImportButtons()
+{
+	return QString(
+		"QPushButton { background: #111; border: 1px solid black; border-radius: 1px; padding: 8px 12px; }"
+	);
+}
+
+const QString StyleSheet::AssetViewAddToProjectButton()
+{
+	return QString(
+		"QPushButton { background: #3498db; }"
+		"QPushButton:hover { background-color: #4aa3de; }"
+		"QPushButton:pressed { background-color: #1f80c1; }"
+		"QPushButton:disabled { color: #656565; background-color: #3e3e3e; }"
+	);
+}
+
+const QString StyleSheet::AssetViewDeleteButton()
+{
+	return QString(
+		"QPushButton { background: #E74C3C } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }"
+	);
+}
+
+const QString StyleSheet::AssetViewChangeCollectionLink()
+{
+	return QString(
+		"font-size: 8px; color: green; padding: 0; background: transparent; border: 0"
+	);
+}
+
+const QString StyleSheet::AssetViewMetadataHeader()
+{
+	return QString(
+		"border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A"
+	);
+}
+
+const QString StyleSheet::AssetViewPanel()
+{
+	return QString(
+		"*							{ color: #EEE; }"
+		"QPushButton				{ background: #404040; border-radius: 2px; padding: 8px 12px; }"
+		"QSplitter					{ background: #2E2E2E; } QSplitter:handle { background: black; }"
+		"#localAssetsButton			{ text-align: left; padding: 12px; }"
+		"#onlineAssetsButton		{ text-align: left; padding: 12px; }"
+		"QPushButton[accessibleName=\"assetsButton\"]:disabled { color: #444; }"
+		"#assetDropPad				{}"
+		"#assetDropPadLabel			{ border: 4px dashed #111; border-radius: 4px; "
+		"							  padding: 48px 36px; margin: 0; }"
+		"#assetDropPad, #MetadataPane QPushButton	{ padding: 8px 12px; }"
+		"QLineEdit					{ border: 1px solid #1E1E1E; border-radius: 2px; background: #3B3B3B; }"
+		"#assetDropPad QLabel		{}"
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; alternate-background-color: #252525;"
+		"                         selection-background-color: #404040; color: #EEE; background: #202020;"
+		"                         paint-alternating-row-colors-for-empty-area: 1; outline: none; }"
+		//"QTreeWidget::branch { background-color: #202020; }"
+		"QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
+		"QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
+		"QTreeWidget::branch:hover { background-color: #303030; }"
+		"QTreeWidget::branch:selected { background-color: #404040; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040;"
+		"							  background: #404040; outline: none; padding: 5px 0; }"
+		/* Important, this is set for when the widget loses focus to fill the left gap */
+		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
+		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
+		"QTreeWidget::item { padding: 5px 0; }"
+		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
+		"QComboBox { background: #1A1A1A; border : 0; }"
+	);
+}
+
+const QString StyleSheet::AssetViewRenameDialog()
+{
+	return QString(
+		"QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
+				"QComboBox { background: #4D4D4D; color: #BBB; padding: 6px; border: 0; }"
+				"QComboBox::drop-down { border : 0; }"
+				"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
+				"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
+				"QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
+				"QPushButton:hover { background: #555; }"
+				"QDialog { background: #1A1A1A; }"
+	);
+}
+
+const QString StyleSheet::SceneHierarchyTree()
+{
+	return QString(
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; paint-alternating-row-colors-for-empty-area: 1; }"
+		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
+		//"QTreeWidget::branch { background-color: #202020; }"
+		"QTreeWidget::branch:hover { background-color: #303030; }"
+		"QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
+		"QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
+		"QTreeWidget::branch:selected { background-color: #404040; }"
+		"QTreeWidget::item:selected { selection-background-color: #404040; background: #404040; outline: none; padding: 5px 0; }"
+		"QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #222; }"
+		/* Important, this is set for when the widget loses focus to fill the left gap */
+		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
+		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
+		"QTreeWidget::item { padding: 5px 0; }"
+		"QTreeWidget QLineEdit { background-color: #404040; selection-background-color: #777; border: 0; }"
+		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
+	);
+}
+
+const QString StyleSheet::ColorViewPanel()
+{
+	return QString(
+		"background: rgba(25,25,25,1);;"
+	);
+}
+
+const QString StyleSheet::ColorViewInputCircle()
+{
+	return QString(
+		"QWidget{background: rgba(20,20,20,1);}"
+	);
+}
+
+const QString StyleSheet::ValueSliderGradient()
+{
+	return QString(
+		              QString(
+		"QSlider::groove:horizontal {background: qlineargradient(x1: 1, y1: 0, x2: 0, y2: 0,stop: 0 white, stop: 1 black); border-radius: 1px; border: 1px solid rgba(0,0,0,1); }"
+		" QSlider::handle:horizontal {height: 3px; width:14px; margin: -2px 0px; background: rgba(50,148,213,1); }"
+		" QSlider::add-page:horizontal, QSlider::sub-page:horizontal {background: rgba(0,0,0,0); border-radius: 1px;}"
+
+		)
+	);
+}
+
+const QString StyleSheet::TopMenuDisabled()
+{
+	return QString(
+		"color: #444; border-color: #111"
+	);
+}
+
+const QString StyleSheet::BackgroundTransparent()
+{
+	return QString(
+		"background: transparent"
+	);
+}
+
+const QString StyleSheet::HelpButton()
+{
+	return QString(
+		"#helpButton { qproperty-icon: url(\"\");"
+		"qproperty-iconSize: 48px 48px;"
+		"background: transparent;"
+		"color: rgba(255,255,255,.9);"
+		"background-repeat: no-repeat; }"
+		"#helpButton::hover {color: rgba(255, 255, 255, 1); }"
+	);
+}
+
+const QString StyleSheet::PrefsButton()
+{
+	return QString(
+		"#prefsButton { qproperty-icon: url(\"\");"
+		"qproperty-iconSize: 48px 48px;"
+		"background: transparent;"
+		"color: rgba(255,255,255,.9);"
+		"background-repeat: no-repeat; }"
+		"#prefsButton::hover { color: rgba(255, 255, 255, 1); }"
+	);
+}
+
+const QString StyleSheet::ControlBar()
+{
+	return QString(
+		"#controlBar {  background: #1E1E1E; border-bottom: 1px solid black; }"
+	);
+}
+
+const QString StyleSheet::DockToggleDialog()
+{
+	return QString(
+		"QDialog { border: 1px solid black; background: #1E1E1E; }"
+		"QPushButton { padding: 8px 24px; border-radius: 1px; }"
+		"QPushButton[accessibleName=\"toggleAbles\"]:checked { background: #1E1E1E; }"
+		"QPushButton[accessibleName=\"toggleAbles\"] { background: #3E3E3E; }"
+	);
+}
+
+const QString StyleSheet::ItemGridTileButton()
+{
+	return QString(
+		"QPushButton { background: transparent; font-weight: bold; color: white }"
+		                              "QToolTip { padding: 2px; }"
+	);
+}
+
+const QString StyleSheet::ItemGridTileControls()
+{
+	return QString(
+		"#fresh { background: rgba(32, 32, 32, 190); border-radius: 4px; }"
+		                            "QLabel { font-weight: bold; font-size: 12px }"
+	);
+}
+
+const QString StyleSheet::ItemGridTileCaptionActive()
+{
+	return QString(
+		"color: white"
+	);
+}
+
+const QString StyleSheet::ItemGridTileCaptionIdle()
+{
+	return QString(
+		"color: rgba(255, 255, 255, 50%)"
+	);
+}
+
+const QString StyleSheet::ProjectManagerCanvas()
+{
+	return QString(
+		"border: none;"
+		"background-image: url(:/images/empty_canvas.png);"
+		"background-attachment: fixed;"
+		"background-position: center;"
+		"background-origin: content;"
+		"background-repeat: no-repeat;"
+	);
+}
+
+const QString StyleSheet::ProjectManagerSampleList()
+{
+	return QString(
+		"#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none; color: #EEE; } " \
+		                              "QListWidgetItem { padding: 12px; } "\
+		                              "QListView::item:selected { "\
+		                              "    border: 1px solid #3498db; "\
+		                               " background: #3498db; "\
+		                               "  color: #CECECE; "\
+		                              "} "\
+		                              "*, QLabel { color: white; } "\
+		                              "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }"
+	);
+}
+
+const QString StyleSheet::ProjectManagerInstructions()
+{
+	return QString(
+		"#instructions { border: none; background: #1e1e1e; color: white; " \
+		                                "padding: 10px; font-size: 12px }"
+	);
+}
+
+const QString StyleSheet::QLineEditDisabled()
+{
+	return QString(
+		"background: #303030; color: #888;"
+	);
+}
+
+const QString StyleSheet::QMenuDarkDesktop()
+{
+	return QString(
+		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
+		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 10px; margin: 0; }"
+		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
+		"QMenu::item:disabled { color: #555; }"
+	);
+}
+
+const QString StyleSheet::TopMenuSelected()
+{
+	return QString(
+		"border-color: #3498db"
+	);
+}
+
+const QString StyleSheet::TopMenuUnselected()
+{
+	return QString(
+		"border-color: #111"
+	);
+}
+
+const QString StyleSheet::MainWindowHeaderLogo(const QString &imagePath)
+{
+	return QString("image: url(%1);").arg(imagePath);
+}
+
+const QString StyleSheet::AssetGridItemLabel(const QString &borderColor)
+{
+	return QString("color: #ddd; font-size: 12px; background: #1e1e1e;")
+		+ "border-left: 3px solid " + borderColor
+		+ "; border-bottom: 3px solid " + borderColor
+		+ "; border-right: 3px solid " + borderColor;
+}
+
+const QString StyleSheet::AssetGridItemThumbnail(const QString &borderColor)
+{
+	return QString("border-left: 3px solid ") + borderColor
+		+ "; border-top: 3px solid " + borderColor
+		+ "; border-right: 3px solid " + borderColor;
+}
+
+const QString StyleSheet::ItemGridTileBorder(int width)
+{
+	return QString("border: ") + QString::number(width) + "px solid rgba(0, 0, 0, 10%)";
+}
+
+const QString StyleSheet::ItemGridTileBorderHighlight(int width)
+{
+	return QString("border: ") + QString::number(width) + "px dashed #3498db";
+}
+
+const QString StyleSheet::ItemGridTileLabel(int fontSize)
+{
+	return QString("color: #ddd; font-size: ") + QString::number(fontSize) + "px;";
+}
+
 void StyleSheet::setStyle(QWidget *widget)
 {
 	auto name = widget->metaObject()->className();

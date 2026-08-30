@@ -35,6 +35,75 @@ public:
 	static const QString QSplitter();
 	static const QString QAbstractScrollArea();
 	static const QString QMenu();
+
+	/* Blocks centralized out of the widgets that used to carry them inline.
+	   Each returns exactly the CSS its former call sites passed. */
+
+	// context menus. QMenuDark and QMenuDarkGrid differ ONLY in the disabled-item
+	// selector: "QMenu::item : disabled" (inert, descendant form) vs
+	// "QMenu::item:disabled". Kept apart so neither call site changes appearance.
+	static const QString QMenuDark();
+	static const QString QMenuDarkGrid();
+	static const QString QMenuDarkPadded();
+	static const QString QMenuDarkDesktop();
+	static const QString QMenuFlat();
+
+	// asset widget (dock)
+	static const QString AssetWidgetFilterPane();
+	static const QString AssetWidgetPanel();
+	static const QString AssetWidgetTagDialog();
+
+	// asset view (page)
+	static const QString AssetViewCollectionDialog();
+	static const QString AssetViewSearchField();
+	static const QString AssetViewFilterPane();
+	static const QString AssetViewImportButtons();
+	static const QString AssetViewAddToProjectButton();
+	static const QString AssetViewDeleteButton();
+	static const QString AssetViewChangeCollectionLink();
+	static const QString AssetViewMetadataHeader();
+	static const QString AssetViewPanel();
+	static const QString AssetViewRenameDialog();
+
+	// scene hierarchy
+	static const QString SceneHierarchyTree();
+
+	// colour picker
+	static const QString ColorViewPanel();
+	static const QString ColorViewInputCircle();
+	static const QString ValueSliderGradient();
+
+	// main window
+	static const QString TopMenuDisabled();
+	static const QString TopMenuSelected();
+	static const QString TopMenuUnselected();
+	static const QString BackgroundTransparent();
+	static const QString HelpButton();
+	static const QString PrefsButton();
+	static const QString ControlBar();
+	static const QString DockToggleDialog();
+	static const QString MainWindowHeaderLogo(const QString &imagePath);
+
+	// project tiles
+	static const QString ItemGridTileButton();
+	static const QString ItemGridTileControls();
+	static const QString ItemGridTileCaptionActive();
+	static const QString ItemGridTileCaptionIdle();
+	static const QString ItemGridTileBorder(int width);
+	static const QString ItemGridTileBorderHighlight(int width);
+	static const QString ItemGridTileLabel(int fontSize);
+
+	// asset grid tile
+	static const QString AssetGridItemLabel(const QString &borderColor);
+	static const QString AssetGridItemThumbnail(const QString &borderColor);
+
+	// project manager
+	static const QString ProjectManagerCanvas();
+	static const QString ProjectManagerSampleList();
+	static const QString ProjectManagerInstructions();
+
+	static const QString QLineEditDisabled();
+
 	static void setStyle(QWidget *);
 	static void setStyle(QObject *);
 	static void setStyle(QList<QWidget *>);

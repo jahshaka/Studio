@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include <qdialog.h>
 #include <qcombobox.h>
 #include <QBrush>
+#include "ui/style/stylesheet.h"
 
 SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     QWidget(parent),
@@ -87,23 +88,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Normal);
     disabledIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/lock-filled.png"), QIcon::Selected);
 
-    ui->sceneTree->setStyleSheet(
-		"QTreeView, QTreeWidget { show-decoration-selected: 1; paint-alternating-row-colors-for-empty-area: 1; }"
-		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
-		//"QTreeWidget::branch { background-color: #202020; }"
-		"QTreeWidget::branch:hover { background-color: #303030; }"
-        "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
-        "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
-		"QTreeWidget::branch:selected { background-color: #404040; }"
-		"QTreeWidget::item:selected { selection-background-color: #404040; background: #404040; outline: none; padding: 5px 0; }"
-        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; outline: none; selection-background-color: #404040; color: #EEE; background: #202020; alternate-background-color: #222; }"
-		/* Important, this is set for when the widget loses focus to fill the left gap */
-		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
-		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
-		"QTreeWidget::item { padding: 5px 0; }"
-        "QTreeWidget QLineEdit { background-color: #404040; selection-background-color: #777; border: 0; }"
-		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
-	);
+    ui->sceneTree->setStyleSheet(StyleSheet::SceneHierarchyTree());
 }
 
 void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -118,12 +103,7 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     mainWindow = mainWin;
 
     QMenu* addMenu = new QMenu();
-	addMenu->setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item : disabled { color: #555; }"
-	);
+	addMenu->setStyleSheet(StyleSheet::QMenuDark());
 
 	// Primitives
     auto primtiveMenu = addMenu->addMenu("Primitive");
@@ -295,12 +275,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	selectedNode = node;
 
     QMenu menu;
-	menu.setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; }"
-		"QMenu::item : disabled { color: #555; }"
-	);
+	menu.setStyleSheet(StyleSheet::QMenuDarkPadded());
 
     QAction* action;
 

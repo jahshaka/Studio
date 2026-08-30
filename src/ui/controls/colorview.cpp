@@ -182,7 +182,7 @@ void ColorView::configureView()
     display = new ColorDisplay;
     circle = new ColorCircle();
     inputCircle = new InputCircle(circle);
-    inputCircle->setStyleSheet("QWidget{background: rgba(20,20,20,1);}");
+    inputCircle->setStyleSheet(StyleSheet::ColorViewInputCircle());
     inputCircle->move(inputCircle->offset,inputCircle->offset);
     display->initialColor = this->initialColor;
 
@@ -242,9 +242,7 @@ void ColorView::configureView()
 }
 
 void ColorView::configureStylesheet() {
-    setStyleSheet(
-            "background: rgba(25,25,25,1);;"
-            );
+    setStyleSheet(StyleSheet::ColorViewPanel());
 }
 
 void ColorView::configureConnections()
@@ -921,13 +919,7 @@ void Overlay::paintEvent(QPaintEvent *e) {
 
 ValueSlider::ValueSlider(QWidget *parent) : QSlider(parent) {
     setOrientation(Qt::Horizontal);
-    setStyleSheet(
-                  QString(
-    "QSlider::groove:horizontal {background: qlineargradient(x1: 1, y1: 0, x2: 0, y2: 0,stop: 0 white, stop: 1 black); border-radius: 1px; border: 1px solid rgba(0,0,0,1); }"
-    " QSlider::handle:horizontal {height: 3px; width:14px; margin: -2px 0px; background: rgba(50,148,213,1); }"
-    " QSlider::add-page:horizontal, QSlider::sub-page:horizontal {background: rgba(0,0,0,0); border-radius: 1px;}"
-
-    ));
+    setStyleSheet(StyleSheet::ValueSliderGradient());
     
 }
 

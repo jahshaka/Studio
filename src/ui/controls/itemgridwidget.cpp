@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QApplication>
 
 #include "ui/dialogs/renameprojectdialog.h"
+#include "ui/style/stylesheet.h"
 
 ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
                                QSize size,
@@ -51,16 +52,16 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 
     if (highlight) {
         if (devicePixelRatio() > 1) {
-            gridImageLabel->setStyleSheet("border: 3px dashed #3498db");
+            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorderHighlight(3));
         } else {
-            gridImageLabel->setStyleSheet("border: 5px dashed #3498db");
+            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorderHighlight(5));
         }
         gridTextLabel->setText(tileData.name + " [ Open ]");
     } else {
         if (devicePixelRatio() > 1) {
-            gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(3));
         } else {
-            gridImageLabel->setStyleSheet("border: 5px solid rgba(0, 0, 0, 10%)");
+            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(5));
         }
         gridTextLabel->setText(tileData.name);
     }
@@ -69,9 +70,9 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 
     // make things bigger at lower resolutions
     if (devicePixelRatio() > 1) {
-        gridTextLabel->setStyleSheet("color: #ddd; font-size: 12px;");
+        gridTextLabel->setStyleSheet(StyleSheet::ItemGridTileLabel(12));
     } else {
-        gridTextLabel->setStyleSheet("color: #ddd; font-size: 15px;");
+        gridTextLabel->setStyleSheet(StyleSheet::ItemGridTileLabel(15));
     }
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
@@ -110,8 +111,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     playButton->setCursor(Qt::PointingHandCursor);
     playButton->setIconSize(iconSize);
     playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
-    playButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }"
-                              "QToolTip { padding: 2px; }");
+    playButton->setStyleSheet(StyleSheet::ItemGridTileButton());
 
     spacer = new QLabel("");
     spacer->setMaximumWidth(10);
@@ -125,8 +125,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     editButton->setCursor(Qt::PointingHandCursor);
     editButton->setIconSize(iconSize);
     editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
-    editButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }"
-                              "QToolTip { padding: 2px; }");
+    editButton->setStyleSheet(StyleSheet::ItemGridTileButton());
 
     closeButton = new QPushButton();
     closeButton->setObjectName("closeButton");
@@ -135,8 +134,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     closeButton->setCursor(Qt::PointingHandCursor);
     closeButton->setIconSize(iconSize);
     closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
-    closeButton->setStyleSheet("QPushButton { background: transparent; font-weight: bold; color: white }"
-                               "QToolTip { padding: 2px; }");
+    closeButton->setStyleSheet(StyleSheet::ItemGridTileButton());
 
     playContainer = new QWidget;
     auto l = new QVBoxLayout;
@@ -187,8 +185,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 
     controls = new QWidget();
     controls->setObjectName("fresh");
-    controls->setStyleSheet("#fresh { background: rgba(32, 32, 32, 190); border-radius: 4px; }"
-                            "QLabel { font-weight: bold; font-size: 12px }");
+    controls->setStyleSheet(StyleSheet::ItemGridTileControls());
     controls->setContentsMargins(iconSize.width() / 2,
                                  iconSize.width() / 2,
                                  iconSize.width() / 2,
@@ -288,9 +285,9 @@ void ItemGridWidget::updateLabel(QString text)
 void ItemGridWidget::removeHighlight()
 {
     if (devicePixelRatio() > 1) {
-        gridImageLabel->setStyleSheet("border: 3px solid rgba(0, 0, 0, 10%)");
+        gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(3));
     } else {
-        gridImageLabel->setStyleSheet("border: 5px solid rgba(0, 0, 0, 10%)");
+        gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(5));
     }
     gridTextLabel->setText(tileData.name);
 
@@ -308,13 +305,13 @@ bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
         switch (event->type()) {
             case QEvent::Enter: {
                 playButton->setIcon(QIcon(":/icons/tplay.svg"));
-                playText->setStyleSheet("color: white");
+                playText->setStyleSheet(StyleSheet::ItemGridTileCaptionActive());
                 break;
             }
 
             case QEvent::Leave: {
                 playButton->setIcon(QIcon(":/icons/tplay_alpha.svg"));
-                playText->setStyleSheet("color: rgba(255, 255, 255, 50%)");
+                playText->setStyleSheet(StyleSheet::ItemGridTileCaptionIdle());
                 break;
             }
 
@@ -326,13 +323,13 @@ bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
         switch (event->type()) {
             case QEvent::Enter: {
                 editButton->setIcon(QIcon(":/icons/tedit.svg"));
-                editText->setStyleSheet("color: white");
+                editText->setStyleSheet(StyleSheet::ItemGridTileCaptionActive());
                 break;
             }
 
             case QEvent::Leave: {
                 editButton->setIcon(QIcon(":/icons/tedit_alpha.svg"));
-                editText->setStyleSheet("color: rgba(255, 255, 255, 50%)");
+                editText->setStyleSheet(StyleSheet::ItemGridTileCaptionIdle());
                 break;
             }
 
@@ -344,13 +341,13 @@ bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)
         switch (event->type()) {
             case QEvent::Enter: {
                 closeButton->setIcon(QIcon(":/icons/error.svg"));
-                closeText->setStyleSheet("color: white");
+                closeText->setStyleSheet(StyleSheet::ItemGridTileCaptionActive());
                 break;
             }
 
             case QEvent::Leave: {
                 closeButton->setIcon(QIcon(":/icons/error_alpha.svg"));
-                closeText->setStyleSheet("color: rgba(255, 255, 255, 50%)");
+                closeText->setStyleSheet(StyleSheet::ItemGridTileCaptionIdle());
                 break;
             }
 
@@ -464,12 +461,7 @@ void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 void ItemGridWidget::projectContextMenu(const QPoint &pos)
 {
     QMenu menu("Context Menu", this);
-    menu.setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:disabled { color: #555; }"
-	);
+    menu.setStyleSheet(StyleSheet::QMenuDarkGrid());
 
     QAction open("Open", this);
     connect(&open, SIGNAL(triggered()), this, SLOT(openProject()));

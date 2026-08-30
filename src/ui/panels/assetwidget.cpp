@@ -56,6 +56,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 #include "io/materialpresetreader.h"
 #include "io/materialreader.h"
+#include "ui/style/stylesheet.h"
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -237,61 +238,14 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
         updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
     });
 
-    ui->filterWidget->setStyleSheet(
-        "#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
-        "QLabel { font-size: 12px; margin-right: 8px; }"
-        "QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
-        "QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 24px; min-width: 64px; border: 1px solid #111;}"
-        "QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
-        "QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
-        "QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
-        "QComboBox QAbstractItemView::item { min-height: 28px; selection-background-color: #404040; color: #cecece; }"
-        "QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
-        "QComboBox QAbstractItemView::item:selected { background: #404040; }"
-    );
+    ui->filterWidget->setStyleSheet(StyleSheet::AssetWidgetFilterPane());
 
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
 	progressDialog = new ProgressDialog;
 	progressDialog->setLabelText("Importing assets...");
 
-	setStyleSheet(
-		"QWidget#headerTEMP { background: #1A1A1A;}"
-		"QWidget#Switcher { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
-		"QWidget#Switcher QPushButton { background-color: #333; padding: 4px 16px; }"
-        "QWidget#DirControl { background: #1A1A1A; }"
-		"QWidget#Switcher QPushButton:checked { background: #2980b9; }"
-		"QWidget#BreadCrumb { background: #1A1A1A; border-top: 1px solid #151515; border-bottom: 1px solid #151515; }"
-		"QWidget#BreadCrumb QPushButton { background: transparent; padding: 4px 16px;"
-		"									border-right: 1px solid black; color: #999; }"
-		"QWidget#BreadCrumb QPushButton:checked { color: white; border-right: 1px solid black; }"
-        "QWidget#FilterWidget QPushButton:checked { color: white; background: #2980b9; }"
-		"QWidget#assetTree { background: #202020; border: 0; }"
-		"QWidget#assetView { background: #202020; border: 0; outline: 0; padding: 0; margin: 0; }"
-		"QSplitter::handle { width: 1px; background: #151515; }"
-		"QLineEdit { border: 0; background: #292929; color: #EEE; padding: 4px 8px; selection-background-color: #404040; color: #EEE; }"
-		"QTreeView, QTreeWidget { show-decoration-selected: 1; }"
-		"QWidget#assetView { alternate-background-color: #222; selection-background-color: transparent; }"
-		"QListView::item:selected { background-color: #303030; }"
-		"QListView::item:hover { background-color: #292929; }"
-		"QTreeWidget { outline: none; selection-background-color: #404040; color: #EEE; }"
-		"QTreeWidget::branch { background-color: #202020; }"
-		"QTreeWidget::branch:hover { background-color: #303030; }"
-        "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
-        "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
-		"QTreeWidget::branch:selected { background-color: #404040; }"
-		"QTreeWidget::item:selected { selection-background-color: #404040;"
-		"								background: #404040; outline: none; padding: 5px 0; }"
-		/* Important, this is set for when the widget loses focus to fill the left gap */
-		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
-		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
-		"QTreeWidget::item { padding: 5px 0; }"
-		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
-		"QPushButton{ background-color: #333; color: #DEDEDE; border : 0; padding: 4px 16px; }"
-		"QPushButton:hover{ background-color: #555; }"
-		"QPushButton:pressed{ background-color: #444; }"
-        "QPushButton:disabled{ color: #444; }"
-	);
+	setStyleSheet(StyleSheet::AssetWidgetPanel());
 }
 
 void AssetWidget::trigger()
@@ -802,12 +756,7 @@ void AssetWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	assetItem.selectedPath = assetItem.item->data(0, Qt::UserRole).toString();
 
 	QMenu menu;
-	menu.setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item : disabled { color: #555; }"
-	);
+	menu.setStyleSheet(StyleSheet::QMenuDark());
 
 	QAction *action;
 
@@ -936,12 +885,7 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 	QModelIndex index = ui->assetView->indexAt(pos);
 
 	QMenu menu;
-	menu.setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item : disabled { color: #555; }"
-	);
+	menu.setStyleSheet(StyleSheet::QMenuDark());
 	QAction *action;
 
 	if (index.isValid()) {
@@ -1795,26 +1739,7 @@ void AssetWidget::deleteItem()
 			dialog.close();
 		});
 
-		dialog.setStyleSheet(
-			"* { color: #EEE; }"
-			"QDialog { background: #202020; padding: 4px; }"
-			"QPushButton { background: #444; color: #EEE; border: 0; padding: 6px 10px; }"
-			"QPushButton:hover { background: #555; color: #EEE; }"
-			"QPushButton:pressed { background: #333; color: #EEE; }"
-			"QListWidget { show-decoration-selected: 1; background: #202020; border: 0; outline: 0 }"
-			"QListWidget::item:selected { background-color: #191919; }"
-			"QListWidget::item:selected:active { background-color: #191919; }"
-			"QListWidget::item { padding: 5px 0; }"
-			"QListWidget::item:hover { background: #303030; }"
-			"QListWidget::item:disabled { background: #202020; color: #888; }"
-			"QListWidget::item:disabled:hover { background: #202020; color: #888; }"
-			"QListWidget::item:hover:!active { background: #202020; color: #888; }"
-			"QListWidget { spacing: 0 5px; }"
-			"QListWidget::indicator { width: 18px; height: 18px; }"
-			"QListWidget::indicator::unchecked { image: url(:/icons/check-unchecked.png); }"
-			"QListWidget::indicator::checked { image: url(:/icons/check-checked.png); }"
-			"QListWidget::indicator::disabled { image: url(:/icons/check-disabled.png); }"
-		);
+		dialog.setStyleSheet(StyleSheet::AssetWidgetTagDialog());
 
 		dialog.exec();
 	}

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include <QMenu>
 
 #include "ui/controls/assetgriditem.h"
+#include "ui/style/stylesheet.h"
 
 // local
 AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject properties, QJsonObject tags, QWidget *parent) : QWidget(parent) {
@@ -40,9 +41,8 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 	setMinimumHeight(142);
 	setMaximumHeight(142);
 
-	textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
-		"border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
-	gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 3%); border-top: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
+	textLabel->setStyleSheet(StyleSheet::AssetGridItemLabel("rgba(0, 0, 0, 3%)"));
+	gridImageLabel->setStyleSheet(StyleSheet::AssetGridItemThumbnail("rgba(0, 0, 0, 3%)"));
 
 	setStyleSheet("background: #272727");
 	setLayout(layout);
@@ -58,12 +58,7 @@ AssetGridItem::AssetGridItem(QJsonObject details, QImage image, QJsonObject prop
 void AssetGridItem::projectContextMenu(const QPoint &pos)
 {
 	QMenu menu("Context Menu", this);
-	menu.setStyleSheet(
-		"QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-		"QMenu::item { background-color: #1A1A1A; padding: 6px 8px; margin: 0; }"
-		"QMenu::item:selected { background-color: #3498db; color: #EEE; padding: 6px 8px; margin: 0; }"
-		"QMenu::item : disabled { color: #555; }"
-	);
+	menu.setStyleSheet(StyleSheet::QMenuDark());
 
 	QAction add("Add to Project", this);
 	connect(&add, &QAction::triggered, this, [this]() {
@@ -118,26 +113,23 @@ void AssetGridItem::mousePressEvent(QMouseEvent *event) {
 
 void AssetGridItem::dimHighlight() {
     if (!selected) {
-        textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
-            "border-left: 3px solid rgba(0, 0, 0, 10%); border-bottom: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
-        gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 10%); border-top: 3px solid rgba(0, 0, 0, 10%); border-right: 3px solid rgba(0, 0, 0, 10%)");
+        textLabel->setStyleSheet(StyleSheet::AssetGridItemLabel("rgba(0, 0, 0, 10%)"));
+        gridImageLabel->setStyleSheet(StyleSheet::AssetGridItemThumbnail("rgba(0, 0, 0, 10%)"));
     }
 }
 
 void AssetGridItem::noHighlight() {
     if (!selected) {
-        textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
-            "border-left: 3px solid rgba(0, 0, 0, 3%); border-bottom: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
-        gridImageLabel->setStyleSheet("border-left: 3px solid rgba(0, 0, 0, 3%); border-top: 3px solid rgba(0, 0, 0, 3%); border-right: 3px solid rgba(0, 0, 0, 3%)");
+        textLabel->setStyleSheet(StyleSheet::AssetGridItemLabel("rgba(0, 0, 0, 3%)"));
+        gridImageLabel->setStyleSheet(StyleSheet::AssetGridItemThumbnail("rgba(0, 0, 0, 3%)"));
     }
 }
 
 void AssetGridItem::highlight(bool highlight) {
 	selected = highlight;
 	if (selected) {
-		textLabel->setStyleSheet("color: #ddd; font-size: 12px; background: #1e1e1e;"
-			"border-left: 3px solid #3498db; border-bottom: 3px solid #3498db; border-right: 3px solid #3498db");
-		gridImageLabel->setStyleSheet("border-left: 3px solid #3498db; border-top: 3px solid #3498db; border-right: 3px solid #3498db");
+		textLabel->setStyleSheet(StyleSheet::AssetGridItemLabel("#3498db"));
+		gridImageLabel->setStyleSheet(StyleSheet::AssetGridItemThumbnail("#3498db"));
 	}
 	else {
 		dimHighlight();

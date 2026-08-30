@@ -219,14 +219,7 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     layout->addWidget(dynamicGrid);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    ui->pmContainer->setStyleSheet(
-		"border: none;"
-		"background-image: url(:/images/empty_canvas.png);"
-		"background-attachment: fixed;"
-		"background-position: center;"
-		"background-origin: content;"
-		"background-repeat: no-repeat;"
-	);
+    ui->pmContainer->setStyleSheet(StyleSheet::ProjectManagerCanvas());
     ui->pmContainer->setLayout(layout);
 }
 
@@ -466,11 +459,7 @@ void ProjectManager::setupDesktopControls()
 {
     currentDesktop = qBound(1, settings->getValue("current_desktop", 1).toInt(), 4);
 
-    const QString menuStyle =
-        "QMenu { background-color: #1A1A1A; color: #EEE; padding: 0; margin: 0; }"
-        "QMenu::item { background-color: #1A1A1A; padding: 6px 16px 6px 10px; margin: 0; }"
-        "QMenu::item:selected { background-color: #3498db; color: #EEE; }"
-        "QMenu::item:disabled { color: #555; }";
+    const QString menuStyle = StyleSheet::QMenuDarkDesktop();
 
     // switcher popup: Desktop 1..4, current one checked
     desktopMenu = new QMenu(this);
@@ -705,15 +694,7 @@ void ProjectManager::openSampleBrowser()
     QListWidget *sampleList = new QListWidget();
     sampleList->setAttribute(Qt::WA_MacShowFocusRect, false);
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet("#sampleList { background-color: #1e1e1e; padding: 0 8px; border: none; color: #EEE; } " \
-                              "QListWidgetItem { padding: 12px; } "\
-                              "QListView::item:selected { "\
-                              "    border: 1px solid #3498db; "\
-                               " background: #3498db; "\
-                               "  color: #CECECE; "\
-                              "} "\
-                              "*, QLabel { color: white; } "\
-                              "QToolTip { padding: 2px; border: 0; background: black; opacity: 200; }");
+    sampleList->setStyleSheet(StyleSheet::ProjectManagerSampleList());
     sampleList->setViewMode(QListWidget::IconMode);
     sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     sampleList->setSpacing(4);
@@ -744,8 +725,7 @@ void ProjectManager::openSampleBrowser()
 
     auto instructions = new QLabel("Double click on a sample scene to import it in the editor");
     instructions->setObjectName("instructions");
-    instructions->setStyleSheet("#instructions { border: none; background: #1e1e1e; color: white; " \
-                                "padding: 10px; font-size: 12px }");
+    instructions->setStyleSheet(StyleSheet::ProjectManagerInstructions());
 
 	auto cancel = new QPushButton("Cancel");
 	auto select = new QPushButton("Open");

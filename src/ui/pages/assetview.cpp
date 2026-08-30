@@ -72,6 +72,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 
 #include "ui/dialogs/toast.h"
+#include "ui/style/stylesheet.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -415,10 +416,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     connect(collectionButton, &QPushButton::pressed, [this]() {
         QDialog d;
-        d.setStyleSheet("QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
-                        "QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
-                        "QPushButton:hover { background: #51a1d6; }"
-                        "QDialog { background: #1a1a1a; }");
+        d.setStyleSheet(StyleSheet::AssetViewCollectionDialog());
         QHBoxLayout *l = new QHBoxLayout;
         d.setFixedWidth(350);
         d.setLayout(l);
@@ -547,10 +545,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	filterLayout->addWidget(new QLabel("Search: "));
 	le = new QLineEdit();
 	le->setFixedWidth(256);
-	le->setStyleSheet(
-		"border: 1px solid #1E1E1E; border-radius: 1px; "
-		"font-size: 12px; background: #3B3B3B; padding: 6px 4px;"
-	);
+	le->setStyleSheet(StyleSheet::AssetViewSearchField());
 	filterLayout->addWidget(le);
 
 	connect(le, &QLineEdit::textChanged, this, [this](const QString &searchTerm) {
@@ -561,18 +556,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	filterPane->setObjectName("filterPane");
 	filterPane->setLayout(filterLayout);
 	filterPane->setFixedHeight(48);
-	filterPane->setStyleSheet(
-        "#filterPane { background: #1E1E1E; border-bottom: 1px solid #111; }"
-		"QLabel { font-size: 12px; margin-right: 8px; }"
-		"QPushButton[accessibleName=\"filterObj\"] { border-radius: 0; padding: 10px 8px; }"
-		"QComboBox { background: #222; border-radius: 1px; color: #BBB; padding: 0 12px; min-height: 30px; min-width: 72px; border: 1px solid #111;}"
-		"QComboBox::drop-down { border: 0; margin: 0; padding: 0; min-height: 20px; }"
-		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
-		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
-		"QComboBox QAbstractItemView::item { min-height: 24px; selection-background-color: #404040; color: #cecece; }"
-        "QComboBox QAbstractItemView { background-color: #1A1A1A; selection-background-color: #404040; border: 0; outline: none; }"
-        "QComboBox QAbstractItemView::item:selected { background: #404040; }"
-	);
+	filterPane->setStyleSheet(StyleSheet::AssetViewFilterPane());
 
 	auto views = new QWidget;
 	auto viewsL = new QVBoxLayout;
@@ -683,9 +667,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	ipbl->addWidget(downloadWorld);
 	importButtons->setLayout(ipbl);
 
-    importButtons->setStyleSheet(
-        "QPushButton { background: #111; border: 1px solid black; border-radius: 1px; padding: 8px 12px; }"
-    );
+    importButtons->setStyleSheet(StyleSheet::AssetViewImportButtons());
 
 	assetDropPadLayout->addWidget(importButtons);
 
@@ -696,16 +678,11 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     normalize = new QPushButton("Normalize");
 
 	addToProject = new QPushButton("Add to Project");
-	addToProject->setStyleSheet(
-		"QPushButton { background: #3498db; }"
-		"QPushButton:hover { background-color: #4aa3de; }"
-		"QPushButton:pressed { background-color: #1f80c1; }"
-		"QPushButton:disabled { color: #656565; background-color: #3e3e3e; }"
-	);
+	addToProject->setStyleSheet(StyleSheet::AssetViewAddToProjectButton());
 	addToProject->setEnabled(false);
 
     deleteFromLibrary = new QPushButton("Delete From Library");
-	deleteFromLibrary->setStyleSheet("QPushButton { background: #E74C3C } QPushButton:disabled { color: #656565; background-color: #3e3e3e; }");
+	deleteFromLibrary->setStyleSheet(StyleSheet::AssetViewDeleteButton());
     deleteFromLibrary->setEnabled(false);
 
 	renameModel = new QLabel("Name:");
@@ -990,7 +967,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     changeMetaCollection = new QPushButton(tr("change"));
     changeMetaCollection->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
-    changeMetaCollection->setStyleSheet("font-size: 8px; color: green; padding: 0; background: transparent; border: 0");
+    changeMetaCollection->setStyleSheet(StyleSheet::AssetViewChangeCollectionLink());
     metadataLayout = new QHBoxLayout;
     metadataLayout->setContentsMargins(0, 0, 0, 0);
     metadataLayout->setSpacing(12);
@@ -1019,7 +996,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	//metadata->setStyleSheet("QLabel { font-size: 12px; }");
 	auto header = new QLabel("Asset Metadata");
 	header->setAlignment(Qt::AlignCenter);
-	header->setStyleSheet("border-top: 1px solid black; border-bottom: 1px solid black; text-align: center; padding: 12px; background: #1A1A1A");
+	header->setStyleSheet(StyleSheet::AssetViewMetadataHeader());
 	metaLayout->addWidget(header);
 	metaLayout->addWidget(metadata);
 
@@ -1056,36 +1033,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     layout->addWidget(_splitter);
     setLayout(layout);
 
-	setStyleSheet(
-		"*							{ color: #EEE; }"
-        "QPushButton				{ background: #404040; border-radius: 2px; padding: 8px 12px; }"
-		"QSplitter					{ background: #2E2E2E; } QSplitter:handle { background: black; }"
-		"#localAssetsButton			{ text-align: left; padding: 12px; }"
-		"#onlineAssetsButton		{ text-align: left; padding: 12px; }"
-        "QPushButton[accessibleName=\"assetsButton\"]:disabled { color: #444; }"
-		"#assetDropPad				{}"
-		"#assetDropPadLabel			{ border: 4px dashed #111; border-radius: 4px; "
-		"							  padding: 48px 36px; margin: 0; }"
-        "#assetDropPad, #MetadataPane QPushButton	{ padding: 8px 12px; }"
-		"QLineEdit					{ border: 1px solid #1E1E1E; border-radius: 2px; background: #3B3B3B; }"
-		"#assetDropPad QLabel		{}"
-        "QTreeView, QTreeWidget { show-decoration-selected: 1; border: 0; alternate-background-color: #252525;"
-        "                         selection-background-color: #404040; color: #EEE; background: #202020;"
-        "                         paint-alternating-row-colors-for-empty-area: 1; outline: none; }"
-		//"QTreeWidget::branch { background-color: #202020; }"
-        "QTreeView::branch:open { image: url(:/icons/expand_arrow_open.png); }"
-        "QTreeView::branch:closed:has-children { image: url(:/icons/expand_arrow_closed.png); }"
-		"QTreeWidget::branch:hover { background-color: #303030; }"
-		"QTreeWidget::branch:selected { background-color: #404040; }"
-		"QTreeWidget::item:selected { selection-background-color: #404040;"
-		"							  background: #404040; outline: none; padding: 5px 0; }"
-		/* Important, this is set for when the widget loses focus to fill the left gap */
-		"QTreeWidget::item:selected:!active { background: #404040; padding: 5px 0; color: #EEE; }"
-		"QTreeWidget::item:selected:active { background: #404040; padding: 5px 0; }"
-		"QTreeWidget::item { padding: 5px 0; }"
-		"QTreeWidget::item:hover { background: #303030; padding: 5px 0; }"
-        "QComboBox { background: #1A1A1A; border : 0; }"
-	);
+	setStyleSheet(StyleSheet::AssetViewPanel());
 }
 
 QString importProjectNameAV;
@@ -2361,14 +2309,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 void AssetView::changeAssetCollection(AssetGridItem *item)
 {
 	QDialog d;
-	d.setStyleSheet("QLineEdit { font-size: 14px; background: #2f2f2f; padding: 6px; border: 0; }"
-		"QComboBox { background: #4D4D4D; color: #BBB; padding: 6px; border: 0; }"
-		"QComboBox::drop-down { border : 0; }"
-		"QComboBox::down-arrow { image: url(:/icons/down_arrow_check.png); width: 18px; height: 14px; }"
-		"QComboBox::down-arrow:!enabled { image: url(:/icons/down_arrow_check_disabled.png); width: 18px; height: 14px; }"
-		"QPushButton { background: #4898ff; color: white; border: 0; padding: 8px 12px; border-radius: 1px; }"
-		"QPushButton:hover { background: #555; }"
-		"QDialog { background: #1A1A1A; }");
+	d.setStyleSheet(StyleSheet::AssetViewRenameDialog());
 
 	QHBoxLayout *l = new QHBoxLayout;
 	d.setFixedWidth(350);

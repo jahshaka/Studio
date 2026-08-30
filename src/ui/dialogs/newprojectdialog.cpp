@@ -44,7 +44,7 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
     settingsManager = SettingsManager::getDefaultManager();
 	
 	projectPathEdit->setDisabled(true);
-    projectPathEdit->setStyleSheet("background: #303030; color: #888;");
+    projectPathEdit->setStyleSheet(StyleSheet::QLineEditDisabled());
 
     connect(create, SIGNAL(pressed()), SLOT(confirmProjectCreation()));
     connect(cancel, SIGNAL(pressed()), SLOT(close()));
