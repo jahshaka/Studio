@@ -84,6 +84,12 @@ public:
 
     bool getShowLightWires() const override { return mShowLightWires; }
     void setShowLightWires(bool value) override { mShowLightWires = value; }
+    bool getShowGrid() const override { return mShowGrid; }
+    void setShowGrid(bool value) override { mShowGrid = value; }
+    // G / editor.gameView: hide every in-viewport editor helper (grid, light
+    // wires, outline, gizmo) — docks and toolbars untouched. Not persisted.
+    void setGameView(bool enabled) override { mGameView = enabled; }
+    bool isGameView() const override { return mGameView; }
     bool getSelectionWireframe() const override { return mSelectionWireframe; }
     void setSelectionWireframe(bool value) override { mSelectionWireframe = value; }
     bool getShowDebugDrawFlags() const override { return mShowDebugDraw; }
@@ -168,6 +174,8 @@ private:
     iris::CameraNodePtr mEditorCam;
     EditorData *mEditorData = nullptr;
     bool mShowLightWires = true;
+    bool mShowGrid = true;              // per-scene (EditorData), default ON
+    bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;
     bool mActive = false;

@@ -518,6 +518,7 @@ void EngineSceneViewport::setEditorData(EditorData *data)
     if (data) {
         if (data->editorCamera) mEditorCam = data->editorCamera;
         mShowLightWires = data->showLightWires;
+        mShowGrid = data->showGrid;
         mShowDebugDraw = data->showDebugDrawFlags;
     }
     // The controller must steer the SAME camera the view renders; without this a
@@ -531,6 +532,7 @@ EditorData *EngineSceneViewport::getEditorData()
     if (!mEditorData) mEditorData = new EditorData();
     mEditorData->editorCamera = mEditorCam;
     mEditorData->showLightWires = mShowLightWires;
+    mEditorData->showGrid = mShowGrid;
     mEditorData->showDebugDrawFlags = mShowDebugDraw;
     return mEditorData;
 }
@@ -563,17 +565,28 @@ void EngineSceneViewport::syncFrame()
         }
     }
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
+    // G (Game View) hides every in-viewport editor helper; play mode hides the
+    // grid too (the Unreal look), while the other helpers keep their existing
+    // play behaviour.
+    const bool helpers = !mGameView;
     if (mMirror) {
-        mMirror->setLightWires(mShowLightWires);
+        mMirror->setLightWires(mShowLightWires && helpers);
         mMirror->setHighlightWireframe(mSelectionWireframe);
-        mMirror->setHighlightedNode(mSelectedNode);
+        // No selection outline for the World root (the whole scene would glow)
+        // or for the built-in ground plane — owner ask 2026-08-31. Selection,
+        // gizmo and property panel still work on both.
+        iris::SceneNodePtr highlight = helpers ? mSelectedNode : iris::SceneNodePtr();
+        if (highlight && ((mScene && highlight == mScene->getRootNode()) || highlight->isBuiltIn))
+            highlight.reset();
+        mMirror->setHighlightedNode(highlight);
+        mMirror->setGrid(mShowGrid && helpers && !mPlaying, 1.0f);   // spacing follows SnapSettings in phase C
         mMirror->sync();
     }
     if (mGizmo && mEditorCam && mSelectedNode) mGizmo->updateSize(mEditorCam);
     if (mOverlay) {
         QVector3D rayPos, rayDir, viewDir;
         mouseRay(rayPos, rayDir, viewDir);
-        mOverlay->update(mSelectedNode ? mGizmo : nullptr, rayPos, rayDir, viewDir);
+        mOverlay->update((helpers && mSelectedNode) ? mGizmo : nullptr, rayPos, rayDir, viewDir);
     }
     if (mMirror) mMirror->applySky(view());
     if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());

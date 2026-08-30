@@ -45,6 +45,12 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "focusSelection", "editor.focusSelection() -> bool",
           "Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept.",
           Needs::Engine },
+        { "gameView", "editor.gameView(enabled) -> bool",
+          "Game View (the G key): hides every in-viewport editor helper — grid, light wires, selection outline, gizmo. Docks stay; not persisted.",
+          Needs::Engine },
+        { "isGameView", "editor.isGameView() -> bool",
+          "Whether Game View is active.",
+          Needs::Engine },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
           Needs::Document },
@@ -134,6 +140,19 @@ bool EditorApi::focusSelection()
         return fail("editor.focusSelection: nothing is selected");
     host.viewport->focusOnSelection();
     return true;
+}
+
+bool EditorApi::gameView(bool enabled)
+{
+    if (!requireEngine()) return false;
+    host.viewport->setGameView(enabled);
+    return true;
+}
+
+bool EditorApi::isGameView()
+{
+    if (!requireEngine()) return false;
+    return host.viewport->isGameView();
 }
 
 bool EditorApi::undo()

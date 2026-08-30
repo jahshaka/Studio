@@ -403,6 +403,8 @@ public slots:
 
     void takeScreenshot();
     void toggleLightWires(bool state);
+    void toggleGrid(bool state);
+    void toggleImmersiveFullscreen();
     void toggleDebugDrawer(bool state);
     void showProjectManagerInternal();
 
@@ -536,6 +538,11 @@ private:
 
     QAction *wireCheckAction;
     QAction *physicsCheckAction;
+    QAction *gridCheckAction = nullptr;
+    // F11 immersive fullscreen restore state (EDITOR_SHORTCUTS_SPEC §3)
+    bool immersiveFullscreen = false;
+    bool preFullscreenMaximized = false;
+    QVector<bool> preFullscreenWidgets;
 
 	QVector<bool> widgetStates;	// use the order in the enum
 

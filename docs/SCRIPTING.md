@@ -60,6 +60,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `editor.gizmoMode() -> "translate" \| "rotate" \| "scale"` | engine | The active transform gizmo mode (W/E/R in the viewport; Space cycles). |
 | `editor.setGizmoMode("translate"\|"rotate"\|"scale") -> bool` | engine | Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons. |
 | `editor.focusSelection() -> bool` | engine | Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. |
+| `editor.gameView(enabled) -> bool` | engine | Game View (the G key): hides every in-viewport editor helper — grid, light wires, selection outline, gizmo. Docks stay; not persisted. |
+| `editor.isGameView() -> bool` | engine | Whether Game View is active. |
 | `editor.undo() -> bool` | document | Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script. |
 | `editor.redo() -> bool` | document | Redoes the last undone step. |
 | `editor.play() -> bool` | document | Enters play mode (PlayBack drives physics, animations and controllers in place). |

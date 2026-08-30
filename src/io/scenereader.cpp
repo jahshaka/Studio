@@ -113,6 +113,8 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
     editorData->showLightWires = editorObj["showLightWires"].toBool();
 	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool();
+    // Grid defaults ON: scenes saved before the grid existed read back true.
+    editorData->showGrid = editorObj["showGrid"].toBool(true);
 
     return editorData;
 }

@@ -855,6 +855,42 @@ int main(int argc, char **argv)
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
 
+    // ---- editor ground grid (EDITOR_SHORTCUTS_SPEC §3) ----
+    // Empty scene, flat blue sky: every non-blue pixel is the grid. Looking
+    // straight down from y=10 the ±100-unit grid fills the frame.
+    {
+        cam->setLocalPos(QVector3D(0.0f, 10.0f, 0.01f));
+        cam->lookAt(QVector3D(0, 0, 0));
+        mirror.applyCamera(cam, view);
+        auto gridPixels = [&](float minR) {
+            int count = 0;
+            for (unsigned y = 0; y < img.height; ++y)
+                for (unsigned x = 0; x < img.width; ++x)
+                    if (img.at(x, y).r > minR) ++count;
+            return count;
+        };
+        mirror.setGrid(true, 1.0f);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("grid, spacing 1", img);
+        const int at1 = gridPixels(0.08f);
+        std::printf("    grid pixels at spacing 1: %d\n", at1);
+        CHECK(at1 > 100, "grid lines render over the empty scene");
+        // The two axis lines through the origin are MAJOR (every 10th, brighter).
+        CHECK(gridPixels(0.22f) > 10, "major lines are visibly brighter");
+
+        mirror.setGrid(true, 4.0f);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("grid, spacing 4", img);
+        const int at4 = gridPixels(0.08f);
+        std::printf("    grid pixels at spacing 4: %d\n", at4);
+        CHECK(at4 > 20 && at4 < at1, "wider spacing draws fewer lines (grid re-spaces live)");
+
+        mirror.setGrid(false, 4.0f);
+        mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("grid hidden", img);
+        CHECK(gridPixels(0.08f) < 5, "hiding the grid removes every line pixel");
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);

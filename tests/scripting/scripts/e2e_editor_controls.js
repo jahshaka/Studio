@@ -50,4 +50,12 @@ assert(moved, "screenshot centre changed after focus (" +
     before.center.r + "," + before.center.g + "," + before.center.b + " -> " +
     after.center.r + "," + after.center.g + "," + after.center.b + ")");
 
-console.log("editor_controls: phase A verbs verified");
+// ---- gameView round-trip (phase B) ----
+assert(editor.isGameView() === false, "game view off by default");
+assert(editor.gameView(true), "gameView(true)");
+assert(editor.isGameView() === true, "isGameView reads back true");
+editor.frame(2);   // a frame renders fine with every helper hidden
+assert(editor.gameView(false), "gameView(false)");
+assert(editor.isGameView() === false, "isGameView reads back false");
+
+console.log("editor_controls: verbs verified");

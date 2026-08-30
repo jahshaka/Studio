@@ -34,6 +34,8 @@ public:
     Q_INVOKABLE QString gizmoMode();
     Q_INVOKABLE bool setGizmoMode(const QString &mode);
     Q_INVOKABLE bool focusSelection();
+    Q_INVOKABLE bool gameView(bool enabled);
+    Q_INVOKABLE bool isGameView();
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     Q_INVOKABLE bool play();

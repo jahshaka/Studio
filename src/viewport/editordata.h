@@ -18,9 +18,12 @@ class EditorData
 {
 public:
     iris::CameraNodePtr editorCamera;
-    float distFromPivot;
-    bool showLightWires;
-	bool showDebugDrawFlags;
+    float distFromPivot = 0.0f;
+    bool showLightWires = true;
+    bool showDebugDrawFlags = false;
+    /// Ground grid (EDITOR_SHORTCUTS_SPEC §3): per-scene like showLightWires,
+    /// default ON — absent in older scenes reads back as true.
+    bool showGrid = true;
 };
 
 #endif // EDITORDATA_H

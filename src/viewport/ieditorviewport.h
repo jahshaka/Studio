@@ -117,6 +117,17 @@ public:
     virtual bool getShowLightWires() const = 0;
     virtual void setShowLightWires(bool value) = 0;
 
+    /// Ground grid (EDITOR_SHORTCUTS_SPEC §3): per-scene, default ON. Only the
+    /// engine viewport draws it.
+    virtual bool getShowGrid() const { return true; }
+    virtual void setShowGrid(bool) {}
+
+    /// Game View (G): hides every in-viewport editor helper (grid, light
+    /// wires, selection outline, gizmo). Docks/toolbars untouched, never
+    /// persisted. Only the engine viewport implements it.
+    virtual void setGameView(bool) {}
+    virtual bool isGameView() const { return false; }
+
     /// Selection highlight style: false (default) = silhouette outline, true = the
     /// polygon wireframe. Only the engine viewport implements it; the legacy
     /// viewport keeps its own single style.

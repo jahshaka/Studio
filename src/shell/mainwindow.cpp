@@ -841,6 +841,7 @@ void MainWindow::openProject(bool playMode)
 		// camera
 		playerView->setScene(scene);
         wireCheckAction->setChecked(editorData->showLightWires);
+        gridCheckAction->setChecked(editorData->showGrid);
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
     }
 
@@ -1633,6 +1634,13 @@ void MainWindow::setupViewPort()
     connect(wireCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleLightWires(bool)));
     wireFramesMenu->addAction(wireCheckAction);
 
+    // Ground grid (EDITOR_SHORTCUTS_SPEC §3): default ON, per-scene persisted
+    // beside the light-wires flag; hidden in Game View (G) and while playing.
+    gridCheckAction = new QAction(QIcon(), "Ground Grid");
+    gridCheckAction->setCheckable(true);
+    connect(gridCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleGrid(bool)));
+    wireFramesMenu->addAction(gridCheckAction);
+
     physicsCheckAction = new QAction(QIcon(), "Physics Debug Overlay");
     physicsCheckAction->setCheckable(true);
     connect(physicsCheckAction, SIGNAL(toggled(bool)), this, SLOT(toggleDebugDrawer(bool)));
@@ -1848,6 +1856,7 @@ void MainWindow::setupViewPort()
 	playerView = new PlayerWidget(viewPort, playerBackend);
 
     wireCheckAction->setChecked(sceneView->getShowLightWires());
+    gridCheckAction->setChecked(sceneView->getShowGrid());
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
 
     QGridLayout* layout = new QGridLayout;
@@ -2126,6 +2135,17 @@ void MainWindow::setupShortcuts()
                  "RMB (hold) + W/A/S/D + Q/E \xc2\xb7 Shift: 3x");
     reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
 
+    // ---- view ----
+    reg.add("view.gameView", "Game View (hide editor helpers)", "View", QKeySequence(Qt::Key_G), this,
+            [this]() {
+                if (currentSpace == WindowSpaces::EDITOR)
+                    sceneView->setGameView(!sceneView->isGameView());
+            });
+    reg.add("view.grid", "Toggle Ground Grid", "View", QKeySequence(), this,
+            [this]() { if (gridCheckAction) gridCheckAction->toggle(); });
+    reg.add("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), this,
+            [this]() { toggleImmersiveFullscreen(); });
+
     // ---- playback (Space is the gizmo cycle now — Unreal PIE puts play on
     // Alt+P; the toolbar Play button is unchanged) ----
     reg.add("play.toggle", "Play / Stop Scene", "Playback",
@@ -2358,6 +2378,40 @@ void MainWindow::takeScreenshot()
 void MainWindow::toggleLightWires(bool state)
 {
     sceneView->setShowLightWires(state);
+}
+
+void MainWindow::toggleGrid(bool state)
+{
+    if (sceneView) sceneView->setShowGrid(state);
+}
+
+// F11: immersive fullscreen — the window goes fullscreen and (in the editor
+// space) the docks and toolbar hide; a second F11 restores exactly what was
+// visible before (EDITOR_SHORTCUTS_SPEC §3).
+void MainWindow::toggleImmersiveFullscreen()
+{
+    QWidget *editorDocks[] = { sceneHierarchyDock, sceneNodePropertiesDock, presetsDock,
+                               assetDock, animationDock, scriptConsoleDock, toolBar };
+    if (!immersiveFullscreen) {
+        immersiveFullscreen = true;
+        preFullscreenMaximized = isMaximized();
+        preFullscreenWidgets.clear();
+        if (currentSpace == WindowSpaces::EDITOR) {
+            for (QWidget *w : editorDocks) {
+                preFullscreenWidgets.append(w && w->isVisible());
+                if (w) w->hide();
+            }
+        }
+        showFullScreen();
+    } else {
+        immersiveFullscreen = false;
+        if (preFullscreenWidgets.size() == int(sizeof(editorDocks) / sizeof(editorDocks[0]))) {
+            for (int i = 0; i < preFullscreenWidgets.size(); ++i)
+                if (editorDocks[i]) editorDocks[i]->setVisible(preFullscreenWidgets[i]);
+        }
+        preFullscreenWidgets.clear();
+        preFullscreenMaximized ? showMaximized() : showNormal();
+    }
 }
 
 void MainWindow::toggleDebugDrawer(bool state)
