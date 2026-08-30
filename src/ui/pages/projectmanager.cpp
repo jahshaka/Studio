@@ -71,7 +71,10 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
 	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
 	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
 
-	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [&]() {
+	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [this]() {
+		// [this], never [&]: this connect fires long after the constructor returns,
+		// so the ctor parameters are gone - only members are safe to touch here.
+		Project *project = this->project;
 		progressDialog->setRange(0, 100);
 		progressDialog->setLabelText(tr("Caching assets..."));
 
