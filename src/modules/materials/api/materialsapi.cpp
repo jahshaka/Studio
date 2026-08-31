@@ -28,6 +28,8 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/materialpresetreader.h"
 #include "shell/mainwindow.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
@@ -341,7 +343,9 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
             newValue = QVariant::fromValue(colorFromJs(newValue));
         } else if (mapKeys.contains(key)) {
             // texture: an absolute/existing path passes through, an asset guid
-            // resolves to the project file, empty clears
+            // resolves through the CAS (pinned bytes in project context; the
+            // flat projectFolder/name join pointed at an unpopulated folder),
+            // empty clears
             const QString ref = newValue.toString();
             if (!ref.isEmpty() && !QFileInfo::exists(ref)) {
                 if (!host.db || !host.isProjectOpen())
@@ -349,7 +353,14 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 const auto record = host.db->fetchAsset(ref);
                 if (record.guid.isEmpty())
                     return fail(QStringLiteral("material.set: no texture file or asset '%1'").arg(ref));
-                newValue = QDir(host.project->getProjectFolder()).filePath(record.name);
+                QSqlDatabase conn = QSqlDatabase::database();
+                QString resolved = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                                           host.project->getProjectGuid(), ref);
+                if (resolved.isEmpty())
+                    resolved = AssetCas::resolveSource(conn, AssetStorePaths::root(), ref);
+                if (resolved.isEmpty())
+                    resolved = QDir(host.project->getProjectFolder()).filePath(record.name);
+                newValue = resolved;
             }
         }
 

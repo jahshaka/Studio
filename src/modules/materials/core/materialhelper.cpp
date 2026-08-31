@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "graphbaker.h"
 #include "pbrgraphevaluator.h"
 #include "texturemanager.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 #include <QFileInfo>
 #include <QJsonObject>
 #include "irisgl/document/materials/custommaterial.h"
@@ -138,6 +140,14 @@ PbrGraphEvaluator::TextureResolver MaterialHelper::textureResolver()
 		for (auto tex : TextureManager::getSingleton()->textures) {
 			if (tex->guid == value)
 				return tex->path;
+		}
+		// a texture guid the TextureManager never loaded (library material
+		// referencing store textures): resolve through the CAS rather than
+		// handing the raw guid to a path-based loader
+		{
+			QSqlDatabase conn = QSqlDatabase::database();
+			const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), value);
+			if (!path.isEmpty()) return path;
 		}
 		return value;
 	};

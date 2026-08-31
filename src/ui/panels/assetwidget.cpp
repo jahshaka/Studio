@@ -352,7 +352,7 @@ void AssetWidget::trigger()
 				return mat;
 			});
 
-			AssetHelper::updateNodeMaterial(node, materialObj.object());
+			AssetHelper::updateNodeMaterial(node, materialObj.object(), db);
 
 			//QString meshGuid = db->fetchObjectMesh(asset->assetGuid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
 

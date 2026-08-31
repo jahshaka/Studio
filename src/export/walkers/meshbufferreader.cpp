@@ -37,10 +37,16 @@ bool extractMeshBuffers(iris::Mesh *mesh, MeshBuffers &out)
         case iris::VertexAttribUsage::Normal:
             out.normals.assign(f, f + floats); break;
         case iris::VertexAttribUsage::TexCoord0: {
-            // assimp stores texcoords as 3 floats; exporters want 2 (mirror does the same)
+            // assimp stores texcoords as 3 floats; exporters want 2. V is
+            // FLIPPED to the glTF top-left convention (v = 1 - v): the
+            // document keeps assimp's GL-style bottom-left origin (the
+            // legacy renderer mirrored texture images to match), but the
+            // exported textures are the unmirrored source files — exporting
+            // document V verbatim rendered every texture V-flipped in real
+            // glTF viewers. The engine mirror applies the same conversion.
             const int comps = attr.count > 0 ? attr.count : 3;
             for (int i = 0; i + comps <= floats; i += comps) {
-                out.uvs.push_back(f[i]); out.uvs.push_back(f[i + 1]);
+                out.uvs.push_back(f[i]); out.uvs.push_back(1.0f - f[i + 1]);
             }
             break;
         }

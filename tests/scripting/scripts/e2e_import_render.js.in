@@ -1,0 +1,60 @@
+// scripting.e2e.import_render — a textured PBR GLB through the ONE import
+// pipeline RENDERS (post-release fix 2026-08-31):
+//   - the imported object's texture properties resolve to existing store
+//     files, never raw member guids (the guid-fed Texture2D::load defect:
+//     "error loading image: <guid>", every map silently dropped);
+//   - the scene-placed model actually has geometry (the Mesh member row
+//     carries the model bytes — resolvePinned(meshGuid) used to be empty and
+//     every library model placed into a scene was invisible);
+//   - the textured surface renders its map (centre pixel green-dominant from
+//     the fixture's green texel region — not grey, not white, not sky).
+// Fixture: tests/importer/fixtures/textured_pbr_quad.glb (+Z quad, top-left
+// texture quadrant RED, rest GREEN, split MR + normal maps).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+project.create("import_render");
+
+var guid = assets.import("@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb");
+assert(guid.length > 10, "assets.import -> " + guid);
+assert(assets.addToProject(guid) === guid, "assets.addToProject");
+
+var nodeId = assets.addToScene(guid, { position: { x: -2, y: 3, z: 0 } });
+assert(nodeId && nodeId.length > 10, "assets.addToScene -> " + nodeId);
+
+// the imported quad is a single mesh node; find it and check its material
+var meshId = null;
+var nodes = scene.nodes();
+for (var i = 0; i < nodes.length; i++)
+    if (nodes[i].id === nodeId && nodes[i].type === "mesh") meshId = nodes[i].id;
+assert(meshId !== null, "imported model instantiated as a mesh node");
+
+var mat = material.get(meshId);
+["baseColorMap", "metallicMap", "roughnessMap", "normalMap"].forEach(function (key) {
+    var v = mat[key];
+    assert(typeof v === "string" && v.length > 0, key + " is set (" + v + ")");
+    assert(!GUID_RE.test(v), key + " is not a raw guid");
+    assert(v.indexOf("/") >= 0, key + " is a filesystem path");
+});
+
+// grow the quad so the front view's centre pixel lands in its GREEN texel
+// region (quad at (-2,3), scale 4: view centre (0,5) -> uv (0.75, 0.25))
+node.transform(nodeId, { scale: { x: 4, y: 4, z: 4 } });
+editor.select(null);
+editor.setView("front");
+editor.frame(5);
+var shot = editor.screenshot("import_render.png", 512, 512);
+console.log("centre pixel " + JSON.stringify(shot.center));
+assert(shot.center.g > 40, "textured surface renders (not black/sky): g=" + shot.center.g);
+assert(shot.center.g > shot.center.r + 20 && shot.center.g > shot.center.b + 20,
+       "centre samples the GREEN texel region (map bound, not grey/white fallback)");
+
+// the engine thumbnail path renders the same resolved material
+assert(assets.refreshThumbnail(guid) === true, "assets.refreshThumbnail renders");
+
+console.log("e2e_import_render: ALL OK");

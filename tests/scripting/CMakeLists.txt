@@ -189,3 +189,18 @@ set_tests_properties(scripting.e2e.import_pipeline PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 120)
+
+# Post-release fix (2026-08-31): an imported textured GLB RENDERS — texture
+# properties resolve to store files (no raw guid reaches Texture2D::load),
+# the Mesh member carries the model bytes (scene placement has geometry),
+# and the preview pixel shows the bound map. Engine up (no --headless).
+configure_file(scripts/e2e_import_render.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_render)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.import_render
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_render.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.import_render PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)

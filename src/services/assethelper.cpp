@@ -22,14 +22,31 @@ For more information see the LICENSE file
 
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
+#include <QSqlDatabase>
 
 // Thanks to Qt not allowing updating its json values and instead returning temp objects
 // This class updates a meshnode with the values in a material definition
 // We handle special cases such as textures that need to be matched with guids
 // and colors that need to be converted from hex, the rest can be implicitly set
-void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition)
+void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition,
+                                     Database *db)
 {
+    // Texture values in stored definitions are member asset guids; every
+    // branch below must resolve them to store files before setValue() hands
+    // them to Texture2D::load (same CAS resolution as
+    // MaterialReader::resolveTextureGuid). Old blobs that stored plain paths
+    // still work: an unresolvable value falls back to itself.
+    Q_UNUSED(db);
+    const auto resolveTexture = [&](const QString &stored) -> QString {
+        if (stored.isEmpty()) return stored;
+        QSqlDatabase conn = QSqlDatabase::database();
+        const QString path = AssetCas::resolveSource(conn, AssetStorePaths::root(), stored);
+        return path.isEmpty() ? stored : path;
+    };
+
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto materialDefinition = definition.value("material").toObject();
 
@@ -45,6 +62,9 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
                 if (property->type == iris::PropertyType::Color)
                     pbr->setValue(property->name,
                                   QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
+                else if (property->type == iris::PropertyType::Texture)
+                    pbr->setValue(property->name,
+                                  resolveTexture(values.value(property->name).toString()));
                 else
                     pbr->setValue(property->name, values.value(property->name).toVariant());
             }
@@ -88,21 +108,29 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
             }
         }
 
+        // V1 definitions carry values at the top level; V2 (everything the
+        // one-pipeline importer writes) nests them under "values". Read both.
+        const QJsonObject nestedValues = materialDefinition.value("values").toObject();
+        const auto valueFor = [&](const QString &name) -> QJsonValue {
+            if (materialDefinition.contains(name)) return materialDefinition.value(name);
+            return nestedValues.value(name);
+        };
+
         for (const iris::Property* property : nodeMaterial->properties) {
             if (property->type == iris::PropertyType::Texture) {
-				QString textureValue = materialDefinition.value(property->name).toString();
+				QString textureValue = valueFor(property->name).toString();
                 if (!textureValue.isEmpty() || !QFileInfo(textureValue).suffix().isEmpty()) {
-                    nodeMaterial->setValue(property->name, materialDefinition.value(property->name).toString());
+                    nodeMaterial->setValue(property->name, resolveTexture(textureValue));
                 }
             }
             else if (property->type == iris::PropertyType::Color) {
                 nodeMaterial->setValue(
                     property->name,
-                    QVariant::fromValue(materialDefinition.value(property->name).toVariant().value<QColor>())
+                    QVariant::fromValue(valueFor(property->name).toVariant().value<QColor>())
                 );
             }
             else {
-                nodeMaterial->setValue(property->name, QVariant::fromValue(materialDefinition.value(property->name)));
+                nodeMaterial->setValue(property->name, QVariant::fromValue(valueFor(property->name)));
             }
         }
         }
@@ -113,7 +141,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     if (!children.isEmpty()) {
         for (int i = 0; i < node->children.count(); ++i) {
             if (!children[i].toObject().isEmpty())
-                updateNodeMaterial(node->children[i], children[i].toObject());
+                updateNodeMaterial(node->children[i], children[i].toObject(), db);
         }
     }
 }

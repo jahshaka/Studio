@@ -23,7 +23,12 @@ For more information see the LICENSE file
 class AssetHelper
 {
 public:
-    static void updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition);
+    /// Rebuilds a library object's materials from its stored definition.
+    /// Texture values in the definition are member asset GUIDs (the import
+    /// pipeline stores references, not paths); `db` is required to resolve
+    /// them to CAS store files before they reach the path-based loaders.
+    static void updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition,
+                                   Database *db);
     static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
     static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
     static QStringList getChildGuids(const iris::SceneNodePtr &node);

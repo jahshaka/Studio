@@ -22,14 +22,20 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QImage>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <cstdio>
 
 #include "data/database/database.h"
 #include "services/assetcas.h"
+#include "services/assethelper.h"
 #include "services/assetmigration.h"
 #include "services/assetstorepaths.h"
+#include "irisgl/core/properties/property.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -249,6 +255,56 @@ int main(int argc, char **argv)
         check.close();
     }
     QSqlDatabase::removeDatabase("RebuildCheck");
+
+    // ---- updateNodeMaterial resolves guid texture references (2026-08-31) ----
+    // The library rebuild path (ProjectAssets::addToProject in a fresh
+    // session) feeds stored definitions into AssetHelper::updateNodeMaterial.
+    // Texture values are member asset GUIDS; unresolved they reach
+    // Texture2D::load as fake paths ("error loading image: <guid>") and every
+    // map silently drops (the mottled-import defect).
+    {
+        AssetStorePaths::setRootOverride(root);
+
+        const QString texPng = srcDir + "/resolve_me.png";
+        {
+            QImage img(4, 4, QImage::Format_RGBA8888);
+            img.fill(QColor(10, 200, 30));
+            img.save(texPng, "PNG");
+        }
+        const QString texGuid = "11111111-2222-3333-4444-555555555555";
+        insertAsset(texGuid, 2 /* Texture */, "resolve_me.png", 3);
+        QString oid, err;
+        CHECK(AssetCas::ingestFile(QSqlDatabase::database(), root, texPng,
+                                   texGuid, "source", "resolve_me.png", &oid, &err),
+              "texture ingested for updateNodeMaterial");
+
+        QJsonObject values;
+        values["baseColorMap"] = texGuid;   // guid reference, as the importer stores it
+        values["roughness"] = 0.25;
+        QJsonObject material;
+        material["materialType"] = "pbr";
+        material["values"] = values;
+        QJsonObject definition;
+        definition["material"] = material;
+
+        auto meshNode = iris::MeshNode::create();
+        auto sceneNode = meshNode.staticCast<iris::SceneNode>();
+        AssetHelper::updateNodeMaterial(sceneNode, definition, &db);
+
+        auto pbr = meshNode->getMaterial().dynamicCast<iris::PbrMaterial>();
+        CHECK(!pbr.isNull(), "pbr definition rebuilds a PbrMaterial");
+        if (pbr) {
+            QString stored;
+            for (auto prop : pbr->properties)
+                if (prop->name == "baseColorMap") stored = prop->getValue().toString();
+            CHECK(stored != texGuid, "texture property is NOT the raw guid");
+            CHECK(stored.contains("/objects/") && QFileInfo::exists(stored),
+                  "texture property resolves to an existing CAS object file");
+            CHECK(pbr->useBaseColorMap, "the map actually loaded (no guid reached Texture2D::load)");
+        }
+
+        AssetStorePaths::setRootOverride(QString());
+    }
 
     // ---- cleanup ----
     QFile::remove(dbPath);

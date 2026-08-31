@@ -171,6 +171,58 @@ int main(int argc, char **argv)
         }
     }
 
+    // ================= 3b. UV orientation + tangent handedness =================
+    // textured_pbr_quad.glb: a +Z-facing unit quad with authored NORMAL,
+    // TANGENT (1,0,0,+1) and TEXCOORD_0 mapping u=(x+1)/2, v=(1-y)/2 (glTF
+    // top-left origin). assimp imports V flipped to its GL-style bottom-left
+    // convention (the legacy renderer compensated by flipping the texture
+    // image at load); the engine samples top-left images unflipped, so the
+    // MIRROR must hand the engine glTF-convention UVs (v = 1 - v_document)
+    // and the matching handedness — otherwise every imported model renders
+    // its textures V-flipped (the "misplaced textures" defect).
+    {
+        QTemporaryDir tmp;
+        const QString model = QDir(tmp.path()).filePath("quad.glb");
+        CHECK(QFile::copy(fixture("textured_pbr_quad.glb"), model), "quad fixture copied");
+        QStringList texNames, texPaths;
+        bool hasEmbedded = false;
+        auto node = AssetHelper::extractTexturesAndMaterialFromMesh(model, texNames, texPaths,
+                                                                    hasEmbedded, nullptr, tmp.path());
+        auto meshNode = node.dynamicCast<iris::MeshNode>();
+        CHECK(!meshNode.isNull(), "textured quad imports as a MeshNode");
+        if (meshNode) {
+            MeshData md;
+            CHECK(SceneMirror::toMeshData(meshNode->getMesh().data(), md), "quad toMeshData");
+            const size_t nv = md.positions.size() / 3;
+            CHECK(nv >= 4, "quad has at least 4 vertices");
+            CHECK(md.uvs.size() == nv * 2, "quad has UVs");
+            CHECK(md.tangents.size() == nv * 4, "quad has float4 tangents");
+            bool uvOk = md.uvs.size() == nv * 2;
+            for (size_t i = 0; i < nv && uvOk; ++i) {
+                const float x = md.positions[i*3], y = md.positions[i*3+1];
+                const float u = md.uvs[i*2], v = md.uvs[i*2+1];
+                const float expU = (x + 1.0f) / 2.0f;
+                const float expV = (1.0f - y) / 2.0f;
+                if (std::fabs(u - expU) > 1e-4f || std::fabs(v - expV) > 1e-4f) {
+                    std::printf("    vertex (%.1f,%.1f): uv (%.3f,%.3f), expected (%.3f,%.3f)\n",
+                                x, y, u, v, expU, expV);
+                    uvOk = false;
+                }
+            }
+            CHECK(uvOk, "engine-facing UVs are glTF convention (v NOT flipped: red quadrant top-left)");
+            bool tanOk = md.tangents.size() == nv * 4;
+            for (size_t i = 0; i < nv && tanOk; ++i) {
+                const float tx = md.tangents[i*4], w = md.tangents[i*4+3];
+                if (std::fabs(tx - 1.0f) > 1e-3f || std::fabs(w - 1.0f) > 1e-3f) {
+                    std::printf("    tangent[%zu] = (%.3f, %.3f, %.3f, w=%.1f)\n", i,
+                                md.tangents[i*4], md.tangents[i*4+1], md.tangents[i*4+2], w);
+                    tanOk = false;
+                }
+            }
+            CHECK(tanOk, "engine-facing tangents keep the authored frame (T=+X, w=+1)");
+        }
+    }
+
     // ================= 4. animation extraction (S1/S2) + child time (S5) =================
     {
         Assimp::Importer importer;

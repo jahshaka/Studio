@@ -27,6 +27,25 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/scenereader.h"
 #include "io/assetmanager.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
+
+namespace {
+// Sky texture references are asset guids: resolve them through the CAS
+// (pinned bytes in project context, then library source) before falling back
+// to the legacy projectFolder/name join (pre-pipeline projects).
+QString resolveSkyAssetFile(Project *project, Database *db, const QString &guid)
+{
+    if (guid.isEmpty()) return QString();
+    QSqlDatabase conn = QSqlDatabase::database();
+    QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                           project->getProjectGuid(), guid);
+    if (path.isEmpty()) path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
+    if (path.isEmpty()) path = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(guid).name);
+    return path;
+}
+} // namespace
 
 namespace {
 // The "Material" sky is gone from the UI (it was broken even in the legacy
@@ -344,7 +363,7 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 {
     if (!guid.isEmpty()) {
 		equiSkyDefinition.insert("equiSkyGuid", guid);
-        auto image = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(guid).name);
+        auto image = resolveSkyAssetFile(project, db, guid);
         equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
         scene->setSkyTexture(iris::Texture2D::load(image, false));
     }
@@ -352,12 +371,12 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 
 void SkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 {
-	auto front = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["front"].toString()).name);
-	auto back = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["back"].toString()).name);
-	auto left = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["left"].toString()).name);
-	auto right = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["right"].toString()).name);
-	auto top = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["top"].toString()).name);
-	auto bottom = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(skyDataDefinition["bottom"].toString()).name);
+	auto front = resolveSkyAssetFile(project, db, skyDataDefinition["front"].toString());
+	auto back = resolveSkyAssetFile(project, db, skyDataDefinition["back"].toString());
+	auto left = resolveSkyAssetFile(project, db, skyDataDefinition["left"].toString());
+	auto right = resolveSkyAssetFile(project, db, skyDataDefinition["right"].toString());
+	auto top = resolveSkyAssetFile(project, db, skyDataDefinition["top"].toString());
+	auto bottom = resolveSkyAssetFile(project, db, skyDataDefinition["bottom"].toString());
 
 	cubeMapDefinition.insert("front", skyDataDefinition["front"].toString());
 	cubeMapDefinition.insert("back", skyDataDefinition["back"].toString());
@@ -391,8 +410,8 @@ void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
 	auto vert = materialDefinition.value("vertexShader").toString();
 	auto frag = materialDefinition.value("fragmentShader").toString();
 
-	auto vPath = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(vert).name);
-	auto fPath = IrisUtils::join(project->getProjectFolder(), db->fetchAsset(frag).name);
+	auto vPath = resolveSkyAssetFile(project, db, vert);
+	auto fPath = resolveSkyAssetFile(project, db, frag);
 
 	//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
 }

@@ -377,12 +377,19 @@ void SceneEditService::addAssetParticleSystem(bool ignore, QVector3D position, Q
     particleNode->setName(pDefs["name"].toString());
     particleNode->setSpeed((float) pDefs["speed"].toDouble(1.0f));
     {
+        // The stored value is an asset guid: resolve it through the CAS (the
+        // pinned bytes in project context) — the flat projectFolder/name join
+        // pointed at a folder the pipeline no longer populates.
         auto textureGuid = pDefs["texture"].toString();
-        auto texPath = IrisUtils::join(
-            project->getProjectFolder(),
-            db->fetchAsset(textureGuid).name
-        );
-        particleNode->setTexture(iris::Texture2D::load(texPath));
+        if (!textureGuid.isEmpty()) {
+            QSqlDatabase conn = QSqlDatabase::database();
+            QString texPath = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                                      project->getProjectGuid(), textureGuid);
+            if (texPath.isEmpty())
+                texPath = IrisUtils::join(project->getProjectFolder(),
+                                          db->fetchAsset(textureGuid).name);
+            particleNode->setTexture(iris::Texture2D::load(texPath));
+        }
     }
     particleNode->setVisible(pDefs["visible"].toBool(true));
 

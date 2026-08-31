@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
+#include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
 #include "services/assetstorepaths.h"
@@ -107,8 +108,14 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     out.metadata = modelStats;
     out.node = node;
 
-    // The source model file.
+    // The source model file — recorded under BOTH the Object guid and the Mesh
+    // member guid (same content id: the CAS dedups). Scene instantiation
+    // (SceneReader::createMesh) resolves the blob's "mesh" reference — the Mesh
+    // guid — through resolvePinned/resolveSource; without a file row under
+    // that guid every scene-placed import silently lost its geometry.
     out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
+                       QStringLiteral("source"), sourceInfo.fileName() });
+    out.files.append({ sourceInfo.absoluteFilePath(), out.meshGuid,
                        QStringLiteral("source"), sourceInfo.fileName() });
 
     // .obj sidecars: exactly the .mtl files the model names (a precise
@@ -163,27 +170,19 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
                           out.mainGuid, entry.guid, QString() });
     }
 
-    // Guid rewrite: the mesh path becomes the Mesh row's guid, every mesh
-    // node carries the Object guid, texture material properties become
-    // member texture guids.
+    // Guid rewrite, node side: the mesh path becomes the Mesh row's guid and
+    // every mesh node carries the Object guid. Texture references are NOT
+    // rewritten on the live node - Material::setValue() eagerly calls
+    // Texture2D::load() on texture properties, so writing a guid into the
+    // live material both logged "error loading image: <guid>" per texture and
+    // dropped the already-loaded map from the session-registered asset. The
+    // guid substitution happens on the serialized blob below instead.
     std::function<void(iris::SceneNodePtr &)> rewrite = [&](iris::SceneNodePtr &n) {
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto meshNode = n.staticCast<iris::MeshNode>();
             if (QFileInfo(meshNode->meshPath).fileName() == sourceInfo.fileName())
                 meshNode->meshPath = out.meshGuid;
             meshNode->setGUID(out.mainGuid);
-
-            auto material = meshNode->getMaterial();
-            if (material) {
-                for (auto prop : material->properties) {
-                    if (prop->type != iris::PropertyType::Texture) continue;
-                    const QString fileName = QFileInfo(prop->getValue().toString()).fileName();
-                    for (const auto &tex : textures) {
-                        if (tex.fileName == fileName)
-                            material->setValue(prop->name, tex.guid);
-                    }
-                }
-            }
         }
         for (auto &child : n->children) rewrite(child);
     };
@@ -191,6 +190,34 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
 
     QJsonObject blob;
     SceneWriter::writeSceneNode(blob, node, false);
+
+    // Guid rewrite, blob side: texture material values (written as paths by
+    // writeSceneNodeMaterial) become member texture guids, matched by file
+    // name (the member list is unique by file name). Readers resolve them
+    // back through the CAS (MaterialReader/SceneReader/AssetHelper).
+    std::function<QJsonObject(QJsonObject)> substituteTextureGuids =
+        [&](QJsonObject nodeObj) -> QJsonObject {
+        QJsonObject matObj = nodeObj.value(QStringLiteral("material")).toObject();
+        QJsonObject values = matObj.value(QStringLiteral("values")).toObject();
+        if (!values.isEmpty()) {
+            for (auto it = values.begin(); it != values.end(); ++it) {
+                if (!it.value().isString()) continue;
+                const QString fileName = QFileInfo(it.value().toString()).fileName();
+                if (fileName.isEmpty()) continue;
+                for (const auto &tex : textures) {
+                    if (tex.fileName == fileName) { it.value() = tex.guid; break; }
+                }
+            }
+            matObj[QStringLiteral("values")] = values;
+            nodeObj[QStringLiteral("material")] = matObj;
+        }
+        QJsonArray children = nodeObj.value(QStringLiteral("children")).toArray();
+        for (int i = 0; i < children.size(); ++i)
+            children[i] = substituteTextureGuids(children[i].toObject());
+        if (!children.isEmpty()) nodeObj[QStringLiteral("children")] = children;
+        return nodeObj;
+    };
+    blob = substituteTextureGuids(blob);
 
     // Mesh member row (no blob — matches the legacy importers' tail).
     StagedRow meshRow;
@@ -213,10 +240,34 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     out.deps.append({ static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh),
                       out.mainGuid, out.meshGuid, QString() });
 
-    // Session registration (post-commit).
+    // Session registration (post-commit). The live node's texture properties
+    // still point into the extraction staging dir, which dies with the import;
+    // re-point them at the durable CAS object paths (resolvable post-commit)
+    // so the session-registered asset renders for the rest of the session.
     const QString mainGuid = out.mainGuid;
     const QString fileName = sourceInfo.fileName();
-    out.registerSession = [node, mainGuid, fileName]() {
+    out.registerSession = [node, mainGuid, fileName, textures]() {
+        QSqlDatabase conn = QSqlDatabase::database();
+        const QString root = AssetStorePaths::root();
+        std::function<void(iris::SceneNodePtr)> repoint = [&](iris::SceneNodePtr n) {
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                auto material = n.staticCast<iris::MeshNode>()->getMaterial();
+                if (material) for (auto prop : material->properties) {
+                    if (!prop || prop->type != iris::PropertyType::Texture) continue;
+                    const QString fn = QFileInfo(prop->getValue().toString()).fileName();
+                    if (fn.isEmpty()) continue;
+                    for (const auto &tex : textures) {
+                        if (tex.fileName != fn) continue;
+                        const QString path = AssetCas::resolveSource(conn, root, tex.guid);
+                        if (!path.isEmpty()) material->setValue(prop->name, path);
+                        break;
+                    }
+                }
+            }
+            for (auto &child : n->children) repoint(child);
+        };
+        repoint(node);
+
         auto *assetObject = new AssetNodeObject;
         assetObject->fileName = fileName;
         assetObject->assetGuid = mainGuid;
@@ -396,7 +447,10 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
                 TexEntry entry{ texInfo.fileName(), GUIDManager::generateGUID(),
                                 texInfo.absoluteFilePath() };
                 textures.append(entry);
-                material->setValue(prop->name, entry.guid);
+                // The live material keeps the real path (setValue eagerly
+                // loads texture properties; a guid would log an error and
+                // drop the map). The blob substitution below writes the guid.
+                material->setValue(prop->name, entry.path);
             } else {
                 material->setValue(prop->name, QFileInfo(textureStr).fileName());
             }
@@ -407,6 +461,21 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
 
     QJsonObject blob;
     SceneWriter::writeSceneNodeMaterial(blob, material, false);
+
+    // Texture values become member guids in the stored definition (readers
+    // resolve them through the CAS); matched by file name, unique per import.
+    {
+        QJsonObject values = blob.value(QStringLiteral("values")).toObject();
+        for (auto it = values.begin(); it != values.end(); ++it) {
+            if (!it.value().isString()) continue;
+            const QString fn = QFileInfo(it.value().toString()).fileName();
+            if (fn.isEmpty()) continue;
+            for (const auto &tex : textures) {
+                if (tex.fileName == fn) { it.value() = tex.guid; break; }
+            }
+        }
+        blob[QStringLiteral("values")] = values;
+    }
 
     for (const auto &tex : textures) {
         out.files.append({ tex.path, out.mainGuid, QStringLiteral("texture"), tex.fileName });

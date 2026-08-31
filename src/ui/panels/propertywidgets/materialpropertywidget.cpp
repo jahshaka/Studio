@@ -41,6 +41,9 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "io/materialreader.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 
 iris::MaterialPtr MaterialPropertyWidget::currentMaterial() const
 {
@@ -198,9 +201,18 @@ void MaterialPropertyWidget::materialChanged(int index)
 	for (auto prop : material->properties) {
 		if (prop->type == (iris::PropertyType::Texture)) {
 			auto guid = prop->getValue().toString();
-			auto asset = db->fetchAsset(guid).name;
-			auto path = QDir(project->getProjectFolder()).filePath(asset);
-			if(QFile::exists(path))
+			if (guid.isEmpty() || QFile::exists(guid)) continue;
+			// guid-valued texture reference: resolve through the CAS (pinned
+			// in project context); the flat projectFolder join stays as a
+			// last-resort fallback for pre-pipeline projects.
+			QSqlDatabase conn = QSqlDatabase::database();
+			QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+			                                       project->getProjectGuid(), guid);
+			if (path.isEmpty())
+				path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
+			if (path.isEmpty())
+				path = QDir(project->getProjectFolder()).filePath(db->fetchAsset(guid).name);
+			if (QFile::exists(path))
 				material->setValue(prop->name, path);
 		}
 	}

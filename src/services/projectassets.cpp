@@ -100,7 +100,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
                 });
             if (!node) break;
             const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
-            AssetHelper::updateNodeMaterial(node, definition);
+            AssetHelper::updateNodeMaterial(node, definition, db);
             auto *asset = new AssetNodeObject;
             asset->assetGuid = member;
             asset->fileName = memberRecord.name;
