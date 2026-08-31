@@ -33,11 +33,6 @@ NodeGraph *GraphNodeScene::getNodeGraph() const
 	return nodeGraph;
 }
 
-GraphNode * GraphNodeScene::getNodeByPropertyId(QString id)
-{
-	return nullptr;
-}
-
 void GraphNodeScene::refreshNodeTitle(QString id)
 {
 	auto node = getNodeById(id);
@@ -172,16 +167,6 @@ QMenu *GraphNodeScene::createContextMenu(float x, float y)
 		});
 	}
 
-	// create properties
-	auto propMenu = menu->addMenu("Properties");
-	for (auto prop : nodeGraph->properties) {
-		connect(propMenu->addAction(prop->displayName), &QAction::triggered, [this, x, y, prop]() {
-			auto propNode = new PropertyNode();
-			propNode->setProperty(prop);
-			this->addNodeModel(propNode, x, y);
-		});
-	}
-
 	return menu;
 }
 
@@ -237,22 +222,6 @@ QJsonObject GraphNodeScene::serialize()
 	return data;
 }
 
-void GraphNodeScene::updatePropertyNodeTitle(QString title, QString propId)
-{
-
-	auto propList = nodeGraph->getNodesByTypeName("property");
-
-	for (auto node : propList) {
-		auto propNode = static_cast<PropertyNode *>(node);
-		if (propNode->getProperty()->id == propId) {
-			auto node = getNodeById(propNode->id);
-			node->setTitle(title);
-		}
-	}
-
-	
-}
-
 void GraphNodeScene::addNodeFromSearchDialog(QTreeWidgetItem * item, const QPoint &point)
 {
 	auto view = this->views().first();
@@ -260,18 +229,6 @@ void GraphNodeScene::addNodeFromSearchDialog(QTreeWidgetItem * item, const QPoin
 	auto scenePoint = view->mapToScene(viewPoint);
 
 	auto p = scenePoint;
-
-
-	if (!item->data(0, MODEL_EXT_ROLE).isNull()) {
-		auto prop = nodeGraph->properties.at(item->data(0, MODEL_EXT_ROLE).toInt());
-		if (prop) {
-			auto propNode = new PropertyNode();
-			propNode->setProperty(prop);
-			propNode->setX(p.x());
-			propNode->setY(p.y());
-			this->addNodeModel(propNode);
-		}
-	}
 
 	if (item->data(0, MODEL_TYPE_ROLE).toString() == "node") {
 		auto node = nodeGraph->library->createNode(item->data(0, Qt::UserRole).toString());
@@ -438,18 +395,7 @@ static bool pasteSelection(GraphNodeScene* scene, const QJsonObject& data, float
 		if (copy == nullptr)
 			continue; // master types are not in the library
 
-		if (type == "property") {
-			// a property node references a graph property by id
-			auto prop = nodeGraph->getPropertyById(nodeObj["value"].toString());
-			if (prop == nullptr) {
-				delete copy;
-				continue;
-			}
-			static_cast<PropertyNode*>(copy)->setProperty(prop);
-		}
-		else {
-			copy->deserializeWidgetValue(nodeObj["value"]);
-		}
+		copy->deserializeWidgetValue(nodeObj["value"]);
 
 		copy->setX(nodeObj["x"].toDouble() + offset);
 		copy->setY(nodeObj["y"].toDouble() + offset);
@@ -518,20 +464,6 @@ void GraphNodeScene::clearDragHighlight()
 void GraphNodeScene::dropEvent(QGraphicsSceneDragDropEvent * event)
 {
 
-	if (!event->mimeData()->data("index").isNull()) {
-		event->accept();
-		auto prop = nodeGraph->properties.at(event->mimeData()->data("index").toInt());
-		if (prop) {
-			auto propNode = new PropertyNode();
-			propNode->setProperty(prop);
-			propNode->setX(event->scenePos().x());
-			propNode->setY(event->scenePos().y());
-			this->addNodeModel(propNode);
-			auto nodeView = this->getNodeById(propNode->id);
-			nodeView->setPos(event->scenePos().x() - nodeView->boundingRect().width() / 2.0, event->scenePos().y() - nodeView->boundingRect().height() / 4.0);
-		}
-	}
-
 	if ("node" == event->mimeData()->data("MODEL_TYPE_ROLE").toStdString()) {
 		event->accept();
 
@@ -582,8 +514,48 @@ GraphNodeScene::GraphNodeScene(QWidget* parent) :
 	conGroup = new QGraphicsItemGroup;
 	addItem(conGroup);
 	stack = new QUndoStack;
-	
+
 	selectedNode = nullptr;
+
+	// §3a: surface selection as a model-level signal the properties panel
+	// (and the graph.selectNode verbs) can follow
+	connect(this, &QGraphicsScene::selectionChanged, this, [this]() {
+		emit nodeSelected(selectedNodeModel());
+	});
+}
+
+bool GraphNodeScene::selectNodeById(const QString& id)
+{
+	auto node = getNodeById(id);
+	if (node == nullptr)
+		return false;
+	clearSelection();
+	node->setSelected(true);
+	return true;
+}
+
+NodeModel* GraphNodeScene::selectedNodeModel()
+{
+	GraphNode* single = nullptr;
+	for (auto item : selectedItems()) {
+		if (item->type() != (int)GraphicsItemType::Node)
+			continue;
+		if (single != nullptr)
+			return nullptr; // multi-selection: no single node
+		single = static_cast<GraphNode*>(item);
+	}
+	return single != nullptr ? single->model : nullptr;
+}
+
+QString GraphNodeScene::selectedNodeId()
+{
+	auto model = selectedNodeModel();
+	return model != nullptr ? model->id : QString();
+}
+
+void GraphNodeScene::deselectAll()
+{
+	clearSelection();
 }
 
 void GraphNodeScene::undo()

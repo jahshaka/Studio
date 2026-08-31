@@ -12,7 +12,7 @@
 #include <QToolBar>
 #include <QUndoStack>
 
-#include "widgets/propertylistwidget.h"
+#include "widgets/nodepropertiespanel.h"
 //#include "nodemodel.h"
 #include "widgets/graphicsview.h"
 #include "widgets/materialsettingswidget.h"
@@ -85,6 +85,12 @@ public:
 	void loadGraph(QString guid);
 	static QString genGUID();
 
+	// §3a selection bridge for the graph.selectNode/selectedNode/deselect
+	// verbs (wired up by MaterialsModule::registerApi)
+	bool selectGraphNode(const QString& nodeId);
+	QString selectedGraphNodeId();
+	void deselectGraphNodes();
+
     ~EffectsPage();
 
 	QList<NodeGraphPreset> list;
@@ -100,7 +106,6 @@ private:
 	void saveDefaultShader();
     void loadShadersFromDisk();
 
-	void saveMaterialFile(QString filename, TexturePropertyWidget* widget);
 	void deleteMaterialFile(QString filename);
 
     void importGraph();
@@ -174,7 +179,7 @@ private:
 	QTabWidget *tabWidget;
 	GraphicsView* graphicsView;
 	QTextEdit* textEdit;
-	PropertyListWidget* propertyListWidget;
+	NodePropertiesPanel* nodePropertiesPanel;
 	QListWidget *nodeContainer;
 	QMenuBar *bar;  
 	QToolBar *toolBar;

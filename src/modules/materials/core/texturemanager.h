@@ -81,7 +81,11 @@ public:
 
 	GraphTexture* importTexture(QString path);
 	static TextureManager* getSingleton();
+
+	// whether a project database backs guid lookups (headless slices and the
+	// standalone build run without one)
+	bool hasDatabase() const { return database != nullptr; }
 private:
-	Database *database;
+	Database *database = nullptr;
 	static TextureManager* instance;
 };

@@ -437,6 +437,16 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "save", "graph.save() -> bool",
           "Serializes the current graph back into its shader asset (only for graphs opened from an asset guid).",
           Needs::Document },
+        { "selectNode", "graph.selectNode(id) -> bool",
+          "Selects a node. When the Effects page has a node with this id its canvas selection (and the properties panel) follows; "
+          "otherwise the id must belong to the current script graph.",
+          Needs::Document },
+        { "selectedNode", "graph.selectedNode() -> id|null",
+          "The selected node's id: the Effects page's canvas selection when one exists, else the script-side selection.",
+          Needs::Document },
+        { "deselect", "graph.deselect() -> bool",
+          "Clears the selection (canvas and script-side).",
+          Needs::Document },
     };
 }
 
@@ -446,6 +456,7 @@ void GraphApi::setCurrent(NodeGraph *graph, const QString &assetGuid)
     // little, matching how the shadergraph window itself swaps graphs.
     mGraph = graph;
     mAssetGuid = assetGuid;
+    mSelectedNodeId.clear();
 }
 
 NodeGraph *GraphApi::graphOrFail(const QString &verb)
@@ -487,12 +498,8 @@ QString GraphApi::addNode(const QString &type)
     NodeModel *node = nullptr;
     if (type == "PbrMaterial") {
         node = new PbrMasterNode();
-    } else if (type == "property") {
-        // a bare PropertyNode has no sockets and no Property behind it —
-        // the search dialog refuses to offer one, and so does this verb
-        fail(QStringLiteral("graph.addNode: 'property' nodes must reference a graph property — create one in the Properties panel and drag it in"));
-        return QString();
     } else {
+        // ("property" retired §3b — it is simply no longer a library type)
         LibraryV1 library;
         if (!library.hasNode(type)) {
             fail(QStringLiteral("graph.addNode: unknown type '%1' (graph.nodeTypes() lists them)").arg(type));
@@ -640,6 +647,41 @@ bool GraphApi::toMaterial(const QString &nodeId)
     }
     if (!material) return fail("graph.toMaterial: evaluation produced no material");
     node.staticCast<iris::MeshNode>()->setMaterial(material);
+    return true;
+}
+
+bool GraphApi::selectNode(const QString &nodeId)
+{
+    // the live Effects canvas wins when it knows the id (§3a: the panel
+    // follows its selection)
+    if (mSelection.select && mSelection.select(nodeId)) {
+        mSelectedNodeId.clear();
+        return true;
+    }
+
+    auto graph = graphOrFail(QStringLiteral("graph.selectNode"));
+    if (!graph) return false;
+    if (!graph->nodes.contains(nodeId))
+        return fail(QStringLiteral("graph.selectNode: no node '%1' in the Effects page or the current graph").arg(nodeId));
+    mSelectedNodeId = nodeId;
+    return true;
+}
+
+QVariant GraphApi::selectedNode()
+{
+    if (mSelection.selected) {
+        const QString pageId = mSelection.selected();
+        if (!pageId.isEmpty()) return pageId;
+    }
+    if (!mSelectedNodeId.isEmpty() && mGraph && mGraph->nodes.contains(mSelectedNodeId))
+        return mSelectedNodeId;
+    return QVariant(); // null: nothing selected anywhere
+}
+
+bool GraphApi::deselect()
+{
+    if (mSelection.deselect) mSelection.deselect();
+    mSelectedNodeId.clear();
     return true;
 }
 

@@ -31,7 +31,11 @@ GraphTexture* TextureManager::createTexture()
 
 void TextureManager::removeTexture(GraphTexture* tex)
 {
-	this->textures.removeAt(textures.indexOf(tex));
+	// clearTextures() may already have dropped it from the list; removeAt(-1)
+	// would assert
+	int index = textures.indexOf(tex);
+	if (index >= 0)
+		this->textures.removeAt(index);
 }
 
 void TextureManager::removeTextureByGuid(QString guid)
@@ -82,6 +86,13 @@ void TextureManager::clearTextures()
 GraphTexture * TextureManager::loadTextureFromGuid(QString guid)
 {
 	auto tex = this->createTexture();
+	tex->guid = guid;
+
+	// no database (headless slice / standalone): keep the guid, the path
+	// stays unresolved
+	if (database == nullptr)
+		return tex;
+
 	auto asset = database->fetchAsset(guid);
 	if (asset.guid.isEmpty()) {
 		return tex;

@@ -22,6 +22,7 @@ For more information see the LICENSE file
 
 #include <QVariantList>
 #include <QVariantMap>
+#include <functional>
 
 #include "scripting/apimodule.h"
 #include "irisgl/irisglfwd.h"
@@ -83,6 +84,17 @@ public:
     void setCurrent(NodeGraph *graph, const QString &assetGuid);
     NodeGraph *current() const { return mGraph; }
 
+    /// §3a: when the Effects page is alive its scene owns selection — the
+    /// module wires these to EffectsPage::selectGraphNode & co. Verbs fall
+    /// back to API-local selection on the current script graph when the
+    /// page has no node with the id (or no delegate is set: headless slices).
+    struct SelectionDelegate {
+        std::function<bool(const QString &)> select;
+        std::function<QString()> selected;
+        std::function<void()> deselect;
+    };
+    void setSelectionDelegate(const SelectionDelegate &delegate) { mSelection = delegate; }
+
     Q_INVOKABLE QVariantList nodes();
     Q_INVOKABLE QVariantList nodeTypes();
     Q_INVOKABLE QString addNode(const QString &type);
@@ -95,12 +107,17 @@ public:
     Q_INVOKABLE QVariantMap bake(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool toMaterial(const QString &nodeId);
     Q_INVOKABLE bool save();
+    Q_INVOKABLE bool selectNode(const QString &nodeId);
+    Q_INVOKABLE QVariant selectedNode();
+    Q_INVOKABLE bool deselect();
 
 private:
     NodeGraph *graphOrFail(const QString &verb);
 
     NodeGraph *mGraph = nullptr;
     QString mAssetGuid;
+    QString mSelectedNodeId;      // API-local selection (headless fallback)
+    SelectionDelegate mSelection; // the Effects page, when wired
 };
 
 #endif // SCRIPTING_MATERIALSAPI_H

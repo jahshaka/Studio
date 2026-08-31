@@ -1,0 +1,59 @@
+// shadergraph.selection_verbs — graph.selectNode/selectedNode/deselect
+// end-to-end in the real app (--script --headless: document verbs only).
+//
+// The verbs prefer the Effects page's canvas when it knows the node id; a
+// script-loaded graph (which the page does not display) exercises the
+// API-local selection the headless matrix guarantees.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+// load a shipped preset as the current script graph
+var info = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/silver.effect");
+assert(info.nodes >= 3, "silver.effect loaded (" + info.nodes + " nodes)");
+assert(info.master === "PbrMaterial", "master is PbrMaterial");
+
+var nodes = graph.nodes();
+assert(nodes.length === info.nodes, "graph.nodes() enumerates the loaded graph");
+
+// §3b: no property nodes anywhere post-migration
+for (var i = 0; i < nodes.length; i++)
+    assert(nodes[i].type !== "property", "no 'property' node survives the load");
+
+// nothing selected on load
+assert(graph.selectedNode() === null || graph.selectedNode() === undefined,
+       "selectedNode is empty after load");
+
+// select a non-master node
+var target = null;
+for (var i = 0; i < nodes.length; i++)
+    if (!nodes[i].master) { target = nodes[i].id; break; }
+assert(target !== null, "found a non-master node to select");
+
+assert(graph.selectNode(target) === true, "selectNode accepts a valid id");
+assert(graph.selectedNode() === target, "selectedNode returns the selected id");
+
+// unknown id -> a catchable error, selection unchanged
+var threw = false;
+try { graph.selectNode("no-such-node"); } catch (e) { threw = true; }
+assert(threw, "selectNode throws on an unknown id");
+assert(graph.selectedNode() === target, "failed select leaves the selection alone");
+
+// deselect clears
+assert(graph.deselect() === true, "deselect returns true");
+assert(graph.selectedNode() === null || graph.selectedNode() === undefined,
+       "selectedNode is empty after deselect");
+
+// selection resets when another graph becomes current
+graph.selectNode(target);
+materials.loadGraph("@SOURCE_DIR@/app/shadergraph/default.effect");
+assert(graph.selectedNode() === null || graph.selectedNode() === undefined,
+       "loading a new graph clears the script-side selection");
+
+// §3b: 'property' is no longer a creatable node type
+var types = graph.nodeTypes();
+assert(types.indexOf("property") < 0, "'property' absent from graph.nodeTypes()");
+
+console.log("shadergraph.selection_verbs: all ok");

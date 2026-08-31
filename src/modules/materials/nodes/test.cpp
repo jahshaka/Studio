@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "../propertywidgets/vectorpropertywidget.h"
 #include "ui/style/stylesheet.h"
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QDebug>
 
 SurfaceMasterNode::SurfaceMasterNode()
@@ -343,112 +344,9 @@ void TextureSamplerNode::process(ModelContext* context)
 	ctx->addCodeChunk(this, code);
 }
 
-PropertyNode::PropertyNode()
-{
-	// both were uninitialized — serializeWidgetValue/process read garbage
-	// on a bare node (audit D2)
-	prop = nullptr;
-	graphTexture = nullptr;
-	this->typeName = "property";
-	setNodeType(NodeCategory::Input);
-}
-
-// doesnt own property
-void PropertyNode::setProperty(Property* property)
-{
-	this->prop = property;
-	this->title = property->displayName;
-
-	// add output based on property type
-	switch (property->type) {
-	case PropertyType::Int: {
-		this->addOutputSocket(new FloatSocketModel("int"));
-	}
-		break;
-	case PropertyType::Float:
-		this->addOutputSocket(new FloatSocketModel("float"));
-		break;
-
-	case PropertyType::Vec2:
-		this->addOutputSocket(new Vector2SocketModel("vector2"));
-		break;
-
-	case PropertyType::Vec3:
-		this->addOutputSocket(new Vector3SocketModel("vector3"));
-		break;
-
-	case PropertyType::Vec4:
-		this->addOutputSocket(new Vector4SocketModel("vector4"));
-		break;
-
-	case PropertyType::Texture:
-		this->addOutputSocket(new TextureSocketModel("texture"));
-		this->addOutputSocket(new Vector4SocketModel("rgba"));
-		this->addOutputSocket(new Vector3SocketModel("normal"));
-		this->addInputSocket(new Vector2SocketModel("uv","v_texCoord"));
-		
-		break;
-
-	default:
-		//todo: throw error or something
-		Q_ASSERT(false);
-		break;
-	}
-}
-
-QJsonValue PropertyNode::serializeWidgetValue(int widgetIndex)
-{
-	if (this->prop) {
-		return this->prop->id;
-	}
-
-	return "";
-}
-
-void PropertyNode::process(ModelContext* context)
-{
-	if (prop == nullptr) return; // bare node — nothing to emit
-
-	auto ctx = (ShaderContext*)context;
-	ctx->addUniform(prop->getUniformString());
-
-	if (this->outSockets.count() > 0)
-		outSockets[0]->setVarName(prop->getUniformName());
-
-	if (prop->type == PropertyType::Texture) {
-		auto uv = this->getValueFromInputSocket(0);
-		auto rgba = this->getOutputSocketVarName(1);
-		auto normal = this->getOutputSocketVarName(2);
-
-		QString code = "";
-		code += rgba + " = texture(" + prop->getUniformName() + "," + uv + ");\n";
-		//if (this->outSockets[2]->hasConnection())
-			code += normal + " = " + rgba + ".xyz * vec3(2) - vec3(1);";
-		ctx->addCodeChunk(this, code);
-	}
-}
-
-
-TexturePropertyNode::TexturePropertyNode()
-{
-
-}
-
-// doesnt own property
-void TexturePropertyNode::setProperty(Property* property)
-{
-
-}
-
-QJsonValue TexturePropertyNode::serializeWidgetValue(int widgetIndex)
-{
-	return QJsonValue();
-}
-
-void TexturePropertyNode::process(ModelContext* context)
-{
-
-}
+// (PropertyNode / TexturePropertyNode retired 2026-08-31, §3b — load-time
+// migration in NodeGraph::deserialize turns their instances into real
+// constant/texture nodes)
 
 TextureNode::TextureNode()
 {
@@ -514,8 +412,35 @@ void TextureNode::setTexturePath(const QString& path)
 	graphTexture->path = path;
 }
 
+QString TextureNode::getTextureGuid() const
+{
+	if (graphTexture == nullptr) return QString();
+	return graphTexture->guid;
+}
+
+void TextureNode::setTextureGuid(const QString& guid)
+{
+	if (graphTexture != nullptr) {
+		TextureManager::getSingleton()->removeTexture(graphTexture);
+		delete graphTexture;
+		graphTexture = nullptr;
+	}
+
+	// resolves the path through the project database when one is set;
+	// otherwise keeps the guid with an unresolved path
+	graphTexture = TextureManager::getSingleton()->loadTextureFromGuid(guid);
+	graphTexture->guid = guid;
+
+	if (!graphTexture->path.isEmpty() && QFileInfo::exists(graphTexture->path))
+		texture->setIcon(QIcon(graphTexture->path));
+}
+
 QJsonValue TextureNode::serializeWidgetValue(int widgetIndex)
 {
+	// guid-backed textures serialize their guid (durable across machines and
+	// what DB dependency tracking wants); plain file picks keep the path
+	if (graphTexture != nullptr && !graphTexture->guid.isEmpty())
+		return graphTexture->guid;
 	return getTexturePath();
 }
 
@@ -523,9 +448,12 @@ void TextureNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 {
 	// old graphs carry "" here (the path was never saved before) — leave
 	// the node empty in that case, exactly as those files loaded before
-	auto path = val.toString();
-	if (path.isEmpty()) return;
-	setTexturePath(path);
+	auto value = val.toString();
+	if (value.isEmpty()) return;
+	if (QFileInfo::exists(value))
+		setTexturePath(value);
+	else
+		setTextureGuid(value); // an asset guid (or an app-relative preset image)
 }
 
 void TextureNode::process(ModelContext * context)

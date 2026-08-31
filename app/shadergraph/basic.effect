@@ -8,12 +8,27 @@
     "fragment_shader": "shader.frag",
     "lighting": true,
     "name": "Basic",
+    "pbrMaterial": {
+        "surfaceType": "surface",
+        "unsupportedNodes": [
+        ],
+        "values": {
+            "baseColor": {
+                "a": 1,
+                "b": 0,
+                "g": 1,
+                "r": 0
+            }
+        }
+    },
+    "properties": [
+    ],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "08c9f9e4-ff80-4ea0-a09a-bd69e312de5d",
+                "id": "4f02bd1b-2aa4-4386-8265-3b66b07936f1",
                 "leftNodeId": "af7a89a6-24f3-4351-a438-80fbd51d702d",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "50aedc23-3ef8-44c8-b362-f09a4964e554",
@@ -21,9 +36,11 @@
             }
         ],
         "masternode": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+        "materialGuid": "",
         "nodes": [
             {
                 "id": "50aedc23-3ef8-44c8-b362-f09a4964e554",
+                "title": "Surface Material",
                 "type": "Material",
                 "value": "",
                 "x": 0,
@@ -31,28 +48,20 @@
             },
             {
                 "id": "af7a89a6-24f3-4351-a438-80fbd51d702d",
-                "type": "property",
-                "value": "112083ee-9bad-4197-a030-f6b99fd05cdf",
-                "x": -342,
-                "y": 109
-            }
-        ],
-        "properties": [
-            {
-                "displayName": "Vector 3 property",
-                "id": "112083ee-9bad-4197-a030-f6b99fd05cdf",
-                "name": "property0",
-                "type": "vec3",
-                "uniform": "input_property0",
+                "title": "Vector 3 property",
+                "type": "vector3",
                 "value": {
                     "x": 0,
                     "y": 1,
                     "z": 0
-                }
+                },
+                "x": -342,
+                "y": 109
             }
         ],
         "settings": {
             "acceptLighting": true,
+            "bakeResolution": 1024,
             "blendMode": "Opaque",
             "castShadow": true,
             "cullMode": "Back",

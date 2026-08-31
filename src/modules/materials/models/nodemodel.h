@@ -10,6 +10,7 @@
 
 #include "socketmodel.h"
 
+// (the Properties category died with the PropertyNode retirement, §3b)
 enum class NodeCategory {
 	Input = 0,
 	Math = 1,
@@ -18,8 +19,7 @@ enum class NodeCategory {
 	Vector = 4,
 	Object = 5,
 	Utility = 6,
-	PlaceHolder = 7,
-	Properties = 8
+	PlaceHolder = 7
 };
 
 class QWidget;
@@ -104,6 +104,15 @@ public:
 	virtual void deserializeWidgetValue(QJsonValue val, int widgetIndex = 0)
 	{
 
+	}
+
+	// The one write path (§3a panel): callers set a value through
+	// deserializeWidgetValue and then announce it here so every editor
+	// (inline node widget, properties panel, scripts) flows through the
+	// same valueChanged -> graphInvalidated pipeline.
+	void notifyValueChanged(int socketIndex = 0)
+	{
+		emit valueChanged(this, socketIndex);
 	}
 
 	static QString getEnumString(NodeCategory type);

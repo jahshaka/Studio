@@ -148,7 +148,6 @@ class TextureNode : public NodeModel
 	Q_OBJECT
 	QPushButton *texture;
 	GraphTexture* graphTexture;
-	TexturePropertyWidget *textureWidget;
 public:
 	TextureNode();
 	virtual void process(ModelContext* context) override;
@@ -158,39 +157,19 @@ public:
 
 	void setTexturePath(const QString& path);
 
+	// DB-backed route (§3b property migration + the panel's picker): the
+	// stored value is an asset guid; the path resolves through TextureManager
+	// when a database is behind it, and stays empty otherwise.
+	QString getTextureGuid() const;
+	void setTextureGuid(const QString& guid);
+
 	virtual QJsonValue serializeWidgetValue(int widgetIndex = 0) override;
 	virtual void deserializeWidgetValue(QJsonValue val, int widgetIndex = 0) override;
 };
 
-class PropertyNode : public NodeModel
-{
-	GraphTexture* graphTexture;
-	Property* prop;
-public:
-	PropertyNode();
-
-	// doesnt own property
-	void setProperty(Property* property);
-	Property* getProperty() { return prop; }
-
-	virtual QJsonValue serializeWidgetValue(int widgetIndex = 0) override;
-
-	virtual void process(ModelContext* context) override;
-};
-
-class TexturePropertyNode : public NodeModel
-{
-	TextureProperty* prop;
-public:
-	TexturePropertyNode();
-
-	// doesnt own property
-	void setProperty(Property* property);
-
-	virtual QJsonValue serializeWidgetValue(int widgetIndex = 0) override;
-
-	virtual void process(ModelContext* context) override;
-};
+// (PropertyNode / TexturePropertyNode retired 2026-08-31, §3b: graph-global
+// properties migrate to real constant/texture nodes at load time —
+// NodeGraph::deserialize)
 
 class Vector2Node : public NodeModel
 {

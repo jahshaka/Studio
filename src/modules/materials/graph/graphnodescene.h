@@ -100,12 +100,10 @@ public:
 	GraphNode* getNodeByPos(QPointF point);
 	//QVector<SocketConnection*> socketConnections;
 	NodeGraph *getNodeGraph() const;
-	GraphNode* getNodeByPropertyId(QString id);
 	void refreshNodeTitle(QString id);
 	void setNodeGraph(NodeGraph* value);
 	void addNodeModel(NodeModel* model, bool addToGraph = true);
 	GraphNode* addNodeModel(NodeModel* model, float x, float y, bool addToGraph = true);
-	void addPropertyNode(Property* prop, float x, float y, bool addToGraph = true);
 
 	QMenu* createContextMenu(float x, float y);
 	QMenu* removeConnectionContextMenu(float x, float y);
@@ -115,13 +113,19 @@ public:
 	QList<QString> loadedShadersGUID;
 
 	void setList(QList<QString> list) { loadedShadersGUID = list; }
-	void updatePropertyNodeTitle(QString title, QString propId);
 
 	void addNodeFromSearchDialog(QTreeWidgetItem* item, const QPoint& point);
 
 	void deleteSelectedNodes();
 	void deleteNode(GraphNode* node);
 	void clearDragHighlight();
+
+	// selection API (§3a): the panel and the graph.selectNode/selectedNode/
+	// deselect verbs drive selection through these
+	bool selectNodeById(const QString& id);
+	QString selectedNodeId();
+	NodeModel* selectedNodeModel();
+	void deselectAll();
 
 	// clipboard copy/paste/duplicate of the selected nodes and the
 	// connections that run between them
@@ -143,6 +147,8 @@ signals:
 	void connectionRemoved(SocketConnection* connection);
 	void nodeRemoved(GraphNode* connection);
 	void nodeValueChanged(NodeModel* nodeModel, int socketIndex);
+	// exactly one node selected -> its model; empty or multi selection -> null
+	void nodeSelected(NodeModel* model);
 	void loadGraph(QListWidgetItem *item);
 	void loadGraphFromPreset(QString name);
 	void loadGraphFromPreset2(QString name);

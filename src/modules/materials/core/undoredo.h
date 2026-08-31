@@ -5,9 +5,7 @@
 #include "../graph/graphnode.h"
 #include "../graph/graphnodescene.h"
 #include "../widgets/materialsettingswidget.h"
-#include "../propertywidgets/basepropertywidget.h"
 
-class PropertyListWidget;
 class UndoRedo : public QUndoCommand
 {
 public:
@@ -123,32 +121,4 @@ private:
 	MaterialSettingsWidget *mat;
 };
 
-class AddPropertyCommand : public UndoRedo
-{
-public:
-	AddPropertyCommand(QVBoxLayout *, QVector<BasePropertyWidget*> &, BasePropertyWidget *, int index, PropertyListWidget *);
-
-	void undo();
-	void redo();
-private:
-	QVBoxLayout * lay;
-	QVector<BasePropertyWidget*> *list;
-	BasePropertyWidget *wid;
-	PropertyListWidget *propertyList;
-	int index;
-};
-
-class DeletePropertyCommand : public UndoRedo
-{
-public:
-	DeletePropertyCommand(QVBoxLayout *, BasePropertyWidget *, int index, PropertyListWidget *);
-
-	void undo();
-	void redo();
-private:
-	QVBoxLayout * lay;
-	BasePropertyWidget *wid;
-	PropertyListWidget *propertyList;
-	int index;
-};
 

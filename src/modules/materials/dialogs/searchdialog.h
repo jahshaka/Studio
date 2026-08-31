@@ -17,13 +17,10 @@ public:
 
 	void generateTileNode(QList<NodeLibraryItem*> lis);
 	void generateTileNode(NodeGraph *graph);
-	void generateTileProperty(NodeGraph *graph);
 	void configureTreeWidget();
 	void selectItemByName(const QString& name);
-	int index = 0;
 
 	TreeWidget *tree;
-	TreeWidget *treeProperty;
 
 	QLineEdit *searchBar;
 	QPoint point;
