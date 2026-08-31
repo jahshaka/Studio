@@ -75,13 +75,17 @@ struct DatabaseMetadataRecord
 	int patch;
 };
 
+// The int fields default: not every fetch query selects every column, and an
+// unselected column left the field UNINITIALIZED — assets.list's project
+// scope returned garbage ints in `drawer` (record.collection) for records
+// fetched through fetchChildAssets. 0 = Uncategorized for collection.
 struct AssetRecord
 {
     QString     guid;
-	int			type;
+	int			type = 0;
 	QString     name;
-	int			collection;
-	int			timesUsed;
+	int			collection = 0;
+	int			timesUsed = 0;
     QString     projectGuid;
     QDateTime   dateCreated;
     QDateTime   lastUpdated;
@@ -94,7 +98,7 @@ struct AssetRecord
 	QByteArray  asset;
 	QByteArray  tags;
 	QByteArray  properties;
-	int			view_filter;
+	int			view_filter = 0;
 };
 
 struct DependencyRecord

@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
 #include <QAbstractItemView>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QMetaObject>
@@ -142,6 +143,27 @@ public:
         if (metric == QStyle::PM_MenuPanelWidth)
             return 0;
         return oclero::qlementine::QlementineStyle::pixelMetric(metric, option, widget);
+    }
+
+    // Qlementine answers SH_ItemView_ActivateItemOnSingleClick with true,
+    // which inside the NON-NATIVE QFileDialog means a single click on a file
+    // ACTIVATES it — the dialog accepts and the import starts while the user
+    // is still browsing (owner-reported: "the file dialog imports on one
+    // click"). Scope the platform-default double-click activation to file
+    // dialogs only: selection (and multi-select for batch imports) stays a
+    // click, importing takes Open, Enter or a double-click. Everything else
+    // keeps Qlementine's behavior.
+    int styleHint(StyleHint hint, const QStyleOption *option = nullptr,
+                  const QWidget *widget = nullptr,
+                  QStyleHintReturn *returnData = nullptr) const override
+    {
+        if (hint == QStyle::SH_ItemView_ActivateItemOnSingleClick) {
+            for (const QWidget *w = widget; w; w = w->parentWidget()) {
+                if (qobject_cast<const QFileDialog *>(w))
+                    return 0;
+            }
+        }
+        return oclero::qlementine::QlementineStyle::styleHint(hint, option, widget, returnData);
     }
 };
 

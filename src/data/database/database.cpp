@@ -1172,7 +1172,7 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -1187,6 +1187,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
             data.properties = query.value(5).toByteArray();
             data.view_filter = query.value(6).toInt();
             data.dateCreated = query.value(7).toDateTime();
+            data.collection = query.value(8).toInt();
             return data;
         }
     }
@@ -1320,6 +1321,27 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     }
 
     return tileData;
+}
+
+QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGuid, bool includeDependencies)
+{
+    QVector<AssetRecord> records;
+    if (projectGuid.isEmpty()) return records;
+
+    QString sql = "SELECT asset_guid FROM project_assets WHERE project_guid = ?";
+    if (!includeDependencies)
+        sql += " AND asset_guid NOT IN (SELECT dependee FROM dependencies)";
+
+    QSqlQuery query;
+    query.prepare(sql);
+    query.addBindValue(projectGuid);
+    executeAndCheckQuery(query, "fetchProjectPinnedAssets");
+
+    while (query.next()) {
+        const auto record = fetchAsset(query.value(0).toString());
+        if (!record.guid.isEmpty()) records.push_back(record);
+    }
+    return records;
 }
 
 QVector<AssetRecord> Database::fetchAssetsFromParent(const QString & guid)

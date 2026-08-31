@@ -183,6 +183,13 @@ public:
     /// forgets filter 3 silently skips most of a real library).
     QStringList fetchLibraryAssetGuids();
     QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1, bool showDependencies = true);
+    /// Reference-with-pin membership (ASSET_PIPELINE_SPEC §3.1.5): the LIBRARY
+    /// assets this project pinned (project_assets rows), as full catalog
+    /// records. `includeDependencies` false drops rows that exist only as a
+    /// dependency of another asset (matching fetchChildAssets' semantics).
+    /// This is THE source assets.list({scope:'project'}) and the editor's
+    /// project panel share.
+    QVector<AssetRecord> fetchProjectPinnedAssets(const QString &projectGuid, bool includeDependencies = true);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
 	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);

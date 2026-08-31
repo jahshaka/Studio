@@ -195,19 +195,14 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         records = host.db->fetchChildAssets(host.project->getProjectGuid(), host.project->getProjectGuid(), -1, true);
         // Reference-with-pin (phase 4): pinned LIBRARY assets are project
         // members too — a project "use" is a project_assets row, not a
-        // cloned Editor row.
-        QSqlQuery pins(QSqlDatabase::database());
-        pins.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
-        pins.addBindValue(host.project->getProjectGuid());
-        if (pins.exec()) {
-            while (pins.next()) {
-                const QString pinned = pins.value(0).toString();
-                if (std::any_of(records.begin(), records.end(),
-                                [&](const AssetRecord &r) { return r.guid == pinned; }))
-                    continue;
-                const auto record = host.db->fetchAsset(pinned);
-                if (!record.guid.isEmpty()) records.append(record);
-            }
+        // cloned Editor row. fetchProjectPinnedAssets is the shared source
+        // (the editor's project panel reads the same rows).
+        for (const auto &record :
+             host.db->fetchProjectPinnedAssets(host.project->getProjectGuid())) {
+            if (std::any_of(records.begin(), records.end(),
+                            [&](const AssetRecord &r) { return r.guid == record.guid; }))
+                continue;
+            records.append(record);
         }
     } else {
         fail("assets.list: scope must be 'store' or 'project'");

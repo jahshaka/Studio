@@ -664,6 +664,24 @@ void AssetWidget::updateAssetView(const QString &path, int filter, bool showDepe
         addCrumbs(db->fetchCrumbTrail(path, project->getProjectGuid()));
     }
 
+    // Reference-with-pin (phase 4): project membership is a project_assets
+    // ROW pinning a LIBRARY asset — there is no project-guid clone row for
+    // fetchChildAssets to find, so the panel populated from the pre-pin
+    // shape showed NOTHING for pinned assets ("Add to Project shows the
+    // toast but nothing appears"). Pinned members list at the project ROOT,
+    // from the same source as assets.list({scope:'project'}).
+    if (path == project->getProjectGuid()) {
+        QSet<QString> listed;
+        for (int i = 0; i < ui->assetView->count(); ++i)
+            listed.insert(ui->assetView->item(i)->data(MODEL_GUID_ROLE).toString());
+        for (const auto &pinned :
+             db->fetchProjectPinnedAssets(project->getProjectGuid(), showDependencies)) {
+            if (listed.contains(pinned.guid)) continue;
+            if (filter > 0 && pinned.type != filter) continue;
+            addItem(pinned);
+        }
+    }
+
     goUpOneControl->setEnabled(false);
 }
 

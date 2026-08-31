@@ -1957,6 +1957,11 @@ void MainWindow::setupDesktop()
 	_assetView->installEventFilter(this);
 	_assetView->setServices(services);
 	_assetView->setProject(project);
+	// A pin made on the Assets page must show up in the editor's project
+	// panel live (both can be open in one session) — the panel repopulates
+	// from the pinned membership on every add.
+	connect(_assetView, &AssetView::assetAddedToProject, this,
+	        [this](const QString &) { assetWidget->refresh(); });
 
 	ui->stackedWidget->addWidget(pmContainer);
 	
