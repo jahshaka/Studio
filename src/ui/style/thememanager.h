@@ -66,6 +66,12 @@ public:
     // Add to Project, Update). Same geometry, primary color.
     static QString chromeAccentButtonSheet();
 
+    // Compact variant of the chrome spec for dense panel header rows (the
+    // editor asset panel's Go Up / Display controls): same colors, rounded
+    // corners and side gutters as chromeButtonSheet, reduced height. Returns
+    // "" under Classic, like the full-height spec.
+    static QString chromeCompactButtonSheet();
+
     // Qlementine mode: replaces every checkable QAction in the menu with a
     // qlementine Switch row (QWidgetAction). The original QAction stays alive
     // and authoritative — the switch and the action mirror each other — so

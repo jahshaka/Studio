@@ -57,6 +57,8 @@ For more information see the LICENSE file
 #include "io/materialpresetreader.h"
 #include "io/materialreader.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
+#include <QActionGroup>
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -132,27 +134,30 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	breadCrumbLayout->setSpacing(0);
 	ui->breadCrumb->setObjectName(QStringLiteral("BreadCrumb"));
 	ui->breadCrumb->setLayout(breadCrumbLayout);
-	assetViewToggleButtonGroup = new QButtonGroup;
-	toggleIconView = new QPushButton(tr("Icon"));
-	toggleIconView->setCheckable(true);
-	toggleIconView->setCursor(Qt::PointingHandCursor);
+	// Display ▾ — same grey popup-button pattern as the desktop footer's
+	// Tile Size/Desktops/Layouts buttons (owner direction): static label,
+	// the checked popup entry is the current view mode. Replaces the old
+	// Icon/List toggle-button pair.
+	displayButton = new QPushButton(tr("Display ▾"));
+	displayButton->setCursor(Qt::PointingHandCursor);
+
+	displayMenu = new QMenu(this);
+	displayMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
+	auto displayGroup = new QActionGroup(displayMenu);
+	displayGroup->setExclusive(true);
+	displayGridAction = displayMenu->addAction(tr("Grid"));
+	displayGridAction->setCheckable(true);
 	// Todo - use preferences
-	toggleIconView->setChecked(true);
-
-	toggleListView = new QPushButton(tr("List"));
-	toggleListView->setCheckable(true);
-	toggleListView->setCursor(Qt::PointingHandCursor);
-
-	assetViewToggleButtonGroup->addButton(toggleIconView);
-	assetViewToggleButtonGroup->addButton(toggleListView);
+	displayGridAction->setChecked(true);
+	displayGroup->addAction(displayGridAction);
+	displayListAction = displayMenu->addAction(tr("List"));
+	displayListAction->setCheckable(true);
+	displayGroup->addAction(displayListAction);
 
 	QHBoxLayout *toggleLayout = new QHBoxLayout;
 	toggleLayout->setSpacing(0);
 	toggleLayout->setSizeConstraint(QLayout::SetFixedSize);
-	toggleLayout->addWidget(new QLabel(tr("Display:")));
-	toggleLayout->addSpacing(8);
-	toggleLayout->addWidget(toggleIconView);
-	toggleLayout->addWidget(toggleListView);
+	toggleLayout->addWidget(displayButton);
 
 	iconSize = QSize(72, 72);
 	listSize = QSize(32, 32);
@@ -186,7 +191,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->setSpacing(4);
 	ui->assetView->setIconSize(currentSize);
 
-	connect(toggleIconView, &QPushButton::pressed, [this]() {
+	connect(displayGridAction, &QAction::triggered, this, [this]() {
 		ui->assetView->setViewMode(QListWidget::IconMode);
 		ui->assetView->setAlternatingRowColors(false);
 		ui->assetView->setSpacing(4);
@@ -196,7 +201,7 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	});
 
-	connect(toggleListView, &QPushButton::pressed, [this]() {
+	connect(displayListAction, &QAction::triggered, this, [this]() {
 		ui->assetView->setViewMode(QListWidget::ListMode);
 		ui->assetView->setAlternatingRowColors(true);
 		ui->assetView->setSpacing(0);
@@ -206,8 +211,20 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
 	});
 
+	connect(displayButton, &QPushButton::pressed, this, [this]() {
+		displayMenu->exec(displayButton->mapToGlobal(QPoint(0, displayButton->height())));
+	});
+
 	ui->switcher->setLayout(toggleLayout);
 	ui->switcher->setObjectName("Switcher");
+
+	if (!ThemeManager::classicActive()) {
+		// The shared chrome button spec at panel-header height (owner
+		// direction): rounded grey with side gutters, compact. Classic keeps
+		// its #Switcher/#DirControl sheets bit-for-bit.
+		goUpOneControl->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
+		displayButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
+	}
 
     filterGroupLayout = new QHBoxLayout;
     filterGroupLayout->setContentsMargins(0, 0, 0, 0);
