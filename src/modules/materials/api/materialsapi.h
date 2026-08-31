@@ -91,6 +91,7 @@ public:
     Q_INVOKABLE QVariant getValue(const QString &nodeId);
     Q_INVOKABLE QVariantMap evaluate();
     Q_INVOKABLE QVariantMap bakeInfo();
+    Q_INVOKABLE QVariantMap bake(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool toMaterial(const QString &nodeId);
     Q_INVOKABLE bool save();
 

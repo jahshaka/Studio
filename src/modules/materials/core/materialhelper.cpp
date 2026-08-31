@@ -132,11 +132,24 @@ QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 	return matObj;
 }
 
+QString MaterialHelper::projectRoot;
+
+void MaterialHelper::setProjectRoot(const QString& folder)
+{
+	projectRoot = folder;
+}
+
 PbrGraphEvaluator::TextureResolver MaterialHelper::textureResolver()
 {
 	return [](const QString& value) -> QString {
 		if (value.isEmpty() || QFileInfo::exists(value))
 			return value;
+		// project-relative baked-map cache paths (MATERIALS_EVALUATOR_SPEC
+		// section 1.6) resolve against the open project's folder
+		if (value.startsWith(QStringLiteral("BakedMaps/")) && !projectRoot.isEmpty()) {
+			const QString abs = projectRoot + "/" + value;
+			if (QFileInfo::exists(abs)) return abs;
+		}
 		// treat as an asset GUID already loaded by the graph's TextureManager
 		for (auto tex : TextureManager::getSingleton()->textures) {
 			if (tex->guid == value)

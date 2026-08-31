@@ -79,7 +79,9 @@ public:
 
 	// Builds an iris::PbrMaterial from an evaluation result / a stored
 	// "pbrMaterial.values" object, applying every key through setValue so the
-	// editor panel's Property list stays in step.
-	static iris::PbrMaterialPtr materialFromValues(const QJsonObject& values);
+	// editor panel's Property list stays in step. The resolver re-absolutizes
+	// project-relative baked-map paths (BakedMaps/...) when given.
+	static iris::PbrMaterialPtr materialFromValues(const QJsonObject& values,
+	                                               TextureResolver resolver = {});
 	static iris::PbrMaterialPtr createMaterial(NodeGraph* graph, TextureResolver resolver = {});
 };

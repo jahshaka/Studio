@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
+#include "modules/materials/core/graphbaker.h"
 #include "modules/materials/core/materialhelper.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 #include "modules/materials/graph/nodegraph.h"
@@ -370,6 +371,11 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}}",
           "Classifies each master input: 'uniform' | 'passthrough' | 'baked' | 'unsupported' | 'unconnected'.",
           Needs::Document },
+        { "bake", "graph.bake({resolution?, time?}) -> {values, maps, passthrough, approximated, unsupported, animated, msElapsed}",
+          "Full-quality synchronous bake of the current graph: UV-varying chains render per texel into "
+          "<project>/BakedMaps/<guid>/ PNGs (hash-cached, headless-capable - CPU only), uniform chains fold, "
+          "bare textures pass through. Map values are project-relative paths.",
+          Needs::Document },
         { "toMaterial", "graph.toMaterial(nodeId) -> bool",
           "Evaluates the current graph and applies the resulting PBR material to a mesh node.",
           Needs::Document },
@@ -518,6 +524,36 @@ QVariantMap GraphApi::bakeInfo()
     auto graph = graphOrFail(QStringLiteral("graph.bakeInfo"));
     if (!graph) return out;
     return PbrGraphEvaluator::bakeInfo(graph, MaterialHelper::textureResolver()).toVariantMap();
+}
+
+QVariantMap GraphApi::bake(const QVariantMap &options)
+{
+    QVariantMap out;
+    auto graph = graphOrFail(QStringLiteral("graph.bake"));
+    if (!graph) return out;
+    if (!requireProject()) return out; // baked maps land in the project folder
+
+    QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
+    if (guid.isEmpty()) guid = QStringLiteral("scratch");
+
+    const QString projectFolder = host.project->getProjectFolder();
+    MaterialHelper::setProjectRoot(projectFolder);
+
+    materials::GraphBaker::Options opts;
+    opts.resolution = options.value(QStringLiteral("resolution"), 1024).toInt();
+    opts.time = options.value(QStringLiteral("time"), 0.0).toDouble();
+    opts.outputDir = projectFolder + QStringLiteral("/BakedMaps/") + guid;
+    opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+
+    const auto result = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
+    out["values"] = result.eval.values.toVariantMap();
+    out["maps"] = result.maps.toVariantMap();
+    out["passthrough"] = result.passthrough.toVariantMap();
+    out["approximated"] = QVariant(result.eval.approximatedNodes);
+    out["unsupported"] = QVariant(result.eval.unsupportedNodes);
+    out["animated"] = result.eval.animated;
+    out["msElapsed"] = double(result.msElapsed);
+    return out;
 }
 
 bool GraphApi::toMaterial(const QString &nodeId)

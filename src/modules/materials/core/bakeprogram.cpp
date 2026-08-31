@@ -135,9 +135,9 @@ QString imageStampFor(const QString& path)
 
 // ------------------------------------------------------------ op registry
 
-using EvalFn = Value (*)(const BakeOp&, const QVector<Value>&, const EvalContext&);
+using EvalFn = BakeOp::EvalFn;
 
-Value evalLiteral(const BakeOp& op, const QVector<Value>&, const EvalContext&)
+Value evalLiteral(const BakeOp& op, const Value*, const EvalContext&)
 {
 	return op.literal;
 }
@@ -151,67 +151,67 @@ const QHash<QString, EvalFn>& evalRegistry()
 		for (const auto& t : { "float", "color", "vector2", "vector3", "vector4", "property" })
 			r[t] = evalLiteral;
 
-		r["add"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["add"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw2(in[0], in[1], [](double a, double b) { return a + b; });
 		};
-		r["subtract"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["subtract"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw2(in[0], in[1], [](double a, double b) { return a - b; });
 		};
-		r["multiply"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["multiply"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw2(in[0], in[1], [](double a, double b) { return a * b; });
 		};
 		r["vectorMultiply"] = r["multiply"];
-		r["divide"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["divide"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// GLSL semantics: b == 0 -> inf, no silent epsilon (spec 1.2, D22 stays cosmetic)
 			return cw2(in[0], in[1], [](double a, double b) { return a / b; });
 		};
-		r["power"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["power"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw2(in[0], in[1], [](double a, double b) { return std::pow(a, b); });
 		};
-		r["sqrt"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["sqrt"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::sqrt(a); });
 		};
-		r["min"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["min"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw2(in[0], in[1], [](double a, double b) { return a < b ? a : b; });
 		};
-		r["max"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["max"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw2(in[0], in[1], [](double a, double b) { return a > b ? a : b; });
 		};
-		r["abs"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["abs"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::fabs(a); });
 		};
-		r["sign"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["sign"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return double((a > 0) - (a < 0)); });
 		};
-		r["ceil"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["ceil"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::ceil(a); });
 		};
-		r["floor"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["floor"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::floor(a); });
 		};
-		r["round"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["round"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::round(a); });
 		};
-		r["trunc"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["trunc"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::trunc(a); });
 		};
-		r["fraction"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["fraction"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return a - std::floor(a); }); // GLSL fract
 		};
-		r["oneminus"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["oneminus"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return 1.0 - a; });
 		};
-		r["negate"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["negate"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return -a; });
 		};
-		r["sine"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["sine"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return cw1(in[0], [](double a) { return std::sin(a); });
 		};
-		r["step"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["step"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// inputs: Edge, Value; step(edge, x) = x < edge ? 0 : 1
 			return cw2(in[0], in[1], [](double edge, double x) { return x < edge ? 0.0 : 1.0; });
 		};
-		r["smoothstep"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["smoothstep"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// inputs: Edge1, Edge2, Value - GLSL Hermite
 			Value out;
 			out.arity = in[2].arity;
@@ -223,7 +223,7 @@ const QHash<QString, EvalFn>& evalRegistry()
 			}
 			return out;
 		};
-		r["clamp"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["clamp"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// inputs in socket order Min, Max, Value; post-D7: clamp(Value, Min, Max)
 			Value out;
 			out.arity = in[2].arity;
@@ -233,7 +233,7 @@ const QHash<QString, EvalFn>& evalRegistry()
 			}
 			return out;
 		};
-		r["lerp"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["lerp"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// mix(a, b, t): t is the float T socket
 			const double t = in[2].x;
 			Value out;
@@ -242,7 +242,7 @@ const QHash<QString, EvalFn>& evalRegistry()
 				out.setComponent(i, in[0].component(i) * (1.0 - t) + in[1].component(i) * t);
 			return out;
 		};
-		r["reflect"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["reflect"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// inputs: Normal (0), Incident (1); GLSL reflect(I, N) = I - 2*dot(N,I)*N
 			const Value& n = in[0];
 			const Value& i = in[1];
@@ -253,41 +253,41 @@ const QHash<QString, EvalFn>& evalRegistry()
 				out.setComponent(c, i.component(c) - 2.0 * d * n.component(c));
 			return out;
 		};
-		r["dot"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["dot"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return Value(glslDot(in[0], in[1]));
 		};
-		r["length"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["length"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return Value(std::sqrt(glslDot(in[0], in[0])));
 		};
-		r["distance"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["distance"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			const Value d = cw2(in[0], in[1], [](double a, double b) { return a - b; });
 			return Value(std::sqrt(glslDot(d, d)));
 		};
-		r["normalize"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["normalize"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return glslNormalize(in[0]);
 		};
-		r["splitvector"] = [](const BakeOp& op, const QVector<Value>& in, const EvalContext&) {
+		r["splitvector"] = [](const BakeOp& op, const Value* in, const EvalContext&) {
 			return Value(in[0].component(qBound(0, op.outIndex, 3)));
 		};
-		r["composevector"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["composevector"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// vec4(x, y, z, w) - post-D11 the out socket is vec4 too
 			return Value(in[0].x, in[1].x, in[2].x, in[3].x);
 		};
-		r["makeColor"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["makeColor"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			return Value(in[0].x, in[1].x, in[2].x, 1.0);
 		};
-		r["texCoords"] = [](const BakeOp&, const QVector<Value>&, const EvalContext& ctx) {
+		r["texCoords"] = [](const BakeOp&, const Value*, const EvalContext& ctx) {
 			// TexCoord0-3 all evaluate to the bake UV (single-UV bake, spec 1.2)
 			return Value(ctx.u, ctx.v);
 		};
-		r["textureSampler"] = [](const BakeOp& op, const QVector<Value>& in, const EvalContext&) {
+		r["textureSampler"] = [](const BakeOp& op, const Value* in, const EvalContext&) {
 			if (op.image.isNull()) return Value(0.0, 0.0, 0.0, 0.0); // GLSL-documented: unconnected -> vec4(0)
 			return BakeProgram::sampleImage(op.image, in[0].x, in[0].y);
 		};
-		r["texture"] = [](const BakeOp&, const QVector<Value>&, const EvalContext&) {
+		r["texture"] = [](const BakeOp&, const Value*, const EvalContext&) {
 			return Value(0.0, 0.0, 0.0, 0.0); // image carrier; consumers read op.image
 		};
-		r["texelsize"] = [](const BakeOp& op, const QVector<Value>&, const EvalContext&) {
+		r["texelsize"] = [](const BakeOp& op, const Value*, const EvalContext&) {
 			const double w = op.image.isNull() ? 0.0 : op.image.width();
 			const double h = op.image.isNull() ? 0.0 : op.image.height();
 			switch (op.outIndex) {
@@ -298,12 +298,12 @@ const QHash<QString, EvalFn>& evalRegistry()
 			default: return Value(h > 0 ? 1.0 / h : 0.0);
 			}
 		};
-		r["panner"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["panner"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// uv + speed * time
 			const double t = in[2].x;
 			return Value(in[0].x + in[1].x * t, in[0].y + in[1].y * t);
 		};
-		r["flipbook"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["flipbook"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// post-D10 corrected row/col math (nodes/texture.cpp flipbook())
 			const double rows = in[1].x, columns = in[2].x, animlength = in[3].x, time = in[4].x;
 			const double totalFrames = rows * columns;
@@ -316,7 +316,7 @@ const QHash<QString, EvalFn>& evalRegistry()
 			return Value(animCol * frameWidth + in[0].x * frameWidth,
 			             animRow * frameHeight + in[0].y * frameHeight);
 		};
-		r["normalintensity"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["normalintensity"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// normalize(mix(vec3(0,0,1), N, intensity))
 			const double i = in[1].x;
 			Value mixed(0.0 * (1.0 - i) + in[0].x * i,
@@ -324,29 +324,36 @@ const QHash<QString, EvalFn>& evalRegistry()
 			            1.0 * (1.0 - i) + in[0].z * i);
 			return glslNormalize(mixed);
 		};
-		r["combinenormals"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext&) {
+		r["combinenormals"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// normalize(a + b) on the raw flowing values (spec 1.5 - no hidden decode)
 			return glslNormalize(cw2(in[0], in[1], [](double a, double b) { return a + b; }));
 		};
-		r["worldNormal"] = [](const BakeOp&, const QVector<Value>&, const EvalContext& ctx) {
+		r["worldNormal"] = [](const BakeOp&, const Value*, const EvalContext& ctx) {
 			return Value(ctx.normalX, ctx.normalY, ctx.normalZ); // tangent-space identity
 		};
 		r["localNormal"] = r["worldNormal"];
-		r["fresnel"] = [](const BakeOp& op, const QVector<Value>& in, const EvalContext& ctx) {
+		r["fresnel"] = [](const BakeOp& op, const Value* in, const EvalContext& ctx) {
 			// pow(1 - max(0, dot(N, view)), power); Normal input honored (D17 intent)
 			const double d = in[0].x * ctx.viewX + in[0].y * ctx.viewY + in[0].z * ctx.viewZ;
 			const double f = std::pow(1.0 - (d > 0.0 ? d : 0.0), in[1].x);
 			return Value(f, f, f, f);
 		};
-		r["depth"] = [](const BakeOp&, const QVector<Value>&, const EvalContext&) {
+		r["depth"] = [](const BakeOp&, const Value*, const EvalContext&) {
 			// near-plane convention of the legacy (1 - z/w) at z=0
 			return Value(0.0);
 		};
-		r["time"] = [](const BakeOp&, const QVector<Value>&, const EvalContext& ctx) {
+		r["time"] = [](const BakeOp&, const Value*, const EvalContext& ctx) {
 			return Value(ctx.time);
 		};
-		r["pulsate"] = [](const BakeOp&, const QVector<Value>& in, const EvalContext& ctx) {
+		r["pulsate"] = [](const BakeOp&, const Value* in, const EvalContext& ctx) {
 			return Value(std::sin(ctx.time * in[0].x) * 0.5 + 0.5);
+		};
+		// texture property out 2: rgba.xyz * 2 - 1 (the node's GLSL decode)
+		r["propertyNormalSample"] = [](const BakeOp& op, const Value* in, const EvalContext&) {
+			const Value rgba = op.image.isNull()
+			                       ? Value(0.0, 0.0, 0.0, 0.0)
+			                       : BakeProgram::sampleImage(op.image, in[0].x, in[0].y);
+			return Value(rgba.x * 2.0 - 1.0, rgba.y * 2.0 - 1.0, rgba.z * 2.0 - 1.0);
 		};
 		return r;
 	}();
@@ -590,6 +597,9 @@ struct Compiler
 			approximated.insert(type);
 		}
 
+		// resolve the evaluator once - per-pixel hash lookups are too slow
+		op.fn = evalRegistry().value(op.typeName, nullptr);
+
 		const int index = addOp(op);
 		memo[key] = index;
 		return index;
@@ -665,22 +675,21 @@ BakeProgram BakeProgram::compile(SocketModel* masterInput, const TextureResolver
 
 Value BakeProgram::evaluate(const EvalContext& ctx) const
 {
-	static const auto propertyNormalSample =
-	    [](const BakeOp& op, const QVector<Value>& in) -> Value {
-		Value rgba = op.image.isNull() ? Value(0.0, 0.0, 0.0, 0.0)
-		                               : sampleImage(op.image, in[0].x, in[0].y);
-		return Value(rgba.x * 2.0 - 1.0, rgba.y * 2.0 - 1.0, rgba.z * 2.0 - 1.0);
-	};
+	QVarLengthArray<Value, 64> scratch;
+	return evaluate(ctx, scratch);
+}
 
-	QVector<Value> results(ops.size());
-	QVector<Value> inputs;
+Value BakeProgram::evaluate(const EvalContext& ctx, QVarLengthArray<Value, 64>& results) const
+{
+	results.resize(ops.size());
+	Value inputs[8];
 	for (int i = 0; i < ops.size(); ++i) {
 		const BakeOp& op = ops[i];
 		if (!op.unsupportedReason.isEmpty()) { results[i] = Value(0.0); continue; }
 		if (op.hasLiteral) { results[i] = op.literal; continue; }
 
-		inputs.resize(op.inputs.size());
-		for (int j = 0; j < op.inputs.size(); ++j) {
+		const int inCount = qMin(op.inputs.size(), 8);
+		for (int j = 0; j < inCount; ++j) {
 			const auto& ref = op.inputs[j];
 			Value v;
 			if (ref.op >= 0) v = results[ref.op];
@@ -690,12 +699,7 @@ Value BakeProgram::evaluate(const EvalContext& ctx) const
 			inputs[j] = ref.arity > 0 ? v.coerced(ref.arity) : v;
 		}
 
-		if (op.typeName == "propertyNormalSample") {
-			results[i] = propertyNormalSample(op, inputs);
-			continue;
-		}
-		auto fn = evalRegistry().value(op.typeName, nullptr);
-		results[i] = fn ? fn(op, inputs, ctx) : Value(0.0);
+		results[i] = op.fn ? op.fn(op, inputs, ctx) : Value(0.0);
 	}
 	return rootOp >= 0 ? results[rootOp] : Value(0.0);
 }

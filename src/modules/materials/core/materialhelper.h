@@ -36,8 +36,15 @@ public:
 	static iris::PbrMaterialPtr createPbrMaterialFromDefinition(QJsonObject matObj);
 
 	// Maps a texture property's stored asset GUID to an image path via
-	// TextureManager; passes real file paths through untouched.
+	// TextureManager; passes real file paths through untouched; resolves
+	// project-relative baked-map paths (BakedMaps/...) against the project
+	// root set below.
 	static PbrGraphEvaluator::TextureResolver textureResolver();
+
+	// The open project's folder, for resolving BakedMaps/... cache paths.
+	// Set on project open / by the bake verb; empty when no project.
+	static void setProjectRoot(const QString& folder);
+	static QString projectRoot;
 
 	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj);
 

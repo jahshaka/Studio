@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
+#include <QVarLengthArray>
 #include <QVector>
 #include <functional>
 
@@ -101,6 +102,11 @@ struct BakeInputRef
 // several outputs compiles to one op per used output, memoized.
 struct BakeOp
 {
+	// Per-op evaluator, resolved once at compile time (a per-pixel QHash
+	// lookup by QString was a measurable share of the bake cost).
+	using EvalFn = Value (*)(const BakeOp&, const Value* inputs, const EvalContext&);
+	EvalFn fn = nullptr;
+
 	QString typeName;
 	QString nodeId;
 	int outIndex = 0;
@@ -146,8 +152,10 @@ public:
 	static BakeProgram compile(SocketModel* masterInput, const TextureResolver& resolve);
 
 	// Runs the op list at one fragment context. Meaningful for Uniform
-	// programs at any context, and per-texel for Baked ones.
+	// programs at any context, and per-texel for Baked ones. The scratch
+	// overload reuses the caller's buffer - allocation-free per pixel.
 	Value evaluate(const EvalContext& ctx) const;
+	Value evaluate(const EvalContext& ctx, QVarLengthArray<Value, 64>& scratch) const;
 
 	// Deterministic content signature of the compiled chain (op list,
 	// literals, image stamps) - the section 1.6 hash ingredient.

@@ -158,6 +158,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `graph.getValue(nodeId) -> value` | document | Reads a node's value back. |
 | `graph.evaluate() -> {values, unsupported, approximated, animated, hasPbrMaster}` | document | Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...). |
 | `graph.bakeInfo() -> {perSocket: {socketName: class}}` | document | Classifies each master input: 'uniform' \| 'passthrough' \| 'baked' \| 'unsupported' \| 'unconnected'. |
+| `graph.bake({resolution?, time?}) -> {values, maps, passthrough, approximated, unsupported, animated, msElapsed}` | document | Full-quality synchronous bake of the current graph: UV-varying chains render per texel into <project>/BakedMaps/<guid>/ PNGs (hash-cached, headless-capable - CPU only), uniform chains fold, bare textures pass through. Map values are project-relative paths. |
 | `graph.toMaterial(nodeId) -> bool` | document | Evaluates the current graph and applies the resulting PBR material to a mesh node. |
 | `graph.save() -> bool` | document | Serializes the current graph back into its shader asset (only for graphs opened from an asset guid). |
 
