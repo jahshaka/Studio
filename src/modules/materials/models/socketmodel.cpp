@@ -23,16 +23,6 @@ NodeGraph *SocketModel::getGraph() const
 	return graph;
 }
 
-QString SocketModel::getVarName() const
-{
-	return varName;
-}
-
-void SocketModel::setVarName(const QString &value)
-{
-	varName = value;
-}
-
 SocketModel *SocketModel::getConnectedSocket()
 {
 	Q_ASSERT(connection != nullptr);

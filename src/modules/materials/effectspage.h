@@ -6,7 +6,6 @@
 #include <QWidget>
 #include <QGraphicsPathItem>
 #include <QGraphicsView>
-#include <QTextEdit>
 #include <QDockWidget>
 #include <QSplitter>
 #include <QToolBar>
@@ -113,8 +112,6 @@ private:
 
 	NodeGraph* importGraphFromFilePath(QString filePath, bool assign = true);
 	void exportEffect(QString guid);
-	// keeping this around for standalone (nick)
-	void exportGraph();
     void restoreGraphPositions(const QJsonObject& data);
     bool deleteShader(QString guid);
 
@@ -137,7 +134,6 @@ private:
 	QByteArray fetchAsset(QString string);
 
     GraphNodeScene* createNewScene();
-	void regenerateShader();
 	QListWidgetItem* selectCorrectItemFromDrop(QString guid);
 	int selectCorrectTabForItem(QString guid);
 	QList<QString> loadedShadersGUID;
@@ -167,7 +163,6 @@ private:
 
 	QDockWidget* nodeTray;
 	QWidget *centralWidget;
-	QDockWidget* textWidget;
 	QDockWidget* displayWidget;
 	MaterialSettingsWidget *materialSettingsWidget;
 
@@ -178,7 +173,6 @@ private:
 	QTabWidget *tabbedWidget;
 	QTabWidget *tabWidget;
 	GraphicsView* graphicsView;
-	QTextEdit* textEdit;
 	NodePropertiesPanel* nodePropertiesPanel;
 	QListWidget *nodeContainer;
 	QMenuBar *bar;  

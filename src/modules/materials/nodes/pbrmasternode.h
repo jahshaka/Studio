@@ -15,16 +15,12 @@ For more information see the LICENSE file
 // PBR master node (Option B, PBR_SPEC.md section 5): the graph's output sockets
 // are HlmsPbs-compatible iris::PbrMaterial inputs instead of Blinn-Phong ones.
 //
-// Socket ORDER is load-bearing: ShaderGenerator reads Vertex Offset/Extrusion
-// by hard-coded indices 8/9 (generator/shadergenerator.cpp), which is why this
-// node keeps ten sockets in the same tail layout as SurfaceMasterNode.
+// Socket ORDER is load-bearing: saved graphs reference sockets by index, and
+// BakeProgram/GraphBaker key their master-slot table off this layout — the
+// node keeps ten sockets in the same tail layout as SurfaceMasterNode
+// (Vertex Offset/Extrusion at 8/9, honestly-unsupported).
 class PbrMasterNode : public NodeModel
 {
 public:
 	PbrMasterNode();
-
-	// Emits a legacy-GLSL approximation of the PBR inputs so the old
-	// generator (and with it the legacy viewport preview) keeps working.
-	// The real PBR output is produced CPU-side by PbrGraphEvaluator.
-	virtual void process(ModelContext* ctx) override;
 };

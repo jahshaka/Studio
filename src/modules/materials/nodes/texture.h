@@ -10,7 +10,6 @@
 #include "../graph/nodegraph.h"
 #include "../models/nodemodel.h"
 #include "../graph/sockets.h"
-#include "../generator/shadercontext.h"
 #include "../propertywidgets/propertywidgetbase.h"
 
 /* Blends two normals */
@@ -19,8 +18,6 @@ class CombineNormalsNode : public NodeModel
 public:
 	CombineNormalsNode();
 
-	virtual void process(ModelContext* context) override;
-	virtual QString generatePreview(ModelContext* context) override;
 };
 
 /* Provides the texture width, height, 1/width and 1/height */
@@ -29,7 +26,6 @@ class TexelSizeNode : public NodeModel
 public:
 	TexelSizeNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 /*
@@ -39,8 +35,6 @@ class SampleTextureNode : public NodeModel
 public:
 	SampleTextureNode();
 
-	virtual void process(ModelContext* context) override;
-	virtual QString generatePreview(ModelContext* context) override;
 };
 */
 /*
@@ -50,8 +44,6 @@ class SampleEquirectangularTextureNode : public NodeModel
 public:
 	SampleEquirectangularTextureNode();
 
-	virtual void process(ModelContext* context) override;
-	virtual QString generatePreview(ModelContext* context) override;
 };
 */
 /* Generates UV based on flipbook animation
@@ -64,13 +56,5 @@ class FlipbookUVAnimationNode : public NodeModel
 public:
 	FlipbookUVAnimationNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
-class TileUVNode : public NodeModel
-{
-public:
-	TileUVNode();
-
-	virtual void process(ModelContext* context) override;
-};

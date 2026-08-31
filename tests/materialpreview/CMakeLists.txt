@@ -12,8 +12,6 @@ add_executable(test_engine_material_preview test_engine_material_preview.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp

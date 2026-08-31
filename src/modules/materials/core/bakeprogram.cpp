@@ -35,7 +35,7 @@ Value Value::coerced(int toArity) const
 	Value out;
 	out.arity = toArity;
 	if (arity == 1) {
-		// float -> vecN: splat (sockethelper: vecN(f))
+		// float -> vecN: splat (GLSL vecN(f))
 		for (int i = 0; i < toArity; ++i) out.setComponent(i, x);
 		return out;
 	}

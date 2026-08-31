@@ -84,25 +84,6 @@ void NodeModel::setWidget(QWidget * wid)
 	updateStyle();
 }
 
-QString NodeModel::getValueFromInputSocket(int index)
-{
-	auto sock = inSockets[index];
-	if (sock->hasConnection()) {
-		//return sock->getConnectedSocket()->getVarName();
-
-		// converts the var before sending it back
-		return sock->getConnectedSocket()->convertVarTo(sock);
-	}
-
-	return sock->getValue();
-}
-
-QString NodeModel::getOutputSocketVarName(int index)
-{
-	auto sock = outSockets[index];
-	return sock->getVarName();
-}
-
 NodeGraph *NodeModel::getGraph() const
 {
 	return graph;

@@ -50,10 +50,6 @@ struct MaterialSettings {
 	int bakeResolution = 1024;
 };
 
-class ModelContext
-{
-};
-
 class NodeGraph
 {
 public:

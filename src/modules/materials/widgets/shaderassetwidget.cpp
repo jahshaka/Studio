@@ -575,7 +575,6 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 
 	//auto assetData = db->fetchAssetData(targetGuid);
     auto matObj = QJsonDocument::fromJson(sourceData).object();
-	//auto mat = MaterialHelper::generateMaterialFromMaterialDefinition(matObj, true);
 	//assetShader->setValue(QVariant::fromValue(mat));
 	assetShader->setValue(matObj);
 

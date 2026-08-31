@@ -15,7 +15,8 @@ For more information see the LICENSE file
 // a flat post-order op list that is a pure value object (no QObject, no
 // QWidget), safe to evaluate on any thread. The CPU semantics of every op are
 // the parity contract with the (post-defect-fix) GLSL emitter; type coercion
-// mirrors core/sockethelper.cpp exactly:
+// mirrors the retired GLSL emitter's coercion (core/sockethelper.cpp,
+// deleted in phase 5 — these CPU rules are now the definition):
 //   float -> vecN   splat            vec4(f)
 //   shrink          leading comps    v.xy
 //   grow            repeat last      v.xyyy
@@ -75,7 +76,7 @@ struct Value
 		}
 	}
 
-	// sockethelper.cpp rules: splat / leading / repeat-last.
+	// coercion rules: splat / leading / repeat-last (ex-sockethelper.cpp).
 	Value coerced(int toArity) const;
 };
 

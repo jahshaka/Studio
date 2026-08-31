@@ -73,7 +73,6 @@ public:
 	Socket* getOutSocket(int index);
 
 	void layout();
-	void setPreviewShader(QString shader);
 	void enablePreviewWidget();
 
 	void setNodeGraph(NodeGraph* graph);

@@ -23,26 +23,7 @@ ReflectVectorNode::ReflectVectorNode()
 	addOutputSocket(new Vector3SocketModel("Result"));
 }
 
-void ReflectVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto normal = this->getValueFromInputSocket(0);
-	auto incident = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = reflect(" + incident + " , " + normal + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString ReflectVectorNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto normal = this->getValueFromInputSocket(0);
-	auto incident = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = reflect(" + incident + " , " + normal + ");";
-	return output;
-}
 
 /* SPLIT VECTOR */
 
@@ -57,16 +38,6 @@ SplitVectorNode::SplitVectorNode()
 	addOutputSocket(new FloatSocketModel("Y"));
 	addOutputSocket(new FloatSocketModel("Z"));
 	addOutputSocket(new FloatSocketModel("W"));
-}
-
-void SplitVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto vec = this->getValueFromInputSocket(0);
-	this->outSockets[0]->varName = vec + ".x";
-	this->outSockets[1]->varName = vec + ".y";
-	this->outSockets[2]->varName = vec + ".z";
-	this->outSockets[3]->varName = vec + ".w";
 }
 
 
@@ -87,17 +58,6 @@ ComposeVectorNode::ComposeVectorNode()
 	addOutputSocket(new Vector4SocketModel("Vector"));
 }
 
-void ComposeVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto x = this->getValueFromInputSocket(0);
-	auto y = this->getValueFromInputSocket(1);
-	auto z = this->getValueFromInputSocket(2);
-	auto w = this->getValueFromInputSocket(3);
-
-	this->outSockets[0]->varName = "vec4("+x+","+y+","+z+","+w+")";
-}
-
 
 /* DISTANCE */
 
@@ -115,16 +75,6 @@ DistanceVectorNode::DistanceVectorNode()
 	addOutputSocket(new FloatSocketModel("Result"));
 }
 
-void DistanceVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto vecA = this->getValueFromInputSocket(0);
-	auto vecB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = distance(" + vecA + ", " + vecB + ");";
-	ctx->addCodeChunk(this, code);
-}
 
 /* DOT PRODUCT */
 
@@ -139,16 +89,6 @@ DotVectorNode::DotVectorNode()
 	addOutputSocket(new FloatSocketModel("Result"));
 }
 
-void DotVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto vec1 = this->getValueFromInputSocket(0);
-	auto vec2 = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = dot(" + vec1 + "," + vec2 + ");";
-	ctx->addCodeChunk(this, code);
-}
 
 /* LENGTH */
 
@@ -162,15 +102,6 @@ LengthVectorNode::LengthVectorNode()
 	addOutputSocket(new FloatSocketModel("Result"));
 }
 
-void LengthVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto vec1 = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = length(" + vec1 + ");";
-	ctx->addCodeChunk(this, code);
-}
 
 /* NORMALIZE */
 
@@ -184,12 +115,3 @@ NormalizeVectorNode::NormalizeVectorNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void NormalizeVectorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto vec1 = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = normalize(" + vec1 + ");";
-	ctx->addCodeChunk(this, code);
-}

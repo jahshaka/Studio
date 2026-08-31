@@ -23,28 +23,6 @@ CombineNormalsNode::CombineNormalsNode()
 	addOutputSocket(new Vector3SocketModel("Result"));
 }
 
-void CombineNormalsNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto normalA = this->getValueFromInputSocket(0);
-	auto normalB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = normalize((" + normalA + " + " + normalB + "));";
-	ctx->addCodeChunk(this, code);
-}
-
-QString CombineNormalsNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto normalA = this->getValueFromInputSocket(0);
-	auto normalB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto output = "preview.color.rgb = normalize((" + normalA + " + " + normalB + "));";
-
-	return output;
-}
 
 
 TexelSizeNode::TexelSizeNode()
@@ -62,17 +40,6 @@ TexelSizeNode::TexelSizeNode()
 	addOutputSocket(new FloatSocketModel("1/Height"));
 }
 
-void TexelSizeNode::process(ModelContext* context)
-{
-	// textureSize takes an int LOD and returns ivec2 — the old emission
-	// passed 0.0 and used the ivec2 raw, neither of which compiles/converts
-	auto texName = this->getValueFromInputSocket(0);
-	this->outSockets[0]->setVarName("vec2(textureSize(" + texName + ", 0))");
-	this->outSockets[1]->setVarName("float(textureSize(" + texName + ", 0).x)");
-	this->outSockets[2]->setVarName("float(textureSize(" + texName + ", 0).y)");
-	this->outSockets[3]->setVarName("(1.0 / float(textureSize(" + texName + ", 0).x))");
-	this->outSockets[4]->setVarName("(1.0 / float(textureSize(" + texName + ", 0).y))");
-}
 
 /*
 SampleEquirectangularTextureNode::SampleEquirectangularTextureNode()
@@ -108,65 +75,3 @@ FlipbookUVAnimationNode::FlipbookUVAnimationNode()
 	addOutputSocket(new Vector2SocketModel("UV"));
 }
 
-void FlipbookUVAnimationNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-
-	ctx->addFunction("flipbook", R"(vec2 flipbook(float rows, float columns, float animlength, vec2 uv, float time)
-	{
-		float totalFrames = rows * columns;
-		float frameWidth = 1.0 / float(columns);
-		float frameHeight = 1.0 / float(rows);
-
-		float timePerFrame = animlength / totalFrames;
-
-		float currentFrame = floor(mod(time / timePerFrame, totalFrames));
-
-		// frames run left-to-right, top-to-bottom on the sheet; the old
-		// math swapped row/column and could index off the sheet entirely
-		float animCol = mod(currentFrame, columns);
-		float animRow = rows - floor(currentFrame / columns) - 1.0;
-
-		vec2 animUV = (vec2(animCol * frameWidth, animRow * frameHeight) + uv * vec2(frameWidth, frameHeight));
-
-		return animUV;
-	})");
-
-	auto uv = this->getValueFromInputSocket(0);
-	auto rows = this->getValueFromInputSocket(1);
-	auto columns = this->getValueFromInputSocket(2);
-	auto animLength = this->getValueFromInputSocket(3);
-	auto time = this->getValueFromInputSocket(4);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = flipbook("+rows+","+columns+","+animLength+","+uv+","+time+");";
-	ctx->addCodeChunk(this, code);
-}
-
-
-TileUVNode::TileUVNode()
-{
-	setNodeType(NodeCategory::Texture);
-	title = "Tile UV";
-	typeName = "tileuv";
-
-	addInputSocket(new Vector2SocketModel("UV", "v_texCoord"));
-	addInputSocket(new FloatSocketModel("Rows", "1.0"));
-	addInputSocket(new FloatSocketModel("Columns", "1.0"));
-
-	addOutputSocket(new Vector2SocketModel("UV"));
-}
-
-void TileUVNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-
-	auto uv = this->getValueFromInputSocket(0);
-	auto rows = this->getValueFromInputSocket(1);
-	auto columns = this->getValueFromInputSocket(2);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = vec2(" + rows + "," + columns +") * "+uv+";";
-	ctx->addCodeChunk(this, code);
-
-}

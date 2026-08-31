@@ -10,7 +10,6 @@
 #include "../graph/nodegraph.h"
 #include "../models/nodemodel.h"
 #include "../graph/sockets.h"
-#include "../generator/shadercontext.h"
 #include "../propertywidgets/propertywidgetbase.h"
 #include "../propertywidgets/texturepropertywidget.h"
 
@@ -25,7 +24,6 @@ class SurfaceMasterNode : public NodeModel
 {
 public:
 	SurfaceMasterNode();
-	virtual void process(ModelContext* ctx) override;
 };
 
 
@@ -38,7 +36,6 @@ public:
 	FloatNodeModel();
 
 	void editTextChanged(const QString& text);
-	virtual void process(ModelContext* context) override;
 
 	virtual QJsonValue serializeWidgetValue(int widgetIndex = 0) override;
 
@@ -50,7 +47,6 @@ class VectorMultiplyNode : public NodeModel
 public:
 	VectorMultiplyNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class WorldNormalNode : public NodeModel
@@ -58,7 +54,6 @@ class WorldNormalNode : public NodeModel
 public:
 	WorldNormalNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class LocalNormalNode : public NodeModel
@@ -66,7 +61,6 @@ class LocalNormalNode : public NodeModel
 public:
 	LocalNormalNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class TimeNode : public NodeModel
@@ -74,7 +68,6 @@ class TimeNode : public NodeModel
 public:
 	TimeNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class SineNode : public NodeModel
@@ -82,7 +75,6 @@ class SineNode : public NodeModel
 public:
 	SineNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class PulsateNode : public NodeModel
@@ -90,7 +82,6 @@ class PulsateNode : public NodeModel
 public:
 	PulsateNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class PannerNode : public NodeModel
@@ -98,7 +89,6 @@ class PannerNode : public NodeModel
 public:
 	PannerNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 class NormalIntensityNode : public NodeModel
@@ -106,7 +96,6 @@ class NormalIntensityNode : public NodeModel
 public:
 	NormalIntensityNode();
 
-	virtual void process(ModelContext* context) override;
 };
 
 
@@ -115,7 +104,6 @@ class MakeColorNode : public NodeModel
 public:
 	MakeColorNode();
 
-	virtual void process(ModelContext *context) override;
 };
 
 class TextureCoordinateNode : public NodeModel
@@ -125,7 +113,6 @@ class TextureCoordinateNode : public NodeModel
 public:
 	TextureCoordinateNode();
 
-	virtual void process(ModelContext* context) override;
 
 	void comboTextChanged(const QString& text);
 };
@@ -137,7 +124,6 @@ class TextureSamplerNode : public NodeModel
 public:
 	TextureSamplerNode();
 
-	virtual void process(ModelContext* context) override;
 
 	void comboTextChanged(const QString& text);
 };
@@ -150,7 +136,6 @@ class TextureNode : public NodeModel
 	GraphTexture* graphTexture;
 public:
 	TextureNode();
-	virtual void process(ModelContext* context) override;
 
 	// image path of the chosen texture, empty if none (used by PbrGraphEvaluator)
 	QString getTexturePath() const;
@@ -178,7 +163,6 @@ public:
 	double x, y; // was int — truncated every fractional component (audit D4)
 	QVector2D value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox;
-	virtual void process(ModelContext* context) override;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);
 	void deserializeWidgetValue(QJsonValue val, int widgetIndex);
@@ -191,7 +175,6 @@ public:
 	double x, y, z; // was int — truncated every fractional component (audit D4)
 	QVector3D value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox, *zSpinBox;
-	virtual void process(ModelContext* context) override;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);
 	void deserializeWidgetValue(QJsonValue val, int widgetIndex);
@@ -204,7 +187,6 @@ public:
 	double x, y, z, w; // was int — truncated every fractional component (audit D4)
 	QVector4D value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox, *zSpinBox, *wSpinBox;
-	virtual void process(ModelContext* context) override;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);
 	void deserializeWidgetValue(QJsonValue val, int widgetIndex);
@@ -218,7 +200,6 @@ public:
 
 private:
 	ColorPickerWidget *colorWidget;
-	virtual void process(ModelContext* context) override;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);
 	void deserializeWidgetValue(QJsonValue val, int widgetIndex);

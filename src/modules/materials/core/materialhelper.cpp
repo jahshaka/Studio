@@ -11,7 +11,6 @@ For more information see the LICENSE file
 #include "materialhelper.h"
 #include "../graph/graphnodescene.h"
 #include "../graph/nodegraph.h"
-#include "../generator/shadergenerator.h"
 #include "graphbaker.h"
 #include "pbrgraphevaluator.h"
 #include "texturemanager.h"
@@ -19,46 +18,32 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/assets/shader.h"
 #include "../models/libraryv1.h"
 #include <QVector2D>
 #include <QVector3D>
 #include <QVector4D>
 
 /*
-EFFECT SHADER FORMAT
+EFFECT SHADER FORMAT (v2, post MATERIALS_EVALUATOR phase 5)
 ===============
 {
 	version:2,
 	name:"",
-	type:"shader", //shader, fx, postprocess
+	type:"effect",
 
-	vertexShaderSource:"",
-	fragmentShaderSource:"",
+	// the graph itself
+	shadergraph:{ },
 
-	// if custom shadows
-	shadowVertexShaderSource:"",
-	shadowFragmentShaderSource:"",
+	// CPU-evaluated engine material: folded values + baked map paths
+	pbrMaterial:{ values, bakedMaps, ... },
 
-	// effect
-	shadergraph:{
+	properties : { },   // legacy graph-global uniforms — readable forever
+	states : { }
 
-	},
-
-	values : [
-
-	],
-
-	properties : {
-
-	},
-
-	states : {
-
-	}
+	// Old files also carry vertexShaderSource/fragmentShaderSource — the GLSL
+	// pipeline died in phase 5; readers TOLERATE the keys, writers never emit
+	// them again.
 }
-
-
 */
 
 bool MaterialHelper::materialHasEffect(QJsonObject matObj)
@@ -78,23 +63,6 @@ QString MaterialHelper::assetPath(QString relPath)
 #endif
 }
 
-bool MaterialHelper::generateShader(NodeGraph * graph, QString & vertexShader, QString & fragmentShader)
-{
-	//todo: change to proper paths
-	auto vertTemplate = iris::GraphicsHelper::loadAndProcessShader(assetPath("surface.vert"));
-	auto fragTemplate = iris::GraphicsHelper::loadAndProcessShader(assetPath("surface.frag"));
-
-	ShaderGenerator shaderGen;
-	shaderGen.generateShader(graph);
-	auto vertCode = shaderGen.getVertexShader();
-	auto fragCode = shaderGen.getFragmentShader();
-
-	vertexShader = vertTemplate + vertCode;
-	fragmentShader = fragTemplate + fragCode;
-
-	return true;
-}
-
 QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 {
 	QJsonObject matObj;
@@ -103,16 +71,10 @@ QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 	matObj["type"] = "effect";
 	matObj["shaderGuid"] = "";
 
-
-	// GENERATE SHADERS
-	QString vertCode, fragCode;
-	generateShader(graph, vertCode, fragCode);
 	matObj["shadergraph"] = graph->serialize();
 
-	matObj["vertexShaderSource"] = vertCode;
-	matObj["fragmentShaderSource"] = fragCode;
-
-	// todo: if vertex offset or alpha was connected to, generate shadow shader
+	// (vertexShaderSource/fragmentShaderSource are gone — phase 5. Readers
+	// stay tolerant of old files that carry them.)
 
 	// properties are the same as the ones in the shadergraph, they're
 	// just placed here for convenience
@@ -120,9 +82,8 @@ QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 
 	matObj["states"] = matObj["shadergraph"].toObject()["settings"];
 
-	// Option B phase 1: evaluated PBR output alongside the generated GLSL.
-	// The GLSL keeps the legacy viewport working; "pbrMaterial" is what the
-	// engine-backed editor consumes (see pbrgraphevaluator.h).
+	// "pbrMaterial" is the engine-facing output: the CPU-evaluated
+	// iris::PbrMaterial inputs of the graph (see pbrgraphevaluator.h).
 	auto evaluated = PbrGraphEvaluator::evaluate(graph, textureResolver());
 	QJsonObject pbrObj;
 	pbrObj["values"] = evaluated.values;
@@ -196,62 +157,12 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 	return PbrGraphEvaluator::materialFromValues(values, textureResolver());
 }
 
-iris::CustomMaterialPtr MaterialHelper::createMaterialFromShaderGraph(NodeGraph* graph)
-{
-	auto matObj = serialize(graph);
-
-	auto shader = iris::Shader::create();
-	shader->setVertexShader(matObj["vertexShaderSource"].toString());
-	shader->setFragmentShader(matObj["fragmentShaderSource"].toString());
-
-	auto mat = iris::CustomMaterial::createFromShader(shader);
-	mat->setMaterialDefinition(matObj);
-
-	return mat;
-}
-
 NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj)
 {
 	auto graphObj = matObj["shadergraph"].toObject();
 	auto graph = NodeGraph::deserialize(graphObj, new LibraryV1());
 
 	return graph;
-}
-
-iris::CustomMaterialPtr MaterialHelper::generateMaterialFromMaterialDefinition(QJsonObject matObj, bool generateFromGraph)
-{
-	//auto nodeGraph = extractNodeGraphFromMaterialDefinition(matObj);
-
-	auto shader = iris::Shader::create();
-
-	if (generateFromGraph) {
-		ShaderGenerator shaderGen;
-		auto graph = extractNodeGraphFromMaterialDefinition(matObj);
-		
-		QString vertCode, fragCode;
-		generateShader(graph, vertCode, fragCode);
-
-		// append to shader templates
-		shader->setVertexShader(vertCode);
-		shader->setFragmentShader(fragCode);
-	}
-	else {
-		auto vertShader = matObj["vertexShaderSource"].toString();
-		auto fragShader = matObj["fragmentShaderSource"].toString();
-		shader->setVertexShader(vertShader);
-		shader->setFragmentShader(fragShader);
-	}
-	
-
-	auto mat = iris::CustomMaterial::createFromShader(shader);
-	mat->setMaterialDefinition(matObj);
-	mat->setVersion(2);
-
-	// generate properties
-	parseMaterialProperties(mat, matObj["properties"].toArray());
-	parseMaterialStates(mat, matObj);
-
-	return mat;
 }
 
 void MaterialHelper::parseMaterialProperties(iris::CustomMaterialPtr material, QJsonArray propList)

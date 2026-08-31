@@ -23,7 +23,6 @@
 #include "graphnode.h"
 #include "nodegraph.h"
 #include "socket.h"
-#include "../core/sockethelper.h"
 #include "../models/nodemodel.h"
 #include "../models/connectionmodel.h"
 #include "../models/library.h"

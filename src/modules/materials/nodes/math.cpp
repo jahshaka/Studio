@@ -23,26 +23,7 @@ AddNode::AddNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void AddNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = " + valA + " + " + valB + ";";
-	ctx->addCodeChunk(this, code);
-}
-
-QString AddNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = " + valA + " + " + valB + ";";
-	return output;
-}
 
 /*    SUBTRACT    */
 SubtractNode::SubtractNode()
@@ -57,26 +38,7 @@ SubtractNode::SubtractNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void SubtractNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = " + valA + " - " + valB + ";";
-	ctx->addCodeChunk(this, code);
-}
-
-QString SubtractNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = " + valA + " - " + valB + ";";
-	return output;
-}
 
 /*    MULTIPLY    */
 MultiplyNode::MultiplyNode()
@@ -91,26 +53,7 @@ MultiplyNode::MultiplyNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void MultiplyNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = " + valA + " * " + valB + ";";
-	ctx->addCodeChunk(this, code);
-}
-
-QString MultiplyNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = " + valA + " * " + valB + ";";
-	return output;
-}
 
 /*    DIVIDE    */
 DivideNode::DivideNode()
@@ -125,26 +68,6 @@ DivideNode::DivideNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void DivideNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = " + valA + " / " + valB + ";";
-	ctx->addCodeChunk(this, code);
-}
-
-QString DivideNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = " + valA + " / " + valB + ";";
-	return output;
-}
 
 
 /*    POWER    */
@@ -160,26 +83,7 @@ PowerNode::PowerNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void PowerNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = pow(" + valA + " , " + valB + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString PowerNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = pow(" + valA + " , " + valB + ");";
-	return output;
-}
 
 /*    SQUARE ROOT    */
 SqrtNode::SqrtNode()
@@ -193,24 +97,7 @@ SqrtNode::SqrtNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void SqrtNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = sqrt(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString SqrtNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = sqrt(" + valA + ");";
-	return output;
-}
 
 /*    MIN    */
 MinNode::MinNode()
@@ -225,26 +112,7 @@ MinNode::MinNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void MinNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = min(" + valA + " , " + valB + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString MinNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = min(" + valA + " , " + valB + ");";
-	return output;
-}
 
 /*    MAX    */
 MaxNode::MaxNode()
@@ -259,25 +127,6 @@ MaxNode::MaxNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void MaxNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = max(" + valA + " , " + valB + ");";
-	ctx->addCodeChunk(this, code);
-}
-QString MaxNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = max(" + valA + " , " + valB + ");";
-	return output;
-}
 
 
 /*    ABS    */
@@ -292,24 +141,7 @@ AbsNode::AbsNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void AbsNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = abs(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString AbsNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = abs(" + valA + ");";
-	return output;
-}
 
 /*    SIGN    */
 SignNode::SignNode()
@@ -323,24 +155,7 @@ SignNode::SignNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void SignNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = sign(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString SignNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = sign(" + valA + ");";
-	return output;
-}
 
 /*    CEIL    */
 CeilNode::CeilNode()
@@ -354,24 +169,7 @@ CeilNode::CeilNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void CeilNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = ceil(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString CeilNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = ceil(" + valA + ");";
-	return output;
-}
 
 /*    FLOOR    */
 FloorNode::FloorNode()
@@ -385,24 +183,7 @@ FloorNode::FloorNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void FloorNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = floor(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString FloorNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = floor(" + valA + ");";
-	return output;
-}
 
 /*    ROUND    */
 RoundNode::RoundNode()
@@ -417,24 +198,7 @@ RoundNode::RoundNode()
 }
 
 // https://forum.unity.com/threads/round-not-supported-in-shaders.144316/
-void RoundNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = round(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString RoundNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = round(" + valA + ");";
-	return output;
-}
 
 /*    TRUNCATE    */
 TruncNode::TruncNode()
@@ -449,24 +213,7 @@ TruncNode::TruncNode()
 }
 
 // https://stackoverflow.com/questions/14/difference-between-math-floor-and-math-truncate
-void TruncNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = trunc(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString TruncNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = trunc(" + valA + ");";
-	return output;
-}
 
 /*    STEP    */
 StepNode::StepNode()
@@ -481,26 +228,7 @@ StepNode::StepNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void StepNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto edge = this->getValueFromInputSocket(0);
-	auto val = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = step(" + edge + " , " + val + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString StepNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto edge = this->getValueFromInputSocket(0);
-	auto val = this->getValueFromInputSocket(1);
-
-	auto output = "preview.color = step(" + edge + " , " + val + ");";
-	return output;
-}
 
 /*    SMOOTHSTEP    */
 SmoothStepNode::SmoothStepNode()
@@ -516,28 +244,7 @@ SmoothStepNode::SmoothStepNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void SmoothStepNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto edge1 = this->getValueFromInputSocket(0);
-	auto edge2 = this->getValueFromInputSocket(1);
-	auto val = this->getValueFromInputSocket(2);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = smoothstep(" + edge1 + " , " + edge2 + " , " + val + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString SmoothStepNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto edge1 = this->getValueFromInputSocket(0);
-	auto edge2 = this->getValueFromInputSocket(1);
-	auto val = this->getValueFromInputSocket(2);
-
-	auto output = "preview.color = smoothstep(" + edge1 + " , " + edge2 + " , " + val + ");";
-	return output;
-}
 
 /*    FRACTION    */
 FracNode::FracNode()
@@ -551,24 +258,7 @@ FracNode::FracNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void FracNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = fract(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString FracNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = fract(" + valA + ");";
-	return output;
-}
 
 /*    CLAMP    */
 ClampNode::ClampNode()
@@ -584,29 +274,7 @@ ClampNode::ClampNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void ClampNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto minVal = this->getValueFromInputSocket(0);
-	auto maxVal = this->getValueFromInputSocket(1);
-	auto val = this->getValueFromInputSocket(2);
-	auto res = this->getOutputSocketVarName(0);
 
-	// GLSL is clamp(x, minVal, maxVal) — the old emission clamped the Min input
-	auto code = res + " = clamp(" + val + " , " + minVal + " , " + maxVal + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString ClampNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto minVal = this->getValueFromInputSocket(0);
-	auto maxVal = this->getValueFromInputSocket(1);
-	auto val = this->getValueFromInputSocket(2);
-
-	auto output = "preview.color = clamp(" + val + " , " + minVal + " , " + maxVal + ");";
-	return output;
-}
 
 /*    LERP    */
 LerpNode::LerpNode()
@@ -622,29 +290,7 @@ LerpNode::LerpNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void LerpNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto t = this->getValueFromInputSocket(2);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = mix(" + valA + " , " + valB + " , " + t + ");";
-	//auto code = res + " = mix(vec3(1.0,0.0,0.0).xyzz,vec3(0.0,1.0,1.0).xyzz, " + t + ");";
-	ctx->addCodeChunk(this, code);
-}
-
-QString LerpNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto t = this->getValueFromInputSocket(2);
-
-	auto output = "preview.color = mix(" + valA + " , " + valB + " , " + t + ");";
-	return output;
-}
 
 /*    ONEMINUS    */
 OneMinusNode::OneMinusNode()
@@ -658,24 +304,7 @@ OneMinusNode::OneMinusNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void OneMinusNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = vec4(1.0) - " + valA + ";";
-	ctx->addCodeChunk(this, code);
-}
-
-QString OneMinusNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = vec4(1.0) - " + valA + ";";
-	return output;
-}
 
 /*    NEGATE    */
 NegateNode::NegateNode()
@@ -689,21 +318,3 @@ NegateNode::NegateNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void NegateNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = -" + valA + ";";
-	ctx->addCodeChunk(this, code);
-}
-
-QString NegateNode::generatePreview(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-
-	auto output = "preview.color = -" + valA + ";";
-	return output;
-}

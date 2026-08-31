@@ -34,35 +34,6 @@ SurfaceMasterNode::SurfaceMasterNode()
 	addInputSocket(new FloatSocketModel("Vertex Extrusion"));
 }
 
-void SurfaceMasterNode::process(ModelContext* ctx)
-{
-	QString code = "";
-	auto context = (ShaderContext*)ctx;
-	//context->addCodeChunk(this, "void surface(inout Material material){\n");
-
-	auto diffVar = this->getValueFromInputSocket(0);
-	auto specVar = this->getValueFromInputSocket(1);
-	auto shininessVar = this->getValueFromInputSocket(2);
-	auto normVar = this->getValueFromInputSocket(3);
-	auto ambientVar = this->getValueFromInputSocket(4);
-	auto emissionVar = this->getValueFromInputSocket(5);
-	auto alphaVar = this->getValueFromInputSocket(6);
-	auto alphaCutoffVar = this->getValueFromInputSocket(7);
-
-	code += "material.diffuse = " + diffVar + ";\n";
-	code += "material.specular = " + specVar + ";\n";
-	code += "material.shininess = " + shininessVar + ";\n";
-	code += "material.normal = " + normVar + ";\n";
-	code += "material.ambient = " + ambientVar + ";\n";
-	code += "material.emission = " + emissionVar + ";\n";
-	code += "material.alpha = " + alphaVar + ";\n";
-	code += "material.alphaCutoff = " + alphaCutoffVar + ";\n";
-	//context->addCodeChunk(this, "material.diffuse = " + diffVar + ";");
-
-	//context->clear();
-	context->addCodeChunk(this, code);
-	
-}
 
 FloatNodeModel::FloatNodeModel() :
 	NodeModel()
@@ -107,14 +78,6 @@ void FloatNodeModel::editTextChanged(const QString& text)
 	emit valueChanged(this, 0);
 }
 
-void FloatNodeModel::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = " + valueSock->getValue() + ";";
-	valueSock->setVarName(valueSock->getValue());
-}
 
 QJsonValue FloatNodeModel::serializeWidgetValue(int widgetIndex)
 {
@@ -143,16 +106,6 @@ VectorMultiplyNode::VectorMultiplyNode()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void VectorMultiplyNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto valB = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = " + valA + " * " + valB + ";";
-	ctx->addCodeChunk(this, code);
-}
 
 WorldNormalNode::WorldNormalNode()
 {
@@ -164,14 +117,6 @@ WorldNormalNode::WorldNormalNode()
 	addOutputSocket(new Vector3SocketModel("World Normal", "v_normal"));
 }
 
-void WorldNormalNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = v_normal;";
-	outSockets[0]->setVarName("v_normal");
-}
 
 LocalNormalNode::LocalNormalNode()
 {
@@ -183,13 +128,6 @@ LocalNormalNode::LocalNormalNode()
 	addOutputSocket(new Vector3SocketModel("Local Normal", "v_locaNormal"));
 }
 
-void LocalNormalNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto res = this->getOutputSocketVarName(0);
-
-	outSockets[0]->setVarName("v_localNormal");
-}
 
 TimeNode::TimeNode()
 {
@@ -201,10 +139,6 @@ TimeNode::TimeNode()
 	addOutputSocket(new FloatSocketModel("Seconds", "u_time"));
 }
 
-void TimeNode::process(ModelContext* context)
-{
-	outSockets[0]->setVarName("u_time");
-}
 
 SineNode::SineNode()
 {
@@ -216,17 +150,6 @@ SineNode::SineNode()
 	addInputSocket(new Vector3SocketModel("Value"));
 	addOutputSocket(new Vector3SocketModel("Result"));
 }
-
-void SineNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = sin(" + valA + ");";
-	ctx->addCodeChunk(this, code);
-}
-
 
 
 MakeColorNode::MakeColorNode() {
@@ -241,18 +164,6 @@ MakeColorNode::MakeColorNode() {
 	addInputSocket(new FloatSocketModel("B"));
 
 	addOutputSocket(new Vector4SocketModel("Color"));
-}
-
-void MakeColorNode::process(ModelContext *context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valr = this->getValueFromInputSocket(0);
-	auto valg = this->getValueFromInputSocket(1);
-	auto valb = this->getValueFromInputSocket(2);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = vec4(" + valr + "," + valg + "," + valb + ", 1);";
-	ctx->addCodeChunk(this, code);
 }
 
 
@@ -289,10 +200,6 @@ TextureCoordinateNode::TextureCoordinateNode()
 	uv = "v_texCoord";
 }
 
-void TextureCoordinateNode::process(ModelContext* context)
-{
-	outSockets[0]->setVarName(uv);
-}
 
 void TextureCoordinateNode::comboTextChanged(const QString& text)
 {
@@ -326,23 +233,6 @@ TextureSamplerNode::TextureSamplerNode()
 	addOutputSocket(new Vector4SocketModel("RGBA"));
 }
 
-void TextureSamplerNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-
-	auto tex = this->getValueFromInputSocket(0);
-	auto uv = this->getValueFromInputSocket(1);
-	auto rgba = this->getOutputSocketVarName(0);
-
-	QString code = "";
-
-	if (tex.isEmpty())
-		code = rgba + " = vec4(0.0,0.0,0.0,0.0);";
-	else
-		code = rgba + " = texture("+tex+","+uv+");";
-
-	ctx->addCodeChunk(this, code);
-}
 
 // (PropertyNode / TexturePropertyNode retired 2026-08-31, §3b — load-time
 // migration in NodeGraph::deserialize turns their instances into real
@@ -456,15 +346,6 @@ void TextureNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 		setTextureGuid(value); // an asset guid (or an app-relative preset image)
 }
 
-void TextureNode::process(ModelContext * context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto texName = this->getOutputSocketVarName(0);
-	ctx->addUniform("uniform sampler2D "+texName+"");
-	if (graphTexture != nullptr) {
-		graphTexture->uniformName = texName;
-	}
-}
 
 PulsateNode::PulsateNode()
 {
@@ -477,15 +358,6 @@ PulsateNode::PulsateNode()
 	addOutputSocket(new FloatSocketModel("Result"));
 }
 
-void PulsateNode::process(ModelContext * context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto valA = this->getValueFromInputSocket(0);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = sin(u_time *" + valA + ") * 0.5 + 0.5;";
-	ctx->addCodeChunk(this, code);
-}
 
 PannerNode::PannerNode()
 {
@@ -500,18 +372,6 @@ PannerNode::PannerNode()
 	addOutputSocket(new Vector2SocketModel("Result"));
 }
 
-void PannerNode::process(ModelContext * context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto uv = this->getValueFromInputSocket(0);
-	auto speed = this->getValueFromInputSocket(1);
-	auto time = this->getValueFromInputSocket(2);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = " + uv + " + " + speed + " * "+ time + ";";
-	ctx->addCodeChunk(this, code);
-}
-
 
 NormalIntensityNode::NormalIntensityNode()
 {
@@ -523,17 +383,6 @@ NormalIntensityNode::NormalIntensityNode()
 	addInputSocket(new Vector3SocketModel("Normal", "vec3(0.0, 0.0, 1.0)"));
 	addInputSocket(new FloatSocketModel("Intensity", "1.0"));
 	addOutputSocket(new Vector3SocketModel("Result"));
-}
-
-void NormalIntensityNode::process(ModelContext* context)
-{
-	auto ctx = (ShaderContext*)context;
-	auto normal = this->getValueFromInputSocket(0);
-	auto intensity = this->getValueFromInputSocket(1);
-	auto res = this->getOutputSocketVarName(0);
-
-	auto code = res + " = normalize(mix(vec3(0,0,1)," + normal + "," + intensity + "));";
-	ctx->addCodeChunk(this, code);
 }
 
 
@@ -594,11 +443,6 @@ Vector2Node::Vector2Node()
 
 }
 
-void Vector2Node::process(ModelContext * context)
-{
-	auto ctx = (ShaderContext*)context;
-	outSockets[0]->setVarName("vec2(" + QString::number(value.x()) + "," + QString::number(value.y()) + ")");
-}
 
 QJsonValue Vector2Node::serializeWidgetValue(int widgetIndex)
 {
@@ -685,11 +529,6 @@ Vector3Node::Vector3Node()
 	addOutputSocket(new Vector3SocketModel("Result"));
 }
 
-void Vector3Node::process(ModelContext * context)
-{
-	auto ctx = (ShaderContext*)context;
-	outSockets[0]->setVarName("vec3(" + QString::number(value.x()) + "," + QString::number(value.y()) + "," + QString::number(value.z()) + ")");
-}
 
 QJsonValue Vector3Node::serializeWidgetValue(int widgetIndex)
 {
@@ -786,11 +625,6 @@ Vector4Node::Vector4Node()
 	addOutputSocket(new Vector4SocketModel("Result"));
 }
 
-void Vector4Node::process(ModelContext * context)
-{
-	auto ctx = (ShaderContext*)context;
-	outSockets[0]->setVarName("vec4(" + QString::number(value.x()) + "," + QString::number(value.y()) + "," + QString::number(value.z()) + "," + QString::number(value.w()) + ")");
-}
 
 QJsonValue Vector4Node::serializeWidgetValue(int widgetIndex)
 {
@@ -843,16 +677,6 @@ ColorPickerNode::ColorPickerNode()
 	addOutputSocket(new FloatSocketModel("A"));
 }
 
-void ColorPickerNode::process(ModelContext * context)
-{
-	auto col = colorWidget->getColor();
-	outSockets[0]->setVarName("vec4(" + QString::number(col.redF()) + "," + QString::number(col.greenF()) + "," + QString::number(col.blueF()) + "," + QString::number(col.alphaF()) + ")");
-	outSockets[1]->setVarName(QString::number(col.redF()));
-	outSockets[2]->setVarName(QString::number(col.greenF()));
-	outSockets[3]->setVarName(QString::number(col.blueF()));
-	outSockets[4]->setVarName(QString::number(col.alphaF()));
-
-}
 
 QJsonValue ColorPickerNode::serializeWidgetValue(int widgetIndex)
 {

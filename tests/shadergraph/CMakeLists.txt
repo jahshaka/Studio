@@ -9,8 +9,6 @@ add_executable(test_pbr_evaluator
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
@@ -47,8 +45,6 @@ add_executable(test_node_regressions
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
@@ -81,7 +77,6 @@ set_tests_properties(shadergraph.node_regressions PROPERTIES ENVIRONMENT "QT_QPA
 
 # Materials Evaluator parity suite (MATERIALS_EVALUATOR_SPEC section 6): the
 # audit's probe table as fixtures, one hand-computed case per op node,
-# sockethelper coercion parity, fake-fragment-context approximations, and the
 # graph.bakeInfo classifier. Same slice as test_node_regressions.
 add_executable(test_baker_parity
     test_baker_parity.cpp
@@ -89,8 +84,6 @@ add_executable(test_baker_parity
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
@@ -130,8 +123,6 @@ add_executable(test_bake_output
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
@@ -181,8 +172,6 @@ add_executable(test_panel_migration
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
@@ -224,9 +213,7 @@ add_executable(test_selection
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/undoredo.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/graphnode.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/graphnodescene.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
@@ -290,8 +277,6 @@ add_executable(resave_presets
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
-    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp

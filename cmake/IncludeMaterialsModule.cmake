@@ -20,18 +20,14 @@ set(SRCS
 	src/modules/materials/core/bakeprogram.cpp
 	src/modules/materials/core/graphbaker.cpp
 	src/modules/materials/core/materialhelper.cpp
-	src/modules/materials/core/materialwriter.cpp
 	src/modules/materials/core/pbrgraphevaluator.cpp
 	#src/modules/materials/core/project.cpp
 	src/modules/materials/core/texturemanager.cpp
 	src/modules/materials/core/undoredo.cpp
-	src/modules/materials/core/sockethelper.cpp
 
 	src/modules/materials/dialogs/createnewdialog.cpp
 	src/modules/materials/dialogs/searchdialog.cpp
 
-	src/modules/materials/generator/shadercontext.cpp
-	src/modules/materials/generator/shadergenerator.cpp
 
 	src/modules/materials/graph/graphnode.cpp
 	src/modules/materials/graph/graphnodescene.cpp
@@ -49,15 +45,12 @@ set(SRCS
 	src/modules/materials/models/properties.cpp
 	src/modules/materials/models/socketmodel.cpp
 
-	src/modules/materials/nodes/inputs.cpp
 	src/modules/materials/nodes/math.cpp
 	src/modules/materials/nodes/object.cpp
 	src/modules/materials/nodes/pbrmasternode.cpp
 	src/modules/materials/nodes/test.cpp
 	src/modules/materials/nodes/texture.cpp
-	src/modules/materials/nodes/utils.cpp
 	src/modules/materials/nodes/vector.cpp
-	src/modules/materials/nodes/view.cpp
 
 	src/modules/materials/propertywidgets/floatpropertywidget.cpp
     src/modules/materials/propertywidgets/vectorpropertywidget.cpp
@@ -85,17 +78,13 @@ set(HEADERS
 	src/modules/materials/core/graphbaker.h
 	src/modules/materials/core/guidhelper.h
 	src/modules/materials/core/materialhelper.h
-	src/modules/materials/core/materialwriter.h
 	src/modules/materials/core/pbrgraphevaluator.h
 	#src/modules/materials/core/project.h
 	src/modules/materials/core/texturemanager.h
 	src/modules/materials/core/undoredo.h
-	src/modules/materials/core/sockethelper.h
 	src/modules/materials/dialogs/createnewdialog.h
 	src/modules/materials/dialogs/searchdialog.h
 
-	src/modules/materials/generator/shadercontext.h
-	src/modules/materials/generator/shadergenerator.h
 
 	src/modules/materials/graph/graphnode.h
 	src/modules/materials/graph/graphnodescene.h
@@ -114,17 +103,12 @@ set(HEADERS
 	src/modules/materials/models/properties.h
 	src/modules/materials/models/socketmodel.h
 
-	src/modules/materials/nodes/inputs.h
 	src/modules/materials/nodes/math.h
 	src/modules/materials/nodes/object.h
 	src/modules/materials/nodes/pbrmasternode.h
 	src/modules/materials/nodes/test.h
 	src/modules/materials/nodes/texture.h
-	src/modules/materials/nodes/utils.h
 	src/modules/materials/nodes/vector.h
-	src/modules/materials/nodes/vertex.h
-	src/modules/materials/nodes/view.h
-	src/modules/materials/nodes/generated.h
 
 	src/modules/materials/propertywidgets/floatpropertywidget.h
     src/modules/materials/propertywidgets/vectorpropertywidget.h

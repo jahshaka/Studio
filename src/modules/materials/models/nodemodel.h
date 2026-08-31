@@ -23,7 +23,6 @@ enum class NodeCategory {
 };
 
 class QWidget;
-class ModelContext;
 
 class NodeModel : public QObject
 {
@@ -70,22 +69,10 @@ public:
 	void addOutputSocket(SocketModel* sock);
 	void setWidget(QWidget *wid);
 
-	virtual QString getSocketValue(int socketIndex, ModelContext* context)
-	{
-		return outSockets[socketIndex]->getValue();
-	}
-
-	QString getValueFromInputSocket(int index);
-	QString getOutputSocketVarName(int index);
-
-
-	virtual void preProcess(ModelContext* context) {}
-	virtual void process(ModelContext* context) {}
-	virtual void postProcess(ModelContext* context) {}
-	virtual QString generatePreview(ModelContext* context)
-	{
-		return "";
-	}
+	// (the GLSL emission interface — process()/generatePreview()/getSocketValue
+	// and the var-name plumbing — died in MATERIALS_EVALUATOR phase 5; nodes are
+	// sockets + widgets + serialize, and the CPU semantics live in
+	// core/bakeprogram.cpp's op registry)
 
 	NodeGraph *getGraph() const;
 	void setGraph(NodeGraph *value);

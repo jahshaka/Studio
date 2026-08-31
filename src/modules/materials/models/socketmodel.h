@@ -13,11 +13,8 @@ public:
 	QString name;
 	QString typeName; //todo: change to enum
 
-					  // used to store results of calculations
-					  // usually only right nodes have these assigned
-	QString varName;
-	// used to get calculation results
-	// will sometimes be var name
+	// the socket's default value as a GLSL-style literal string (e.g.
+	// "vec2(0.0f, 0.0f)") — parsed by BakeProgram for unconnected inputs
 	QString value;
 
 	// color for the socket depending on the type of socket - no enum created
@@ -38,27 +35,13 @@ public:
 		return true;
 	}
 
-	virtual QString convertVarTo(SocketModel* toModel)
-	{
-		return varName;
-	}
-
-	virtual QString convertValueTo(SocketModel* toModel)
-	{
-		return value;
-	}
-
 	virtual SocketModel* duplicate() = 0;
 
 	void setGraph(NodeGraph *value);
 	NodeGraph *getGraph() const;
 
-	// assigned by shader model context
 	QString getValue() const;
 	void setValue(const QString &value);
-
-	QString getVarName() const;
-	void setVarName(const QString &value);
 
 	bool hasConnection()
 	{

@@ -258,12 +258,6 @@ void GraphNode::layout()
 	setPath(path_content);
 }
 
-void GraphNode::setPreviewShader(QString shader)
-{
-	// The per-node GL preview died with the legacy viewport (step 14).
-	Q_UNUSED(shader);
-}
-
 void GraphNode::enablePreviewWidget()
 {
 	// The per-node GL preview died with the legacy viewport (step 14); the

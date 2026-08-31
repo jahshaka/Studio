@@ -39,10 +39,8 @@ For more information see the LICENSE file
 #include <QScrollBar>
 #include <QShortcut>
 #include <QDesktopServices>
-#include "generator/shadergenerator.h"
 #include "nodes/test.h"
 #include "nodes/pbrmasternode.h"
-#include "core/materialwriter.h"
 #include "core/materialhelper.h"
 #include "core/graphbaker.h"
 #include <QFutureWatcher>
@@ -101,7 +99,7 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	stack = new QUndoStack;
 	scene = nullptr;
 	// Debounce for the engine preview: one evaluation per burst of edits
-	// (regenerateShader fires per value change while a slider drags).
+	// (graphInvalidated fires per value change while a slider drags).
 	previewUpdateTimer = new QTimer(this);
 	previewUpdateTimer->setSingleShot(true);
 	previewUpdateTimer->setInterval(300); // MATERIALS_EVALUATOR_SPEC section 2
@@ -157,8 +155,7 @@ void EffectsPage::setNodeGraph(NodeGraph *graph)
 	stack->clear(); // clears stack, later to add seperate routes for each node addition
 	this->graph = graph;
 
-	regenerateShader();
-	
+	schedulePreviewUpdate();
 }
 
 void EffectsPage::newNodeGraph(QString *shaderName, int *templateType, QString *templateName)
@@ -421,7 +418,7 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 
 	if (assign) {
 		this->setNodeGraph(graph);
-		regenerateShader();
+		schedulePreviewUpdate();
 	}
 	
 	return graph;
@@ -470,7 +467,6 @@ void EffectsPage::loadGraph(QString guid)
 
 	progressDialog->setValueAndText(8, "Tidying up");
 
-	//regenerateShader();
 	currentProjectShader = selectCorrectItemFromDrop(guid);
 	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
 	oldName = currentShaderInformation.name = currentProjectShader->data(Qt::DisplayRole).toString(); 
@@ -565,34 +561,6 @@ void EffectsPage::exportEffect(QString guid)
 
 	// close our now exported file
 	zip_close(zip);
-}
-
-// keeping this around for standalone (nick)
-void EffectsPage::exportGraph()
-{
-	QString path = QFileDialog::getSaveFileName(this, "Choose file name", "effect.effect", "Material File (*.effect)");
-
-	QJsonDocument doc;
-	doc.setObject((new MaterialWriter())->serializeMaterial(graph));
-
-	QFile file(path);
-	file.open(QFile::WriteOnly | QFile::Truncate);
-	file.write(doc.toJson());
-	file.close();
-
-	QString sourcePath = QFileInfo(path).absolutePath()+"/shader.frag";
-	QFile sourceFile(sourcePath);
-	sourceFile.open(QFile::WriteOnly | QFile::Truncate);
-	ShaderGenerator gen;
-	gen.generateShader(graph);
-	sourceFile.write("#pragma include <surface.frag>\n\n" + (gen.getFragmentShader().toUtf8()));
-	//sourceFile.write("#pragma include <surface.frag>\n\n"+(new ShaderGenerator())->generateShader(graph).toUtf8());
-	sourceFile.close();
-
-	auto imagePath = path.split('.')[0]+".png";
-
-	
-
 }
 
 void EffectsPage::restoreGraphPositions(const QJsonObject &data)
@@ -704,11 +672,9 @@ void EffectsPage::configureStyleSheet()
 		"QComboBox::down-arrow{image : url(:/images/drop-down-24.png); }"
 	);
 
-	textWidget->setStyleSheet(nodeTray->styleSheet());
 	displayWidget->setStyleSheet(nodeTray->styleSheet());
 	propertyWidget->setStyleSheet(nodeTray->styleSheet());
 	materialSettingsWidget->setStyleSheet(nodeTray->styleSheet());
-	textEdit->setStyleSheet(nodeTray->styleSheet());
 	materialSettingsDock->setStyleSheet(nodeTray->styleSheet());
 	tabbedWidget->setStyleSheet(nodeTray->styleSheet() + 
 	"QTabWidget::pane{	border: 1px solid rgba(0, 0, 0, .5); border - top: 0px solid rgba(0, 0, 0, 0);}"
@@ -971,7 +937,6 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 	
 	currentShaderInformation.GUID = assetGuid;
 	currentShaderInformation.name = newShader;
-//	regenerateShader();
 
 
 #if(EFFECT_BUILD_AS_LIB)
@@ -982,7 +947,9 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 	assetShader->fileName = newShader;
 	assetShader->assetGuid = assetGuid;
 	assetShader->path = IrisUtils::join(mProject->getProjectFolder(), IrisUtils::buildFileName(newShader, "shader"));
-	assetShader->setValue(QVariant::fromValue(MaterialHelper::createMaterialFromShaderGraph(graph)));
+	// the stored value is the definition itself (materialsapi.createGraph
+	// precedent) — the GLSL CustomMaterial route died in phase 5
+	assetShader->setValue(QVariant::fromValue(shaderDefinition));
     dataBase->updateAssetAsset(assetGuid, QJsonDocument(shaderDefinition).toJson());
 	AssetManager::addAsset(assetShader);
 #endif
@@ -1063,7 +1030,6 @@ void EffectsPage::configureUI()
 {
 	nodeTray = new QDockWidget("Library");
 	centralWidget = new QWidget();
-	textWidget = new QDockWidget("Code View");
 	displayWidget = new QDockWidget("Display");
     assetsDock = new QDockWidget("");
     projectDock = new QDockWidget("Project");
@@ -1073,14 +1039,12 @@ void EffectsPage::configureUI()
 	materialSettingsWidget = new MaterialSettingsWidget;
 	tabbedWidget = new QTabWidget;
 	graphicsView = new GraphicsView;
-	textEdit = new QTextEdit;
 	nodePropertiesPanel = new NodePropertiesPanel;
 	nodeContainer = new QListWidget;
 	splitView = new QSplitter;
 	projectName = new QLineEdit;
 
 	nodeTray->setAllowedAreas(Qt::AllDockWidgetAreas);
-	textWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	displayWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	propertyWidget->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 	materialSettingsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
@@ -1100,7 +1064,6 @@ void EffectsPage::configureUI()
 	//addDockWidget(Qt::LeftDockWidgetArea, projectDock, Qt::Vertical);
 #endif
 	addDockWidget(Qt::LeftDockWidgetArea, assetsDock, Qt::Vertical);
-//	addDockWidget(Qt::RightDockWidgetArea, textWidget, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, displayWidget, Qt::Vertical);
 	addDockWidget(Qt::LeftDockWidgetArea, materialSettingsDock, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, propertyWidget, Qt::Vertical);
@@ -1112,7 +1075,6 @@ void EffectsPage::configureUI()
 	displayWidget->toggleViewAction()->setEnabled(false);
 	assetsDock->setMinimumWidth(330);
 
-	textWidget->setWidget(textEdit);
 	propertyWidget->setWidget(nodePropertiesPanel);
 	nodePropertiesPanel->setMinimumHeight(400);
 	
@@ -1209,12 +1171,8 @@ void EffectsPage::configureToolbar()
 
 	toolBar->addSeparator();
 
-	auto exportBtn = new QAction;
 	auto importBtn = new QAction;
 	auto addBtn = new QAction;
-
-	exportBtn->setIcon(fontIcons->icon(fa::upload, options));
-	exportBtn->setToolTip("Export shader");
 
 	importBtn->setIcon(fontIcons->icon(fa::download, options));
 	importBtn->setToolTip("Import shader");
@@ -1222,7 +1180,7 @@ void EffectsPage::configureToolbar()
 	addBtn->setIcon(fontIcons->icon(fa::plus, options));
 	addBtn->setToolTip("Create new shader");
 
-	toolBar->addActions({ /*exportBtn,*/ importBtn, addBtn });
+	toolBar->addActions({ importBtn, addBtn });
 
 	// this acts as a spacer
 	QWidget* empty = new QWidget();
@@ -1251,7 +1209,6 @@ void EffectsPage::configureToolbar()
 	this->addToolBar(toolBar);
 
 	connect(actionSave, &QAction::triggered, this, &EffectsPage::saveShader);
-	connect(exportBtn, &QAction::triggered, this, &EffectsPage::exportGraph);
 	connect(importBtn, &QAction::triggered, this, &EffectsPage::importGraph);
 	connect(addBtn, &QAction::triggered, this, [=]() {
 		createNewGraph(true);
@@ -1423,7 +1380,10 @@ GraphNodeScene *EffectsPage::createNewScene()
 
 	connect(scene, &GraphNodeScene::graphInvalidated, [this, scene]()
 	{
-		regenerateShader();
+		// Engine preview: every path that re-evaluates the graph ends here
+		// (graphInvalidated covers connections, deletions and value edits
+		// alike), so this one debounced hook keeps the Display dock live.
+		schedulePreviewUpdate();
 	});
 
 	connect(scene, &GraphNodeScene::loadGraph, [=](QListWidgetItem *item) {
@@ -1450,27 +1410,6 @@ GraphNodeScene *EffectsPage::createNewScene()
 	});
 
     return scene;
-}
-
-void EffectsPage::regenerateShader()
-{
-	ShaderGenerator shaderGen;
-	shaderGen.generateShader(graph);
-	auto code = shaderGen.getFragmentShader();
-
-	textEdit->setPlainText(code);
-
-	// assign previews
-	auto nodes = scene->getNodes();
-	for (auto node : nodes) {
-		if (shaderGen.shaderPreviews.contains(node->nodeId))
-			node->setPreviewShader(shaderGen.shaderPreviews[node->nodeId]);
-	}
-
-	// Engine preview: every path that re-evaluates the graph ends here
-	// (graphInvalidated covers connections, deletions and value edits alike),
-	// so this one debounced hook keeps the Display dock live.
-	schedulePreviewUpdate();
 }
 
 void EffectsPage::setEnginePreview(IMaterialPreviewWidget *preview)
@@ -1784,12 +1723,6 @@ void EffectsPage::configureConnections()
 			}
 		}
 	});
-
-	QShortcut* exportGraphCall = new QShortcut(QKeySequence("crtl+e"), this);
-	connect(exportGraphCall, &QShortcut::activated, [=]() {
-		qDebug() << "graph export should call";
-		exportGraph();
-		});
 
 	
 

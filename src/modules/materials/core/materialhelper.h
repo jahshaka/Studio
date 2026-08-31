@@ -14,10 +14,6 @@ public:
 
 	static QString assetPath(QString relPath);
 
-	// generates vertex and fragment shader form nodegraph
-	// returns true if all goes well, false if otherwose
-	static bool generateShader(NodeGraph* graph, QString& vertexShader, QString& fragmentShader);
-	
 	// Converts a NodeGraph to the Material json format.
 	// Since Option B phase 1 the result also carries "pbrMaterial", the
 	// CPU-evaluated iris::PbrMaterial inputs of the graph (values + the list
@@ -30,7 +26,6 @@ public:
 	// "pbrMaterial" carries their project-relative paths. Falls back to the
 	// plain serialize when no project root is set or bakeGuid is empty.
 	static QJsonObject serializeWithBake(NodeGraph* graph, const QString& bakeGuid);
-	static iris::CustomMaterialPtr createMaterialFromShaderGraph(NodeGraph* scene);
 
 	// Option B phase 1: the graph evaluated to the document's PBR material
 	// (which SceneMirror already mirrors into the engine). Texture-property
@@ -55,18 +50,13 @@ public:
 
 	static NodeGraph* extractNodeGraphFromMaterialDefinition(QJsonObject matObj);
 
-	// uses the vertexShaderSource and fragmentShaderSource by default
-	// if generateFromGraph is set to true, it generates it from the shadergraph
-	// if there's an error generating the code then a null material is returned
-	static iris::CustomMaterialPtr generateMaterialFromMaterialDefinition(QJsonObject matObj, bool generateFromGraph = false);
-	//static QJsonObject serialize(GraphNodeScene* scene);
+	// (generateShader/createMaterialFromShaderGraph/generateMaterialFrom-
+	// MaterialDefinition died in MATERIALS_EVALUATOR phase 5 — the GLSL
+	// pipeline is gone. Graph-backed definitions load through
+	// createPbrMaterialFromDefinition; the shader-less CustomMaterial fallback
+	// lives in ShaderHandler::loadMaterialFromShaderV2.)
 
 	static void parseMaterialProperties(iris::CustomMaterialPtr material, QJsonArray propList);
-	//static QJsonArray serializeMateriaProperties(iris::)
 
 	static void parseMaterialStates(iris::CustomMaterialPtr material, QJsonObject matObj);
-
-
-	static QString vertexShaderTemplate;
-	static QString fragmentShaderTemplate;
 };

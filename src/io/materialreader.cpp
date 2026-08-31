@@ -317,7 +317,17 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShader(QJsonObject shader
 
 iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV2(QJsonObject shaderObject, Database* db)
 {
-	return MaterialHelper::generateMaterialFromMaterialDefinition(shaderObject, false);
+	// The GLSL pipeline died in MATERIALS_EVALUATOR phase 5: stored
+	// vertexShaderSource/fragmentShaderSource keys are IGNORED (readers stay
+	// tolerant of old files carrying them). The engine renders CustomMaterials
+	// from their editable properties alone; graph-backed material assets load
+	// as the shader's baked PbrMaterial via parseMaterialTyped's dispatch.
+	auto mat = iris::CustomMaterial::create();
+	mat->setMaterialDefinition(shaderObject);
+	mat->setVersion(2);
+	MaterialHelper::parseMaterialProperties(mat, shaderObject["properties"].toArray());
+	MaterialHelper::parseMaterialStates(mat, shaderObject);
+	return mat;
 }
 
 iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shaderObject, Database* db)

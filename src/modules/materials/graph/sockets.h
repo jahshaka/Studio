@@ -5,7 +5,6 @@
 
 #include "../models/socketmodel.h"
 #include "nodestyle.h"
-#include "../core/sockethelper.h"
 
 class FloatSocketModel : public SocketModel
 {
@@ -15,11 +14,6 @@ public:
 	{
 		this->setValue(defaultValue);
 		socketColor = NodeStyle::Port::typeFloat;
-	}
-
-	QString convertVarTo(SocketModel* toModel)
-	{
-		return SocketHelper::convertVectorValue(varName, this, toModel);
 	}
 
 	virtual SocketModel* duplicate()
@@ -48,11 +42,6 @@ public:
 		socketColor = NodeStyle::Port::typeVec2;
 	}
 
-	QString convertVarTo(SocketModel* toModel)
-	{
-		return SocketHelper::convertVectorValue(varName, this, toModel);
-	}
-
 	virtual SocketModel* duplicate()
 	{
 		return new Vector2SocketModel(name);
@@ -79,11 +68,6 @@ public:
 		socketColor = NodeStyle::Port::typeVec3;
 	}
 
-	QString convertVarTo(SocketModel* toModel)
-	{
-		return SocketHelper::convertVectorValue(varName, this, toModel);
-	}
-
 	virtual bool canConvertTo(SocketModel* other)
 	{
 		if (other->typeName == "float" ||
@@ -108,11 +92,6 @@ public:
 	{
 		this->setValue(defaultValue);
 		socketColor = NodeStyle::Port::typeVec4;
-	}
-
-	QString convertVarTo(SocketModel* toModel)
-	{
-		return SocketHelper::convertVectorValue(varName, this, toModel);
 	}
 
 	virtual bool canConvertTo(SocketModel* other)
