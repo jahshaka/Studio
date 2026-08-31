@@ -50,6 +50,9 @@ public:
     Q_INVOKABLE bool remove(const QString &guid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool refreshThumbnail(const QString &guid);
     Q_INVOKABLE QVariantList dependencies(const QString &guid);
+    Q_INVOKABLE QString storeRoot();
+    Q_INVOKABLE bool setStoreRoot(const QString &path, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap storeStatus();
 };
 
 #endif // SCRIPTING_ASSETSAPI_H

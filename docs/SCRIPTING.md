@@ -132,6 +132,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `assets.remove(guid, {keepShared: true}) -> bool` | document | Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo. |
 | `assets.refreshThumbnail(guid) -> bool` | document | Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only). |
 | `assets.dependencies(guid) -> [guid]` | document | The asset plus all its dependencies, recursively. |
+| `assets.storeRoot() -> path` | document | The active asset-store root directory (the assets/storeRoot setting; the AppData default when unset). |
+| `assets.setStoreRoot(path, {move, force}) -> bool` | document | Repoints the asset store. Empty path returns to the default root. {move: true} copies the current store's contents to the new root first (verified; the old tree is retained). Without move, the target must already contain this library's store ({force: true} skips that check). Throws on failure; nothing changes on a failed call. |
+| `assets.storeStatus() -> {root, online, missing}` | document | Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it. |
 
 ## materials
 

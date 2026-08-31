@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/donatedialog.h"
 #include "ui/dialogs/custompopup.h"
 #include "services/assethelper.h"
+#include "services/assetstore.h"
 #include "services/scenenodehelper.h"
 
 #include <QFontDatabase>
@@ -522,6 +523,11 @@ void MainWindow::setupProjectDB()
     const QString path = IrisUtils::join(
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::JAH_DATABASE
     );
+
+    // Library lock (ASSET_PIPELINE preflight §6.2): held for the app's
+    // lifetime so store migration tools can refuse while any instance runs.
+    // Non-fatal — a second instance simply runs without the lock, as before.
+    LibraryLock::acquire(path);
 
     db = new Database();
 	if (db->initializeDatabase(path)) {

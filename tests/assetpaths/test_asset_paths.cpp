@@ -22,7 +22,10 @@
 #include <QStandardPaths>
 #include <cstdio>
 
+#include <QLockFile>
+
 #include "data/database/database.h"
+#include "services/assetstore.h"
 #include "services/assetstorepaths.h"
 
 static int failures = 0;
@@ -164,12 +167,34 @@ static void testIndices()
     CHECK(names.contains("idx_dependencies_dependee"), "idx_dependencies_dependee exists");
 }
 
+static void testLibraryLock()
+{
+    printf("--- LibraryLock (phase 1) ---\n");
+    const QString dbPath = QDir::current().filePath("assetpaths_lock_test.db");
+    QFile::remove(dbPath + ".lock");
+
+    CHECK(LibraryLock::acquire(dbPath), "lock acquired beside the db");
+    CHECK(!LibraryLock::heldElsewhere(dbPath), "our own lock is not 'elsewhere'");
+
+    QLockFile probe(dbPath + ".lock");
+    probe.setStaleLockTime(0);
+    CHECK(!probe.tryLock(0), "a second locker is refused while we hold it");
+
+    LibraryLock::release();
+    CHECK(probe.tryLock(0), "released lock is acquirable again");
+    // While the probe holds it, it IS held elsewhere (another QLockFile).
+    CHECK(LibraryLock::heldElsewhere(dbPath), "foreign lock reported heldElsewhere");
+    probe.unlock();
+    QFile::remove(dbPath + ".lock");
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);   // database.cpp links QtWidgets (QMessageBox)
 
     testPathsAuthority();
+    testLibraryLock();
 
     const QString dbPath = "assetpaths_test.db";
     QFile::remove(dbPath);

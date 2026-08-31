@@ -1,0 +1,95 @@
+// scripting.e2e.store_root — ASSET_PIPELINE_SPEC §3.1.1/§3.1.2 phase-1 proof.
+//
+// Runs --script --headless with HOME redirected to a scratch dir (fresh
+// JahLibrary.db + default AssetStore). Round-trips the relocatable store
+// root: default root, Move Store (copy-verify-flip, old tree retained),
+// byte access from the new root, OFFLINE mode (catalog stays fully usable,
+// byte actions fail cleanly, nothing crashes), Use Existing sanity check +
+// force, and the reset to default.
+//
+// jahsettings.ini lives beside the binary (QT_DEBUG) and is shared across
+// this build dir's suites — the script starts AND ends by resetting
+// assets/storeRoot so no other suite ever sees a leftover value.
+// Throwing exits non-zero.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+function assetByGuid(guid) {
+    var all = assets.list({ scope: "store" });
+    for (var i = 0; i < all.length; i++) if (all[i].guid === guid) return all[i];
+    return null;
+}
+
+// ---- defensive reset (a failed earlier run must not poison this one) ----
+assets.setStoreRoot("", {});
+
+try {
+    // ---- the default root ----
+    var defaultRoot = assets.storeRoot();
+    assert(defaultRoot.length > 0 && defaultRoot.indexOf("AssetStore") >= 0,
+           "default store root ends in AssetStore: " + defaultRoot);
+    var st = assets.storeStatus();
+    assert(st.online === true, "default root is online");
+    assert(st.root === defaultRoot, "storeStatus.root matches storeRoot()");
+
+    // ---- seed one real library asset (bytes in the store) ----
+    var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+    assert(png.length > 10, "assets.importFile(png) -> " + png);
+    assert(assets.refreshThumbnail(png), "thumbnail rebuilds from the default root (bytes reachable)");
+
+    // ---- Move Store: copy-verify-flip ----
+    var moved = "@STORE_MOVE_TARGET@";
+    assert(assets.setStoreRoot(moved, { move: true }), "setStoreRoot({move}) succeeds");
+    assert(assets.storeRoot() === moved, "root flipped to " + moved);
+    st = assets.storeStatus();
+    assert(st.online === true, "moved root is online");
+    assert(assets.refreshThumbnail(png), "bytes reachable from the MOVED root (files travelled)");
+
+    // Refuse nesting the root inside itself.
+    mustThrow(function () { assets.setStoreRoot(moved + "/nested", { move: true }); },
+              "nesting the new root inside the current one throws");
+
+    // ---- offline mode: identity survives absence ----
+    var offline = "/nonexistent/jah-e2e-offline-@STAMP@";
+    // Use Existing on a missing dir throws — and changes nothing.
+    mustThrow(function () { assets.setStoreRoot(offline, {}); },
+              "use-existing on a missing directory throws");
+    assert(assets.storeRoot() === moved, "failed call changed nothing");
+
+    // Point at an EXISTING empty dir without force: the catalog knows
+    // store-backed assets, none are there -> sanity check throws.
+    var emptyDir = "@STORE_EMPTY_TARGET@";
+    mustThrow(function () { assets.setStoreRoot(emptyDir, {}); },
+              "use-existing on a dir with none of the library's assets throws");
+    // force overrides (the user said so) -> store is 'online' but the files
+    // are elsewhere: catalog loads, bytes fail CLEANLY.
+    assert(assets.setStoreRoot(emptyDir, { force: true }), "force use-existing succeeds");
+    assert(assets.list({ scope: "store" }).length >= 1, "catalog still lists the library");
+    assert(assetByGuid(png) !== null, "the imported row is still cataloged");
+    var meta = assets.metadata(png);
+    assert(meta !== null && typeof meta === "object", "metadata still answers (DB-backed)");
+    st = assets.storeStatus();
+    assert(st.missing >= 1, "storeStatus counts the asset folder as missing here");
+
+    // ---- back to the moved root, then reset to default ----
+    assert(assets.setStoreRoot(moved, {}), "use-existing back on the real store (sanity check passes)");
+    assert(assets.refreshThumbnail(png), "bytes reachable again");
+
+    assert(assets.setStoreRoot("", {}), "reset to default");
+    assert(assets.storeRoot() === defaultRoot, "root is the default again");
+    // Move retained the old tree, so the default root still has the files.
+    assert(assets.refreshThumbnail(png), "default root still holds the original files (move = copy, retain)");
+
+    console.log("store_root e2e: all checks passed");
+}
+finally {
+    // Never leak a custom root into the shared jahsettings.ini.
+    assets.setStoreRoot("", {});
+}

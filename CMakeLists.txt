@@ -107,8 +107,10 @@ set(SRCS
     src/scripting/claude/claudechathost.cpp
     src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
+    src/ui/dialogs/preferences/assetssettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/assetmetadata.cpp
+    src/services/assetstore.cpp
     src/services/assetstorepaths.cpp
     src/services/audiopeaks.cpp
     src/services/videoutils.cpp
@@ -294,9 +296,11 @@ set(HEADERS
     src/scripting/claude/claudechathost.h
     src/ui/windows/claudechatwindow.h
     src/ui/dialogs/preferences/mcpsettingswidget.h
+    src/ui/dialogs/preferences/assetssettingswidget.h
     src/services/services.h
     src/services/assetimporter.h
     src/services/assetmetadata.h
+    src/services/assetstore.h
     src/services/assetstorepaths.h
     src/services/audiopeaks.h
     src/services/videoutils.h

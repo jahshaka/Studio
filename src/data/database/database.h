@@ -173,6 +173,10 @@ public:
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
     QVector<AssetRecord> fetchAssetsForAssetView();
+    /// Guids of LIBRARY rows — view_filter IN (2,3): AssetsView + Effects
+    /// (preflight §1.6 — Effects rows ARE library tiles; any store scan that
+    /// forgets filter 3 silently skips most of a real library).
+    QStringList fetchLibraryAssetGuids();
     QVector<AssetRecord> fetchChildAssets(const QString &parent, const QString &projectGuid, int filter = -1, bool showDependencies = true);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);

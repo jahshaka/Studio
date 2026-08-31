@@ -69,6 +69,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/services.h"
+#include "services/assetstore.h"
 #include "services/assetstorepaths.h"
 #include "services/projectservice.h"
 #include "ui/controls/assetviewgrid.h"
@@ -1225,11 +1226,31 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     _metadataPane->setMinimumWidth(280);
     _metadataPane->setMaximumWidth(380);
     
+    // Offline-store banner (§3.1.2): persistent, non-modal, above the page.
+    storeOfflineBanner = new QWidget(this);
+    storeOfflineBanner->setObjectName(QStringLiteral("StoreOfflineBanner"));
+    storeOfflineBanner->setStyleSheet(
+        "#StoreOfflineBanner { background: #7a4a12; }"
+        "#StoreOfflineBanner QLabel { color: #ffe0b3; background: transparent; }");
+    {
+        auto *bl = new QHBoxLayout(storeOfflineBanner);
+        bl->setContentsMargins(12, 6, 12, 6);
+        storeOfflineLabel = new QLabel(storeOfflineBanner);
+        bl->addWidget(storeOfflineLabel, 1);
+        auto *reconnect = new QPushButton(tr("Reconnect"), storeOfflineBanner);
+        connect(reconnect, &QPushButton::clicked, this, &AssetView::refreshStoreBanner);
+        bl->addWidget(reconnect);
+    }
+    storeOfflineBanner->hide();
+
     QGridLayout *layout = new QGridLayout;
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(_splitter);
+    layout->setSpacing(0);
+    layout->addWidget(storeOfflineBanner, 0, 0);
+    layout->addWidget(_splitter, 1, 0);
     setLayout(layout);
 
+	refreshStoreBanner();
 	updateAddToProjectButton();   // initial disabled state carries its tooltip
 
 	setStyleSheet(StyleSheet::AssetViewPanel());
@@ -1239,8 +1260,12 @@ void AssetView::updateAddToProjectButton()
 {
 	const bool haveTile = selectedGridItem && !selectedGridItem->metadata.isEmpty();
 	const bool sceneOpen = services && services->project && services->project->isSceneOpen();
-	addToProject->setEnabled(haveTile && sceneOpen);
-	if (!haveTile)
+	const bool storeOnline = AssetStoreService::online();
+	addToProject->setEnabled(haveTile && sceneOpen && storeOnline);
+	if (!storeOnline)
+		addToProject->setToolTip(tr("Asset store offline: %1")
+		    .arg(QDir::toNativeSeparators(AssetStorePaths::root())));
+	else if (!haveTile)
 		addToProject->setToolTip(tr("Click an asset tile to select it first"));
 	else if (!sceneOpen)
 		addToProject->setToolTip(tr("Open a project to add assets to it"));
@@ -1249,10 +1274,27 @@ void AssetView::updateAddToProjectButton()
 		    .arg(QFileInfo(selectedGridItem->metadata["name"].toString()).baseName()));
 }
 
+void AssetView::refreshStoreBanner()
+{
+	if (!storeOfflineBanner) return;
+	const bool online = AssetStoreService::online();
+	if (online) {
+		storeOfflineBanner->hide();
+	}
+	else {
+		storeOfflineLabel->setText(tr("Asset store offline: %1 — thumbnails, search and drawers still work; previews and Add to Project need the files.")
+		    .arg(QDir::toNativeSeparators(AssetStorePaths::root())));
+		storeOfflineBanner->show();
+	}
+	updateAddToProjectButton();
+}
+
 void AssetView::showEvent(QShowEvent *event)
 {
 	QWidget::showEvent(event);
-	// The scene may have opened/closed since the page was last shown.
+	// The scene may have opened/closed since the page was last shown — and
+	// the store drive may have come or gone (§3.1.2).
+	refreshStoreBanner();
 	updateAddToProjectButton();
 }
 

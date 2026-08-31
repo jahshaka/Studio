@@ -20,8 +20,10 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "services/assetservice.h"
+#include "services/assetstore.h"
 #include "services/assetstorepaths.h"
 #include "data/constants.h"
+#include "data/settingsmanager.h"
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
@@ -139,6 +141,15 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
+          Needs::Document },
+        { "storeRoot", "assets.storeRoot() -> path",
+          "The active asset-store root directory (the assets/storeRoot setting; the AppData default when unset).",
+          Needs::Document },
+        { "setStoreRoot", "assets.setStoreRoot(path, {move, force}) -> bool",
+          "Repoints the asset store. Empty path returns to the default root. {move: true} copies the current store's contents to the new root first (verified; the old tree is retained). Without move, the target must already contain this library's store ({force: true} skips that check). Throws on failure; nothing changes on a failed call.",
+          Needs::Document },
+        { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
+          "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
           Needs::Document },
     };
 }
@@ -577,4 +588,28 @@ QVariantList AssetsApi::dependencies(const QString &guid)
     for (const auto &dep : AssetHelper::fetchAssetAndAllDependencies(guid, host.db))
         out.append(dep);
     return out;
+}
+
+QString AssetsApi::storeRoot()
+{
+    return AssetStorePaths::root();
+}
+
+bool AssetsApi::setStoreRoot(const QString &path, const QVariantMap &options)
+{
+    const bool move = options.value("move", false).toBool();
+    const bool force = options.value("force", false).toBool();
+
+    QString error;
+    if (!AssetStoreService::setRoot(path, move, force,
+                                    SettingsManager::getDefaultManager(),
+                                    host.db, &error)) {
+        return fail(QStringLiteral("assets.setStoreRoot: %1").arg(error));
+    }
+    return true;
+}
+
+QVariantMap AssetsApi::storeStatus()
+{
+    return AssetStoreService::status(host.db);
 }

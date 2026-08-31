@@ -1139,6 +1139,21 @@ AssetRecord Database::fetchAsset(const QString &guid)
     return AssetRecord();
 }
 
+QStringList Database::fetchLibraryAssetGuids()
+{
+    QSqlQuery query;
+    // view_filter IN (2,3) — AssetsView AND Effects are both library rows
+    // (ASSET_PIPELINE_SPEC preflight amendment 2).
+    query.prepare("SELECT guid FROM assets WHERE view_filter IN (?, ?)");
+    query.addBindValue(static_cast<int>(AssetViewFilter::AssetsView));
+    query.addBindValue(static_cast<int>(AssetViewFilter::Effects));
+    executeAndCheckQuery(query, "FetchLibraryAssetGuids");
+
+    QStringList guids;
+    while (query.next()) guids << query.value(0).toString();
+    return guids;
+}
+
 QVector<AssetRecord> Database::fetchAssetsForAssetView()
 {
     QSqlQuery query;
