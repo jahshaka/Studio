@@ -24,6 +24,9 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	setAlignment(Qt::AlignHCenter);
 	//setWidgetResizable(true);
 	setWidget(gridWidget);
+	// Frameless in both themes — the border:0 sheet alone doesn't stop
+	// Qlementine drawing the default QFrame around the scroll area.
+	setFrameShape(QFrame::NoFrame);
     setStyleSheet("background: #202020; border: 0");
 
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
