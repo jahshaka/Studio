@@ -30,23 +30,6 @@ For more information see the LICENSE file
 namespace AssetMigration
 {
 
-QVariantMap MigrateReport::toMap() const
-{
-    QVariantMap map;
-    map["ok"] = ok;
-    if (!error.isEmpty()) map["error"] = error;
-    map["libraryRows"] = libraryRows;
-    map["rowsWithFiles"] = rowsWithFiles;
-    map["rowsWithoutFiles"] = rowsWithoutFiles;
-    map["filesSeen"] = filesSeen;
-    map["objectsCreated"] = objectsCreated;
-    map["objectsReused"] = objectsReused;
-    map["bytesHashed"] = bytesHashed;
-    map["sidecars"] = sidecars;
-    map["elapsedMs"] = elapsedMs;
-    return map;
-}
-
 QVariantMap VerifyReport::toMap() const
 {
     QVariantMap map;
@@ -99,87 +82,6 @@ private:
     QString name;
 };
 } // namespace
-
-MigrateReport migrateStore(const QString &dbPath, const QString &storeRoot)
-{
-    MigrateReport report;
-    QElapsedTimer timer;
-    timer.start();
-
-    if (!QFileInfo::exists(dbPath)) {
-        report.error = QStringLiteral("no database at %1").arg(dbPath);
-        return report;
-    }
-    if (!QDir(storeRoot).exists()) {
-        report.error = QStringLiteral("store root unreachable: %1").arg(storeRoot);
-        return report;
-    }
-    // Refusal guard (preflight §6.2): another running instance = stop.
-    if (LibraryLock::heldElsewhere(dbPath)) {
-        report.error = QStringLiteral("the library is open in another Jahshaka instance — close Jahshaka first");
-        return report;
-    }
-
-    ScopedConnection scoped(dbPath);
-    if (!scoped.opened) {
-        report.error = QStringLiteral("cannot open %1").arg(dbPath);
-        return report;
-    }
-    QSqlDatabase conn = scoped.db;
-
-    AssetCas::ensureCasSchema(conn);
-    QString error;
-    if (!AssetCas::writeStoreInfo(storeRoot, &error)) {
-        report.error = error;
-        return report;
-    }
-
-    // Library rows only: view_filter IN (2,3) — preflight §1.6.
-    struct Row { QString guid, name; };
-    QVector<Row> rows;
-    {
-        QSqlQuery query(conn);
-        query.prepare("SELECT guid, name FROM assets WHERE view_filter IN (2, 3)");
-        if (!query.exec()) {
-            report.error = query.lastError().text();
-            return report;
-        }
-        while (query.next()) rows.append({ query.value(0).toString(), query.value(1).toString() });
-    }
-    report.libraryRows = rows.size();
-
-    conn.transaction();
-    for (const Row &row : rows) {
-        const bool hadFolder = QDir(AssetStorePaths::legacyFolderIn(storeRoot, row.guid)).exists();
-
-        AssetCas::IngestStats stats;
-        if (!AssetCas::ingestLegacyFolder(conn, storeRoot, row.guid, row.name, &stats, &error)) {
-            conn.rollback();
-            report.error = QStringLiteral("%1 (asset %2)").arg(error, row.guid);
-            return report;
-        }
-        hadFolder ? ++report.rowsWithFiles : ++report.rowsWithoutFiles;
-        report.filesSeen += stats.files;
-        report.objectsCreated += stats.objectsCreated;
-        report.objectsReused += stats.objectsReused;
-        report.bytesHashed += stats.bytesHashed;
-
-        if (!AssetCas::writeSidecar(conn, storeRoot, row.guid, &error)) {
-            conn.rollback();
-            report.error = QStringLiteral("%1 (sidecar %2)").arg(error, row.guid);
-            return report;
-        }
-        ++report.sidecars;
-    }
-    if (!conn.commit()) {
-        report.error = QStringLiteral("commit failed: %1").arg(conn.lastError().text());
-        return report;
-    }
-
-    report.elapsedMs = timer.elapsed();
-    report.ok = true;
-    return report;
-}
 
 VerifyReport verify(const QString &dbPath, const QString &storeRoot)
 {

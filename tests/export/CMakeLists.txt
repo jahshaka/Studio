@@ -68,10 +68,11 @@ set_tests_properties(export.walkers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offs
 add_executable(test_raw_export test_raw_export.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportmanifest.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/rawexporter.cpp)
+    ${CMAKE_SOURCE_DIR}/src/export/rawexporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp)
 set_target_properties(test_raw_export PROPERTIES AUTOMOC OFF)
 target_include_directories(test_raw_export PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_raw_export PRIVATE Qt6::Core)
+target_link_libraries(test_raw_export PRIVATE Qt6::Core Qt6::Sql)
 add_test(NAME export.raw COMMAND test_raw_export
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(export.raw PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")

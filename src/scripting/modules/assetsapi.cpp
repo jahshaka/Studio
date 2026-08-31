@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
 #include "services/projectassets.h"
+#include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
@@ -144,8 +145,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
           "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
           Needs::Document },
-        { "migrateStore", "assets.migrateStore({dbPath, root}) -> report",
-          "Migrates a legacy per-guid store into the content-addressed store: hashes every library file (view_filter 2 and 3), hardlinks/copies into objects/, writes files/asset_files rows + rebuild sidecars + store.json. The legacy tree is RETAINED; a missing folder is zero files; idempotent (rerun = zero new objects). Refuses while another Jahshaka instance holds the library. dbPath/root default to the live library — pass both to rehearse against a copy.",
+        { "importSettings", "assets.importSettings(guid) -> {sourceOid, importer, importerVersion, assimp, settings}",
+          "The determinism record the ONE import pipeline stamped on the asset: content id of the source, "
+          "importer name/version, assimp version and the request settings.",
+          Needs::Document },
+        { "checkConsistency", "assets.checkConsistency(guid) -> {consistent, expected, produced, ...}",
+          "Re-runs the import pipeline's convert stage on the stored source and diffs the produced object "
+          "set against the catalog (Unity -consistencyCheck): non-deterministic importers surface here.",
           Needs::Document },
         { "verify", "assets.verify({dbPath, root}) -> report",
           "Re-hashes every catalogued object against its oid: reports corrupt (bit-rot) and missing objects with counts and bytes. Defaults to the live library.",
@@ -187,6 +193,22 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             return out;
         }
         records = host.db->fetchChildAssets(host.project->getProjectGuid(), host.project->getProjectGuid(), -1, true);
+        // Reference-with-pin (phase 4): pinned LIBRARY assets are project
+        // members too — a project "use" is a project_assets row, not a
+        // cloned Editor row.
+        QSqlQuery pins(QSqlDatabase::database());
+        pins.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
+        pins.addBindValue(host.project->getProjectGuid());
+        if (pins.exec()) {
+            while (pins.next()) {
+                const QString pinned = pins.value(0).toString();
+                if (std::any_of(records.begin(), records.end(),
+                                [&](const AssetRecord &r) { return r.guid == pinned; }))
+                    continue;
+                const auto record = host.db->fetchAsset(pinned);
+                if (!record.guid.isEmpty()) records.append(record);
+            }
+        }
     } else {
         fail("assets.list: scope must be 'store' or 'project'");
         return out;
@@ -559,15 +581,6 @@ QString liveDbPath()
 }
 } // namespace
 
-QVariantMap AssetsApi::migrateStore(const QVariantMap &options)
-{
-    const QString dbPath = options.value("dbPath", liveDbPath()).toString();
-    const QString root = options.value("root", AssetStorePaths::root()).toString();
-    const auto report = AssetMigration::migrateStore(dbPath, root);
-    if (!report.ok) fail(QStringLiteral("assets.migrateStore: %1").arg(report.error));
-    return report.toMap();
-}
-
 QVariantMap AssetsApi::verify(const QVariantMap &options)
 {
     const QString dbPath = options.value("dbPath", liveDbPath()).toString();
@@ -587,4 +600,25 @@ QVariantMap AssetsApi::rebuildCatalog(const QString &dbPath, const QVariantMap &
     const auto report = AssetMigration::rebuildCatalog(dbPath, root);
     if (!report.ok) fail(QStringLiteral("assets.rebuildCatalog: %1").arg(report.error));
     return report.toMap();
+}
+
+QVariantMap AssetsApi::importSettings(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    AssetImportService service(host.db, host.project);
+    const QJsonObject record = service.importSettings(guid);
+    if (record.isEmpty()) { fail(QStringLiteral("assets.importSettings: no import record for '%1'").arg(guid)); return out; }
+    return record.toVariantMap();
+}
+
+QVariantMap AssetsApi::checkConsistency(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    AssetImportService service(host.db, host.project);
+    const QJsonObject report = service.checkConsistency(guid);
+    if (report.value("ok").toBool() == false)
+        fail(QStringLiteral("assets.checkConsistency: %1").arg(report.value("error").toString()));
+    return report.toVariantMap();
 }

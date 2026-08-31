@@ -81,16 +81,12 @@ class LegacyStoreContentSource : public ExportContentSource
 {
 public:
     /// `storeRoot` = the AssetStore root directory (explicit, see header).
-    /// `computeHashes` fills Entry::oid with sha256 hex (streamed; the owner's
-    /// whole store is ~222 MB, so hashing is cheap and manifests get stable
-    /// content ids from day one).
-    /// `fallbackDir`: when the guid has no store folder, look for `nameHint`
-    /// in this flat directory — the project-folder resolution project rows use
-    /// today (folder + name IS the current join; this encoding of it dies with
-    /// the final-half resolver swap).
+    /// `computeHashes` fills Entry::oid with sha256 hex. Production exports
+    /// use CasContentSource; this survives as the filesystem-only source the
+    /// export unit suite drives (no DB required). The flat project-folder
+    /// fallback died with the pin world.
     explicit LegacyStoreContentSource(const QString &storeRoot,
-                                      bool computeHashes = true,
-                                      const QString &fallbackDir = QString());
+                                      bool computeHashes = true);
 
     QVector<Entry> filesForAsset(const QString &guid,
                                  const QString &nameHint = QString()) override;
@@ -98,7 +94,6 @@ public:
 private:
     QString root;
     bool hashFiles;
-    QString fallback;
 };
 
 #endif // EXPORTCONTENTSOURCE_H

@@ -311,10 +311,21 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
 
     // The same sweep assets.list({scope:'project'}) shows, closed over each
     // asset's outgoing dependency edges so the manifest is self-describing.
+    // Reference-with-pin (phase 4): pinned LIBRARY assets are members too.
     QStringList guids;
     for (const auto &record :
          host.db->fetchChildAssets(projectGuid, projectGuid, -1, true))
         if (!record.guid.isEmpty() && !guids.contains(record.guid)) guids.append(record.guid);
+    {
+        QSqlQuery pins(QSqlDatabase::database());
+        pins.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
+        pins.addBindValue(projectGuid);
+        if (pins.exec())
+            while (pins.next()) {
+                const QString pinned = pins.value(0).toString();
+                if (!pinned.isEmpty() && !guids.contains(pinned)) guids.append(pinned);
+            }
+    }
     for (int i = 0; i < guids.size(); ++i)   // grows while iterating: transitive closure
         for (const QString &dep : host.db->fetchAssetGUIDAndDependencies(guids.at(i), false))
             if (!dep.isEmpty() && !guids.contains(dep)) guids.append(dep);

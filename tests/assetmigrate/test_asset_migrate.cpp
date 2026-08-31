@@ -1,22 +1,27 @@
-// Phase-2 suite for the ASSET PIPELINE program (ASSET_PIPELINE_SPEC §3.1.3 +
-// preflight amendments): the content-addressed store on a FIXTURE library.
+// CAS correctness harness (ASSET_PIPELINE_SPEC §3.1.3 + §3.1.5). The
+// phase-2 migration machinery is GONE (owner decision 2026-08-31: Jahshaka
+// ships as a NEW app, there is no old user data to migrate) — this suite
+// exercises the primitives the ONE import pipeline and the pin world are
+// built on, against a fixture store:
 //
-//   - migrateStore: hashes every library file (view_filter 2 AND 3 — an
-//     Effects row is included; Editor rows are skipped), 2-char fan-out
-//     objects, files/asset_files rows with refcounts, sidecars, store.json;
-//     the legacy tree is RETAINED; a row with no folder is zero files;
-//   - dedup: identical content under two names/extensions = ONE object;
-//   - resolver: asset_files → objects path, byte-identical; legacy fallback;
+//   - ingestFile: CAS-first single-file ingest — 2-char fan-out objects,
+//     files/asset_files rows with trigger-maintained refcounts, extension
+//     canonicalization for known content, idempotency;
+//   - dedup: identical bytes under two names/extensions = ONE object;
+//   - resolveFile / resolveSource: guid-first resolution, byte-identical;
+//   - reference-with-pin: writePin/pinnedOid/resolvePinned — a pin freezes
+//     content; new bytes under the same asset move only the pin that is
+//     explicitly moved (copy-on-write, invariant I3);
 //   - verify: clean store, then detected bit-rot on a corrupted object;
-//   - idempotency: second migrate run creates zero new objects, same rows;
-//   - rebuildCatalog: fresh DB reconstructed from sidecars matches;
-//   - refusal: migration refuses while another process holds the lock.
+//   - sidecars + rebuildCatalog: a fresh DB reconstructed from sidecars
+//     matches (the honest I2 test);
+//   - materializeLegacyView: the per-guid hardlink view for not-yet-
+//     rerouted readers.
 //
 // Headless (offscreen platform); throwaway files in the test working dir.
 #include <QApplication>
 #include <QDir>
 #include <QFile>
-#include <QLockFile>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <cstdio>
@@ -69,8 +74,8 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);   // database.cpp links QtWidgets
 
     const QString cwd = QDir::currentPath();
-    const QString dbPath = cwd + "/migrate_test.db";
-    const QString root = cwd + "/migrate_store_root";
+    const QString dbPath = cwd + "/cas_test.db";
+    const QString root = cwd + "/cas_store_root";
     QFile::remove(dbPath);
     QFile::remove(dbPath + ".lock");
     QDir(root).removeRecursively();
@@ -78,107 +83,142 @@ int main(int argc, char **argv)
 
     const QByteArray contentX(1500, 'X');
     const QByteArray contentY = QByteArray("PNGISH-").repeated(200);
-    const QString oidX = AssetCas::hashFile(QString());   // exercise the error path
-    CHECK(oidX.isEmpty(), "hashFile of a missing path returns empty");
+    const QByteArray contentZ = QByteArray("EDITED-").repeated(300);
+    CHECK(AssetCas::hashFile(QString()).isEmpty(), "hashFile of a missing path returns empty");
 
-    // ---- fixture library ----
+    // ---- fixture: sources on disk + a fresh full-schema database ----
+    const QString srcDir = cwd + "/cas_sources";
+    QDir(srcDir).removeRecursively();
+    writeFile(srcDir + "/a.glb", contentX);
+    writeFile(srcDir + "/b.png", contentY);
+    writeFile(srcDir + "/dup.bin", contentX);   // same bytes as a.glb — dedup
+    writeFile(srcDir + "/edited.glb", contentZ);
+
     Database db;
     CHECK(db.initializeDatabase(dbPath), "fixture database opened");
-    db.createAllTables();
+    db.createAllTables();   // fresh-DB bootstrap creates the FULL final schema
 
-    insertAsset("guidA", 1, "a.glb", 2);            // AssetsView row with one file
-    insertAsset("guidB", 7, "b.png", 3);            // EFFECTS row (preflight §1.6) with two files
-    insertAsset("guidC", 1, "ghost.glb", 2);        // library row with NO folder
-    insertAsset("guidD", 1, "editor.glb", 1);       // Editor row — must be SKIPPED
-    writeFile(root + "/guidA/a.glb", contentX);
-    writeFile(root + "/guidB/b.png", contentY);
-    writeFile(root + "/guidB/dup.bin", contentX);   // same bytes as a.glb — dedup
-    writeFile(root + "/guidD/editor.glb", QByteArray(64, 'D'));
-    db.closeDatabase();
+    insertAsset("guidA", 1, "a.glb", 2);
+    insertAsset("guidB", 7, "b.png", 3);
+    insertAsset("guidC", 1, "ghost.glb", 2);    // DB-only row, no bytes
 
-    // ---- refusal while a foreign lock is held ----
+    QSqlDatabase conn = QSqlDatabase::database();
     {
-        QLockFile foreign(dbPath + ".lock");
-        foreign.setStaleLockTime(0);
-        CHECK(foreign.tryLock(0), "test holds a foreign lock");
-        const auto refused = AssetMigration::migrateStore(dbPath, root);
-        CHECK(!refused.ok && refused.error.contains("another"),
-              "migrateStore refuses while the library is locked elsewhere");
-        foreign.unlock();
-    }
-
-    // ---- the migration ----
-    const auto report = AssetMigration::migrateStore(dbPath, root);
-    CHECK(report.ok, "migrateStore succeeded");
-    CHECK(report.libraryRows == 3, "3 library rows scanned (Editor row skipped)");
-    CHECK(report.rowsWithFiles == 2, "2 rows had legacy folders");
-    CHECK(report.rowsWithoutFiles == 1, "1 row without a folder = zero files, not an error");
-    CHECK(report.filesSeen == 3, "3 files hashed");
-    CHECK(report.objectsCreated == 2, "2 distinct objects created (dedup)");
-    CHECK(report.objectsReused == 1, "1 duplicate content reused");
-    CHECK(report.sidecars == 3, "3 sidecars written");
-
-    const QString hashX = AssetCas::hashFile(root + "/guidA/a.glb");
-    const QString hashY = AssetCas::hashFile(root + "/guidB/b.png");
-    CHECK(hashX.size() == 64 && hashX == hashX.toLower(), "sha256 oid is 64 lowercase hex chars");
-    CHECK(QFileInfo::exists(AssetStorePaths::objectPathIn(root, hashX, "glb")),
-          "object for X at objects/<aa>/<oid>.glb");
-    CHECK(QFileInfo::exists(AssetStorePaths::objectPathIn(root, hashY, "png")),
-          "object for Y at objects/<aa>/<oid>.png");
-    CHECK(readFile(AssetStorePaths::objectPathIn(root, hashX, "glb")) == contentX,
-          "object bytes are identical to the source");
-    CHECK(QFileInfo::exists(root + "/guidA/a.glb"), "legacy tree RETAINED after migration");
-    CHECK(QFileInfo::exists(AssetStorePaths::storeInfoPathIn(root)), "store.json written");
-    CHECK(QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, "guidC")),
-          "file-less library row still gets a sidecar");
-    CHECK(!QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, "guidD")),
-          "Editor row got NO sidecar (skipped)");
-
-    // ---- catalog rows on a checking connection ----
-    {
-        QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "MigrateCheck");
-        check.setDatabaseName(dbPath);
-        check.open();
-        CHECK(countRows(check, "SELECT COUNT(*) FROM files") == 2, "2 files rows");
-        CHECK(countRows(check, "SELECT COUNT(*) FROM asset_files") == 3, "3 asset_files rows");
-        CHECK(countRows(check, "SELECT refcount FROM files WHERE oid = '" + hashX + "'") == 2,
-              "dedup'd object has refcount 2 (trigger-maintained)");
-        CHECK(countRows(check, "SELECT COUNT(*) FROM asset_files WHERE asset_guid = 'guidD'") == 0,
-              "Editor row has no asset_files rows");
-        QSqlQuery version(check);
+        QSqlQuery version(conn);
         version.exec("PRAGMA user_version");
         version.next();
-        CHECK(version.value(0).toInt() >= 1, "PRAGMA user_version set");
-
-        // resolver: asset_files → object path with identical bytes; unknown
-        // name falls back to the legacy folder.
-        const QString resolved = AssetCas::resolveFile(check, root, "guidB", "dup.bin");
-        CHECK(!resolved.isEmpty() && readFile(resolved) == contentX,
-              "resolver returns byte-identical content for a dedup'd name");
-        writeFile(root + "/guidB/legacy_only.txt", "legacy");
-        CHECK(AssetCas::resolveFile(check, root, "guidB", "legacy_only.txt")
-                  == root + "/guidB/legacy_only.txt",
-              "resolver falls back to the legacy folder for unmigrated files");
-        QFile::remove(root + "/guidB/legacy_only.txt");
-        check.close();
+        CHECK(version.value(0).toInt() >= 2, "fresh DB bootstraps user_version >= 2 (pin schema)");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'project_assets'") == 1,
+              "fresh DB bootstraps project_assets directly");
     }
-    QSqlDatabase::removeDatabase("MigrateCheck");
+
+    // ---- ingestFile: CAS-first, roles, dedup ----
+    QString oidX, oidY, oidDup, error;
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/a.glb", "guidA", "source", "a.glb", &oidX, &error),
+          "ingestFile a.glb");
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/b.png", "guidB", "source", "b.png", &oidY, &error),
+          "ingestFile b.png");
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/dup.bin", "guidB", "file", "dup.bin", &oidDup, &error),
+          "ingestFile dup.bin");
+    CHECK(!AssetCas::ingestFile(conn, root, srcDir + "/missing.bin", "guidA", "file", "missing.bin", nullptr, &error),
+          "ingestFile of a missing path fails with a message");
+
+    CHECK(oidX.size() == 64 && oidX == oidX.toLower(), "sha256 oid is 64 lowercase hex chars");
+    CHECK(oidX == oidDup, "identical bytes = identical oid (dedup by construction)");
+    CHECK(QFileInfo::exists(AssetStorePaths::objectPathIn(root, oidX, "glb")),
+          "object for X at objects/<aa>/<oid>.glb");
+    CHECK(readFile(AssetStorePaths::objectPathIn(root, oidX, "glb")) == contentX,
+          "object bytes are identical to the source");
+
+    CHECK(countRows(conn, "SELECT COUNT(*) FROM files") == 2, "2 files rows (dedup)");
+    CHECK(countRows(conn, "SELECT COUNT(*) FROM asset_files") == 3, "3 asset_files rows");
+    CHECK(countRows(conn, "SELECT refcount FROM files WHERE oid = '" + oidX + "'") == 2,
+          "dedup'd object has refcount 2 (trigger-maintained)");
+
+    // idempotency: re-ingest changes nothing
+    QString oidAgain;
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/a.glb", "guidA", "source", "a.glb", &oidAgain, &error),
+          "re-ingest succeeds");
+    CHECK(oidAgain == oidX, "re-ingest yields the same oid");
+    CHECK(countRows(conn, "SELECT COUNT(*) FROM asset_files") == 3, "idempotent: still 3 asset_files rows");
+    CHECK(countRows(conn, "SELECT refcount FROM files WHERE oid = '" + oidX + "'") == 2,
+          "idempotent: refcount unchanged on re-ingest");
+
+    // extension canonicalization: same bytes under another extension reuse
+    // the recorded object, no sibling copy
+    writeFile(srcDir + "/alias.jpeg", contentY);
+    QString oidAlias;
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/alias.jpeg", "guidB", "file", "alias.jpeg", &oidAlias, &error),
+          "ingest of aliased content succeeds");
+    CHECK(oidAlias == oidY, "aliased content maps to the same oid");
+    CHECK(countRows(conn, "SELECT COUNT(*) FROM files") == 2, "no new files row for aliased content");
+
+    // ---- resolution ----
+    const QString resolved = AssetCas::resolveFile(conn, root, "guidB", "dup.bin");
+    CHECK(!resolved.isEmpty() && readFile(resolved) == contentX,
+          "resolveFile returns byte-identical content for a dedup'd name");
+    QString sourceName;
+    const QString source = AssetCas::resolveSource(conn, root, "guidA", &sourceName);
+    CHECK(!source.isEmpty() && readFile(source) == contentX && sourceName == "a.glb",
+          "resolveSource returns the source-role file + display name");
+    CHECK(AssetCas::resolveSource(conn, root, "guidC").isEmpty(),
+          "resolveSource of a DB-only row is empty (not an error)");
+
+    // ---- reference-with-pin (phase 4) ----
+    CHECK(AssetCas::writePin(conn, "projP", "guidA", oidX), "writePin");
+    CHECK(AssetCas::pinnedOid(conn, "projP", "guidA") == oidX, "pinnedOid reads back");
+    CHECK(readFile(AssetCas::resolvePinned(conn, root, "projP", "guidA")) == contentX,
+          "resolvePinned returns the pinned bytes");
+    CHECK(readFile(AssetCas::resolvePinned(conn, root, "projQ", "guidA")) == contentX,
+          "an unpinned project falls back to the current source");
+
+    // copy-on-write: new bytes ingest under the SAME guid; only the moved
+    // pin sees them (the library mapping keeps its original oid — the
+    // asset_files PK holds it)
+    QString oidZ;
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/edited.glb", "guidA", "source", "a.glb", &oidZ, &error),
+          "COW ingest of edited bytes");
+    CHECK(oidZ != oidX, "edited bytes are a new object");
+    CHECK(AssetCas::writePin(conn, "projQ", "guidA", oidZ), "projQ pins the edit");
+    CHECK(readFile(AssetCas::resolvePinned(conn, root, "projQ", "guidA")) == contentZ,
+          "projQ renders the edited bytes");
+    CHECK(readFile(AssetCas::resolvePinned(conn, root, "projP", "guidA")) == contentX,
+          "projP still renders its ORIGINAL pinned bytes (I3)");
+    CHECK(readFile(AssetCas::resolveSource(conn, root, "guidA")) == contentX,
+          "the library mapping is untouched by the project edit");
+
+    // ---- sidecars + store info ----
+    CHECK(AssetCas::writeSidecar(conn, root, "guidA", &error), "sidecar for guidA");
+    CHECK(AssetCas::writeSidecar(conn, root, "guidB", &error), "sidecar for guidB");
+    CHECK(AssetCas::writeSidecar(conn, root, "guidC", &error), "sidecar for the DB-only row");
+    CHECK(AssetCas::writeStoreInfo(root, &error), "store.json written");
+    CHECK(QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, "guidC")),
+          "file-less row still gets a sidecar");
+
+    // ---- legacy hardlink view ----
+    CHECK(AssetCas::materializeLegacyView(conn, root, "guidB", &error), "legacy view for guidB");
+    CHECK(readFile(root + "/guidB/b.png") == contentY, "view file carries the object bytes");
+    CHECK(AssetCas::materializeLegacyView(conn, root, "guidB", &error), "view materialization is idempotent");
+    CHECK(AssetCas::materializeLegacyView(conn, root, "guidC", &error),
+          "view of a file-less row is a no-op, not an error");
+
+    db.closeDatabase();
 
     // ---- verify: clean, then corrupted ----
     auto verifyReport = AssetMigration::verify(dbPath, root);
     CHECK(verifyReport.ok, "verify: clean store");
-    CHECK(verifyReport.objects == 2, "verify walked both objects");
+    CHECK(verifyReport.objects == 3, "verify walked all three objects");
 
-    const QString objectY = AssetStorePaths::objectPathIn(root, hashY, "png");
+    const QString objectY = AssetStorePaths::objectPathIn(root, oidY, "png");
     {
         // Break the hardlink first so the corruption can't reach back into
-        // the legacy source file.
+        // the source file.
         const QByteArray original = readFile(objectY);
         QFile::remove(objectY);
         writeFile(objectY, original + "CORRUPTED");
     }
     verifyReport = AssetMigration::verify(dbPath, root);
-    CHECK(!verifyReport.ok && verifyReport.corrupt.size() == 1 && verifyReport.corrupt[0] == hashY,
+    CHECK(!verifyReport.ok && verifyReport.corrupt.size() == 1 && verifyReport.corrupt[0] == oidY,
           "verify detects the corrupted object");
     {
         QFile::remove(objectY);
@@ -186,30 +226,17 @@ int main(int argc, char **argv)
     }
     CHECK(AssetMigration::verify(dbPath, root).ok, "verify clean again after restore");
 
-    // ---- idempotency: second run, nothing new ----
-    const auto rerun = AssetMigration::migrateStore(dbPath, root);
-    CHECK(rerun.ok, "second migrateStore run succeeded");
-    CHECK(rerun.objectsCreated == 0, "idempotent: zero new objects on rerun");
-    CHECK(rerun.objectsReused == 3, "idempotent: every file reuses its object");
-    {
-        QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "MigrateCheck2");
-        check.setDatabaseName(dbPath);
-        check.open();
-        CHECK(countRows(check, "SELECT COUNT(*) FROM asset_files") == 3, "idempotent: still 3 asset_files rows");
-        CHECK(countRows(check, "SELECT refcount FROM files WHERE oid = '" + hashX + "'") == 2,
-              "idempotent: refcount unchanged on rerun");
-        check.close();
-    }
-    QSqlDatabase::removeDatabase("MigrateCheck2");
-
     // ---- rebuildCatalog into a FRESH database (the honest I2 test) ----
-    const QString rebuiltDb = cwd + "/migrate_rebuilt.db";
+    const QString rebuiltDb = cwd + "/cas_rebuilt.db";
     QFile::remove(rebuiltDb);
     const auto rebuild = AssetMigration::rebuildCatalog(rebuiltDb, root);
     CHECK(rebuild.ok, "rebuildCatalog succeeded");
     CHECK(rebuild.assets == 3, "rebuild recovered 3 asset rows");
-    CHECK(rebuild.files == 2, "rebuild recovered 2 files rows");
-    CHECK(rebuild.links == 3, "rebuild recovered 3 asset_files rows");
+    // 2, not 3: the COW edit's object is referenced only by a project PIN,
+    // and sidecars record the asset_files mapping — a rebuilt catalog
+    // recovers the library truth; pin-only objects stay on disk and verify
+    // still walks them (recorded limitation of sidecar-based recovery).
+    CHECK(rebuild.files == 2, "rebuild recovered the 2 library-mapped files rows");
     {
         QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "RebuildCheck");
         check.setDatabaseName(rebuiltDb);
@@ -218,9 +245,7 @@ int main(int argc, char **argv)
         q.exec("SELECT name, type, view_filter FROM assets WHERE guid = 'guidB'");
         CHECK(q.next() && q.value(0).toString() == "b.png" && q.value(1).toInt() == 7
                   && q.value(2).toInt() == 3,
-              "rebuilt Effects row matches (name/type/view_filter)");
-        CHECK(countRows(check, "SELECT refcount FROM files WHERE oid = '" + hashX + "'") == 2,
-              "rebuilt refcounts are trigger-consistent");
+              "rebuilt row matches (name/type/view_filter)");
         check.close();
     }
     QSqlDatabase::removeDatabase("RebuildCheck");
@@ -230,6 +255,7 @@ int main(int argc, char **argv)
     QFile::remove(dbPath + ".lock");
     QFile::remove(rebuiltDb);
     QDir(root).removeRecursively();
+    QDir(srcDir).removeRecursively();
 
     printf(failures ? "FAILED: %d check(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;

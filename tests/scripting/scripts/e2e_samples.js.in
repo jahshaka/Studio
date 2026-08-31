@@ -1,0 +1,41 @@
+// scripting.e2e.samples — the shipped sample scenes are the ONE data
+// artifact Jahshaka ships (owner decision, 2026-08-31): each bundled sample
+// archive must import through the consolidated pipeline and open with
+// content on a FRESH post-wipe install. The archives are phase-4 format
+// (catalog snapshot + manifest v2 + CAS objects), re-exported by the
+// conversion in this program; import writes rows + objects + pins and the
+// readers resolve everything pin-first.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var samples = [
+    { file: "Matcaps.zip", minNodes: 2 },
+    { file: "Particles.zip", minNodes: 2 },
+    { file: "Skeletal Animation.zip", minNodes: 2 },
+    { file: "World Background.zip", minNodes: 2 },
+    { file: "Physics.zip", minNodes: 2 },
+];
+
+for (var i = 0; i < samples.length; ++i) {
+    var sample = samples[i];
+    var path = "@SOURCE_DIR@/scenes/" + sample.file;
+
+    var imported = project.importArchive(path);
+    assert(imported && imported.guid && imported.guid.length > 10,
+           sample.file + ": importArchive -> " + imported.guid);
+    assert(imported.assets > 0, sample.file + ": catalog rows imported (" + imported.assets + ")");
+    assert(imported.objects > 0, sample.file + ": objects ingested (" + imported.objects + ")");
+
+    assert(project.open(imported.guid), sample.file + ": project.open");
+
+    var nodes = scene.nodes();
+    assert(nodes.length >= sample.minNodes,
+           sample.file + ": scene has content (" + nodes.length + " nodes)");
+
+    assert(project.close(), sample.file + ": project.close");
+}
+
+console.log("e2e_samples: ALL OK");

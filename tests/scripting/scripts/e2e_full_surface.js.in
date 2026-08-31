@@ -67,7 +67,9 @@ var deps = assets.dependencies(objGuid);
 assert(deps.length >= 2, "object has dependencies (self + mesh): " + deps.length);
 
 var projGuid = assets.addToProject(objGuid);
-assert(projGuid.length > 10 && projGuid !== objGuid, "assets.addToProject -> fresh guid");
+// Reference-with-pin (phase 4): a project use is a PIN of the library
+// asset, not a clone - the verb returns the library guid itself.
+assert(projGuid === objGuid, "assets.addToProject -> the library guid (pin, not clone)");
 assert(assets.list({ scope: "project" }).some(function (a) { return a.guid === projGuid; }),
        "project sees the copied asset");
 

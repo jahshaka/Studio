@@ -1,0 +1,56 @@
+// scripting.e2e.import_pipeline — the ONE import pipeline, end to end in the
+// real binary (ASSET_PIPELINE_SPEC §3.2, phase 3):
+//   - a GLB with a mislabeled embedded texture imports through the spine
+//     (extraction into staging, CAS-first store, member rows);
+//   - the determinism record (assets.importSettings) is stamped;
+//   - assets.checkConsistency re-runs convert and the object set matches —
+//     the importer is deterministic;
+//   - importing the same source twice yields the SAME content ids (dedup by
+//     construction) under different asset guids.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var fixture = "@SOURCE_DIR@/tests/importer/fixtures/mislabeled_embedded.glb";
+
+// ---- import #1 ----
+var a = assets.import(fixture);
+assert(a.length > 10, "assets.import #1 -> " + a);
+
+var rec = assets.importSettings(a);
+assert(rec.sourceOid && rec.sourceOid.length === 64, "determinism record: sourceOid is a sha256");
+assert(rec.importer === "mesh", "determinism record: importer name");
+assert(rec.importerVersion >= 1, "determinism record: importer version");
+assert(("" + rec.assimp).length >= 3, "determinism record: assimp version");
+
+var check = assets.checkConsistency(a);
+assert(check.ok === true, "checkConsistency ran");
+assert(check.consistent === true,
+       "the importer is DETERMINISTIC (re-convert produced the same object set)"
+       + (check.consistent ? "" : " missing=" + JSON.stringify(check.missingFromReimport)
+          + " extra=" + JSON.stringify(check.extraFromReimport)));
+
+// ---- import #2: same source, new asset, same content ids ----
+var b = assets.import(fixture);
+assert(b.length > 10 && b !== a, "assets.import #2 -> a distinct asset " + b);
+var recB = assets.importSettings(b);
+assert(recB.sourceOid === rec.sourceOid, "both imports hash the same source content");
+var checkB = assets.checkConsistency(b);
+assert(checkB.consistent === true, "second import is deterministic too");
+assert(JSON.stringify(check.expected.slice().sort()) === JSON.stringify(checkB.expected.slice().sort()),
+       "same source imported twice -> IDENTICAL object sets (one copy in the store)");
+
+// ---- media import carries the record too ----
+var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(png.length > 10, "assets.importFile(png)");
+var recPng = assets.importSettings(png);
+assert(recPng.importer === "image" && recPng.sourceOid.length === 64, "image import records its identity");
+assert(assets.checkConsistency(png).consistent === true, "image import is deterministic");
+
+// ---- metadata still computed at import (same assimp scene, no re-parse) ----
+var meta = assets.metadata(a);
+assert(meta.kind === "model" && meta.vertices > 0, "model metadata block present");
+
+console.log("e2e_import_pipeline: ALL OK");

@@ -972,6 +972,19 @@ bool Database::deleteAsset(const QString &guid)
     query.prepare("DELETE FROM assets WHERE guid = ?");
     query.addBindValue(guid);
 
+    // The catalog's content mapping and any project pins go with the row
+    // (phase 4): the asset_files delete trigger decrements files.refcount,
+    // which is what assets.gc (later) reaps by.
+    QSqlQuery dropFiles;
+    dropFiles.prepare("DELETE FROM asset_files WHERE asset_guid = ?");
+    dropFiles.addBindValue(guid);
+    executeAndCheckQuery(dropFiles, "DeleteAssetFiles");
+
+    QSqlQuery dropPins;
+    dropPins.prepare("DELETE FROM project_assets WHERE asset_guid = ?");
+    dropPins.addBindValue(guid);
+    executeAndCheckQuery(dropPins, "DeleteAssetPins");
+
     for (int i = 0; i < AssetManager::getAssets().count(); i++) {
         if (AssetManager::getAssets()[i]->assetGuid == guid) AssetManager::getAssets().remove(i);
     }

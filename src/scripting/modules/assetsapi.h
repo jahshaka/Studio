@@ -55,7 +55,8 @@ public:
     Q_INVOKABLE QString storeRoot();
     Q_INVOKABLE bool setStoreRoot(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap storeStatus();
-    Q_INVOKABLE QVariantMap migrateStore(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap importSettings(const QString &guid);
+    Q_INVOKABLE QVariantMap checkConsistency(const QString &guid);
     Q_INVOKABLE QVariantMap verify(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap rebuildCatalog(const QString &dbPath, const QVariantMap &options = QVariantMap());
 };

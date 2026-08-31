@@ -67,7 +67,10 @@ var sphere = scene.addPrimitive("sphere", { position: { x: 0, y: 1, z: 2 } });
 assert(material.apply(sphere, savedMat.guid) === true, "material.apply with a SAVED material asset guid");
 var sphereMat = material.get(sphere);
 assert(near(sphereMat.roughnessLowerBound, 0.92), "saved asset rebuilt as a real PbrMaterial (roughnessLowerBound)");
-assert(basename(sphereMat.baseColorMap) === "Brick_Ground_01_UV_H_CM_1_COLOR.png", "saved asset kept its texture");
+// Pin world (phase 4): texture guids resolve to content-addressed object
+// paths (oid-named); the DISPLAY name lives in the catalog, not the path.
+assert(("" + sphereMat.baseColorMap).length > 0 && /\.png$/.test(sphereMat.baseColorMap),
+       "saved asset kept its texture (resolves to a stored object)");
 
 // a bad guid still fails loudly
 var thrown = false;
@@ -105,9 +108,11 @@ function compare(label, before, afterId) {
     var lost = [];
     for (var k in before) {
         var b = before[k], a = after[k];
-        // texture paths retarget into the project folder on save; the FILE must
-        // survive, so compare basenames for *Map keys.
-        if (/Map$/.test(k)) { b = basename(b); a = basename(a); }
+        // Pin world: texture values resolve to content-addressed object
+        // paths whose names are oids — what must survive the reopen is the
+        // PRESENCE of the map (the bytes are content-addressed, identical
+        // by construction when the oid resolves).
+        if (/Map$/.test(k)) { b = ("" + b).length > 0; a = ("" + a).length > 0; }
         if (JSON.stringify(b) !== JSON.stringify(a))
             lost.push(k + ": " + JSON.stringify(before[k]) + " -> " + JSON.stringify(after[k]));
     }

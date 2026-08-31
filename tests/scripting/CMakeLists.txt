@@ -161,3 +161,31 @@ set_tests_properties(scripting.e2e.store_root PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 120)
+
+# The shipped sample scenes (the ONE data artifact Jahshaka ships): each
+# bundled archive must import through the consolidated pipeline and open
+# with content on a FRESH install (phase-4 archive format: catalog snapshot
+# + manifest v2 + CAS objects, pins written on import).
+configure_file(scripts/e2e_samples.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-samples)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.samples
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.samples PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# The ONE import pipeline (phase 3): determinism record + checkConsistency +
+# identical object sets on double import, in the real binary.
+configure_file(scripts/e2e_import_pipeline.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-import_pipeline)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.import_pipeline
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_import_pipeline.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.import_pipeline PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)

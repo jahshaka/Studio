@@ -30,6 +30,6 @@ target_include_directories(test_asset_migrate PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_asset_migrate PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Multimedia)
-add_test(NAME assets.migrate COMMAND test_asset_migrate
+add_test(NAME assets.cas COMMAND test_asset_migrate
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(assets.migrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
+set_tests_properties(assets.cas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")

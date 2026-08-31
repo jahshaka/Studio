@@ -77,20 +77,6 @@ int main(int argc, char **argv)
         CHECK(!nh.isEmpty() && nh.first().oid.isEmpty(), "hashing can be skipped (oid empty)");
     }
 
-    // ---- flat-folder fallback (project rows) ----
-    {
-        const QString projDir = tmp.filePath("project");
-        CHECK(writeFile(projDir + "/loose.obj", modelBytes), "fixture project/loose.obj");
-        LegacyStoreContentSource src(store, true, projDir);
-        const auto hit = src.filesForAsset("guidNoFolder", "loose.obj");
-        CHECK(hit.size() == 1 && hit.first().name == "loose.obj",
-              "fallback resolves name-keyed in the flat folder");
-        CHECK(src.filesForAsset("guidNoFolder", "absent.obj").isEmpty(),
-              "fallback miss = zero files");
-        const auto a = src.filesForAsset("guidA", "loose.obj");
-        CHECK(a.size() == 2, "store folder wins over the fallback");
-    }
-
     // ---- raw export round-trip ----
     const QString outDir = tmp.filePath("out");
     {

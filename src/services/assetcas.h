@@ -25,14 +25,6 @@ For more information see the LICENSE file
 
 namespace AssetCas
 {
-struct IngestStats
-{
-    int files = 0;             // files seen in the legacy folder
-    int objectsCreated = 0;    // new objects written to objects/
-    int objectsReused = 0;     // content already in the store (dedup)
-    qint64 bytesHashed = 0;
-};
-
 /// sha256 hex (lowercase) of a file's bytes, streamed; empty on I/O error.
 QString hashFile(const QString &path);
 
@@ -44,13 +36,6 @@ bool storeObject(const QString &srcPath, const QString &root,
 
 /// Ensure the CAS tables/triggers/user_version exist on this connection.
 void ensureCasSchema(QSqlDatabase conn);
-
-/// Hash + store every file in <root>/<guid>/ (the legacy per-guid folder)
-/// and record files/asset_files rows on the connection. A MISSING legacy
-/// folder is ZERO files, not an error (preflight amendment 3 — most Editor
-/// rows have none). Idempotent: re-running changes nothing.
-bool ingestLegacyFolder(QSqlDatabase conn, const QString &root, const QString &guid,
-                        const QString &assetName, IngestStats *stats, QString *errorOut);
 
 /// CAS-FIRST ingest of ONE file (phase 3 — the import pipeline's store
 /// primitive): hash srcPath (wherever it lives — the import source, a

@@ -89,62 +89,6 @@ void ensureCasSchema(QSqlDatabase conn)
         QSqlQuery(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion), conn);
 }
 
-bool ingestLegacyFolder(QSqlDatabase conn, const QString &root, const QString &guid,
-                        const QString &assetName, IngestStats *stats, QString *errorOut)
-{
-    const QString folder = AssetStorePaths::legacyFolderIn(root, guid);
-    if (!QDir(folder).exists()) return true;   // zero files, not an error
-
-    QDirIterator it(folder, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        const QString srcPath = it.next();
-        const QFileInfo info(srcPath);
-
-        const QString oid = hashFile(srcPath);
-        if (oid.isEmpty()) {
-            if (errorOut) *errorOut = QStringLiteral("cannot hash %1").arg(srcPath);
-            return false;
-        }
-        if (stats) { ++stats->files; stats->bytesHashed += info.size(); }
-
-        // One object per oid: when the catalog already knows this content,
-        // its recorded extension is canonical — a same-bytes file arriving
-        // under another extension (jpeg vs jpg) reuses the existing object
-        // instead of writing a sibling copy.
-        QString ext = info.suffix().toLower();
-        {
-            QSqlQuery known(conn);
-            known.prepare("SELECT ext FROM files WHERE oid = ?");
-            known.addBindValue(oid);
-            if (known.exec() && known.next()) ext = known.value(0).toString();
-        }
-
-        const bool existed = QFileInfo::exists(AssetStorePaths::objectPathIn(root, oid, ext));
-        if (!storeObject(srcPath, root, oid, ext, errorOut)) return false;
-        if (stats) { existed ? ++stats->objectsReused : ++stats->objectsCreated; }
-
-        QSqlQuery insertFile(conn);
-        insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
-        insertFile.addBindValue(oid);
-        insertFile.addBindValue(info.size());
-        insertFile.addBindValue(ext);
-        insertFile.exec();
-
-        // The role: the file matching the asset's recorded name is the
-        // primary 'source'; everything else rides along as 'file'.
-        const QString role = (info.fileName() == assetName) ? QStringLiteral("source")
-                                                            : QStringLiteral("file");
-        QSqlQuery insertLink(conn);
-        insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
-        insertLink.addBindValue(guid);
-        insertLink.addBindValue(role);
-        insertLink.addBindValue(oid);
-        insertLink.addBindValue(info.fileName());
-        insertLink.exec();
-    }
-    return true;
-}
-
 bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
                 const QString &guid, const QString &role, const QString &name,
                 QString *oidOut, QString *errorOut)

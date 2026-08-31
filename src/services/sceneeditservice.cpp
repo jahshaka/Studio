@@ -11,6 +11,9 @@ For more information see the LICENSE file
 
 #include "services/sceneeditservice.h"
 
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+
 #include <QBuffer>
 #include <QDateTime>
 #include <QDebug>
@@ -22,6 +25,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QPixmap>
 #include <QTemporaryDir>
+#include <QSqlDatabase>
 #include <QTextStream>
 
 #include "irisgl/core/irisutils.h"
@@ -594,7 +598,6 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset, iris::S
             auto file = prop->getValue().toString();
             if (file.isEmpty()) continue;
             const QString fileName = QFileInfo(file).fileName();
-            QFile::copy(file, QDir(project->getProjectFolder()).filePath(fileName));
 
             // One row per file: reapplying a preset must not duplicate it.
             QString fileGuid = db->fetchAssetGUIDByName(fileName, project->getProjectGuid());
@@ -611,6 +614,17 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset, iris::S
                     QByteArray(),
                     QByteArray()
                 );
+            }
+            // Pin world (phase 4): the texture's bytes go into the CAS under
+            // the row's guid and the project pins them — no flat project-
+            // folder copy, and the readers resolve pin-first.
+            {
+                QSqlDatabase conn = QSqlDatabase::database();
+                const QString root = AssetStorePaths::root();
+                QString oid, casError;
+                if (AssetCas::ingestFile(conn, root, file, fileGuid,
+                                         QStringLiteral("source"), fileName, &oid, &casError))
+                    AssetCas::writePin(conn, project->getProjectGuid(), fileGuid, oid);
             }
             textureGuids.append(fileGuid);
         }

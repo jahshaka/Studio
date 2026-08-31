@@ -30,23 +30,6 @@ For more information see the LICENSE file
 
 namespace AssetMigration
 {
-struct MigrateReport
-{
-    bool ok = false;
-    QString error;
-    int libraryRows = 0;        // view_filter IN (2,3)
-    int rowsWithFiles = 0;
-    int rowsWithoutFiles = 0;   // no legacy folder — legitimate (preflight §3.1)
-    int filesSeen = 0;
-    int objectsCreated = 0;
-    int objectsReused = 0;      // dedup + idempotent reruns
-    qint64 bytesHashed = 0;
-    int sidecars = 0;
-    qint64 elapsedMs = 0;
-
-    QVariantMap toMap() const;
-};
-
 struct VerifyReport
 {
     bool ok = false;            // true = every object present and bit-identical
@@ -72,11 +55,6 @@ struct RebuildReport
     QVariantMap toMap() const;
 };
 
-/// Migrate a legacy per-guid store into the CAS: hash every file of every
-/// library row, hardlink/copy into objects/, write files/asset_files rows +
-/// sidecar/<guid>.json + store.json. Legacy tree retained. Refuses while
-/// another process holds the lock beside dbPath.
-MigrateReport migrateStore(const QString &dbPath, const QString &storeRoot);
 
 /// Re-hash every catalogued object against its oid (Perforce p4 verify):
 /// bit-rot and missing objects, with counts and bytes.
