@@ -124,6 +124,27 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 {
 	if (matObject["materialType"].toString() == "pbr")
 		return parsePbrMaterial(matObject, db, loadTextures);
+
+	// Graph-backed material assets - a shaderGuid whose stored definition
+	// carries a shadergraph - load as the shader's baked PbrMaterial
+	// (MATERIALS_EVALUATOR phase 5): folded values plus BakedMaps/<guid>/
+	// textures, resolved against the open project. The CustomMaterial-from-
+	// graph route is gone. A definition predating the evaluator (no
+	// "pbrMaterial" object) falls through to the shader-less CustomMaterial
+	// fallback; materials.regenerate rebuilds it.
+	if (getMaterialVersion(matObject) >= 2) {
+		const auto shaderGuid = matObject["shaderGuid"].toString();
+		if (!shaderGuid.isEmpty() && db
+			&& !Constants::Reserved::BuiltinShaders.contains(shaderGuid)) {
+			const auto shaderObject = getShaderObjectFromId(shaderGuid, db);
+			if (MaterialHelper::materialHasEffect(shaderObject)) {
+				if (project) MaterialHelper::setProjectRoot(project->getProjectFolder());
+				if (auto pbr = MaterialHelper::createPbrMaterialFromDefinition(shaderObject))
+					return pbr;
+			}
+		}
+	}
+
 	return parseMaterial(matObject, db, loadTextures);
 }
 
