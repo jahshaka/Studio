@@ -49,6 +49,27 @@ public:
 
     void polish(QWidget *w) override
     {
+        // Keep Qlementine's hands off QMenu (verified by gdb trace, 2026-08-31):
+        // its menu polish sets WA_TranslucentBackground and installs a
+        // MenuEventFilter that swallows every real mouse release and replays a
+        // synthetic one after a flash animation. Both assumptions break here:
+        // (1) polish() is not idempotent but Qt re-polishes widgets freely
+        // (Qlementine's own setWindowFlag() inside polish() recurses via
+        // inheritStyle(), and every ancestor setStyleSheet() re-polishes all
+        // descendants), so menus collect 2..11 stacked filters — and stacked
+        // filters swallow each other's synthetic release, so clicking a menu
+        // item does NOTHING (the desktop layout/switcher popups). (2) legacy
+        // stylesheets up the parent chain (mainwindow.ui / projectmanager.ui
+        // root sheets) interpose QStyleSheetStyle, which takes over menu
+        // painting and paints no panel background, while the menu window is
+        // translucent — a see-through menu (the desktop tile context menu).
+        // Menus in this app are painted by QStyleSheetStyle/palette anyway;
+        // plain QCommonStyle polish keeps them opaque and clickable.
+        if (qobject_cast<QMenu *>(w)) {
+            QCommonStyle::polish(w);
+            return;
+        }
+
         if (auto *itemView = qobject_cast<QAbstractItemView *>(w)) {
             auto *popup = itemView->parentWidget();
             if (popup && popup->inherits("QComboBoxPrivateContainer")) {
