@@ -7,6 +7,9 @@ add_executable(test_web_export test_web_export.cpp
     ${CMAKE_SOURCE_DIR}/src/export/gltfexporter.cpp
     ${CMAKE_SOURCE_DIR}/src/export/exportservice.cpp
     ${CMAKE_SOURCE_DIR}/src/export/previewlauncher.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/scenewalker.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/meshbufferreader.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/materialtexturereader.cpp
     ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc)
 set_target_properties(test_web_export PROPERTIES AUTOMOC OFF AUTORCC ON)
 target_include_directories(test_web_export PRIVATE ${CMAKE_SOURCE_DIR}
@@ -40,3 +43,35 @@ endif()
 add_test(NAME export.embed COMMAND test_embedded_preview
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(export.embed PROPERTIES LABELS "export")
+
+# Shared export walkers (ASSET_PIPELINE_SPEC §3.3 phase-5 front half):
+# traversal/skip/classification, scene inventory, mesh buffer readers.
+# Document-only — runs offscreen like export.web.
+add_executable(test_export_walkers test_export_walkers.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/scenewalker.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/meshbufferreader.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/materialtexturereader.cpp)
+set_target_properties(test_export_walkers PROPERTIES AUTOMOC OFF)
+target_include_directories(test_export_walkers PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_export_walkers PRIVATE IrisGL Qt6::Gui)
+add_test(NAME export.walkers COMMAND test_export_walkers
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(export.walkers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
+
+# Raw export + manifest v2 round-trip over a fixture store (content source,
+# oid dedup, name collisions, DB-only rows, flat-folder fallback, v1 reader
+# acceptance). Pure QtCore.
+add_executable(test_raw_export test_raw_export.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/exportmanifest.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/exportcontentsource.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/rawexporter.cpp)
+set_target_properties(test_raw_export PROPERTIES AUTOMOC OFF)
+target_include_directories(test_raw_export PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_raw_export PRIVATE Qt6::Core)
+add_test(NAME export.raw COMMAND test_raw_export
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(export.raw PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")

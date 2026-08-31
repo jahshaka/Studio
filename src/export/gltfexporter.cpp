@@ -11,6 +11,10 @@ For more information see the LICENSE file
 
 #include "export/gltfexporter.h"
 
+#include "export/walkers/scenewalker.h"
+#include "export/walkers/meshbufferreader.h"
+#include "export/walkers/materialtexturereader.h"
+
 #include <QBuffer>
 #include <QFileInfo>
 #include <QImage>
@@ -159,133 +163,14 @@ int addUShortAccessor(Ctx &c, const std::vector<unsigned short> &data, int comps
 }
 
 // ---- mesh conversion -------------------------------------------------------
+// MeshBuffers extraction and the normal/tangent generators moved to the shared
+// walker layer (export/walkers/meshbufferreader.*) — every exporter reads the
+// same geometry the same way.
 
-struct MeshBuffers
-{
-    std::vector<float> positions, normals, uvs, tangents;
-    std::vector<float> boneIndices, boneWeights;   // 4 per vertex, float (document layout)
-    std::vector<unsigned> indices;
-    size_t vertexCount() const { return positions.size() / 3; }
-};
-
-bool extractMeshBuffers(iris::Mesh *mesh, MeshBuffers &out)
-{
-    if (!mesh) return false;
-    for (const auto &vb : mesh->getVertexBuffers()) {
-        if (!vb || !vb->data) continue;
-        const QList<iris::VertexAttribute> attribs = vb->vertexLayout.getAttribs();
-        if (attribs.isEmpty()) continue;
-        const iris::VertexAttribute &attr = attribs.first();
-        const float *f = reinterpret_cast<const float *>(vb->data);
-        const int floats = vb->dataSize / int(sizeof(float));
-        switch (attr.usage) {
-        case iris::VertexAttribUsage::Position:
-            out.positions.assign(f, f + floats); break;
-        case iris::VertexAttribUsage::Normal:
-            out.normals.assign(f, f + floats); break;
-        case iris::VertexAttribUsage::TexCoord0: {
-            // assimp stores texcoords as 3 floats; glTF wants 2 (mirror does the same)
-            const int comps = attr.count > 0 ? attr.count : 3;
-            for (int i = 0; i + comps <= floats; i += comps) {
-                out.uvs.push_back(f[i]); out.uvs.push_back(f[i + 1]);
-            }
-            break;
-        }
-        case iris::VertexAttribUsage::BoneIndices:
-            out.boneIndices.assign(f, f + floats); break;
-        case iris::VertexAttribUsage::BoneWeights:
-            out.boneWeights.assign(f, f + floats); break;
-        default: break;
-        }
-    }
-    if (out.positions.empty()) return false;
-    const size_t nv = out.vertexCount();
-    const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
-    if (ib && ib->data && ib->dataSize > 0) {
-        const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
-        out.indices.assign(idx, idx + ib->dataSize / int(sizeof(unsigned)));
-    } else {
-        out.indices.resize(nv);
-        for (size_t i = 0; i < nv; ++i) out.indices[i] = unsigned(i);
-    }
-    if (out.normals.size() != nv * 3) out.normals.clear();
-    if (out.uvs.size() != nv * 2) out.uvs.clear();
-    if (out.boneIndices.size() != nv * 4 || out.boneWeights.size() != nv * 4) {
-        out.boneIndices.clear(); out.boneWeights.clear();
-    }
-    return out.indices.size() >= 3;
-}
-
-// Smooth normals + Lengyel tangents — the same generators the engine mirror
-// runs (irisgl/engine/src/OgreMesh.cpp buildMeshV2), ported so the web viewer
-// shades identically. GLTFLoader does NOT compute tangents (audit §1).
-void generateNormals(MeshBuffers &m)
-{
-    const size_t nv = m.vertexCount(), ni = m.indices.size();
-    m.normals.assign(nv * 3, 0.0f);
-    for (size_t t = 0; t + 2 < ni; t += 3) {
-        const unsigned a = m.indices[t], b = m.indices[t + 1], cc = m.indices[t + 2];
-        if (a >= nv || b >= nv || cc >= nv) continue;
-        const float *pa = &m.positions[a * 3], *pb = &m.positions[b * 3], *pc = &m.positions[cc * 3];
-        const float e1[3] = { pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2] };
-        const float e2[3] = { pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2] };
-        const float n[3] = { e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
-                             e1[0] * e2[1] - e1[1] * e2[0] };
-        for (unsigned v : { a, b, cc })
-            for (int k = 0; k < 3; ++k) m.normals[v * 3 + k] += n[k];
-    }
-    for (size_t v = 0; v < nv; ++v) {
-        float *n = &m.normals[v * 3];
-        const float len = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
-        if (len > 1e-8f) { n[0] /= len; n[1] /= len; n[2] /= len; } else { n[1] = 1.0f; }
-    }
-}
-
-void generateTangents(MeshBuffers &m)
-{
-    const size_t nv = m.vertexCount(), ni = m.indices.size();
-    m.tangents.assign(nv * 4, 0.0f);
-    std::vector<float> bitan(nv * 3, 0.0f);
-    if (!m.uvs.empty()) {
-        for (size_t t = 0; t + 2 < ni; t += 3) {
-            const unsigned a = m.indices[t], b = m.indices[t + 1], cc = m.indices[t + 2];
-            if (a >= nv || b >= nv || cc >= nv) continue;
-            const float *pa = &m.positions[a * 3], *pb = &m.positions[b * 3], *pc = &m.positions[cc * 3];
-            const float *ua = &m.uvs[a * 2], *ub = &m.uvs[b * 2], *uc = &m.uvs[cc * 2];
-            const float e1[3] = { pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2] };
-            const float e2[3] = { pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2] };
-            const float s1 = ub[0] - ua[0], t1 = ub[1] - ua[1];
-            const float s2 = uc[0] - ua[0], t2 = uc[1] - ua[1];
-            const float det = s1 * t2 - s2 * t1;
-            if (std::fabs(det) < 1e-12f) continue;
-            const float r = 1.0f / det;
-            const float T[3] = { (t2 * e1[0] - t1 * e2[0]) * r, (t2 * e1[1] - t1 * e2[1]) * r,
-                                 (t2 * e1[2] - t1 * e2[2]) * r };
-            const float B[3] = { (s1 * e2[0] - s2 * e1[0]) * r, (s1 * e2[1] - s2 * e1[1]) * r,
-                                 (s1 * e2[2] - s2 * e1[2]) * r };
-            for (unsigned v : { a, b, cc })
-                for (int k = 0; k < 3; ++k) { m.tangents[v * 4 + k] += T[k]; bitan[v * 3 + k] += B[k]; }
-        }
-    }
-    for (size_t v = 0; v < nv; ++v) {
-        const float *n = &m.normals[v * 3];
-        float *t = &m.tangents[v * 4];
-        const float ndt = n[0] * t[0] + n[1] * t[1] + n[2] * t[2];
-        float tx = t[0] - n[0] * ndt, ty = t[1] - n[1] * ndt, tz = t[2] - n[2] * ndt;
-        const float len = std::sqrt(tx * tx + ty * ty + tz * tz);
-        if (len > 1e-8f) { tx /= len; ty /= len; tz /= len; }
-        else {
-            if (std::fabs(n[0]) < 0.9f) { tx = 1.0f - n[0] * n[0]; ty = -n[0] * n[1]; tz = -n[0] * n[2]; }
-            else                        { tx = -n[1] * n[0]; ty = 1.0f - n[1] * n[1]; tz = -n[1] * n[2]; }
-            const float l2 = std::sqrt(tx * tx + ty * ty + tz * tz);
-            tx /= l2; ty /= l2; tz /= l2;
-        }
-        const float cx = n[1] * tz - n[2] * ty, cy = n[2] * tx - n[0] * tz, cz = n[0] * ty - n[1] * tx;
-        const float *b = &bitan[v * 3];
-        t[0] = tx; t[1] = ty; t[2] = tz;
-        t[3] = (cx * b[0] + cy * b[1] + cz * b[2]) < 0.0f ? -1.0f : 1.0f;
-    }
-}
+using exportwalk::MeshBuffers;
+using exportwalk::extractMeshBuffers;
+using exportwalk::generateNormals;
+using exportwalk::generateTangents;
 
 // ---- images / textures -----------------------------------------------------
 
@@ -374,12 +259,8 @@ QJsonObject textureRef(Ctx &c, int texIdx, float uvScale)
     return ref;
 }
 
-QString texSource(iris::Material *mat, const char *slot)
-{
-    auto it = mat->textures.constFind(slot);
-    if (it != mat->textures.constEnd() && it.value()) return it.value()->source;
-    return QString();
-}
+// Per-slot texture reads go through the shared walker layer.
+using exportwalk::textureSlotSource;
 
 QJsonArray colorArray(float r, float g, float b, float a = -1.0f)
 {
@@ -404,7 +285,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     mr["baseColorFactor"] = colorArray(float(bc.redF()) * bf, float(bc.greenF()) * bf,
                                        float(bc.blueF()) * bf, alpha);
 
-    const QString baseSrc = texSource(pbr, "u_baseColorMap");
+    const QString baseSrc = textureSlotSource(pbr, "u_baseColorMap");
     if (!baseSrc.isEmpty()) {
         const QImage img = loadDocumentImage(baseSrc, c);
         const int tex = addTexture(c, addImage(c, "src:" + baseSrc, img, true));
@@ -415,8 +296,8 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // document's per-texel roughness remap (mix(lower, upper, factor*sample),
     // audit §1 "Roughness remap") has no glTF equivalent — bake it into the
     // packed texture and set the scalar factors to 1.
-    const QString metalSrc = texSource(pbr, "u_metallicMap");
-    const QString roughSrc = texSource(pbr, "u_roughnessMap");
+    const QString metalSrc = textureSlotSource(pbr, "u_metallicMap");
+    const QString roughSrc = textureSlotSource(pbr, "u_roughnessMap");
     if (!metalSrc.isEmpty() || !roughSrc.isEmpty()) {
         const QImage metalImg = metalSrc.isEmpty() ? QImage() : loadDocumentImage(metalSrc, c);
         QImage roughImg = roughSrc.isEmpty() ? QImage() : loadDocumentImage(roughSrc, c);
@@ -471,7 +352,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     }
     m["pbrMetallicRoughness"] = mr;
 
-    const QString normalSrc = texSource(pbr, "u_normalMap");
+    const QString normalSrc = textureSlotSource(pbr, "u_normalMap");
     if (!normalSrc.isEmpty()) {
         const QImage img = loadDocumentImage(normalSrc, c);
         const int tex = addTexture(c, addImage(c, "src:" + normalSrc, img, false));
@@ -484,7 +365,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
 
     // AO: in the document but deliberately dropped by the engine — web export
     // carries what the engine drops (audit §1 "Occlusion").
-    const QString aoSrc = texSource(pbr, "u_occlusionMap");
+    const QString aoSrc = textureSlotSource(pbr, "u_occlusionMap");
     if (!aoSrc.isEmpty()) {
         const QImage img = loadDocumentImage(aoSrc, c);
         const int tex = addTexture(c, addImage(c, "src:" + aoSrc, img, true));
@@ -511,7 +392,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
                                              float(ec.blueF()) * ei);
         }
     }
-    const QString emSrc = texSource(pbr, "u_emissiveMap");
+    const QString emSrc = textureSlotSource(pbr, "u_emissiveMap");
     if (!emSrc.isEmpty()) {
         const QImage img = loadDocumentImage(emSrc, c);
         const int tex = addTexture(c, addImage(c, "src:" + emSrc, img, true));
@@ -569,7 +450,7 @@ int convertDefaultMaterial(Ctx &c, iris::DefaultMaterial *def, iris::FaceCulling
     mr["metallicFactor"] = 0.0;
     const float shin = std::max(0.0f, std::min(def->getShininess(), 128.0f));
     mr["roughnessFactor"] = double(1.0f - std::sqrt(shin / 128.0f) * 0.9f);
-    const QString diffSrc = texSource(def, "u_diffuseTexture");
+    const QString diffSrc = textureSlotSource(def, "u_diffuseTexture");
     const float uvScale = def->getTextureScale();
     if (!diffSrc.isEmpty()) {
         const QImage img = loadDocumentImage(diffSrc, c);
@@ -577,7 +458,7 @@ int convertDefaultMaterial(Ctx &c, iris::DefaultMaterial *def, iris::FaceCulling
         if (tex >= 0) mr["baseColorTexture"] = textureRef(c, tex, uvScale);
     }
     m["pbrMetallicRoughness"] = mr;
-    const QString normalSrc = texSource(def, "u_normalTexture");
+    const QString normalSrc = textureSlotSource(def, "u_normalTexture");
     if (!normalSrc.isEmpty()) {
         const QImage img = loadDocumentImage(normalSrc, c);
         const int tex = addTexture(c, addImage(c, "src:" + normalSrc, img, false));
@@ -876,15 +757,9 @@ QJsonObject orientationShimNode(const QString &name)
     return n;
 }
 
-// SceneNode::exportable is the legacy "include in model-file export" flag:
-// LightNode/CameraNode/ViewerNode constructors hard-code it false, so honoring
-// it for every node type would silently delete all lights and cameras from
-// every web export. It keeps its historical meaning — an opt-out for MESH
-// nodes — and everything else always exports.
-bool skipNode(const iris::SceneNodePtr &node)
-{
-    return node->getSceneNodeType() == iris::SceneNodeType::Mesh && !node->isExportable();
-}
+// Traversal, skip semantics (the legacy mesh-only exportable flag) and node
+// classification (the CameraNode enum quirk) live in the shared walker layer
+// (export/walkers/scenewalker.*) — this writer is one visitor driving it.
 
 } // namespace
 
@@ -911,8 +786,11 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     };
     std::vector<PendingSkin> pendingSkins;
 
-    std::function<int(const iris::SceneNodePtr &)> writeNode =
-        [&](const iris::SceneNodePtr &node) -> int {
+    // The walker visits post-order (children first) and hands us the already-
+    // written children's node indices; light shim nodes are prepended so the
+    // children array keeps its historical order (shim, then walked children).
+    const exportwalk::NodeVisitor writeNode =
+        [&](const iris::SceneNodePtr &node, const QVector<int> &childHandles) -> int {
         QJsonObject n;
         n["name"] = node->getName().isEmpty() ? QStringLiteral("node") : node->getName();
         writeTrs(n, node);
@@ -924,8 +802,9 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         int myIndexReserved = -1;   // filled at the end; children need our index order
         QJsonArray children;
 
-        const auto type = node->getSceneNodeType();
-        if (type == iris::SceneNodeType::Mesh) {
+        using exportwalk::NodeKind;
+        const NodeKind kind = exportwalk::classifyNode(node);
+        if (kind == NodeKind::Mesh) {
             auto *meshNode = static_cast<iris::MeshNode *>(node.data());
             iris::MeshPtr mesh = meshNode->getMesh();
             if (mesh) {
@@ -974,7 +853,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 }
                 if (meshIdx >= 0) n["mesh"] = meshIdx;
             }
-        } else if (type == iris::SceneNodeType::Light) {
+        } else if (kind == NodeKind::Light) {
             auto *light = static_cast<iris::LightNode *>(node.data());
             if (light->lightType == iris::LightType::Area) {
                 // No ratified glTF area-light extension — extras + a viewer-side
@@ -1028,10 +907,11 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 children.append(c.nodes.size() - 1);
                 res.lightCount++;
             }
-        } else if (auto *cam = dynamic_cast<iris::CameraNode *>(node.data())) {
-            // dynamic_cast, not the type enum: CameraNode never writes
-            // sceneNodeType (document quirk — nothing in irisgl sets
-            // SceneNodeType::Camera), so the enum still reads Empty.
+        } else if (kind == NodeKind::Camera) {
+            // classifyNode uses dynamic_cast, not the type enum: CameraNode
+            // never writes sceneNodeType (document quirk — nothing in irisgl
+            // sets SceneNodeType::Camera), so the enum still reads Empty.
+            auto *cam = static_cast<iris::CameraNode *>(node.data());
             QJsonObject gc;
             gc["name"] = n["name"];
             if (cam->isPerspective) {
@@ -1053,7 +933,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             c.cameras.append(gc);
             n["camera"] = c.cameras.size() - 1;
             res.cameraCount++;
-        } else if (type == iris::SceneNodeType::ParticleSystem) {
+        } else if (kind == NodeKind::ParticleSystem) {
             auto *ps = static_cast<iris::ParticleSystemNode *>(node.data());
             QJsonObject p;
             p["particlesPerSecond"] = double(ps->particlesPerSecond);
@@ -1074,16 +954,11 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 if (!img.isNull()) p["texture"] = imageToDataUri(img, false);
             }
             jah["particles"] = p;
-        } else if (type == iris::SceneNodeType::Viewer) {
+        } else if (kind == NodeKind::Viewer) {
             jah["viewpoint"] = true;
         }
 
-        for (const auto &child : node->children) {
-            if (!child) continue;
-            if (skipNode(child)) continue;
-            const int ci = writeNode(child);
-            if (ci >= 0) children.append(ci);
-        }
+        for (int ci : childHandles) children.append(ci);
 
         if (!children.isEmpty()) n["children"] = children;
         QJsonObject extras; extras["jah"] = jah;
@@ -1092,16 +967,13 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         myIndexReserved = c.nodes.size() - 1;
         // Patch the skin record with the mesh node's index (added just now).
         for (auto &ps : pendingSkins)
-            if (ps.meshNodeIndex < 0 && type == iris::SceneNodeType::Mesh)
+            if (ps.meshNodeIndex < 0 && kind == NodeKind::Mesh)
                 ps.meshNodeIndex = myIndexReserved;
         return myIndexReserved;
     };
 
-    for (const auto &child : scene->rootNode->children) {
-        if (!child || skipNode(child)) continue;
-        const int idx = writeNode(child);
-        if (idx >= 0) sceneRoots.append(idx);
-    }
+    for (int idx : exportwalk::walkScene(scene, writeNode))
+        sceneRoots.append(idx);
 
     // ---- skins + skeletal animations (phase 2) ----
     for (auto &ps : pendingSkins) {

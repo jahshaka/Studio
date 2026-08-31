@@ -98,6 +98,12 @@ set(SRCS
     src/export/exportservice.cpp
     src/export/previewlauncher.cpp
     src/export/embeddedpreview.cpp
+    src/export/walkers/scenewalker.cpp
+    src/export/walkers/meshbufferreader.cpp
+    src/export/walkers/materialtexturereader.cpp
+    src/export/exportmanifest.cpp
+    src/export/exportcontentsource.cpp
+    src/export/rawexporter.cpp
     src/scripting/modules/studiomodules.cpp
     src/scripting/mcp/mcpserver.cpp
     src/scripting/mcp/mcptools.cpp
@@ -283,6 +289,12 @@ set(HEADERS
     src/export/exportservice.h
     src/export/previewlauncher.h
     src/export/embeddedpreview.h
+    src/export/walkers/scenewalker.h
+    src/export/walkers/meshbufferreader.h
+    src/export/walkers/materialtexturereader.h
+    src/export/exportmanifest.h
+    src/export/exportcontentsource.h
+    src/export/rawexporter.h
     src/modules/studiomodule.h
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
