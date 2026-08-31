@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 
 #include "data/project.h"
+#include "export/embeddedpreview.h"
 #include "export/exportservice.h"
 #include "export/previewlauncher.h"
 #include "services/sceneeditservice.h"
@@ -113,17 +114,49 @@ PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     cardLayout->addWidget(statusLabel);
     cardLayout->addWidget(detailLabel);
 
+    // In-page preview area (Linux/X11 + Chrome only): hidden until an
+    // EmbeddedWebPreview adoption succeeds; every failure keeps it hidden and
+    // the preview opens as the companion window exactly as before.
+    previewFrame = new QFrame();
+    previewFrame->setObjectName("previewFrame");
+    previewFrame->setStyleSheet(
+        "#previewFrame { background: #14161a; border: 1px solid #32363e; border-radius: 8px; }");
+    previewFrame->setMinimumHeight(320);
+    auto *pv = new QVBoxLayout(previewFrame);
+    pv->setContentsMargins(10, 6, 10, 10);
+    pv->setSpacing(6);
+    auto *pvHeader = new QHBoxLayout();
+    auto *pvLabel = new QLabel(QStringLiteral("Preview"));
+    pvLabel->setStyleSheet("font-size: 12px; color: rgba(255,255,255,0.55); background: transparent;");
+    popOutButton = new QPushButton(QStringLiteral("Pop out"));
+    popOutButton->setStyleSheet(kSecondaryButtonStyle);
+    popOutButton->setCursor(Qt::PointingHandCursor);
+    pvHeader->addWidget(pvLabel);
+    pvHeader->addStretch();
+    pvHeader->addWidget(popOutButton);
+    pv->addLayout(pvHeader);
+    previewSlot = new QWidget();
+    previewSlot->setStyleSheet("background: #000;");
+    auto *slotLayout = new QVBoxLayout(previewSlot);
+    slotLayout->setContentsMargins(0, 0, 0, 0);
+    pv->addWidget(previewSlot, 1);
+    previewFrame->hide();
+
+    vl->setContentsMargins(24, 24, 24, 24);
     vl->addStretch();
     vl->addWidget(title);
     vl->addSpacing(6);
     vl->addWidget(subtitle);
     vl->addSpacing(28);
     vl->addWidget(card, 0, Qt::AlignHCenter);
+    vl->addSpacing(16);
+    vl->addWidget(previewFrame, 10);
     vl->addStretch();
 
     connect(processButton, &QPushButton::clicked, this, &PublishPage::onProcess);
     connect(browserButton, &QPushButton::clicked, this, &PublishPage::onOpenBrowser);
     connect(folderButton, &QPushButton::clicked, this, &PublishPage::onOpenFolder);
+    connect(popOutButton, &QPushButton::clicked, this, [this] { onPopOut(); });
 
     refreshState();
 }
@@ -180,13 +213,107 @@ void PublishPage::setStatus(const QString &text, bool isError)
 
 void PublishPage::closePreview()
 {
-    if (preview) {
-        preview->terminate();
-        if (!preview->waitForFinished(1500)) preview->kill();
-        preview->deleteLater();
+    if (embed) {
+        preview.clear();          // that QProcess is owned by the embed controller
+        embed->disconnect(this);
+        embed->stop();
+        embed->deleteLater();
+        embed = nullptr;
+        previewFrame->hide();
     }
-    preview.clear();
+    // Take the pointer FIRST and disconnect: waitForFinished() delivers
+    // finished() synchronously, and the launch-time lambda clears `preview` —
+    // going back through the QPointer afterwards is a null deref (found as a
+    // live segfault in libQt6Core during the embed rig test; the bug predates
+    // the embedded preview).
+    if (QProcess *proc = preview.data()) {
+        preview.clear();
+        proc->disconnect(this);
+        proc->terminate();
+        if (!proc->waitForFinished(1500)) proc->kill();
+        proc->deleteLater();
+    }
     previewRunning = false;
+}
+
+// Try the embedded preview first (Linux/X11 + detected Chrome); any failure —
+// no window, no WebGPU in the X11 browser, adoption refused, browser death —
+// degrades silently to launchCompanion, which is today's behavior verbatim.
+void PublishPage::startPreview(const QString &indexHtml, const QString &summary)
+{
+    if (EmbeddedWebPreview::platformSupported()) {
+        const QString browser = PreviewLauncher::findChromiumBrowser();
+        if (!browser.isEmpty()) {
+            embed = new EmbeddedWebPreview(this);
+            connect(embed, &EmbeddedWebPreview::embedded, this, [this, summary] {
+                previewFrame->show();
+                setStatus(summary + QStringLiteral(" Preview embedded — \"Pop out\" for a separate window."));
+                refreshState();
+            });
+            connect(embed, &EmbeddedWebPreview::failed, this,
+                    [this, indexHtml, summary](const QString &) {
+                if (embed) { embed->stop(); embed->deleteLater(); embed = nullptr; }
+                previewFrame->hide();
+                preview.clear();
+                previewRunning = false;
+                launchCompanion(indexHtml, summary);
+                refreshState();
+            });
+            connect(embed, &EmbeddedWebPreview::closed, this, [this] {
+                if (embed) { embed->deleteLater(); embed = nullptr; }
+                previewFrame->hide();
+                preview.clear();
+                previewRunning = false;
+                setStatus(QStringLiteral("Preview closed."));
+                refreshState();
+            });
+            if (embed->start(browser, indexHtml, previewSlot)) {
+                preview = embed->process();
+                previewRunning = true;
+                setStatus(summary + QStringLiteral(" Starting embedded preview…"));
+                return;
+            }
+            embed->deleteLater();
+            embed = nullptr;
+        }
+    }
+    launchCompanion(indexHtml, summary);
+}
+
+void PublishPage::launchCompanion(const QString &indexHtml, const QString &summary)
+{
+    QProcess *proc = PreviewLauncher::launchKiosk(indexHtml, this);
+    if (proc) {
+        preview = proc;
+        previewRunning = true;
+        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                this, [this](int, QProcess::ExitStatus) {
+                    previewRunning = false;
+                    if (preview) preview->deleteLater();
+                    preview.clear();
+                    refreshState();
+                });
+        setStatus(summary + QStringLiteral(" Preview window opened (%1).")
+                                .arg(QFileInfo(PreviewLauncher::findChromiumBrowser()).fileName()));
+    } else {
+        PreviewLauncher::openInBrowser(indexHtml);
+        setStatus(summary + QStringLiteral(" No Chrome/Chromium found — opened in the default browser."));
+    }
+}
+
+void PublishPage::onPopOut()
+{
+    if (!embed) return;
+    const QString index = lastIndexHtml();
+    preview.clear();
+    embed->disconnect(this);
+    embed->stop();
+    embed->deleteLater();
+    embed = nullptr;
+    previewFrame->hide();
+    previewRunning = false;
+    if (!index.isEmpty()) launchCompanion(index, QString());
+    refreshState();
 }
 
 void PublishPage::onProcess()
@@ -228,25 +355,10 @@ void PublishPage::onProcess()
         detailLabel->show();
     }
 
-    // Launch the kiosk companion window (owned QProcess); fall back to the
-    // default browser when no Chromium-family browser exists (audit §7.6).
-    QProcess *proc = PreviewLauncher::launchKiosk(r.indexHtml, this);
-    if (proc) {
-        preview = proc;
-        previewRunning = true;
-        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, [this](int, QProcess::ExitStatus) {
-                    previewRunning = false;
-                    if (preview) preview->deleteLater();
-                    preview.clear();
-                    refreshState();
-                });
-        setStatus(summary + QStringLiteral(" Preview window opened (%1).")
-                                .arg(QFileInfo(PreviewLauncher::findChromiumBrowser()).fileName()));
-    } else {
-        PreviewLauncher::openInBrowser(r.indexHtml);
-        setStatus(summary + QStringLiteral(" No Chrome/Chromium found — opened in the default browser."));
-    }
+    // Embedded preview when possible (Linux/X11 + Chrome), companion kiosk
+    // window otherwise; default browser when no Chromium family exists
+    // (audit §7.6). All embedding failures degrade silently to the companion.
+    startPreview(r.indexHtml, summary);
     refreshState();
 }
 
