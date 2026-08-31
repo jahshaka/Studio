@@ -20,6 +20,7 @@ NodeModel::NodeModel()
 {
 	id = GuidHelper::createGuid();
 	widget = nullptr;
+	headerWidget = nullptr;
 	connect(this, &NodeModel::titleColorChanged, [=]() {
 		setNodeTitleColor();
 	});

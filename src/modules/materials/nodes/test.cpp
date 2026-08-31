@@ -68,125 +68,36 @@ FloatNodeModel::FloatNodeModel() :
 {
 	setNodeType(NodeCategory::Constants);
 
-	auto wid = new QWidget;
-	auto label = new QLabel(" ");
-	auto layout = new QVBoxLayout;
-	auto layoutH = new QHBoxLayout;
-	auto layoutH1 = new QHBoxLayout;
-
-	auto min = new QDoubleSpinBox;
-	auto max = new QDoubleSpinBox;
-	auto stepBox = new QDoubleSpinBox;
-	auto valueBox = new QDoubleSpinBox;
-	wid->setMaximumWidth(164);
-
-	min->setValue(0.0);
-	max->setValue(1.0);
-	stepBox->setValue(0.1);
-
-	double step = 0.1;
-	double upModifier = (step * 1000);
-
-	auto slider = new QSlider(Qt::Horizontal);
-	slider->setMinimum(min->value());
-	slider->setMaximum(max->value()*upModifier);
-	slider->setSingleStep(stepBox->value());
-
-	min->setAlignment(Qt::AlignCenter);
-	max->setAlignment(Qt::AlignCenter);
-	valueBox->setAlignment(Qt::AlignCenter);
-	slider->setMaximumWidth(150);
-	
-
-	wid->setLayout(layout);
-
-	layoutH->addWidget(min);
-	layoutH->addWidget(max);
-	layoutH->addWidget(valueBox);
-
-	auto holdem = new QWidget;
-	holdem->setLayout(layoutH);
-
-	auto minl = new QLabel("min");
-	auto maxl = new QLabel(" max");
-	auto vall = new QLabel("value");
-
-	minl->setAlignment(Qt::AlignCenter);
-	maxl->setAlignment(Qt::AlignCenter);
-	vall->setAlignment(Qt::AlignCenter);
-
-	auto textHolder = new QWidget;
-	textHolder->setLayout(layoutH1);
-	layoutH1->setContentsMargins(10, 0, 10, 0);
-
-
-	layoutH1->addWidget(minl);
-		layoutH1->addWidget(maxl);
-		layoutH1->addWidget(vall);
-
-	layout->addWidget(textHolder);
-
-	layout->addWidget(holdem);
-	layout->addWidget(slider);
-	
-	this->widget = wid;
-
 	typeName = "float";
 	title = "Float";
 
 	// add output socket
 	valueSock = new FloatSocketModel("value");
 	addOutputSocket(valueSock);
-	
 
-	connect(min, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
-		slider->setMinimum(val);
-	});
-	connect(max, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
-		slider->setMaximum(val*upModifier);
-	}); 
-	connect(valueBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
-		slider->blockSignals(true);
-		slider->setValue(val*step);
-		slider->blockSignals(false);
-	});
-	connect(stepBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [&step, &upModifier](double val) {
-		step = val;
-		upModifier = (step * 100);
-	});
-	connect(slider, &QSlider::valueChanged, [=](int value) {
-		editTextChanged(QString::number(value/upModifier, 'g', 2));
-		valueBox->blockSignals(true);
-		valueBox->setValue(qreal(value/upModifier));
-		valueBox->blockSignals(false);
-
-	});
-
-
-	wid->setStyleSheet(""
-		"QWidget{ background: rgba(0,0,0,0); color: rgba(250,250,250,1); }"
-
-		"");
-	min->setStyleSheet(
-		"QDoubleSpinBox{border: 2px solid rgba(200, 200, 200, .4); padding: 2px; background: rgba(0, 0, 0, 0.0);}"
-		"QWidget{ background: rgba(0,0,0,0); color: rgba(250,250,250,1); }"
+	// compact in-node editor: one number box in the title bar,
+	// left of the "Float" label
+	valueBox = new QDoubleSpinBox;
+	valueBox->setRange(-99999.0, 99999.0);
+	valueBox->setDecimals(2);
+	valueBox->setSingleStep(0.1);
+	valueBox->setValue(0.0);
+	valueBox->setAlignment(Qt::AlignCenter);
+	valueBox->setFixedSize(58, 20);
+	valueBox->setKeyboardTracking(false);
+	valueBox->setStyleSheet(
+		"QDoubleSpinBox{border: 1px solid rgba(200, 200, 200, .4); border-radius: 2px;"
+		" padding: 0 2px; background: rgba(0, 0, 0, 0.35); color: rgba(250,250,250,1); font-size: 11px;}"
 		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
 		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}");
-	max->setStyleSheet(min->styleSheet());
-	stepBox->setStyleSheet(min->styleSheet());
-	valueBox->setStyleSheet(min->styleSheet());
+	this->headerWidget = valueBox;
 
-	slider->setStyleSheet(
-		"QSlider::sub-page {	border: 0px solid transparent;	height: 2px;	background: #3498db;	margin: 2px 0;}"
-		"QSlider::groove:horizontal {    border: 0px solid transparent;    height: 4px;   background: #1e1e1e;   margin: 2px 0;}"
-		"QSlider::handle:horizontal {    background-color: #CCC;    width: 12px;    border: 1px solid #1e1e1e;    margin: -5px 0px;   border-radius:7px;}"
-		"QSlider::handle:horizontal:pressed {    background-color: #AAA;    width: 12px;   border: 1px solid #1e1e1e;    margin: -5px 0px;    border-radius: 7px;}"
-		"QSlider::handle:horizontal:disabled {    background-color: #bbbbbb;    width: 12px;    border: 0px solid transparent;    margin: -1px -1px;    border-radius: 4px;}"
-		"QSlider::groove:vertical {background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 white, stop: 1 black); border-radius: 2px; width: 13px; }"
-		" QSlider::handle:vertical {height: 3px; width:1px; margin: -2px 0px; background: rgba(50,148,213,0.9); }"
-		" QSlider::add-page:vertical, QSlider::sub-page:vertical {background: rgba(0,0,0,0); border-radius: 1px;}"
-	);
+	connect(valueBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
+		editTextChanged(QString::number(val));
+	});
 
+	// keep the socket's stored value in step with the editor's default
+	valueSock->setValue("0");
 }
 
 void FloatNodeModel::editTextChanged(const QString& text)
@@ -213,6 +124,10 @@ void FloatNodeModel::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 {
 	auto value = val.toDouble();
 	valueSock->setValue(QString("%1").arg(value));
+
+	valueBox->blockSignals(true);
+	valueBox->setValue(value);
+	valueBox->blockSignals(false);
 }
 
 
@@ -317,7 +232,7 @@ MakeColorNode::MakeColorNode() {
 	setNodeType(NodeCategory::Utility);
 
 
-	title = "Color";
+	title = "Make Color";
 	typeName = "makeColor";
 
 	addInputSocket(new FloatSocketModel("R"));
@@ -430,6 +345,10 @@ void TextureSamplerNode::process(ModelContext* context)
 
 PropertyNode::PropertyNode()
 {
+	// both were uninitialized — serializeWidgetValue/process read garbage
+	// on a bare node (audit D2)
+	prop = nullptr;
+	graphTexture = nullptr;
 	this->typeName = "property";
 	setNodeType(NodeCategory::Input);
 }
@@ -488,6 +407,8 @@ QJsonValue PropertyNode::serializeWidgetValue(int widgetIndex)
 
 void PropertyNode::process(ModelContext* context)
 {
+	if (prop == nullptr) return; // bare node — nothing to emit
+
 	auto ctx = (ShaderContext*)context;
 	ctx->addUniform(prop->getUniformString());
 
@@ -557,18 +478,13 @@ TextureNode::TextureNode()
 	graphTexture = nullptr;
 	connect(texture, &QPushButton::clicked, [=]() {
 		auto filename = QFileDialog::getOpenFileName();
-		QIcon icon(filename);
-		texture->setIcon(icon);
+		if (filename.isEmpty()) return; // dialog cancelled
 
-		if (graphTexture != nullptr) {
-			TextureManager::getSingleton()->removeTexture(graphTexture);
-			delete graphTexture;
-		}
+		setTexturePath(filename);
 
-		graphTexture = TextureManager::getSingleton()->createTexture();
-		graphTexture->path = filename;
-
-
+		// the picker is the node's inline editor: choosing an image must
+		// reach the evaluator/preview like any other value edit
+		emit valueChanged(this, 0);
 	});
 	
 	widget->setStyleSheet("background:rgba(0,0,0,0); color: rgba(250,250,250,.9);");
@@ -583,6 +499,33 @@ QString TextureNode::getTexturePath() const
 {
 	if (graphTexture == nullptr) return QString();
 	return graphTexture->path;
+}
+
+void TextureNode::setTexturePath(const QString& path)
+{
+	texture->setIcon(QIcon(path));
+
+	if (graphTexture != nullptr) {
+		TextureManager::getSingleton()->removeTexture(graphTexture);
+		delete graphTexture;
+	}
+
+	graphTexture = TextureManager::getSingleton()->createTexture();
+	graphTexture->path = path;
+}
+
+QJsonValue TextureNode::serializeWidgetValue(int widgetIndex)
+{
+	return getTexturePath();
+}
+
+void TextureNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
+{
+	// old graphs carry "" here (the path was never saved before) — leave
+	// the node empty in that case, exactly as those files loaded before
+	auto path = val.toString();
+	if (path.isEmpty()) return;
+	setTexturePath(path);
 }
 
 void TextureNode::process(ModelContext * context)
@@ -669,7 +612,7 @@ void NormalIntensityNode::process(ModelContext* context)
 Vector2Node::Vector2Node()
 {
 	setNodeType(NodeCategory::Constants);
-	title = "Vector 2 Node";
+	title = "Vector2";
 	typeName = "vector2";
 
 	x = y = 0;
@@ -677,14 +620,21 @@ Vector2Node::Vector2Node()
 	auto wid = new QWidget;
 	auto layout = new QHBoxLayout;
 	wid->setLayout(layout);
-	wid->setMaximumWidth(164);
+	wid->setFixedWidth(158); // fixed: the expanding boxes otherwise overrun the 170px card
+	layout->setContentsMargins(4, 2, 4, 2);
+	layout->setSpacing(3);
 
 	xSpinBox = new QDoubleSpinBox;
 	ySpinBox = new QDoubleSpinBox;
-	xSpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	ySpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	xSpinBox->setAlignment(Qt::AlignCenter);
-	ySpinBox->setAlignment(Qt::AlignCenter);
+	for (auto box : { xSpinBox, ySpinBox }) {
+		box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		box->setAlignment(Qt::AlignCenter);
+		box->setRange(-99999.0, 99999.0);
+		box->setDecimals(2);
+		box->setSingleStep(0.1);
+		box->setFixedHeight(20);
+		box->setKeyboardTracking(false);
+	}
 
 	layout->addWidget(xSpinBox);
 	layout->addWidget(ySpinBox);
@@ -746,7 +696,7 @@ void Vector2Node::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 Vector3Node::Vector3Node()
 {
 	setNodeType(NodeCategory::Constants);
-	title = "Vector 3 Node";
+	title = "Vector3";
 	typeName = "vector3";
 
 	x = y = z = 0;
@@ -754,17 +704,22 @@ Vector3Node::Vector3Node()
 	auto wid = new QWidget;
 	auto layout = new QHBoxLayout;
 	wid->setLayout(layout);
-	wid->setMaximumWidth(164);
+	wid->setFixedWidth(158);
+	layout->setContentsMargins(4, 2, 4, 2);
+	layout->setSpacing(3);
 
 	xSpinBox = new QDoubleSpinBox;
 	ySpinBox = new QDoubleSpinBox;
 	zSpinBox = new QDoubleSpinBox;
-	xSpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	ySpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	zSpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	xSpinBox->setAlignment(Qt::AlignCenter);
-	ySpinBox->setAlignment(Qt::AlignCenter);
-	zSpinBox->setAlignment(Qt::AlignCenter);
+	for (auto box : { xSpinBox, ySpinBox, zSpinBox }) {
+		box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		box->setAlignment(Qt::AlignCenter);
+		box->setRange(-99999.0, 99999.0);
+		box->setDecimals(2);
+		box->setSingleStep(0.1);
+		box->setFixedHeight(20);
+		box->setKeyboardTracking(false);
+	}
 
 	layout->addWidget(xSpinBox);
 	layout->addWidget(ySpinBox);
@@ -834,7 +789,7 @@ void Vector3Node::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 Vector4Node::Vector4Node()
 {
 	setNodeType(NodeCategory::Constants);
-	title = "Vector 4 Node";
+	title = "Vector4";
 	typeName = "vector4";
 
 	x = y = z = w = 0;
@@ -842,20 +797,23 @@ Vector4Node::Vector4Node()
 	auto wid = new QWidget;
 	auto layout = new QHBoxLayout;
 	wid->setLayout(layout);
-	wid->setMaximumWidth(154);
+	wid->setFixedWidth(158);
+	layout->setContentsMargins(4, 2, 4, 2);
+	layout->setSpacing(3);
 
 	xSpinBox = new QDoubleSpinBox;
 	ySpinBox = new QDoubleSpinBox;
 	zSpinBox = new QDoubleSpinBox;
 	wSpinBox = new QDoubleSpinBox;
-	xSpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	ySpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	zSpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	wSpinBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	xSpinBox->setAlignment(Qt::AlignCenter);
-	ySpinBox->setAlignment(Qt::AlignCenter);
-	zSpinBox->setAlignment(Qt::AlignCenter);
-	wSpinBox->setAlignment(Qt::AlignCenter);
+	for (auto box : { xSpinBox, ySpinBox, zSpinBox, wSpinBox }) {
+		box->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		box->setAlignment(Qt::AlignCenter);
+		box->setRange(-99999.0, 99999.0);
+		box->setDecimals(2);
+		box->setSingleStep(0.1);
+		box->setFixedHeight(20);
+		box->setKeyboardTracking(false);
+	}
 
 	layout->addWidget(xSpinBox);
 	layout->addWidget(ySpinBox);
@@ -883,8 +841,9 @@ Vector4Node::Vector4Node()
 		emit valueChanged(this, 0);
 	});
 
-	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
-		z = val;
+	// was wired to zSpinBox twice; w never updated from its own box
+	connect(wSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
+		w = val;
 		value = QVector4D(x, y, z, w);
 		emit valueChanged(this, 0);
 	});
@@ -936,13 +895,15 @@ void Vector4Node::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 ColorPickerNode::ColorPickerNode()
 {
 	setNodeType(NodeCategory::Constants);
-	title = "Color Node";
+	title = "Color";
 	typeName = "color";
 
+	// compact in-node editor: a swatch button in the title bar that
+	// opens the color dialog (ColorPickerWidget paints itself and pops
+	// the dialog on click)
 	colorWidget = new ColorPickerWidget();
-	colorWidget->setMaximumWidth(154);
-	this->widget = colorWidget;
-	//colorWidget->setGeometry(0, 0, 60, 140);
+	colorWidget->setFixedSize(40, 18);
+	this->headerWidget = colorWidget;
 	connect(colorWidget, &ColorPickerWidget::onColorChanged, [=](QColor color) {
 		emit valueChanged(this, 0);
 	});

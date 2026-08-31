@@ -31,7 +31,7 @@ public:
 
 class FloatNodeModel : public NodeModel
 {
-	QLineEdit* lineEdit;
+	QDoubleSpinBox* valueBox;
 
 	FloatSocketModel* valueSock;
 public:
@@ -155,6 +155,11 @@ public:
 
 	// image path of the chosen texture, empty if none (used by PbrGraphEvaluator)
 	QString getTexturePath() const;
+
+	void setTexturePath(const QString& path);
+
+	virtual QJsonValue serializeWidgetValue(int widgetIndex = 0) override;
+	virtual void deserializeWidgetValue(QJsonValue val, int widgetIndex = 0) override;
 };
 
 class PropertyNode : public NodeModel
@@ -191,7 +196,7 @@ class Vector2Node : public NodeModel
 {
 public:
 	Vector2Node();
-	int x, y;
+	double x, y; // was int — truncated every fractional component (audit D4)
 	QVector2D value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox;
 	virtual void process(ModelContext* context) override;
@@ -204,7 +209,7 @@ class Vector3Node : public NodeModel
 {
 public:
 	Vector3Node();
-	int x, y, z;
+	double x, y, z; // was int — truncated every fractional component (audit D4)
 	QVector3D value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox, *zSpinBox;
 	virtual void process(ModelContext* context) override;
@@ -217,7 +222,7 @@ class Vector4Node : public NodeModel
 {
 public:
 	Vector4Node();
-	int x, y, z, w;
+	double x, y, z, w; // was int — truncated every fractional component (audit D4)
 	QVector4D value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox, *zSpinBox, *wSpinBox;
 	virtual void process(ModelContext* context) override;

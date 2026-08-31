@@ -108,6 +108,10 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 		nodeView->setWidget(model->widget);
 	}
 
+	if (model->headerWidget != nullptr) {
+		nodeView->setHeaderWidget(model->headerWidget);
+	}
+
 	
 	/*nodeView->setTitle(model->title);
 	nodeView->setTitleColor(model->setNodeTitleColor());*/

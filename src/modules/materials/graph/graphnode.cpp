@@ -33,6 +33,7 @@ GraphNode::GraphNode(QGraphicsItem* parent) :
 {
 	nodeType = 0;
 	proxyWidget = nullptr;
+	proxyHeaderWidget = nullptr;
 
 
 	this->setFlag(QGraphicsItem::ItemIsMovable);
@@ -88,8 +89,31 @@ void GraphNode::setTitle(QString title)
 {
 	text->setPlainText(title);
 	auto textHeight = text->boundingRect().height();
-	// left-aligned next to the 18px header icon (NodeGraphQt layout)
-	text->setPos(10 + NodeStyle::Node::iconSize, titleHeight / 2 - textHeight / 2);
+	// left-aligned next to the 18px header icon (NodeGraphQt layout);
+	// an inline header editor, when present, sits between icon and text
+	int x = 10 + NodeStyle::Node::iconSize;
+	if (headerWidgetWidth > 0)
+		x += headerWidgetWidth + 6;
+	text->setPos(x, titleHeight / 2 - textHeight / 2);
+}
+
+void GraphNode::setHeaderWidget(QWidget *widget)
+{
+	// same re-embed guard as setWidget
+	if (auto oldProxy = widget->graphicsProxyWidget())
+		oldProxy->setWidget(nullptr);
+
+	proxyHeaderWidget = new QGraphicsProxyWidget(this);
+	proxyHeaderWidget->setWidget(widget);
+
+	const int stripH = NodeStyle::Node::titleStripHeight;
+	const auto size = proxyHeaderWidget->size();
+	headerWidgetWidth = (int)size.width();
+	proxyHeaderWidget->setPos(10 + NodeStyle::Node::iconSize,
+		stripH + (titleHeight - stripH - size.height()) / 2);
+
+	// re-run the title layout so the text clears the editor
+	setTitle(text->toPlainText());
 }
 
 void GraphNode::addInSocket(SocketModel *socket)
@@ -124,6 +148,11 @@ void GraphNode::setWidget(QWidget *widget)
 {
 	// gotta do this here before adding the widget
 	auto y = calcHeight();
+
+	// a deleted-then-undone node gets a fresh GraphNode for the same
+	// model; unembed from the orphaned proxy or setWidget refuses
+	if (auto oldProxy = widget->graphicsProxyWidget())
+		oldProxy->setWidget(nullptr);
 
 	proxyWidget = new QGraphicsProxyWidget(this);
 	proxyWidget->setWidget(widget);

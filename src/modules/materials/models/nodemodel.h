@@ -44,6 +44,7 @@ public:
 	NodeCategory nodeType;
 
 	QWidget* widget;
+	QWidget* headerWidget; // compact editor shown in the node's title bar
 	QColor titleColor;
 	QIcon icon;
 	QString iconPath;

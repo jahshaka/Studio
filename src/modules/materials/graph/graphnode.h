@@ -25,7 +25,9 @@ class GraphNode : public QGraphicsPathItem
 	int nodeWidth;
 	QGraphicsTextItem* text;
 	QGraphicsProxyWidget* proxyWidget;
+	QGraphicsProxyWidget* proxyHeaderWidget;
 	QGraphicsProxyWidget* proxyPreviewWidget;
+	int headerWidgetWidth = 0; // shifts the title text right when set
 	
 
 	int inSocketCount = 0;
@@ -58,6 +60,8 @@ public:
 	void addOutSocket(SocketModel *socket);
 	void addSocket(Socket* sock);
 	void setWidget(QWidget* widget);
+	// compact value editor living in the title bar, left of the title text
+	void setHeaderWidget(QWidget* widget);
 	void calcPath();
 	int calcHeight();
 	void resetPositionForColorWidget();

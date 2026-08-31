@@ -52,6 +52,11 @@ NodeModel* NodeLibrary::createNode(QString name)
 		if (item->name == name) {
 			auto node = item->factoryFunction();
 			node->setNodeType(item->nodeCategory);
+			// the drawer's display name IS the node's title, verbatim —
+			// constructors may not drift from it, and nothing renames a
+			// node after creation (property nodes take the property's
+			// user-given name in setProperty, which is their drawer name)
+			node->title = item->displayName;
 			return node;
 		}
 	return nullptr;

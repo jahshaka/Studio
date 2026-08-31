@@ -302,7 +302,7 @@ void LibraryV1::initUtility()
 	QString iconPath = ":/icons/utility.png";
 
 	// pulsate
-	addNode("pulsate", "Pulsate Node", iconPath, type, []()
+	addNode("pulsate", "Pulsate", iconPath, type, []()
 	{
 		return new PulsateNode();
 	});
