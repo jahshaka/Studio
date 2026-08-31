@@ -77,6 +77,7 @@ void ensureCasSchema(QSqlDatabase conn)
     QSqlQuery(CasSchema::kAssetFilesOidIndex, conn);
     QSqlQuery(CasSchema::kRefcountInsertTrigger, conn);
     QSqlQuery(CasSchema::kRefcountDeleteTrigger, conn);
+    QSqlQuery(CasSchema::kProjectAssetsTable, conn);
 
     // PRAGMA user_version arrives with the CAS (spec §3.1.3) — informational
     // at this phase; never lowered.
@@ -334,6 +335,53 @@ QString resolveFile(QSqlDatabase conn, const QString &root,
     const QString legacy = QDir(AssetStorePaths::legacyFolderIn(root, guid)).filePath(name);
     if (QFileInfo::exists(legacy)) return legacy;
     return QString();
+}
+
+bool writePin(QSqlDatabase conn, const QString &projectGuid,
+              const QString &assetGuid, const QString &oid)
+{
+    QSqlQuery upsert(conn);
+    upsert.prepare("INSERT INTO project_assets (project_guid, asset_guid, oid_pin) "
+                   "VALUES (?, ?, ?) "
+                   "ON CONFLICT(project_guid, asset_guid) DO UPDATE SET oid_pin = excluded.oid_pin");
+    upsert.addBindValue(projectGuid);
+    upsert.addBindValue(assetGuid);
+    upsert.addBindValue(oid);
+    return upsert.exec();
+}
+
+QString pinnedOid(QSqlDatabase conn, const QString &projectGuid,
+                  const QString &assetGuid)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT oid_pin FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    query.addBindValue(projectGuid);
+    query.addBindValue(assetGuid);
+    if (query.exec() && query.next()) return query.value(0).toString();
+    return QString();
+}
+
+QString resolvePinned(QSqlDatabase conn, const QString &root,
+                      const QString &projectGuid, const QString &guid,
+                      QString *nameOut)
+{
+    const QString pin = pinnedOid(conn, projectGuid, guid);
+    if (!pin.isEmpty()) {
+        QSqlQuery query(conn);
+        query.prepare("SELECT F.ext, AF.name FROM files F "
+                      "LEFT JOIN asset_files AF ON AF.oid = F.oid AND AF.asset_guid = ? "
+                      "WHERE F.oid = ?");
+        query.addBindValue(guid);
+        query.addBindValue(pin);
+        if (query.exec() && query.next()) {
+            const QString path = AssetStorePaths::objectPathIn(root, pin, query.value(0).toString());
+            if (QFileInfo::exists(path)) {
+                if (nameOut) *nameOut = query.value(1).toString();
+                return path;
+            }
+        }
+    }
+    return resolveSource(conn, root, guid, nameOut);
 }
 
 bool writeStoreInfo(const QString &root, QString *errorOut)

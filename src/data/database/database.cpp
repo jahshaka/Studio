@@ -526,6 +526,12 @@ void Database::createCasTables()
     decTrigger.prepare(CasSchema::kRefcountDeleteTrigger);
     executeAndCheckQuery(decTrigger, "CreateRefcountDeleteTrigger");
 
+    // Reference-with-pin (phase 4): projects reference library assets and
+    // pin the content they were built with.
+    QSqlQuery projectAssetsTable;
+    projectAssetsTable.prepare(CasSchema::kProjectAssetsTable);
+    executeAndCheckQuery(projectAssetsTable, "CreateProjectAssetsTable");
+
     QSqlQuery versionQuery;
     versionQuery.exec("PRAGMA user_version");
     int current = 0;

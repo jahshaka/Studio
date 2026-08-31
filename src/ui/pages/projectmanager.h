@@ -36,13 +36,6 @@ namespace Ui {
 	class ProjectManager;
 }
 
-struct ModelData {
-	ModelData() = default;
-    ModelData(QString p, QString g, const aiScene *s) : path(p), guid(g), data(s) {}
-	QString			path;
-	QString			guid;
-    const aiScene  *data;
-};
 
 class SettingsManager;
 class MainWindow;
@@ -68,7 +61,6 @@ public:
     bool checkForEmptyState();
     void cleanupOnClose();
 
-	ModelData loadAiSceneFromModel(const QPair<QString, QString> asset);
 	MainWindow *mainWindow = nullptr;
 	/// Is this tile the project whose scene is open right now? (highlight rule)
 	bool isOpenProjectTile(const QString &guid) const;
@@ -89,6 +81,9 @@ public:
     /// dialog, no fileToOpen signal — the caller decides what happens next.
     void loadProjectAssetsSync();
 
+    /// Session AssetManager registrations shared by both load paths.
+    void registerProjectSessionAssets();
+
 public slots:
     // public for the scripting API (app.desktop(n))
     void switchDesktop(int desktop);
@@ -100,8 +95,6 @@ protected slots:
 
     void changePreviewSize(QString);
 
-    void finalizeProjectAssetLoad();
-    void finishedFutureWatcher();
 
     void openSampleBrowser();
 
@@ -157,7 +150,6 @@ private:
     Database *db;
     Project *project;
 
-    QPointer<QFutureWatcher<QVector<ModelData>>> futureWatcher;
 	QPointer<ProgressDialog> progressDialog;
 
     bool isNewProject;
@@ -169,13 +161,5 @@ private:
     QMap<QString, QString> assetGuids;
 };
 
-struct AssetWidgetConcurrentWrapper {
-    ProjectManager *instance;
-    typedef ModelData result_type;
-    AssetWidgetConcurrentWrapper(ProjectManager *inst) : instance(inst) {}
-        result_type operator()(const QPair<QString, QString> &value) {
-        return instance->loadAiSceneFromModel(value);
-    }
-};
 
 #endif // PROJECTMANAGER_H

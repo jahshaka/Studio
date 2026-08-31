@@ -20,8 +20,25 @@ For more information see the LICENSE file
 
 namespace CasSchema
 {
-// PRAGMA user_version introduced with the CAS tables.
-inline constexpr int kUserVersion = 1;
+// 1 = the CAS tables; 2 = project_assets (reference-with-pin, phase 4).
+// Fresh databases bootstrap the FULL final schema directly — there are no
+// user-data migrations (the app ships new; the owner's library is wiped).
+inline constexpr int kUserVersion = 2;
+
+// Reference-with-pin (ASSET_PIPELINE_SPEC §3.1.5, phase 4): a project "use"
+// of an asset is a row here, pinning the source oid AT ADD TIME. Content is
+// immutable (I3), so the pin gives copy semantics without copying: a library
+// re-import moves the LIBRARY pointer; the project keeps rendering the exact
+// bytes it was built with until the pin is explicitly updated. Per-project
+// edits are copy-on-write: new oid, pin moves.
+inline constexpr const char *kProjectAssetsTable =
+    "CREATE TABLE IF NOT EXISTS project_assets ("
+    "    project_guid TEXT,"
+    "    asset_guid   TEXT,"
+    "    oid_pin      TEXT,"                 // '' = asset has no stored bytes
+    "    added        DATETIME DEFAULT CURRENT_TIMESTAMP,"
+    "    PRIMARY KEY (project_guid, asset_guid)"
+    ")";
 
 inline constexpr const char *kFilesTable =
     "CREATE TABLE IF NOT EXISTS files ("

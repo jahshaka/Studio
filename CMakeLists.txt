@@ -115,6 +115,8 @@ set(SRCS
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/ui/dialogs/preferences/assetssettingswidget.cpp
     src/services/assetimporter.cpp
+    src/services/import/assetimportservice.cpp
+    src/services/import/assetimporters.cpp
     src/services/assetmetadata.cpp
     src/services/assetcas.cpp
     src/services/assetmigration.cpp

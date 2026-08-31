@@ -135,7 +135,6 @@ public:
 	void showEvent(QShowEvent *event) override;
 
 	void importJahModel(const QString &filename, bool addToLibrary = true);
-	void importJahBundle(const QString &filename);
 	void importModel(const QString &filename, bool jfx = false);
 	/// THE import dispatch (ASSET_DRAWERS_SPEC §3): every path (drop pad,
 	/// browse dialog) lands here; one switch keyed on ModelTypes per file.

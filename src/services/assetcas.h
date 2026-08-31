@@ -79,6 +79,26 @@ bool materializeLegacyView(QSqlDatabase conn, const QString &root,
 QString resolveSource(QSqlDatabase conn, const QString &root,
                       const QString &guid, QString *nameOut = nullptr);
 
+// --- Reference-with-pin (phase 4, spec §3.1.5) -----------------------------
+
+/// Record (or move) a project's pin of an asset: the content the project
+/// renders with, frozen at add time (or at an explicit update). Idempotent
+/// upsert; empty oid = a DB-only asset (no stored bytes).
+bool writePin(QSqlDatabase conn, const QString &projectGuid,
+              const QString &assetGuid, const QString &oid);
+
+/// The pinned oid for (project, asset); empty when no pin row exists.
+QString pinnedOid(QSqlDatabase conn, const QString &projectGuid,
+                  const QString &assetGuid);
+
+/// Project-context resolution: the PINNED bytes when a pin exists and the
+/// object is present, else the asset's current source (a project asset
+/// created before pinning, or a pin whose object was purged). `nameOut`
+/// receives the display name. Empty when the asset has no bytes anywhere.
+QString resolvePinned(QSqlDatabase conn, const QString &root,
+                      const QString &projectGuid, const QString &guid,
+                      QString *nameOut = nullptr);
+
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,

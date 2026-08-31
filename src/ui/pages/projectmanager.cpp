@@ -89,115 +89,7 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     setAttribute(Qt::WA_NativeWindow, true);
 #endif
 
-	futureWatcher = QPointer<QFutureWatcher<QVector<ModelData>>>(new QFutureWatcher<QVector<ModelData>>());
 	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
-
-	QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::finished, [this]() {
-		// [this], never [&]: this connect fires long after the constructor returns,
-		// so the ctor parameters are gone - only members are safe to touch here.
-		Project *project = this->project;
-		progressDialog->setRange(0, 100);
-		progressDialog->setLabelText(tr("Caching assets..."));
-
-		// Meshes
-		// Note - this would be the perfect place to attach materials as well but we can't access the opengl context
-		for (const auto &item : futureWatcher->result()) {
-			AssetObject *model = new AssetObject(
-				new AssimpObject(item.data, item.path), item.path, QFileInfo(item.path).fileName()
-			);
-			model->assetGuid = item.guid;
-			AssetManager::addAsset(model);
-		}
-
-		progressDialog->setValue(40);
-
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), project->getProjectGuid())) {
-            auto assetFile = new AssetFile;
-            assetFile->fileName = asset.name;
-            assetFile->assetGuid = asset.guid;
-            assetFile->path = IrisUtils::join(project->getProjectFolder(), asset.name);
-            AssetManager::addAsset(assetFile);
-        }
-
-        //for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::CubeMap), project->getProjectGuid())) {
-        //    QJsonDocument mapDefinition = QJsonDocument::fromBinaryData(db->fetchAssetData(asset.guid));
-        //    QJsonObject mapObject = mapDefinition.object();
-
-        //    auto assetCubeMap = new AssetCubeMap;
-        //    assetCubeMap->fileName = asset.name;
-        //    assetCubeMap->assetGuid = asset.guid;
-        //    // assetFile->path = IrisUtils::join(project->getProjectFolder(), asset.name);
-        //    assetCubeMap->setValue(mapObject);
-        //    AssetManager::addAsset(assetCubeMap);
-        //}
-
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), project->getProjectGuid())) {
-            auto assetTexture = new AssetTexture;
-            assetTexture->fileName = asset.name;
-            assetTexture->assetGuid = asset.guid;
-            assetTexture->path = IrisUtils::join(project->getProjectFolder(), asset.name);
-            AssetManager::addAsset(assetTexture);
-        }
-
-		progressDialog->setValue(60);
-
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), project->getProjectGuid())) {
-            QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
-            QJsonObject shaderObject = shaderDefinition.object();
-
-            auto assetShader = new AssetShader;
-            assetShader->assetGuid = asset.guid;
-            assetShader->fileName = QFileInfo(asset.name).baseName();
-            assetShader->setValue(QVariant::fromValue(shaderObject));
-            AssetManager::addAsset(assetShader);
-        }
-
-		progressDialog->setValue(70);
-
-        for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), project->getProjectGuid())) {
-            QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
-            QJsonObject particleObject = particleDefinition.object();
-
-            auto assetPS = new AssetParticleSystem;
-            assetPS->assetGuid = asset.guid;
-            assetPS->fileName = QFileInfo(asset.name).baseName();
-            assetPS->setValue(QVariant::fromValue(particleObject));
-            AssetManager::addAsset(assetPS);
-        }
-
-		progressDialog->setValue(80);
-
-		// Materials
-		for (const auto &asset :
-			db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
-		{
-            QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
-			QJsonObject matObject = matDoc.object();
-
-			MaterialReader reader;
-			reader.setProject(project);
-			// Typed parse: a saved PBR material hydrates as a PbrMaterial. The
-			// untyped parseMaterial forced everything through the shader-guid
-			// CustomMaterial path and PBR assets came back broken (grey).
-			iris::MaterialPtr material = reader.parseMaterialTyped(matObject, db);
-
-			auto assetMat = new AssetMaterial;
-			assetMat->assetGuid = asset.guid;
-			assetMat->setValue(QVariant::fromValue(material));
-			AssetManager::addAsset(assetMat);
-		}
-
-		progressDialog->setLabelText(tr("Opening scene..."));
-		progressDialog->setValue(100);
-		emit fileToOpen(openInPlayMode);
-		progressDialog->close();
-	});
-
-
-	//QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressRangeChanged,
-	//	progressDialog.data(), &ProgressDialog::setRange);
-	//QObject::connect(futureWatcher, &QFutureWatcher<QVector<ModelData>>::progressValueChanged,
-	//	progressDialog.data(), &ProgressDialog::setValue);
 
     dynamicGrid = new DynamicGrid(this);
 
@@ -760,32 +652,6 @@ void ProjectManager::changePreviewSize(QString scale)
     dynamicGrid->scaleTile(scale);
 }
 
-ModelData ProjectManager::loadAiSceneFromModel(const QPair<QString, QString> asset)
-{
-	//QFile file(asset.first);
-	//file.open(QFile::ReadOnly);
-	//auto data = file.readAll();
-
-	Assimp::Importer *importer = new Assimp::Importer;
-	 //const aiScene *scene = importer->ReadFile(asset.first.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast);
-	//const aiScene *scene = sceneSource->importer.ReadFileFromMemory((void*)data.data(),
-	//																data.length(),
-	//																aiProcessPreset_TargetRealtime_Fast);
-	ModelData d = { asset.first, asset.second, importer->ReadFile(asset.first.toStdString().c_str(), aiProcessPreset_TargetRealtime_Fast) };
-	return d;
-}
-
-void ProjectManager::finalizeProjectAssetLoad()
-{
-	
-}
-
-void ProjectManager::finishedFutureWatcher()
-{
-    emit fileToOpen(settings->getValue("open_in_player", QVariant::fromValue(false)).toBool());
-    progressDialog->close();
-}
-
 void ProjectManager::openSampleBrowser()
 {
     // 3 columns x 2 rows of uniformly sized tiles: every preview center-cropped
@@ -908,60 +774,28 @@ void ProjectManager::openSampleBrowser()
 
 void ProjectManager::loadProjectAssets()
 {
-	// This shouldn't be needed but just in case a scene doesn't get cleaned up due 
-	// to some future change this will prevent any subtle bugs regarding invalid data
+	// The parse-everything preloader died with the ONE pipeline
+	// (ASSET_PIPELINE_SPEC Â§3.2.3): opening a project no longer runs assimp
+	// over every mesh up front â meshes parse once on demand (canonical
+	// preset) when the scene actually needs them. Only the session
+	// registrations remain.
 	AssetManager::clearAssetList();
-
-    // The whole point of the function is to concurrently load models when opening a project
-    // As the project scope expands and projects get larger, it will be expanded for more (large) assets
-    QVector<AssetList> assetsToLoad;
-
-	progressDialog->setLabelText(tr("Collecting assets..."));
-
-	// TODO - if we are only loading a couple assets, just do it sequentially
-	for (const auto &asset : db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
-		assetsToLoad.append(
-			AssetList(QDir(project->getProjectFolder()).filePath(asset.name),
-			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh)))
-		);
-	}
-
-    progressDialog->setLabelText(tr("Loading assets..."));
-
-    AssetWidgetConcurrentWrapper aiSceneFromModelMapper(this);
-    auto aiSceneFromModelReducer = [](QVector<ModelData> &accum, const ModelData &interm) {
-		accum.append(interm);
-	};
-    auto future = QtConcurrent::mappedReduced<QVector<ModelData>>(assetsToLoad.constBegin(),
-																  assetsToLoad.constEnd(),
-																  aiSceneFromModelMapper,
-																  aiSceneFromModelReducer,
-																  QtConcurrent::OrderedReduce);
-    futureWatcher->setFuture(future);
-    progressDialog->exec();
-    futureWatcher->waitForFinished();
+	registerProjectSessionAssets();
+	emit fileToOpen(openInPlayMode);
 }
 
 void ProjectManager::loadProjectAssetsSync()
 {
-	// Mirrors loadProjectAssets() + its futureWatcher-finished lambda exactly —
-	// same DB sweeps, same AssetManager registrations, same order — minus the
-	// QtConcurrent map, the modal progress dialog and the fileToOpen signal.
+	// Headless twin of loadProjectAssets(): same registrations, no signal.
 	AssetManager::clearAssetList();
+	registerProjectSessionAssets();
+}
 
-
-	// Meshes
-	for (const auto &asset : db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Mesh))) {
-		auto item = loadAiSceneFromModel(
-			AssetList(QDir(project->getProjectFolder()).filePath(asset.name),
-			db->fetchMeshObject(asset.guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh))));
-		AssetObject *model = new AssetObject(
-			new AssimpObject(item.data, item.path), item.path, QFileInfo(item.path).fileName()
-		);
-		model->assetGuid = item.guid;
-		AssetManager::addAsset(model);
-	}
-
+void ProjectManager::registerProjectSessionAssets()
+{
+	// Session AssetManager registrations for the opening project. Mesh
+	// assets are NOT pre-parsed (see loadProjectAssets); their bytes load on
+	// demand through the readers.
 	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), project->getProjectGuid())) {
 		auto assetFile = new AssetFile;
 		assetFile->fileName = asset.name;
@@ -1009,7 +843,7 @@ void ProjectManager::loadProjectAssetsSync()
 
 		MaterialReader reader;
 		reader.setProject(project);
-		// Typed parse — see loadProjectAssets() above.
+		// Typed parse: a saved PBR material hydrates as a PbrMaterial.
 		iris::MaterialPtr material = reader.parseMaterialTyped(matObject, db);
 
 		auto assetMat = new AssetMaterial;
