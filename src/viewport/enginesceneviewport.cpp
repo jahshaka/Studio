@@ -96,38 +96,97 @@ void EngineSceneViewport::setCameraController(CameraControllerBase *c)
 
 void EngineSceneViewport::setFreeCameraMode()   { setCameraController(mFreeCam); }
 void EngineSceneViewport::setArcBallCameraMode() { setCameraController(mOrbitCam); }
+QString EngineSceneViewport::cameraMode() const
+{ return mCamController == mOrbitCam ? QStringLiteral("orbit") : QStringLiteral("free"); }
 
 // Views dropdown / view.* shortcuts / editor.setView verb: snap to a canonical
-// view. Axis views go orthographic (the orbital controller animates there via
-// its lerp; the free camera turns in place); "perspective" restores the
-// perspective projection and keeps the current orientation.
+// view. Every view remembers its camera between visits (per viewport session):
+// switching saves the outgoing view's camera and restores the incoming one's —
+// perspective keeps its full free/orbit pose across trips into ortho views,
+// each ortho view keeps its own pan + zoom. A first visit to an axis view gets
+// the standard framing (the orbital controller animates there via its lerp;
+// the free camera turns in place). Re-picking the current view re-snaps it.
 bool EngineSceneViewport::setCameraView(const QString &view)
 {
-    if (view == QLatin1String("perspective")) {
-        if (mScene && mScene->camera)
-            mScene->camera->setProjection(iris::CameraProjection::Perspective);
-        mCameraView = view;
-        return true;
-    }
-
     struct AxisView { const char *name; float yaw; float pitch; };
     static const AxisView axisViews[] = {
         { "top", 0.f, -90.f }, { "bottom", 0.f, 90.f },
         { "left", 90.f, 0.f }, { "right", -90.f, 0.f },
         { "front", 0.f, 0.f }, { "back", 180.f, 0.f },
     };
-    for (const auto &v : axisViews) {
-        if (view != QLatin1String(v.name)) continue;
-        if (mCamController == mOrbitCam && mOrbitCam)
-            mOrbitCam->setAxisView(v.yaw, v.pitch);
-        else if (mFreeCam)
-            mFreeCam->setAxisView(v.yaw, v.pitch);
-        if (mScene && mScene->camera)
-            mScene->camera->setProjection(iris::CameraProjection::Orthogonal);
+    const AxisView *axis = nullptr;
+    for (const auto &v : axisViews)
+        if (view == QLatin1String(v.name)) { axis = &v; break; }
+    const bool persp = (view == QLatin1String("perspective"));
+    if (!axis && !persp) return false;   // unknown name: refuse before touching state
+
+    // Save the outgoing view's camera — but not on a re-pick of the current
+    // view, which must re-snap (the pre-memory behavior), not restore what
+    // was saved a moment ago.
+    const bool switching = (view != mCameraView);
+    if (switching) saveViewState();
+
+    const auto projection = persp ? iris::CameraProjection::Perspective
+                                  : iris::CameraProjection::Orthogonal;
+    if (mEditorCam) mEditorCam->setProjection(projection);
+    if (mScene && mScene->camera && mScene->camera != mEditorCam)
+        mScene->camera->setProjection(projection);
+
+    if (switching && restoreViewState(view)) {
         mCameraView = view;
         return true;
     }
-    return false;
+
+    // First visit (or a re-pick): the standard framing. "perspective" keeps
+    // the current orientation — it only ever lands here before its pose has
+    // been saved once, i.e. when it IS the current pose already.
+    if (axis) {
+        if (mCamController == mOrbitCam && mOrbitCam)
+            mOrbitCam->setAxisView(axis->yaw, axis->pitch);
+        else if (mFreeCam)
+            mFreeCam->setAxisView(axis->yaw, axis->pitch);
+    }
+    mCameraView = view;
+    return true;
+}
+
+void EngineSceneViewport::saveViewState()
+{
+    if (!mEditorCam) return;
+    ViewCameraState s;
+    s.pos = mEditorCam->getLocalPos();
+    s.rot = mEditorCam->getLocalRot();
+    s.orthoSize = mEditorCam->orthoSize;
+    if (mOrbitCam) s.distFromPivot = mOrbitCam->distFromPivot;
+    mViewStates.insert(mCameraView, s);
+}
+
+bool EngineSceneViewport::restoreViewState(const QString &view)
+{
+    const auto it = mViewStates.constFind(view);
+    if (it == mViewStates.constEnd() || !mEditorCam) return false;
+    const ViewCameraState &s = *it;
+    mEditorCam->setLocalPos(s.pos);
+    mEditorCam->setLocalRot(s.rot);
+    mEditorCam->setOrthagonalZoom(s.orthoSize);   // ortho zoom; inert in perspective
+    mEditorCam->update(0);
+    // Resync the active controller with the restored pose — the same resync
+    // focusOnNode/setEditorData use. The free cam re-derives yaw/pitch (and
+    // wheel zoom from orthoSize); the orbital cam re-derives its pivot from
+    // the restored pose + orbit distance, targets matched so nothing lerps.
+    if (mCamController == mOrbitCam && mOrbitCam) {
+        mOrbitCam->distFromPivot = s.distFromPivot;
+        mOrbitCam->setCamera(mEditorCam);
+    } else if (mCamController) {
+        mCamController->setCamera(mEditorCam);
+    }
+    return true;
+}
+
+void EngineSceneViewport::clearViewStates()
+{
+    mViewStates.clear();
+    mCameraView = QStringLiteral("perspective");
 }
 
 void EngineSceneViewport::setActiveGizmo(Gizmo *g)
@@ -626,6 +685,7 @@ void EngineSceneViewport::setEditorCamera(iris::CameraNodePtr camera)
 
 void EngineSceneViewport::resetEditorCam()
 {
+    clearViewStates();   // a fresh camera invalidates every remembered view pose
     mEditorCam = iris::CameraNode::create();
     mEditorCam->setLocalPos(QVector3D(0, 5, 14));
     mEditorCam->lookAt(QVector3D(0, 0, 0));
@@ -639,7 +699,12 @@ void EngineSceneViewport::setEditorData(EditorData *data)
 {
     mEditorData = data;
     if (data) {
-        if (data->editorCamera) mEditorCam = data->editorCamera;
+        if (data->editorCamera) {
+            // Project open: another scene's camera — its remembered view
+            // poses do not apply (per-view memory is per scene session).
+            if (data->editorCamera != mEditorCam) clearViewStates();
+            mEditorCam = data->editorCamera;
+        }
         mShowLightWires = data->showLightWires;
         mShowGrid = data->showGrid;
         mShowDebugDraw = data->showDebugDrawFlags;

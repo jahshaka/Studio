@@ -86,9 +86,13 @@ public:
     virtual void resetEditorCam() = 0;
     virtual void setFreeCameraMode() = 0;
     virtual void setArcBallCameraMode() = 0;
+    /// The active camera controller: "free" (fly) or "orbit" (arcball).
+    virtual QString cameraMode() const { return QStringLiteral("free"); }
     /// Snap the editor camera to a canonical view — "top", "bottom", "left",
-    /// "right", "front", "back" (orthographic), or "perspective" (restores
-    /// perspective projection, orientation kept). Works in both camera modes.
+    /// "right", "front", "back" (orthographic), or "perspective". Each view
+    /// remembers its camera between visits (session-only): perspective its
+    /// full pose, each ortho view its own pan + zoom; a first visit to an
+    /// axis view gets the standard framing. Works in both camera modes.
     /// Returns false for an unknown name. Optional; headless viewports may
     /// leave it unimplemented.
     virtual bool setCameraView(const QString &) { return false; }

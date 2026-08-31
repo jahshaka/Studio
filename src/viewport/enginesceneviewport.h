@@ -29,6 +29,9 @@ class EditorCameraController;
 class OrbitalCameraController;
 #include <QElapsedTimer>
 #include <QPointF>
+#include <QHash>
+#include <QVector3D>
+#include <QQuaternion>
 
 class EngineSceneViewport : public EngineViewWidget, public IEditorViewport
 {
@@ -59,6 +62,7 @@ public:
     void resetEditorCam() override;
     void setFreeCameraMode() override;
     void setArcBallCameraMode() override;
+    QString cameraMode() const override;
     bool setCameraView(const QString &view) override;
     QString cameraView() const override { return mCameraView; }
     void setEditorData(EditorData *data) override;
@@ -140,6 +144,24 @@ protected:
 private:
     bool ensureEngineScene();
     void setActiveGizmo(Gizmo *g);
+
+    /// Per-view camera memory (Views dropdown / editor.setView): each canonical
+    /// view keeps its own camera between visits for the life of the viewport —
+    /// perspective its full free/orbit pose, each ortho view its pan + zoom.
+    /// Session-only by design (matches standard editors; serializing it into
+    /// EditorData is a possible future option). Cleared on scene switch.
+    struct ViewCameraState {
+        QVector3D pos;
+        QQuaternion rot;
+        float orthoSize = 10.0f;      // ortho zoom (CameraNode::orthoSize)
+        float distFromPivot = 15.0f;  // orbital controller's orbit distance
+    };
+    /// Snapshot the current camera under the CURRENT view's key (mCameraView).
+    void saveViewState();
+    /// Restore `view`'s saved camera, resyncing the active controller.
+    /// False when the view has never been visited (caller applies the default).
+    bool restoreViewState(const QString &view);
+    void clearViewStates();
     /// V-hold vertex snapping during a translate drag (EDITOR_SHORTCUTS_SPEC §4).
     bool snapDragToVertexUnderCursor();
     void setCameraController(CameraControllerBase *c);
@@ -184,6 +206,7 @@ private:
     bool mShowLightWires = true;
     bool mShowGrid = true;              // per-scene (EditorData), default ON
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
+    QHash<QString, ViewCameraState> mViewStates; // per-view camera memory (session-only)
     bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;

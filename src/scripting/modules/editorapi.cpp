@@ -18,6 +18,7 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "viewport/ieditorviewport.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/snapsettings.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
@@ -53,10 +54,19 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Whether Game View is active.",
           Needs::Engine },
         { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
-          "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Axis views switch to orthographic projection; \"perspective\" restores perspective and keeps the orientation. Works in both camera modes.",
+          "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes.",
           Needs::Engine },
         { "view", "editor.view() -> string",
           "The last canonical view requested via editor.setView (\"perspective\" until one is set). Informational — free orbiting afterwards does not reset it.",
+          Needs::Engine },
+        { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize}",
+          "The editor camera's current pose: local position, local rotation quaternion, projection mode and ortho zoom. Read-only — the pixel-free way to assert camera moves (focus, view switches).",
+          Needs::Engine },
+        { "cameraMode", "editor.cameraMode() -> \"free\" | \"orbit\"",
+          "The active camera controller: \"free\" (fly camera) or \"orbit\" (arcball).",
+          Needs::Engine },
+        { "setCameraMode", "editor.setCameraMode(\"free\"|\"orbit\") -> bool",
+          "Switches the camera controller, like the toolbar's Free Camera / Arc Ball buttons. (The toolbar buttons do not yet reflect a script-driven switch.)",
           Needs::Engine },
         { "snapSize", "editor.snapSize() -> number",
           "The translate snap size (world units) — also the ground grid's spacing. Editor-global, persisted.",
@@ -188,6 +198,46 @@ QString EditorApi::view()
 {
     if (!requireEngine()) return QString();
     return host.viewport->cameraView();
+}
+
+QVariantMap EditorApi::camera()
+{
+    QVariantMap out;
+    if (!requireEngine()) return out;
+    auto cam = host.viewport->editorCamera();
+    if (!cam) { fail("editor.camera: no editor camera"); return out; }
+    const QVector3D pos = cam->getLocalPos();
+    const QQuaternion rot = cam->getLocalRot();
+    out["position"] = QVariantMap{ { "x", pos.x() }, { "y", pos.y() }, { "z", pos.z() } };
+    out["rotation"] = QVariantMap{ { "x", rot.x() }, { "y", rot.y() }, { "z", rot.z() },
+                                   { "scalar", rot.scalar() } };
+    out["projection"] = cam->projMode == iris::CameraProjection::Perspective
+                            ? QStringLiteral("perspective") : QStringLiteral("orthogonal");
+    out["orthoSize"] = cam->orthoSize;
+    return out;
+}
+
+QString EditorApi::cameraMode()
+{
+    if (!requireEngine()) return QString();
+    return host.viewport->cameraMode();
+}
+
+bool EditorApi::setCameraMode(const QString &mode)
+{
+    if (!requireEngine()) return false;
+    // Through MainWindow's slots when the shell exists (the toolbar buttons'
+    // path); straight to the viewport otherwise.
+    if (mode == QLatin1String("free")) {
+        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "useFreeCamera");
+        else host.viewport->setFreeCameraMode();
+    } else if (mode == QLatin1String("orbit")) {
+        if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "useArcballCam");
+        else host.viewport->setArcBallCameraMode();
+    } else {
+        return fail(QStringLiteral("editor.setCameraMode: unknown mode '%1' (free|orbit)").arg(mode));
+    }
+    return true;
 }
 
 double EditorApi::snapSize()
