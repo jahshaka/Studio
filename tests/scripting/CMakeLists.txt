@@ -81,6 +81,18 @@ set_tests_properties(scripting.e2e.drawers PROPERTIES
 # Rich asset metadata (ASSET_DRAWERS_SPEC addendum): import-time "metadata"
 # blocks + the assets.metadata verb (with its lazy backfill). Image/audio/mesh
 # imports here are all document-side, so this runs --headless too.
+# Web export (WEB_EXPORT_AUDIT): project.exportWeb through the real binary.
+# Document-only, so --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_web)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.export_web
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_export_web.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.export_web PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.metadata

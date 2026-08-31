@@ -26,6 +26,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `project.moveToDesktop(guid, desktop) -> bool` | document | Moves a project tile to desktop 1-4. |
 | `project.setPosition(guid, x, y) -> bool` | document | Sets a tile's freeform position (normalized 0..1) on its desktop. |
 | `project.current() -> {guid, name, folder} \| null` | document | The open project, or null. |
+| `project.exportWeb(dir) -> {dir, indexHtml, glb, nodes, materials, extensions, warnings, ...}` | document | Exports the open scene for the web (glTF 2.0 + self-contained WebGPU viewer): index.html (double-clickable), viewer.html + scene.glb (served path), README.txt. dir defaults to <project>/exports/web. Document-only; works headless. |
+| `project.previewWeb(dir) -> {browser, mode}` | document | Opens an existing web export (see exportWeb) in a Chromium-family browser as a chromeless --app window, or the default browser when none is found. mode is 'kiosk' or 'browser'. |
 
 ## scene
 

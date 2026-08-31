@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/export">
+        <file alias="three-webgpu.iife.js">three-webgpu.iife.js</file>
+        <file alias="viewer.js">viewer.js</file>
+        <file alias="index_template.html">index_template.html</file>
+        <file alias="THREE_LICENSE">THREE_LICENSE</file>
+    </qresource>
+</RCC>
