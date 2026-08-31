@@ -190,6 +190,22 @@ set_tests_properties(scripting.e2e.import_pipeline PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# IMAGE_PLANE_SPEC option A: scene.addImagePlane — aspect-correct plane
+# (long side 1 m), camera-facing at creation, image as baseColorMap
+# (roughness 1 / metallic 0, alpha images blend), dependency row. Engine up
+# (no --headless): the camera-facing assertion reads editor.camera(), an
+# engine verb. Fixture paths configured in.
+configure_file(scripts/e2e_image_plane.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-image_plane)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.image_plane
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_plane.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.image_plane PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # IMAGE_PLANE_SPEC §6: pinned library assets hydrate on project REOPEN —
 # add-to-project → close → reopen → material.apply by the pinned guid onto a
 # cube → document material asserted. Document verbs only -> --headless;

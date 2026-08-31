@@ -43,6 +43,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `scene.addLight(type, {position, ...}) -> id` | document | Adds a light: point, spot, directional or area. Undoable. |
 | `scene.addEmpty({position, parent}) -> id` | document | Adds an empty group node. Undoable. |
 | `scene.addMesh(path, {position, ...}) -> id` | document | Imports a mesh file (obj, fbx, dae, ...) straight into the scene — no dialog, the path is the argument. Undoable. |
+| `scene.addImagePlane(textureGuid, {position?, doubleSided?}) -> id` | document | Spawns an image plane for a Texture asset (IMAGE_PLANE_SPEC option A): a plane sized to the image's aspect (long side 1 m), facing the editor camera at creation, with a basic PBR material carrying the image as baseColorMap (roughness 1, metallic 0; images with an alpha channel blend). Bytes resolve pin-first through the CAS. doubleSided defaults true. Undoable. |
 
 ## node
 
@@ -152,6 +153,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `materials.createGraph(name) -> guid` | document | Creates a new effect-graph asset in the open project from the shader template and opens it as the current graph. |
 | `materials.loadGraph(guidOrPath) -> {nodes, master}` | document | Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for graph.* verbs. |
 | `materials.regenerate(shaderGuid) -> bool` | document | Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app upgraded' recovery) and refreshes materials in the open scene that use that cache. |
+| `materials.createFromImage(textureGuid) -> materialGuid` | document | Creates the standard image material asset for a Texture (IMAGE_PLANE_SPEC option B1): a PBR .material with the image as baseColorMap (roughness 1, metallic 0; alpha images blend), a Material→Texture dependency row and an image-derived thumbnail. Created in the library; with a project open it is also pinned into the project (bin-visible, droppable). Direct image add-to-project runs this automatically; re-creating for the same image returns a fresh asset. NOT undoable. |
 
 ## material
 

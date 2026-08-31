@@ -30,6 +30,10 @@
 #include "io/assetmanager.h"
 #include "ui/panels/scenehierarchywidget.h"
 #include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "commands/changematerialpropertycommand.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 #include "irisgl/core/math/intersectionhelper.h"
 #include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
@@ -333,7 +337,11 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
                 }
             }
         }
-    } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)) {
+    } else if (type == static_cast<int>(ModelTypes::Object) || type == static_cast<int>(ModelTypes::ParticleSystem)
+               || type == static_cast<int>(ModelTypes::Texture)) {
+        // Texture too (IMAGE_PLANE_SPEC §2): an image dropped on empty space
+        // becomes an image plane at the drop point, so the drag must track it
+        // exactly like Object drags.
         mDragScenePos = dropPositionAt(event->position());
     }
     event->acceptProposedAction();
@@ -369,13 +377,44 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         }
         mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
     } else if (type == static_cast<int>(ModelTypes::Texture)) {
+        // IMAGE_PLANE_SPEC §2: on a mesh the image retextures it; on empty
+        // space it spawns an image plane at the tracked drop point.
+        const QString textureGuid = role.value(3).toString();
         iris::SceneNodePtr node = pickAt(event->position(), false);
         if (node && node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto mat = node.staticCast<iris::MeshNode>()->getMaterial().dynamicCast<iris::CustomMaterial>();
-            if (mat && !mat->firstTextureSlot().isEmpty()) {
-                mat->setValue(mat->firstTextureSlot(), QDir(mProject->getProjectFolder()).filePath(role.value(1).toString()));
-                if (mMainWindow) mMainWindow->sceneNodeSelected(node);
+            auto meshNode = node.staticCast<iris::MeshNode>();
+            // Bytes resolve pin-first through the CAS — the flat
+            // projectFolder join this branch used pointed at a folder the
+            // pin world no longer populates (the drop was dead code).
+            QString texPath;
+            if (mDatabase) {
+                QSqlDatabase conn = QSqlDatabase::database();
+                texPath = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                                  mProject ? mProject->getProjectGuid() : QString(),
+                                                  textureGuid);
             }
+            if (texPath.isEmpty()) return;
+            if (auto pbr = meshNode->getMaterial().dynamicCast<iris::PbrMaterial>()) {
+                // The PBR repair: baseColorMap, undoable like the panel edit.
+                QVariant oldMap;
+                for (auto *prop : pbr->properties)
+                    if (prop->name == QStringLiteral("baseColorMap")) { oldMap = prop->getValue(); break; }
+                if (mServices && mServices->undo) {
+                    mServices->undo->push(new ChangeMaterialPropertyCommand(
+                        pbr, QStringLiteral("baseColorMap"), oldMap, texPath));
+                } else {
+                    pbr->setValue(QStringLiteral("baseColorMap"), texPath);
+                }
+                if (mMainWindow) mMainWindow->sceneNodeSelected(node);
+            } else if (auto mat = meshNode->getMaterial().dynamicCast<iris::CustomMaterial>()) {
+                // The legacy CustomMaterial slot path stays for old materials.
+                if (!mat->firstTextureSlot().isEmpty()) {
+                    mat->setValue(mat->firstTextureSlot(), texPath);
+                    if (mMainWindow) mMainWindow->sceneNodeSelected(node);
+                }
+            }
+        } else {
+            emit mEvents.addDroppedImagePlane(mDragScenePos, textureGuid);
         }
     } else if (type == static_cast<int>(ModelTypes::Sky)) {
         if (!mScene || !mDatabase) return;

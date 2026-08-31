@@ -40,6 +40,14 @@ class UndoService;
 class SelectionService;
 class MaterialPreset;
 
+/// Options for SceneEditService::addImagePlane. Defaults are the
+/// owner-approved §8 calls (IMAGE_PLANE_SPEC): double-sided ON (a
+/// single-sided floating image that vanishes from behind reads as a bug).
+struct ImagePlaneOptions
+{
+    bool doubleSided = true;
+};
+
 class SceneEditService : public QObject
 {
     Q_OBJECT
@@ -82,6 +90,19 @@ public:
     void addEmpty();
     void addViewer();
     void addParticleSystem();
+
+    /// IMAGE_PLANE_SPEC Option A: spawns an image plane for a Texture asset
+    /// at `position` — a plane.obj mesh scaled to the image's aspect (max
+    /// side 1 m), oriented ONCE at creation to face the editor camera
+    /// (afterwards a perfectly normal node: gizmos, undo, serialization),
+    /// with a basic PBR material carrying the image as baseColorMap
+    /// (roughness 1, metallic 0; alpha images blend — ImageMaterial::
+    /// fromTexture is the shared builder). Bytes resolve pin-first through
+    /// the CAS. Lands as one undoable AddSceneNodeCommand plus an
+    /// Object→Texture dependency row for the export walkers.
+    /// Returns null when the guid is not a resolvable image.
+    iris::MeshNodePtr addImagePlane(const QString &textureGuid, QVector3D position,
+                                    const ImagePlaneOptions &opts = ImagePlaneOptions());
 
     /// Imports a mesh file straight into the scene. The path must be a real
     /// file — the file dialog stays in the shell.

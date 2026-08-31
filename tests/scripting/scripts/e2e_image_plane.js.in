@@ -1,0 +1,91 @@
+// scripting.e2e.image_plane — IMAGE_PLANE_SPEC option A: scene.addImagePlane.
+//
+// Drives the verb (the seam the viewport drop also calls) headless:
+//   - aspect from the import-time metadata, long side capped at exactly 1 m
+//     (plane.obj is a 2x2 quad -> local scale 0.5 * aspect-normalized),
+//     wide and tall images both;
+//   - basic PBR material: the image as baseColorMap, roughness 1, metallic 0;
+//   - alpha images default to BLEND (alphaMode 2 — owner call §8.2);
+//   - one-shot orient at creation: the plane's +Y normal points at the
+//     editor camera;
+//   - Object→Texture dependency row (assets.dependencies);
+//   - position option honored; junk guids refused.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b) { return Math.abs(a - b) < 1e-3; }
+function vnear(v, x, y, z) { return near(v.x, x) && near(v.y, y) && near(v.z, z); }
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+
+var wideGuid  = assets.importFile(fixtures + "/implane_wide.png");   // 64x32
+var tallGuid  = assets.importFile(fixtures + "/implane_tall.png");   // 32x64
+var alphaGuid = assets.importFile(fixtures + "/implane_alpha.png");  // 48x48 + alpha
+assert(wideGuid.length > 10 && tallGuid.length > 10 && alphaGuid.length > 10,
+       "fixture images imported to the library");
+
+var proj = project.create("Image Plane " + Date.now());
+assert(proj.length > 10, "project.create");
+
+function nodeById(id) {
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+}
+
+// ---- wide 2:1: world extents 1 m x 0.5 m (local scale 0.5, 0.5, 0.25) ----
+var wideId = scene.addImagePlane(wideGuid, { position: { x: 1, y: 2, z: 3 } });
+assert(wideId.length > 10, "scene.addImagePlane(wide)");
+var wideNode = nodeById(wideId);
+assert(vnear(wideNode.scale, 0.5, 0.5, 0.25), "wide 64x32 -> scale (0.5, 0.5, 0.25): 1 m x 0.5 m");
+assert(vnear(wideNode.position, 1, 2, 3), "position option honored");
+
+var wideMat = material.get(wideId);
+assert(("" + wideMat.baseColorMap).length > 0, "image bound as baseColorMap");
+assert(near(wideMat.roughness, 1), "roughness 1");
+assert(near(wideMat.metallic, 0), "metallic 0");
+assert(wideMat.alphaMode === 0, "opaque image stays alphaMode 0");
+
+// ---- one-shot orient: the plane's +Y normal points at the editor camera ----
+// Qt euler convention: R = Ry(yaw) * Rx(pitch) * Rz(roll), degrees.
+function normalFromEuler(e) {
+    var d = Math.PI / 180.0;
+    var cx = Math.cos(e.x * d), sx = Math.sin(e.x * d);
+    var cy = Math.cos(e.y * d), sy = Math.sin(e.y * d);
+    var cz = Math.cos(e.z * d), sz = Math.sin(e.z * d);
+    // n = Ry * Rx * Rz * (0,1,0)
+    var v = { x: -sz, y: cz, z: 0 };                       // Rz * (0,1,0)
+    v = { x: v.x, y: cx * v.y - sx * v.z, z: sx * v.y + cx * v.z };  // Rx
+    v = { x: cy * v.x + sy * v.z, y: v.y, z: -sy * v.x + cy * v.z }; // Ry
+    return v;
+}
+var cam = editor.camera();
+var toCam = { x: cam.position.x - 1, y: cam.position.y - 2, z: cam.position.z - 3 };
+var len = Math.sqrt(toCam.x * toCam.x + toCam.y * toCam.y + toCam.z * toCam.z);
+toCam = { x: toCam.x / len, y: toCam.y / len, z: toCam.z / len };
+var n = normalFromEuler(wideNode.rotation);
+var dot = n.x * toCam.x + n.y * toCam.y + n.z * toCam.z;
+assert(dot > 0.999, "plane normal faces the editor camera (dot " + dot.toFixed(4) + ")");
+
+// ---- tall 1:2: world extents 0.5 m x 1 m ----
+var tallId = scene.addImagePlane(tallGuid);
+var tallNode = nodeById(tallId);
+assert(vnear(tallNode.scale, 0.25, 0.5, 0.5), "tall 32x64 -> scale (0.25, 0.5, 0.5): 0.5 m x 1 m");
+
+// ---- alpha image: BLEND by default (owner call — matching alpha) ----
+var alphaId = scene.addImagePlane(alphaGuid);
+var alphaMat = material.get(alphaId);
+assert(alphaMat.alphaMode === 2, "alpha image defaults to alphaMode 2 (blend)");
+
+// ---- dependency row: the plane's object row depends on the texture ----
+var deps = assets.dependencies(wideId);
+assert(deps.indexOf(wideGuid) >= 0, "Object->Texture dependency row created");
+
+// ---- junk guid refused ----
+var thrown = false;
+try { scene.addImagePlane("no-such-guid"); } catch (e) { thrown = true; }
+assert(thrown, "scene.addImagePlane refuses a non-texture guid");
+
+console.log("image_plane: ALL OK");

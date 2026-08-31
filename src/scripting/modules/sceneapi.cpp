@@ -55,6 +55,9 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "addMesh", "scene.addMesh(path, {position, ...}) -> id",
           "Imports a mesh file (obj, fbx, dae, ...) straight into the scene — no dialog, the path is the argument. Undoable.",
           Needs::Document },
+        { "addImagePlane", "scene.addImagePlane(textureGuid, {position?, doubleSided?}) -> id",
+          "Spawns an image plane for a Texture asset (IMAGE_PLANE_SPEC option A): a plane sized to the image's aspect (long side 1 m), facing the editor camera at creation, with a basic PBR material carrying the image as baseColorMap (roughness 1, metallic 0; images with an alpha channel blend). Bytes resolve pin-first through the CAS. doubleSided defaults true. Undoable.",
+          Needs::Document },
     };
 }
 
@@ -175,6 +178,30 @@ QString SceneApi::addEmpty(const QVariantMap &options)
     host.services->selection->select(iris::SceneNodePtr());
     host.services->sceneEdit->addEmpty();
     return finishAdd(options, QStringLiteral("scene.addEmpty"));
+}
+
+QString SceneApi::addImagePlane(const QString &textureGuid, const QVariantMap &options)
+{
+    if (!requireProject()) return QString();   // the plane gets a DB object row + dependency
+    if (!sceneOrFail()) return QString();
+
+    ImagePlaneOptions opts;
+    opts.doubleSided = options.value("doubleSided", true).toBool();
+
+    host.services->selection->select(iris::SceneNodePtr());
+    auto node = host.services->sceneEdit->addImagePlane(
+        textureGuid, vecFromJs(options.value("position")), opts);
+    if (!node) {
+        fail(QStringLiteral("scene.addImagePlane: '%1' is not a resolvable image texture asset")
+                 .arg(textureGuid));
+        return QString();
+    }
+    // position is consumed by the service (the drop point); strip it so
+    // applyOptions does not re-apply it as a second transform command.
+    QVariantMap rest = options;
+    rest.remove("position");
+    rest.remove("doubleSided");
+    return finishAdd(rest, QStringLiteral("scene.addImagePlane"));
 }
 
 QString SceneApi::addMesh(const QString &path, const QVariantMap &options)

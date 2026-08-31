@@ -41,6 +41,9 @@ signals:
     void addPrimitive(QString guid);
     void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
     void addDroppedParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
+    /// A Texture asset dropped on empty space — the shell spawns an image
+    /// plane at the drop point (IMAGE_PLANE_SPEC option A).
+    void addDroppedImagePlane(QVector3D position, QString guid);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
     void updateToolbarButton();
     void changeSkyFromAssetWidget(int index);
