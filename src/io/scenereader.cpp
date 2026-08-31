@@ -575,6 +575,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->intensity = (float)nodeObj["intensity"].toDouble(1.0f);
     lightNode->distance = (float)nodeObj["distance"].toDouble(1.0f);
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
+    // Serializer gap fixed (WEB_EXPORT_AUDIT §1): the mirror consumes softness
+    // but it was never persisted. Default matches the LightNode constructor.
+    lightNode->spotCutOffSoftness = (float)nodeObj["spotCutOffSoftness"].toDouble(1.0f);
     lightNode->rectWidth = (float)nodeObj["rectWidth"].toDouble(1.0f);
     lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(1.0f);
     lightNode->doubleSided = nodeObj["doubleSided"].toBool(false);
