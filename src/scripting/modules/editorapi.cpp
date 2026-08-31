@@ -104,6 +104,9 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "endBatch", "editor.endBatch() -> bool",
           "Closes the macro opened by editor.beginBatch().",
           Needs::Document },
+        { "importAssets", "editor.importAssets([paths]) -> bool",
+          "Starts the interactive THREADED import of the given files — the same ImportBatchRunner + progress dialog the project panel's Import button and drops use — and returns once the batch has started (it does not wait). assets.importFile is the synchronous, dialog-free verb.",
+          Needs::Window },
     };
 }
 
@@ -377,5 +380,27 @@ bool EditorApi::endBatch()
     if (mBatchDepth <= 0) return fail("editor.endBatch: no batch is open");
     host.undoStack->endMacro();
     --mBatchDepth;
+    return true;
+}
+
+bool EditorApi::importAssets(const QVariant &paths)
+{
+    if (!requireProject()) return false;
+    if (!host.mainWindow) return fail("editor.importAssets: no window in this session");
+
+    QStringList files;
+    const QVariant normalized = scriptmod::normalizeJs(paths);
+    if (normalized.typeId() == QMetaType::QVariantList) {
+        for (const QVariant &v : normalized.toList()) files.append(v.toString());
+    } else if (!normalized.toString().isEmpty()) {
+        files.append(normalized.toString());
+    }
+    if (files.isEmpty()) return fail("editor.importAssets: no files given");
+    for (const QString &file : files) {
+        if (!QFileInfo::exists(file))
+            return fail(QStringLiteral("editor.importAssets: no such file: %1").arg(file));
+    }
+    if (!host.mainWindow->startInteractiveImport(files))
+        return fail("editor.importAssets: an interactive import is already running");
     return true;
 }

@@ -14,11 +14,17 @@ For more information see the LICENSE file
 
 #include <QApplication>
 
-ProgressDialog::ProgressDialog(QDialog *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
+ProgressDialog::ProgressDialog(QWidget *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
     ui->setupUi(this);
-    this->setWindowFlags(Qt::FramelessWindowHint);
-	setWindowModality(Qt::WindowModal);
+    // Qt::Dialog keeps this a top-level window now that callers parent us
+    // (bare FramelessWindowHint has no window-type bit — a parented dialog
+    // would collapse into an embedded child widget). Parenting matters:
+    // app teardown must be able to close and destroy every progress dialog,
+    // or a "loading" window outlives the main window (owner-reported).
+    this->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+    // No modality: the old unparented dialog blocked nothing (WindowModal
+    // with no parent is inert), and imports must keep the app interactive.
 
     ui->stageLabel->setVisible(false);
     // Opt-in: flows that honor the latch (the import batch) call
@@ -63,10 +69,19 @@ ProgressDialog::~ProgressDialog()
     delete ui;
 }
 
+// NO QApplication::processEvents() in the setters. It was there for the old
+// SYNCHRONOUS importers, which blocked the UI thread and needed a manual
+// pump to repaint. Since the threaded import landed the event loop runs
+// normally, and pumping from a setter is actively dangerous: a progress
+// update emitted from inside AssetImportService::commit re-entered the loop,
+// delivered the batch's finished() signal, and the handler's deleteLater
+// destroyed the ImportBatchRunner *underneath the running commit* — the
+// commit then emitted stageProgress on freed memory (exit-time SIGSEGV in
+// QObjectPrivate::maybeSignalConnected, seen while quitting mid-import).
 void ProgressDialog::setLabelText(const QString &text)
 {
     ui->label->setText(text);
-    QApplication::processEvents();
+    if (mPumps) QApplication::processEvents();
 }
 
 void ProgressDialog::reset()
@@ -82,7 +97,7 @@ void ProgressDialog::setRange(int min, int max)
 void ProgressDialog::setValue(int val)
 {
     ui->progressBar->setValue(val);
-	QApplication::processEvents();
+    if (mPumps) QApplication::processEvents();   // see setLabelText
 }
 
 void ProgressDialog::setValueAndText(int value, QString text)

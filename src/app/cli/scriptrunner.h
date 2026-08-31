@@ -34,4 +34,11 @@ int runDumpApiDocs(MainWindow &window, const QString &outPath);
 /// line to stdout, and serve until the app quits.
 int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool headless);
 
+/// The shared exec tail: releases the engine (EngineHost::shutdown) and then
+/// guarantees the process actually exits — if the global thread pool still
+/// holds a worker after a bounded wait (a stuck import/decode future), it
+/// logs and force-exits instead of hanging in QThreadPool's destructor (the
+/// owner-reported headless zombie). Returns rc for the normal path.
+int finalizeAppExit(int rc);
+
 #endif // SCRIPTRUNNER_H

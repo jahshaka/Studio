@@ -541,7 +541,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	treeWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    progressDialog = new ProgressDialog;
+    // Parented: app teardown must close and destroy it (an unparented
+    // progress dialog is an orphanable top-level that also blocks
+    // quitOnLastWindowClosed).
+    progressDialog = new ProgressDialog(this);
     progressDialog->setLabelText("Importing assets...");
 
 	rebuildDrawerTree();
@@ -1546,6 +1549,24 @@ void AssetView::importFiles(const QStringList &fileNames)
 		requests.append(request);
 	}
 	if (!requests.isEmpty()) runImportBatch(requests);
+}
+
+bool AssetView::shutdownImports(int msTimeout)
+{
+	if (progressDialog) progressDialog->close();
+	if (tailQueue) tailQueue->clear();
+	pendingViewerTails.clear();
+	pendingVideoThumbGuids.clear();
+	stopMediaPreviews();
+	if (!importRunner) return true;
+	// waitForDone pumps events, which can delete the runner (its finished
+	// handler deleteLater()s it) — hold it weakly and never touch the raw
+	// member afterwards.
+	QPointer<ImportBatchRunner> runner(importRunner);
+	runner->requestAbort();
+	if (runner->waitForDone(msTimeout)) return true;
+	qWarning("AssetView: import worker still running after %dms", msTimeout);
+	return false;
 }
 
 void AssetView::runImportBatch(const QVector<ImportRequest> &requests)

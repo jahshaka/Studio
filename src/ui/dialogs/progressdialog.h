@@ -23,7 +23,7 @@ class ProgressDialog : public QDialog
     Q_OBJECT
 
 public:
-    ProgressDialog(QDialog *parent = nullptr);
+    ProgressDialog(QWidget *parent = nullptr);
     ~ProgressDialog();
 
     /// True after the user pressed Cancel (or Esc) — the accessor the import
@@ -44,6 +44,17 @@ public slots:
     /// Show/hide the Cancel button (rows that cannot cancel hide it).
     void setCancelVisible(bool visible);
 
+    /// Legacy SYNCHRONOUS flows only (scene open, graph load): repaint by
+    /// pumping the event loop from the setters, the way this dialog always
+    /// did when its callers blocked the UI thread.
+    ///
+    /// OFF by default, and it must stay off for the threaded import: a pump
+    /// from inside AssetImportService::commit re-enters the loop, delivers
+    /// the batch's finished() signal, and the handler's deleteLater destroys
+    /// the ImportBatchRunner underneath the running commit — which then
+    /// emits on freed memory (exit-time SIGSEGV while quitting mid-import).
+    void setPumpsEventLoop(bool pumps) { mPumps = pumps; }
+
 signals:
     /// The user asked to cancel (button or Esc). Emitted once per latch.
     void canceled();
@@ -55,6 +66,7 @@ protected:
 private:
     Ui::ProgressDialog *ui;
     bool mCanceled = false;
+    bool mPumps = false;   // see setPumpsEventLoop
 };
 
 #endif // PROGRESSDIALOG_H

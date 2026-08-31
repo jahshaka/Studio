@@ -78,6 +78,11 @@ public:
     void updateCameraRot();
 
 	bool canLeftMouseDrag();
+
+	/// Alt+LMB orbit: the arcball orbits already, so this only re-points the
+	/// pivot at the selection (and re-derives the orbit distance) for the
+	/// duration of the drag.
+	void setAltOrbit(bool active, const QVector3D &pivot) override;
 protected:
 	virtual void keyReleaseEvent(QKeyEvent *event);
 };

@@ -281,7 +281,11 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	ui->searchBar->setPlaceholderText(tr("Type to search for assets..."));
 
-	progressDialog = new ProgressDialog;
+	// Parented: app teardown must close and destroy it — an unparented
+	// progress dialog is a top-level window that outlives the main window
+	// (the owner-reported orphaned "loading" dialog) and, worse, keeps
+	// quitOnLastWindowClosed from ever firing.
+	progressDialog = new ProgressDialog(this);
 	progressDialog->setLabelText("Importing assets...");
 
 	setStyleSheet(StyleSheet::AssetWidgetPanel());
@@ -1784,6 +1788,27 @@ void AssetWidget::importAssetB()
 {
 	auto fileNames = QFileDialog::getOpenFileNames(this, "Import Asset");
 	if (!fileNames.isEmpty()) importAsset(fileNames);
+}
+
+bool AssetWidget::importFiles(const QStringList &files)
+{
+	if (importRunner && importRunner->isRunning()) return false;
+	importAsset(files);
+	return true;
+}
+
+bool AssetWidget::shutdownImports(int msTimeout)
+{
+	if (progressDialog) progressDialog->close();
+	if (!importRunner) return true;
+	// waitForDone pumps events, which can delete the runner (its finished
+	// handler deleteLater()s it) — hold it weakly and never touch the raw
+	// member afterwards.
+	QPointer<ImportBatchRunner> runner(importRunner);
+	runner->requestAbort();
+	if (runner->waitForDone(msTimeout)) return true;
+	qWarning("AssetWidget: import worker still running after %dms", msTimeout);
+	return false;
 }
 
 void AssetWidget::importAsset(const QStringList &fileNames)

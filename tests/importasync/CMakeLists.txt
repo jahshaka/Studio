@@ -44,3 +44,26 @@ add_test(NAME import.async COMMAND test_import_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(import.async PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 120 LABELS "importer")
+
+# import.shutdown — the owner-reported ZOMBIE: quitting while (or right
+# after) a threaded import ran left the process alive headless with an
+# orphaned "loading" dialog. Spawns the REAL binary (like mcp.e2e) under a
+# scratch HOME, starts the interactive batch through editor.importAssets,
+# calls app.quit() mid-batch and after a batch, and asserts the PROCESS is
+# gone within the exit budget with code 0.
+find_package(Qt6 REQUIRED COMPONENTS Core Network)
+add_executable(test_import_shutdown test_import_shutdown.cpp)
+set_target_properties(test_import_shutdown PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(test_import_shutdown PRIVATE Qt6::Core Qt6::Network)
+target_compile_definitions(test_import_shutdown PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
+
+set(_shutdown_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shutdown)
+file(MAKE_DIRECTORY ${_shutdown_home}/run)
+add_test(NAME import.shutdown COMMAND test_import_shutdown
+         WORKING_DIRECTORY ${_shutdown_home}/run)
+set_tests_properties(import.shutdown PROPERTIES
+    ENVIRONMENT "HOME=${_shutdown_home}"
+    TIMEOUT 480 LABELS "importer")

@@ -12,15 +12,30 @@ For more information see the LICENSE file
 #include "app/cli/scriptrunner.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 #include <QApplication>
 #include <QFile>
 #include <QThread>
+#include <QThreadPool>
 
 #include "bridge/enginehost.h"
 #include "scripting/scriptengine.h"
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
+
+int finalizeAppExit(int rc)
+{
+    // The engine borrows Qt's X display: release it before QApplication goes away.
+    EngineHost::instance().shutdown();
+    if (!QThreadPool::globalInstance()->waitForDone(5000)) {
+        qWarning("shutdown: background workers still running 5s after exit — "
+                 "forcing process exit (code %d)", rc);
+        std::fflush(nullptr);
+        std::_Exit(rc);
+    }
+    return rc;
+}
 
 int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bool headless)
 {
@@ -67,8 +82,7 @@ int runScriptFile(MainWindow &window, QApplication &app, const QString &path, bo
     }
 
     if (!headless) window.endEngineSelftest();
-    EngineHost::instance().shutdown();
-    return rc;
+    return finalizeAppExit(rc);
 }
 
 int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool headless)
@@ -104,8 +118,7 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     std::fflush(stdout);
 
     const int rc = app.exec();
-    EngineHost::instance().shutdown();
-    return rc;
+    return finalizeAppExit(rc);
 }
 
 int runDumpApiDocs(MainWindow &window, const QString &outPath)

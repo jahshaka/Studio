@@ -123,6 +123,21 @@ void EditorCameraController::pan(float angle)
  */
 void EditorCameraController::onMouseMove(int x,int y)
 {
+    // Alt+LMB orbit (Maya/Unreal): turn yaw/pitch like a look, then put the
+    // camera back on the orbit sphere so the pivot stays put on screen. The
+    // free camera keeps its own orientation model — this is a temporary
+    // orbit for the duration of the drag only.
+    if (altOrbit && leftMouseDown && camera) {
+        this->yaw += x / 10.0f;
+        this->pitch += y / 10.0f;
+        pitch = (pitch < -89.0f ? -89.0f : (pitch > 89.0f ? 89.0f : pitch));
+        const QQuaternion rot = QQuaternion::fromEulerAngles(pitch, yaw, 0);
+        camera->setLocalPos(altOrbitPivot + rot.rotatedVector(QVector3D(0, 0, 1)) * altOrbitDistance);
+        camera->setLocalRot(rot);
+        camera->update(0);
+        return;   // never also pan/look on the same drag
+    }
+
     if(rightMouseDown)
     {
         //rotate camera
@@ -155,9 +170,21 @@ void EditorCameraController::onMouseMove(int x,int y)
     updateCameraRot();
 }
 
+void EditorCameraController::setAltOrbit(bool active, const QVector3D &pivot)
+{
+	CameraControllerBase::setAltOrbit(active, pivot);
+	if (!active || !camera) return;
+	// Capture the orbit radius at drag start so the first frame cannot jump;
+	// a camera sitting exactly on the pivot gets a sane default distance.
+	altOrbitDistance = camera->getGlobalPosition().distanceToPoint(pivot);
+	if (altOrbitDistance < 0.001f) altOrbitDistance = 5.0f;
+}
+
 bool EditorCameraController::canLeftMouseDrag()
 {
-	
+	// Alt+LMB orbits; it must not also pan in jahshaka mouse mode.
+	if (altOrbit) return false;
+
 	// Refuse camera drags while a gizmo drag is in progress (step-14 fix: the
 	// old guard dynamic_cast to the deleted legacy widget and was dead in
 	// engine mode, letting the camera pan mid-gizmo-drag).

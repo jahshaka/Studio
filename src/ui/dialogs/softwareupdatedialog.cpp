@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QProcess>
 
 
-SoftwareUpdateDialog::SoftwareUpdateDialog(QDialog *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
+SoftwareUpdateDialog::SoftwareUpdateDialog(QWidget *parent) : QDialog(parent), ui(new Ui::SoftwareUpdateDialog)
 {
 	ui->setupUi(this); 
 	setWindowTitle("Software Update");

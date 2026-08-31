@@ -93,7 +93,12 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     setAttribute(Qt::WA_NativeWindow, true);
 #endif
 
-	progressDialog = QPointer<ProgressDialog>(new ProgressDialog());
+	// Parented: app teardown closes/destroys it (no orphanable top-level).
+	// Scene open is still synchronous here, so it keeps the legacy pump that
+	// repaints the dialog between steps (threaded flows must NOT — see
+	// ProgressDialog::setPumpsEventLoop).
+	progressDialog = QPointer<ProgressDialog>(new ProgressDialog(this));
+	progressDialog->setPumpsEventLoop(true);
 
     dynamicGrid = new DynamicGrid(this);
 

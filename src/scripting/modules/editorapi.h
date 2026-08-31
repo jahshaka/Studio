@@ -54,6 +54,7 @@ public:
                                        const QVariantList &probes = QVariantList());
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
+    Q_INVOKABLE bool importAssets(const QVariant &paths);
 
 private:
     int mBatchDepth = 0;

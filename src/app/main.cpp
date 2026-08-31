@@ -165,6 +165,12 @@ int main(int argc, char *argv[])
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
 
+    // Hide the splash as soon as the window shows — including the CLI paths
+    // below (script/MCP runs show the window themselves). A splash left
+    // visible counts as a window and blocks quitOnLastWindowClosed: the app
+    // then survives its own main window (the headless-zombie bug family).
+    splash.finish(&window);
+
     if (!cli.selftestPng.isEmpty())
         return runEngineSelftest(window, app, cli.selftestPng);
 
@@ -184,15 +190,14 @@ int main(int argc, char *argv[])
 
     // Make our window render as normal going forward
     //window.setAttribute(Qt::WA_DontShowOnScreen, false);
-    window.goToDesktop();
-    splash.finish(&window);
+    window.goToDesktop();   // splash.finish above hides the splash here
 
 	UpdateChecker updateChecker;
 	QObject::connect(&updateChecker, &UpdateChecker::updateNeeded,
-        [&updateChecker](QString nextVersion, QString versionNotes, QString downloadLink)
+        [&window](QString nextVersion, QString versionNotes, QString downloadLink)
 	{
-		// show update dialog
-		auto dialog = new SoftwareUpdateDialog();
+		// show update dialog (parented: no orphanable top-level windows)
+		auto dialog = new SoftwareUpdateDialog(&window);
 		dialog->setVersionNotes(versionNotes);
 		dialog->setDownloadUrl(downloadLink);
 		dialog->show();
@@ -204,7 +209,5 @@ int main(int argc, char *argv[])
 	app.installEventFilter(new ToolTipHelper());
 
     const int rc = app.exec();
-    // The engine borrows Qt's X display: release it before QApplication goes away.
-    EngineHost::instance().shutdown();
-    return rc;
+    return finalizeAppExit(rc);
 }
