@@ -24,6 +24,7 @@ For more information see the LICENSE file
 
 #include "data/project.h"
 #include "export/embeddedpreview.h"
+#include "modules/publish/publishrecord.h"
 #include "export/exportservice.h"
 #include "export/previewlauncher.h"
 #include "services/sceneeditservice.h"
@@ -90,6 +91,10 @@ PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     processButton->setStyleSheet(kButtonStyle);
     processButton->setCursor(Qt::PointingHandCursor);
     processButton->setMinimumHeight(40);
+    previewButton = new QPushButton(QStringLiteral("Preview"));
+    previewButton->setStyleSheet(kSecondaryButtonStyle);
+    previewButton->setCursor(Qt::PointingHandCursor);
+    previewButton->setMinimumHeight(40);
     browserButton = new QPushButton(QStringLiteral("Open in browser"));
     browserButton->setStyleSheet(kSecondaryButtonStyle);
     browserButton->setCursor(Qt::PointingHandCursor);
@@ -102,6 +107,7 @@ PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     auto *buttons = new QHBoxLayout();
     buttons->setSpacing(10);
     buttons->addWidget(processButton);
+    buttons->addWidget(previewButton);
     buttons->addWidget(browserButton);
     buttons->addWidget(folderButton);
     buttons->addStretch();
@@ -154,6 +160,7 @@ PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     vl->addStretch();
 
     connect(processButton, &QPushButton::clicked, this, &PublishPage::onProcess);
+    connect(previewButton, &QPushButton::clicked, this, &PublishPage::onPreviewToggle);
     connect(browserButton, &QPushButton::clicked, this, &PublishPage::onOpenBrowser);
     connect(folderButton, &QPushButton::clicked, this, &PublishPage::onOpenFolder);
     connect(popOutButton, &QPushButton::clicked, this, [this] { onPopOut(); });
@@ -161,12 +168,19 @@ PublishPage::PublishPage(ModuleHost host_, QWidget *parent)
     refreshState();
 }
 
-QString PublishPage::exportDir() const
+QString PublishPage::projectFolder() const
 {
     // A real project (guid + folder), not just any open scene — the engine
     // selftest boots a project-less scene that must not enable publishing.
     if (!host.project || host.project->getProjectGuid().isEmpty()) return QString();
-    const QString folder = host.project->getProjectFolder();
+    return host.project->getProjectFolder();
+}
+
+QString PublishPage::exportDir() const
+{
+    // THE per-project publish path (owner model: one publish per project,
+    // Process always updates it in place).
+    const QString folder = projectFolder();
     if (folder.isEmpty()) return QString();
     return QDir(folder).filePath(QStringLiteral("exports/web"));
 }
@@ -183,18 +197,58 @@ void PublishPage::refreshState()
 {
     const bool projectOpen = host.services && host.services->sceneEdit &&
                              host.services->sceneEdit->scene() && !exportDir().isEmpty();
-    const bool hasExport = !lastIndexHtml().isEmpty();
 
-    processButton->setEnabled(projectOpen || previewRunning);
-    processButton->setText(previewRunning ? QStringLiteral("Close preview") : QStringLiteral("Process"));
-    browserButton->setEnabled(hasExport);
-    folderButton->setEnabled(hasExport);
-    if (projectOpen)
-        dirLabel->setText(QStringLiteral("Output: %1").arg(QDir::toNativeSeparators(exportDir())));
-    else
+    // A preview left running for a DIFFERENT project (or after the project
+    // closed) dies with the switch — the page must never show project A's
+    // Chrome over project B's state.
+    if (previewRunning && (!projectOpen || previewSourceDir != exportDir()))
+        closePreview();
+
+    const PublishRecord rec =
+        projectOpen ? PublishRecord::load(projectFolder(), exportDir()) : PublishRecord();
+    const PublishRecord::State st = rec.state();
+    const bool present = projectOpen && st == PublishRecord::State::Present;
+
+    processButton->setEnabled(projectOpen);
+    previewButton->setEnabled(present || previewRunning);
+    previewButton->setText(previewRunning ? QStringLiteral("Close preview")
+                                          : QStringLiteral("Preview"));
+    browserButton->setEnabled(present);
+    folderButton->setEnabled(present);
+
+    if (!projectOpen) {
         dirLabel->setText(QStringLiteral("Output: <project folder>/exports/web"));
-    if (!projectOpen && !previewRunning)
         setStatus(QStringLiteral("Open a project to publish its scene."));
+        return;
+    }
+    switch (st) {
+    case PublishRecord::State::Present:
+        // The project's standing publish: path + when, buttons live above.
+        dirLabel->setText(QStringLiteral("Last published %1 — %2")
+                              .arg(rec.when.toString(QStringLiteral("yyyy-MM-dd hh:mm")),
+                                   QDir::toNativeSeparators(rec.dir)));
+        // Replace a stale other-state placeholder (page opened fresh on a
+        // published project) without stomping transient statuses (summaries,
+        // "Preview closed.", errors).
+        if (!previewRunning &&
+            (statusLabel->text() == QStringLiteral("Open a project to publish its scene.") ||
+             statusLabel->text() == QStringLiteral("Not published yet — Process packages the open scene.") ||
+             statusLabel->text() == QStringLiteral("Previous publish missing — Process to regenerate.")))
+            setStatus(QStringLiteral("Process updates this publish in place."));
+        break;
+    case PublishRecord::State::Missing:
+        // Publish on record but the user deleted the folder: degrade clearly,
+        // never error — Process recreates it at the same path.
+        dirLabel->setText(QStringLiteral("Output: %1").arg(QDir::toNativeSeparators(exportDir())));
+        setStatus(QStringLiteral("Previous publish missing — Process to regenerate."));
+        break;
+    case PublishRecord::State::None:
+        // Never published: the empty starting state.
+        dirLabel->setText(QStringLiteral("Output: %1").arg(QDir::toNativeSeparators(exportDir())));
+        if (!previewRunning)
+            setStatus(QStringLiteral("Not published yet — Process packages the open scene."));
+        break;
+    }
 }
 
 void PublishPage::showEvent(QShowEvent *event)
@@ -211,15 +265,17 @@ void PublishPage::setStatus(const QString &text, bool isError)
     statusLabel->setText(text);
 }
 
+// FULL preview teardown, safe from any state — the single seam every re-entry
+// (Process, Preview toggle, Pop out, project switch) goes through BEFORE
+// starting anything new. Kills only Chrome processes this page launched.
 void PublishPage::closePreview()
 {
     if (embed) {
         preview.clear();          // that QProcess is owned by the embed controller
         embed->disconnect(this);
-        embed->stop();
+        embed->stop();            // container -> process -> profile dir, in order
         embed->deleteLater();
         embed = nullptr;
-        previewFrame->hide();
     }
     // Take the pointer FIRST and disconnect: waitForFinished() delivers
     // finished() synchronously, and the launch-time lambda clears `preview` —
@@ -233,7 +289,12 @@ void PublishPage::closePreview()
         if (!proc->waitForFinished(1500)) proc->kill();
         proc->deleteLater();
     }
+    // The embed area is visible ONLY while an adoption is live — its slot
+    // paints black by design, so a visible frame with no container is exactly
+    // the reported dead black panel.
+    previewFrame->hide();
     previewRunning = false;
+    previewSourceDir.clear();
 }
 
 // Try the embedded preview first (Linux/X11 + detected Chrome); any failure —
@@ -241,6 +302,11 @@ void PublishPage::closePreview()
 // degrades silently to launchCompanion, which is today's behavior verbatim.
 void PublishPage::startPreview(const QString &indexHtml, const QString &summary)
 {
+    // Re-entry invariant: a fresh preview NEVER starts over a live one — the
+    // second Chrome would race the first embed's window/profile and the page
+    // would end up with both a companion window and a dead embed area.
+    closePreview();
+
     if (EmbeddedWebPreview::platformSupported()) {
         const QString browser = PreviewLauncher::findChromiumBrowser();
         if (!browser.isEmpty()) {
@@ -249,6 +315,12 @@ void PublishPage::startPreview(const QString &indexHtml, const QString &summary)
                 previewFrame->show();
                 setStatus(summary + QStringLiteral(" Preview embedded — \"Pop out\" for a separate window."));
                 refreshState();
+            });
+            connect(embed, &EmbeddedWebPreview::detached, this, [this] {
+                // Watchdog dropped the container while it re-finds the window:
+                // hide the area (never show a dead panel); embedded() fires
+                // again on re-adoption, closed() if the browser is gone.
+                previewFrame->hide();
             });
             connect(embed, &EmbeddedWebPreview::failed, this,
                     [this, indexHtml, summary](const QString &) {
@@ -260,16 +332,18 @@ void PublishPage::startPreview(const QString &indexHtml, const QString &summary)
                 refreshState();
             });
             connect(embed, &EmbeddedWebPreview::closed, this, [this] {
-                if (embed) { embed->deleteLater(); embed = nullptr; }
+                if (embed) { embed->stop(); embed->deleteLater(); embed = nullptr; }
                 previewFrame->hide();
                 preview.clear();
                 previewRunning = false;
+                previewSourceDir.clear();
                 setStatus(QStringLiteral("Preview closed."));
                 refreshState();
             });
             if (embed->start(browser, indexHtml, previewSlot)) {
                 preview = embed->process();
                 previewRunning = true;
+                previewSourceDir = exportDir();
                 setStatus(summary + QStringLiteral(" Starting embedded preview…"));
                 return;
             }
@@ -286,9 +360,11 @@ void PublishPage::launchCompanion(const QString &indexHtml, const QString &summa
     if (proc) {
         preview = proc;
         previewRunning = true;
+        previewSourceDir = exportDir();
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
                 this, [this](int, QProcess::ExitStatus) {
                     previewRunning = false;
+                    previewSourceDir.clear();
                     if (preview) preview->deleteLater();
                     preview.clear();
                     refreshState();
@@ -305,25 +381,20 @@ void PublishPage::onPopOut()
 {
     if (!embed) return;
     const QString index = lastIndexHtml();
-    preview.clear();
-    embed->disconnect(this);
-    embed->stop();
-    embed->deleteLater();
-    embed = nullptr;
-    previewFrame->hide();
-    previewRunning = false;
+    closePreview();               // the one teardown seam — no partial states
     if (!index.isEmpty()) launchCompanion(index, QString());
     refreshState();
 }
 
 void PublishPage::onProcess()
 {
-    if (previewRunning) {
-        closePreview();
-        setStatus(QStringLiteral("Preview closed."));
-        refreshState();
-        return;
-    }
+    // Re-entry lifecycle: Process ALWAYS starts from a clean slate. Any live
+    // preview — embedded, mid-adoption, or companion — is fully torn down
+    // FIRST; only then does the fresh export + preview flow run. (This is the
+    // double-preview fix: a second Chrome launched while the first embed's
+    // window/profile lived produced a companion window outside the app plus a
+    // dead black embed panel inside.)
+    closePreview();
 
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
                                                              : iris::ScenePtr();
@@ -339,6 +410,7 @@ void PublishPage::onProcess()
     repaint();
 
     // The same seam the `project.exportWeb` verb drives (API-first rule).
+    // Always the project's stable path — a re-Process updates it in place.
     const auto r = ExportService::exportWeb(scene, host.project ? host.project->getProjectName()
                                                                 : QString(), dir);
     if (!r.ok) {
@@ -346,6 +418,9 @@ void PublishPage::onProcess()
         refreshState();
         return;
     }
+
+    // This publish is now the project's publish — remember it per project.
+    PublishRecord::save(projectFolder(), dir);
 
     QString summary = QStringLiteral("Exported %1 nodes, %2 materials — index.html %3 MB.")
         .arg(r.nodeCount).arg(r.materialCount)
@@ -362,10 +437,32 @@ void PublishPage::onProcess()
     refreshState();
 }
 
+void PublishPage::onPreviewToggle()
+{
+    if (previewRunning) {
+        closePreview();
+        setStatus(QStringLiteral("Preview closed."));
+        refreshState();
+        return;
+    }
+    const QString index = lastIndexHtml();
+    if (index.isEmpty()) {
+        setStatus(QStringLiteral("Previous publish missing — Process to regenerate."), true);
+        refreshState();
+        return;
+    }
+    startPreview(index, QString());
+    refreshState();
+}
+
 void PublishPage::onOpenBrowser()
 {
     const QString index = lastIndexHtml();
-    if (index.isEmpty()) { setStatus(QStringLiteral("No export yet — Process first."), true); return; }
+    if (index.isEmpty()) {
+        setStatus(QStringLiteral("Previous publish missing — Process to regenerate."), true);
+        refreshState();
+        return;
+    }
     PreviewLauncher::openInBrowser(index);
 }
 
@@ -373,7 +470,8 @@ void PublishPage::onOpenFolder()
 {
     const QString dir = exportDir();
     if (dir.isEmpty() || !QDir(dir).exists()) {
-        setStatus(QStringLiteral("No export yet — Process first."), true);
+        setStatus(QStringLiteral("Previous publish missing — Process to regenerate."), true);
+        refreshState();
         return;
     }
     QDesktopServices::openUrl(QUrl::fromLocalFile(dir));

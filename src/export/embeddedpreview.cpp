@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "export/embeddedpreview.h"
 
 #include <QDateTime>
+#include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QLayout>
@@ -32,6 +33,27 @@ namespace {
 
 const char kReadyMarker[] = "[jah-gpu-ready]";
 const char kNoGpuMarker[] = "[jah-no-gpu]";
+
+// Our embedded-preview Chrome profiles, and ONLY ours: hidden dirs with this
+// prefix inside the export folder, created by this class and nothing else.
+const char kProfilePrefix[] = ".preview-profile-embedded";
+
+// Delete leftover embedded-preview profiles from earlier runs (or an earlier
+// app that crashed) before launching a new Chrome. A live leftover Chrome on
+// such a profile would otherwise capture the new launch through Chrome's
+// profile singleton: the new process forwards its URL to the OLD instance
+// (which opens a window with the OLD WM_CLASS — unadoptable, outside the app)
+// and exits immediately, so the handshake can never succeed. Scoped strictly
+// to our own prefix; never touches any other Chrome data.
+void purgeStaleProfiles(const QString &exportDirPath)
+{
+    QDir dir(exportDirPath);
+    const QStringList stale = dir.entryList(
+        {QString::fromLatin1(kProfilePrefix) + QLatin1Char('*')},
+        QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot);
+    for (const QString &name : stale)
+        QDir(dir.filePath(name)).removeRecursively();
+}
 
 #ifdef JAH_HAVE_XCB
 
@@ -153,15 +175,24 @@ bool EmbeddedWebPreview::start(const QString &browserPath, const QString &indexH
     Q_UNUSED(browserPath); Q_UNUSED(indexHtml); Q_UNUSED(hostSlot);
     return false;
 #else
-    if (phase != Phase::Idle || !platformSupported()) return false;
+    // Reusable after stop() or a finished run — refuse only while a run is
+    // actually in flight (re-entry goes through stop() first, by design).
+    if (phase != Phase::Idle && phase != Phase::Done) return false;
+    if (!platformSupported()) return false;
     const QFileInfo info(indexHtml);
     if (browserPath.isEmpty() || !info.exists() || !hostSlot || !hostSlot->layout())
         return false;
+    stop(); // clears any Done-state leftovers (proc, container, profile dir)
 
     slot = hostSlot;
-    // Unique per attempt so a stale window from a previous run can't match.
-    classToken = "JahWebPreview-" +
-                 QUuid::createUuid().toString(QUuid::Id128).left(12).toUtf8();
+    // Unique per attempt so a stale window from a previous run can't match —
+    // and the SAME uniqueness for the Chrome profile below, so a previous
+    // run's Chrome (live or half-dead) can never singleton-capture this one.
+    const QString uniq = QUuid::createUuid().toString(QUuid::Id128).left(12);
+    classToken = "JahWebPreview-" + uniq.toUtf8();
+    profileDir = info.absolutePath() + QLatin1Char('/') +
+                 QString::fromLatin1(kProfilePrefix) + QLatin1Char('-') + uniq;
+    purgeStaleProfiles(info.absolutePath());
 
     // ?jahembed=1 makes OUR viewer append readiness markers to its title;
     // exported pages opened normally never carry the marker.
@@ -179,8 +210,10 @@ bool EmbeddedWebPreview::start(const QString &browserPath, const QString &indexH
         // real WebGPU adapter with the Vulkan feature (spike-verified).
         QStringLiteral("--ozone-platform=x11"),
         QStringLiteral("--enable-features=Vulkan"),
-        // Distinct profile: never contend with a running companion preview.
-        QStringLiteral("--user-data-dir=%1/.preview-profile-embedded").arg(info.absolutePath()),
+        // Distinct AND unique-per-run profile: never contend with a running
+        // companion preview, and never with a previous embedded run's Chrome
+        // (same-profile launches get singleton-forwarded to the old instance).
+        QStringLiteral("--user-data-dir=%1").arg(profileDir),
         QStringLiteral("--no-first-run"),
         QStringLiteral("--no-default-browser-check"),
         QStringLiteral("--window-size=1280,800"),
@@ -222,8 +255,8 @@ void EmbeddedWebPreview::poll()
             windowId = w;
             phase = Phase::WaitingReady;
             phaseStartMs = QDateTime::currentMSecsSinceEpoch();
-        } else if (inPhase > findTimeoutMs) {
-            finish(false, QStringLiteral("browser window not found"));
+        } else if (inPhase > (refinding ? refindGraceMs : findTimeoutMs)) {
+            finish(everEmbedded, QStringLiteral("browser window not found"));
         }
         break;
     }
@@ -237,13 +270,13 @@ void EmbeddedWebPreview::poll()
         }
         const QByteArray title = windowTitle(c, xcb_window_t(windowId));
         if (title.contains(kNoGpuMarker)) {
-            finish(false, QStringLiteral("viewer reported no WebGPU in embeddable browser"));
+            finish(everEmbedded, QStringLiteral("viewer reported no WebGPU in embeddable browser"));
         } else if (title.contains(kReadyMarker)) {
             // ADOPT ONLY NOW: reparenting during Chrome's GPU-process init
             // permanently kills its WebGPU adapter (spike-verified).
             adopt(windowId);
         } else if (inPhase > readyTimeoutMs) {
-            finish(false, QStringLiteral("viewer never signalled gpu-ready"));
+            finish(everEmbedded, QStringLiteral("viewer never signalled gpu-ready"));
         }
         break;
     }
@@ -251,6 +284,8 @@ void EmbeddedWebPreview::poll()
         if (windowAlive(c, xcb_window_t(windowId))) break;
         // Chrome recreated (or lost) its window. Drop the dead container and
         // give the watchdog a grace period to re-adopt (spike-verified path).
+        // detached() lets the host hide the embed area meanwhile — a visible
+        // slot with no container is a dead black panel.
         delete container;
         container = nullptr;
         foreignWindow = nullptr;
@@ -258,7 +293,8 @@ void EmbeddedWebPreview::poll()
         if (proc && proc->state() == QProcess::Running) {
             phase = Phase::Finding;
             phaseStartMs = QDateTime::currentMSecsSinceEpoch();
-            findTimeoutMs = refindGraceMs;
+            refinding = true; // grace timeout, without mutating findTimeoutMs
+            emit detached();
         } else {
             finish(true, QString());
         }
@@ -288,6 +324,8 @@ void EmbeddedWebPreview::adopt(quint32 wid)
     slot->layout()->addWidget(container);
     phase = Phase::Embedded;
     phaseStartMs = QDateTime::currentMSecsSinceEpoch();
+    everEmbedded = true;
+    refinding = false;
     emit embedded();
 #else
     Q_UNUSED(wid);
@@ -296,25 +334,51 @@ void EmbeddedWebPreview::adopt(quint32 wid)
 
 void EmbeddedWebPreview::finish(bool wasEmbedded, const QString &reason)
 {
-    if (phase == Phase::Done) return;
+    if (phase == Phase::Done || phase == Phase::Idle) return;
     phase = Phase::Done;
     if (timer) timer->stop();
     delete container;
     container = nullptr;
     foreignWindow = nullptr;
-    if (wasEmbedded) emit closed();
+    // A session that WAS embedded ends as closed(), never failed() — failed()
+    // makes the caller fall back to a companion window, which must only
+    // happen for a preview the user never saw embedded.
+    if (wasEmbedded || everEmbedded) emit closed();
     else emit failed(reason);
 }
 
 void EmbeddedWebPreview::stop()
 {
-    phase = Phase::Done;
-    if (timer) timer->stop();
+    // Full teardown back to Idle: the same object (or a successor using the
+    // same export dir) must be able to start a FRESH run with nothing of this
+    // one left — no container over a dead window, no owned Chrome, no profile
+    // dir a new Chrome could singleton-collide with. Order: container first
+    // (the prior Close-preview fix proved destroying the container before the
+    // foreign window dies is the safe direction), then the process, then the
+    // profile once the process is down.
+    phase = Phase::Idle;
+    if (timer) { timer->stop(); timer->deleteLater(); timer = nullptr; }
     delete container;
     container = nullptr;
     foreignWindow = nullptr;
-    if (proc && proc->state() != QProcess::NotRunning) {
-        proc->terminate();
-        if (!proc->waitForFinished(1500)) proc->kill();
+    windowId = 0;
+    everEmbedded = false;
+    refinding = false;
+    classToken.clear();
+    if (proc) {
+        proc->disconnect(this); // its finished-lambda must not re-enter finish()
+        if (proc->state() != QProcess::NotRunning) {
+            proc->terminate();
+            if (!proc->waitForFinished(1500)) {
+                proc->kill();
+                proc->waitForFinished(500);
+            }
+        }
+        proc->deleteLater();
+        proc = nullptr;
+    }
+    if (!profileDir.isEmpty()) {
+        QDir(profileDir).removeRecursively(); // ours alone, by construction
+        profileDir.clear();
     }
 }

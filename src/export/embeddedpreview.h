@@ -63,12 +63,17 @@ public:
     // fail. Progress is reported ONLY through the signals.
     bool start(const QString &browserPath, const QString &indexHtml, QWidget *hostSlot);
 
-    // Tear down: destroy the container and terminate the browser process.
-    // Safe to call in any state, including after failed()/closed().
+    // Tear down COMPLETELY: destroy the container, terminate and reap the
+    // browser process, delete this run's Chrome profile dir, and return to
+    // Idle so start() can run again on the same object. Safe to call in any
+    // state, including after failed()/closed(). Emits nothing.
     void stop();
 
     bool isEmbedded() const { return phase == Phase::Embedded; }
+    // The owned browser process for the CURRENT run; null once stop() reaped it.
     QProcess *process() const { return proc; }
+    // This run's unique --user-data-dir (for tests); empty after stop().
+    QString profileDirPath() const { return profileDir; }
 
     // Timeouts (ms), overridable for tests.
     int findTimeoutMs = 10000;    // window with our WM_CLASS token must appear
@@ -77,8 +82,14 @@ public:
 
 signals:
     void embedded();                    // container is live inside hostSlot
-    void failed(const QString &reason); // never embedded — fall back silently
-    void closed();                      // was embedded, browser went away
+                                        // (fires again after a re-adoption)
+    void failed(const QString &reason); // NEVER embedded — fall back silently
+    void closed();                      // WAS embedded at some point, browser
+                                        // (or its window) went away for good
+    void detached();                    // was embedded, container dropped while
+                                        // the watchdog re-finds the window —
+                                        // hide the embed area until embedded()
+                                        // fires again or closed() ends the run
 
 private:
     enum class Phase { Idle, Finding, WaitingReady, Embedded, Done };
@@ -89,8 +100,11 @@ private:
 
     Phase phase = Phase::Idle;
     QByteArray classToken;
+    QString profileDir;         // unique per run — Chrome singleton isolation
     quint32 windowId = 0;
     qint64 phaseStartMs = 0;
+    bool everEmbedded = false;  // a lost window after success is closed(), not failed()
+    bool refinding = false;     // Finding is a watchdog re-find (grace timeout)
     QPointer<QWidget> slot;
     QPointer<QWidget> container;
     QWindow *foreignWindow = nullptr;
