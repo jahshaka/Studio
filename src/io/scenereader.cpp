@@ -896,5 +896,15 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, Q
 
     if (animMap.contains(animName)) return animMap[animName];
 
+    // Name miss with exactly one clip in the source: take it. Heals scenes
+    // saved before clip names were fixed (extraction used to collapse a clip
+    // named after its first channel to "", a name that no longer exists in
+    // the re-extracted map). With several clips there is no safe guess —
+    // warn instead of silently dropping the animation.
+    if (animMap.size() == 1) return animMap.first();
+    if (!animMap.isEmpty())
+        qWarning() << "getSkeletalAnimation: no clip named" << animName
+                   << "in" << relPath << "- clips:" << animMap.keys();
+
     return iris::SkeletalAnimationPtr();
 }

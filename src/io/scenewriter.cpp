@@ -344,7 +344,17 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
         if (anim->hasSkeletalAnimation()) {
             auto skelAnim = anim->getSkeletalAnimation();
             QJsonObject skelObj;
-            skelObj["source"] = skelAnim->source;
+            // Never persist an ABSOLUTE source (GLB importer fix phase 1):
+            // import sets SkeletalAnimation::source to the model's absolute
+            // path, which breaks the {source, name} reference on any other
+            // machine (or after the project moves). Store it relative to the
+            // project dir — SceneReader::getSkeletalAnimation resolves
+            // relative sources via getAbsolutePath and re-relativizes after
+            // load, so saved scenes converge on the stable relative form.
+            QString source = skelAnim->source;
+            if (!source.isEmpty() && QFileInfo(source).isAbsolute())
+                source = dir.relativeFilePath(source);
+            skelObj["source"] = source;
             skelObj["name"] = skelAnim->name;
             animObj["skeletalAnimation"] = skelObj;
         }

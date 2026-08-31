@@ -135,7 +135,9 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
                 meshNode->meshPath = meshGuid;
             meshNode->setGUID(mainGuid);
 
-            auto material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+            // Base MaterialPtr — imported GLBs now carry PbrMaterial, and both
+            // it and CustomMaterial expose `properties` + virtual setValue.
+            auto material = meshNode->getMaterial();
             if (material) {
                 for (auto prop : material->properties) {
                     if (prop->type != iris::PropertyType::Texture) continue;

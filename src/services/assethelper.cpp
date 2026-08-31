@@ -16,6 +16,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
@@ -189,6 +190,35 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     // load mesh as scene
     auto node = iris::MeshNode::loadAsSceneFragment(filePath, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
+        const auto isFile = [](const QString &p) {
+            return !p.isEmpty() && QFileInfo::exists(p) && QFileInfo(p).isFile();
+        };
+
+        // glTF/GLB (and any source with pbrMetallicRoughness data) imports as
+        // a REAL PbrMaterial — factors and maps straight from the file. The
+        // old path forced everything into the legacy Default.shader
+        // CustomMaterial, whose shininess round-trip faked roughness to ~0.1
+        // (GLB importer fix phase 0; serialization handles "pbr" natively).
+        if (data.hasPbr) {
+            auto pbr = iris::PbrMaterial::create();
+            pbr->setValue("baseColor", data.baseColorFactor);
+            pbr->setValue("metallic",  data.metallicFactor);
+            pbr->setValue("roughness", data.roughnessFactor);
+            pbr->setValue("emissiveColor", data.emissionColor);
+
+            if (isFile(data.baseColorTexture)) {
+                hasEmbeddedTexture = hasEmbeddedTexture || data.hasEmbeddedDiffTexture;
+                pbr->setValue("baseColorMap", data.baseColorTexture);
+                // A sampled base colour multiplies with the factor; imports
+                // keep the authored factor (glTF semantics) as-is.
+            }
+            if (isFile(data.metallicTexture))  pbr->setValue("metallicMap",  data.metallicTexture);
+            if (isFile(data.roughnessTexture)) pbr->setValue("roughnessMap", data.roughnessTexture);
+            if (isFile(data.normalTexture))    pbr->setValue("normalMap",    data.normalTexture);
+            if (isFile(data.emissiveTexture))  pbr->setValue("emissiveMap",  data.emissiveTexture);
+            return iris::MaterialPtr(pbr);
+        }
+
         auto mat = iris::CustomMaterial::create();
 
         mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
@@ -216,7 +246,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
             mat->setValue("normalIntensity", 1.f);
         }
 
-        return mat;
+        return iris::MaterialPtr(mat);
     }, ssource);
 
     const aiScene *scene = ssource->importer.GetScene();
@@ -233,8 +263,11 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     std::function<void(iris::SceneNodePtr&)> getUsedTexture = [&](iris::SceneNodePtr &node) -> void {
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto n = node.staticCast<iris::MeshNode>();
-            auto mat = n->getMaterial().staticCast<iris::CustomMaterial>();
-            for (auto prop : mat->properties) {
+            // Base MaterialPtr, no downcast: `properties` lives on iris::Material
+            // and the material may now be a PbrMaterial (imported GLB) as well
+            // as the legacy CustomMaterial.
+            auto mat = n->getMaterial();
+            if (mat) for (auto prop : mat->properties) {
                 if (prop->type != iris::PropertyType::Texture) {
                     continue;
                 }

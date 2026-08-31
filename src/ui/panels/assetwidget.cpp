@@ -33,6 +33,8 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QComboBox>
 
+#include <algorithm>
+
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h" 
@@ -2319,23 +2321,19 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 			asset->thumbnail = thumbnail;
 
             if (asset->type != ModelTypes::Undefined) {
-                // QString pathToCopyTo = project->getProjectFolder();
-                // QString fileToCopyTo = IrisUtils::join(pathToCopyTo, asset->fileName);
-
-                // int increment = 1;
-                // QFileInfo checkFile(fileToCopyTo);
-
-                // // If we encounter the same file, make a duplicate...
-                // // Maybe ask the user to replace sometime later on (iKlsR)
-                // while (checkFile.exists()) {
-                //     // Repeatedly test if a file exists by incrementally adding a numeral to the base name
-                //     QString newName = QString(entryInfo.baseName() + " %1").arg(QString::number(increment++));
-                //     checkFile = QFileInfo(
-                //         IrisUtils::buildFileName(IrisUtils::join(pathToCopyTo, newName), entryInfo.suffix())
-                //     );
-                //     asset->fileName = checkFile.fileName();
-                //     fileToCopyTo = checkFile.absoluteFilePath();
-                // }
+                // The imported file must ALSO land in the project folder: every
+                // reader resolves texture/mesh rows as
+                // join(projectFolder, asset.name) (MaterialReader::parseMaterial,
+                // SceneReader::createMesh), so a row whose file only exists in
+                // the AssetStore renders white and breaks scene reload. This
+                // copy existed once and was commented out (GLB importer audit,
+                // greek_temple). Existing files are kept, not overwritten.
+                {
+                    const QString fileToCopyTo =
+                        IrisUtils::join(project->getProjectFolder(), asset->fileName);
+                    if (!QFileInfo::exists(fileToCopyTo))
+                        QFile::copy(entry.path, fileToCopyTo);
+                }
 
                 // Accumulate a list of all the images imported so we can use this to update references
                 // If they are used in assets that depend on them such as Materials and Objects
@@ -2471,6 +2469,53 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
                                                                                  paths,
                                                                                  hasEmbeddedTexture);
 
+                    // Textures that only exist AFTER the model was opened —
+                    // embedded GLB/FBX images extracted beside the model and
+                    // the split metallic/roughness maps — are invisible to the
+                    // import manifest (it snapshots the folder before assimp
+                    // runs). Without rows + project copies they stay absolute
+                    // AssetStore paths in the blob and render white
+                    // (GLB importer audit, greek_temple). Register and copy
+                    // them here exactly like manifest textures.
+                    for (const auto &texPath : paths) {
+                        const QFileInfo texInfo(texPath);
+                        if (!texInfo.exists() || !texInfo.isFile()) continue;
+                        const bool known = std::any_of(imagesInUse.begin(), imagesInUse.end(),
+                            [&](const directory_tuple &d) { return d.path == texInfo.fileName(); });
+                        if (known) continue;
+
+                        const QString projCopy =
+                            IrisUtils::join(project->getProjectFolder(), texInfo.fileName());
+                        if (!QFileInfo::exists(projCopy)) QFile::copy(texPath, projCopy);
+
+                        QPixmap texThumb = QPixmap(":/icons/empty_object.png");
+                        auto thumb = ThumbnailManager::createThumbnail(texPath, 72, 72);
+                        if (thumb && thumb->thumb) texThumb = QPixmap::fromImage(*thumb->thumb);
+
+                        directory_tuple extracted;
+                        extracted.parent_guid = entry.parent_guid;
+                        extracted.guid = GUIDManager::generateGUID();
+                        extracted.path = texInfo.fileName();
+                        db->createAssetEntry(extracted.guid,
+                                             texInfo.fileName(),
+                                             static_cast<int>(ModelTypes::Texture),
+                                             extracted.parent_guid,
+                                             project->getProjectGuid(),
+                                             QString(),
+                                             QString(),
+                                             AssetHelper::makeBlobFromPixmap(texThumb));
+
+                        auto assetTexture = new AssetTexture;
+                        assetTexture->assetGuid = extracted.guid;
+                        assetTexture->fileName = texInfo.fileName();
+                        assetTexture->path = extracted.guid;
+                        AssetManager::addAsset(assetTexture);
+
+                        imagesInUse.append(extracted);
+                        if (!texturesToCopy.contains(texInfo.fileName()))
+                            texturesToCopy.append(texInfo.fileName());
+                    }
+
 					QString preObjectGuid = GUIDManager::generateGUID();
 
 					// Replace all path references with GUIDs before storing in the database
@@ -2484,7 +2529,10 @@ void AssetWidget::importRegularAssets(const QList<directory_tupleA> &fileNames)
 
 							meshNode->setGUID(preObjectGuid);
 
-							auto material = meshNode->getMaterial().staticCast<iris::CustomMaterial>();
+							// Base MaterialPtr: imported GLBs now carry PbrMaterial;
+							// `properties` and virtual setValue live on iris::Material.
+							auto material = meshNode->getMaterial();
+							if (material)
 							for (auto prop : material->properties) {
 								if (prop->type == iris::PropertyType::Texture) {
                                     // Cycle through any textures that were selected in the import and use them
