@@ -111,7 +111,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 
 | verb | needs | description |
 |---|---|---|
-| `assets.list({scope: 'store'\|'project', type}) -> [{guid, name, type, drawer}]` | document | Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized). |
+| `assets.list({scope: 'store'\|'project', type}) -> [{guid, name, type, drawer}]` | document | Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). |
 | `assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}` | document | Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). |
 | `assets.import(path) -> guid` | document | Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable. |
 | `assets.importFile(path, drawerId?) -> guid` | document | Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. |
@@ -140,7 +140,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 
 | verb | needs | description |
 |---|---|---|
-| `material.apply(nodeId, presetOrGuid) -> bool` | document | Applies a built-in preset (by name or reserved guid) to a mesh node. Also registers the material as a project asset, like the presets panel. |
+| `material.apply(nodeId, presetOrGuid) -> bool` | document | Applies a built-in preset (by name or reserved guid) or a saved project material asset (by guid) to a node. A container node (an imported model's root) applies to every mesh under it, each with its own material instance. Also registers preset applies as a project asset, like the presets panel. Undoable. |
 | `material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, ...}) -> bool` | document | Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. |
 | `material.get(nodeId) -> {property: value}` | document | Reads the node material's editor-facing properties. |
 

@@ -93,7 +93,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
         { "list", "assets.list({scope: 'store'|'project', type}) -> [{guid, name, type, drawer}]",
-          "Store assets (default) or the open project's assets, optionally filtered by type name. drawer is the containing drawer's id (0 = Uncategorized).",
+          "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized).",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
@@ -160,6 +160,19 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         records = host.db->fetchAssetsForAssetView();
     } else if (scope == "project") {
         if (!requireProject()) return out;
+        if (typeFilter >= 0) {
+            // Folder-independent: a type-filtered project listing must see
+            // assets registered in subfolders too (a preset apply files its
+            // material asset under Presets/, which a root-children sweep
+            // never returned).
+            for (const auto &record : host.db->fetchFilteredAssets(host.project->getProjectGuid(), typeFilter)) {
+                out.append(QVariantMap{ { "guid", record.guid },
+                                        { "name", record.name },
+                                        { "type", typeName(typeFilter) },
+                                        { "drawer", record.collection } });
+            }
+            return out;
+        }
         records = host.db->fetchChildAssets(host.project->getProjectGuid(), host.project->getProjectGuid(), -1, true);
     } else {
         fail("assets.list: scope must be 'store' or 'project'");
@@ -398,7 +411,7 @@ QString AssetsApi::addToProject(const QString &guid)
         auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(newGuid)).object();
         MaterialReader reader;
         reader.setProject(host.project);
-        auto material = reader.parseMaterial(matObject, host.db);
+        auto material = reader.parseMaterialTyped(matObject, host.db);
         auto asset = new AssetMaterial;
         asset->assetGuid = newGuid;
         asset->setValue(QVariant::fromValue(material));
@@ -546,7 +559,7 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
         MaterialReader reader;
         reader.setProject(host.project);
-        image = renderer.renderMaterial(reader.parseMaterial(matObject, host.db), QSize(512, 512));
+        image = renderer.renderMaterial(reader.parseMaterialTyped(matObject, host.db), QSize(512, 512));
     } else {
         renderer.release();
         return fail("assets.refreshThumbnail: only object and material assets are supported");

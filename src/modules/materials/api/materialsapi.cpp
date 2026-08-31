@@ -191,7 +191,9 @@ QVector<VerbInfo> MaterialApi::verbs() const
 {
     return {
         { "apply", "material.apply(nodeId, presetOrGuid) -> bool",
-          "Applies a built-in preset (by name or reserved guid) to a mesh node. Also registers the material as a project asset, like the presets panel.",
+          "Applies a built-in preset (by name or reserved guid) or a saved project material asset (by guid) to a node. "
+          "A container node (an imported model's root) applies to every mesh under it, each with its own material instance. "
+          "Also registers preset applies as a project asset, like the presets panel. Undoable.",
           Needs::Document },
         { "set", "material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, ...}) -> bool",
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property.",
@@ -221,24 +223,45 @@ bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
 {
     if (!host.mainWindow) return fail("material: not available in this session");
     if (!requireProject()) return false;   // the delegate registers DB rows
-    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.apply"));
-    if (!meshNode) return false;
+
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene() : iris::ScenePtr();
+    if (!scene) return fail("material.apply: no scene is open");
+    auto node = findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) return fail(QStringLiteral("material.apply: no node '%1'").arg(nodeId));
+
+    // A mesh applies directly; a container (an imported model's Empty root —
+    // exactly what the viewport's click-selects-the-root rule selects) applies
+    // to every mesh underneath. A target with no meshes at all is an error,
+    // not a silent no-op — the silent path is how applied materials used to
+    // vanish without ever reaching the document.
+    std::function<bool(const iris::SceneNodePtr &)> hasMesh =
+        [&hasMesh](const iris::SceneNodePtr &n) -> bool {
+            if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) return true;
+            for (const auto &child : n->children)
+                if (hasMesh(child)) return true;
+            return false;
+        };
+    if (!hasMesh(node))
+        return fail(QStringLiteral("material.apply: '%1' has no mesh nodes to apply to").arg(nodeId));
+
+    host.services->selection->select(node);
 
     QString name = Constants::Reserved::DefaultMaterials.value(presetOrGuid);
     if (name.isEmpty()) name = presetOrGuid;
 
     const auto presets = loadPresets();
-    const MaterialPreset *match = nullptr;
     for (const auto &preset : presets) {
-        if (preset.name.compare(name, Qt::CaseInsensitive) == 0) { match = &preset; break; }
+        if (preset.name.compare(name, Qt::CaseInsensitive) == 0) {
+            host.services->sceneEdit->applyMaterialPreset(preset, node);
+            return true;
+        }
     }
-    if (!match)
-        return fail(QStringLiteral("material.apply: no preset named or guid '%1' (materials.presets() lists them)").arg(presetOrGuid));
 
-    // The service targets the selection — select the node, then apply.
-    host.services->selection->select(meshNode);
-    host.services->sceneEdit->applyMaterialPreset(*match);
-    return true;
+    // Not a built-in preset: a saved project material asset guid (the same
+    // fallback the viewport drop uses).
+    if (host.services->sceneEdit->applyMaterialAsset(presetOrGuid, node)) return true;
+
+    return fail(QStringLiteral("material.apply: no preset or material asset '%1' (materials.presets() and assets.list list them)").arg(presetOrGuid));
 }
 
 bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)

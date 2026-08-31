@@ -101,9 +101,23 @@ public:
     bool deleteNode(iris::SceneNodePtr node);
     iris::SceneNodePtr duplicateNode(iris::SceneNodePtr node);
 
-    /// Applies a material preset to the selected mesh node (both surfaces
-    /// select first — the pre-extraction contract).
+    /// Applies a material preset to the selection. The selection may be a
+    /// single mesh OR a container (an imported model roots at an Empty — the
+    /// viewport's click-selects-the-root rule hands exactly that node over):
+    /// every mesh at or under it receives its own fresh material instance.
+    /// Undoable as one "Apply Material" entry. The old mesh-only guard
+    /// silently dropped presets applied to models — the owner-reported
+    /// "PBR materials lost on reopen" data loss: they never entered the
+    /// document, so the writer had nothing to save.
     void applyMaterialPreset(const MaterialPreset &preset);
+    void applyMaterialPreset(const MaterialPreset &preset, iris::SceneNodePtr target);
+
+    /// Applies a SAVED material asset (a project .material row — e.g. one the
+    /// preset apply registered under Presets/) to the same target set.
+    /// Dispatches on the stored materialType, so saved PBR materials come back
+    /// as real PbrMaterials. Returns false when the guid has no material data
+    /// or the target holds no meshes.
+    bool applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target);
 
     /// Snapshots the node's material into a .material asset registered under
     /// folderGuid (the shell passes its asset browser's current folder).

@@ -263,7 +263,9 @@ iris::MaterialPtr EngineAssetViewer::readJafMaterial(const QString &guid)
     QJsonObject matObject = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
     MaterialReader reader(TextureSource::GlobalAssets, assetFolder(guid));
     reader.setProject(mProject);
-    return reader.parseMaterial(matObject, mDb);
+    // Typed: a saved PBR material previews as a PbrMaterial, not a broken
+    // shader-less CustomMaterial.
+    return reader.parseMaterialTyped(matObject, mDb);
 }
 
 iris::MaterialPtr EngineAssetViewer::readJafShader(const QString &guid)

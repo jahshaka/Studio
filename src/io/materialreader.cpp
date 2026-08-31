@@ -31,8 +31,11 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "data/settingsmanager.h"
 
+#include <QFileInfo>
+
 // iris includes
 #include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/core/irisutils.h"
 //#include "irisgl/src/core/property.h"
 #include "modules/materials/core/materialhelper.h"
@@ -113,6 +116,67 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString sha
 
 	ShaderHandler handler(textureSource, globalSourceFolder);
 	auto mat = handler.loadMaterialFromShader(shaderObj, db);
+
+	return mat;
+}
+
+iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Database* db, bool loadTextures)
+{
+	if (matObject["materialType"].toString() == "pbr")
+		return parsePbrMaterial(matObject, db, loadTextures);
+	return parseMaterial(matObject, db, loadTextures);
+}
+
+iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Database* db, bool loadTextures)
+{
+	auto mat    = iris::PbrMaterial::create();
+	auto values = matObject["values"].toObject();
+
+	// Drive everything through setValue so both the shader-facing field and the
+	// editor-facing Property object update (same contract as
+	// SceneReader::readPbrMaterial, which reads these out of the scene blob).
+	for (auto prop : mat->properties) {
+		if (!values.contains(prop->name)) continue;
+		const auto val = values.value(prop->name);
+
+		switch (prop->type) {
+		case iris::PropertyType::Float:
+			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
+			break;
+		case iris::PropertyType::Int:
+			mat->setValue(prop->name, val.toInt());
+			break;
+		case iris::PropertyType::Color:
+			mat->setValue(prop->name, QColor(val.toString()));
+			break;
+		case iris::PropertyType::Bool:
+			mat->setValue(prop->name, val.toBool());
+			break;
+		case iris::PropertyType::Texture: {
+			if (!loadTextures) break;
+			// Stored as an asset guid (saved against the project database) or
+			// as a path. Resolve the guid to the project/global file the same
+			// way parseMaterial does; fall back to treating it as a path.
+			const QString stored = val.toString();
+			QString path;
+			if (!stored.isEmpty()) {
+				if (db) {
+					const QString assetName = db->fetchAsset(stored).name;
+					if (!assetName.isEmpty()) {
+						path = (textureSource == TextureSource::Project && project)
+							? IrisUtils::join(project->getProjectFolder(), assetName)
+							: IrisUtils::join(globalSourceFolder, assetName);
+					}
+				}
+				if (path.isEmpty() && QFileInfo::exists(stored)) path = stored;
+			}
+			mat->setValue(prop->name, path);
+			break;
+		}
+		default:
+			break;
+		}
+	}
 
 	return mat;
 }

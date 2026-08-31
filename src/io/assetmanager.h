@@ -21,6 +21,11 @@ For more information see the LICENSE file
 
 #include "data/project.h"
 
+// AssetMaterial values hold the hydrated material behind a saved .material
+// asset. PBR materials only exist behind the Material base (PbrMaterial is not
+// a CustomMaterial), so the variant payload is the base pointer.
+Q_DECLARE_METATYPE(iris::MaterialPtr)
+
 class aiScene;
 
 struct Asset {

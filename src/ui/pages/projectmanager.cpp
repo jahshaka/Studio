@@ -155,9 +155,10 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
 
 			MaterialReader reader;
 			reader.setProject(project);
-			iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
-			//qDebug() << matObject;
-			//iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
+			// Typed parse: a saved PBR material hydrates as a PbrMaterial. The
+			// untyped parseMaterial forced everything through the shader-guid
+			// CustomMaterial path and PBR assets came back broken (grey).
+			iris::MaterialPtr material = reader.parseMaterialTyped(matObject, db);
 
 			auto assetMat = new AssetMaterial;
 			assetMat->assetGuid = asset.guid;
@@ -934,7 +935,8 @@ void ProjectManager::loadProjectAssetsSync()
 
 		MaterialReader reader;
 		reader.setProject(project);
-		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
+		// Typed parse — see loadProjectAssets() above.
+		iris::MaterialPtr material = reader.parseMaterialTyped(matObject, db);
 
 		auto assetMat = new AssetMaterial;
 		assetMat->assetGuid = asset.guid;

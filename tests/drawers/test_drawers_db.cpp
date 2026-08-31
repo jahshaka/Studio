@@ -167,6 +167,32 @@ int main(int argc, char **argv)
         q.exec(QString("UPDATE assets SET collection = 0 WHERE guid = '%1'").arg(swordGuid));
     }
 
+    // --- Material-asset data heal (PBR data-loss audit) ---------------------
+    // Libraries written before the fix carry material rows whose definition
+    // JSON landed in the TAGS column (a shifted createAssetEntry argument)
+    // with the ASSET column empty. The startup migration must move it over,
+    // leave healthy rows alone, and be idempotent.
+    {
+        QSqlQuery q;
+        bool ok = q.exec(
+            "INSERT INTO assets (name, guid, type, project_guid, collection, tags, asset) "
+            "VALUES ('Stranded PBR', 'stranded-mat-guid', 1, 'projX', 0, '{\"materialType\": \"pbr\"}', NULL)");
+        ok = ok && q.exec(
+            "INSERT INTO assets (name, guid, type, project_guid, collection, tags, asset) "
+            "VALUES ('Healthy Mat', 'healthy-mat-guid', 1, 'projX', 0, 'user,tags', '{\"materialType\": \"custom\"}')");
+        CHECK(ok, "pre-fix material rows simulated");
+
+        db.createAllTables();   // runs migrateAssetsTable
+        CHECK(db.fetchAssetData("stranded-mat-guid") == QByteArray("{\"materialType\": \"pbr\"}"),
+              "stranded material JSON moved from tags to asset");
+        CHECK(db.fetchAssetData("healthy-mat-guid") == QByteArray("{\"materialType\": \"custom\"}"),
+              "healthy material row untouched");
+
+        db.createAllTables();   // idempotent
+        CHECK(db.fetchAssetData("stranded-mat-guid") == QByteArray("{\"materialType\": \"pbr\"}"),
+              "material data migration is idempotent");
+    }
+
     db.closeDatabase();
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("all drawers db checks passed\n");

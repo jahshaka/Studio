@@ -52,6 +52,15 @@ public:
 	// if handle is null then it will try to fetch the assets
 	// from the asset manager
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
+
+	// Dispatches on the "materialType" tag SceneWriter stamps on every saved
+	// material: "pbr" rebuilds a PbrMaterial (parseMaterial would force it
+	// through the shader-guid CustomMaterial path — a pbr definition has no
+	// shaderGuid, so it came back as a broken default material and the PBR
+	// values were silently dropped); anything else takes the legacy
+	// CustomMaterial path unchanged.
+	iris::MaterialPtr parseMaterialTyped(QJsonObject matObject, Database* handle, bool loadTextures = true);
+	iris::PbrMaterialPtr parsePbrMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid, Database* db);
 	iris::CustomMaterialPtr createMaterialFromShaderFile(QString shaderPath, Database* db);
 	QJsonObject getShaderObjectFromId(QString shaderGuid, Database* db);
