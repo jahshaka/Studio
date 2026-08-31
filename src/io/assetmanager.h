@@ -26,7 +26,9 @@ For more information see the LICENSE file
 // a CustomMaterial), so the variant payload is the base pointer.
 Q_DECLARE_METATYPE(iris::MaterialPtr)
 
-class aiScene;
+// (No `class aiScene;` here: nothing in this header names the type — the model
+// payload is AssimpObject, declared by graphicshelper.h above, which carries
+// its own forward declaration. ENGINEERING_DEBT_SPEC item 5, shape 3.)
 
 struct Asset {
     ModelTypes          type;
