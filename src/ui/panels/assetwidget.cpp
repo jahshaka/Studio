@@ -289,7 +289,14 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 void AssetWidget::trigger()
 {
-    AssetManager::clearAssetList();
+    // NO clearAssetList() here (IMAGE_PLANE_SPEC §6): trigger() runs AFTER
+    // ProjectManager::registerProjectSessionAssets in every open flow
+    // (loadProjectAssets[Sync] → MainWindow::openProject → trigger), so a
+    // clear at this point silently WIPED the session hydration — the
+    // "material drag no-ops after reopen" defect. Every path here already
+    // cleared: closeProject() and loadProjectAssets[Sync]() both start with
+    // AssetManager::clearAssetList(), so the built-in presets below register
+    // exactly once per open.
 
     auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
     auto files = dir.entryInfoList(QStringList(), QDir::Files);

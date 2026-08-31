@@ -56,7 +56,7 @@ For more information see the LICENSE file
 #include "services/projectarchiver.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
-#include "io/materialreader.h"
+#include "services/projectassets.h"
 #include "ui/dialogs/customdialog.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -744,68 +744,37 @@ void ProjectManager::loadProjectAssetsSync()
 
 void ProjectManager::registerProjectSessionAssets()
 {
-	// Session AssetManager registrations for the opening project. Mesh
-	// assets are NOT pre-parsed (see loadProjectAssets); their bytes load on
-	// demand through the readers.
-	QSqlDatabase conn = QSqlDatabase::database();
-	const QString storeRoot = AssetStorePaths::root();
+	// Session AssetManager registrations for the opening project — every
+	// guid goes through ProjectAssets::registerSessionAsset, THE one
+	// hydration routine (IMAGE_PLANE_SPEC §6; bytes CAS-resolved pin-first).
+	// Two membership shapes exist:
+	//   - legacy per-project rows (assets.project_guid = this project),
+	//     collected by type below. Object/Mesh rows deliberately stay
+	//     unregistered (not pre-parsed; the readers load them on demand —
+	//     see loadProjectAssets).
+	//   - pin rows (project_assets) — the pin world's ONLY membership shape.
+	//     Before this union they were registered exclusively by the ADDING
+	//     session (ProjectAssets::addToProject), so after a project reopen
+	//     the panel listed them but the viewport's AssetManager lookups
+	//     missed (material drag no-op — the §6 defect).
 	const QString projectGuid = project->getProjectGuid();
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), projectGuid)) {
-		auto assetFile = new AssetFile;
-		assetFile->fileName = asset.name;
-		assetFile->assetGuid = asset.guid;
-		assetFile->path = AssetCas::resolvePinned(conn, storeRoot, projectGuid, asset.guid);
-		AssetManager::addAsset(assetFile);
+	QStringList guids;
+	for (const int type : { static_cast<int>(ModelTypes::File),
+	                        static_cast<int>(ModelTypes::Texture),
+	                        static_cast<int>(ModelTypes::Shader),
+	                        static_cast<int>(ModelTypes::ParticleSystem),
+	                        static_cast<int>(ModelTypes::Material) }) {
+		for (const auto &asset : db->fetchAssetsByType(type, projectGuid))
+			guids.append(asset.guid);
 	}
+	// The pin union — members hydrate exactly as the adding session did
+	// (pinned Objects included: their bin drags need the session entry).
+	for (const auto &asset : db->fetchProjectPinnedAssets(projectGuid))
+		guids.append(asset.guid);
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), projectGuid)) {
-		auto assetTexture = new AssetTexture;
-		assetTexture->fileName = asset.name;
-		assetTexture->assetGuid = asset.guid;
-		assetTexture->path = AssetCas::resolvePinned(conn, storeRoot, projectGuid, asset.guid);
-		AssetManager::addAsset(assetTexture);
-	}
-
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Shader), project->getProjectGuid())) {
-		QJsonDocument shaderDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
-		QJsonObject shaderObject = shaderDefinition.object();
-
-		auto assetShader = new AssetShader;
-		assetShader->assetGuid = asset.guid;
-		assetShader->fileName = QFileInfo(asset.name).baseName();
-		assetShader->setValue(QVariant::fromValue(shaderObject));
-		AssetManager::addAsset(assetShader);
-	}
-
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::ParticleSystem), project->getProjectGuid())) {
-		QJsonDocument particleDefinition = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
-		QJsonObject particleObject = particleDefinition.object();
-
-		auto assetPS = new AssetParticleSystem;
-		assetPS->assetGuid = asset.guid;
-		assetPS->fileName = QFileInfo(asset.name).baseName();
-		assetPS->setValue(QVariant::fromValue(particleObject));
-		AssetManager::addAsset(assetPS);
-	}
-
-	// Materials
-	for (const auto &asset :
-		db->fetchFilteredAssets(project->getProjectGuid(), static_cast<int>(ModelTypes::Material)))
-	{
-		QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(asset.guid));
-		QJsonObject matObject = matDoc.object();
-
-		MaterialReader reader;
-		reader.setProject(project);
-		// Typed parse: a saved PBR material hydrates as a PbrMaterial.
-		iris::MaterialPtr material = reader.parseMaterialTyped(matObject, db);
-
-		auto assetMat = new AssetMaterial;
-		assetMat->assetGuid = asset.guid;
-		assetMat->setValue(QVariant::fromValue(material));
-		AssetManager::addAsset(assetMat);
-	}
+	for (const QString &guid : guids)
+		ProjectAssets::registerSessionAsset(guid, db, project);
 }
 
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)

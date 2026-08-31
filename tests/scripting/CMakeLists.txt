@@ -190,6 +190,21 @@ set_tests_properties(scripting.e2e.import_pipeline PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# IMAGE_PLANE_SPEC §6: pinned library assets hydrate on project REOPEN —
+# add-to-project → close → reopen → material.apply by the pinned guid onto a
+# cube → document material asserted. Document verbs only -> --headless;
+# fixture paths configured in.
+configure_file(scripts/e2e_pinned_reopen.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-pinned_reopen)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.pinned_reopen
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_pinned_reopen.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.pinned_reopen PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # Post-release fix (2026-08-31): an imported textured GLB RENDERS — texture
 # properties resolve to store files (no raw guid reaches Texture2D::load),
 # the Mesh member carries the model bytes (scene placement has geometry),

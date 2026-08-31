@@ -85,8 +85,8 @@ QString storeFolderFor(const QString &guid)
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project', type}) -> [{guid, name, type, drawer}]",
-          "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized).",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type}) -> [{guid, name, type, drawer}]",
+          "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
@@ -175,6 +175,20 @@ QVariantList AssetsApi::list(const QVariantMap &options)
     }
 
     QVector<AssetRecord> records;
+    if (scope == "session") {
+        // The live AssetManager registrations — what the viewport's drag-drop
+        // lookups and the panels actually see. Makes session hydration
+        // observable to scripts and tests (IMAGE_PLANE_SPEC §6 gate).
+        if (!requireProject()) return out;
+        for (Asset *asset : AssetManager::getAssets()) {
+            if (!asset) continue;
+            if (typeFilter >= 0 && static_cast<int>(asset->type) != typeFilter) continue;
+            out.append(QVariantMap{ { "guid", asset->assetGuid },
+                                    { "name", asset->fileName },
+                                    { "type", typeName(static_cast<int>(asset->type)) } });
+        }
+        return out;
+    }
     if (scope == "store") {
         records = host.db->fetchAssetsForAssetView();
     } else if (scope == "project") {
@@ -205,7 +219,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             records.append(record);
         }
     } else {
-        fail("assets.list: scope must be 'store' or 'project'");
+        fail("assets.list: scope must be 'store', 'project' or 'session'");
         return out;
     }
 

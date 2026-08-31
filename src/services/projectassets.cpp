@@ -78,13 +78,28 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
 
     // Session registrations — the ORIGINAL guids, bytes CAS-resolved through
     // the fresh pins (identical to what the readers will resolve).
-    for (const QString &member : members) {
-        if (sessionHas(member)) continue;
-        const auto memberRecord = db->fetchAsset(member);
-        if (memberRecord.guid.isEmpty()) continue;
-        const QString path = AssetCas::resolvePinned(conn, root, projectGuid, member);
+    for (const QString &member : members)
+        registerSessionAsset(member, db, project);
 
-        switch (static_cast<ModelTypes>(memberRecord.type)) {
+    result.guid = guid;
+    return result;
+}
+
+bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
+                                         Project *project)
+{
+    if (!db || !project || project->getProjectGuid().isEmpty()) return false;
+    if (sessionHas(guid)) return true;
+    const auto memberRecord = db->fetchAsset(guid);
+    if (memberRecord.guid.isEmpty()) return false;
+
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QString projectGuid = project->getProjectGuid();
+    const QString member = guid;
+    const QString path = AssetCas::resolvePinned(conn, root, projectGuid, member);
+
+    switch (static_cast<ModelTypes>(memberRecord.type)) {
         case ModelTypes::Object: {
             if (path.isEmpty()) break;
             auto node = iris::MeshNode::loadAsSceneFragment(
@@ -164,12 +179,9 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
             break;
         }
         default:
-            break;
+            return false;   // no session shape for this type (Mesh rows etc.)
         }
-    }
-
-    result.guid = guid;
-    return result;
+    return true;
 }
 
 bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project *project)
