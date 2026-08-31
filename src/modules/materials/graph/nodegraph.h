@@ -45,6 +45,9 @@ struct MaterialSettings {
 	BlendMode blendMode = BlendMode::Opaque;
 	CullMode cullMode = CullMode::Back;
 	RenderLayer renderLayer = RenderLayer::Opaque;
+	// Final bake resolution for this material's UV-varying chains
+	// (MATERIALS_EVALUATOR_SPEC section 2); previews always bake 256.
+	int bakeResolution = 1024;
 };
 
 class ModelContext

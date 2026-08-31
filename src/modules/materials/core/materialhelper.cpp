@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "../graph/graphnodescene.h"
 #include "../graph/nodegraph.h"
 #include "../generator/shadergenerator.h"
+#include "graphbaker.h"
 #include "pbrgraphevaluator.h"
 #include "texturemanager.h"
 #include <QFileInfo>
@@ -132,6 +133,28 @@ QJsonObject MaterialHelper::serialize(NodeGraph* graph)
 	return matObj;
 }
 
+QJsonObject MaterialHelper::serializeWithBake(NodeGraph* graph, const QString& bakeGuid)
+{
+	QJsonObject matObj = serialize(graph);
+	if (!graph || bakeGuid.isEmpty() || projectRoot.isEmpty())
+		return matObj;
+
+	materials::GraphBaker::Options opts;
+	opts.resolution = graph->settings.bakeResolution;
+	opts.outputDir = projectRoot + "/BakedMaps/" + bakeGuid;
+	opts.relativePrefix = "BakedMaps/" + bakeGuid + "/";
+	const auto baked = materials::GraphBaker::run(graph, opts, textureResolver());
+
+	QJsonObject pbrObj = matObj["pbrMaterial"].toObject();
+	pbrObj["values"] = baked.eval.values;
+	pbrObj["unsupportedNodes"] = QJsonArray::fromStringList(baked.eval.unsupportedNodes);
+	pbrObj["approximatedNodes"] = QJsonArray::fromStringList(baked.eval.approximatedNodes);
+	pbrObj["animated"] = baked.eval.animated;
+	pbrObj["bakedMaps"] = baked.maps;
+	matObj["pbrMaterial"] = pbrObj;
+	return matObj;
+}
+
 QString MaterialHelper::projectRoot;
 
 void MaterialHelper::setProjectRoot(const QString& folder)
@@ -170,7 +193,7 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 		return iris::PbrMaterialPtr();
 
 	auto values = matObj["pbrMaterial"].toObject()["values"].toObject();
-	return PbrGraphEvaluator::materialFromValues(values);
+	return PbrGraphEvaluator::materialFromValues(values, textureResolver());
 }
 
 iris::CustomMaterialPtr MaterialHelper::createMaterialFromShaderGraph(NodeGraph* graph)

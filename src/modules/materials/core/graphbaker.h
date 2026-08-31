@@ -81,6 +81,27 @@ public:
 		qint64 msElapsed = 0;
 	};
 
+	// The compile/execute split (spec section 1.1): compile() snapshots the
+	// graph into pure value objects on the GUI thread (node models carry
+	// live QWidgets); runCompiled() is safe on any thread - the preview path
+	// runs it under QtConcurrent.
+	struct CompiledSlot
+	{
+		MasterSlot slot;
+		bool connected = false;
+		BakeProgram program;
+	};
+	struct CompiledGraph
+	{
+		bool hasMaster = false;
+		bool hasPbrMaster = false;
+		QString name;
+		QVector<CompiledSlot> sockets;
+	};
+
+	static CompiledGraph compile(NodeGraph* graph, BakeProgram::TextureResolver resolver = {});
+	static Result runCompiled(const CompiledGraph& compiled, const Options& opts);
+
 	static Result run(NodeGraph* graph, const Options& opts,
 	                  BakeProgram::TextureResolver resolver = {});
 

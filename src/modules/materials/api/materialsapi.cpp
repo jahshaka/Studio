@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
+#include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -81,7 +82,61 @@ QVector<VerbInfo> MaterialsApi::verbs() const
         { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master}",
           "Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for graph.* verbs.",
           Needs::Document },
+        { "regenerate", "materials.regenerate(shaderGuid) -> bool",
+          "Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app "
+          "upgraded' recovery) and refreshes materials in the open scene that use that cache.",
+          Needs::Document },
     };
+}
+
+bool MaterialsApi::regenerate(const QString &shaderGuid)
+{
+    if (!host.db) return fail("materials: not available in this session");
+    if (!requireProject()) return false;
+
+    const QByteArray blob = host.db->fetchAssetData(shaderGuid);
+    if (blob.isEmpty())
+        return fail(QStringLiteral("materials.regenerate: no shader asset '%1'").arg(shaderGuid));
+    const QJsonObject definition = QJsonDocument::fromJson(blob).object();
+    if (!definition.contains("shadergraph"))
+        return fail("materials.regenerate: the asset has no 'shadergraph' object");
+
+    NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1());
+    if (!graph || !graph->getMasterNode())
+        return fail("materials.regenerate: the graph has no master node");
+
+    MaterialHelper::setProjectRoot(host.project->getProjectFolder());
+    QJsonObject rebaked = MaterialHelper::serializeWithBake(graph, shaderGuid);
+    // keep the identity keys the stored definition carried
+    if (definition.contains("name")) rebaked["name"] = definition["name"];
+    if (definition.contains("guid")) rebaked["guid"] = definition["guid"];
+    host.db->updateAssetAsset(shaderGuid, QJsonDocument(rebaked).toJson());
+
+    // refresh applied materials in the open scene: PbrMaterials whose maps
+    // point into this shader's BakedMaps cache rebuild from the fresh bake
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (scene && scene->getRootNode()) {
+        const QString marker = QStringLiteral("/BakedMaps/") + shaderGuid + QStringLiteral("/");
+        std::function<void(const iris::SceneNodePtr &)> walk =
+            [&](const iris::SceneNodePtr &n) {
+                if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                    auto mesh = n.staticCast<iris::MeshNode>();
+                    if (auto pbr = mesh->getMaterial().dynamicCast<iris::PbrMaterial>()) {
+                        bool usesCache = false;
+                        for (auto it = pbr->textures.constBegin(); it != pbr->textures.constEnd(); ++it)
+                            if (it.value() && it.value()->source.contains(marker)) { usesCache = true; break; }
+                        if (usesCache) {
+                            if (auto fresh = MaterialHelper::createPbrMaterialFromDefinition(rebaked))
+                                mesh->setMaterial(fresh);
+                        }
+                    }
+                }
+                for (const auto &child : n->children) walk(child);
+            };
+        walk(scene->getRootNode());
+    }
+    return true;
 }
 
 QVariantList MaterialsApi::presets()
@@ -566,7 +621,23 @@ bool GraphApi::toMaterial(const QString &nodeId)
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh)
         return fail(QStringLiteral("graph.toMaterial: '%1' is not a mesh node").arg(nodeId));
 
-    auto material = PbrGraphEvaluator::createMaterial(graph, MaterialHelper::textureResolver());
+    // applying is a final-bake trigger (spec section 2): with a project open,
+    // UV-varying chains land as BakedMaps PNGs and ride the material's map keys
+    iris::PbrMaterialPtr material;
+    if (host.isProjectOpen() && host.project) {
+        MaterialHelper::setProjectRoot(host.project->getProjectFolder());
+        QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
+        if (guid.isEmpty()) guid = QStringLiteral("scratch");
+
+        materials::GraphBaker::Options opts;
+        opts.resolution = graph->settings.bakeResolution;
+        opts.outputDir = host.project->getProjectFolder() + QStringLiteral("/BakedMaps/") + guid;
+        opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+        const auto baked = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
+        material = PbrGraphEvaluator::materialFromValues(baked.eval.values, MaterialHelper::textureResolver());
+    } else {
+        material = PbrGraphEvaluator::createMaterial(graph, MaterialHelper::textureResolver());
+    }
     if (!material) return fail("graph.toMaterial: evaluation produced no material");
     node.staticCast<iris::MeshNode>()->setMaterial(material);
     return true;
@@ -582,6 +653,9 @@ bool GraphApi::save()
     if (!graph->masterNode)
         return fail("graph.save: the graph has no master node (serialize would crash)");
 
-    const QJsonObject definition = MaterialHelper::serialize(graph);
+    // saving is a final-bake trigger (spec section 2)
+    if (host.isProjectOpen() && host.project)
+        MaterialHelper::setProjectRoot(host.project->getProjectFolder());
+    const QJsonObject definition = MaterialHelper::serializeWithBake(graph, mAssetGuid);
     return host.db->updateAssetAsset(mAssetGuid, QJsonDocument(definition).toJson());
 }

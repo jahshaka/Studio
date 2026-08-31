@@ -23,6 +23,13 @@ public:
 	// CPU-evaluated iris::PbrMaterial inputs of the graph (values + the list
 	// of unsupported inputs) - see PbrGraphEvaluator.
 	static QJsonObject serialize(NodeGraph* graph);
+
+	// serialize + a FINAL-quality per-texel bake of the UV-varying chains
+	// (MATERIALS_EVALUATOR_SPEC section 2): maps land in
+	// <projectRoot>/BakedMaps/<bakeGuid>/ at the graph's bakeResolution and
+	// "pbrMaterial" carries their project-relative paths. Falls back to the
+	// plain serialize when no project root is set or bakeGuid is empty.
+	static QJsonObject serializeWithBake(NodeGraph* graph, const QString& bakeGuid);
 	static iris::CustomMaterialPtr createMaterialFromShaderGraph(NodeGraph* scene);
 
 	// Option B phase 1: the graph evaluated to the document's PBR material

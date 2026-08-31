@@ -137,6 +137,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `materials.presets() -> [{name, type, guid}]` | document | The built-in material presets (PBR only in engine mode); guid is the reserved id when one exists. |
 | `materials.createGraph(name) -> guid` | document | Creates a new effect-graph asset in the open project from the shader template and opens it as the current graph. |
 | `materials.loadGraph(guidOrPath) -> {nodes, master}` | document | Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for graph.* verbs. |
+| `materials.regenerate(shaderGuid) -> bool` | document | Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app upgraded' recovery) and refreshes materials in the open scene that use that cache. |
 
 ## material
 

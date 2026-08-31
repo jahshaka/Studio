@@ -6,8 +6,12 @@
 // (the mirror re-attaches only on node/material change — the node-swap rule);
 // a green material must show green; the background colour must reach the
 // corner pixel; release() must detach cleanly.
-#include <QGuiApplication>
+#include <QApplication>
 #include <QColor>
+#include <QDir>
+#include <QImage>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -18,6 +22,15 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "jahshaka/engine/Engine.h"
 #include "bridge/enginematerialpreviewscene.h"
+
+// Materials Evaluator phase 3: a graph baked by GraphBaker must reach pixels.
+#include "modules/materials/graph/nodegraph.h"
+#include "modules/materials/models/libraryv1.h"
+#include "modules/materials/models/nodemodel.h"
+#include "modules/materials/nodes/pbrmasternode.h"
+#include "modules/materials/nodes/test.h"
+#include "modules/materials/core/graphbaker.h"
+#include "modules/materials/core/pbrgraphevaluator.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -51,7 +64,7 @@ static Image render(EngineMaterialPreviewScene &preview, Engine &engine, View *v
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv); // widget-backed graph nodes need QApplication
 
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -138,6 +151,61 @@ int main(int argc, char **argv)
         img = render(preview, *engine, view, 8);
         show("orbited 180 degrees", img, CX, CY);
         CHECK(isGreen(img.at(CX, CY)), "subject stays centred through a 180-degree orbit");
+
+        // ---- 7. a BAKED map reaches pixels (Materials Evaluator phase 3) ----
+        // A solid-red source sampled through math classifies Baked, GraphBaker
+        // writes the PNG, and the resulting PbrMaterial must render red over
+        // the blue background from step 5.
+        {
+            const QString bakeDir = QDir::current().absoluteFilePath("matpreview_bake_scratch");
+            QDir(bakeDir).removeRecursively();
+            const QString srcPath = bakeDir + "/red_src.png";
+            QDir().mkpath(bakeDir);
+            QImage src(8, 8, QImage::Format_RGBA8888);
+            src.fill(QColor(230, 20, 20));
+            CHECK(src.save(srcPath), "baked-map: red source texture written");
+
+            LibraryV1 lib;
+            NodeGraph graphDoc;
+            graphDoc.setNodeLibrary(&lib);
+            auto *graphMaster = new PbrMasterNode();
+            graphDoc.addNode(graphMaster);
+            graphDoc.setMasterNode(graphMaster);
+            auto *tex = lib.createNode("texture");
+            static_cast<TextureNode *>(tex)->setTexturePath(srcPath);
+            graphDoc.addNode(tex);
+            auto *sampler = lib.createNode("textureSampler");
+            graphDoc.addNode(sampler);
+            auto *uv = lib.createNode("texCoords");
+            graphDoc.addNode(uv);
+            auto *mul = lib.createNode("multiply");
+            graphDoc.addNode(mul);
+            auto *one = lib.createNode("float");
+            one->deserializeWidgetValue(QJsonValue(1.0));
+            graphDoc.addNode(one);
+            graphDoc.addConnection(tex, 0, sampler, 0);
+            graphDoc.addConnection(uv, 0, sampler, 1);
+            graphDoc.addConnection(sampler, 0, mul, 0);
+            graphDoc.addConnection(one, 0, mul, 1);
+            graphDoc.addConnection(mul, 0, graphMaster, 0); // Base Color
+
+            materials::GraphBaker::Options opts;
+            opts.resolution = 64;
+            opts.outputDir = bakeDir;
+            opts.relativePrefix = bakeDir + "/";
+            const auto baked = materials::GraphBaker::run(&graphDoc, opts);
+            CHECK(baked.maps.contains("baseColorMap"), "baked-map: math chain baked a baseColorMap PNG");
+
+            auto bakedMaterial = PbrGraphEvaluator::materialFromValues(baked.eval.values);
+            CHECK(!!bakedMaterial && bakedMaterial->useBaseColorMap,
+                  "baked-map: material carries the baked map");
+            preview.setMaterial(bakedMaterial);
+            img = render(preview, *engine, view, 8);
+            show("BAKED baseColorMap on the sphere", img, CX, CY);
+            CHECK(isRed(img.at(CX, CY)), "baked map reaches pixels: centre is the baked red");
+            CHECK(isBlue(img.at(2, 2)), "background stays blue behind the baked-map sphere");
+            QDir(bakeDir).removeRecursively();
+        }
 
         preview.release();
         CHECK(view->scene() == nullptr, "release() detached the scene from the view");

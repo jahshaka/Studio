@@ -154,7 +154,8 @@ private:
     GraphNodeScene* scene;
 	IMaterialPreviewWidget *enginePreview = nullptr;
 	QMainWindow *displayWindow = nullptr;   // the Display dock's inner window (menus + preview)
-	QTimer *previewUpdateTimer = nullptr;   // ~150ms debounce: slider drags evaluate once, not per pixel
+	QTimer *previewUpdateTimer = nullptr;   // 300ms debounce: slider drags bake once, not per pixel
+	quint64 previewGeneration = 0;          // latest-wins stamp for async preview bakes
 	NodeGraph *graph;
 	QSplitter *splitView;
 	AssetView* assetView;

@@ -127,12 +127,10 @@ QString hash16(const QByteArray& recipe)
 	    QCryptographicHash::hash(recipe, QCryptographicHash::Sha1).toHex().left(16));
 }
 
-// One compiled master socket.
+// One master socket during a run: the compiled slot plus per-run state.
 struct SlotState
 {
-	const MasterSlot* slot = nullptr;
-	bool connected = false;
-	BakeProgram program;
+	const GraphBaker::CompiledSlot* cs = nullptr;
 	bool needsBake = false;
 };
 
@@ -184,19 +182,44 @@ QJsonObject GraphBaker::classify(NodeGraph* graph, BakeProgram::TextureResolver 
 
 // --------------------------------------------------------------------- run
 
+GraphBaker::CompiledGraph GraphBaker::compile(NodeGraph* graph, BakeProgram::TextureResolver resolver)
+{
+	CompiledGraph out;
+	if (!graph) return out;
+	auto master = graph->getMasterNode();
+	if (!master) return out;
+
+	out.hasMaster = true;
+	out.hasPbrMaster = (master->typeName == "PbrMaterial");
+	out.name = graph->settings.name;
+	if (!resolver) resolver = [](const QString& value) { return value; };
+
+	for (const auto& slot : masterSlotsFor(master->typeName)) {
+		CompiledSlot cs;
+		cs.slot = slot;
+		auto sock = findMasterInSocket(master, slot.socketName);
+		cs.connected = sock && sock->hasConnection();
+		if (cs.connected)
+			cs.program = BakeProgram::compile(sock, resolver);
+		out.sockets.append(cs);
+	}
+	return out;
+}
+
 GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
                                    BakeProgram::TextureResolver resolver)
+{
+	return runCompiled(compile(graph, resolver), opts);
+}
+
+GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const Options& opts)
 {
 	Result out;
 	QElapsedTimer timer;
 	timer.start();
 
-	if (!graph) return out;
-	auto master = graph->getMasterNode();
-	if (!master) return out;
-	out.eval.hasPbrMaster = (master->typeName == "PbrMaterial");
-
-	if (!resolver) resolver = [](const QString& value) { return value; };
+	if (!compiled.hasMaster) return out;
+	out.eval.hasPbrMaster = compiled.hasPbrMaster;
 
 	const int resolution = qBound(1, opts.resolution, 4096);
 	const bool canBake = opts.bakeMaps && !opts.outputDir.isEmpty();
@@ -208,16 +231,9 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 		out.eval.unsupportedNodes.append(socketName + " <- " + what);
 	};
 
-	// ---- compile every connected master socket -------------------------
-	const auto slotTable = masterSlotsFor(master->typeName);
-	QVector<SlotState> states(slotTable.size());
-	for (int i = 0; i < slotTable.size(); ++i) {
-		states[i].slot = &slotTable[i];
-		auto sock = findMasterInSocket(master, slotTable[i].socketName);
-		states[i].connected = sock && sock->hasConnection();
-		if (states[i].connected)
-			states[i].program = BakeProgram::compile(sock, resolver);
-	}
+	QVector<SlotState> states(compiled.sockets.size());
+	for (int i = 0; i < compiled.sockets.size(); ++i)
+		states[i].cs = &compiled.sockets[i];
 
 	using SocketClass = BakeProgram::SocketClass;
 
@@ -226,17 +242,17 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 	SlotState* baseState = nullptr;
 	SlotState* alphaState = nullptr;
 	for (auto& state : states) {
-		if (state.slot->mapKey == "baseColorMap") baseState = &state;
-		if (state.slot->valueKey == "alpha" && state.slot->mapKey.isEmpty()) alphaState = &state;
+		if (state.cs->slot.mapKey == "baseColorMap") baseState = &state;
+		if (state.cs->slot.valueKey == "alpha" && state.cs->slot.mapKey.isEmpty()) alphaState = &state;
 	}
-	const bool alphaBaked = canBake && alphaState && alphaState->connected
-	                        && alphaState->program.classification == SocketClass::Baked;
+	const bool alphaBaked = canBake && alphaState && alphaState->cs->connected
+	                        && alphaState->cs->program.classification == SocketClass::Baked;
 
 	// ---- land every socket ---------------------------------------------
 	for (auto& state : states) {
-		if (!state.connected) continue;
-		const MasterSlot& slot = *state.slot;
-		BakeProgram& program = state.program;
+		if (!state.cs->connected) continue;
+		const MasterSlot& slot = state.cs->slot;
+		const BakeProgram& program = state.cs->program;
 
 		const bool isBaseWithBakedAlpha = (&state == baseState) && alphaBaked;
 
@@ -331,31 +347,31 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 
 		// -- baseColorMap: base color chain RGB + alpha chain A ----------
 		const bool baseNeeds = baseState && (baseState->needsBake
-		                       || (alphaBaked && !baseState->connected));
+		                       || (alphaBaked && !baseState->cs->connected));
 		if (baseNeeds || alphaBaked) {
 			QByteArray recipe = "baseColorMap|";
 			Value uniformBase(1.0, 1.0, 1.0); // white: material default RGB
 			QImage srcImage;                  // passthrough source, if sampling
 			enum { RgbUniform, RgbSampled, RgbEvaluated } rgbMode = RgbUniform;
-			if (baseState && baseState->connected) {
-				switch (baseState->program.classification) {
+			if (baseState && baseState->cs->connected) {
+				switch (baseState->cs->program.classification) {
 				case SocketClass::Baked:
 					rgbMode = RgbEvaluated;
-					recipe += baseState->program.signature();
+					recipe += baseState->cs->program.signature();
 					break;
 				case SocketClass::Passthrough: {
 					rgbMode = RgbSampled;
-					recipe += "src:" + baseState->program.passthroughStamp.toUtf8();
+					recipe += "src:" + baseState->cs->program.passthroughStamp.toUtf8();
 					// the compiled carrier op usually holds the loaded image
-					const auto& rootOp = baseState->program.ops[baseState->program.rootOp];
+					const auto& rootOp = baseState->cs->program.ops[baseState->cs->program.rootOp];
 					srcImage = rootOp.image.isNull()
-					               ? QImage(baseState->program.passthroughPath)
+					               ? QImage(baseState->cs->program.passthroughPath)
 					                     .convertToFormat(QImage::Format_RGBA8888)
 					               : rootOp.image;
 					break;
 				}
 				case SocketClass::Uniform: {
-					uniformBase = baseState->program.evaluate(uniformCtx);
+					uniformBase = baseState->cs->program.evaluate(uniformCtx);
 					recipe += QStringLiteral("rgb:%1,%2,%3,%4|%5")
 					              .arg(uniformBase.x).arg(uniformBase.y)
 					              .arg(uniformBase.z).arg(uniformBase.w)
@@ -366,7 +382,7 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 					break;
 				}
 			}
-			if (alphaBaked) recipe += "|alpha:" + alphaState->program.signature();
+			if (alphaBaked) recipe += "|alpha:" + alphaState->cs->program.signature();
 			recipe += "|" + QByteArray::number(resolution) + "|" + QByteArray::number(opts.time);
 
 			const QString fileName = QStringLiteral("baseColorMap-%1.png").arg(hash16(recipe));
@@ -386,12 +402,12 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 						ctx.u = (x + 0.5) / resolution;
 						uchar* p = line + 4 * x;
 						if (rgbMode == RgbEvaluated)
-							valueToRgb(baseState->program.evaluate(ctx, scratch), p);
+							valueToRgb(baseState->cs->program.evaluate(ctx, scratch), p);
 						else if (rgbMode == RgbSampled && !srcImage.isNull())
 							valueToRgb(BakeProgram::sampleImage(srcImage, ctx.u, ctx.v), p);
 						else
 							valueToRgb(uniformBase, p);
-						p[3] = alphaBaked ? toByte(alphaState->program.evaluate(ctx, scratch).x) : 255;
+						p[3] = alphaBaked ? toByte(alphaState->cs->program.evaluate(ctx, scratch).x) : 255;
 					}
 				});
 				image.save(filePath, "PNG");
@@ -406,9 +422,9 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 		// -- the other baked slots ---------------------------------------
 		for (auto& state : states) {
 			if (!state.needsBake || &state == baseState || &state == alphaState) continue;
-			const MasterSlot& slot = *state.slot;
+			const MasterSlot& slot = state.cs->slot;
 
-			QByteArray recipe = slot.mapKey.toUtf8() + "|" + state.program.signature()
+			QByteArray recipe = slot.mapKey.toUtf8() + "|" + state.cs->program.signature()
 			                    + "|" + QByteArray::number(resolution)
 			                    + "|" + QByteArray::number(opts.time);
 			const QString fileName = QStringLiteral("%1-%2.png").arg(slot.mapKey, hash16(recipe));
@@ -424,7 +440,7 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 					ctx.v = (y + 0.5) / resolution;
 					for (int x = 0; x < resolution; ++x) {
 						ctx.u = (x + 0.5) / resolution;
-						const Value v = state.program.evaluate(ctx, scratch);
+						const Value v = state.cs->program.evaluate(ctx, scratch);
 						uchar* p = line + 4 * x;
 						if (slot.target == MasterSlot::FloatSlot) {
 							// grayscale written to RGB (spec 1.3)
@@ -462,7 +478,7 @@ GraphBaker::Result GraphBaker::run(NodeGraph* graph, const Options& opts,
 		out.eval.values["alphaMode"] = 2;
 
 	if (!out.eval.unsupportedNodes.isEmpty()) {
-		qWarning() << "GraphBaker: unsupported inputs on" << graph->settings.name
+		qWarning() << "GraphBaker: unsupported inputs on" << compiled.name
 		           << "- material defaults used for:" << out.eval.unsupportedNodes.join(", ");
 	}
 

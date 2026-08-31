@@ -47,6 +47,10 @@ add_script_e2e(undo_macro e2e_undo_macro.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+# MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
+# toMaterial/save/regenerate; baked maps land inside the project folder (and
+# so ride the recursive .jaf zip).
+add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 add_script_e2e(editor_controls e2e_editor_controls.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).

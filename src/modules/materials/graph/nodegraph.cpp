@@ -347,6 +347,7 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 	obj["blendMode"] = blendType;
 	obj["cullMode"] = cullMode;
 	obj["renderLayer"] = renderLayer;
+	obj["bakeResolution"] = settings.bakeResolution;
 	return obj;
 }
 
@@ -384,6 +385,8 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 	settings.blendMode = getBlendmode(obj);
 	settings.cullMode = getCullMode(obj);
 	settings.renderLayer = getRenderLayer(obj);
+	// absent in graphs saved before the Materials Evaluator program
+	settings.bakeResolution = qBound(128, obj["bakeResolution"].toInt(1024), 4096);
 
 	return settings;
 }

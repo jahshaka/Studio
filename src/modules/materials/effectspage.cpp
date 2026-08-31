@@ -44,6 +44,9 @@ For more information see the LICENSE file
 #include "nodes/pbrmasternode.h"
 #include "core/materialwriter.h"
 #include "core/materialhelper.h"
+#include "core/graphbaker.h"
+#include <QFutureWatcher>
+#include <QtConcurrent>
 #include "models/library.h"
 #include "models/libraryv1.h"
 #include <QPointer>
@@ -101,7 +104,7 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	// (regenerateShader fires per value change while a slider drags).
 	previewUpdateTimer = new QTimer(this);
 	previewUpdateTimer->setSingleShot(true);
-	previewUpdateTimer->setInterval(150);
+	previewUpdateTimer->setInterval(300); // MATERIALS_EVALUATOR_SPEC section 2
 	connect(previewUpdateTimer, &QTimer::timeout, this, &EffectsPage::updateEnginePreviewMaterial);
 	fontIcons = new QtAwesome;
 	fontIcons->initFontAwesome();
@@ -188,7 +191,9 @@ void EffectsPage::saveShader()
 	}
 
 	QJsonDocument doc;
-	auto matObj = MaterialHelper::serialize(graph);
+	// saving is a final-bake trigger (MATERIALS_EVALUATOR_SPEC section 2):
+	// UV-varying chains land as BakedMaps/<guid>/ PNGs in the project folder
+	auto matObj = MaterialHelper::serializeWithBake(graph, currentShaderInformation.GUID);
 	doc.setObject(matObj);
 	QString data = doc.toJson();
 
@@ -1366,6 +1371,8 @@ void EffectsPage::setProject(Project *project)
 {
 	mProject = project;
 	if (assetWidget) assetWidget->project = project;
+	// the baked-map cache (BakedMaps/...) resolves against the open project
+	MaterialHelper::setProjectRoot(project ? project->getProjectFolder() : QString());
 }
 
 void EffectsPage::setSceneOpenProbe(std::function<bool()> probe)
@@ -1526,10 +1533,32 @@ void EffectsPage::schedulePreviewUpdate()
 void EffectsPage::updateEnginePreviewMaterial()
 {
 	if (!enginePreview || !graph) return;
-	// CPU evaluation (Option B): unsupported nodes fall back to the material's
-	// defaults inside the evaluator — this never fails, at worst it is plain.
-	auto material = MaterialHelper::createPbrMaterialFromShaderGraph(graph);
-	if (material) enginePreview->setPreviewMaterial(material);
+
+	// MATERIALS_EVALUATOR_SPEC section 2: preview bakes run off-thread over
+	// the compiled BakeProgram (a pure value object - the graph's QWidgets
+	// are only touched here, on the GUI thread), latest-wins by generation.
+	const quint64 generation = ++previewGeneration;
+	auto compiled = materials::GraphBaker::compile(graph, MaterialHelper::textureResolver());
+
+	materials::GraphBaker::Options opts;
+	opts.resolution = 256; // preview quality, fixed
+	const QString guid = currentShaderInformation.GUID.isEmpty()
+	                         ? QStringLiteral("preview") : currentShaderInformation.GUID;
+	opts.outputDir = QDir::temp().absoluteFilePath("jahshaka-preview-bakes/" + guid);
+	opts.relativePrefix = opts.outputDir + "/"; // absolute: no resolver round-trip
+
+	auto watcher = new QFutureWatcher<materials::GraphBaker::Result>(this);
+	connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, generation]() {
+		watcher->deleteLater();
+		if (generation != previewGeneration) return; // a newer bake is in flight
+		if (!enginePreview) return;
+		auto material = PbrGraphEvaluator::materialFromValues(
+		    watcher->result().eval.values, MaterialHelper::textureResolver());
+		if (material) enginePreview->setPreviewMaterial(material);
+	});
+	watcher->setFuture(QtConcurrent::run([compiled, opts]() {
+		return materials::GraphBaker::runCompiled(compiled, opts);
+	}));
 }
 
 QListWidgetItem * EffectsPage::selectCorrectItemFromDrop(QString guid)
@@ -1652,11 +1681,12 @@ void EffectsPage::generateMaterialInProjectFromShader(QString guid)
 	AssetManager::addAsset(assetMat);
 
 
-	// write material guid to graph and save graph
+	// write material guid to graph and save graph (a final-bake trigger:
+	// applying a graph as a project material must land its baked maps)
 	graphObj->materialGuid = assetGuid;
 	graph->materialGuid = assetGuid;
 	QJsonDocument doc;
-	auto graphObject = MaterialHelper::serialize(graphObj);
+	auto graphObject = MaterialHelper::serializeWithBake(graphObj, guid);
 	doc.setObject(graphObject);
     dataBase->updateAssetAsset(guid, doc.toJson());
 }
