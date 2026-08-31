@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QPixmap>
 #include <QBuffer>
+#include <QAtomicInt>
 
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
@@ -226,6 +227,15 @@ ModelTypes AssetHelper::getAssetTypeFromExtension(const QString &fileSuffix)
     return ModelTypes::Undefined;
 }
 
+// One full assimp parse per call — the import suites assert the completion
+// tail never adds a second one on top of the pipeline's convert.
+static QAtomicInt sMeshParseCount;
+
+int AssetHelper::meshParseCount()
+{
+    return sMeshParseCount.loadRelaxed();
+}
+
 iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     const QString &filePath,
     QStringList &textureList,
@@ -234,6 +244,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     QJsonObject *modelStats,
     const QString &extractDir)
 {
+    sMeshParseCount.fetchAndAddRelaxed(1);
     // Owns the assimp importer (and with it the aiScene) for the duration of
     // this function only — it used to be `new` with no delete, leaking the
     // entire parsed scene per import.

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
 #include "ui/pages/headlessassetviewer.h"
+#include "ui/pages/importviewertail.h"
 #include <QTimer>
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
@@ -27,6 +28,7 @@ For more information see the LICENSE file
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QVBoxLayout>
+#include <QDialog>
 #include <QGridLayout>
 #include <QSplitter>
 #include <QPushButton>
@@ -250,6 +252,9 @@ void AssetView::clearViewer()
 	viewer->clearScene();
 	stopMediaPreviews();
 	if (assetNodeTree) assetNodeTree->clear();
+	// Back to the explicit empty state — never a stale preview page.
+	if (assetEmptyViewer)
+		viewers->setCurrentIndex(viewers->indexOf(assetEmptyViewer));
 }
 
 void AssetView::populateAssetNodeTree(const QString &guid, int assetType)
@@ -457,6 +462,22 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     filePageLayout->addWidget(fileNameLabel);
     filePageLayout->addStretch();
     assetFileViewer->setLayout(filePageLayout);
+
+    // Empty state (owner-reported): with nothing selected the preview area
+    // used to show a mystery blue "S" — the Placeholder page's file icon with
+    // no name. A dedicated page says what to do instead; initial and cleared
+    // states land here (both themes are dark — explicit colors, no stray icon).
+    assetEmptyViewer = new QWidget;
+    assetEmptyViewer->setStyleSheet("background: #1e1e1e;");
+    {
+        auto *emptyPreviewLabel = new QLabel(tr("Select an asset to preview"));
+        emptyPreviewLabel->setAlignment(Qt::AlignCenter);
+        emptyPreviewLabel->setStyleSheet(
+            "font-size: 14px; color: #8f8f8f; background: transparent;");
+        auto *emptyPreviewLayout = new QVBoxLayout;
+        emptyPreviewLayout->addWidget(emptyPreviewLabel);
+        assetEmptyViewer->setLayout(emptyPreviewLayout);
+    }
 
     settings = SettingsManager::getDefaultManager();
 	//prefsDialog = new PreferencesDialog(this, db, settings);
@@ -791,6 +812,25 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		}
 	});
 
+	// The post-dialog tail pump: one viewer preview/thumbnail per event-loop
+	// turn (the app keeps painting and clicking between items), with a
+	// subtle status strip under the grid while it works.
+	tailStatusLabel = new QLabel;
+	tailStatusLabel->setStyleSheet(
+	    "padding: 4px 10px; color: #9a9a9a; font-size: 12px;");
+	tailStatusLabel->setVisible(false);
+	tailQueue = new ImportTailQueue(this);
+	connect(tailQueue, &ImportTailQueue::progress, this, [this](int done, int total) {
+		tailStatusLabel->setText(tr("Rendering previews… (%1 of %2)")
+		                             .arg(done + 1).arg(total));
+		tailStatusLabel->setVisible(true);
+	});
+	connect(tailQueue, &ImportTailQueue::finished, this, [this]() {
+		tailStatusLabel->setVisible(false);
+		fastGrid->updateGridColumns(fastGrid->lastWidth);
+		filterFromSelection();
+	});
+
 	auto views = new QWidget;
 	auto viewsL = new QVBoxLayout;
 	// Clear the filter/search toolbar (owner direction 2026-08-31 — was
@@ -800,6 +840,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	viewsL->addWidget(emptyGrid);
 	viewsL->addWidget(fastGrid);
 	viewsL->addWidget(assetListView);
+	viewsL->addWidget(tailStatusLabel);
 	views->setLayout(viewsL);
     if (ThemeManager::classicActive())
         views->setStyleSheet("background: #202020");
@@ -1279,7 +1320,11 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     viewers->addWidget(assetAudioViewer);        // PreviewPage::Audio
     viewers->addWidget(assetVideoViewer);        // PreviewPage::Video
     viewers->addWidget(assetFileViewer);         // PreviewPage::Placeholder
+    viewers->addWidget(assetEmptyViewer);        // empty state (index 5, unrouted)
     viewersWidget->setLayout(viewers);
+    // Nothing is selected when the page opens: show the empty state, not a
+    // stray page (the router switches to the right page on selection).
+    viewers->setCurrentIndex(viewers->indexOf(assetEmptyViewer));
 
     // Leaving a media page stops its player (§2: viewers stop on page change).
     connect(viewers, &QStackedLayout::currentChanged, this, [this](int index) {
@@ -1438,38 +1483,34 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
     }
 }
 
-// The old importModel viewer/tile tail — the pipeline half already ran on the
-// batch runner's worker and committed; this engine-dependent half (viewer
-// preview + rendered thumbnail) runs post-dialog on the UI thread, the tile
-// updating live.
-void AssetView::finishMeshImport(const ImportResult &result, const QString &fileName)
+// The mesh tail, one item per event-loop turn (see scheduleViewerTails). The
+// pipeline half already ran on the batch runner's worker; ImportMeshTail
+// consumes ITS parsed fragment (ImportResult::node) — engine upload +
+// offscreen render only, no second assimp parse — and the tile that appeared
+// mid-batch takes the rendered thumbnail.
+void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fileName)
 {
     // The grid tile and metadata pane read the `filename` member, which only
     // the browse dialog used to set — a drag-and-dropped model got a nameless
     // tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
     // here, so set it here.
     filename = fileName;
-
     renameModelField->setText(QFileInfo(fileName).baseName());
-    const QString storedModel =
-        AssetStorePaths::legacyFilePath(result.assetGuid, QFileInfo(fileName).fileName());
-    viewer->loadModel(storedModel, result.assetGuid);
 
-    // Thumbnail + camera properties AFTER the model finished loading
-    // (ASSETS_AUDIT.md finding 5), merged into the row's properties without
-    // clobbering the pipeline's "metadata"/"import" blocks.
-    auto loadedSnapshot = viewer->takeScreenshot(512, 512);
-    if (!loadedSnapshot.isNull())
-        db->updateAssetThumbnail(result.assetGuid,
-                                 AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(loadedSnapshot)));
-    QJsonObject properties =
-        QJsonDocument::fromJson(db->fetchAsset(result.assetGuid).properties).object();
-    const QJsonObject cameraProps = viewer->getSceneProperties();
-    for (auto it = cameraProps.constBegin(); it != cameraProps.constEnd(); ++it)
-        properties[it.key()] = it.value();
-    db->updateAssetProperties(result.assetGuid, QJsonDocument(properties).toJson());
+    const auto outcome = ImportMeshTail::run(db, viewer, result, fileName);
 
-    addToLibrary(result.assetGuid, false);
+    if (auto *tile = fastGrid->tileByGuid(result.assetGuid)) {
+        tile->hideLoadingOverlay();
+        if (!outcome.snapshot.isNull())
+            tile->setTile(QPixmap::fromImage(outcome.snapshot));
+        // The freshly rendered camera properties feed the pane on selection.
+        tile->sceneProperties = QJsonDocument::fromJson(
+            db->fetchAsset(result.assetGuid).properties).object();
+    }
+
+    renameWidget->setVisible(true);
+    tagWidget->setVisible(true);
+    updateAsset->setVisible(true);
 }
 
 // THE import dispatch (ASSET_DRAWERS_SPEC §3): drop pad and browse dialog both
@@ -1587,8 +1628,9 @@ void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
 
 		// Engine-dependent tails AFTER the dialog closed (the dialog never
 		// waits on the viewer): mesh/.jaf previews + rendered thumbnails,
-		// video frame grabs — each tile updates live as its render lands.
-		runViewerTails();
+		// video frame grabs — queued ONE PER EVENT-LOOP TURN so the app
+		// never freezes; each tile updates live as its render lands.
+		scheduleViewerTails();
 
 		fastGrid->updateGridColumns(fastGrid->lastWidth);
 		filterFromSelection();
@@ -1609,8 +1651,16 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 	const bool isJaf =
 	    QFileInfo(request.sourcePath).suffix().toLower() == Constants::ASSET_EXT;
 	if (isJaf || request.typeHint == static_cast<int>(ModelTypes::Mesh)) {
-		// Viewer-driven types: the preview render happens post-dialog.
+		// Viewer-driven types: the preview render happens post-dialog, one
+		// item per event-loop turn (scheduleViewerTails). Mesh tiles appear
+		// NOW, mid-batch, with the loading overlay up — the render lands on
+		// the tile when its turn comes.
 		pendingViewerTails.append({ result, request.sourcePath });
+		if (!isJaf) {
+			addLibraryTileForAsset(result.assetGuid);
+			if (auto *tile = fastGrid->tileByGuid(result.assetGuid))
+				tile->showLoadingOverlay();
+		}
 		return;
 	}
 
@@ -1620,26 +1670,34 @@ void AssetView::handleImportedFile(const ImportRequest &request, const ImportRes
 		pendingVideoThumbGuids.append(result.assetGuid);   // real frame, post-dialog
 }
 
-void AssetView::runViewerTails()
+void AssetView::scheduleViewerTails()
 {
 	const auto tails = pendingViewerTails;
 	pendingViewerTails.clear();
 	for (const auto &tail : tails) {
 		if (QFileInfo(tail.fileName).suffix().toLower() == Constants::ASSET_EXT)
-			finishJafImport(tail.result, tail.fileName);
+			tailQueue->enqueue([this, tail]() {
+				finishJafImport(tail.result, tail.fileName);
+			});
 		else
-			finishMeshImport(tail.result, tail.fileName);
+			tailQueue->enqueue([this, tail]() {
+				finishMeshTailItem(tail.result, tail.fileName);
+			});
 	}
 
 	const auto videoGuids = pendingVideoThumbGuids;
 	pendingVideoThumbGuids.clear();
 	for (const QString &guid : videoGuids) {
 		// The worker could not run QMediaPlayer (GUI-thread-only), so the row
-		// committed with the film icon; grab the real first-second frame now
-		// — the same path as tile right-click → Rebuild Thumbnail.
-		if (AssetGridItem *tile = fastGrid->tileByGuid(guid))
-			rebuildTileThumbnail(tile);
+		// committed with the film icon; grab the real first-second frame on
+		// the queue — the same path as tile right-click → Rebuild Thumbnail.
+		tailQueue->enqueue([this, guid]() {
+			if (AssetGridItem *tile = fastGrid->tileByGuid(guid))
+				rebuildTileThumbnail(tile);
+		});
 	}
+
+	if (tailQueue->pendingCount() > 0) tailQueue->start();
 }
 
 int AssetView::selectedDrawerId() const
@@ -2194,6 +2252,54 @@ void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int
 
 void AssetView::addAssetItemToProject(AssetGridItem *item)
 {
+	// Are-you-sure first (owner direction): every UI entry point — the
+	// button, Shift+click and the tile context menu — funnels through here,
+	// so one dialog covers all three. The headless verb
+	// (assets.addToProject) never comes this way and stays dialog-free.
+	const QString assetName =
+	    QFileInfo(item->metadata["name"].toString()).baseName();
+	const QString projectName = project ? project->getProjectName() : QString();
+	{
+		QDialog confirm(this);
+		confirm.setWindowTitle(tr("Add to Project"));
+		confirm.setWindowFlags(confirm.windowFlags() & ~Qt::WindowContextHelpButtonHint);
+
+		auto *message = new QLabel(
+		    tr("Add \"%1\" to project \"%2\"?").arg(assetName, projectName));
+		message->setWordWrap(true);
+
+		// The sample-scenes dialog convention: no background band behind the
+		// button row, accent confirm, grey cancel (classic keeps its big
+		// button sheets).
+		auto *cancel = new QPushButton(tr("Cancel"));
+		auto *add = new QPushButton(tr("Add"));
+		add->setDefault(true);
+		if (ThemeManager::classicActive()) {
+			cancel->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
+			add->setStyleSheet(StyleSheet::QPushButtonBlueBig());
+		} else {
+			cancel->setStyleSheet(ThemeManager::chromeButtonSheet());
+			add->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
+		}
+
+		auto *buttons = new QHBoxLayout;
+		buttons->addStretch();
+		buttons->addWidget(cancel);
+		buttons->addWidget(add);
+		buttons->setContentsMargins(0, 10, 0, 0);
+
+		auto *layout = new QVBoxLayout;
+		layout->setContentsMargins(16, 16, 16, 12);
+		layout->addWidget(message);
+		layout->addLayout(buttons);
+		confirm.setLayout(layout);
+		confirm.setMinimumWidth(360);
+
+		connect(cancel, &QPushButton::clicked, &confirm, &QDialog::reject);
+		connect(add, &QPushButton::clicked, &confirm, &QDialog::accept);
+		if (confirm.exec() != QDialog::Accepted) return;
+	}
+
 	// Reference-with-pin (phase 4): the twin ~250-line transcription of the
 	// verb body (flat project-folder copies + Database::copyAsset clones)
 	// died here - ProjectAssets is the one implementation.
@@ -2204,6 +2310,10 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 		                     result.error, QMessageBox::Ok);
 		return;
 	}
+
+	// The editor's project panel refreshes off this (the shell connects it):
+	// the pin must be visible without switching pages back and forth.
+	emit assetAddedToProject(guid);
 
 	Toast *t = new Toast(this);
 	t->showToast(

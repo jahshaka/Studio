@@ -68,6 +68,7 @@ class AssetViewGrid;
 class AssetGridItem;
 class DrawerTreeWidget;
 class ImportBatchRunner;
+class ImportTailQueue;
 class QMenu;
 class IAssetViewer;
 class Database;
@@ -86,6 +87,12 @@ typedef struct directory_tuple
 class AssetView : public QWidget
 {
 	Q_OBJECT
+
+signals:
+	/// A store asset was pinned into the open project (button, Shift+click
+	/// or tile context menu). The shell refreshes the editor's project
+	/// panel so the membership is visible without a page round-trip.
+	void assetAddedToProject(const QString &guid);
 
 public slots:
 	void fetchMetadata(AssetGridItem*, bool allowBackfill = true);
@@ -152,11 +159,13 @@ private:
 	/// live; mesh/.jaf viewer tails queue for after the dialog closes.
 	void handleImportedFile(const ImportRequest &request, const ImportResult &result);
 	/// Engine-dependent tails (viewer preview + rendered thumbnail) — run
-	/// AFTER the batch dialog closes; tiles update live as renders land.
-	void runViewerTails();
-	/// The old importModel tail: viewer preview, screenshot thumbnail,
-	/// camera properties, library tile.
-	void finishMeshImport(const ImportResult &result, const QString &fileName);
+	/// AFTER the batch dialog closes, ONE PER EVENT-LOOP TURN through
+	/// tailQueue so the app stays responsive; tiles update live as renders
+	/// land (the busy state shows on the tile overlay + the status strip).
+	void scheduleViewerTails();
+	/// One mesh tail item: consumes the pipeline's parsed fragment
+	/// (ImportMeshTail — no second assimp parse), updates the tile.
+	void finishMeshTailItem(const ImportResult &result, const QString &fileName);
 	/// The old importJahModel tail: per-kind viewer page + library tile.
 	void finishJafImport(const ImportResult &result, const QString &fileName);
 	/// Images/audio/video: build + wire the library tile for a committed row.
@@ -255,6 +264,10 @@ private:
 	struct PendingViewerTail { ImportResult result; QString fileName; };
 	QVector<PendingViewerTail> pendingViewerTails;
 	QStringList pendingVideoThumbGuids;       // real frame grabs, post-dialog
+	// The post-dialog tail pump (one item per event-loop turn) + its subtle
+	// busy strip under the grid ("Rendering previews… (n of m)").
+	ImportTailQueue *tailQueue = nullptr;
+	QLabel *tailStatusLabel = nullptr;
 
 	// Tiles/List view mode (owner request): the grey "View ▾" popup beside
 	// Backdrop; the list mirrors the editor panel's list mode with
@@ -310,6 +323,11 @@ private:
     QWidget *assetFileViewer = nullptr;
     QLabel *fileIconLabel = nullptr;
     QLabel *fileNameLabel = nullptr;
+
+    // Empty state (stack index 5, after the routed pages): what shows with
+    // NOTHING selected — centered muted text, no stray icon (the old initial/
+    // cleared state could land on the Placeholder page's blue "S" file icon).
+    QWidget *assetEmptyViewer = nullptr;
 
     QWidget *viewersWidget;
     QStackedLayout *viewers;

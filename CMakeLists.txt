@@ -212,7 +212,7 @@ set(SRCS
     src/bridge/enginethumbnailrenderer.cpp 
     src/ui/dialogs/donatedialog.cpp
     src/ui/pages/assetview.cpp
-    src/ui/pages/assetview.cpp
+    src/ui/pages/importviewertail.cpp
     src/bridge/engineassetscene.cpp
     src/ui/pages/engineassetviewer.cpp
     src/bridge/enginematerialpreviewscene.cpp
@@ -416,6 +416,7 @@ set(HEADERS
     src/services/thumbnailgenerator.h 
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
+    src/ui/pages/importviewertail.h
     src/ui/pages/previewrouter.h
     src/ui/pages/iassetviewer.h
     src/ui/pages/headlessassetviewer.h

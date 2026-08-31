@@ -45,6 +45,12 @@ public:
                                                                  bool& hasEmbeddedTexture,
                                                                  QJsonObject *modelStats = nullptr,
                                                                  const QString &extractDir = QString());
+
+    /// Process-wide count of extractTexturesAndMaterialFromMesh runs — each
+    /// is one full assimp parse of a model file. Instrumentation for the
+    /// import suites: the completion tail must never add a second parse on
+    /// top of the pipeline's convert (import.async asserts on this).
+    static int meshParseCount();
 };
 
 #endif
