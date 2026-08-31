@@ -159,6 +159,7 @@ For more information see the LICENSE file
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -787,6 +788,24 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
 	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
 
+	// Under Qlementine the classic border-color swap above is neutralized (the
+	// getters return "") and a checked flat button renders invisibly on the
+	// near-black header, so the active space gets its label painted in the
+	// accent color instead — a text-only sheet, the one deliberate stylesheet
+	// in Qlementine mode. Runs after the classic swaps so it wins; the
+	// scene-closed branch below still overrides editor/player as before.
+	if (!ThemeManager::classicActive()) {
+		static const QString qlemActive =
+			QStringLiteral("QPushButton { color: #3498db; }");
+		const QList<QPair<QPushButton *, WindowSpaces>> spaceButtons = {
+			{ worlds_menu, WindowSpaces::DESKTOP }, { assets_menu, WindowSpaces::ASSETS },
+			{ effect_menu, WindowSpaces::EFFECT }, { publish_menu, WindowSpaces::PUBLISH },
+			{ editor_menu, WindowSpaces::EDITOR }, { player_menu, WindowSpaces::PLAYER }
+		};
+		for (const auto &pair : spaceButtons)
+			pair.first->setStyleSheet(activeSpace == pair.second ? qlemActive : QString());
+	}
+
 	if (projectService->isSceneOpen()) {
 		editor_menu->setEnabled(true);
 		editor_menu->setCursor(Qt::PointingHandCursor);
@@ -1410,7 +1429,8 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesWidget->setProject(project);
     sceneNodePropertiesWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
     sceneNodePropertiesWidget->setObjectName(QStringLiteral("SceneNodePropertiesWidget"));
-    sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
+    if (ThemeManager::classicActive())
+        sceneNodePropertiesDock->setStyleSheet("QWidget { background-color: #202020; }");
 
     QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
@@ -1431,7 +1451,8 @@ void MainWindow::setupDockWidgets()
     presetsDock->setObjectName(QStringLiteral("presetsDock"));
 
     QWidget *presetDockContents = new QWidget;
-    presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
+    if (ThemeManager::classicActive())
+        presetDockContents->setStyleSheet( "QWidget { background-color: #151515; }");
     SkyPresets *skyPresets = new SkyPresets;
     skyPresets->setMainWindow(this);
 	skyPresets->setDatabase(db);
@@ -1553,7 +1574,15 @@ void MainWindow::setupViewPort()
 #else
     header_image_path = IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.svg");
 #endif
-    jlogo->setStyleSheet(StyleSheet::MainWindowHeaderLogo(header_image_path));
+    // Classic paints the logo via a stylesheet image; under Qlementine that
+    // getter is neutralized, so set a real pixmap instead (sheet-free).
+    if (ThemeManager::classicActive()) {
+        jlogo->setStyleSheet(StyleSheet::MainWindowHeaderLogo(header_image_path));
+    } else {
+        jlogo->setPixmap(QPixmap(header_image_path)
+                             .scaledToHeight(40, Qt::SmoothTransformation));
+        jlogo->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    }
 
 	help = new QPushButton;
 	help->setObjectName("helpButton");
@@ -1685,6 +1714,10 @@ void MainWindow::setupViewPort()
     }
     // --------------------------------------------------------------------
 
+    // Qlementine: the checkable actions become Switch rows (and stay in sync
+    // with their QActions); a bonus is the menu no longer closes per toggle.
+    ThemeManager::switchifyMenuToggles(wireFramesMenu);
+
     wireFramesButton->setMenu(wireFramesMenu);
     wireFramesButton->setText("View Options ");
     wireFramesButton->setPopupMode(QToolButton::InstantPopup);
@@ -1722,7 +1755,8 @@ void MainWindow::setupViewPort()
     controlBar->setStyleSheet(StyleSheet::ControlBar());
 
     playerControls = new QWidget;
-    playerControls->setStyleSheet("background: #1A1A1A");
+    if (ThemeManager::classicActive())
+        playerControls->setStyleSheet("background: #1A1A1A");
 
     auto playerControlsLayout = new QHBoxLayout;
 

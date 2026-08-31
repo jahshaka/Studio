@@ -54,6 +54,13 @@ public:
     // setStyleSheet crud applied earlier in a constructor. No-op under Classic.
     // Call at the END of a constructor, after setupUi and sheet-pushing code.
     static void clearClassicSheets(QWidget *root);
+
+    // Qlementine mode: replaces every checkable QAction in the menu with a
+    // qlementine Switch row (QWidgetAction). The original QAction stays alive
+    // and authoritative — the switch and the action mirror each other — so
+    // code toggling the action programmatically keeps working. No-op under
+    // Classic. Call once, after the menu's actions are all added.
+    static void switchifyMenuToggles(class QMenu *menu);
 };
 
 #endif // JAH_THEMEMANAGER_H

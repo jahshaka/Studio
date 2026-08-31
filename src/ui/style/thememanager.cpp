@@ -19,7 +19,58 @@ For more information see the LICENSE file
 
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
+#include <QAbstractItemView>
+#include <QHBoxLayout>
+#include <QMenu>
+#include <QMetaObject>
+#include <QPointer>
+#include <QWidgetAction>
+
+#include <oclero/qlementine/widgets/Switch.hpp>
+
 static bool s_classicActive = false;
+
+namespace {
+
+// Qt 6.10 + Qlementine v1.4.2 crash workaround (verified by backtrace,
+// 2026-08-31): QComboBoxPrivateContainer's constructor calls ensurePolished()
+// BEFORE QComboBoxPrivate::container is assigned. QlementineStyle::polish of
+// the popup's item view reparents the popup (setWindowFlag) and installs a
+// ComboboxItemViewFilter whose ChildAdded handler calls QComboBox::view() —
+// which, container still null, constructs a SECOND container, recursing until
+// the stack overflows on the first QComboBox::addItem of the app (upstream dev
+// branch has the same code). Deferring that one polish by an event-loop tick
+// lets the container pointer land first; the deferred polish then behaves
+// exactly as upstream intended. Everything else passes straight through.
+class JahQlementineStyle : public oclero::qlementine::QlementineStyle
+{
+public:
+    using oclero::qlementine::QlementineStyle::QlementineStyle;
+
+    void polish(QWidget *w) override
+    {
+        if (auto *itemView = qobject_cast<QAbstractItemView *>(w)) {
+            auto *popup = itemView->parentWidget();
+            if (popup && popup->inherits("QComboBoxPrivateContainer")) {
+                QPointer<QWidget> guard(itemView);
+                QMetaObject::invokeMethod(
+                    this,
+                    [this, guard]() {
+                        if (guard) oclero::qlementine::QlementineStyle::polish(guard.data());
+                    },
+                    Qt::QueuedConnection);
+                return;
+            }
+        }
+        oclero::qlementine::QlementineStyle::polish(w);
+    }
+
+    // The base class overloads polish(QApplication*)/polish(QPalette&); keep
+    // them reachable despite the QWidget override above.
+    using oclero::qlementine::QlementineStyle::polish;
+};
+
+} // namespace
 
 QString ThemeManager::settingsKey()
 {
@@ -67,9 +118,36 @@ void ThemeManager::applyAtStartup(QApplication &app)
     // Qlementine Dark (the default): a real QStyle owns every stock widget.
     // Must run before any widget is constructed. Typography comes from the
     // theme (Inter/Roboto Mono, bundled by Qlementine) — no DroidSans override.
-    auto *style = new oclero::qlementine::QlementineStyle(&app);
+    auto *style = new JahQlementineStyle(&app);
     style->setThemeJsonPath(QStringLiteral(":/themes/jahshaka-dark.json"));
     QApplication::setStyle(style);
+}
+
+void ThemeManager::switchifyMenuToggles(QMenu *menu)
+{
+    if (s_classicActive || !menu) return;
+
+    const auto actions = menu->actions();
+    for (QAction *action : actions) {
+        if (!action->isCheckable() || qobject_cast<QWidgetAction *>(action))
+            continue;
+
+        auto *container = new QWidget(menu);
+        auto *lay = new QHBoxLayout(container);
+        lay->setContentsMargins(12, 4, 12, 4);
+        auto *sw = new oclero::qlementine::Switch(container);
+        sw->setText(action->text());
+        sw->setChecked(action->isChecked());
+        lay->addWidget(sw);
+
+        QObject::connect(sw, &QAbstractButton::toggled, action, &QAction::setChecked);
+        QObject::connect(action, &QAction::toggled, sw, &QAbstractButton::setChecked);
+
+        auto *wa = new QWidgetAction(menu);
+        wa->setDefaultWidget(container);
+        menu->insertAction(action, wa);
+        menu->removeAction(action);
+    }
 }
 
 void ThemeManager::clearClassicSheets(QWidget *root)

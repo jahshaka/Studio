@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferences/mcpsettingswidget.h"
 
 #include <QCheckBox>
+#include "ui/style/thememanager.h"
+#include <oclero/qlementine/widgets/Switch.hpp>
 #include <QClipboard>
 #include <QFormLayout>
 #include <QGuiApplication>
@@ -39,7 +41,15 @@ McpSettingsWidget::McpSettingsWidget(SettingsManager *settings, QWidget *parent)
     intro->setWordWrap(true);
     layout->addWidget(intro);
 
-    mEnabled = new QCheckBox("Enable MCP server", this);
+    // Qlementine mode gets the real Switch widget (first adoption of the
+    // qlementine utility widgets); Classic keeps its QCheckBox.
+    if (ThemeManager::classicActive())
+        mEnabled = new QCheckBox("Enable MCP server", this);
+    else {
+        auto *sw = new oclero::qlementine::Switch(this);
+        sw->setText("Enable MCP server");
+        mEnabled = sw;
+    }
     mEnabled->setChecked(mSettings->getValue("mcp_enabled", false).toBool());
     layout->addWidget(mEnabled);
 

@@ -19,7 +19,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 
-class QCheckBox;
+class QAbstractButton;
 class QLabel;
 class QLineEdit;
 class QSpinBox;
@@ -48,7 +48,7 @@ private:
     McpServer *mServer = nullptr;
     MainWindow *mMainWindow = nullptr;
 
-    QCheckBox *mEnabled;
+    QAbstractButton *mEnabled;   // QCheckBox (Classic) or qlementine Switch (Qlementine)
     QSpinBox *mPort;
     QLineEdit *mToken;
     QLineEdit *mCommand;

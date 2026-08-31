@@ -85,6 +85,7 @@ For more information see the LICENSE file
 
 #include "ui/dialogs/toast.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 
 void AssetView::focusInEvent(QFocusEvent *event)
 {
@@ -389,7 +390,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     QVBoxLayout *navLayout = new QVBoxLayout;
 	navLayout->setSpacing(6);
     _navPane->setLayout(navLayout);
-    _navPane->setStyleSheet("background: #202020;");
+    if (ThemeManager::classicActive())
+        _navPane->setStyleSheet("background: #202020;");
 
 	// The drawers tree (ASSET_DRAWERS_SPEC §1): nested like a file system,
 	// rebuilt from the collections table by rebuildDrawerTree().
@@ -611,7 +613,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	viewsL->addWidget(emptyGrid);
 	viewsL->addWidget(fastGrid);
 	views->setLayout(viewsL);
-    views->setStyleSheet("background: #202020");
+    if (ThemeManager::classicActive())
+        views->setStyleSheet("background: #202020");
 
 	testL->addWidget(filterPane, 0, 0);
 	testL->addWidget(views, 1, 0);
@@ -676,7 +679,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     _metadataPane = new QWidget; 
 	_metadataPane->setObjectName(QStringLiteral("MetadataPane"));
-    _metadataPane->setStyleSheet("background: #202020");
+    if (ThemeManager::classicActive())
+        _metadataPane->setStyleSheet("background: #202020");
     QVBoxLayout *metaLayout = new QVBoxLayout;
     metaLayout->setContentsMargins(0, 0, 0, 0);
 	assetDropPad = new QWidget;
