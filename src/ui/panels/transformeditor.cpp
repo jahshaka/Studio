@@ -111,7 +111,10 @@ DragSpinBox* TransformEditor::createField(const QString& objectName, double perP
 {
     auto box = new DragSpinBox(this);
     box->setObjectName(objectName);
-    box->setDecimals(2);
+    // 4 decimals, not 2: imported models routinely carry root scales like
+    // 0.0143 (Sketchfab FBX->glTF conversions); a 2-decimal field cannot even
+    // DISPLAY them without lying.
+    box->setDecimals(4);
     box->setRange(-1024.0, 1024.0);
     box->setPerPixelStep(perPixelStep);
     box->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
@@ -134,6 +137,12 @@ void TransformEditor::onResetBtnClicked()
         xScaleChanged(scale.x());
         yScaleChanged(scale.y());
         zScaleChanged(scale.z());
+
+        // Display-only: the unrounded values went onto the node above; the
+        // spinboxes must not echo their ROUNDED copies back (see refreshUi).
+        const QSignalBlocker b1(xpos), b2(ypos), b3(zpos);
+        const QSignalBlocker b4(xrot), b5(yrot), b6(zrot);
+        const QSignalBlocker b7(xscale), b8(yscale), b9(zscale);
 
         xpos->setValue(0);
         ypos->setValue(0);
@@ -162,6 +171,19 @@ void TransformEditor::refreshUi()
 {
 	// ui might have a null node
 	if (!!sceneNode) {
+		// Populating the fields FROM the document must never write back INTO
+		// the document. Without the blockers, QDoubleSpinBox::setValue rounds
+		// to the field's decimals, and a changed (= rounded) value fires
+		// valueChanged straight into set{Pos,Rot,Scale} — selecting a freshly
+		// imported model silently stamped the rounded transform onto the node
+		// (the double-import "root scale 0.0143 became 0.01" corruption: only
+		// the FIRST selection in a panel's life changed the spinbox value, so
+		// only the first import was hit). Euler round-trips through the
+		// rotation fields corrupted rotations the same way.
+		const QSignalBlocker b1(xpos), b2(ypos), b3(zpos);
+		const QSignalBlocker b4(xrot), b5(yrot), b6(zrot);
+		const QSignalBlocker b7(xscale), b8(yscale), b9(zscale);
+
 		auto pos = sceneNode->getLocalPos();
 		xpos->setValue(pos.x());
 		ypos->setValue(pos.y());
