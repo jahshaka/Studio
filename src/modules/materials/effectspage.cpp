@@ -1068,7 +1068,12 @@ void EffectsPage::configureUI()
 	addDockWidget(Qt::LeftDockWidgetArea, materialSettingsDock, Qt::Vertical);
 	addDockWidget(Qt::RightDockWidgetArea, propertyWidget, Qt::Vertical);
 
-	displayWidget->setMinimumSize(400, 230);
+	// The right column starts and bottoms out at the left column's width
+	// (assetsDock is 330): the Display preview scales to any width, and the
+	// properties panel scrolls (phase-5 owner fix - the dock used to open at
+	// ~750px and refuse to shrink).
+	displayWidget->setMinimumSize(330, 230);
+	resizeDocks({ displayWidget, propertyWidget }, { 330, 330 }, Qt::Horizontal);
 	// The dock stays hidden until Studio hands in the engine-rendered preview
 	// (setEnginePreview).
 	displayWidget->hide();

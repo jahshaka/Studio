@@ -66,6 +66,11 @@ public:
 	enum class View { GraphSettings, MaterialSettings, Node };
 	View currentView() const;
 
+	// Drives the dock's INITIAL width: match the left column (the node
+	// drawer, 330). Minimums stay tiny — the settings pages are wrapped in
+	// QScrollAreas so no child hint can lock the dock wide (phase 5 fix).
+	QSize sizeHint() const override { return QSize(330, 480); }
+
 signals:
 	// Master/graph settings edits. The page routes this into the same
 	// MaterialSettingsChangeCommand the left settings dock uses.

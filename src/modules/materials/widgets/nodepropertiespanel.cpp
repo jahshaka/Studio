@@ -179,6 +179,18 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	layout->addLayout(formLayout);
 	layout->addStretch();
 
+	// Wrap the page in a resizable scroll area so its layout's minimum size
+	// hint cannot propagate to the dock: QStackedWidget takes the max minimum
+	// over ALL pages, and an inflated page minimum made the whole right dock
+	// column ~660px wide and impossible to shrink (owner report, phase 5).
+	// QScrollArea::minimumSizeHint is tiny regardless of content, so the dock
+	// resizes freely and long content scrolls instead of pushing.
+	auto pageScroll = new QScrollArea;
+	pageScroll->setWidgetResizable(true);
+	pageScroll->setFrameShape(QFrame::NoFrame);
+	pageScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	pageScroll->setWidget(page);
+
 	// every edit rebuilds the settings struct and hands it to the page
 	connect(form.name, &QLineEdit::editingFinished, this, [this]() { emitSettings(); });
 	connect(form.blend, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emitSettings(); });
@@ -191,7 +203,7 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 			connect(box, &QCheckBox::toggled, this, [this](bool) { emitSettings(); });
 	}
 
-	return page;
+	return pageScroll;
 }
 
 void NodePropertiesPanel::setScene(GraphNodeScene* scene)
