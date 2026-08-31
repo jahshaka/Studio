@@ -17,7 +17,7 @@
 
 #include "modules/materials/graph/nodegraph.h"
 #include "modules/materials/nodes/pbrmasternode.h"
-#include "modules/materials/nodes/test.h" // FloatNodeModel, ColorPickerNode, PropertyNode, SurfaceMasterNode
+#include "modules/materials/nodes/test.h" // FloatNodeModel, ColorPickerNode, TextureNode, SurfaceMasterNode
 #include "modules/materials/models/properties.h"
 #include "modules/materials/models/library.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
@@ -53,16 +53,12 @@ static ColorPickerNode* makeColor(NodeGraph* graph, double r, double g, double b
     return node;
 }
 
-static PropertyNode* makeTextureProperty(NodeGraph* graph, const QString& name, const QString& path)
+// A node-owned texture (§3b: PropertyNode is retired; texture nodes carry
+// their image path/guid themselves).
+static TextureNode* makeTextureNode(NodeGraph* graph, const QString& path)
 {
-    auto prop = new TextureProperty();
-    prop->displayName = name;
-    prop->name = name;
-    prop->setValue(path);
-    graph->addProperty(prop);
-
-    auto node = new PropertyNode();
-    node->setProperty(prop);
+    auto node = new TextureNode();
+    node->setTexturePath(path);
     graph->addNode(node);
     return node;
 }
@@ -114,16 +110,16 @@ int main(int argc, char** argv)
         CHECK(material->textures.isEmpty(), "graph 1: no maps bound");
     }
 
-    // ---- graph 2: texture properties into the PBR master ---------------------
-    // texture property -> Base Color (becomes baseColorMap), texture property -> Normal
+    // ---- graph 2: texture nodes into the PBR master --------------------------
+    // texture node -> Base Color (becomes baseColorMap), texture node -> Normal
     {
         auto graph = new NodeGraph();
         auto master = new PbrMasterNode();
         graph->addNode(master);
         graph->setMasterNode(master);
 
-        auto diffuse = makeTextureProperty(graph, "diffuseTex", texPath);
-        auto normal = makeTextureProperty(graph, "normalTex", texPath);
+        auto diffuse = makeTextureNode(graph, texPath);
+        auto normal = makeTextureNode(graph, texPath);
         graph->addConnection(diffuse, 0, master, 0); // texture -> Base Color
         graph->addConnection(normal, 0, master, 3);  // texture -> Normal
 

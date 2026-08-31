@@ -61,7 +61,16 @@ public:
 	QMap<QString, NodeModel*> nodes;
 	QMap<QString, ConnectionModel*> connections;
 	NodeModel* masterNode = nullptr;
+	// Legacy graph-global uniform parameters. Since the §3b migration these
+	// are READ (old files stay loadable forever; the values fold into real
+	// nodes at load time) but never written back — serialize() stops
+	// emitting "properties".
 	QVector<Property*> properties;
+	// §3b migration record: id of every node that replaced a PropertyNode
+	// instance at load time -> the property id it carried. Lets the preset
+	// loader (and tools) re-target texture assignments that used to key off
+	// the property list.
+	QMap<QString, QString> migratedPropertyNodes;
 	MaterialSettings settings;
 	QString materialGuid = "";
 

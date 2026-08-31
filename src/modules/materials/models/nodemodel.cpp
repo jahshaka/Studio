@@ -124,10 +124,6 @@ QColor NodeModel::setNodeTitleColor()
 		icon.addPixmap({ ":/icons/math.png" });
 		return titleColor = QColor(25,118,210);
 		break;
-	case NodeCategory::Properties:
-		icon.addPixmap({ ":/icons/properties.png" });
-		return titleColor = QColor(230, 74, 25);
-		break;
 	case NodeCategory::Constants:
 		icon.addPixmap({ ":/icons/constant.png" });
 		return titleColor = QColor(150, 24, 35);
@@ -146,8 +142,6 @@ QString NodeModel::getEnumString(NodeCategory type) {
 		return "Input";
 	case NodeCategory::Math:
 		return "Math";
-	case NodeCategory::Properties:
-		return "Properties";
 	case NodeCategory::Constants:
 		return "Constants";
 	case NodeCategory::Object:
@@ -174,10 +168,6 @@ void NodeModel::setNodeType(NodeCategory type)
 		return;
 	case NodeCategory::Math:
 		iconPath = ":/icons/math.png";
-		icon = QIcon(iconPath);
-		return;
-	case NodeCategory::Properties:
-		iconPath = ":/icons/property.png";
 		icon = QIcon(iconPath);
 		return;
 	case NodeCategory::Constants:

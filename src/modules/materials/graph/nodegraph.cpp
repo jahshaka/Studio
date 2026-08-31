@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QSet>
 
 #include <QDebug>
 
@@ -166,6 +167,9 @@ QJsonObject NodeGraph::serialize()
 		nodeObj["id"] = node->id;
 		nodeObj["value"] = node->serializeWidgetValue();
 		nodeObj["type"] = node->typeName;
+		// keeps user-facing names (e.g. a migrated property's "Diffuse")
+		// across the save; absent/empty on load = the constructor's default
+		nodeObj["title"] = node->title;
 		nodeObj["x"] = node->getX();
 		nodeObj["y"] = node->getY();
 		nodesJson.append(nodeObj);
@@ -191,13 +195,9 @@ QJsonObject NodeGraph::serialize()
 
 	graph["settings"] = serializeMaterialSettings();
 
-	//todo: save parameters
-	QJsonArray propJson;
-	for (auto prop : this->properties) {
-		QJsonObject propObj = prop->serialize();
-		propJson.append(propObj);
-	}
-	graph["properties"] = propJson;
+	// §3b: "properties" is no longer written. Old files carrying it stay
+	// readable forever (deserialize migrates them into real nodes); the
+	// values now live on the nodes themselves.
 	graph["materialGuid"] = materialGuid;
 	return graph;
 }
@@ -218,6 +218,9 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 	}
 
 	// read nodes
+	// ids of texture nodes that replaced texture PropertyNodes this load —
+	// their connections need the output-index collapse below
+	QSet<QString> migratedTextureNodes;
 	auto nodeList = graphObj["nodes"].toArray();
 	for (auto nodeVar : nodeList) {
 		auto nodeObj = nodeVar.toObject();
@@ -242,6 +245,83 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 			//nodeModel = graph->modelFactories[type]();
 			nodeModel = graph->library->createNode(type);
 		}
+		// §3b migration: a PropertyNode instance becomes the real node for
+		// its property's value — Float/Int/Bool -> float, Vec2/3/4 ->
+		// vector2/3/4, Color -> color, Texture -> texture (carrying the
+		// asset guid). Position and id are preserved so connections
+		// re-attach 1:1; multiple instances of one property become
+		// independent copies (owner-locked call, 2026-08-31).
+		bool migratedTexture = false;
+		if (type == "property") {
+			auto propId = nodeObj["value"].toString();
+			auto prop = graph->getPropertyById(propId);
+			nodeModel = nullptr;
+			if (prop != nullptr) {
+				switch (prop->type) {
+				case PropertyType::Float:
+				case PropertyType::Int:
+					nodeModel = graph->library->createNode("float");
+					if (nodeModel) nodeModel->deserializeWidgetValue(QJsonValue(prop->getValue().toDouble()));
+					break;
+				case PropertyType::Bool:
+					nodeModel = graph->library->createNode("float");
+					if (nodeModel) nodeModel->deserializeWidgetValue(QJsonValue(prop->getValue().toBool() ? 1.0 : 0.0));
+					break;
+				case PropertyType::Vec2: {
+					nodeModel = graph->library->createNode("vector2");
+					auto v = prop->getValue().value<QVector2D>();
+					QJsonObject o; o["x"] = v.x(); o["y"] = v.y();
+					if (nodeModel) nodeModel->deserializeWidgetValue(o);
+					break;
+				}
+				case PropertyType::Vec3: {
+					nodeModel = graph->library->createNode("vector3");
+					auto v = prop->getValue().value<QVector3D>();
+					QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z();
+					if (nodeModel) nodeModel->deserializeWidgetValue(o);
+					break;
+				}
+				case PropertyType::Vec4: {
+					nodeModel = graph->library->createNode("vector4");
+					auto v = prop->getValue().value<QVector4D>();
+					QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z(); o["w"] = v.w();
+					if (nodeModel) nodeModel->deserializeWidgetValue(o);
+					break;
+				}
+				case PropertyType::Color: {
+					nodeModel = graph->library->createNode("color");
+					auto c = prop->getValue().value<QColor>();
+					QJsonObject o; o["r"] = c.redF(); o["g"] = c.greenF(); o["b"] = c.blueF(); o["a"] = c.alphaF();
+					if (nodeModel) nodeModel->deserializeWidgetValue(o);
+					break;
+				}
+				case PropertyType::Texture:
+					nodeModel = graph->library->createNode("texture");
+					if (nodeModel) nodeModel->deserializeWidgetValue(QJsonValue(prop->getValue().toString()));
+					migratedTexture = true;
+					break;
+				default:
+					break;
+				}
+			}
+			// a property node whose property is missing or untyped:
+			// skip it (matches the old skip-unknown-node rule)
+			if (nodeModel == nullptr) {
+				qWarning() << "NodeGraph: dropped property node" << nodeObj["id"].toString()
+				           << "- no usable property" << propId;
+				continue;
+			}
+			nodeModel->title = prop->displayName;
+			nodeModel->id = nodeObj["id"].toString();
+			nodeModel->setX(nodeObj["x"].toDouble());
+			nodeModel->setY(nodeObj["y"].toDouble());
+			graph->addNode(nodeModel);
+			graph->migratedPropertyNodes.insert(nodeModel->id, propId);
+			if (migratedTexture)
+				migratedTextureNodes.insert(nodeModel->id);
+			continue;
+		}
+
 		// a type the library doesn't know (e.g. graphs saved while
 		// TruncNode wrote "truncate" instead of its key "trunc") used
 		// to null-deref here; skip the node and keep loading the file
@@ -251,16 +331,10 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		nodeModel->setX(nodeObj["x"].toDouble());
   		nodeModel->setY(nodeObj["y"].toDouble());
 
-
-		// special case for properties
-		if (type == "property") {
-			auto propId = nodeObj["value"].toString();
-			auto prop = graph->getPropertyById(propId);
-			((PropertyNode*)nodeModel)->setProperty(prop);
-		}
-		else {
-			nodeModel->deserializeWidgetValue(nodeObj["value"]);
-		}
+		nodeModel->deserializeWidgetValue(nodeObj["value"]);
+		auto storedTitle = nodeObj["title"].toString();
+		if (!storedTitle.isEmpty())
+			nodeModel->title = storedTitle;
 
 		graph->addNode(nodeModel);
 		if (type == "Material" || type == "PbrMaterial") {
@@ -281,6 +355,17 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		// endpoints may be missing when an unknown node type was skipped
 		if (!graph->nodes.contains(leftNodeId) || !graph->nodes.contains(rightNodeId))
 			continue;
+
+		// §3b: a texture PropertyNode had outputs texture/rgba/normal — the
+		// replacing texture node has the single texture output, and the
+		// evaluator lands it on the same map slot, so all three collapse to
+		// output 0. Its uv INPUT has no equivalent; connections into it drop.
+		if (migratedTextureNodes.contains(leftNodeId))
+			leftSockIndex = 0;
+		if (migratedTextureNodes.contains(rightNodeId)) {
+			qWarning() << "NodeGraph: dropped uv connection into migrated texture node" << rightNodeId;
+			continue;
+		}
 
 		graph->addConnection(leftNodeId, leftSockIndex, rightNodeId, rightSockIndex);
 	}

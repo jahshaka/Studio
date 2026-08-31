@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "../models/nodemodel.h"
 #include "../models/properties.h"
 #include "../models/socketmodel.h"
-#include "../nodes/test.h" // PropertyNode, TextureNode
+#include "../nodes/test.h" // TextureNode
 
 #include "irisgl/document/materials/pbrmaterial.h"
 
@@ -107,34 +107,9 @@ InputValue evaluateInput(SocketModel* socket, const PbrGraphEvaluator::TextureRe
 		return result;
 	}
 
-	if (type == "property") {
-		auto prop = ((PropertyNode*)node)->getProperty();
-		if (!prop) return result;
-		switch (prop->type) {
-		case PropertyType::Float:
-		case PropertyType::Int:
-			result.kind = InputValue::Scalar;
-			result.scalar = prop->getValue().toFloat();
-			return result;
-		case PropertyType::Color:
-			result.kind = InputValue::Color;
-			result.color = prop->getValue().value<QColor>();
-			return result;
-		case PropertyType::Texture: {
-			auto stored = prop->getValue().toString();
-			auto path = resolve ? resolve(stored) : stored;
-			if (path.isEmpty()) return result; // empty slot, not an error
-			result.kind = InputValue::TexturePath;
-			result.path = path;
-			return result;
-		}
-		default:
-			break;
-		}
-		result.kind = InputValue::Unsupported;
-		result.describe = QString("property(%1)").arg(prop->displayName);
-		return result;
-	}
+	// ("property" retired 2026-08-31, §3b: property nodes migrate to real
+	// constant/texture nodes in NodeGraph::deserialize, so no live graph
+	// carries the type any more)
 
 	if (type == "texture") {
 		auto path = ((TextureNode*)node)->getTexturePath();

@@ -989,12 +989,43 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
     currentShaderInformation.GUID = "";
 	NodeGraph *graph;
 	graph = importGraphFromFilePath(MaterialHelper::assetPath(preset.templatePath), false);
+
+	// Texture assignment at template instantiation (§3b, post-migration):
+	//
+	// OLD-format templates still carry graph["properties"]; the migration
+	// turned each texture property's PropertyNode into a texture node
+	// (graph->migratedPropertyNodes). Import the preset's image per texture
+	// property, in property order — exactly the pairing the old loop used —
+	// and hand the imported guid to BOTH the readable property and its
+	// migrated node.
 	int i = 0;
 	for (auto prop : graph->properties) {
-		if (prop->type == PropertyType::Texture) {
-			GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(MaterialHelper::assetPath(preset.list.at(i)));
-			prop->setValue(graphTexture->guid);
-			i++;
+		if (prop->type != PropertyType::Texture) continue;
+		if (i >= preset.list.size()) break;
+		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(MaterialHelper::assetPath(preset.list.at(i)));
+		prop->setValue(graphTexture->guid);
+		for (auto it = graph->migratedPropertyNodes.constBegin(); it != graph->migratedPropertyNodes.constEnd(); ++it) {
+			if (it.value() != prop->id) continue;
+			if (auto texNode = dynamic_cast<TextureNode*>(graph->getNode(it.key())))
+				texNode->setTextureGuid(graphTexture->guid);
+		}
+		i++;
+	}
+
+	// NEW-format templates (re-saved through the migration) have no
+	// properties: their texture nodes carry app-relative image names
+	// ("wood.jpg", "materials_to_graph/brick diff.jpg") that resolve
+	// against the shadergraph asset folder and import on first use.
+	for (auto node : graph->nodes.values()) {
+		if (node->typeName != "texture") continue;
+		auto texNode = static_cast<TextureNode*>(node);
+		if (!texNode->getTexturePath().isEmpty()) continue; // already resolved
+		auto rel = texNode->getTextureGuid();
+		if (rel.isEmpty()) continue;
+		auto abs = MaterialHelper::assetPath(rel);
+		if (QFileInfo::exists(abs)) {
+			GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
+			texNode->setTextureGuid(graphTexture->guid);
 		}
 	}
 
@@ -1243,7 +1274,6 @@ void EffectsPage::generateTileNode()
 	QSize currentSize(90, 90);
 
 	for (NodeLibraryItem *tile : graph->library->items) {
-		if (tile->name == "property") continue;
 		auto item = new QListWidgetItem;
 		item->setText(tile->displayName);
 		item->setData(Qt::DisplayRole, tile->displayName);

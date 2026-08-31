@@ -54,7 +54,6 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 
 	tree = new TreeWidget;
 	tree->setContentsMargins(10, 10, 60, 10);
-	treeProperty = new TreeWidget;
 	configureTreeWidget();
 
 	searchContainer->setLayout(searchLayout);
@@ -71,7 +70,7 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 	nodeLayout->addWidget(tree);
 
 	tabWidget->addTab(nodeWidget, "Nodes");
-	tabWidget->addTab(treeProperty, "Properties");
+	// (the Properties tab died with the §3b PropertyNode retirement)
 
 
 	tabWidget->setStyleSheet(
@@ -88,7 +87,6 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 	layout->addWidget(widgetHolder);
 
 	generateTileNode(graph);
-	generateTileProperty(graph);
 
 
 	connect(searchBar, &QLineEdit::textChanged, [=](QString str) {
@@ -108,7 +106,6 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 		// fuzzy match + rank (best first), so Enter creates the best hit
 		QList<QPair<int, NodeLibraryItem*>> ranked;
 		for (auto item : graph->library->items) {
-			if (item->name == "property") continue;
 			int score = 0;
 			if (FuzzySearch::match(str, item->displayName, &score))
 				ranked.append({ score, item });
@@ -143,12 +140,6 @@ SearchDialog::SearchDialog(NodeGraph *graph, GraphNodeScene* scene, QPoint point
 			item->setExpanded(true);
 		}
 	});
-
-	connect(treeProperty, &TreeWidget::itemClicked, [=](QTreeWidgetItem *item, int column) {
-			scene->addNodeFromSearchDialog(treeProperty->currentItem(), this->point);
-			this->close();		
-	});
-
 
 	searchContainer->setStyleSheet("background:rgba(32,32,32,0);");
 	searchBar->setStyleSheet("QLineEdit{ background:rgba(41,41,41,1); border: 1px solid rgba(150,150,150,.2); border-radius: 1px; color: rgba(250,250,250,.95); padding: 6px;  }");
@@ -233,7 +224,6 @@ void SearchDialog::generateTileNode(NodeGraph *graph)
 	QSize currentSize(20, 20);
 
 	for (NodeLibraryItem *tile : graph->library->items) {
-		if (tile->name == "property") continue;
 		auto item = new QTreeWidgetItem;
 		item->setText(0, tile->displayName);
 		item->setData(0, Qt::DisplayRole, tile->displayName);
@@ -244,26 +234,6 @@ void SearchDialog::generateTileNode(NodeGraph *graph)
 		item->setFlags(item->flags() | Qt::ItemIsEditable);
 		tree->findItems(NodeModel::getEnumString(tile->nodeCategory), Qt::MatchExactly)[0]->addChild(item);
 	}
-}
-
-void SearchDialog::generateTileProperty(NodeGraph * graph)
-{
-	QSize currentSize(20, 20);
-
-	for (auto tile : graph->properties) {
-		if (tile->name == "property") continue;
-		auto item = new QTreeWidgetItem;
-		item->setText(0,tile->displayName);
-		item->setData(0,Qt::DisplayRole, tile->displayName);
-		item->setData(0,Qt::UserRole, tile->name);
-		item->setData(0,MODEL_EXT_ROLE, index);
-		item->setSizeHint(0,currentSize);
-		item->setTextAlignment(0,Qt::AlignLeft);
-		item->setFlags(item->flags() | Qt::ItemIsEditable);
-		treeProperty->addTopLevelItem(item);
-		index++;
-	}
-
 }
 
 void SearchDialog::configureTreeWidget()

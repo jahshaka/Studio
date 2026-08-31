@@ -100,12 +100,10 @@ public:
 	GraphNode* getNodeByPos(QPointF point);
 	//QVector<SocketConnection*> socketConnections;
 	NodeGraph *getNodeGraph() const;
-	GraphNode* getNodeByPropertyId(QString id);
 	void refreshNodeTitle(QString id);
 	void setNodeGraph(NodeGraph* value);
 	void addNodeModel(NodeModel* model, bool addToGraph = true);
 	GraphNode* addNodeModel(NodeModel* model, float x, float y, bool addToGraph = true);
-	void addPropertyNode(Property* prop, float x, float y, bool addToGraph = true);
 
 	QMenu* createContextMenu(float x, float y);
 	QMenu* removeConnectionContextMenu(float x, float y);
@@ -115,7 +113,6 @@ public:
 	QList<QString> loadedShadersGUID;
 
 	void setList(QList<QString> list) { loadedShadersGUID = list; }
-	void updatePropertyNodeTitle(QString title, QString propId);
 
 	void addNodeFromSearchDialog(QTreeWidgetItem* item, const QPoint& point);
 

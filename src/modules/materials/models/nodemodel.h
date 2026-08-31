@@ -10,6 +10,7 @@
 
 #include "socketmodel.h"
 
+// (the Properties category died with the PropertyNode retirement, §3b)
 enum class NodeCategory {
 	Input = 0,
 	Math = 1,
@@ -18,8 +19,7 @@ enum class NodeCategory {
 	Vector = 4,
 	Object = 5,
 	Utility = 6,
-	PlaceHolder = 7,
-	Properties = 8
+	PlaceHolder = 7
 };
 
 class QWidget;

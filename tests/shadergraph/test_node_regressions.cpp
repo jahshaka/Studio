@@ -90,15 +90,12 @@ int main(int argc, char** argv)
     }
 
     // ---------------------------------------------------------------- D2
+    // (killed for good by §3b: PropertyNode no longer exists — a bare one
+    // can never be constructed again)
     {
         LibraryV1 library;
-        auto bare = library.createNode("property");
-        CHECK(bare != nullptr, "D2: bare property node constructs");
-        // both used to read an uninitialized Property* (SIGSEGV)
-        auto value = bare->serializeWidgetValue();
-        CHECK(value.toString().isEmpty(), "D2: bare property serializes to empty, no crash");
-        bare->process(nullptr);
-        CHECK(true, "D2: bare property process() is a guarded no-op");
+        CHECK(!library.hasNode("property"), "D2/§3b: 'property' is no longer a library type");
+        CHECK(library.createNode("property") == nullptr, "D2/§3b: createNode('property') returns null");
     }
 
     // ------------------------------------------------------------ D4/D13

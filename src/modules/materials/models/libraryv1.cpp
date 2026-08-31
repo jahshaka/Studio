@@ -33,12 +33,8 @@ void LibraryV1::initTest()
 	QString iconPath = ":/icons/input.png";
 	auto type = NodeCategory::Input;
 
-	// property
-	lib->addNode("property", "Property", iconPath, type, []()
-	{
-		auto node = new PropertyNode();
-		return node;
-	});
+	// ("property" retired 2026-08-31, §3b — graph properties migrate to real
+	// constant/texture nodes at load time)
 
 	// mult
 	lib->addNode("vectorMultiply", "Vector Multiply", iconPath, type, []()
