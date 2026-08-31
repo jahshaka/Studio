@@ -19,6 +19,15 @@ For more information see the LICENSE file
 #include <QDebug>
 #include "services/thumbnailmanager.h"
 
+#include <QMutex>
+#include <QMutexLocker>
+
+// The two static caches are shared between the UI thread and the import
+// pipeline's worker (ImportBatchRunner runs importer convert() off-thread) —
+// every read/insert goes through this lock. QImage itself is fine off the
+// GUI thread; the hazard was only the unguarded QHash mutation.
+static QMutex sThumbnailCacheMutex;
+
 QSharedPointer<Thumbnail> ThumbnailManager::createThumbnail(QString filename, int width, int height)
 {
     // assumes file exist for now
@@ -26,14 +35,16 @@ QSharedPointer<Thumbnail> ThumbnailManager::createThumbnail(QString filename, in
     auto lastModified = fileInfo.lastModified();
     auto hash = filename + QString::number(lastModified.toMSecsSinceEpoch()) + QString("-") + QString::number(width) + QString("-") + QString::number(height);
 
-    if (ThumbnailManager::thumbnails.contains(hash)) {
-        return ThumbnailManager::thumbnails[hash];
-    }
-
     QImage image;
-    if (cachedImages.contains(filename))
-        image = cachedImages[filename];
-    else {
+    {
+        QMutexLocker lock(&sThumbnailCacheMutex);
+        if (ThumbnailManager::thumbnails.contains(hash)) {
+            return ThumbnailManager::thumbnails[hash];
+        }
+        if (cachedImages.contains(filename))
+            image = cachedImages[filename];
+    }
+    if (image.isNull()) {
         image = QImage(filename);
     }
 
@@ -44,13 +55,17 @@ QSharedPointer<Thumbnail> ThumbnailManager::createThumbnail(QString filename, in
     thumb->thumb		= new QImage(image.scaledToHeight(height, Qt::SmoothTransformation));
 
     auto thumbPtr = QSharedPointer<Thumbnail>(thumb);
-    ThumbnailManager::thumbnails.insert(hash, thumbPtr);
+    {
+        QMutexLocker lock(&sThumbnailCacheMutex);
+        ThumbnailManager::thumbnails.insert(hash, thumbPtr);
+    }
 
     return thumbPtr;
 }
 
 void ThumbnailManager::cacheImage(QString filename, QImage image)
 {
+    QMutexLocker lock(&sThumbnailCacheMutex);
     cachedImages.insert(filename, image);
 }
 

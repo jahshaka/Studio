@@ -42,10 +42,13 @@ void ensureCasSchema(QSqlDatabase conn);
 /// staging dir), store the object, record the files row and an asset_files
 /// row {guid, role, name}. The recorded extension of already-known content
 /// wins (jpeg/jpg aliasing, as in ingestLegacyFolder). Idempotent.
-/// `oidOut` (optional) receives the content id.
+/// `oidOut` (optional) receives the content id. `knownOid` (optional) is a
+/// precomputed sha256 of srcPath — the import pipeline hashes on a worker
+/// thread and passes it here so the DB-thread store stage never re-hashes.
 bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
                 const QString &guid, const QString &role, const QString &name,
-                QString *oidOut, QString *errorOut);
+                QString *oidOut, QString *errorOut,
+                const QString &knownOid = QString());
 
 /// Materialize the legacy per-guid folder <root>/<guid>/ as a HARDLINK VIEW
 /// of the asset's objects (copy on filesystems without links): one entry per

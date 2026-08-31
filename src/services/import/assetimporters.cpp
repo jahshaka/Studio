@@ -17,8 +17,9 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QBuffer>
+#include <QImage>
 #include <QJsonObject>
-#include <QPixmap>
 #include <QTextStream>
 #include <functional>
 
@@ -42,20 +43,42 @@ For more information see the LICENSE file
 
 namespace {
 
-QPixmap thumbnailFor(int type, const QString &filePath)
+// Convert() runs on a worker thread (ImportBatchRunner) — QImage only, never
+// QPixmap (GUI-thread-bound). PNG bytes via QBuffer, the exact blob
+// AssetHelper::makeBlobFromPixmap produced.
+QByteArray pngBlobFromImage(const QImage &image)
+{
+    if (image.isNull()) return QByteArray();
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "PNG");
+    return bytes;
+}
+
+QImage thumbnailImageFor(int type, const QString &filePath)
 {
     switch (static_cast<ModelTypes>(type)) {
     case ModelTypes::Texture: {
         auto thumb = ThumbnailManager::createThumbnail(filePath, 256, 256);
-        if (thumb && thumb->thumb) return QPixmap::fromImage(*thumb->thumb);
-        return QPixmap();
+        if (thumb && thumb->thumb) return *thumb->thumb;
+        return QImage();
     }
-    case ModelTypes::Video:
-        return VideoUtils::thumbnailFor(filePath);
+    case ModelTypes::Video: {
+        // grabFrame hard-gates on the GUI thread (QMediaPlayer + event loop)
+        // and returns null on a worker — the film icon lands in the row and
+        // AssetView's post-import UI tail grabs the real frame.
+        const QImage frame = VideoUtils::grabFrame(filePath);
+        if (!frame.isNull())
+            return frame.width() >= frame.height()
+                       ? frame.scaledToWidth(256, Qt::SmoothTransformation)
+                       : frame.scaledToHeight(256, Qt::SmoothTransformation);
+        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-video.png"));
+    }
     case ModelTypes::Music:
-        return QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
     default:
-        return QPixmap();
+        return QImage();
     }
 }
 
@@ -132,7 +155,12 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // member guid (its own source) and the Object (role "texture").
     struct TexEntry { QString fileName, guid, path; };
     QVector<TexEntry> textures;
+    int texDone = 0;
     for (const auto &texPath : texturePaths) {
+        if (progress && !progress(QStringLiteral("textures"), texDone++, texturePaths.size())) {
+            if (errorOut) *errorOut = QStringLiteral("cancelled");
+            return false;
+        }
         const QFileInfo texInfo(texPath);
         if (!texInfo.exists() || !texInfo.isFile()) continue;
         if (std::any_of(textures.begin(), textures.end(),
@@ -145,17 +173,17 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         out.files.append({ entry.path, out.mainGuid, QStringLiteral("texture"), entry.fileName });
         out.files.append({ entry.path, entry.guid, QStringLiteral("source"), entry.fileName });
 
-        QPixmap texThumb;
+        QImage texThumb;
         {
             auto thumb = ThumbnailManager::createThumbnail(entry.path, 72, 72);
-            if (thumb && thumb->thumb) texThumb = QPixmap::fromImage(*thumb->thumb);
+            if (thumb && thumb->thumb) texThumb = *thumb->thumb;
         }
         StagedRow texRow;
         texRow.guid = entry.guid;
         texRow.name = entry.fileName;
         texRow.type = static_cast<int>(ModelTypes::Texture);
         texRow.parent = out.mainGuid;
-        texRow.thumbnail = AssetHelper::makeBlobFromPixmap(texThumb);
+        texRow.thumbnail = pngBlobFromImage(texThumb);
         texRow.viewFilter = static_cast<int>(AssetViewFilter::Editor);
         out.rows.append(texRow);
 
@@ -281,7 +309,7 @@ bool MediaImporter::convert(const ImportRequest &request, const QString &staging
     row.guid = out.mainGuid;
     row.name = sourceInfo.fileName();
     row.type = mType;
-    row.thumbnail = AssetHelper::makeBlobFromPixmap(thumbnailFor(mType, request.sourcePath));
+    row.thumbnail = pngBlobFromImage(thumbnailImageFor(mType, request.sourcePath));
     row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
     out.rows.append(row);
     return true;
@@ -412,17 +440,17 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
         out.files.append({ tex.path, out.mainGuid, QStringLiteral("texture"), tex.fileName });
         out.files.append({ tex.path, tex.guid, QStringLiteral("source"), tex.fileName });
 
-        QPixmap texThumb;
+        QImage texThumb;
         {
             auto thumb = ThumbnailManager::createThumbnail(tex.path, 72, 72);
-            if (thumb && thumb->thumb) texThumb = QPixmap::fromImage(*thumb->thumb);
+            if (thumb && thumb->thumb) texThumb = *thumb->thumb;
         }
         StagedRow texRow;
         texRow.guid = tex.guid;
         texRow.name = tex.fileName;
         texRow.type = static_cast<int>(ModelTypes::Texture);
         texRow.parent = out.mainGuid;
-        texRow.thumbnail = AssetHelper::makeBlobFromPixmap(texThumb);
+        texRow.thumbnail = pngBlobFromImage(texThumb);
         texRow.viewFilter = static_cast<int>(AssetViewFilter::Editor);
         out.rows.append(texRow);
         out.deps.append({ static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),

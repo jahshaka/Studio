@@ -17,11 +17,16 @@ AssetViewGrid::AssetViewGrid(QWidget *parent) : QScrollArea(parent) {
 	this->parent = parent;
 	gridWidget = new QWidget(this);
 	_layout = new QGridLayout;
-    _layout->setContentsMargins(0, 0, 0, 0);
+	// Tiles clear the filter/search toolbar and the pane's left edge (owner
+	// direction 2026-08-31) instead of running flush against both.
+	_layout->setContentsMargins(12, 12, 12, 12);
 	_layout->setSpacing(12);
 	gridCounter = 0;
 	gridWidget->setLayout(_layout);
-	setAlignment(Qt::AlignHCenter);
+	// File-browser flow (owner direction): rows fill left→right from the
+	// top-left — the grid widget anchors to the viewport's top-left instead
+	// of floating centered.
+	setAlignment(Qt::AlignLeft | Qt::AlignTop);
 	//setWidgetResizable(true);
 	setWidget(gridWidget);
 	// Frameless in both themes — the border:0 sheet alone doesn't stop
@@ -241,6 +246,14 @@ void AssetViewGrid::reassignCollections(const QVector<int> &from, int to, const 
 			gridItem->metadata["collection_name"] = toName;
 		}
 	}
+}
+
+void AssetViewGrid::lightSelectTile(AssetGridItem *item)
+{
+	if (!item) return;
+	deselectAll();
+	item->highlight(true);
+	emit lightSelectedTile(item);
 }
 
 void AssetViewGrid::deselectAll()

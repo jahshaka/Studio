@@ -174,6 +174,10 @@ public:
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
     QVector<AssetRecord> fetchAssetsForAssetView();
+    /// Stored bytes per asset (sum of its linked CAS objects' sizes), for the
+    /// Assets page's list view Size column. guid → bytes; assets with no
+    /// stored content are absent.
+    QMap<QString, qint64> fetchAssetFileSizes();
     /// Guids of LIBRARY rows — view_filter IN (2,3): AssetsView + Effects
     /// (preflight §1.6 — Effects rows ARE library tiles; any store scan that
     /// forgets filter 3 silently skips most of a real library).

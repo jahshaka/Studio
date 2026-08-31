@@ -30,6 +30,9 @@ For more information see the LICENSE file
 #include <QStringList>
 #include <QVector>
 #include <functional>
+#include <memory>
+
+class QTemporaryDir;
 
 #include "irisgl/irisglfwd.h"
 
@@ -116,6 +119,25 @@ struct StagedAsset
     StagedJaf jaf;
     QStringList warnings;
     std::function<void()> registerSession;   // AssetManager adds; runs after commit
+
+    /// Content hashes precomputed off the DB thread (path → sha256 oid).
+    /// AssetImportService::prepare fills this on the worker so the UI-thread
+    /// commit never re-hashes big files; ingestFile trusts a present entry.
+    QMap<QString, QString> fileOids;
+};
+
+/// The output of AssetImportService::prepare — everything the CPU-heavy half
+/// of the pipeline produced, ready for the DB-thread commit. Carries NO live
+/// Qt GUI objects (thumbnails are PNG byte arrays, images decode to QImage
+/// before this point), so it may cross threads freely. The staging dir that
+/// backs StagedFile paths is owned here and must outlive commit().
+struct PreparedImport
+{
+    ImportRequest request;
+    StagedAsset staged;
+    ImportResult result;                     // error/warnings from the prepare half
+    std::shared_ptr<QTemporaryDir> staging;  // keeps staged file paths alive
+    bool ok() const { return result.error.isEmpty(); }
 };
 
 /// Progress callback: stage name + current/total within the stage

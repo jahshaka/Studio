@@ -16,6 +16,7 @@ For more information see the LICENSE file
 
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/core/irisutils.h"
+#include "services/import/importtypes.h"
 
 class QSplitter;
 class QListWidget;
@@ -66,6 +67,8 @@ enum AssetMetaType
 class AssetViewGrid;
 class AssetGridItem;
 class DrawerTreeWidget;
+class ImportBatchRunner;
+class QMenu;
 class IAssetViewer;
 class Database;
 struct StudioServices;
@@ -134,15 +137,30 @@ public:
 	void rebuildTileThumbnail(AssetGridItem *item);
 	void showEvent(QShowEvent *event) override;
 
-	void importJahModel(const QString &filename, bool addToLibrary = true);
-	void importModel(const QString &filename, bool jfx = false);
 	/// THE import dispatch (ASSET_DRAWERS_SPEC §3): every path (drop pad,
-	/// browse dialog) lands here; one switch keyed on ModelTypes per file.
+	/// browse dialog) lands here. Builds one ImportRequest per file and runs
+	/// them through ImportBatchRunner — the heavy pipeline half on a worker,
+	/// one cancellable progress dialog for the whole drop, the UI live
+	/// throughout (the old synchronous importModel/importJahModel/
+	/// importImageOrAudio trio collapsed into the per-type finish tails).
 	void importFiles(const QStringList &fileNames);
 
 private:
-	/// Images/audio/video: the headless AssetImporter service plus a grid tile.
-	void importImageOrAudio(const QString &fileName);
+	/// Start the runner + dialog for a prepared request batch.
+	void runImportBatch(const QVector<ImportRequest> &requests);
+	/// Per-file completion (UI thread, dialog still up): media tiles appear
+	/// live; mesh/.jaf viewer tails queue for after the dialog closes.
+	void handleImportedFile(const ImportRequest &request, const ImportResult &result);
+	/// Engine-dependent tails (viewer preview + rendered thumbnail) — run
+	/// AFTER the batch dialog closes; tiles update live as renders land.
+	void runViewerTails();
+	/// The old importModel tail: viewer preview, screenshot thumbnail,
+	/// camera properties, library tile.
+	void finishMeshImport(const ImportResult &result, const QString &fileName);
+	/// The old importJahModel tail: per-kind viewer page + library tile.
+	void finishJafImport(const ImportResult &result, const QString &fileName);
+	/// Images/audio/video: build + wire the library tile for a committed row.
+	void addLibraryTileForAsset(const QString &guid);
 	/// The drawer new imports are filed in: the selected drawer, else
 	/// Uncategorized (§3).
 	int selectedDrawerId() const;
@@ -230,6 +248,25 @@ private:
 	AssetViewGrid *fastGrid;
 	QWidget *emptyGrid;
 	QWidget *filterPane;
+
+	// Threaded import batch (one at a time; the dialog owns the lifetime UX).
+	ImportBatchRunner *importRunner = nullptr;
+	QStringList importErrors;                 // aggregated, shown after the batch
+	struct PendingViewerTail { ImportResult result; QString fileName; };
+	QVector<PendingViewerTail> pendingViewerTails;
+	QStringList pendingVideoThumbGuids;       // real frame grabs, post-dialog
+
+	// Tiles/List view mode (owner request): the grey "View ▾" popup beside
+	// Backdrop; the list mirrors the editor panel's list mode with
+	// name/type/size columns. Persisted as assetView/viewMode.
+	QPushButton *viewModeButton = nullptr;
+	QMenu *viewModeMenu = nullptr;
+	QAction *viewTilesAction = nullptr;
+	QAction *viewListAction = nullptr;
+	QTreeWidget *assetListView = nullptr;
+	void setAssetViewMode(const QString &mode, bool persist = true);
+	void rebuildAssetList();
+	QString assetViewMode = QStringLiteral("tiles");
 
     QPushButton *normalize;
 	QLabel *metadataMissing;
