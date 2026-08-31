@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "ui_animationwidget.h"
 #include <QMenu>
 #include <QAction>
+#include <QSet>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QToolButton>
@@ -22,6 +23,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/animableproperty.h"
+#include "irisgl/core/logger.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -29,6 +31,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/materials/custommaterial.h"
 
+#include "ui/panels/timeline/propertyanimfactory.h"
 #include "ui/panels/timeline/keyframewidget.h"
 #include "ui/panels/timeline/keyframecurvewidget.h"
 #include "ui/panels/timeline/animationwidgetdata.h"
@@ -189,15 +192,13 @@ void AnimationWidget::buildPropertiesMenu()
     int index = 0;
     for (auto prop : nodeProperties) {
         const int propIndex = index++;
-        // Only the three types createPropertyAnim() and addPropertyKey() can
-        // build a keyframe track for. The document nodes reflect bool/int/string
-        // fields too (name, visible, lightType, meshPath...) and choosing one
-        // here would hit createPropertyAnim's Q_ASSERT(false) default branch and
-        // then use an uninitialised PropertyAnim*. Keeps the menu exactly what it
-        // listed before the reflection was widened.
-        if (prop->type != iris::PropertyType::Float &&
-            prop->type != iris::PropertyType::Vec3 &&
-            prop->type != iris::PropertyType::Color)
+        // Only the types the timeline can build a keyframe track for. The
+        // document nodes reflect bool/int/string fields too (name, visible,
+        // lightType, meshPath...). This filter is defence in depth: since
+        // 2026-09-01 makePropertyAnim() returns nullptr rather than an
+        // indeterminate pointer for the rest, and addPropertyKey() bails out on
+        // it. Same predicate on both sides so they cannot drift apart.
+        if (!isAnimatablePropertyType(prop->type))
             continue;
 
         auto action = new QAction();
@@ -331,29 +332,14 @@ void AnimationWidget::clearPropertyKeys(QString propertyName)
 
 }
 
+//! Returns nullptr for property types the timeline has no track shape for.
+//! See src/ui/panels/timeline/propertyanimfactory.h.
 iris::PropertyAnim *AnimationWidget::createPropertyAnim(iris::Property* prop)
 {
-    iris::PropertyAnim* anim;
+    if (!prop)
+        return nullptr;
 
-    switch (prop->type) {
-    case iris::PropertyType::Float:
-        anim = new iris::FloatPropertyAnim();
-    break;
-
-    case iris::PropertyType::Vec3:
-        anim = new iris::Vector3DPropertyAnim();
-    break;
-
-    case iris::PropertyType::Color:
-        anim = new iris::ColorPropertyAnim();
-    break;
-
-    default:
-        Q_ASSERT(false);
-    }
-
-    anim->setName(prop->name);
-    return anim;
+    return makePropertyAnim(prop->type, prop->name);
 }
 
 void AnimationWidget::setLooping(bool loop)
@@ -407,7 +393,12 @@ void AnimationWidget::addPropertyKey(QAction *action)
         return;
 
     auto index = action->data().toInt();
+    if (index < 0 || index >= nodeProperties.count())
+        return;
+
     auto animProp = nodeProperties[index];
+    if (!animProp)
+        return;
 
     // Get or create property
     iris::PropertyAnim* anim;
@@ -416,25 +407,59 @@ void AnimationWidget::addPropertyKey(QAction *action)
         anim = animation->getPropertyAnim(animProp->name);
     } else {
         anim = createPropertyAnim(animProp);
-        anim->setName(animProp->name);
+        if (!anim) {
+            // The menu filter (buildPropertiesMenu) and the factory share one
+            // predicate, so a null here can only mean the two got out of sync
+            // — or an action reached this slot from somewhere else. Report it
+            // once per property instead of dereferencing garbage.
+            static QSet<QString> reported;
+            if (!reported.contains(animProp->name)) {
+                reported.insert(animProp->name);
+                irisLog(QString("AnimationWidget: property '%1' has no animatable "
+                                "track type (%2) — key ignored")
+                            .arg(animProp->name)
+                            .arg(static_cast<int>(animProp->type)));
+            }
+            return;
+        }
         animation->addPropertyAnim(anim);
         ui->keylabelView->addProperty(animProp->name);
     }
 
+    // Covers the other branch: hasPropertyAnim() said yes but getPropertyAnim()
+    // handed back nothing.
+    if (!anim)
+        return;
+
     auto val = node->getPropertyValue(animProp->name);
+    auto frames = anim->getKeyFrames();
+
+    // An existing track for this name may have been built for a different
+    // shape than the property now reports (a Float track for a Vec3 property,
+    // say, after a document change). Check the track width before indexing it.
+    const auto hasFrames = [&frames](int count) {
+        if (frames.count() < count)
+            return false;
+        for (int i = 0; i < count; ++i)
+            if (!frames[i].keyFrame)
+                return false;
+        return true;
+    };
 
     switch (animProp->type) {
     case iris::PropertyType::Float:
     {
+        if (!hasFrames(1))
+            return;
         auto value = val.toFloat();
-        anim->getKeyFrames()[0].keyFrame->
-                addKey(value, animWidgetData->cursorPosInSeconds);
+        frames[0].keyFrame->addKey(value, animWidgetData->cursorPosInSeconds);
     }
         break;
     case iris::PropertyType::Vec3:
     {
+        if (!hasFrames(3))
+            return;
         auto value = val.value<QVector3D>();
-        auto frames =  anim->getKeyFrames();
         frames[0].keyFrame->addKey(value.x(), animWidgetData->cursorPosInSeconds);
         frames[1].keyFrame->addKey(value.y(), animWidgetData->cursorPosInSeconds);
         frames[2].keyFrame->addKey(value.z(), animWidgetData->cursorPosInSeconds);
@@ -442,8 +467,9 @@ void AnimationWidget::addPropertyKey(QAction *action)
         break;
     case iris::PropertyType::Color:
     {
+        if (!hasFrames(4))
+            return;
         auto value = val.value<QColor>();
-        auto frames =  anim->getKeyFrames();
         frames[0].keyFrame->addKey(value.redF(),    animWidgetData->cursorPosInSeconds);
         frames[1].keyFrame->addKey(value.greenF(),  animWidgetData->cursorPosInSeconds);
         frames[2].keyFrame->addKey(value.blueF(),   animWidgetData->cursorPosInSeconds);
@@ -451,7 +477,9 @@ void AnimationWidget::addPropertyKey(QAction *action)
     }
         break;
     default:
-        break;
+        // Unreachable while the menu filter and makePropertyAnim agree; a
+        // no-op rather than an unhandled shape if they ever do not.
+        return;
     }
 
     animation->calculateAnimationLength();

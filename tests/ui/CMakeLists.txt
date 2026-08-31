@@ -60,3 +60,25 @@ add_test(NAME ui.material_panel COMMAND test_material_panel
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.material_panel PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+
+# ui.property_anim — the timeline PropertyAnim factory returns nullptr, never
+# an indeterminate pointer, for property types it has no track shape for
+# (ENGINEERING_DEBT_SPEC item 8: the createPropertyAnim release-build UB).
+# Header-only factory + IrisGL's animation classes: no widgets, no display.
+add_executable(test_property_anim test_property_anim.cpp)
+set_target_properties(test_property_anim PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_property_anim PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_property_anim PRIVATE IrisGL Qt6::Test)
+add_test(NAME ui.property_anim COMMAND test_property_anim
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.property_anim PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
