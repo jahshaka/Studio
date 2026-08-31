@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QTimer>
 
 #include "ui/controls/assetgriditem.h"
+#include "data/project.h"          // ModelTypes
 #include "ui/style/stylesheet.h"
 
 // local
@@ -99,6 +100,17 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 		emit rebuildThumbnail(this);
 	});
 	menu.addAction(&rebuild);
+
+	// Image tiles only (IMAGE_PLANE_SPEC option B1). Direct add-to-project
+	// already creates the companion automatically; this is the manual /
+	// store-side route (and the way to mint an extra one).
+	QAction createMaterial("Create Material from Image", this);
+	if (static_cast<ModelTypes>(metadata["type"].toInt()) == ModelTypes::Texture) {
+		connect(&createMaterial, &QAction::triggered, this, [this]() {
+			emit createMaterialFromImage(this);
+		});
+		menu.addAction(&createMaterial);
+	}
 
 	QAction remove("Delete", this);
 	connect(&remove, &QAction::triggered, this, [this]() {

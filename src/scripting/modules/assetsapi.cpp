@@ -198,7 +198,22 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             // assets registered in subfolders too (a preset apply files its
             // material asset under Presets/, which a root-children sweep
             // never returned).
-            for (const auto &record : host.db->fetchFilteredAssets(host.project->getProjectGuid(), typeFilter)) {
+            records = host.db->fetchFilteredAssets(host.project->getProjectGuid(), typeFilter);
+            for (auto &record : records) record.type = typeFilter;   // this query selects name+guid only
+            // ...and the PINNED members of that type: a pinned library asset
+            // is a project member exactly like a per-project row (the
+            // unfiltered branch below already unions them; leaving the
+            // filtered one out hid pinned materials — e.g. the companion
+            // image material — from every type-filtered listing).
+            for (const auto &record :
+                 host.db->fetchProjectPinnedAssets(host.project->getProjectGuid())) {
+                if (record.type != typeFilter) continue;
+                if (std::any_of(records.begin(), records.end(),
+                                [&](const AssetRecord &r) { return r.guid == record.guid; }))
+                    continue;
+                records.append(record);
+            }
+            for (const auto &record : records) {
                 out.append(QVariantMap{ { "guid", record.guid },
                                         { "name", record.name },
                                         { "type", typeName(typeFilter) },

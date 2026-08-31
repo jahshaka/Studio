@@ -56,6 +56,7 @@ For more information see the LICENSE file
 #include "services/import/assetimportservice.h"
 #include "services/import/importbatchrunner.h"
 #include "services/projectassets.h"
+#include "services/imagematerial.h"
 #include "services/assetcas.h"
 #include <QSqlDatabase>
 #include "io/ziphelper.h"
@@ -942,6 +943,12 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             action = new QAction(QIcon(), "Export Texture", this);
             connect(action, SIGNAL(triggered()), this, SLOT(exportTexture()));
             menu.addAction(action);
+
+            // IMAGE_PLANE_SPEC option B1 — the same helper the automatic
+            // companion material and materials.createFromImage use.
+            action = new QAction(QIcon(), "Create Material from Image", this);
+            connect(action, SIGNAL(triggered()), this, SLOT(createMaterialFromImage()));
+            menu.addAction(action);
         }
 
         if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Sky)) {
@@ -1121,6 +1128,27 @@ void AssetWidget::editFileExternally()
 			//}
 	//	}
 	//}
+}
+
+void AssetWidget::createMaterialFromImage()
+{
+    if (!assetItem.wItem) return;
+    const QString textureGuid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+    QString error;
+    const QString materialGuid =
+        ImageMaterial::createMaterialAsset(textureGuid, db, project, &error);
+    if (materialGuid.isEmpty()) {
+        QMessageBox::warning(this, tr("Create Material from Image"),
+                             tr("Could not create the material: %1").arg(error));
+        return;
+    }
+    // Project context: pin it in so it lands in the bin, session-registered
+    // and immediately droppable onto meshes.
+    if (project && !project->getProjectGuid().isEmpty())
+        ProjectAssets::addToProject(materialGuid, db, project);
+
+    updateAssetView(assetItem.selectedGuid);
 }
 
 void AssetWidget::exportTexture()

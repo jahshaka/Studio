@@ -47,6 +47,8 @@ public:
     Q_INVOKABLE QString createGraph(const QString &name);
     Q_INVOKABLE QVariantMap loadGraph(const QString &guidOrPath);
     Q_INVOKABLE bool regenerate(const QString &shaderGuid);
+    Q_INVOKABLE QString createFromImage(const QString &textureGuid,
+                                        const QVariantMap &options = QVariantMap());
 
 private:
     GraphApi *mGraphApi = nullptr;

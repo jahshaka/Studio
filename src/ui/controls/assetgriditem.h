@@ -88,6 +88,9 @@ signals:
 	void moveAssetToDrawer(AssetGridItem*, int drawerId);
 	void removeAssetFromProject(AssetGridItem*);
 	void rebuildThumbnail(AssetGridItem*);
+	/// Image tiles only (IMAGE_PLANE_SPEC option B1): create the companion
+	/// PBR material asset for this image.
+	void createMaterialFromImage(AssetGridItem*);
 
 private:
 	void startDrag();

@@ -84,6 +84,7 @@ For more information see the LICENSE file
 #include "services/import/importbatchrunner.h"
 #include "ui/dialogs/toast.h"
 #include "services/projectassets.h"
+#include "services/imagematerial.h"
 #include "services/assetmetadata.h"
 #include "services/audiopeaks.h"
 #include "services/videoutils.h"
@@ -2524,6 +2525,36 @@ void AssetView::wireTile(AssetGridItem *gridItem)
 	connect(gridItem, &AssetGridItem::rebuildThumbnail, [this](AssetGridItem *item) {
 		rebuildTileThumbnail(item);
 	});
+
+	connect(gridItem, &AssetGridItem::createMaterialFromImage, [this](AssetGridItem *item) {
+		createMaterialFromImageTile(item);
+	});
+}
+
+void AssetView::createMaterialFromImageTile(AssetGridItem *item)
+{
+	// IMAGE_PLANE_SPEC option B1 — the same helper the automatic companion
+	// material and materials.createFromImage use.
+	if (!item || item->metadata.isEmpty()) return;
+	const QString textureGuid = item->metadata["guid"].toString();
+
+	QString error;
+	const QString materialGuid =
+	    ImageMaterial::createMaterialAsset(textureGuid, db, project, &error);
+	if (materialGuid.isEmpty()) {
+		QMessageBox::warning(this, tr("Create Material from Image"),
+		                     tr("Could not create the material: %1").arg(error));
+		return;
+	}
+	// With a project open the new material is pinned in too, so it shows up
+	// in the bin and drags onto meshes immediately.
+	if (project && !project->getProjectGuid().isEmpty()) {
+		ProjectAssets::addToProject(materialGuid, db, project);
+		emit assetAddedToProject(materialGuid);
+	}
+
+	// The library tile for the new material, same tail the import path uses.
+	addLibraryTileForAsset(materialGuid);
 }
 
 void AssetView::rebuildTileThumbnail(AssetGridItem *item)

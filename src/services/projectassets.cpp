@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
+#include "services/imagematerial.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -80,6 +81,26 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     // the fresh pins (identical to what the readers will resolve).
     for (const QString &member : members)
         registerSessionAsset(member, db, project);
+
+    // Owner call (IMAGE_PLANE_SPEC §8.1, 2026-08-31): an image added to a
+    // project ALSO gets its companion material asset — created in the
+    // library, then pinned in through this same function so it lands in the
+    // bin, session-registered and droppable. BOUNDARY: only the DIRECTLY
+    // added asset auto-creates — dependency textures riding an object's
+    // closure never do (an object with 30 textures must not explode into 30
+    // materials), and re-adding the same image is a no-op (a Material
+    // depending on the texture already exists). The recursive addToProject
+    // cannot loop: the companion is a Material, and Materials never
+    // auto-create.
+    if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture
+        && !ImageMaterial::hasCompanionMaterial(guid)) {
+        const QString materialGuid = ImageMaterial::createMaterialAsset(guid, db, project);
+        if (!materialGuid.isEmpty()) {
+            const Result companion = addToProject(materialGuid, db, project);
+            result.pinnedGuids.append(companion.pinnedGuids);
+            result.pinnedGuids.removeDuplicates();
+        }
+    }
 
     result.guid = guid;
     return result;

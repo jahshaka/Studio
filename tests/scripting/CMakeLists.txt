@@ -206,6 +206,22 @@ set_tests_properties(scripting.e2e.image_plane PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# IMAGE_PLANE_SPEC option B1: the companion image material — automatic on a
+# DIRECT image add-to-project (owner call), never for dependency textures
+# riding an object's closure, plus the manual materials.createFromImage verb;
+# the material applies to a mesh and survives a reopen. Document verbs only
+# -> --headless; fixture paths configured in.
+configure_file(scripts/e2e_image_material.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-image_material)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.image_material
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_image_material.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.image_material PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # IMAGE_PLANE_SPEC §6: pinned library assets hydrate on project REOPEN —
 # add-to-project → close → reopen → material.apply by the pinned guid onto a
 # cube → document material asserted. Document verbs only -> --headless;

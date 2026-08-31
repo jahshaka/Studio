@@ -30,6 +30,8 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/imagematerial.h"
+#include "services/projectassets.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
@@ -88,7 +90,33 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app "
           "upgraded' recovery) and refreshes materials in the open scene that use that cache.",
           Needs::Document },
+        { "createFromImage", "materials.createFromImage(textureGuid) -> materialGuid",
+          "Creates the standard image material asset for a Texture (IMAGE_PLANE_SPEC option B1): a PBR .material "
+          "with the image as baseColorMap (roughness 1, metallic 0; alpha images blend), a Material→Texture "
+          "dependency row and an image-derived thumbnail. Created in the library; with a project open it is also "
+          "pinned into the project (bin-visible, droppable). Direct image add-to-project runs this automatically; "
+          "re-creating for the same image returns a fresh asset. NOT undoable.",
+          Needs::Document },
     };
+}
+
+QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariantMap &options)
+{
+    Q_UNUSED(options);
+    if (!host.db) { fail("materials: not available in this session"); return QString(); }
+
+    QString error;
+    const QString materialGuid =
+        ImageMaterial::createMaterialAsset(textureGuid, host.db, host.project, &error);
+    if (materialGuid.isEmpty()) {
+        fail(QStringLiteral("materials.createFromImage: %1").arg(error));
+        return QString();
+    }
+    // Project context: pin it in (bin membership + session registration) —
+    // the same path a direct image add-to-project takes for its companion.
+    if (host.project && !host.project->getProjectGuid().isEmpty())
+        ProjectAssets::addToProject(materialGuid, host.db, host.project);
+    return materialGuid;
 }
 
 bool MaterialsApi::regenerate(const QString &shaderGuid)
