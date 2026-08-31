@@ -85,6 +85,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `editor.screenshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}` | engine | Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. |
 | `editor.beginBatch() -> bool` | document | Opens a nested undo macro inside the script's run (finer-grained grouping). |
 | `editor.endBatch() -> bool` | document | Closes the macro opened by editor.beginBatch(). |
+| `editor.importAssets([paths]) -> bool` | window | Starts the interactive THREADED import of the given files — the same ImportBatchRunner + progress dialog the project panel's Import button and drops use — and returns once the batch has started (it does not wait). assets.importFile is the synchronous, dialog-free verb. |
 
 ## app
 
@@ -92,6 +93,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 |---|---|---|
 | `app.desktop(n=0) -> current` | window | Switches to desktop 1-4; app.desktop() just returns the current one. |
 | `app.space(name) -> bool` | window | Switches the main window space: desktop, player, editor, materials, assets, publish. player and editor need an open project. |
+| `app.quit() -> bool` | window | Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes. |
 
 ## desktop
 
