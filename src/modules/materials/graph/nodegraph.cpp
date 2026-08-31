@@ -223,6 +223,11 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		auto nodeObj = nodeVar.toObject();
 		auto type = nodeObj["type"].toString();
 
+		// migration: TruncNode wrote "truncate" for years while its library
+		// key was "trunc" — those saves used to crash on load (audit D1)
+		if (type == "truncate")
+			type = "trunc";
+
 		// master nodes are constructed directly, not through the library:
 		// "PbrMaterial" is the PBR master (default for new graphs),
 		// "Material" the legacy Blinn-Phong one
@@ -237,6 +242,11 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 			//nodeModel = graph->modelFactories[type]();
 			nodeModel = graph->library->createNode(type);
 		}
+		// a type the library doesn't know (e.g. graphs saved while
+		// TruncNode wrote "truncate" instead of its key "trunc") used
+		// to null-deref here; skip the node and keep loading the file
+		if (nodeModel == nullptr)
+			continue;
 		nodeModel->id = nodeObj["id"].toString();
 		nodeModel->setX(nodeObj["x"].toDouble());
   		nodeModel->setY(nodeObj["y"].toDouble());
@@ -267,6 +277,10 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		auto leftSockIndex = conObj["leftNodeSocketIndex"].toInt();
 		auto rightNodeId = conObj["rightNodeId"].toString();
 		auto rightSockIndex = conObj["rightNodeSocketIndex"].toInt();
+
+		// endpoints may be missing when an unknown node type was skipped
+		if (!graph->nodes.contains(leftNodeId) || !graph->nodes.contains(rightNodeId))
+			continue;
 
 		graph->addConnection(leftNodeId, leftSockIndex, rightNodeId, rightSockIndex);
 	}

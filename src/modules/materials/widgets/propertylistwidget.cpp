@@ -22,13 +22,17 @@ For more information see the LICENSE file
 #include "../propertywidgets/texturepropertywidget.h"
 #include "../models/properties.h"
 #include "../graph/nodegraph.h"
+#include "../graph/nodestyle.h"
 #include "../effectspage.h"
 
 PropertyListWidget::PropertyListWidget(QWidget *parent) :
     QWidget(parent)
 {
     auto menu = new QMenu(this);
-	menu->setAttribute(Qt::WA_TranslucentBackground);
+	// WA_TranslucentBackground rendered the popup as an unreadable void on
+	// depth-32 windows, and the /5.2 fixed width below pinned it to ~21px
+	// (audit D19) — the themed QMenu paints itself fine
+	menu->setStyleSheet(NodeStyle::menuStyleSheet);
     auto action = menu->addAction		("Float ");
     auto actionInt = menu->addAction	("Int ");
 	auto action2 = menu->addAction		("Vector 2 ");
@@ -50,7 +54,6 @@ PropertyListWidget::PropertyListWidget(QWidget *parent) :
 	pushButton->setCursor(Qt::PointingHandCursor);
 	pushButton->setMinimumWidth(110);
 
-	menu->setFixedWidth(pushButton->width()/5.2);
 	QObject::connect(pushButton, &QPushButton::released, [=]() {
 		QPoint pos = this->mapToGlobal(pushButton->pos());
 		pos += QPoint(0, pushButton->height());

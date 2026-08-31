@@ -53,5 +53,10 @@ bool AppApi::space(const QString &name)
         return fail(QStringLiteral("app.space: '%1' needs an open project").arg(s));
 
     host.mainWindow->switchSpace(space);
+
+    // audit D15: the verb once reported success while the page stayed put —
+    // never claim a switch the window didn't make
+    if (host.mainWindow->getWindowSpace() != space)
+        return fail(QStringLiteral("app.space: the window refused to switch to '%1'").arg(s));
     return true;
 }

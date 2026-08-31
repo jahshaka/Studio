@@ -441,7 +441,7 @@ TruncNode::TruncNode()
 {
 	setNodeType(NodeCategory::Math);
 	title = "Truncate";
-	typeName = "truncate";
+	typeName = "trunc"; // was "truncate" — the library key is "trunc"; the mismatch made saved Truncate nodes unloadable
 	enablePreview = true;
 
 	addInputSocket(new Vector4SocketModel("A"));
@@ -506,7 +506,7 @@ QString StepNode::generatePreview(ModelContext* context)
 SmoothStepNode::SmoothStepNode()
 {
 	setNodeType(NodeCategory::Math);
-	title = "SmoothStep";
+	title = "Smooth Step";
 	typeName = "smoothstep";
 	enablePreview = true;
 
@@ -592,7 +592,8 @@ void ClampNode::process(ModelContext* context)
 	auto val = this->getValueFromInputSocket(2);
 	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = clamp(" + minVal + " , " + maxVal + " , " + val + ");";
+	// GLSL is clamp(x, minVal, maxVal) — the old emission clamped the Min input
+	auto code = res + " = clamp(" + val + " , " + minVal + " , " + maxVal + ");";
 	ctx->addCodeChunk(this, code);
 }
 
@@ -603,7 +604,7 @@ QString ClampNode::generatePreview(ModelContext* context)
 	auto maxVal = this->getValueFromInputSocket(1);
 	auto val = this->getValueFromInputSocket(2);
 
-	auto output = "preview.color = clamp(" + minVal + " , " + maxVal + " , " + val + ");";
+	auto output = "preview.color = clamp(" + val + " , " + minVal + " , " + maxVal + ");";
 	return output;
 }
 

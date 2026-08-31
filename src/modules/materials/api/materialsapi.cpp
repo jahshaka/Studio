@@ -398,6 +398,11 @@ QString GraphApi::addNode(const QString &type)
     NodeModel *node = nullptr;
     if (type == "PbrMaterial") {
         node = new PbrMasterNode();
+    } else if (type == "property") {
+        // a bare PropertyNode has no sockets and no Property behind it —
+        // the search dialog refuses to offer one, and so does this verb
+        fail(QStringLiteral("graph.addNode: 'property' nodes must reference a graph property — create one in the Properties panel and drag it in"));
+        return QString();
     } else {
         LibraryV1 library;
         if (!library.hasNode(type)) {

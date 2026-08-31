@@ -64,12 +64,14 @@ TexelSizeNode::TexelSizeNode()
 
 void TexelSizeNode::process(ModelContext* context)
 {
+	// textureSize takes an int LOD and returns ivec2 — the old emission
+	// passed 0.0 and used the ivec2 raw, neither of which compiles/converts
 	auto texName = this->getValueFromInputSocket(0);
-	this->outSockets[0]->setVarName("textureSize(" + texName + ", 0.0)");
-	this->outSockets[1]->setVarName("textureSize(" + texName + ", 0.0).x");
-	this->outSockets[2]->setVarName("textureSize(" + texName + ", 0.0).y");
-	this->outSockets[3]->setVarName("(1.0 / textureSize(" + texName + ", 0.0).x)");
-	this->outSockets[4]->setVarName("(1.0 / textureSize(" + texName + ", 0.0).y)");
+	this->outSockets[0]->setVarName("vec2(textureSize(" + texName + ", 0))");
+	this->outSockets[1]->setVarName("float(textureSize(" + texName + ", 0).x)");
+	this->outSockets[2]->setVarName("float(textureSize(" + texName + ", 0).y)");
+	this->outSockets[3]->setVarName("(1.0 / float(textureSize(" + texName + ", 0).x))");
+	this->outSockets[4]->setVarName("(1.0 / float(textureSize(" + texName + ", 0).y))");
 }
 
 /*
@@ -93,7 +95,7 @@ SampleEquirectangularTextureNode::SampleEquirectangularTextureNode()
 FlipbookUVAnimationNode::FlipbookUVAnimationNode()
 {
 	setNodeType(NodeCategory::Texture);
-	title = "FlipBook";
+	title = "Flipbook Animation";
 	typeName = "flipbook";
 	enablePreview = true;
 
@@ -120,9 +122,10 @@ void FlipbookUVAnimationNode::process(ModelContext* context)
 
 		float currentFrame = floor(mod(time / timePerFrame, totalFrames));
 
-		//float currentFrame = 2.0;
-		float animCol = floor(currentFrame / float(columns));
-		float animRow = rows - floor(mod(currentFrame, float(columns))) - 1.0;
+		// frames run left-to-right, top-to-bottom on the sheet; the old
+		// math swapped row/column and could index off the sheet entirely
+		float animCol = mod(currentFrame, columns);
+		float animRow = rows - floor(currentFrame / columns) - 1.0;
 
 		vec2 animUV = (vec2(animCol * frameWidth, animRow * frameHeight) + uv * vec2(frameWidth, frameHeight));
 

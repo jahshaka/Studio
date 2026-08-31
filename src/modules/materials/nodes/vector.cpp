@@ -106,17 +106,21 @@ DistanceVectorNode::DistanceVectorNode()
 	typeName = "distance";
 	//enablePreview = true;
 
-	addInputSocket(new Vector4SocketModel("Vector"));
+	// distance(p0, p1) takes two points; the old single-input emission
+	// produced GLSL that could not compile
+	addInputSocket(new Vector4SocketModel("Vector A"));
+	addInputSocket(new Vector4SocketModel("Vector B"));
 	addOutputSocket(new FloatSocketModel("Result"));
 }
 
 void DistanceVectorNode::process(ModelContext* context)
 {
 	auto ctx = (ShaderContext*)context;
-	auto vec = this->getValueFromInputSocket(0);
+	auto vecA = this->getValueFromInputSocket(0);
+	auto vecB = this->getValueFromInputSocket(1);
 	auto res = this->getOutputSocketVarName(0);
 
-	auto code = res + " = distance(" + vec + ");";
+	auto code = res + " = distance(" + vecA + ", " + vecB + ");";
 	ctx->addCodeChunk(this, code);
 }
 
