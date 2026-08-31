@@ -65,6 +65,22 @@ public:
 	// values were silently dropped); anything else takes the legacy
 	// CustomMaterial path unchanged.
 	iris::MaterialPtr parseMaterialTyped(QJsonObject matObject, Database* handle, bool loadTextures = true);
+
+	/// A SHADER asset (a stored graph definition) as the baked PbrMaterial the
+	/// evaluator wrote into it — the one conversion every shader preview and
+	/// thumbnail goes through (VISUAL_PARITY_SPEC item 5). Null when the guid
+	/// has no stored definition, when the definition predates the evaluator
+	/// (no "pbrMaterial" block — materials.regenerate rebuilds those), or when
+	/// it carries baked maps that cannot be resolved without an open project
+	/// (a half-textured render is worse than none). The CustomMaterial-from-
+	/// GLSL route these call sites used died with the evaluator's phase 5.
+	iris::MaterialPtr parseShaderAsPbr(const QString &shaderGuid, Database* db);
+
+	/// The database-free half of parseShaderAsPbr: a stored definition plus the
+	/// project folder its BakedMaps/ paths resolve against ("" = no project).
+	static iris::MaterialPtr shaderDefinitionAsPbr(const QJsonObject &definition,
+	                                               const QString &projectFolder);
+
 	iris::PbrMaterialPtr parsePbrMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid, Database* db);
 	iris::CustomMaterialPtr createMaterialFromShaderFile(QString shaderPath, Database* db);

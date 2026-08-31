@@ -27,7 +27,6 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -272,18 +271,19 @@ iris::MaterialPtr EngineAssetViewer::readJafMaterial(const QString &guid)
 iris::MaterialPtr EngineAssetViewer::readJafShader(const QString &guid)
 {
     if (!mDb) return iris::MaterialPtr();
-    const QString assetPath = assetFolder(guid);
-    auto shaderDefinition = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
-    auto vAsset = mDb->fetchAsset(shaderDefinition["vertex_shader"].toString());
-    auto fAsset = mDb->fetchAsset(shaderDefinition["fragment_shader"].toString());
-    if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
-    if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
+    // A shader asset is a GRAPH: it previews as the PbrMaterial the evaluator
+    // baked into its definition — the same conversion the thumbnail and the
+    // Materials page use (VISUAL_PARITY_SPEC item 5). The old route built a
+    // GLSL CustomMaterial through material->generate(definition); that pipeline
+    // was deleted in MATERIALS_EVALUATOR phase 5, so it produced a grey
+    // approximation of the graph at best.
+    MaterialReader reader(TextureSource::GlobalAssets, assetFolder(guid));
+    reader.setProject(mProject);
+    if (auto material = reader.parseShaderAsPbr(guid, mDb)) return material;
 
-    // The GLSL itself cannot run on the engine (it is AZSL/Hlms territory); the
-    // shader's colour and texture uniforms still drive the preview material.
-    iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
-    material->generate(shaderDefinition);
-    return material;
+    // Pre-evaluator definition (or baked maps with no open project): show the
+    // neutral preview material rather than pretending to render the graph.
+    return iris::DefaultMaterial::create().staticCast<iris::Material>();
 }
 
 void EngineAssetViewer::applyJafSky(const QString &guid)

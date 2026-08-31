@@ -143,6 +143,18 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         return engineRenderer->renderNode(node, size);
     }
 
+    if (request.type == ThumbnailRequestType::Shader) {
+        // The graph asset's baked material on the preview sphere. Null when the
+        // definition predates the evaluator or its baked maps have no project
+        // to resolve against — an empty QImage, never a half-textured render.
+        if (!db) return QImage();
+        MaterialReader reader;
+        reader.setProject(project);
+        auto material = reader.parseShaderAsPbr(request.id, db);
+        if (!material) return QImage();
+        return engineRenderer->renderMaterial(material, size);
+    }
+
     if (request.type == ThumbnailRequestType::Material) {
         QFile file(request.path);
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QImage();

@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QImage>
 #include <QPixmap>
 #include <QStandardPaths>
 
@@ -128,7 +129,10 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
-          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
+          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, materials and shader graphs render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
+          Needs::Document },
+        { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}}",
+          "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions and the colour of its centre pixel (0-255). empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
           Needs::Document },
         { "exportRaw", "assets.exportRaw(guid, dir, {dependencies: true, hash: true}) -> {dir, manifest, files, assets, totalBytes, warnings}",
           "Exports a store asset's files (and, by default, its dependencies' files) as loose files with their original names into dir, plus a jah.manifest.json (manifest v2: guids, types, dependency edges, sizes, sha256 content ids — hashing skippable via {hash: false}). Identical bytes are written once; assets with no stored files still get manifest entries. The unified-export front half (ASSET_PIPELINE_SPEC §3.3); .jaf export joins it in the final half.",
@@ -501,14 +505,50 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         MaterialReader reader;
         reader.setProject(host.project);
         image = renderer.renderMaterial(reader.parseMaterialTyped(matObject, host.db), QSize(512, 512));
+    } else if (record.type == static_cast<int>(ModelTypes::Shader)) {
+        // A shader asset is a graph definition: it thumbnails as the material
+        // the evaluator baked into it, on the same preview sphere a .material
+        // uses (VISUAL_PARITY_SPEC item 5).
+        MaterialReader reader;
+        reader.setProject(host.project);
+        auto material = reader.parseShaderAsPbr(guid, host.db);
+        if (!material) {
+            renderer.release();
+            return fail("assets.refreshThumbnail: this shader carries no evaluated material "
+                        "(re-save the graph, or run materials.regenerate; baked maps need an open project)");
+        }
+        image = renderer.renderMaterial(material, QSize(512, 512));
     } else {
         renderer.release();
-        return fail("assets.refreshThumbnail: only object and material assets are supported");
+        return fail("assets.refreshThumbnail: only object, material and shader assets are supported");
     }
     renderer.release();
 
     if (image.isNull()) return fail("assets.refreshThumbnail: the render produced no image");
     return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(image)));
+}
+
+QVariantMap AssetsApi::thumbnail(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.thumbnail: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    out["guid"] = guid;
+    out["bytes"] = record.thumbnail.size();
+    QImage image;
+    image.loadFromData(record.thumbnail, "PNG");
+    out["empty"] = image.isNull();
+    out["width"] = image.isNull() ? 0 : image.width();
+    out["height"] = image.isNull() ? 0 : image.height();
+    if (!image.isNull()) {
+        const QColor c = image.pixelColor(image.width() / 2, image.height() / 2);
+        out["centre"] = QVariantMap{ { "r", c.red() }, { "g", c.green() }, { "b", c.blue() } };
+    }
+    return out;
 }
 
 QVariantList AssetsApi::dependencies(const QString &guid)

@@ -21,6 +21,13 @@ For more information see the LICENSE file
 
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
+// extractTexturesAndMaterialFromMaterial still builds a legacy CustomMaterial
+// from app/shader_defs/*.shader (the builtin Default/Flat/Glass set, the last
+// CustomMaterial users). It used to reach the type through thumbnailgenerator.h;
+// the dependency is spelled out here so the scheduled iris::CustomMaterial
+// deletion can grep its real call sites.
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/core/properties/property.h"
 #include "zip.h"
 
 #include <QStackedLayout>

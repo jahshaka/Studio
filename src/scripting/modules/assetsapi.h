@@ -49,6 +49,7 @@ public:
     Q_INVOKABLE QVariantList builtins();
     Q_INVOKABLE bool remove(const QString &guid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool refreshThumbnail(const QString &guid);
+    Q_INVOKABLE QVariantMap thumbnail(const QString &guid);
     Q_INVOKABLE QVariantList dependencies(const QString &guid);
     Q_INVOKABLE QVariantMap exportRaw(const QString &guid, const QString &dir,
                                       const QVariantMap &options = QVariantMap());

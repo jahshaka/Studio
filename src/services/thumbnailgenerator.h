@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 
 #include <QObject>
@@ -34,7 +33,12 @@ enum class ThumbnailRequestType
 {
     Material,
     Mesh,
-    ImportedMesh // Stuff that's already in the app to refresh previews
+    ImportedMesh, // Stuff that's already in the app to refresh previews
+    // A Shader ASSET (a stored graph definition, id = its guid): rendered as
+    // the PbrMaterial the evaluator baked into it, on the preview sphere
+    // (VISUAL_PARITY_SPEC item 5). The materials module's save path uses this
+    // instead of reaching into src/bridge itself.
+    Shader
 };
 
 struct ThumbnailRequest

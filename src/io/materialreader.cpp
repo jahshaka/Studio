@@ -163,14 +163,47 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 			&& !Constants::Reserved::BuiltinShaders.contains(shaderGuid)) {
 			const auto shaderObject = getShaderObjectFromId(shaderGuid, db);
 			if (MaterialHelper::materialHasEffect(shaderObject)) {
-				if (project) MaterialHelper::setProjectRoot(project->getProjectFolder());
-				if (auto pbr = MaterialHelper::createPbrMaterialFromDefinition(shaderObject))
+				if (auto pbr = shaderDefinitionAsPbr(shaderObject,
+				                                    project ? project->getProjectFolder() : QString()))
 					return pbr;
 			}
 		}
 	}
 
 	return parseMaterial(matObject, db, loadTextures);
+}
+
+iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &shaderGuid, Database *db)
+{
+	if (shaderGuid.isEmpty() || !db) return iris::MaterialPtr();
+	// getShaderObjectFromId, not a raw fetch: it also serves the reserved
+	// builtin shaders, which live as files (they carry no "pbrMaterial" and
+	// therefore come back null — the caller decides what to show instead).
+	const QJsonObject definition = getShaderObjectFromId(shaderGuid, db);
+	return shaderDefinitionAsPbr(definition, project ? project->getProjectFolder() : QString());
+}
+
+iris::MaterialPtr MaterialReader::shaderDefinitionAsPbr(const QJsonObject &definition,
+                                                        const QString &projectFolder)
+{
+	if (definition.isEmpty() || !definition.contains("pbrMaterial"))
+		return iris::MaterialPtr();
+
+	// BakedMaps/<guid>/*.png paths are project-relative: without a project root
+	// they would reach the loader as literal relative strings and render as an
+	// untextured half-material. Refuse instead (VISUAL_PARITY_SPEC §5.5 risk c).
+	const QJsonObject pbrObj = definition["pbrMaterial"].toObject();
+	const bool hasBakedMaps = !pbrObj["bakedMaps"].toObject().isEmpty();
+	if (hasBakedMaps && projectFolder.isEmpty()) return iris::MaterialPtr();
+
+	// MaterialHelper::projectRoot is process-wide state the resolver reads;
+	// only write it when we actually have a project, so a project-less preview
+	// never clears the open project's root.
+	if (!projectFolder.isEmpty()) MaterialHelper::setProjectRoot(projectFolder);
+
+	auto pbr = MaterialHelper::createPbrMaterialFromDefinition(definition);
+	if (!pbr) return iris::MaterialPtr();
+	return pbr.staticCast<iris::Material>();
 }
 
 iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Database* db, bool loadTextures)

@@ -71,6 +71,7 @@ For more information see the LICENSE file
 #if(EFFECT_BUILD_AS_LIB)
 #include "data/database/database.h"
 #include "services/assethelper.h"
+#include "services/thumbnailgenerator.h"
 #include "data/guidmanager.h"
 #include "irisgl/core/irisutils.h"
 #include "io/assetmanager.h"
@@ -213,14 +214,14 @@ void EffectsPage::saveShader()
 	doc.setObject(matObj);
 	QString data = doc.toJson();
 
-	// Thumbnail: the GL preview died with the legacy viewport; the engine
-	// preview has no offscreen capture surface here yet, so an empty thumbnail
-	// is stored (matches what engine mode effectively produced before step 14).
-	QByteArray arr;
-
 #if(EFFECT_BUILD_AS_LIB)
     dataBase->updateAssetAsset(currentShaderInformation.GUID, doc.toJson());
-	dataBase->updateAssetThumbnail(currentShaderInformation.GUID, arr);
+	// Thumbnail: queued, never inline. The graph's baked material renders on
+	// the preview sphere through the shell's thumbnail queue (one request per
+	// tick, main thread) and lands in onShaderThumbnail — saving must not block
+	// on a render, and the stored asset data must already be written when the
+	// request is served (the renderer re-reads it from the database).
+	requestShaderThumbnail(currentShaderInformation.GUID);
 #else
 
 	auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/MyFx/");
@@ -238,12 +239,52 @@ void EffectsPage::saveShader()
 	int currentTab = selectCorrectTabForItem(currentShaderInformation.GUID);
 	auto item = selectCorrectItemFromDrop(currentShaderInformation.GUID);
 	if (item) {
-		ListWidget::updateThumbnailImage(arr, item);
+		// The tile keeps whatever it has until the render arrives (blanking it
+		// here is what made every saved graph show the generic file icon).
 		tabWidget->setCurrentIndex(currentTab);
 		ListWidget::highlightNodeForInterval(2, item);
 
 		if (currentTab == (int)ShaderWorkspace::Projects) updateMaterialFromShader(currentShaderInformation.GUID);
 	}
+}
+
+void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
+{
+	if (shaderGuid.isEmpty()) return;
+	auto generator = ThumbnailGenerator::getSingleton();
+	generator->setDatabase(dataBase);
+	generator->setProject(mProject);          // BakedMaps/... resolve against it
+	if (!mThumbnailConnected) {
+		connect(generator, &ThumbnailGenerator::thumbnailComplete,
+		        this, &EffectsPage::onShaderThumbnail);
+		mThumbnailConnected = true;
+	}
+	generator->requestThumbnail(ThumbnailRequestType::Shader, QString(), shaderGuid);
+}
+
+void EffectsPage::onShaderThumbnail(ThumbnailResult *result)
+{
+	// The queue is shared: only our own Shader renders are ours to store.
+	if (!result || result->type != ThumbnailRequestType::Shader) return;
+	if (result->preview || result->thumbnail.isNull() || result->id.isEmpty()) return;
+
+	QByteArray bytes;
+	QBuffer buffer(&bytes);
+	buffer.open(QIODevice::WriteOnly);
+	QPixmap::fromImage(result->thumbnail).save(&buffer, "PNG");
+	if (bytes.isEmpty()) return;
+
+	dataBase->updateAssetThumbnail(result->id, bytes);
+	if (auto item = selectCorrectItemFromDrop(result->id))
+		ListWidget::updateThumbnailImage(bytes, item);
+
+	// The derived material asset carries the same picture (it already did —
+	// it just used to copy emptiness). The graph's own "materialGuid" names it;
+	// read it straight out of the stored definition, no graph rebuild.
+	const auto definition = QJsonDocument::fromJson(dataBase->fetchAssetData(result->id)).object();
+	const QString materialGuid =
+		definition["shadergraph"].toObject()["materialGuid"].toString();
+	if (!materialGuid.isEmpty()) updateMaterialThumbnail(result->id, materialGuid);
 }
 
 void EffectsPage::saveDefaultShader()

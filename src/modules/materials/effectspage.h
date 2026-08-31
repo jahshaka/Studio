@@ -33,6 +33,7 @@ class Project;
 class TexturePropertyWidget;
 class UndoRedo;
 class AssetView;
+struct ThumbnailResult;
 
 class QTimer;
 
@@ -103,6 +104,14 @@ private:
 	
 	void saveShader();
 	void saveDefaultShader();
+
+	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator
+	/// (the module never reaches into src/bridge itself) and delivers it in
+	/// onShaderThumbnail — the tile, the asset row and the derived material
+	/// all update from there (VISUAL_PARITY_SPEC item 5).
+	void requestShaderThumbnail(const QString &shaderGuid);
+	void onShaderThumbnail(ThumbnailResult *result);
+	bool mThumbnailConnected = false;
     void loadShadersFromDisk();
 
 	void deleteMaterialFile(QString filename);

@@ -255,3 +255,18 @@ set_tests_properties(scripting.e2e.import_render PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 180)
+
+# VISUAL_PARITY_SPEC item 5: a saved shader GRAPH gets a real thumbnail —
+# createGraph -> colour wired into Base Color -> save -> refreshThumbnail
+# renders the evaluated PbrMaterial on the preview sphere, and the stored PNG's
+# centre pixel is the graph's colour (assets.thumbnail reads it back). Engine up
+# (no --headless): the render is the point.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-shader_thumbnail)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.shader_thumbnail
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_shader_thumbnail.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.shader_thumbnail PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
