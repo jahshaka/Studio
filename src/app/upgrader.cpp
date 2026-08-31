@@ -114,6 +114,10 @@ void Upgrader::checkIfDeprecatedVersion()
 			if (proceed) {
 				db.wipeDatabase();
 
+                // EXEMPT from the AssetStorePaths sweep (ASSET_PIPELINE_SPEC preflight
+                // amendment 1): the upgrader wipes the PRE-storeRoot install location,
+                // which is always the DEFAULT AppData root — a relocated store set by
+                // the assets/storeRoot setting must never be addressed (or wiped) here.
                 QDir storeDir(IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore"));
 				if (!storeDir.removeRecursively()) {
 #ifdef Q_OS_WIN

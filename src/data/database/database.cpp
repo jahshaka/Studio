@@ -481,7 +481,7 @@ bool Database::createFavoritesTable()
 
 void Database::createAllTables()
 {
-    // TODO - transactions here
+    DbTransaction tx(db);
     if (!checkIfTableExists("projects"))        createProjectsTable();
     migrateProjectsTable();
     if (!checkIfTableExists("thumbnails"))      createThumbnailsTable();
@@ -494,6 +494,22 @@ void Database::createAllTables()
     if (!checkIfTableExists("folders"))         createFoldersTable();
     if (!checkIfTableExists("metadata"))        createMetadataTable();
     if (!checkIfTableExists("favorites"))       createFavoritesTable();
+    createIndexes();
+    tx.commit();
+}
+
+void Database::createIndexes()
+{
+    // The dependencies table was scanned unindexed on both edge directions
+    // (ASSET_PIPELINE_SPEC §1.2 / phase 0). IF NOT EXISTS keeps this
+    // idempotent across every startup and older libraries.
+    QSqlQuery byDepender;
+    byDepender.prepare("CREATE INDEX IF NOT EXISTS idx_dependencies_depender ON dependencies (depender)");
+    executeAndCheckQuery(byDepender, "CreateDependenciesDependerIndex");
+
+    QSqlQuery byDependee;
+    byDependee.prepare("CREATE INDEX IF NOT EXISTS idx_dependencies_dependee ON dependencies (dependee)");
+    executeAndCheckQuery(byDependee, "CreateDependenciesDependeeIndex");
 }
 
 bool Database::createProject(
@@ -869,6 +885,8 @@ QString Database::getAuthorName()
 // MUTATE Globals::project to delete a project that is not the open one.
 bool Database::deleteProject(const QString &guid)
 {
+    DbTransaction tx(db);
+
     QSqlQuery query;
     query.prepare("DELETE FROM projects WHERE guid = ?");
     query.addBindValue(guid);
@@ -879,7 +897,8 @@ bool Database::deleteProject(const QString &guid)
     dquery.addBindValue(guid);
     bool d = executeAndCheckQuery(dquery, "DeleteDependencies");
 
-    return d && q;
+    if (!(d && q)) return false;   // tx rolls back — no half-deleted project
+    return tx.commit();
 }
 
 bool Database::destroyTable(const QString &table)
@@ -891,6 +910,7 @@ bool Database::destroyTable(const QString &table)
 
 void Database::wipeDatabase()
 {
+	DbTransaction tx(db);
 	destroyTable("projects");
 	destroyTable("thumbnails");
 	destroyTable("collections");
@@ -899,6 +919,7 @@ void Database::wipeDatabase()
 	destroyTable("author");
 	destroyTable("folders");
 	destroyTable("metadata");
+	tx.commit();
 }
 
 bool Database::deleteAsset(const QString &guid)
@@ -924,6 +945,8 @@ bool Database::deleteCollection(const int &collectionId)
     const QVector<int> subtree = fetchCollectionSubtree(collectionId);
     if (subtree.isEmpty()) return false;   // no such drawer
 
+    DbTransaction tx(db);
+
     QStringList placeholders;
     for (int i = 0; i < subtree.size(); ++i) placeholders << "?";
 
@@ -936,7 +959,8 @@ bool Database::deleteCollection(const int &collectionId)
     QSqlQuery query;
     query.prepare("DELETE FROM collections WHERE collection_id IN (" + placeholders.join(", ") + ")");
     for (const int id : subtree) query.addBindValue(id);
-    return executeAndCheckQuery(query, "DeleteCollection");
+    if (!executeAndCheckQuery(query, "DeleteCollection")) return false;
+    return tx.commit();
 }
 
 bool Database::deleteFolder(const QString &guid)
@@ -1118,9 +1142,12 @@ AssetRecord Database::fetchAsset(const QString &guid)
 QVector<AssetRecord> Database::fetchAssetsForAssetView()
 {
     QSqlQuery query;
+    // Phase 0 (ASSET_PIPELINE_SPEC §1.2): the asset JSON BLOB is deliberately
+    // NOT selected — no grid consumer reads it, and dragging it in loaded
+    // every library row's node JSON into memory on each grid refresh.
     query.prepare(
         "SELECT A.name, A.thumbnail, A.guid, C.collection_id, A.type, A.collection, A.properties, "
-        "A.author, A.license, A.tags, A.project_guid, A.asset, A.view_filter "
+        "A.author, A.license, A.tags, A.project_guid, A.view_filter "
         "FROM assets A "
         // LEFT JOIN: a row whose collection no longer exists must still show
         // (pre-drawers deleteCollection orphaned assets instead of reassigning)
@@ -1147,8 +1174,7 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
             data.author = record.value(7).toString();
             data.license = record.value(8).toString();
             data.tags = record.value(9).toByteArray();
-			data.asset = record.value(11).toByteArray();
-			data.view_filter = record.value(12).toInt();
+			data.view_filter = record.value(11).toInt();
         }
 
 
@@ -1320,6 +1346,10 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
     }
 
+    // Export DB writes in one transaction (phase 0): atomic bundle file,
+    // one fsync instead of one per row.
+    exportConnection.transaction();
+
     QSqlQuery createAssetsTable(exportConnection);
     createAssetsTable.prepare(assetsTableSchema);
     executeAndCheckQuery(createAssetsTable, "CreateAssetsTable");
@@ -1417,31 +1447,28 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
     QVector<DependencyRecord> dependenciesToExport;
 
     for (const auto &asset : assetList) {
+        // Dependency-export fix (ASSET_PIPELINE_SPEC §1.7 / phase 0): follow the
+        // asset's OUTGOING edges (what it depends on — depender = asset), and
+        // iterate EVERY row; the old query walked the wrong direction
+        // (dependee = asset → the asset's dependents) and `if (first())`
+        // exported at most one dependency per asset.
         QSqlQuery selectDep;
         selectDep.prepare(
             "SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies WHERE "
-            "dependee = ? AND dependee_type = ?"// AND depender_type = ?"
+            "depender = ? AND depender_type = ?"
         );
         selectDep.addBindValue(asset.guid);
         selectDep.addBindValue(asset.type);
-        //selectDep.addBindValue(static_cast<int>(type));
 
         if (selectDep.exec()) {
-            if (selectDep.first()) {
-                auto ertype = selectDep.value(0).toInt();
-                auto eetype = selectDep.value(1).toInt();
-                auto project_guid = selectDep.value(2).toString();
-                auto depender = selectDep.value(3).toString();
-                auto dependee = selectDep.value(4).toString();
-                auto id = selectDep.value(5).toString();
-
+            while (selectDep.next()) {
                 DependencyRecord record;
-                record.dependerType = ertype;
-                record.dependeeType = eetype;
-                record.projectGuid = project_guid;
-                record.depender = depender;
-                record.dependee = dependee;
-                record.id = id;
+                record.dependerType = selectDep.value(0).toInt();
+                record.dependeeType = selectDep.value(1).toInt();
+                record.projectGuid = selectDep.value(2).toString();
+                record.depender = selectDep.value(3).toString();
+                record.dependee = selectDep.value(4).toString();
+                record.id = selectDep.value(5).toString();
 
                 dependenciesToExport.append(record);
             }
@@ -1470,6 +1497,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
         executeAndCheckQuery(exportDep, "exportDep");
     }
 
+    exportConnection.commit();
     exportConnection.close();
     exportConnection = QSqlDatabase();
     QSqlDatabase::removeDatabase("NodeExportConnection");
@@ -1806,6 +1834,10 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         return false;
     }
 
+    // Export DB writes in one transaction (phase 0): atomic bundle file,
+    // one fsync instead of one per row.
+    exportConnection.transaction();
+
     QSqlQuery createAssetsTable(exportConnection);
     createAssetsTable.prepare(assetsTableSchema);
     if (!executeAndCheckQuery(createAssetsTable, "CreateAssetsTable")) return false;
@@ -1907,17 +1939,19 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
     QVector<DependencyRecord> dependenciesToExport;
 
     for (const auto &asset : assetList) {
+        // Dependency-export fix (phase 0): outgoing edges, every row — see
+        // the matching comment in createExportBundle.
         QSqlQuery selectDep;
         selectDep.prepare(
             "SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
             "FROM dependencies WHERE "
-            "dependee = ? AND dependee_type = ?"
+            "depender = ? AND depender_type = ?"
         );
         selectDep.addBindValue(asset.guid);
         selectDep.addBindValue(asset.type);
 
         if (selectDep.exec()) {
-            if (selectDep.first()) {
+            while (selectDep.next()) {
                 DependencyRecord record;
                 record.dependerType = selectDep.value(0).toInt();
                 record.dependeeType = selectDep.value(1).toInt();
@@ -1952,6 +1986,7 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
         executeAndCheckQuery(exportDep, "exportDep");
     }
 
+    exportConnection.commit();
     exportConnection.close();
     exportConnection = QSqlDatabase();
     QSqlDatabase::removeDatabase("NodeExportConnection");
@@ -1975,6 +2010,10 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
         return false;
     }
+
+    // Export DB writes in one transaction (phase 0): atomic bundle file,
+    // one fsync instead of one per row.
+    exportConnection.transaction();
 
     QSqlQuery createAssetsTable(exportConnection);
     createAssetsTable.prepare(assetsTableSchema);
@@ -2064,17 +2103,19 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
     QVector<DependencyRecord> dependenciesToExport;
 
     for (const auto &asset : assetList) {
+        // Dependency-export fix (phase 0): outgoing edges, every row — see
+        // the matching comment in createExportBundle.
         QSqlQuery selectDep;
         selectDep.prepare(
             "SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
             "FROM dependencies WHERE "
-            "dependee = ? AND dependee_type = ?"
+            "depender = ? AND depender_type = ?"
         );
         selectDep.addBindValue(asset.guid);
         selectDep.addBindValue(asset.type);
 
         if (selectDep.exec()) {
-            if (selectDep.first()) {
+            while (selectDep.next()) {
                 DependencyRecord record;
                 record.dependerType = selectDep.value(0).toInt();
                 record.dependeeType = selectDep.value(1).toInt();
@@ -2109,6 +2150,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
         executeAndCheckQuery(exportDep, "exportDep");
     }
 
+    exportConnection.commit();
     exportConnection.close();
     exportConnection = QSqlDatabase();
     QSqlDatabase::removeDatabase("NodeExportConnection");
@@ -2657,6 +2699,8 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
 {
 	QStringList files;
 
+	DbTransaction tx(db);
+
 	// For every asset, find their dependencies
 	for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
 		for (const auto &dep : fetchAssetAndDependencies(asset)) {
@@ -2669,6 +2713,8 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
             deleteDependency(asset, dep);
         }
 	}
+
+	tx.commit();
 
     for (int i = 0; i < files.size(); ++i) {
 	    if (QFileInfo(files[i]).suffix().isEmpty()) {
@@ -2784,6 +2830,10 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, GUIDManager::generateGUID());
     dbe.setDatabaseName(inFilePath + ".db");
     dbe.open();
+
+    // One transaction around the whole multi-row import (phase 0): a failed
+    // import leaves nothing behind, and per-row autocommit fsyncs are gone.
+    DbTransaction tx(db);
 
     QSqlQuery query(dbe);
     query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects");
@@ -3018,7 +3068,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     dbe.close();
 
-    return true;
+    return tx.commit();
 }
 
 QString Database::importAsset(
@@ -3043,6 +3093,9 @@ QString Database::importAsset(
     else {
         irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
     }
+
+	// Whole .jaf import lands in one transaction on the main library (phase 0).
+	DbTransaction tx(db);
 
 	QSqlQuery selectAssetQuery(importConnection);
 	selectAssetQuery.prepare(
@@ -3208,6 +3261,7 @@ QString Database::importAsset(
     importConnection = QSqlDatabase();
     QSqlDatabase::removeDatabase("NodeImportConnection");
 
+	tx.commit();
 	return guidToReturn;
 }
 
@@ -3225,6 +3279,9 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     else {
         irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
     }
+
+    // Whole bundle import lands in one transaction on the main library (phase 0).
+    DbTransaction tx(db);
 
     QSqlQuery selectAssetQuery(importConnection);
     selectAssetQuery.prepare(
@@ -3388,6 +3445,7 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     importConnection = QSqlDatabase();
     QSqlDatabase::removeDatabase("NodeImportConnection");
 
+    tx.commit();
     return guidToReturn;
 }
 
@@ -3403,6 +3461,9 @@ QString Database::copyAsset(
     QMap<QString, QString> assetGuids; /* old x new guid */
     const QString guidToReturn = GUIDManager::generateGUID();
     QVector<AssetRecord> assetsToImport;
+
+    // Row-clone set + rewritten blobs + dependencies land atomically (phase 0).
+    DbTransaction tx(db);
 
     QStringList fullAssetList = AssetHelper::fetchAssetAndAllDependencies(guid, this);
 
@@ -3534,6 +3595,7 @@ QString Database::copyAsset(
         executeAndCheckQuery(exportDep, "CopyDependency");
     }
 
+    tx.commit();
     return guidToReturn;
 }
 

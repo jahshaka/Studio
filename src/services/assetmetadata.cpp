@@ -27,6 +27,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
+#include "services/assetstorepaths.h"
 #include "data/project.h"
 #include "irisgl/core/irisutils.h"
 #include "services/videoutils.h"
@@ -269,6 +270,7 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
 
 QString AssetMetadata::storeRootPath()
 {
-    return IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-                           "AssetStore");
+    // Folded into the single path authority (ASSET_PIPELINE_SPEC §3.1.1);
+    // kept as a thin alias for its existing callers.
+    return AssetStorePaths::root();
 }

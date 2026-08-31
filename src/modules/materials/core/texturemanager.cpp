@@ -11,6 +11,7 @@ For more information see the LICENSE file
 #include "texturemanager.h"
 #include "../effectspage.h"
 #include "data/project.h"
+#include "services/assetstorepaths.h"
 
 TextureManager* TextureManager::instance = 0;
 
@@ -49,10 +50,7 @@ void TextureManager::removeTextureByGuid(QString guid)
 			database->deleteAsset(guid);
 
 			// remove from filesystem
-			auto assetFolder = IrisUtils::join(
-                QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-				"AssetStore", guid
-			);
+			auto assetFolder = AssetStorePaths::legacyFolder(guid);
 
 			if (QDir(assetFolder).exists()) {
 				QDir(assetFolder).removeRecursively();
@@ -113,10 +111,7 @@ QString TextureManager::loadTextureFromDisk(QString guid)
 	auto asset = database->fetchAsset(guid);
 	
 
-	auto imagePath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-		"AssetStore", guid, asset.name
-	);
+	auto imagePath = AssetStorePaths::legacyFilePath(guid, asset.name);
 
 	return imagePath;
 }
@@ -125,20 +120,14 @@ QString TextureManager::loadTextureFromDatabase(QString guid)
 {
 	auto asset = database->fetchAsset(guid);
 
-	auto imagePath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-		"AssetStore", guid, asset.name
-	);
+	auto imagePath = AssetStorePaths::legacyFilePath(guid, asset.name);
 
 	return imagePath;
 }
 
 GraphTexture* TextureManager::importTexture(QString path)
 {
-	auto assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-		"AssetStore"
-	);
+	auto assetPath = AssetStorePaths::root();
 
 	auto texGuid = materials::EffectsPage::genGUID();
 

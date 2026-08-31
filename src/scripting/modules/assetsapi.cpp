@@ -20,6 +20,7 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "services/assetservice.h"
+#include "services/assetstorepaths.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
@@ -83,8 +84,7 @@ int typeFromName(const QString &name)
 
 QString storeFolderFor(const QString &guid)
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-           + Constants::ASSET_FOLDER + "/" + guid;
+    return AssetStorePaths::legacyFolder(guid);
 }
 
 } // namespace

@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "services/assetmetadata.h"
+#include "services/assetstorepaths.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
 #include "irisgl/core/irisutils.h"
@@ -53,9 +54,7 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     // Store layout, exactly like AssetView::importModel: main_guid names the
     // Object row, the on-disk folder and the parent of every member row.
     const QString mainGuid = GUIDManager::generateGUID();
-    const QString storeRoot = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore");
-    const QString assetFolder = QDir(storeRoot).filePath(mainGuid);
+    const QString assetFolder = AssetStorePaths::legacyFolder(mainGuid);
     QDir().mkpath(assetFolder);
 
     const QString copiedModel = IrisUtils::join(assetFolder, sourceInfo.fileName());
@@ -215,9 +214,7 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
         // One row at the file's guid, view_filter AssetsView — a first-class
         // library asset, not the Editor-filtered ghost the old path made.
         const QString guid = GUIDManager::generateGUID();
-        const QString storeRoot = IrisUtils::join(
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore");
-        const QString assetFolder = QDir(storeRoot).filePath(guid);
+        const QString assetFolder = AssetStorePaths::legacyFolder(guid);
         QDir().mkpath(assetFolder);
 
         const QString copied = IrisUtils::join(assetFolder, sourceInfo.fileName());

@@ -109,6 +109,7 @@ set(SRCS
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/assetmetadata.cpp
+    src/services/assetstorepaths.cpp
     src/services/audiopeaks.cpp
     src/services/videoutils.cpp
     src/services/assetservice.h
@@ -296,6 +297,7 @@ set(HEADERS
     src/services/services.h
     src/services/assetimporter.h
     src/services/assetmetadata.h
+    src/services/assetstorepaths.h
     src/services/audiopeaks.h
     src/services/videoutils.h
     src/services/projectservice.h

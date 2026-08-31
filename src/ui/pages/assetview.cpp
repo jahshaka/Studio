@@ -69,6 +69,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/services.h"
+#include "services/assetstorepaths.h"
 #include "services/projectservice.h"
 #include "ui/controls/assetviewgrid.h"
 #include "ui/controls/assetgriditem.h"
@@ -189,8 +190,7 @@ void AssetView::copyTextures(const QString &folderGuid)
     }
 
     if (!texturesToCopy.isEmpty()) {
-        QString assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-							Constants::ASSET_FOLDER + "/" + folderGuid;
+        QString assetPath = AssetStorePaths::legacyFolder(folderGuid);
 
         for (auto texture : texturesToCopy) {
 			QString tex = QFileInfo(texture).isRelative()
@@ -966,9 +966,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 			//auto material = db->getAssetMaterialGlobal(gridItem->metadata["guid"].toString());
 			//auto materialObj = QJsonDocument::fromBinaryData(material);
 
-            auto assetPath = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-                Constants::ASSET_FOLDER,
-                gridItem->metadata["guid"].toString());
+            auto assetPath = AssetStorePaths::legacyFolder(gridItem->metadata["guid"].toString());
 
 			// viewer->setMaterial(materialObj.object());
 
@@ -1013,9 +1011,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
             viewers->setCurrentIndex(static_cast<int>(page));
 
             // Store-file path for the media pages (the row's primary file).
-            const QString storeFile = IrisUtils::join(
-                QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-                "AssetStore", guid, db->fetchAsset(guid).name);
+            const QString storeFile =
+                AssetStorePaths::legacyFilePath(guid, db->fetchAsset(guid).name);
 
             switch (page) {
             case PreviewPage::Viewer3D: {
@@ -1270,10 +1267,7 @@ void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
 {
     QFileInfo entryInfo(fileName);
 
-    auto assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-        "AssetStore"
-    );
+    auto assetPath = AssetStorePaths::root();
 
     // create a temporary directory and extract our project into it
     // we need a sure way to get the project name, so we have to extract it first and check the blob
@@ -1394,12 +1388,7 @@ void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
 
 				{
 					viewers->setCurrentIndex(1);
-					auto assetPath = IrisUtils::join(
-                        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-						"AssetStore",
-						guid,
-						db->fetchAsset(guid).name
-					);
+					auto assetPath = AssetStorePaths::legacyFilePath(guid, db->fetchAsset(guid).name);
 
 					QPixmap image(assetPath);
 					assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
@@ -1433,10 +1422,7 @@ void AssetView::importJahBundle(const QString &fileName)
 {
     QFileInfo entryInfo(fileName);
 
-    auto assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-        "AssetStore"
-    );
+    auto assetPath = AssetStorePaths::root();
 
     // create a temporary directory and extract our project into it
     // we need a sure way to get the project name, so we have to extract it first and check the blob
@@ -1530,10 +1516,7 @@ void AssetView::importModel(const QString &fileName, bool jfx)
 
     QFileInfo entryInfo(fileName);
 
-    auto assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-        "AssetStore"
-        );
+    auto assetPath = AssetStorePaths::root();
 
     QString main_guid = GUIDManager::generateGUID();
 
@@ -2374,7 +2357,6 @@ void AssetView::addToLibrary(const QString& main_guid, bool jfx)
     object["license"] = "CCBY";
 
 
-//    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + Constants::ASSET_FOLDER;
 
    //  if (!QDir(QDir(assetPath).filePath(main_guid)).exists()) {
    //      QDir().mkdir(QDir(assetPath).filePath(main_guid));
@@ -2621,7 +2603,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	QString guid = item->metadata["guid"].toString();
 	int assetType = item->metadata["type"].toInt();
 
-    auto assetsDir = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::ASSET_FOLDER, guid);
+    auto assetsDir = AssetStorePaths::legacyFolder(guid);
 
     const int aType = db->fetchAsset(guid).type;
 
@@ -3012,9 +2994,7 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 	const auto record = db->fetchAsset(guid);
 	if (record.guid.isEmpty()) return;
 
-	const auto assetFolder = IrisUtils::join(
-	    QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-	    Constants::ASSET_FOLDER, guid);
+	const auto assetFolder = AssetStorePaths::legacyFolder(guid);
 
 	QPixmap pixmap;
 	switch (static_cast<ModelTypes>(record.type)) {
@@ -3094,7 +3074,7 @@ void AssetView::clearLoadingTile()
 
 void AssetView::removeAssetFromProject(AssetGridItem *item)
 {
-    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + Constants::ASSET_FOLDER;
+    auto assetPath = AssetStorePaths::root();
 
 	auto option = QMessageBox::question(this,
 	    "Deleting Asset", "Are you sure you want to delete this asset?",

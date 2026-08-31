@@ -7,6 +7,7 @@
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assethelper.h"
+#include "services/assetstorepaths.h"
 #include "modules/materials/core/materialhelper.h"
 
 class Exporter
@@ -232,13 +233,9 @@ public:
             path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
 			//auto projectFolder = SettingsManager::getDefaultManager()->getValue("default_directory", spath).toString();
 		}
-		else if (asset.view_filter == AssetViewFilter::AssetsView ||	
+		else if (asset.view_filter == AssetViewFilter::AssetsView ||
 				 asset.view_filter == AssetViewFilter::Effects) {
-			auto assetPath = IrisUtils::join(
-                QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-				"AssetStore"
-			);
-			path = QDir(assetPath).filePath(asset.guid);
+			path = AssetStorePaths::legacyFolder(asset.guid);
 		}
 		
 		return IrisUtils::join(path, asset.name);

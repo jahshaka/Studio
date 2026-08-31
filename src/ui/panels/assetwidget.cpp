@@ -52,6 +52,7 @@ For more information see the LICENSE file
 #include "services/thumbnailmanager.h"
 #include "services/thumbnailgenerator.h"
 #include "services/assethelper.h"
+#include "services/assetstorepaths.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "services/subscriber.h"
@@ -2653,10 +2654,7 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 
     QFileInfo entryInfo(fileNames[0]);
 
-    auto assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-        "AssetStore"
-        );
+    auto assetPath = AssetStorePaths::root();
 
     QString main_guid = GUIDManager::generateGUID();
 

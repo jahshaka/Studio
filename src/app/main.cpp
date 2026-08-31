@@ -35,6 +35,7 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "app/cli/clioptions.h"
+#include "services/assetstorepaths.h"
 #include "app/cli/scriptrunner.h"
 #include "app/cli/selftestrunner.h"
 #include "ui/dialogs/infodialog.h"
@@ -120,7 +121,7 @@ int main(int argc, char *argv[])
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
 
-    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + Constants::ASSET_FOLDER;
+    auto assetPath = AssetStorePaths::root();
     QDir assetDir(assetPath);
     if (!assetDir.exists()) assetDir.mkpath(assetPath);
 

@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
+#include "services/assetstorepaths.h"
 #include "services/thumbnailmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
@@ -359,9 +360,7 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 	auto fragmentShader = shaderObject["fragment_shader"].toString();
 
 	if (textureSource == TextureSource::GlobalAssets) {
-		QString assetPath = IrisUtils::join(
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::ASSET_FOLDER, globalSourceFolder
-		);
+		QString assetPath = AssetStorePaths::legacyFolder(globalSourceFolder);
 
 		auto vAsset = db->fetchAsset(vertexShader);
 		auto fAsset = db->fetchAsset(fragmentShader);

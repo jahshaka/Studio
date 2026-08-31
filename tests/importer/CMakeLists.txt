@@ -10,6 +10,7 @@ add_executable(test_importer_glb test_importer_glb.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     # database.cpp's link closure (same as tests/assetmeta)
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp

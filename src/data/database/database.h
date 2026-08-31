@@ -23,6 +23,41 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 
+// RAII transaction over one QSqlDatabase connection (ASSET_PIPELINE_SPEC
+// phase 0): begin on construction, roll back on destruction unless commit()
+// was called — so every early-return path inside a multi-statement DB
+// operation unwinds cleanly instead of leaving half the rows behind (and a
+// .jaf import stops paying one fsync per row).  If the driver can't start a
+// transaction (nested, or non-transactional driver) the guard degrades to a
+// no-op: statements simply autocommit as before.
+class DbTransaction
+{
+public:
+    explicit DbTransaction(QSqlDatabase database)
+        : db(database), active(database.transaction())
+    {
+    }
+
+    ~DbTransaction()
+    {
+        if (active) db.rollback();
+    }
+
+    bool commit()
+    {
+        if (!active) return true;
+        active = false;
+        return db.commit();
+    }
+
+    DbTransaction(const DbTransaction &) = delete;
+    DbTransaction &operator=(const DbTransaction &) = delete;
+
+private:
+    QSqlDatabase db;
+    bool active;
+};
+
 // Every project-scoped function takes the project guid explicitly — the data
 // layer no longer reads the app's ambient current project (SCRIPTING_SPEC
 // §1.6.1 / APP_ARCHITECTURE_AUDIT §2.5; callers pass
@@ -53,6 +88,7 @@ public:
     bool createMetadataTable();
     bool createFavoritesTable();
     void createAllTables();
+    void createIndexes();
 
     // INSERT ===============================================================================
     bool createProject(const QString &guid,
