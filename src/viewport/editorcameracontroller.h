@@ -36,6 +36,9 @@ class EditorCameraController : public CameraControllerBase
 
 	float orthoZoom;
 
+	/// Distance to the Alt-orbit pivot, captured when the drag starts.
+	float altOrbitDistance = 0.0f;
+
 	IEditorViewport* sceneWidget;
 
 	/// Keys currently held (fed by the viewport's key events). Movement only
@@ -77,6 +80,12 @@ public:
     void update(float dt) override;
 
 	bool canLeftMouseDrag();
+
+	/// Alt+LMB orbit: the free camera has no pivot of its own, so it gains a
+	/// TEMPORARY one for the drag — the distance to the pivot is captured
+	/// here and the camera is re-placed on the orbit sphere as the drag turns
+	/// yaw/pitch. Plain fly behaviour returns when the drag ends.
+	void setAltOrbit(bool active, const QVector3D &pivot) override;
 
 	/// True while the fly keys should own W/A/S/D/Q/E (RMB held) — the viewport
 	/// uses this to withhold those keys from the shortcut system.

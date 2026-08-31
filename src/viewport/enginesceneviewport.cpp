@@ -418,6 +418,12 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
                 }
             }
             mGizmo->startDragging(rayPos, rayDir, viewDir);
+        } else if (e->modifiers() & Qt::AltModifier) {
+            // Alt+LMB anywhere BUT the gizmo orbits around the selection
+            // (Maya/Unreal). The gizmo hit-test above ran first on purpose:
+            // Alt ON the gizmo keeps meaning duplicate-while-transforming.
+            // Orbiting must not re-pick, so the selection is left alone.
+            if (mCamController) mCamController->setAltOrbit(true, orbitPivot());
         } else {
             iris::SceneNodePtr picked = pickAt(e->position(), true);
             setSelectedNode(picked);
@@ -459,6 +465,9 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
         if (mServices && mServices->undo && mServices->undo->stack())
             mServices->undo->stack()->endMacro();
     }
+    // Alt+LMB orbit ends with the drag (the free camera returns to fly).
+    if (e->button() == Qt::LeftButton && mCamController && mCamController->isAltOrbiting())
+        mCamController->setAltOrbit(false, QVector3D());
     if (mCamController) mCamController->onMouseUp(e->button());
 }
 
@@ -668,6 +677,22 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
 void EngineSceneViewport::focusOnSelection()
 {
     if (mSelectedNode) focusOnNode(mSelectedNode);
+    if (mSelectedNode) mLastOrbitPivot = orbitPivot();   // F then Alt+drag orbits there
+}
+
+QVector3D EngineSceneViewport::orbitPivot() const
+{
+    // Alt+LMB orbits around the SELECTION's centre (its world bounding-box
+    // centre when it has meshes, else its origin). With nothing selected we
+    // fall back to the last focus point, and finally to the world origin.
+    if (mSelectedNode) {
+        mSelectedNode->update(0.0f);
+        const iris::AABB bounds = preview::worldBoundingBox(mSelectedNode);
+        if (bounds.getMin().x() <= bounds.getMax().x())   // non-empty (meshes exist)
+            return bounds.getCenter();
+        return mSelectedNode->getGlobalPosition();
+    }
+    return mLastOrbitPivot;
 }
 
 QString EngineSceneViewport::gizmoMode() const

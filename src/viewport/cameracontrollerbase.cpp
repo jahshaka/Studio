@@ -113,6 +113,13 @@ void CameraControllerBase::resetMouseStates()
     leftMouseDown = false;
     middleMouseDown = false;
     rightMouseDown = false;
+    altOrbit = false;
+}
+
+void CameraControllerBase::setAltOrbit(bool active, const QVector3D &pivot)
+{
+    altOrbit = active;
+    if (active) altOrbitPivot = pivot;
 }
 
 void CameraControllerBase::update(float dt)

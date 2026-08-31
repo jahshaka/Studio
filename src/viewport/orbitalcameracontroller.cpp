@@ -84,6 +84,17 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		targetYaw = yaw;
 		targetPitch = pitch;
 	}
+	else if (!previewMode && altOrbit && leftMouseDown) {
+		// Alt+LMB orbit: the arcball already orbits — just route Alt+LMB
+		// into the same branch, around the pivot the viewport handed us
+		// (the selection's centre).
+		yaw = targetYaw;
+		pitch = targetPitch;
+		this->yaw   += x * rotationSpeed;
+		this->pitch += y * rotationSpeed;
+		targetYaw = yaw;
+		targetPitch = pitch;
+	}
 	else if (!previewMode && rightMouseDown) {
 		// in case lerping is still in progress, match the values with their targets
 		yaw = targetYaw;
@@ -108,6 +119,18 @@ void OrbitalCameraController::onMouseMove(int x,int y)
     updateCameraRot();
 }
 
+void OrbitalCameraController::setAltOrbit(bool active, const QVector3D &newPivot)
+{
+	CameraControllerBase::setAltOrbit(active, newPivot);
+	if (!active || !camera) return;
+	// Orbit around the requested point, keeping the camera where it is: the
+	// distance is re-derived so the first drag frame cannot jump.
+	pivot = newPivot;
+	distFromPivot = camera->getGlobalPosition().distanceToPoint(newPivot);
+	yaw = targetYaw;
+	pitch = targetPitch;
+}
+
 bool OrbitalCameraController::canLeftMouseDrag()
 {
 	// Refuse camera drags while a gizmo drag is in progress (step-14 fix: the
@@ -117,6 +140,7 @@ bool OrbitalCameraController::canLeftMouseDrag()
 	bool gizmoDragging = gizmo && gizmo->isDragging();
 
 	return (leftMouseDown && // left mouse must be down
+		!altOrbit && // Alt+LMB orbits; it must not also pan in jahshaka mouse mode
 		settings->getValue("mouse_controls", "default").toString() == "jahshaka" && // left mouse to drag in jahshaka mouse mode
 		!gizmoDragging); // cant pan while dragging gizmo
 }

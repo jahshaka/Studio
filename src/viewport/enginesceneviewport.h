@@ -55,6 +55,10 @@ public:
     void clearSelectedNode() override;
     void focusOnNode(iris::SceneNodePtr sceneNode) override;
     void focusOnSelection() override;
+    /// The point Alt+LMB orbits around: the selection's world bounding-box
+    /// centre (its origin when it has no meshes), else the last focus point,
+    /// else the world origin.
+    QVector3D orbitPivot() const;
     bool snapSelectionToFloor() override;
 
     iris::CameraNodePtr editorCamera() override { return mEditorCam; }
@@ -201,6 +205,9 @@ private:
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::ScenePtr mScene;
     iris::SceneNodePtr mSelectedNode;
+    /// Alt+LMB orbit pivot when nothing is selected: the last focus point
+    /// (F on a node), else the world origin.
+    QVector3D mLastOrbitPivot;
     iris::CameraNodePtr mEditorCam;
     EditorData *mEditorData = nullptr;
     bool mShowLightWires = true;
