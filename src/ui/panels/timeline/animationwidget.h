@@ -104,6 +104,9 @@ signals:
     void animationChanged(iris::SceneNodePtr ptr, iris::AnimationPtr anim);
 
 private:
+    //! Thin forwarder onto jah::makePropertyAnim (propertyanimfactory.h).
+    //! Returns nullptr for a null property and for every type the timeline has
+    //! no keyframe track shape for — callers must check.
     iris::PropertyAnim* createPropertyAnim(iris::Property* prop);
 
 public slots:

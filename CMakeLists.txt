@@ -647,6 +647,26 @@ target_include_directories(${PROJECT_NAME} PUBLIC
                             thirdparty/breakpad/breakpad/src
                             downloader)
 
+# assimp is DECLARED, not inherited (ENGINEERING_DEBT_SPEC item 5, the 0.5 d
+# slice). Studio picked assimp's headers and link flags up transitively through
+# IrisGL's PUBLIC dependency; on macOS that is exactly where dylib install-name
+# / rpath problems surface, and a transitive dependency is much harder to
+# diagnose than a declared one.
+#
+# Exactly two Studio TUs need assimp directly, both parsing outside IrisGL:
+#   src/services/assetmetadata.cpp          - its own Assimp::Importer for the
+#                                             per-type model metadata block
+#   src/services/import/assetimportservice.cpp - assimp/version.h for the
+#                                             import determinism record
+# (Studio also *names* aiScene/AssimpObject through IrisGL's own public
+# headers - assethelper.cpp, assetview.cpp - which is IrisGL's dependency to
+# declare, not ours. True PRIVATE-ization of IrisGL's link stays blocked on
+# step 13; see the spec's item 5.)
+set(JAH_ASSIMP_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${JAH_ASSIMP_INCLUDE_DIRS})
+
 #force build downloader
 #luckily, the jahshaka project has all the dependencies of the downloader project
 #so we dont need to run windeployqt or macdeployqt on the downloader specifically
@@ -656,7 +676,11 @@ if(USE_BREAKPAD)
     set(LIBS ${LIBS} breakpad)
 endif(USE_BREAKPAD)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
+# Keyword signature so `assimp` can be spelled PRIVATE beside the rest (see the
+# assimp note above). CMake forbids mixing the plain and keyword forms on one
+# target; the app is an executable, so PRIVATE is what the plain form already
+# meant in practice.
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LIBS} assimp)
 if(JAHSHAKA_ENGINE_VIEWPORT)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_ENGINE_VIEWPORT_DEFAULT=1)
 else()

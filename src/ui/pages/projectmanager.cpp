@@ -32,7 +32,10 @@ For more information see the LICENSE file
 #include <QStyledItemDelegate>
 #include <QOffscreenSurface>
 
-#include "irisgl/thirdparty/assimp/include/assimp/Importer.hpp"
+// (No assimp include: this TU never used one, and the line that was here
+// reached into the vendored tree by absolute path — `irisgl/thirdparty/assimp/
+// include/assimp/Importer.hpp` — bypassing assimp's own include directory.
+// ENGINEERING_DEBT_SPEC item 5, shape 3.)
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "zip.h"

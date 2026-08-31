@@ -18,11 +18,13 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QWidget>
 
-#include "assimp/Importer.hpp"
-#include "assimp/scene.h"
-#include "assimp/postprocess.h"
-
-class aiScene;
+// No assimp here: the project manager stopped parsing models when the import
+// pipeline landed (ASSET_PIPELINE_SPEC §3.2.3 — see projectmanager.cpp's
+// "opening a project no longer runs assimp" note). The three includes and the
+// `class aiScene;` forward decl that used to sit here were vestigial, and the
+// forward decl declared the wrong tag (assimp's is `struct aiScene`), which
+// Clang diagnoses under -Wmismatched-tags. Removed for the macOS port
+// (ENGINEERING_DEBT_SPEC item 5, shape 3).
 
 class Database;
 class DynamicGrid;
