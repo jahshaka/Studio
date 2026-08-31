@@ -13,7 +13,11 @@ For more information see the LICENSE file
 #include <QGraphicsDropShadowEffect>
 #include <QGridLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QResizeEvent>
+#include <QScrollBar>
+#include <QTimer>
+#include <QWheelEvent>
 
 #include <QDebug>
 
@@ -47,6 +51,10 @@ DynamicGrid::DynamicGrid(QWidget *parent) : QScrollArea(parent)
 
     gridWidget->setLayout(gridLayout);
     gridLayout->setSpacing(12);
+
+    // sliders: empty-space press pans a row, wheel over a row slides it —
+    // both arrive on the canvas (tiles swallow their own presses first)
+    gridWidget->installEventFilter(this);
 
 //    setStyleSheet("border: 1px solid yellow");
 }
@@ -85,14 +93,32 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highli
     connect(gameGridItem,   SIGNAL(moveToDesktopFromWidget(ItemGridWidget*, int)),
             parent,         SLOT(moveProjectToDesktop(ItemGridWidget*, int)));
 
-    connect(gameGridItem,   &ItemGridWidget::tileMoved,
-            this,           &DynamicGrid::tilePositionChanged);
+    connect(gameGridItem,   &ItemGridWidget::tileMoved, this, [this](ItemGridWidget *widget) {
+        if (mode == LayoutMode::Sliders) handleSliderDrop(widget);
+        else emit tilePositionChanged(widget);
+    });
+
+    connect(gameGridItem,   &ItemGridWidget::moveToRowFromWidget,
+            this,           [this](ItemGridWidget *widget, int row) {
+        moveTileToRow(widget, row);     // append at the end of the target row
+    });
 
     // desktops state: which desktop this grid shows + the tile's stored freeform position
     gameGridItem->currentDesktop = currentDesktop;
     gameGridItem->hasFreeformPos = tileData.hasPosition;
     gameGridItem->normX = tileData.posX;
     gameGridItem->normY = tileData.posY;
+    gameGridItem->hasSliderPos = tileData.hasSliderPos;
+    gameGridItem->sliderRow = tileData.sliderRow;
+    gameGridItem->sliderIndex = tileData.sliderIndex;
+
+    if (mode == LayoutMode::Sliders) {
+        gameGridItem->show();
+        // Coalesce: populateDesktop adds tiles one by one; seeding must see them
+        // all at once or round-robin would pile every new tile onto row 0.
+        scheduleSliderRelayout();
+        return;
+    }
 
     if (mode == LayoutMode::Freeform) {
         gameGridItem->freeformDraggable = true;
@@ -112,6 +138,7 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, int count, bool highli
 
 void DynamicGrid::setLayoutMode(LayoutMode newMode)
 {
+    const LayoutMode prevMode = mode;
     mode = newMode;
 
     // detach every tile from the flow layout (keep the widgets)
@@ -119,14 +146,249 @@ void DynamicGrid::setLayoutMode(LayoutMode newMode)
     while ((item = gridLayout->takeAt(0)) != Q_NULLPTR) delete item;
 
     if (mode == LayoutMode::Freeform) {
-        foreach (ItemGridWidget *gridItem, originalItems) gridItem->freeformDraggable = true;
+        foreach (ItemGridWidget *gridItem, originalItems) {
+            gridItem->freeformDraggable = true;
+            gridItem->sliderDraggable = false;
+            gridItem->sliderRowCount = 0;
+        }
         applyFreeformLayout();
+    } else if (mode == LayoutMode::Sliders) {
+        // seed unassigned tiles from the mode we are leaving: freeform maps
+        // y-bands to rows, anything else round-robins in rows order (lossless
+        // switching — DESKTOP_SLIDER_SPEC.md; stored assignments always win)
+        rebuildSliderModel(prevMode);
+        applySliderLayout();
     } else {
         // Rows ignores stored positions: pure sequence, top-left to bottom-right.
         // The freeform positions are kept (not cleared) for the next freeform show.
-        foreach (ItemGridWidget *gridItem, originalItems) gridItem->freeformDraggable = false;
+        foreach (ItemGridWidget *gridItem, originalItems) {
+            gridItem->freeformDraggable = false;
+            gridItem->sliderDraggable = false;
+            gridItem->sliderRowCount = 0;
+        }
         updateGridColumns(qMax(lastWidth, tileSize.width()));
     }
+
+    // panning affordance on the canvas itself (tiles keep their own cursors)
+    if (mode == LayoutMode::Sliders) gridWidget->setCursor(Qt::OpenHandCursor);
+    else gridWidget->unsetCursor();
+    rowPanning = false;
+    panRow = -1;
+}
+
+// ===== Sliders (DESKTOP_SLIDER_SPEC.md): N filmstrip rows over the same tiles =====
+
+ItemGridWidget *DynamicGrid::tileByGuid(const QString &guid) const
+{
+    foreach (ItemGridWidget *gridItem, originalItems)
+        if (gridItem->tileData.guid == guid) return gridItem;
+    return Q_NULLPTR;
+}
+
+void DynamicGrid::scheduleSliderRelayout()
+{
+    if (sliderRelayoutPending) return;
+    sliderRelayoutPending = true;
+    QTimer::singleShot(0, this, [this]() {
+        sliderRelayoutPending = false;
+        if (mode != LayoutMode::Sliders) return;
+        rebuildSliderModel(LayoutMode::Sliders);    // no mode change: rows-order seed
+        applySliderLayout();
+    });
+}
+
+void DynamicGrid::rebuildSliderModel(LayoutMode seedFrom)
+{
+    // "Slider rows" is a user setting (Settings -> Desktop), not per desktop
+    sliderRows = qBound(2, settings->getValue("slider_rows", 6).toInt(), 10);
+
+    QVector<SliderTileInfo> infos;
+    foreach (ItemGridWidget *gridItem, originalItems) {
+        SliderTileInfo info;
+        info.guid = gridItem->tileData.guid;
+        info.hasSlider = gridItem->hasSliderPos;
+        info.row = gridItem->sliderRow;
+        info.index = gridItem->sliderIndex;
+        info.hasFreeform = gridItem->hasFreeformPos;
+        info.normX = gridItem->normX;
+        info.normY = gridItem->normY;
+        infos.push_back(info);
+    }
+
+    sliderModel.build(infos, sliderRows,
+                      seedFrom == LayoutMode::Freeform ? SliderLayoutModel::Seed::FreeformBands
+                                                       : SliderLayoutModel::Seed::RowsOrder);
+    syncSliderAssignments();
+}
+
+void DynamicGrid::syncSliderAssignments()
+{
+    foreach (ItemGridWidget *gridItem, originalItems) {
+        gridItem->freeformDraggable = false;
+        gridItem->sliderDraggable = true;
+        gridItem->sliderRowCount = sliderRows;
+
+        const SliderLayoutModel::Pos pos = sliderModel.posOf(gridItem->tileData.guid);
+        if (!pos.valid()) continue;
+        if (!gridItem->hasSliderPos || gridItem->sliderRow != pos.row
+                                    || gridItem->sliderIndex != pos.index) {
+            gridItem->hasSliderPos = true;
+            gridItem->sliderRow = pos.row;
+            gridItem->sliderIndex = pos.index;
+            emit tileSliderPositionChanged(gridItem);   // persist {row, orderIndex}
+        }
+    }
+}
+
+int DynamicGrid::sliderRowHeight() const
+{
+    // a usable strip: the tile plus its label, never squeezed below that —
+    // when sliderRows * rowHeight exceeds the viewport the desktop scrolls
+    // vertically instead (the scroll area's vertical bar stays enabled)
+    int h = tileSize.height() + 36;
+    foreach (ItemGridWidget *gridItem, originalItems)
+        h = qMax(h, gridItem->sizeHint().height());
+    return h + 12;
+}
+
+int DynamicGrid::sliderRowAt(int y) const
+{
+    const int rowH = qMax(1, sliderRowHeight());
+    return qBound(0, (y - offset) / rowH, sliderRows - 1);
+}
+
+void DynamicGrid::applySliderLayout()
+{
+    if (sliderRows < 1) return;
+
+    const int rowH = sliderRowHeight();
+    const int contentH = offset + sliderRows * rowH + offset;
+    gridWidget->resize(qMax(viewport()->width(), tileSize.width()),
+                       qMax(viewport()->height(), contentH));
+
+    for (int r = 0; r < sliderRows; ++r) positionSliderRow(r);
+
+    // park any tile the model does not know (shouldn't happen; stay visible)
+    foreach (ItemGridWidget *gridItem, originalItems)
+        if (!sliderModel.posOf(gridItem->tileData.guid).valid())
+            gridItem->move(offset, offset);
+}
+
+void DynamicGrid::positionSliderRow(int row)
+{
+    if (row < 0 || row >= sliderModel.rowCount()) return;
+
+    const int rowH = sliderRowHeight();
+    const int gap = 12;
+    const int y = offset + row * rowH;
+
+    // content width of the strip (visible tiles only — search filtering compacts)
+    int contentW = 0;
+    QVector<ItemGridWidget*> strip;
+    foreach (const QString &guid, sliderModel.rows()[row]) {
+        ItemGridWidget *tile = tileByGuid(guid);
+        if (!tile || tile->isHidden()) continue;
+        strip.push_back(tile);
+        contentW += tile->width() + gap;
+    }
+    if (contentW > 0) contentW -= gap;
+
+    // clamp the filmstrip offset: slide freely, but keep the strip reachable
+    const int avail = gridWidget->width() - 2 * offset;
+    const qreal minOffset = qMin<qreal>(0.0, avail - contentW);
+    const qreal off = qBound(minOffset, sliderModel.rowOffset(row), 0.0);
+    sliderModel.setRowOffset(row, off);
+
+    int x = offset + qRound(off);
+    foreach (ItemGridWidget *tile, strip) {
+        const int tileH = tile->height() > 0 ? tile->height() : tile->sizeHint().height();
+        tile->move(x, y + qMax(0, (rowH - tileH) / 2));
+        x += tile->width() + gap;
+    }
+}
+
+void DynamicGrid::handleSliderDrop(ItemGridWidget *widget)
+{
+    // drop x decides the insert position; drop y decides the row
+    const QPoint center = widget->pos() + QPoint(widget->width() / 2, widget->height() / 2);
+    const int row = sliderRowAt(center.y());
+
+    int index = 0;
+    if (row < sliderModel.rowCount()) {
+        foreach (const QString &guid, sliderModel.rows()[row]) {
+            if (guid == widget->tileData.guid) continue;
+            ItemGridWidget *other = tileByGuid(guid);
+            if (!other || other->isHidden()) continue;
+            if (other->pos().x() + other->width() / 2 < center.x()) ++index;
+        }
+    }
+
+    moveTileToRow(widget, row, index);
+}
+
+void DynamicGrid::moveTileToRow(ItemGridWidget *widget, int row, int index)
+{
+    if (mode != LayoutMode::Sliders || !widget) return;
+
+    sliderModel.moveTile(widget->tileData.guid, row, index);
+    syncSliderAssignments();    // reindexes both rows; persists what changed
+    applySliderLayout();
+}
+
+bool DynamicGrid::eventFilter(QObject *watched, QEvent *event)
+{
+    if (mode == LayoutMode::Sliders && watched == gridWidget) {
+        switch (event->type()) {
+        case QEvent::MouseButtonPress: {
+            auto *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::LeftButton) {
+                // empty-space grab: 1:1, momentum-free row pan
+                rowPanning = true;
+                panRow = sliderRowAt(int(me->position().y()));
+                panStartX = me->globalPosition().toPoint().x();
+                panStartOffset = sliderModel.rowOffset(panRow);
+                gridWidget->setCursor(Qt::ClosedHandCursor);
+                return true;
+            }
+            break;
+        }
+        case QEvent::MouseMove: {
+            auto *me = static_cast<QMouseEvent*>(event);
+            if (rowPanning && (me->buttons() & Qt::LeftButton)) {
+                const int dx = me->globalPosition().toPoint().x() - panStartX;
+                sliderModel.setRowOffset(panRow, panStartOffset + dx);
+                positionSliderRow(panRow);  // clamps + moves the strip
+                return true;
+            }
+            break;
+        }
+        case QEvent::MouseButtonRelease: {
+            auto *me = static_cast<QMouseEvent*>(event);
+            if (rowPanning && me->button() == Qt::LeftButton) {
+                rowPanning = false;
+                panRow = -1;
+                gridWidget->setCursor(Qt::OpenHandCursor);
+                return true;
+            }
+            break;
+        }
+        case QEvent::Wheel: {
+            // wheel over a row slides it horizontally (tiles propagate the
+            // wheel up to the canvas, so this covers tile-hover too)
+            auto *we = static_cast<QWheelEvent*>(event);
+            const int row = sliderRowAt(int(we->position().y()));
+            const int delta = we->angleDelta().y() != 0 ? we->angleDelta().y()
+                                                        : we->angleDelta().x();
+            sliderModel.setRowOffset(row, sliderModel.rowOffset(row) + delta);
+            positionSliderRow(row);
+            return true;
+        }
+        default:
+            break;
+        }
+    }
+
+    return QScrollArea::eventFilter(watched, event);
 }
 
 void DynamicGrid::applyFreeformLayout()
@@ -217,6 +479,12 @@ void DynamicGrid::scaleTile(QString scale)
         return;
     }
 
+    if (mode == LayoutMode::Sliders) {
+        foreach (ItemGridWidget *gridItem, originalItems) gridItem->setTileSize(tileSize, iconSize);
+        applySliderLayout();
+        return;
+    }
+
     int columnCount = qMax(1, lastWidth / tileSize.width());
 
     int count = 0;
@@ -237,6 +505,16 @@ void DynamicGrid::searchTiles(QString searchString)
             gridItem->setVisible(searchString.isEmpty()
                                  || gridItem->tileData.name.toLower().contains(searchString));
         }
+        return;
+    }
+
+    if (mode == LayoutMode::Sliders) {
+        // assignments are kept; the strips compact around the visible tiles
+        foreach (ItemGridWidget *gridItem, originalItems) {
+            gridItem->setVisible(searchString.isEmpty()
+                                 || gridItem->tileData.name.toLower().contains(searchString));
+        }
+        applySliderLayout();
         return;
     }
 
@@ -291,8 +569,14 @@ void DynamicGrid::deleteTile(ItemGridWidget *widget)
 {
     int index = gridLayout->indexOf(widget);
     if (index == -1) {
-        // freeform tiles are free children of the canvas, not layout items
+        // freeform/slider tiles are free children of the canvas, not layout items
         originalItems.removeOne(widget);
+        if (mode == LayoutMode::Sliders) {
+            sliderModel.removeTile(widget->tileData.guid);
+            widget->deleteLater();
+            applySliderLayout();    // close the gap in its strip
+            return;
+        }
         widget->deleteLater();
         return;
     }
@@ -330,10 +614,11 @@ void DynamicGrid::resetView()
         delete gridItem;
     }
 
-    // freeform tiles never entered the layout; delete the stragglers
+    // freeform/slider tiles never entered the layout; delete the stragglers
     foreach (ItemGridWidget *item, originalItems) delete item;
 
     originalItems.clear();
+    sliderModel.clear();    // row offsets are session state; a repopulate resets them
 }
 
 void DynamicGrid::resizeEvent(QResizeEvent *event)
@@ -343,6 +628,12 @@ void DynamicGrid::resizeEvent(QResizeEvent *event)
     if (mode == LayoutMode::Freeform) {
         QScrollArea::resizeEvent(event);
         applyFreeformLayout();  // normalized positions -> new canvas size
+        return;
+    }
+
+    if (mode == LayoutMode::Sliders) {
+        QScrollArea::resizeEvent(event);
+        applySliderLayout();    // re-clamp offsets; vertical scroll if rows overflow
         return;
     }
 

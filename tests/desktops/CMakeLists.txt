@@ -27,3 +27,16 @@ target_link_libraries(test_desktops_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6:
 add_test(NAME desktops.db COMMAND test_desktops_db
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(desktops.db PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "desktops")
+
+# Slider-mode layout model (DESKTOP_SLIDER_SPEC.md): pure model, no widgets,
+# no database — seeding, lossless round-trips, insert-at-drop ordering.
+add_executable(test_slider_model test_slider_model.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/sliderlayoutmodel.cpp)
+target_include_directories(test_slider_model PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_slider_model PRIVATE Qt6::Core)
+add_test(NAME desktops.slider_model COMMAND test_slider_model
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(desktops.slider_model PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "desktops")

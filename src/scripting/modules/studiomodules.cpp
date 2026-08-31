@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "scripting/modules/appapi.h"
 #include "scripting/modules/assetsapi.h"
+#include "scripting/modules/desktopapi.h"
 #include "scripting/modules/editorapi.h"
 #include "scripting/modules/nodeapi.h"
 #include "scripting/modules/projectapi.h"
@@ -28,6 +29,7 @@ void registerStudioModules(ScriptEngine &engine)
     engine.addModule(new NodeApi(host));
     engine.addModule(new EditorApi(host));
     engine.addModule(new AppApi(host));
+    engine.addModule(new DesktopApi(host));
     engine.addModule(new WorldApi(host));
     engine.addModule(new AssetsApi(host));
     // The materials/material/graph verbs are the materials module's — the

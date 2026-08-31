@@ -148,6 +148,24 @@ int main(int argc, char **argv)
         CHECK(!b.hasPosition, "unplaced project still reports no position");
     }
 
+    // --- Slider mode (DESKTOP_SLIDER_SPEC.md): migration adds the filmstrip
+    //     columns, unassigned rows read back hasSliderPos == false, and the
+    //     {row, orderIndex} assignment round-trips.
+    CHECK(db.checkIfColumnExists("projects", "slider_row"),   "migration added the slider_row column");
+    CHECK(db.checkIfColumnExists("projects", "slider_index"), "migration added the slider_index column");
+    {
+        auto a = findTile(db.fetchProjects(3), "guid-a");
+        CHECK(!a.hasSliderPos, "legacy project has no slider assignment (NULL)");
+    }
+    CHECK(db.updateProjectSliderPos("guid-a", 2, 5), "updateProjectSliderPos succeeds");
+    {
+        auto a = findTile(db.fetchProjects(3), "guid-a");
+        CHECK(a.hasSliderPos, "assigned project reads back hasSliderPos");
+        CHECK(a.sliderRow == 2 && a.sliderIndex == 5, "slider {row, index} round-trips exactly");
+        auto b = findTile(db.fetchProjects(1), "guid-b");
+        CHECK(!b.hasSliderPos, "unassigned project still reports no slider assignment");
+    }
+
     // --- A row written with an explicit NULL desktop (e.g. by an older build after a
     //     downgrade) must still show up on Desktop 1
     {

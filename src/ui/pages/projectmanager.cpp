@@ -486,7 +486,8 @@ void ProjectManager::setupDesktopControls()
         desktopMenu->exec(corner - QPoint(0, desktopMenu->sizeHint().height()));
     });
 
-    // per-desktop layout mode: Rows (sequential grid) vs Freeform (drag anywhere)
+    // per-desktop layout mode: Rows (sequential grid), Freeform (drag anywhere),
+    // Sliders (N filmstrip rows — DESKTOP_SLIDER_SPEC.md)
     layoutMenu = new QMenu(this);
     layoutMenu->setStyleSheet(menuStyle);
     auto layoutGroup = new QActionGroup(layoutMenu);
@@ -495,10 +496,14 @@ void ProjectManager::setupDesktopControls()
     rowsAction->setCheckable(true);
     freeformAction = layoutMenu->addAction("Freeform");
     freeformAction->setCheckable(true);
+    slidersAction = layoutMenu->addAction("Sliders");
+    slidersAction->setCheckable(true);
     layoutGroup->addAction(rowsAction);
     layoutGroup->addAction(freeformAction);
-    connect(rowsAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode(false, true); });
-    connect(freeformAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode(true, true); });
+    layoutGroup->addAction(slidersAction);
+    connect(rowsAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode("rows", true); });
+    connect(freeformAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode("freeform", true); });
+    connect(slidersAction, &QAction::triggered, this, [this]() { applyDesktopLayoutMode("sliders", true); });
 
     ui->layoutToggle->setCursor(Qt::PointingHandCursor);
     connect(ui->layoutToggle, &QPushButton::pressed, this, [this]() {
@@ -510,22 +515,75 @@ void ProjectManager::setupDesktopControls()
     connect(dynamicGrid, &DynamicGrid::tilePositionChanged,
             this, &ProjectManager::projectTilePositionChanged);
 
+    // slider drops / move-to-row / first-show seeding persist the same way
+    connect(dynamicGrid, &DynamicGrid::tileSliderPositionChanged,
+            this, &ProjectManager::projectTileSliderChanged);
+
     dynamicGrid->setCurrentDesktop(currentDesktop);
-    const bool freeform =
-        settings->getValue(desktopLayoutKey(currentDesktop), "rows").toString() == "freeform";
-    applyDesktopLayoutMode(freeform, false);
+    applyDesktopLayoutMode(
+        settings->getValue(desktopLayoutKey(currentDesktop), "rows").toString(), false);
 }
 
-void ProjectManager::applyDesktopLayoutMode(bool freeform, bool persist)
+QString ProjectManager::normalizedLayoutMode(const QString &name)
 {
-    if (persist) settings->setValue(desktopLayoutKey(currentDesktop), freeform ? "freeform" : "rows");
+    const QString mode = name.trimmed().toLower();
+    if (mode == "freeform" || mode == "sliders") return mode;
+    return QStringLiteral("rows");
+}
 
-    rowsAction->setChecked(!freeform);
-    freeformAction->setChecked(freeform);
-    ui->layoutToggle->setText(freeform ? QString("Freeform ▾") : QString("Rows ▾"));
+void ProjectManager::applyDesktopLayoutMode(const QString &modeName, bool persist)
+{
+    const QString modeStr = normalizedLayoutMode(modeName);
+    currentLayoutMode = modeStr;
 
-    dynamicGrid->setLayoutMode(freeform ? DynamicGrid::LayoutMode::Freeform
-                                        : DynamicGrid::LayoutMode::Rows);
+    if (persist) settings->setValue(desktopLayoutKey(currentDesktop), modeStr);
+
+    rowsAction->setChecked(modeStr == "rows");
+    freeformAction->setChecked(modeStr == "freeform");
+    slidersAction->setChecked(modeStr == "sliders");
+
+    DynamicGrid::LayoutMode gridMode = DynamicGrid::LayoutMode::Rows;
+    QString label = QStringLiteral("Rows ▾");
+    if (modeStr == "freeform") { gridMode = DynamicGrid::LayoutMode::Freeform; label = QStringLiteral("Freeform ▾"); }
+    else if (modeStr == "sliders") { gridMode = DynamicGrid::LayoutMode::Sliders; label = QStringLiteral("Sliders ▾"); }
+    ui->layoutToggle->setText(label);
+
+    dynamicGrid->setLayoutMode(gridMode);
+}
+
+bool ProjectManager::setDesktopViewMode(const QString &name)
+{
+    const QString mode = name.trimmed().toLower();
+    if (mode != "rows" && mode != "freeform" && mode != "sliders") return false;
+    applyDesktopLayoutMode(mode, true);
+    return true;
+}
+
+bool ProjectManager::moveTileToSliderPos(const QString &guid, int row, int index)
+{
+    if (currentLayoutMode != "sliders") return false;
+
+    foreach (ItemGridWidget *widget, dynamicGrid->originalItems) {
+        if (widget->tileData.guid == guid) {
+            dynamicGrid->moveTileToRow(widget, row, index);
+            return true;
+        }
+    }
+    return false;
+}
+
+QVariantList ProjectManager::sliderTilesForApi() const
+{
+    QVariantList tiles;
+    foreach (ItemGridWidget *widget, dynamicGrid->originalItems) {
+        QVariantMap tile;
+        tile["guid"]  = widget->tileData.guid;
+        tile["name"]  = widget->tileData.name;
+        tile["row"]   = widget->hasSliderPos ? widget->sliderRow + 1 : -1;  // API rows are 1-based
+        tile["index"] = widget->hasSliderPos ? widget->sliderIndex : -1;
+        tiles.push_back(tile);
+    }
+    return tiles;
 }
 
 void ProjectManager::switchDesktop(int desktop)
@@ -544,9 +602,8 @@ void ProjectManager::switchDesktop(int desktop)
 
     // this desktop's layout mode FIRST (so tiles populate under the right mode —
     // a rows desktop must not cascade-assign freeform positions), then its projects
-    const bool freeform =
-        settings->getValue(desktopLayoutKey(desktop), "rows").toString() == "freeform";
-    applyDesktopLayoutMode(freeform, false);
+    applyDesktopLayoutMode(
+        settings->getValue(desktopLayoutKey(desktop), "rows").toString(), false);
     populateDesktop(true);
 }
 
@@ -571,6 +628,13 @@ void ProjectManager::projectTilePositionChanged(ItemGridWidget *widget)
     db->updateProjectPosition(widget->tileData.guid,
                               static_cast<float>(widget->normX),
                               static_cast<float>(widget->normY));
+}
+
+void ProjectManager::projectTileSliderChanged(ItemGridWidget *widget)
+{
+    db->updateProjectSliderPos(widget->tileData.guid,
+                               widget->sliderRow,
+                               widget->sliderIndex);
 }
 
 void ProjectManager::addImportedTileToDesktop(const QString &guid)

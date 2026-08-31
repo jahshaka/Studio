@@ -87,6 +87,7 @@ set(SRCS
     src/scripting/modules/nodeapi.cpp
     src/scripting/modules/editorapi.cpp
     src/scripting/modules/appapi.cpp
+    src/scripting/modules/desktopapi.cpp
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
     src/modules/materials/api/materialsapi.cpp
@@ -175,8 +176,9 @@ set(SRCS
     src/ui/dialogs/progressdialog.cpp 
     src/ui/dialogs/screenshotwidget.cpp 
     src/ui/pages/projectmanager.cpp 
-    src/ui/controls/dynamicgrid.cpp 
-    src/ui/controls/itemgridwidget.cpp 
+    src/ui/controls/dynamicgrid.cpp
+    src/ui/controls/itemgridwidget.cpp
+    src/ui/controls/sliderlayoutmodel.cpp
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
     src/bridge/enginethumbnailrenderer.cpp 
@@ -259,6 +261,7 @@ set(HEADERS
     src/scripting/modules/nodeapi.h
     src/scripting/modules/editorapi.h
     src/scripting/modules/appapi.h
+    src/scripting/modules/desktopapi.h
     src/scripting/modules/worldapi.h
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h
@@ -355,8 +358,9 @@ set(HEADERS
     src/ui/dialogs/progressdialog.h 
     src/ui/dialogs/screenshotwidget.h 
     src/ui/pages/projectmanager.h 
-    src/ui/controls/dynamicgrid.h 
-    src/ui/controls/itemgridwidget.h 
+    src/ui/controls/dynamicgrid.h
+    src/ui/controls/itemgridwidget.h
+    src/ui/controls/sliderlayoutmodel.h
     src/ui/dialogs/renameprojectdialog.h 
     src/services/thumbnailgenerator.h 
     src/ui/dialogs/donatedialog.h

@@ -60,6 +60,7 @@ private:
 	QPushButton * about;
 	QPushButton * shortcuts;
 	QPushButton * database;
+	QPushButton * desktopBtn;   // Desktop section (DESKTOP_SLIDER_SPEC.md)
 
 	QWidget *viewportWidget;
 	QWidget *editorWidget;
@@ -69,6 +70,7 @@ private:
 	QWidget *aboutWidget;
 	QWidget *shortcutsWidget;
 	QWidget *databaseWidget;
+	QWidget *desktopWidget;
 
 	QStackedWidget* stack;
 
@@ -78,6 +80,7 @@ private:
 	void configureAbout();
 	void configureShortcuts();
 	void configureDatabaseWidget();
+	void configureDesktop();
 
 	void setSizePolicyForWidgets(QWidget *);
 private slots:
@@ -93,6 +96,7 @@ private slots:
     void editorPathChanged(QString path);
 	void enableAutoUpdate(bool state);
 	void mouseControlChanged(const QString& value);
+	void sliderRowsChanged(int rows);
 
 public slots:
 	void saveSettings();

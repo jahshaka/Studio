@@ -75,6 +75,14 @@ public:
 
     int getCurrentDesktop() const { return currentDesktop; }
 
+    // Desktop view mode + slider tiles, public for the scripting API
+    // (desktop.viewMode / desktop.setViewMode / desktop.moveTile / desktop.tiles).
+    // Mode names: "rows" | "freeform" | "sliders" (persisted per desktop).
+    QString desktopViewMode() const { return currentLayoutMode; }
+    bool setDesktopViewMode(const QString &name);
+    bool moveTileToSliderPos(const QString &guid, int row, int index);   // 0-based row
+    QVariantList sliderTilesForApi() const;
+
     /// Synchronous, dialog-free version of loadProjectAssets() for the scripting
     /// API (project.open): same DB sweeps and AssetManager registrations as the
     /// concurrent path, sequentially on the caller's thread, no modal progress
@@ -106,6 +114,7 @@ protected slots:
     // desktops (DESKTOPS_SPEC.md)
     void moveProjectToDesktop(ItemGridWidget*, int desktop);
     void projectTilePositionChanged(ItemGridWidget*);
+    void projectTileSliderChanged(ItemGridWidget*);     // sliders: persist {row, index}
 
     void searchProjects();
 
@@ -123,17 +132,20 @@ signals:
 private:
     void loadProjectAssets();
 
-    // desktops (DESKTOPS_SPEC.md)
+    // desktops (DESKTOPS_SPEC.md + DESKTOP_SLIDER_SPEC.md)
     void setupDesktopControls();
-    void applyDesktopLayoutMode(bool freeform, bool persist);
+    void applyDesktopLayoutMode(const QString &modeName, bool persist);
     static QString desktopLayoutKey(int desktop);
+    static QString normalizedLayoutMode(const QString &name);   // unknown -> "rows"
 
     int currentDesktop = 1;
+    QString currentLayoutMode = QStringLiteral("rows");
     QMenu *desktopMenu = nullptr;
     QMenu *layoutMenu = nullptr;
     QVector<QAction*> desktopActions;
     QAction *rowsAction = nullptr;
     QAction *freeformAction = nullptr;
+    QAction *slidersAction = nullptr;
 
     Ui::ProjectManager *ui;
     SettingsManager* settings;

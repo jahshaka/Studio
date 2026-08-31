@@ -260,6 +260,20 @@ void Database::migrateProjectsTable()
         query.prepare("ALTER TABLE projects ADD COLUMN desktop_y REAL");
         executeAndCheckQuery(query, "MigrateProjectsAddDesktopY");
     }
+
+    // Slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex} per
+    // tile. NULL = never assigned; the layout model seeds those on first show.
+    if (!checkIfColumnExists("projects", "slider_row")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE projects ADD COLUMN slider_row INTEGER");
+        executeAndCheckQuery(query, "MigrateProjectsAddSliderRow");
+    }
+
+    if (!checkIfColumnExists("projects", "slider_index")) {
+        QSqlQuery query;
+        query.prepare("ALTER TABLE projects ADD COLUMN slider_index INTEGER");
+        executeAndCheckQuery(query, "MigrateProjectsAddSliderIndex");
+    }
 }
 
 void Database::migrateCollectionsTable()
@@ -608,6 +622,16 @@ bool Database::updateProjectPosition(const QString &guid, float x, float y)
 	query.addBindValue(y);
 	query.addBindValue(guid);
 	return executeAndCheckQuery(query, "UpdateProjectPosition");
+}
+
+bool Database::updateProjectSliderPos(const QString &guid, int row, int index)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE projects SET slider_row = ?, slider_index = ? WHERE guid = ?");
+	query.addBindValue(row);
+	query.addBindValue(index);
+	query.addBindValue(guid);
+	return executeAndCheckQuery(query, "UpdateProjectSliderPos");
 }
 
 void Database::updateSchema()
@@ -1669,14 +1693,16 @@ QVector<ProjectTileData> Database::fetchProjects(int desktop)
     if (desktop > 0) {
         // COALESCE: rows from before the desktop migration (NULL) belong to Desktop 1
         query.prepare(
-            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y "
+            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
+            "slider_row, slider_index "
             "FROM projects WHERE COALESCE(desktop, 1) = ? ORDER BY last_written DESC"
         );
         query.addBindValue(desktop);
     }
     else {
         query.prepare(
-            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y "
+            "SELECT name, thumbnail, guid, COALESCE(desktop, 1), desktop_x, desktop_y, "
+            "slider_row, slider_index "
             "FROM projects ORDER BY last_written DESC"
         );
     }
@@ -1694,6 +1720,11 @@ QVector<ProjectTileData> Database::fetchProjects(int desktop)
         if (data.hasPosition) {
             data.posX = record.value(4).toFloat();
             data.posY = record.value(5).toFloat();
+        }
+        data.hasSliderPos = !record.value(6).isNull() && !record.value(7).isNull();
+        if (data.hasSliderPos) {
+            data.sliderRow   = record.value(6).toInt();
+            data.sliderIndex = record.value(7).toInt();
         }
 
         tileData.push_back(data);

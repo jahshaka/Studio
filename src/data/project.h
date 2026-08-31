@@ -47,6 +47,11 @@ struct ProjectTileData {
     bool        hasPosition = false;// freeform position ever assigned?
     float       posX = 0.f;         // normalized 0..1 on the desktop canvas
     float       posY = 0.f;
+    // Slider mode (DESKTOP_SLIDER_SPEC.md): per-tile filmstrip assignment,
+    // kept beside the freeform position so mode switches are lossless.
+    bool        hasSliderPos = false;
+    int         sliderRow = 0;      // 0-based filmstrip row
+    int         sliderIndex = 0;    // 0-based order within the row
 };
 
 enum AssetViewFilter : int
