@@ -34,6 +34,10 @@ void PlaybackService::playScene()
     if (viewport) viewport->startPlayingScene();
 }
 
+// `playing` means "running", not "in play mode": a paused scene stays in
+// PlayMode with playing == false, and the next playScene() RESUMES it (the
+// viewport hands the resume to PlayBack, which keeps the physics world and the
+// pre-play transforms). Only stopScene() leaves play mode's state behind.
 void PlaybackService::pauseScene()
 {
     playing = false;

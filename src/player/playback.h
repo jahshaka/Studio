@@ -64,9 +64,13 @@ class PlayBack
 	QPointF prevMousePos;
 
 	bool _isPlaying = false;
+	/// Paused is a state of PLAYING, not a stop: the physics world, the saved
+	/// pre-play transforms and the animation clock all survive it.
+	bool _isPaused = false;
 	QMap<QString, PlayBackNodeTransform> nodeTransforms;
 public:
 	bool isScenePlaying() { return _isPlaying; }
+	bool isScenePaused() { return _isPaused; }
 
 	void setEditorViewport(IEditorViewport* viewport) { editorViewport = viewport; }
 
@@ -87,8 +91,12 @@ public:
 	void saveNodeTransforms();
 	void restoreNodeTransforms();
 
+	/// Enters play mode, or resumes when paused. Idempotent while already
+	/// playing: re-entering used to re-save the (mid-play) transforms and add a
+	/// second copy of every rigid body.
 	void playScene();
 	void pause();
+	void resume();
 	void stopScene();
 
 	PlayerMouseController* getMouseController() const;

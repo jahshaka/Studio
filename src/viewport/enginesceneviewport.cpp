@@ -613,7 +613,10 @@ bool EngineSceneViewport::event(QEvent *e)
 
 void EngineSceneViewport::setScene(iris::ScenePtr scene)
 {
-    if (mPlaying) stopPlayingScene();
+    // A PAUSED scene is still playing as far as PlayBack is concerned (mPlaying
+    // is false but the physics world and saved transforms are live) — it has to
+    // be stopped before the document underneath it is swapped.
+    if (mPlaying || (mPlayback && mPlayback->isScenePlaying())) stopPlayingScene();
     mScene = scene;
     mSelectedNode.clear();
     // After clearScene() the engine scene is gone but the view survives;
@@ -630,13 +633,21 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
 void EngineSceneViewport::startPlayingScene()
 {
     if (!mScene || !mPlayback) return;
+    // playScene() knows the difference between a cold start and a resume; the
+    // viewport flag only says whether syncFrame drives the simulation.
     if (!mPlaying) mPlayback->playScene();
     mPlaying = true;
 }
 
 void EngineSceneViewport::pausePlayingScene()
 {
+    if (!mPlaying) return;
     mPlaying = false;                 // time is not reset, like the legacy viewport
+    // The pause is a state on PlayBack too, otherwise the next
+    // startPlayingScene() re-entered play: animation clock back to zero, the
+    // mid-play pose saved over the originals, and a second set of rigid bodies
+    // and character controllers added to the physics world.
+    if (mPlayback) mPlayback->pause();
 }
 
 void EngineSceneViewport::stopPlayingScene()

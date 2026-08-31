@@ -76,14 +76,19 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 	if (camController->getCamera() != scene->camera)
 		irisLog("Controller mismatch!");
 
-	animTime += dt;
-	scene->updateSceneAnimation(animTime);
-    scene->update(dt);
+	// A paused scene is frozen: the clock does not advance and the document is
+	// left exactly as the pause found it.
+	if (!_isPaused) {
+		animTime += dt;
+		scene->updateSceneAnimation(animTime);
+		scene->update(dt);
 
-	auto activeViewer = scene->getActiveVrViewer();
-	if (_isPlaying) {
-		if (!!activeViewer && activeViewer->isActiveCharacterController()) {
-			activeViewer->setGlobalTransform(scene->getPhysicsEnvironment()->getActiveCharacterController()->getTransform());
+		auto activeViewer = scene->getActiveVrViewer();
+		if (_isPlaying && !!activeViewer && activeViewer->isActiveCharacterController()) {
+			// The controller can be gone (viewer removed mid-play); the document
+			// flag alone never guaranteed one exists.
+			if (auto *controller = scene->getPhysicsEnvironment()->getActiveCharacterController())
+				activeViewer->setGlobalTransform(controller->getTransform());
 		}
 	}
 
@@ -101,12 +106,16 @@ void PlayBack::saveNodeTransforms()
 void PlayBack::restoreNodeTransforms()
 {
 	for (auto node : scene->nodes) {
-		//node->setLocalTransform(nodeTransforms[node->guid]);
-		const auto trans = nodeTransforms[node->guid];
-		node->setLocalPos(trans.pos);
-		node->setLocalRot(trans.rot);
-		node->setLocalScale(trans.scale);
+		// Only nodes that were present when play started have an original to go
+		// back to; operator[] would have handed a node added mid-play a
+		// default-constructed transform — a ZERO scale, i.e. an invisible node.
+		const auto trans = nodeTransforms.constFind(node->guid);
+		if (trans == nodeTransforms.constEnd()) continue;
+		node->setLocalPos(trans->pos);
+		node->setLocalRot(trans->rot);
+		node->setLocalScale(trans->scale);
 	}
+	nodeTransforms.clear();
 }
 
 void PlayBack::mousePressEvent(QMouseEvent * evt)
@@ -151,6 +160,12 @@ void PlayBack::wheelEvent(QWheelEvent *event)
 
 void PlayBack::playScene()
 {
+	// Resume, never restart: a paused scene keeps its physics world and its
+	// pre-play transforms, so re-running the start path would double-add every
+	// rigid body and overwrite the originals with the mid-play pose.
+	if (_isPaused) { resume(); return; }
+	if (_isPlaying) return;
+
 	_isPlaying = true;
 	saveNodeTransforms();
 	mouseController->setPlayState(_isPlaying);
@@ -164,11 +179,30 @@ void PlayBack::playScene()
 	animTime = 0;
 }
 
+void PlayBack::pause()
+{
+	if (!_isPlaying || _isPaused) return;
+	_isPaused = true;
+	mouseController->setPlayState(false);
+	// Freeze the simulation but keep the world: stopPhysics() only clears the
+	// stepping flag, nothing is torn down.
+	scene->getPhysicsEnvironment()->stopPhysics();
+}
 
-void PlayBack::pause() {}
+void PlayBack::resume()
+{
+	if (!_isPlaying || !_isPaused) return;
+	_isPaused = false;
+	mouseController->setPlayState(true);
+	scene->getPhysicsEnvironment()->simulatePhysics();
+	// NOT camController->start(): it captures the camera transform to restore on
+	// stop, and re-planting the viewer would re-add its character controller.
+}
+
 void PlayBack::stopScene()
 {
 	_isPlaying = false;
+	_isPaused = false;
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
