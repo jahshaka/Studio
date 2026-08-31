@@ -38,6 +38,9 @@ public:
     Q_INVOKABLE bool isGameView();
     Q_INVOKABLE bool setView(const QString &view);
     Q_INVOKABLE QString view();
+    Q_INVOKABLE QVariantMap camera();
+    Q_INVOKABLE QString cameraMode();
+    Q_INVOKABLE bool setCameraMode(const QString &mode);
     Q_INVOKABLE double snapSize();
     Q_INVOKABLE bool setSnapSize(double size);
     Q_INVOKABLE bool snapToFloor();

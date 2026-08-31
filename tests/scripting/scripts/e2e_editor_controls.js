@@ -112,4 +112,84 @@ assert(editor.setView("perspective"), "back to perspective");
 assert(editor.view() === "perspective", "view reads back perspective");
 editor.frame(2);
 
+// ---- per-view camera memory (owner defect: Top -> Perspective reset the
+// camera). Each view remembers its camera for the viewport session:
+// perspective its full pose, each ortho view its own pan + zoom. Verified
+// pixel-free through the editor.camera() pose verb.
+function vecNear(a, b, eps) {
+    return near(a.x, b.x, eps) && near(a.y, b.y, eps) && near(a.z, b.z, eps);
+}
+function quatNear(a, b, eps) {  // q and -q are the same rotation
+    var d = Math.abs(a.x * b.x + a.y * b.y + a.z * b.z + a.scalar * b.scalar);
+    return d > 1 - (eps || 1e-4);
+}
+
+// Give the perspective view a distinctive, content-rich pose first (the
+// earlier phases left it staring at empty sky): frame the floored cube.
+editor.select(cube);
+assert(editor.focusSelection(), "frame the cube in perspective");
+editor.frame(2);
+var persp0 = editor.camera();
+assert(persp0.projection === "perspective", "camera() reports perspective");
+editor.screenshot("memory_persp_before.png", 256, 256);
+
+assert(editor.setView("top"), "into the top view");
+editor.frame(5);
+// Mutate the top view's camera so its memory is distinguishable from the
+// default axis snap: focusing the floored cube pans the camera over it.
+editor.select(cube);
+assert(editor.focusSelection(), "focus inside the top view (pans the camera)");
+editor.frame(2);
+var top0 = editor.camera();
+assert(top0.projection === "orthogonal", "top view is orthographic");
+editor.screenshot("memory_top.png", 256, 256);
+
+assert(editor.setView("perspective"), "top -> perspective");
+editor.frame(2);
+editor.screenshot("memory_persp_after.png", 256, 256);
+var persp1 = editor.camera();
+assert(persp1.projection === "perspective", "perspective projection restored");
+assert(vecNear(persp1.position, persp0.position, 1e-3),
+    "perspective position restored (" + persp0.position.x + "," + persp0.position.y + "," +
+    persp0.position.z + " == " + persp1.position.x + "," + persp1.position.y + "," + persp1.position.z + ")");
+assert(quatNear(persp1.rotation, persp0.rotation), "perspective orientation restored");
+
+// Each ortho view has its OWN memory: detour through front (first visit =
+// default framing), then top must return to the focused pose, not re-snap.
+assert(editor.setView("front"), "into the front view");
+editor.frame(5);
+assert(editor.setView("top"), "front -> top");
+editor.frame(2);
+var top1 = editor.camera();
+assert(top1.projection === "orthogonal", "top is orthographic again");
+assert(vecNear(top1.position, top0.position, 1e-3), "top view pan (position) restored");
+assert(near(top1.orthoSize, top0.orthoSize, 1e-3), "top view zoom (orthoSize) restored");
+
+assert(editor.setView("perspective"), "back to perspective once more");
+editor.frame(2);
+var persp2 = editor.camera();
+assert(vecNear(persp2.position, persp0.position, 1e-3) && quatNear(persp2.rotation, persp0.rotation),
+    "perspective pose survives repeated trips through ortho views");
+
+// ---- the memory works under the arcball controller too ----
+assert(editor.cameraMode() === "free", "camera mode defaults to free");
+assert(editor.setCameraMode("orbit"), "switch to the arcball controller");
+assert(editor.cameraMode() === "orbit", "cameraMode reads back orbit");
+editor.frame(2);   // let the orbit controller's recomposition settle
+var orbP0 = editor.camera();
+assert(editor.setView("top"), "orbit: into top");
+editor.frame(40);  // the arcball lerps to the axis view
+assert(editor.setView("perspective"), "orbit: back to perspective");
+editor.frame(2);
+var orbP1 = editor.camera();
+assert(vecNear(orbP1.position, orbP0.position, 1e-2) &&
+       quatNear(orbP1.rotation, orbP0.rotation, 1e-3),
+    "orbit mode: perspective pose restored (" + orbP0.position.x + "," + orbP0.position.y + "," +
+    orbP0.position.z + " == " + orbP1.position.x + "," + orbP1.position.y + "," + orbP1.position.z + ")");
+var badCamModeRefused = false;
+try { editor.setCameraMode("chase"); } catch (e) { badCamModeRefused = true; }
+assert(badCamModeRefused, "setCameraMode refuses an unknown mode");
+assert(editor.setCameraMode("free"), "back to the free camera");
+assert(editor.cameraMode() === "free", "cameraMode reads back free");
+
 console.log("editor_controls: verbs verified");
