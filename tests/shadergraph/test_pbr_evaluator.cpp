@@ -114,6 +114,39 @@ int main(int argc, char** argv)
         CHECK(material->textures.isEmpty(), "graph 1: no maps bound");
     }
 
+    // ---- graph 1b: evaluator numeric contract (audit D5 + D6) ----------------
+    // vector2 folds like its siblings; FloatSlot landings clamp to [0,1].
+    {
+        auto graph = new NodeGraph();
+        auto master = new PbrMasterNode();
+        graph->addNode(master);
+        graph->setMasterNode(master);
+
+        auto vec2 = new Vector2Node();
+        QJsonObject v2; v2["x"] = 0.5; v2["y"] = 0.25;
+        static_cast<NodeModel*>(vec2)->deserializeWidgetValue(v2);
+        graph->addNode(vec2);
+        graph->addConnection(vec2, 0, master, 0);   // Result -> Base Color
+
+        auto hot = makeFloat(graph, 1.5);
+        graph->addConnection(hot, 0, master, 1);    // 1.5 -> Metallic
+
+        auto cold = makeFloat(graph, -0.5);
+        graph->addConnection(cold, 0, master, 2);   // -0.5 -> Roughness
+
+        auto result = PbrGraphEvaluator::evaluate(graph);
+        CHECK(result.unsupportedNodes.isEmpty(), "graph 1b: vector2 no longer unsupported (D5)");
+        auto col = result.values["baseColor"].toObject();
+        CHECK(near(col["r"].toDouble(), 0.5) && near(col["g"].toDouble(), 0.25) && near(col["b"].toDouble(), 0.0),
+              "graph 1b: vector2 folds to (x, y, 0) on a color slot (D5)");
+        CHECK(result.values["metallic"].toDouble() == 1.0, "graph 1b: float(1.5) -> Metallic clamps to 1.0 (D6)");
+        CHECK(result.values["roughness"].toDouble() == 0.0, "graph 1b: float(-0.5) -> Roughness clamps to 0.0 (D6)");
+
+        auto material = PbrGraphEvaluator::createMaterial(graph);
+        CHECK(!!material && near(material->metallicFactor, 1.0f),
+              "graph 1b: clamped metallic lands on PbrMaterial");
+    }
+
     // ---- graph 2: texture properties into the PBR master ---------------------
     // texture property -> Base Color (becomes baseColorMap), texture property -> Normal
     {

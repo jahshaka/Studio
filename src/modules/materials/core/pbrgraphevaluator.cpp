@@ -97,12 +97,13 @@ InputValue evaluateInput(SocketModel* socket, const PbrGraphEvaluator::TextureRe
 		return result;
 	}
 
-	if (type == "vector3" || type == "vector4") {
+	if (type == "vector2" || type == "vector3" || type == "vector4") {
+		// vector2 folds like its siblings (audit D5): (x, y, 0)
 		auto obj = node->serializeWidgetValue().toObject();
 		result.kind = InputValue::Color;
 		result.color = QColor::fromRgbF(qBound(0.0, obj["x"].toDouble(), 1.0),
 		                                qBound(0.0, obj["y"].toDouble(), 1.0),
-		                                qBound(0.0, obj["z"].toDouble(), 1.0),
+		                                type == "vector2" ? 0.0 : qBound(0.0, obj["z"].toDouble(), 1.0),
 		                                type == "vector4" ? qBound(0.0, obj["w"].toDouble(), 1.0) : 1.0);
 		return result;
 	}
@@ -254,7 +255,10 @@ PbrGraphEvaluator::Result PbrGraphEvaluator::evaluate(NodeGraph* graph, TextureR
 					float gloss = v > 1.0f ? v / 100.0f : v;
 					v = 1.0f - qBound(0.0f, gloss, 1.0f);
 				}
-				result.values[spec.valueKey] = v;
+				// every FloatSlot (metallic, roughness, occlusionFactor,
+				// alpha, alphaCutoff) is a 0-1 quantity on PbrMaterial;
+				// clamp at the landing site (audit D6)
+				result.values[spec.valueKey] = qBound(0.0f, v, 1.0f);
 			}
 			else if (spec.target == SlotSpec::ColorSlot) {
 				// a bare float feeding a color slot: grayscale

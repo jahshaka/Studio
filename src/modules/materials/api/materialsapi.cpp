@@ -349,7 +349,7 @@ QVector<VerbInfo> GraphApi::verbs() const
           "The current graph's nodes.",
           Needs::Document },
         { "nodeTypes", "graph.nodeTypes() -> [type]",
-          "Every node type the library can create (plus the master types PbrMaterial and Material).",
+          "Every node type the library can create (plus the master type PbrMaterial).",
           Needs::Document },
         { "addNode", "graph.addNode(type) -> id",
           "Adds a node to the current graph ('PbrMaterial' adds and sets the master).",
@@ -408,8 +408,9 @@ QVariantList GraphApi::nodeTypes()
     QVariantList out;
     LibraryV1 library;
     for (auto item : library.getItems()) out.append(item->name);
+    // "Material" (the legacy Blinn-Phong master) is deliberately NOT listed:
+    // addNode cannot create one, so listing it made scripts throw (audit D14).
     out.append(QStringLiteral("PbrMaterial"));
-    out.append(QStringLiteral("Material"));
     return out;
 }
 
