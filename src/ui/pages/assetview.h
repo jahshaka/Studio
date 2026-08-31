@@ -124,6 +124,10 @@ public:
 	/// which condition is missing (it used to sit silently disabled after
 	/// the tile flip made plain clicks non-selecting).
 	void updateAddToProjectButton();
+	/// Offline-store banner (ASSET_PIPELINE_SPEC §3.1.2): shown while the
+	/// configured store root is unreachable; Reconnect re-stats and refreshes.
+	/// Byte-needing actions (add-to-project, previews) are disabled meanwhile.
+	void refreshStoreBanner();
 	/// Tile right-click → Rebuild Thumbnail: re-renders and persists the
 	/// tile's thumbnail (3D types through the asset viewer screenshot path,
 	/// images via ThumbnailManager, audio/files back to their type icon).
@@ -202,6 +206,8 @@ private:
 
 	QPushButton *updateAsset;
 	QPushButton *addToProject;
+	QWidget *storeOfflineBanner = nullptr;
+	QLabel *storeOfflineLabel = nullptr;
     QPushButton *deleteFromLibrary;
 	QLabel *renameModel;
 	QLineEdit *renameModelField;

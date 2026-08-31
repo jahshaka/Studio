@@ -16,6 +16,7 @@
 #include "bridge/enginethumbnailrenderer.h"
 #include "bridge/enginehost.h"
 #include "data/constants.h"
+#include "services/assetstorepaths.h"
 #include "data/project.h"
 #include "data/database/database.h"
 #include "io/scenereader.h"
@@ -36,8 +37,7 @@ using namespace jahshaka::engine;
 
 static QString assetFolder(const QString &guid)
 {
-    return IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-                           Constants::ASSET_FOLDER, guid);
+    return AssetStorePaths::legacyFolder(guid);
 }
 
 EngineAssetViewer::EngineAssetViewer(const std::shared_ptr<Engine> &engine,

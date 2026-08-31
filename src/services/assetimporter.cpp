@@ -25,10 +25,13 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
+#include "services/assetcas.h"
 #include "services/assetmetadata.h"
+#include "services/assetstorepaths.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
 #include "irisgl/core/irisutils.h"
+#include "irisgl/core/logger.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -53,9 +56,7 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     // Store layout, exactly like AssetView::importModel: main_guid names the
     // Object row, the on-disk folder and the parent of every member row.
     const QString mainGuid = GUIDManager::generateGUID();
-    const QString storeRoot = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore");
-    const QString assetFolder = QDir(storeRoot).filePath(mainGuid);
+    const QString assetFolder = AssetStorePaths::legacyFolder(mainGuid);
     QDir().mkpath(assetFolder);
 
     const QString copiedModel = IrisUtils::join(assetFolder, sourceInfo.fileName());
@@ -183,6 +184,19 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
     assetObject->setValue(QVariant::fromValue(node));
     AssetManager::addAsset(assetObject);
 
+    // CAS ingest (phase 2): hash the stored files into objects/ and record
+    // files/asset_files rows + the rebuild sidecar. Failure is non-fatal —
+    // the legacy folder is authoritative until phase 3, and assets.migrateStore
+    // sweeps up anything missed.
+    {
+        QString casError;
+        AssetCas::ingestLegacyFolder(QSqlDatabase::database(), AssetStorePaths::root(),
+                                     mainGuid, sourceInfo.fileName(), nullptr, &casError);
+        AssetCas::writeSidecar(QSqlDatabase::database(), AssetStorePaths::root(),
+                               mainGuid, &casError);
+        if (!casError.isEmpty()) irisLog("CAS ingest (import mesh): " + casError);
+    }
+
     result.objectGuid = mainGuid;
     result.meshGuid = meshGuid;
     result.node = node;
@@ -215,9 +229,7 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
         // One row at the file's guid, view_filter AssetsView — a first-class
         // library asset, not the Editor-filtered ghost the old path made.
         const QString guid = GUIDManager::generateGUID();
-        const QString storeRoot = IrisUtils::join(
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), "AssetStore");
-        const QString assetFolder = QDir(storeRoot).filePath(guid);
+        const QString assetFolder = AssetStorePaths::legacyFolder(guid);
         QDir().mkpath(assetFolder);
 
         const QString copied = IrisUtils::join(assetFolder, sourceInfo.fileName());
@@ -269,6 +281,16 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
             result.error = QStringLiteral("imported, but drawer %1 does not exist").arg(drawerId);
         else
             db->switchAssetCollection(drawerId, result.objectGuid);
+    }
+
+    // CAS ingest (phase 2) — see importMesh; non-fatal.
+    if (!result.objectGuid.isEmpty()) {
+        QString casError;
+        AssetCas::ingestLegacyFolder(QSqlDatabase::database(), AssetStorePaths::root(),
+                                     result.objectGuid, sourceInfo.fileName(), nullptr, &casError);
+        AssetCas::writeSidecar(QSqlDatabase::database(), AssetStorePaths::root(),
+                               result.objectGuid, &casError);
+        if (!casError.isEmpty()) irisLog("CAS ingest (import file): " + casError);
     }
 
     return result;

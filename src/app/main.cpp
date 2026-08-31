@@ -35,6 +35,9 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "app/cli/clioptions.h"
+#include "services/assetstorepaths.h"
+#include "services/assetstore.h"
+#include "data/settingsmanager.h"
 #include "app/cli/scriptrunner.h"
 #include "app/cli/selftestrunner.h"
 #include "ui/dialogs/infodialog.h"
@@ -120,9 +123,16 @@ int main(int argc, char *argv[])
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
 
-    auto assetPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + Constants::ASSET_FOLDER;
-    QDir assetDir(assetPath);
-    if (!assetDir.exists()) assetDir.mkpath(assetPath);
+    // Relocatable store root (ASSET_PIPELINE_SPEC §3.1.1): point the path
+    // authority at the assets/storeRoot setting before anything derives a
+    // store path. Only the DEFAULT root is ever created implicitly — a
+    // missing custom root means the store is OFFLINE (§3.1.2), and mkpath-ing
+    // a dead mount point would fake an empty-but-online store.
+    AssetStoreService::bootstrapFromSettings(SettingsManager::getDefaultManager());
+    if (AssetStorePaths::root() == AssetStorePaths::defaultRoot()) {
+        QDir assetDir(AssetStorePaths::defaultRoot());
+        if (!assetDir.exists()) assetDir.mkpath(AssetStorePaths::defaultRoot());
+    }
 
     // Fonts are a theme decision now: Classic sets DroidSans inside
     // ThemeManager::applyAtStartup; Qlementine Dark uses the theme's own

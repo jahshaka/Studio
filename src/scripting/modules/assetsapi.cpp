@@ -22,7 +22,11 @@ For more information see the LICENSE file
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
 #include "services/assetservice.h"
+#include "services/assetmigration.h"
+#include "services/assetstore.h"
+#include "services/assetstorepaths.h"
 #include "data/constants.h"
+#include "data/settingsmanager.h"
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
@@ -71,8 +75,7 @@ int typeFromName(const QString &name)
 
 QString storeFolderFor(const QString &guid)
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-           + Constants::ASSET_FOLDER + "/" + guid;
+    return AssetStorePaths::legacyFolder(guid);
 }
 
 } // namespace
@@ -130,6 +133,24 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
+          Needs::Document },
+        { "storeRoot", "assets.storeRoot() -> path",
+          "The active asset-store root directory (the assets/storeRoot setting; the AppData default when unset).",
+          Needs::Document },
+        { "setStoreRoot", "assets.setStoreRoot(path, {move, force}) -> bool",
+          "Repoints the asset store. Empty path returns to the default root. {move: true} copies the current store's contents to the new root first (verified; the old tree is retained). Without move, the target must already contain this library's store ({force: true} skips that check). Throws on failure; nothing changes on a failed call.",
+          Needs::Document },
+        { "storeStatus", "assets.storeStatus() -> {root, online, missing}",
+          "Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it.",
+          Needs::Document },
+        { "migrateStore", "assets.migrateStore({dbPath, root}) -> report",
+          "Migrates a legacy per-guid store into the content-addressed store: hashes every library file (view_filter 2 and 3), hardlinks/copies into objects/, writes files/asset_files rows + rebuild sidecars + store.json. The legacy tree is RETAINED; a missing folder is zero files; idempotent (rerun = zero new objects). Refuses while another Jahshaka instance holds the library. dbPath/root default to the live library — pass both to rehearse against a copy.",
+          Needs::Document },
+        { "verify", "assets.verify({dbPath, root}) -> report",
+          "Re-hashes every catalogued object against its oid: reports corrupt (bit-rot) and missing objects with counts and bytes. Defaults to the live library.",
+          Needs::Document },
+        { "rebuildCatalog", "assets.rebuildCatalog(dbPath, {root}) -> report",
+          "Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered.",
           Needs::Document },
     };
 }
@@ -619,4 +640,65 @@ QVariantMap AssetsApi::exportRaw(const QString &guid, const QString &dir, const 
     out["totalBytes"] = r.totalBytes;
     out["warnings"] = QVariant(r.warnings);
     return out;
+QString AssetsApi::storeRoot()
+{
+    return AssetStorePaths::root();
+}
+
+bool AssetsApi::setStoreRoot(const QString &path, const QVariantMap &options)
+{
+    const bool move = options.value("move", false).toBool();
+    const bool force = options.value("force", false).toBool();
+
+    QString error;
+    if (!AssetStoreService::setRoot(path, move, force,
+                                    SettingsManager::getDefaultManager(),
+                                    host.db, &error)) {
+        return fail(QStringLiteral("assets.setStoreRoot: %1").arg(error));
+    }
+    return true;
+}
+
+QVariantMap AssetsApi::storeStatus()
+{
+    return AssetStoreService::status(host.db);
+}
+
+namespace
+{
+QString liveDbPath()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+        .filePath(Constants::JAH_DATABASE);
+}
+} // namespace
+
+QVariantMap AssetsApi::migrateStore(const QVariantMap &options)
+{
+    const QString dbPath = options.value("dbPath", liveDbPath()).toString();
+    const QString root = options.value("root", AssetStorePaths::root()).toString();
+    const auto report = AssetMigration::migrateStore(dbPath, root);
+    if (!report.ok) fail(QStringLiteral("assets.migrateStore: %1").arg(report.error));
+    return report.toMap();
+}
+
+QVariantMap AssetsApi::verify(const QVariantMap &options)
+{
+    const QString dbPath = options.value("dbPath", liveDbPath()).toString();
+    const QString root = options.value("root", AssetStorePaths::root()).toString();
+    const auto report = AssetMigration::verify(dbPath, root);
+    if (!report.error.isEmpty()) fail(QStringLiteral("assets.verify: %1").arg(report.error));
+    return report.toMap();
+}
+
+QVariantMap AssetsApi::rebuildCatalog(const QString &dbPath, const QVariantMap &options)
+{
+    if (dbPath.isEmpty()) {
+        fail("assets.rebuildCatalog: dbPath is required (rebuilding into the live catalog is never implied)");
+        return QVariantMap();
+    }
+    const QString root = options.value("root", AssetStorePaths::root()).toString();
+    const auto report = AssetMigration::rebuildCatalog(dbPath, root);
+    if (!report.ok) fail(QStringLiteral("assets.rebuildCatalog: %1").arg(report.error));
+    return report.toMap();
 }

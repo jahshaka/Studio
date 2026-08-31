@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "shaderassetwidget.h"
 #include "data/project.h"
+#include "services/assetstorepaths.h"
 #include <QMenu>
 #include <QEvent>
 #include <QMouseEvent>
@@ -515,13 +516,7 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 			if (type == "texture") {
 				auto value = prop.toObject()["value"].toString();
 
-				auto assetPath = IrisUtils::join(
-                    QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-					"AssetStore"
-				);
-				
-
-				const QString assetFolder = QDir(assetPath).filePath(value);
+				const QString assetFolder = AssetStorePaths::legacyFolder(value);
 				QDirIterator it(assetFolder);
 
 				while (it.hasNext()) {

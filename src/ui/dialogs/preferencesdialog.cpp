@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QTabWidget>
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 #include "ui/dialogs/preferences/mcpsettingswidget.h"
+#include "ui/dialogs/preferences/assetssettingswidget.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
 #include "ui/dialogs/aboutdialog.h"
@@ -43,6 +44,7 @@ void PreferencesDialog::setupPages()
 {
     // can we elimate this to be more permanent? why (was/is) this dynamic really?
     worldSettings = new WorldSettingsWidget(db, settings);
+    assetsSettings = new AssetsSettingsWidget(settings, db);
     mcpSettings = new McpSettingsWidget(settings);
 
     auto *tabs = new QTabWidget(this);
@@ -51,6 +53,7 @@ void PreferencesDialog::setupPages()
     // covers the tab bar, pane, page backgrounds and text defaults.
     tabs->setStyleSheet(StyleSheet::PreferencesTabs());
     tabs->addTab(worldSettings, "General");
+    tabs->addTab(assetsSettings, "Assets");
     tabs->addTab(mcpSettings, "Claude / MCP");
     ui->worldLayout->addWidget(tabs);
 }
@@ -58,6 +61,7 @@ void PreferencesDialog::setupPages()
 void PreferencesDialog::saveSettings()
 {
 	worldSettings->saveSettings();
+	if (assetsSettings) assetsSettings->saveSettings();
 	if (mcpSettings) mcpSettings->saveSettings();
 	close();
 }

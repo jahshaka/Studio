@@ -24,6 +24,7 @@ class QListWidgetItem;
 class SettingsManager;
 class WorldSettingsWidget;
 class McpSettingsWidget;
+class AssetsSettingsWidget;
 class McpServer;
 class IEditorViewport;
 class ShortcutRegistry;
@@ -56,6 +57,7 @@ public:
 
 	WorldSettingsWidget* worldSettings;
 	McpSettingsWidget* mcpSettings = nullptr;
+	AssetsSettingsWidget* assetsSettings = nullptr;
 	Database *db;
 
 protected:

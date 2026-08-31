@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "modules/materials/effectspage.h"
+#include "services/assetstorepaths.h"
 #include <QActionGroup>
 #include "graph/graphnode.h"
 #include <QMouseEvent>
@@ -309,10 +310,7 @@ void EffectsPage::importEffect(QString fileName)
 {
 	QFileInfo entryInfo(fileName);
 
-	auto assetPath = IrisUtils::join(
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-		"AssetStore"
-	);
+	auto assetPath = AssetStorePaths::root();
 
 	// create a temporary directory and extract our project into it
 	// we need a sure way to get the project name, so we have to extract it first and check the blob

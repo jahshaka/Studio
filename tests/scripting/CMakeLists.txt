@@ -139,3 +139,25 @@ set_tests_properties(scripting.e2e.video PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 120)
+
+# Relocatable store root (ASSET_PIPELINE_SPEC §3.1.1/§3.1.2 phase 1):
+# storeRoot/setStoreRoot/storeStatus round-trip — Move Store copy-verify-flip
+# with the old tree retained, offline mode (catalog usable, byte actions fail
+# cleanly), Use Existing sanity check + force, reset to default. Document
+# verbs only -> --headless. The script resets assets/storeRoot on exit
+# (jahsettings.ini beside the binary is shared across this build dir's
+# suites).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-store_root)
+set(STORE_MOVE_TARGET ${_home}/store-moved)
+set(STORE_EMPTY_TARGET ${_home}/store-empty)
+set(STAMP e2e)
+configure_file(scripts/e2e_store_root.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js @ONLY)
+file(MAKE_DIRECTORY ${_home}/run)
+file(MAKE_DIRECTORY ${STORE_EMPTY_TARGET})
+add_test(NAME scripting.e2e.store_root
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_store_root.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.store_root PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
