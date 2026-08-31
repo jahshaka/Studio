@@ -57,8 +57,9 @@ bool DragSpinBox::eventFilter(QObject* watched, QEvent* event)
     switch (event->type()) {
     case QEvent::MouseButtonPress: {
         auto mouse = static_cast<QMouseEvent*>(event);
-        // when already editing, leave the mouse to the line edit (caret, selection)
-        if (mouse->button() == Qt::LeftButton && !lineEdit()->hasFocus()) {
+        // when already editing (typing), leave the mouse to the line edit
+        // (caret, selection). editing_ — not hasFocus(): see the header note.
+        if (mouse->button() == Qt::LeftButton && !editing_) {
             pressed_ = true;
             scrubbing_ = false;
             pressGlobalPos_ = mouse->globalPosition().toPoint();
@@ -103,15 +104,29 @@ bool DragSpinBox::eventFilter(QObject* watched, QEvent* event)
         if (scrubbing_) {
             endScrub(false);
         } else {
-            // plain click: focus for typing
+            // plain click: enter editing mode, focus for typing
+            editing_ = true;
             lineEdit()->setCursor(Qt::IBeamCursor);
             lineEdit()->setFocus(Qt::MouseFocusReason);
             lineEdit()->selectAll();
         }
         return true;
     }
+    case QEvent::FocusIn: {
+        // Tab / programmatic focus for typing also counts as editing; the
+        // click-focus Qt grants during a press does not (reason = Mouse, and
+        // our release decides whether it was a click or a scrub).
+        auto focus = static_cast<QFocusEvent*>(event);
+        if (focus->reason() == Qt::TabFocusReason ||
+            focus->reason() == Qt::BacktabFocusReason) {
+            editing_ = true;
+            lineEdit()->setCursor(Qt::IBeamCursor);
+        }
+        break;
+    }
     case QEvent::FocusOut:
         // back to scrub affordance once typing ends
+        editing_ = false;
         lineEdit()->setCursor(Qt::SizeHorCursor);
         break;
     default:

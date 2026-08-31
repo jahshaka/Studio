@@ -58,6 +58,12 @@ private:
     double perPixelStep_ = 0.02;
     bool pressed_ = false;
     bool scrubbing_ = false;
+    // True only while the user is actually TYPING in the box (entered via our
+    // own click-release or Tab). NOT the same as hasFocus(): Qt hands the box
+    // click-focus BEFORE the press reaches the event filter (and the line
+    // edit's focus proxy is the spinbox), so a hasFocus() guard at press time
+    // is always true and would kill the scrub gesture.
+    bool editing_ = false;
     QPoint pressGlobalPos_;
     int lastGlobalX_ = 0;
     double startValue_ = 0;
