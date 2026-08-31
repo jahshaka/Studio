@@ -81,6 +81,15 @@ var thrown = false;
 try { materials.createFromImage("no-such-guid"); } catch (e) { thrown = true; }
 assert(thrown, "materials.createFromImage refuses a non-texture guid");
 
+// ---- 3b. the B2 graph twin: an editable Shader graph asset ----
+var shaderGuid = materials.createFromImage(texGuid, { graph: true });
+assert(shaderGuid.length > 10, "createFromImage({graph:true}) -> shader guid");
+var shaders = assets.list({ scope: "project", type: "shader" }).map(function (s) { return s.guid; });
+assert(shaders.indexOf(shaderGuid) >= 0, "graph twin registered as a project Shader asset");
+var loaded = materials.loadGraph(shaderGuid);
+assert(loaded.nodes === 3, "graph twin loads: master + texture + textureSampler (3 nodes)");
+assert(("" + loaded.master).length > 0, "graph twin has a master node");
+
 // ---- 4. it is a REAL material: applies to a mesh and survives a reopen ----
 var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 assert(material.apply(cube, companion) === true, "companion material applies to a mesh by guid");

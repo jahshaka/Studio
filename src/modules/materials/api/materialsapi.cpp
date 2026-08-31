@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include "modules/materials/models/nodemodel.h"
 #include "modules/materials/models/socketmodel.h"
 #include "modules/materials/nodes/pbrmasternode.h"
+#include "modules/materials/nodes/test.h"     // TextureNode (B2 graph twin)
 
 using namespace scriptmod;
 
@@ -90,20 +91,25 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app "
           "upgraded' recovery) and refreshes materials in the open scene that use that cache.",
           Needs::Document },
-        { "createFromImage", "materials.createFromImage(textureGuid) -> materialGuid",
+        { "createFromImage", "materials.createFromImage(textureGuid, {graph}) -> materialGuid",
           "Creates the standard image material asset for a Texture (IMAGE_PLANE_SPEC option B1): a PBR .material "
           "with the image as baseColorMap (roughness 1, metallic 0; alpha images blend), a Material→Texture "
           "dependency row and an image-derived thumbnail. Created in the library; with a project open it is also "
           "pinned into the project (bin-visible, droppable). Direct image add-to-project runs this automatically; "
-          "re-creating for the same image returns a fresh asset. NOT undoable.",
+          "re-creating for the same image returns a fresh asset. With {graph: true} (B2, needs an open project) "
+          "it instead creates an editable Shader GRAPH asset — texture → textureSampler → PbrMaster.BaseColor — "
+          "returning the shader guid (opens in the Materials page; applies via the drawer/graph.toMaterial). "
+          "NOT undoable.",
           Needs::Document },
     };
 }
 
 QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariantMap &options)
 {
-    Q_UNUSED(options);
     if (!host.db) { fail("materials: not available in this session"); return QString(); }
+
+    if (options.value("graph").toBool())
+        return createImageGraph(textureGuid);
 
     QString error;
     const QString materialGuid =
@@ -117,6 +123,74 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     if (host.project && !host.project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(materialGuid, host.db, host.project);
     return materialGuid;
+}
+
+QString MaterialsApi::createImageGraph(const QString &textureGuid)
+{
+    // IMAGE_PLANE_SPEC option B2: the graph twin — the spec's template
+    // texture → textureSampler → PbrMaster.BaseColor as an editable Shader
+    // asset. createGraph's registration shape, plus the two nodes.
+    if (!requireProject()) return QString();
+
+    const auto record = host.db->fetchAsset(textureGuid);
+    if (record.guid.isEmpty()
+        || static_cast<ModelTypes>(record.type) != ModelTypes::Texture) {
+        fail(QStringLiteral("materials.createFromImage: '%1' is not a texture asset").arg(textureGuid));
+        return QString();
+    }
+
+    const QString parentFolder = host.project->getProjectGuid();
+    QString shaderName = QFileInfo(record.name).completeBaseName();
+    const QStringList existing = host.db->fetchAssetNameByParent(parentFolder);
+    int increment = 1;
+    while (existing.contains(IrisUtils::buildFileName(shaderName, "shader")))
+        shaderName = QStringLiteral("%1 %2").arg(QFileInfo(record.name).completeBaseName()).arg(increment++);
+
+    const QString assetGuid = GUIDManager::generateGUID();
+    host.db->createAssetEntry(assetGuid, IrisUtils::buildFileName(shaderName, "shader"),
+                              static_cast<int>(ModelTypes::Shader), parentFolder,
+                              host.project->getProjectGuid());
+
+    auto *lib = new LibraryV1();
+    auto *graph = new NodeGraph;
+    graph->setNodeLibrary(lib);
+    auto *master = new PbrMasterNode();
+    graph->addNode(master);
+    graph->setMasterNode(master);
+    MaterialSettings settings;
+    settings.name = shaderName;
+    graph->setMaterialSettings(settings);
+
+    auto *texNode = static_cast<TextureNode *>(lib->createNode("texture"));
+    texNode->setTextureGuid(textureGuid);   // stored as the asset guid; resolvers go pin-first
+    graph->addNode(texNode);
+    auto *sampler = lib->createNode("textureSampler");
+    graph->addNode(sampler);
+    graph->addConnection(texNode, 0, sampler, 0);   // texture -> sampler.Texture
+    graph->addConnection(sampler, 0, master, 0);    // sampler.RGBA -> Base Color
+
+    // serializeWithBake so the stored definition carries the pbrMaterial
+    // object immediately (a bare sampler chain is Passthrough — no bake
+    // files, the image itself is the map).
+    MaterialHelper::setProjectRoot(host.project->getProjectFolder());
+    QJsonObject definition = MaterialHelper::serializeWithBake(graph, assetGuid);
+    definition["name"] = shaderName;
+    definition.insert("guid", assetGuid);
+    host.db->updateAssetAsset(assetGuid, QJsonDocument(definition).toJson());
+    host.db->createDependency(static_cast<int>(ModelTypes::Shader),
+                              static_cast<int>(ModelTypes::Texture),
+                              assetGuid, textureGuid, host.project->getProjectGuid());
+
+    auto assetShader = new AssetMaterial;
+    assetShader->fileName = shaderName;
+    assetShader->assetGuid = assetGuid;
+    assetShader->path = IrisUtils::join(host.project->getProjectFolder(),
+                                        IrisUtils::buildFileName(shaderName, "shader"));
+    assetShader->setValue(QVariant::fromValue(definition));
+    AssetManager::addAsset(assetShader);
+
+    if (mGraphApi) mGraphApi->setCurrent(graph, assetGuid);
+    return assetGuid;
 }
 
 bool MaterialsApi::regenerate(const QString &shaderGuid)

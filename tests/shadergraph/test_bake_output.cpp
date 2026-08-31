@@ -182,6 +182,52 @@ int main(int argc, char** argv)
               "tint: no baseColor value beside the baked map (no double-multiply)");
     }
 
+    // ---- 3b. uvTransform tiling (IMAGE_PLANE_SPEC option C.1): sampling ----
+    // through uv*(2,2) repeats the 2x2 fixture twice in each axis (repeat
+    // wrap), using the node's DEFAULT UV (the bake UV) and its inline-editor
+    // tiling values.
+    {
+        const QString texPath = baseDir + "/fixture2x2_uvt.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.setPixelColor(0, 0, QColor(255, 0, 0));
+        fix.setPixelColor(1, 0, QColor(0, 255, 0));
+        fix.setPixelColor(0, 1, QColor(0, 0, 255));
+        fix.setPixelColor(1, 1, QColor(255, 255, 255));
+        CHECK(fix.save(texPath), "uvTransform: 2x2 fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uvt = r.add("uvTransform");
+        QJsonObject widget;
+        widget["tileX"] = 2.0; widget["tileY"] = 2.0;
+        widget["offsetX"] = 0.0; widget["offsetY"] = 0.0;
+        uvt->deserializeWidgetValue(widget);
+        auto sampler = r.add("textureSampler");
+        r.graph->addConnection(tex, 0, sampler, 0);
+        r.graph->addConnection(uvt, 0, sampler, 1);
+        r.toMaster(sampler, 0, 0); // Base Color
+
+        auto res = bake(r, baseDir + "/uvtile", 4);
+        CHECK(res.maps.contains("baseColorMap"), "uvTransform: UV math breaks passthrough -> baked map");
+        QImage img(res.eval.values["baseColorMap"].toString());
+        img = img.convertToFormat(QImage::Format_RGBA8888);
+        CHECK(img.width() == 4 && img.height() == 4, "uvTransform: 4x4 output at bake resolution 4");
+        // texel centers land exactly on fixture texels: rows R G R G / B W B W repeat
+        CHECK(qRed(img.pixel(0, 0)) == 255 && qGreen(img.pixel(0, 0)) == 0,
+              "uvTransform: (0,0) red");
+        CHECK(qGreen(img.pixel(1, 0)) == 255 && qRed(img.pixel(1, 0)) == 0,
+              "uvTransform: (1,0) green");
+        CHECK(qRed(img.pixel(2, 0)) == 255 && qGreen(img.pixel(2, 0)) == 0,
+              "uvTransform: (2,0) red again — u wrapped (tiled)");
+        CHECK(qBlue(img.pixel(0, 1)) == 255 && qRed(img.pixel(0, 1)) == 0,
+              "uvTransform: (0,1) blue");
+        CHECK(qRed(img.pixel(0, 2)) == 255 && qBlue(img.pixel(0, 2)) == 0,
+              "uvTransform: (0,2) red again — v wrapped (tiled)");
+        CHECK(qRed(img.pixel(3, 3)) == 255 && qGreen(img.pixel(3, 3)) == 255,
+              "uvTransform: (3,3) white — the repeated fixture's corner");
+    }
+
     // ---- 4. varying alpha packs into baseColorMap.A ------------------------
     {
         Rig r;

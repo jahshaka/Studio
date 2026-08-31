@@ -420,6 +420,94 @@ int main(int argc, char** argv)
         CHECK(exact(roughnessOf(r), 0.0), "op: texelsize(no texture) 1/W == 0");
     }
 
+    // ============ IMAGE_PLANE_SPEC option C: uvTransform + texelsize aspect ============
+    {
+        Rig r; // defaults: uv * (1,1) + (0,0) == uv
+        auto op = r.add("uvTransform");
+        r.graph->addConnection(r.addVec(2, 0.25, 0.5), 0, op, 0);
+        r.toMaster(op, 0, 0);
+        auto c = baseColorOf(r);
+        CHECK(near(c["r"].toDouble(), 0.25, 1e-5) && near(c["g"].toDouble(), 0.5, 1e-5),
+              "op: uvTransform(defaults) == identity");
+    }
+    {
+        Rig r; // the inline editors are the socket defaults: uv*(2,2)+(.1,.3)
+        auto op = r.add("uvTransform");
+        QJsonObject widget;
+        widget["tileX"] = 2.0; widget["tileY"] = 2.0;
+        widget["offsetX"] = 0.1; widget["offsetY"] = 0.3;
+        op->deserializeWidgetValue(widget);
+        r.graph->addConnection(r.addVec(2, 0.25, 0.25), 0, op, 0);
+        r.toMaster(op, 0, 0);
+        auto c = baseColorOf(r);
+        CHECK(near(c["r"].toDouble(), 0.6, 1e-5) && near(c["g"].toDouble(), 0.8, 1e-5),
+              "op: uvTransform widget tiling/offset == uv*(2,2)+(.1,.3)");
+    }
+    {
+        Rig r; // a CONNECTED Tiling socket overrides the inline editor
+        auto op = r.add("uvTransform");
+        QJsonObject widget;
+        widget["tileX"] = 5.0; widget["tileY"] = 5.0;
+        widget["offsetX"] = 0.0; widget["offsetY"] = 0.0;
+        op->deserializeWidgetValue(widget);
+        r.graph->addConnection(r.addVec(2, 0.25, 0.25), 0, op, 0);
+        r.graph->addConnection(r.addVec(2, 2.0, 2.0), 0, op, 1);
+        r.toMaster(op, 0, 0);
+        auto c = baseColorOf(r);
+        CHECK(near(c["r"].toDouble(), 0.5, 1e-5) && near(c["g"].toDouble(), 0.5, 1e-5),
+              "op: connected Tiling socket overrides the inline editor");
+    }
+    {
+        // widget values survive a serialize/deserialize round-trip (the same
+        // path a saved .effect takes)
+        Rig r;
+        auto op = r.add("uvTransform");
+        QJsonObject widget;
+        widget["tileX"] = 2.0; widget["tileY"] = 2.0;
+        widget["offsetX"] = 0.1; widget["offsetY"] = 0.3;
+        op->deserializeWidgetValue(widget);
+        r.graph->addConnection(r.addVec(2, 0.25, 0.25), 0, op, 0);
+        r.toMaster(op, 0, 0);
+        const QJsonObject saved = r.graph->serialize();
+        NodeGraph* loaded = NodeGraph::deserialize(saved, new LibraryV1());
+        auto res = PbrGraphEvaluator::evaluate(loaded);
+        auto c = res.values["baseColor"].toObject();
+        CHECK(near(c["r"].toDouble(), 0.6, 1e-5) && near(c["g"].toDouble(), 0.8, 1e-5),
+              "op: uvTransform widget values survive serialize/deserialize");
+    }
+    {
+        Rig r; // texelsize Aspect (out 5): 32x64 -> W/H == 0.5
+        const QString texPath = QDir::current().absoluteFilePath("parity_tall_32x64.png");
+        QImage tall(32, 64, QImage::Format_RGBA8888);
+        tall.fill(Qt::white);
+        CHECK(tall.save(texPath), "texelsize: 32x64 fixture written");
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto op = r.add("texelsize");
+        r.graph->addConnection(tex, 0, op, 0);
+        r.toMaster(op, 5, 2); // Aspect -> Roughness
+        CHECK(exact(roughnessOf(r), 0.5), "op: texelsize Aspect(32x64) == 0.5");
+    }
+    {
+        Rig r; // texelsize 1/Aspect (out 6): 64x32 -> H/W == 0.5
+        const QString texPath = QDir::current().absoluteFilePath("parity_wide_64x32.png");
+        QImage wide(64, 32, QImage::Format_RGBA8888);
+        wide.fill(Qt::white);
+        CHECK(wide.save(texPath), "texelsize: 64x32 fixture written");
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto op = r.add("texelsize");
+        r.graph->addConnection(tex, 0, op, 0);
+        r.toMaster(op, 6, 2); // 1/Aspect -> Roughness
+        CHECK(exact(roughnessOf(r), 0.5), "op: texelsize 1/Aspect(64x32) == 0.5");
+    }
+    {
+        Rig r; // no texture: the aspect outs are 0, not inf/NaN
+        auto op = r.add("texelsize");
+        r.toMaster(op, 5, 2);
+        CHECK(exact(roughnessOf(r), 0.0), "op: texelsize Aspect(no texture) == 0");
+    }
+
     // ================= fake fragment context (approximations) =================
     {
         Rig r;

@@ -256,6 +256,10 @@ void LibraryV1::initTexture()
 		return new TexelSizeNode();
 	});
 
+	addNode("uvTransform", "UV Transform", iconPath, type, []() {
+		return new UVTransformNode();
+	});
+
 	addNode("flipbook", "Flipbook Animation", iconPath, type, []() {
 		return new FlipbookUVAnimationNode();
 	});

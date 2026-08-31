@@ -51,6 +51,9 @@ public:
                                         const QVariantMap &options = QVariantMap());
 
 private:
+    /// The {graph: true} branch of createFromImage (IMAGE_PLANE_SPEC B2).
+    QString createImageGraph(const QString &textureGuid);
+
     GraphApi *mGraphApi = nullptr;
 };
 

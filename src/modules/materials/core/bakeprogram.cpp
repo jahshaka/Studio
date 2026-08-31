@@ -295,8 +295,18 @@ const QHash<QString, EvalFn>& evalRegistry()
 			case 1: return Value(w);
 			case 2: return Value(h);
 			case 3: return Value(w > 0 ? 1.0 / w : 0.0); // unconnected -> 0, not inf
-			default: return Value(h > 0 ? 1.0 / h : 0.0);
+			case 4: return Value(h > 0 ? 1.0 / h : 0.0);
+			// The appended aspect outs (option C.2); no texture -> 0 like the
+			// reciprocals above.
+			case 5: return Value(h > 0 ? w / h : 0.0);   // Aspect (W/H)
+			default: return Value(w > 0 ? h / w : 0.0);  // 1/Aspect
 			}
+		};
+		r["uvTransform"] = [](const BakeOp&, const Value* in, const EvalContext&) {
+			// uv * tiling + offset (IMAGE_PLANE_SPEC option C.1 — Unreal's
+			// TexCoord -> Multiply -> Constant2Vector chain as one node)
+			return Value(in[0].x * in[1].x + in[2].x,
+			             in[0].y * in[1].y + in[2].y);
 		};
 		r["panner"] = [](const BakeOp&, const Value* in, const EvalContext&) {
 			// uv + speed * time
