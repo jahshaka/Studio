@@ -128,6 +128,12 @@ public:
 	void spaceSplits();
     void closeViewer();
 	void clearViewer();
+	/// Shutdown teardown: close the progress dialog, drop pending viewer
+	/// tails, stop media previews, abort a running import batch and join its
+	/// worker (bounded). Safe to call repeatedly. False when the worker did
+	/// NOT stop in time — the caller must then force the process exit rather
+	/// than tear down objects the worker still uses.
+	bool shutdownImports(int msTimeout);
 	QString getAssetType(int);
 	/// Keeps the bottom-right "Add to Project" button honest: enabled only
 	/// when a tile is current AND a project is open, with a tooltip saying

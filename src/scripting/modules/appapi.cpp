@@ -25,7 +25,19 @@ QVector<VerbInfo> AppApi::verbs() const
         { "space", "app.space(name) -> bool",
           "Switches the main window space: desktop, player, editor, materials, assets, publish. player and editor need an open project.",
           Needs::Window },
+        { "quit", "app.quit() -> bool",
+          "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
+          Needs::Window },
     };
+}
+
+bool AppApi::quit()
+{
+    if (!host.mainWindow) return fail("app: not available in this session");
+    // Deferred: let the calling script (and its undo macro) finish first.
+    QMetaObject::invokeMethod(host.mainWindow, [w = host.mainWindow]() { w->close(); },
+                              Qt::QueuedConnection);
+    return true;
 }
 
 int AppApi::desktop(int n)

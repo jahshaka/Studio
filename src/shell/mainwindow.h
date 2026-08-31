@@ -197,6 +197,19 @@ public:
     /// scene/project is open.
     bool saveProjectBlob();
 
+    /// editor.importAssets verb: starts the interactive THREADED import (the
+    /// project panel's ImportBatchRunner + progress dialog) for the given
+    /// files. Returns false when no import UI exists or a batch is running.
+    bool startInteractiveImport(const QStringList &files);
+
+    /// Orderly teardown of every background worker the window owns (import
+    /// batch + tails, MCP server, Claude chat subprocess, thumbnails). Runs
+    /// at most once; called from closeEvent and wired to aboutToQuit so the
+    /// exitApp()/QApplication::exit path is covered too. Bounded: a worker
+    /// that will not die is abandoned (the process-level force-exit guard in
+    /// main() has the final word).
+    void shutdownBackgroundWork();
+
     /// Parameterised node verbs for the scripting API: same behaviour as the
     /// deleteNode()/duplicateNode() context-menu slots but on an explicit node
     /// (and duplication is undoable via AddSceneNodeCommand).

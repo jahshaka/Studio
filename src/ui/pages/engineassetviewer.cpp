@@ -46,8 +46,9 @@ EngineAssetViewer::EngineAssetViewer(const std::shared_ptr<Engine> &engine,
 {
     mScene.reset(new EngineAssetScene(engine));
     mSource = new iris::SceneSource();
-    mProgress = new ProgressDialog();
-    mProgress->setWindowModality(Qt::WindowModal);
+    // Parented to the viewer widget: app teardown closes/destroys it. No
+    // modality — the old unparented WindowModal was inert, keep it inert.
+    mProgress = new ProgressDialog(this);
     mProgress->setRange(0, 100);
     setMouseTracking(true);              // AssetViewer: needed for mouse events
     setFocusPolicy(Qt::ClickFocus);      // AssetViewer: needed for key events

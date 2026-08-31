@@ -53,6 +53,7 @@ public:
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256);
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
+    Q_INVOKABLE bool importAssets(const QVariant &paths);
 
 private:
     int mBatchDepth = 0;

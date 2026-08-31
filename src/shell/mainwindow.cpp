@@ -114,6 +114,12 @@ For more information see the LICENSE file
 #include "viewport/editordata.h"
 #include "ui/panels/assetwidget.h"
 
+#include <QThreadPool>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <thread>
+
 #include "ui/dialogs/newprojectdialog.h"
 
 #include "ui/panels/scenehierarchywidget.h"
@@ -264,6 +270,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	restoreGeometry(settings->getValue("geometry", "").toByteArray());
 	restoreState(settings->getValue("windowState", "").toByteArray());
 
+	// Every exit path funnels through aboutToQuit (window close,
+	// exitApp()'s QApplication::exit, quitOnLastWindowClosed) — teardown of
+	// background workers must not depend on closeEvent alone.
+	connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::shutdownBackgroundWork);
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -502,7 +512,61 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	settings->setValue("geometry", saveGeometry());
 	settings->setValue("windowState", saveState());
 
+    // Orderly teardown BEFORE the window disappears: dialogs close with a
+    // window still on screen, and a mid-flight import batch is aborted and
+    // joined while the event loop can still service its commit hop. (Also
+    // wired to aboutToQuit for the exitApp()/QApplication::exit path.)
+    shutdownBackgroundWork();
+}
+
+void MainWindow::shutdownBackgroundWork()
+{
+    // Idempotent: closeEvent AND aboutToQuit both land here.
+    static bool sDone = false;
+    if (sDone) return;
+    sDone = true;
+
+    // A worker that will not die must never zombify the process: from here
+    // the whole teardown is bounded. If anything below (or Qt's/Ogre's own
+    // destruction) wedges, log and force the exit — better a logged forced
+    // exit than a headless process orphaning a "loading" dialog.
+    std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::seconds(20));
+        qWarning("shutdown watchdog: teardown exceeded 20s — forcing process exit");
+        std::fflush(nullptr);
+        std::_Exit(0);
+    }).detach();
+
+    // Import pipeline: abort batches, join workers (bounded), close the
+    // progress dialogs, drop viewer-tail queues.
+    bool workersStopped = true;
+    if (assetWidget) workersStopped &= assetWidget->shutdownImports(3000);
+    if (_assetView) workersStopped &= _assetView->shutdownImports(3000);
+
+    // The MCP endpoint must not accept requests into a half-torn-down app.
+    if (mcpServer) mcpServer->stop();
+
+    // The Claude chat subprocess: closes stdin, waits briefly, kills.
+    if (claudeChatHost) claudeChatHost->shutdown();
+
     ThumbnailGenerator::getSingleton()->shutdown();
+
+    // Reap the remaining pool workers (metadata/peaks/bake futures) so
+    // QThreadPool's exit-time wait finds an empty pool.
+    workersStopped &= QThreadPool::globalInstance()->waitForDone(3000);
+
+    if (!workersStopped) {
+        // A worker outlived its abort window. Continuing would run the rest
+        // of Qt teardown (window + services destroyed, DB closed, engine
+        // released) UNDER a thread still using those objects — an exit-time
+        // crash, and the settings are already saved by now. Stop here, on
+        // purpose and on the record: a logged forced exit beats both a
+        // zombie and a crash.
+        qWarning("shutdown: background workers did not stop in time — forcing a clean "
+                 "process exit now (settings are saved; no teardown race)");
+        std::fflush(nullptr);
+        std::_Exit(0);
+    }
 }
 
 void MainWindow::setupFileMenu()
@@ -839,6 +903,12 @@ void MainWindow::saveScene(const QString &filename, const QString &projectPath)
 {
 	Q_UNUSED(filename);
 	projectService->saveInitialScene(projectPath);
+}
+
+bool MainWindow::startInteractiveImport(const QStringList &files)
+{
+    if (!assetWidget) return false;
+    return assetWidget->importFiles(files);
 }
 
 bool MainWindow::saveProjectBlob()
@@ -2209,6 +2279,11 @@ void MainWindow::setupShortcuts()
     reg.addFixed("camera.fly", "Fly Camera (free camera)", "Camera",
                  "RMB (hold) + W/A/S/D + Q/E \xc2\xb7 Shift: 3x");
     reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
+    // Held-modifier input, like the fly keys: listed read-only, never a
+    // QShortcut. Alt ON the gizmo keeps its duplicate-while-dragging meaning
+    // (snap.altdrag below) — the gizmo hit-test runs first.
+    reg.addFixed("camera.orbit", "Orbit Around Selection", "Camera",
+                 "Alt + LMB drag (off the gizmo)");
 
     // ---- view ----
     reg.add("view.gameView", "Game View (hide editor helpers)", "View", QKeySequence(Qt::Key_G), this,

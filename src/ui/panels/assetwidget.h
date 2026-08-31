@@ -238,6 +238,17 @@ public:
     void updateNodeMaterialValues(iris::SceneNodePtr &node, QJsonObject definition);
 
     void populateAssetTree(bool initialRun);
+
+    /// Public entry to the interactive threaded import (editor.importAssets
+    /// verb; same path as the Import button and panel drops). Returns false
+    /// while a batch is already running.
+    bool importFiles(const QStringList &files);
+
+    /// Shutdown teardown: close the progress dialog, abort a running import
+    /// batch and join its worker (bounded). Safe to call repeatedly. False
+    /// when the worker did NOT stop in time — the caller must then force the
+    /// process exit rather than tear down objects the worker still uses.
+    bool shutdownImports(int msTimeout);
     void updateTree(QTreeWidgetItem* parentTreeItem, QString path);
     void generateAssetThumbnails();
     void syncTreeAndView(const QString&);

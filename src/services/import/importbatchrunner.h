@@ -23,9 +23,17 @@ For more information see the LICENSE file
 //            prepare(file 1) ──hop──▶ UI: commit(file 1), fileFinished
 //            …                        UI: finished(cancelled)
 //
-// The hop is a Qt::BlockingQueuedConnection invoke — one file is in flight at
-// a time, so a multi-file drop is one dialog counting "N of M" and the
-// staging dir of each PreparedImport lives exactly until its commit returns.
+// The hop is a queued invoke plus a semaphore the worker waits on in short
+// slices — one file is in flight at a time, so a multi-file drop is one
+// dialog counting "N of M" and the staging dir of each PreparedImport lives
+// exactly until its commit returns. The hop is SHUTDOWN-SAFE by design: a
+// worker blocked on a Qt::BlockingQueuedConnection to an event loop that has
+// stopped pumping (the app quitting) can never wake — QThreadPool's teardown
+// then waits on it forever and the process survives its own main window (the
+// owner-reported zombie). Here the worker re-checks an abort flag between
+// slices and ABANDONS the batch when it is set; the queued commit lambda
+// checks the same flag and skips, and shared_ptr ownership of the
+// PreparedImport keeps both sides memory-safe whichever runs last.
 //
 // Cancel: cancel() flips an atomic the ImportProgressFn checks — during
 // prepare the convert aborts with nothing written; during commit the spine's
@@ -33,9 +41,14 @@ For more information see the LICENSE file
 // orphaned CAS objects. Files already committed stay imported (per-file
 // transactions — matching the old sequential behavior).
 //
+// Shutdown: requestAbort() + waitForDone(ms) — see the method docs. The
+// destructor aborts and joins so a live worker can never outlive the object
+// it re-enters.
+//
 // Headless/verb imports (assets.importFile) do NOT come through here — they
 // call AssetImportService::import synchronously, dialog-free, as before.
 
+#include <QFuture>
 #include <QObject>
 #include <QVector>
 #include <atomic>
@@ -66,7 +79,19 @@ public:
     /// returns false. Safe from any thread (the dialog's Cancel button).
     void cancel() { mCancelled.store(true); }
     bool wasCancelled() const { return mCancelled.load(); }
-    bool isRunning() const { return mRunning; }
+    bool isRunning() const { return mRunning.load(); }
+
+    /// Shutdown-grade cancel: cancel PLUS abandon — the worker stops waiting
+    /// for the UI thread (the commit hop gives up within one slice), skips
+    /// the rest of the batch and exits. Queued completion lambdas that still
+    /// arrive check the flag and do nothing. Safe from any thread.
+    void requestAbort() { mCancelled.store(true); mAborted.store(true); }
+
+    /// Bounded join for the UI thread: pumps queued events (the commit hop
+    /// needs servicing to drain cleanly) until the worker exits or msTimeout
+    /// elapses. Returns true when the worker is done. Call requestAbort()
+    /// (or cancel()) first at shutdown.
+    bool waitForDone(int msTimeout);
 
 signals:
     /// A file's pipeline began (worker thread → queued to the UI).
@@ -87,8 +112,10 @@ private:
     Project *project;
     AssetImportService *mService;
     QVector<ImportRequest> mRequests;
+    QFuture<void> mFuture;
     std::atomic<bool> mCancelled { false };
-    bool mRunning = false;
+    std::atomic<bool> mAborted { false };
+    std::atomic<bool> mRunning { false };
 };
 
 #endif // IMPORTBATCHRUNNER_H

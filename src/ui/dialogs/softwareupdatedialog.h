@@ -23,7 +23,7 @@ class SoftwareUpdateDialog : public QDialog
 	Q_OBJECT
 
 public:
-	explicit SoftwareUpdateDialog(QDialog *parent = Q_NULLPTR);
+	explicit SoftwareUpdateDialog(QWidget *parent = Q_NULLPTR);
 	void setVersionNotes(QString nodes);
 	void setDownloadUrl(QString url);
 	void setType(QString string);

@@ -441,8 +441,11 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 void EffectsPage::loadGraph(QString guid)
 {
 	restoringGraph = true;
-	auto progressDialog = new ProgressDialog;
-	
+	// Parented + deleted below: this used to leak one orphanable top-level
+	// window per loadGraph call.
+	auto progressDialog = new ProgressDialog(this);
+	progressDialog->setPumpsEventLoop(true);   // synchronous graph load
+
 	progressDialog->setRange(0, 10);
 	progressDialog->setValueAndText(1, "Preparing graph");
 	progressDialog->show();
@@ -488,6 +491,7 @@ void EffectsPage::loadGraph(QString guid)
 	restoreGraphPositions(obj["shadergraph"].toObject());
 	restoringGraph = false;
 	progressDialog->close();
+	progressDialog->deleteLater();
 }
 
 void EffectsPage::exportEffect(QString guid)
