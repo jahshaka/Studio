@@ -112,6 +112,8 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     auto tileMargins = gameGridLayout->contentsMargins();
     tileMargins.setBottom(gameGridLayout->verticalSpacing());
     gameGridLayout->setContentsMargins(tileMargins);
+    // owner: the caption bar must sit flush against the image - no gap
+    gameGridLayout->setVerticalSpacing(0);
 
 
     QPixmap pixmap;

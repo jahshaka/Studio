@@ -868,9 +868,16 @@ void ProjectManager::openSampleBrowser()
 	layout1->addStretch();
 	layout1->addWidget(cancel);
 	layout1->addWidget(select);
-	cancel->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
-	select->setStyleSheet(StyleSheet::QPushButtonBlueBig());
-	wid->setStyleSheet("background: #1e1e1e; padding: 10px;");
+	// owner: no background band behind the button row; Open blue, Cancel grey.
+	// Classic keeps its big-button sheets; Qlementine uses the shared chrome spec.
+	if (ThemeManager::classicActive()) {
+		cancel->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
+		select->setStyleSheet(StyleSheet::QPushButtonBlueBig());
+	} else {
+		cancel->setStyleSheet(ThemeManager::chromeButtonSheet());
+		select->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
+	}
+	layout1->setContentsMargins(0, 10, 0, 10);
 
 	connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
 	connect(sampleList, &QListWidget::itemClicked, [=](QListWidgetItem *item) {
