@@ -35,6 +35,7 @@ class Subscriber;
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include <QButtonGroup>
+#include <QMenu>
 
 // Look into this (iKlsR) - https://stackoverflow.com/questions/19465812/how-can-i-insert-qdockwidget-as-tab
 
@@ -331,9 +332,12 @@ private:
     QHBoxLayout *filterGroupLayout;
     QComboBox *assetFilterCombo;
 
-	QButtonGroup *assetViewToggleButtonGroup;
-	QPushButton *toggleIconView;
-	QPushButton *toggleListView;
+	// Display ▾ popup (desktop popup-button pattern): the checked menu
+	// entry is the current view mode (Grid / List).
+	QPushButton *displayButton;
+	QMenu *displayMenu;
+	QAction *displayGridAction;
+	QAction *displayListAction;
 
 	QPushButton *goBackOneControl;  // goes to previous dir
 	QPushButton *goUpOneControl;    // goes to parent dir

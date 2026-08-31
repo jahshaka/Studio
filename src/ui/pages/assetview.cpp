@@ -460,7 +460,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	// network code) and the bottom Create Collection button are gone.
 	auto headerRow = new QWidget;
 	auto headerLayout = new QHBoxLayout;
-	headerLayout->setContentsMargins(6, 6, 6, 0);
+	headerLayout->setContentsMargins(6, 6, 6, 6);
 	auto localAssetsLabel = new QLabel(tr("Local Assets"));
 	localAssetsLabel->setStyleSheet("font-size: 12px; padding: 4px;");
 	auto addDrawerButton = new QPushButton("+");
@@ -487,9 +487,13 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	_splitter->setHandleWidth(1);
 
     //QWidget *_filterBar;
-    _navPane = new QWidget; 
+    _navPane = new QWidget;
     QVBoxLayout *navLayout = new QVBoxLayout;
-	navLayout->setSpacing(6);
+	// The drawers/contents trees run flush to the pane edges (owner
+	// direction, matching the tile area); only the Local Assets header row
+	// keeps its own margins.
+	navLayout->setContentsMargins(0, 0, 0, 0);
+	navLayout->setSpacing(0);
     _navPane->setLayout(navLayout);
     if (ThemeManager::classicActive())
         _navPane->setStyleSheet("background: #202020;");
@@ -717,6 +721,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	auto views = new QWidget;
 	auto viewsL = new QVBoxLayout;
+	// The tile area runs flush to its pane edges (owner direction): no
+	// inset below the filter/search row, no frame around the scroll area.
+	viewsL->setContentsMargins(0, 0, 0, 0);
+	viewsL->setSpacing(0);
 	viewsL->addWidget(emptyGrid);
 	viewsL->addWidget(fastGrid);
 	views->setLayout(viewsL);
@@ -801,7 +809,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	auto assetDropPadLayout = new QVBoxLayout;
 	QLabel *assetDropPadLabel = new QLabel("Drop an asset to import...");
 	assetDropPadLayout->setSpacing(6);
-	assetDropPadLayout->setContentsMargins(6, 6, 6, 2);
+	assetDropPadLayout->setContentsMargins(6, 6, 6, 6);
 	assetDropPadLabel->setObjectName(QStringLiteral("assetDropPadLabel"));
 	assetDropPadLabel->setAlignment(Qt::AlignHCenter);
 
@@ -822,7 +830,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     importButtons->setStyleSheet(StyleSheet::AssetViewImportButtons());
 
-	assetDropPadLayout->addWidget(importButtons);
+	// The buttons sit BELOW the drag-and-drop box (owner direction — the
+	// right-column rework had moved them inside it): importButtons joins
+	// metaLayout right after assetDropPad, not assetDropPadLayout.
 
 	updateAsset = new QPushButton("Update");
 	updateAsset->setStyleSheet("background: #3498db");
@@ -842,7 +852,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		// visible drop-target affordance (the classic dashed box was lost with
 		// the sheet kill-switch) + the shared chrome button spec
 		assetDropPad->setStyleSheet(
-			"#assetDropPad { border: 2px dashed #4a4a4a; border-radius: 6px; }");
+			"#assetDropPad { border: 2px dashed #4a4a4a; border-radius: 6px; }"
+			// With the buttons below the box the label alone gives the drop
+			// target its height — keep it a real target, not a thin strip.
+			"#assetDropPadLabel { padding: 24px 8px; }");
 		for (QPushButton *chromeBtn : { browseButton, downloadWorld, normalize,
 		                                deleteFromLibrary })
 			chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
@@ -1133,6 +1146,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	assetDropPad->setLayout(assetDropPadLayout);
 
     metaLayout->addWidget(assetDropPad);
+    metaLayout->addWidget(importButtons);
 
 	auto metadata = new QWidget;
 	auto l = new QVBoxLayout;

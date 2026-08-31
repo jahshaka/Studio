@@ -221,6 +221,20 @@ QString ThemeManager::chromeAccentButtonSheet()
         "QPushButton:disabled { background: #24384a; color: #7d8fa3; }");
 }
 
+QString ThemeManager::chromeCompactButtonSheet()
+{
+    if (s_classicActive) return QString();
+    // chromeButtonSheet at reduced height: identical palette, radius and
+    // 12px side gutters — only the vertical padding shrinks.
+    return QStringLiteral(
+        "QPushButton, QToolButton { background: #444; color: #eee;"
+        " padding: 3px 12px; border-radius: 4px; }"
+        "QPushButton:hover, QToolButton:hover { background: #555; }"
+        "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
+        "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
+        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+}
+
 void ThemeManager::switchifyMenuToggles(QMenu *menu)
 {
     if (s_classicActive || !menu) return;
