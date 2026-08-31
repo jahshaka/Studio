@@ -148,7 +148,6 @@ class TextureNode : public NodeModel
 	Q_OBJECT
 	QPushButton *texture;
 	GraphTexture* graphTexture;
-	TexturePropertyWidget *textureWidget;
 public:
 	TextureNode();
 	virtual void process(ModelContext* context) override;
@@ -157,6 +156,12 @@ public:
 	QString getTexturePath() const;
 
 	void setTexturePath(const QString& path);
+
+	// DB-backed route (§3b property migration + the panel's picker): the
+	// stored value is an asset guid; the path resolves through TextureManager
+	// when a database is behind it, and stays empty otherwise.
+	QString getTextureGuid() const;
+	void setTextureGuid(const QString& guid);
 
 	virtual QJsonValue serializeWidgetValue(int widgetIndex = 0) override;
 	virtual void deserializeWidgetValue(QJsonValue val, int widgetIndex = 0) override;

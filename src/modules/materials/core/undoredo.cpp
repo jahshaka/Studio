@@ -12,8 +12,6 @@ For more information see the LICENSE file
 #include <QPoint>
 #include <QDebug>
 
-#include "../widgets/propertylistwidget.h"
-
 
 int UndoRedo::count = 0;
 UndoRedo::UndoRedo()
@@ -245,63 +243,4 @@ void MaterialSettingsChangeCommand::redo()
 	mat->updateMaterialSettingsWidget(settings);
 }
 
-AddPropertyCommand::AddPropertyCommand(QVBoxLayout *layout, QVector<BasePropertyWidget*>&list, BasePropertyWidget *widget, int index, PropertyListWidget *pl)
-{
-	this->lay = layout;
-	this->list = &list;
-	this->wid = widget;
-	this->index = index;
-	this->propertyList = pl;
-}
-
-void AddPropertyCommand::undo()
-{
-	lay->removeWidget(wid);
-	list->removeOne(wid);
-	index--;
-	wid->setVisible(false);
-	propertyList->graph->removeProperty(wid->modelProperty);
-	propertyList->setCount(index);
-
-}
-
-void AddPropertyCommand::redo()
-{
-	lay->insertWidget(lay->count() - 1, wid); // minus one to account for stretch
-	list->append(wid);
-	wid->index = index;
-	index++;
-	wid->setVisible(true);
-	propertyList->graph->addProperty(wid->modelProperty);
-	propertyList->setCount(index);
-}
-
-DeletePropertyCommand::DeletePropertyCommand(QVBoxLayout *layout, BasePropertyWidget *wid, int index, PropertyListWidget *pl)
-{
-	this->lay = layout;
-	this->index = index;
-	this->wid = wid;
-	this->propertyList = pl;
-}
-
-void DeletePropertyCommand::undo()
-{
-	lay->insertWidget(lay->count() - 1, wid); // minus one to account for stretch
-	propertyList->referenceList.append(wid);
-	wid->index = index;
-	index++;
-	wid->setVisible(true);
-	propertyList->graph->addProperty(wid->modelProperty);
-	propertyList->setCount(index);
-}
-
-void DeletePropertyCommand::redo()
-{
-	lay->removeWidget(wid);
-	propertyList->referenceList.removeOne(wid);
-	index--;
-	wid->setVisible(false);
-	propertyList->graph->removeProperty(wid->modelProperty);
-	propertyList->setCount(index);
-}
 

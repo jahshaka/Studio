@@ -67,7 +67,7 @@ set(SRCS
 	src/modules/materials/widgets/graphicsview.cpp
 	src/modules/materials/widgets/listwidget.cpp
 	src/modules/materials/widgets/materialsettingswidget.cpp
-	src/modules/materials/widgets/propertylistwidget.cpp
+	src/modules/materials/widgets/nodepropertiespanel.cpp
 	src/modules/materials/widgets/shaderlistwidget.cpp
 	src/modules/materials/widgets/shaderassetwidget.cpp
 	src/modules/materials/widgets/treewidget.cpp
@@ -132,7 +132,7 @@ set(HEADERS
 	src/modules/materials/widgets/graphicsview.h
 	src/modules/materials/widgets/listwidget.h
 	src/modules/materials/widgets/materialsettingswidget.h
-	src/modules/materials/widgets/propertylistwidget.h
+	src/modules/materials/widgets/nodepropertiespanel.h
 	src/modules/materials/widgets/shaderlistwidget.h
 	src/modules/materials/widgets/shaderassetwidget.h
 	src/modules/materials/widgets/treewidget.h

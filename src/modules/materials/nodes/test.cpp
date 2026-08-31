@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "../propertywidgets/vectorpropertywidget.h"
 #include "ui/style/stylesheet.h"
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QDebug>
 
 SurfaceMasterNode::SurfaceMasterNode()
@@ -514,8 +515,35 @@ void TextureNode::setTexturePath(const QString& path)
 	graphTexture->path = path;
 }
 
+QString TextureNode::getTextureGuid() const
+{
+	if (graphTexture == nullptr) return QString();
+	return graphTexture->guid;
+}
+
+void TextureNode::setTextureGuid(const QString& guid)
+{
+	if (graphTexture != nullptr) {
+		TextureManager::getSingleton()->removeTexture(graphTexture);
+		delete graphTexture;
+		graphTexture = nullptr;
+	}
+
+	// resolves the path through the project database when one is set;
+	// otherwise keeps the guid with an unresolved path
+	graphTexture = TextureManager::getSingleton()->loadTextureFromGuid(guid);
+	graphTexture->guid = guid;
+
+	if (!graphTexture->path.isEmpty() && QFileInfo::exists(graphTexture->path))
+		texture->setIcon(QIcon(graphTexture->path));
+}
+
 QJsonValue TextureNode::serializeWidgetValue(int widgetIndex)
 {
+	// guid-backed textures serialize their guid (durable across machines and
+	// what DB dependency tracking wants); plain file picks keep the path
+	if (graphTexture != nullptr && !graphTexture->guid.isEmpty())
+		return graphTexture->guid;
 	return getTexturePath();
 }
 
@@ -523,9 +551,12 @@ void TextureNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 {
 	// old graphs carry "" here (the path was never saved before) — leave
 	// the node empty in that case, exactly as those files loaded before
-	auto path = val.toString();
-	if (path.isEmpty()) return;
-	setTexturePath(path);
+	auto value = val.toString();
+	if (value.isEmpty()) return;
+	if (QFileInfo::exists(value))
+		setTexturePath(value);
+	else
+		setTextureGuid(value); // an asset guid (or an app-relative preset image)
 }
 
 void TextureNode::process(ModelContext * context)

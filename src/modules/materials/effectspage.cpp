@@ -145,10 +145,12 @@ void EffectsPage::setNodeGraph(NodeGraph *graph)
     scene = newScene;
 
 
-	propertyListWidget->setNodeGraph(graph);
-
 	materialSettingsWidget->setMaterialSettings(graph->settings);
-	propertyListWidget->setStack(stack);
+
+	// §3a: the right dock follows the new scene's selection
+	nodePropertiesPanel->setGraph(graph);
+	nodePropertiesPanel->setScene(scene);
+
 	stack->clear(); // clears stack, later to add seperate routes for each node addition
 	this->graph = graph;
 
@@ -259,27 +261,6 @@ void EffectsPage::loadShadersFromDisk()
 		effects->addItem(item);
     }
 	
-}
-
-void EffectsPage::saveMaterialFile(QString filename, TexturePropertyWidget* widget)
-{
-	
-#if(EFFECT_BUILD_AS_LIB)
-	TextureManager::getSingleton()->removeTextureByGuid(widget->getValue());
-	auto tex = TextureManager::getSingleton()->importTexture(filename);
-	widget->setValue(tex->guid);
-
-#else
-
-	auto filePath = QDir().filePath(QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/Materials/Textures/");
-	if (!QDir(filePath).exists()) QDir().mkpath(filePath);
-	auto shaderFile = new QFile(filePath + guid);
-	if (shaderFile->open(QIODevice::ReadWrite)) {
-		shaderFile->write(doc.toJson());
-		shaderFile->close();
-	}
-
-#endif
 }
 
 void EffectsPage::deleteMaterialFile(QString filename)
@@ -446,10 +427,9 @@ void EffectsPage::loadGraph(QString guid)
 	auto progressDialog = new ProgressDialog;
 	
 	progressDialog->setRange(0, 10);
-	progressDialog->setValueAndText(1, "Clearing propertyList");
+	progressDialog->setValueAndText(1, "Preparing graph");
 	progressDialog->show();
-    propertyListWidget->clearPropertyList();
-	
+
 	NodeGraph *graph;
 
 #if(EFFECT_BUILD_AS_LIB)
@@ -688,7 +668,7 @@ void EffectsPage::configureStyleSheet()
 		"QScrollBar::sub-line, QScrollBar::add-line {	background: rgba(10, 0, 0, .0);}"
 	);
 
-	propertyListWidget->setStyleSheet(
+	nodePropertiesPanel->setStyleSheet(
 		"QWidget{background:rgba(32,32,32,1);}"
 	);
 
@@ -981,7 +961,6 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 
 	stack->clear();
 
-	propertyListWidget->clearPropertyList();
 	if (loadNewGraph)	loadGraphFromTemplate(preset);
 	else				setNodeGraph(graph);
 	
@@ -1007,7 +986,6 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph)
 
 void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
 {
-    propertyListWidget->clearPropertyList();
     currentShaderInformation.GUID = "";
 	NodeGraph *graph;
 	graph = importGraphFromFilePath(MaterialHelper::assetPath(preset.templatePath), false);
@@ -1060,7 +1038,7 @@ void EffectsPage::configureUI()
 	tabbedWidget = new QTabWidget;
 	graphicsView = new GraphicsView;
 	textEdit = new QTextEdit;
-	propertyListWidget = new PropertyListWidget;
+	nodePropertiesPanel = new NodePropertiesPanel;
 	nodeContainer = new QListWidget;
 	splitView = new QSplitter;
 	projectName = new QLineEdit;
@@ -1099,8 +1077,8 @@ void EffectsPage::configureUI()
 	assetsDock->setMinimumWidth(330);
 
 	textWidget->setWidget(textEdit);
-	propertyWidget->setWidget(propertyListWidget);
-	propertyListWidget->setMinimumHeight(400);
+	propertyWidget->setWidget(nodePropertiesPanel);
+	nodePropertiesPanel->setMinimumHeight(400);
 	
 	QSize currentSize(100, 100);
 
@@ -1137,33 +1115,10 @@ void EffectsPage::configureUI()
 		nodeContainer->setViewMode(QListWidget::ListMode);
 	});
 
-	connect(propertyListWidget, &PropertyListWidget::nameChanged, [=](QString name, QString id) {
-		scene->updatePropertyNodeTitle(name, id);
-	});
-
-	connect(propertyListWidget, &PropertyListWidget::texturePicked, [=](QString fileName, TexturePropertyWidget* widget) {
-		saveMaterialFile(fileName, widget);
-	});
-
-	connect(propertyListWidget, &PropertyListWidget::imageRequestedForTexture, [=](QString guid) {
-		auto assetPath = IrisUtils::join(
-            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-			"AssetStore"
-		);
-		QString assetFolder = QDir(assetPath).filePath(guid);
-
-	});
-
-	connect(propertyListWidget, &PropertyListWidget::deleteProperty, [=](QString propID) {
-		// remind nick to use thios to delete property by id
-
-	});
-
 	//connect(materialSettingsWidget, SIGNAL(settingsChanged(MaterialSettings)), sceneWidget, SLOT(setMaterialSettings(MaterialSettings)));
 	connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged, [=](MaterialSettings value) {
 	});
 	materialSettingsDock->setWidget(materialSettingsWidget);
-	propertyListWidget->installEventFilter(this);
 
 	addTabs();
 	
@@ -1368,6 +1323,23 @@ void EffectsPage::setProject(Project *project)
 	if (assetWidget) assetWidget->project = project;
 }
 
+// ---- §3a selection bridge (graph.selectNode / selectedNode / deselect) ----
+
+bool EffectsPage::selectGraphNode(const QString& nodeId)
+{
+	return scene != nullptr && scene->selectNodeById(nodeId);
+}
+
+QString EffectsPage::selectedGraphNodeId()
+{
+	return scene != nullptr ? scene->selectedNodeId() : QString();
+}
+
+void EffectsPage::deselectGraphNodes()
+{
+	if (scene != nullptr) scene->deselectAll();
+}
+
 void EffectsPage::setSceneOpenProbe(std::function<bool()> probe)
 {
 	mSceneOpenProbe = probe;
@@ -1401,48 +1373,8 @@ void EffectsPage::renameShader()
 
 bool EffectsPage::eventFilter(QObject * watched, QEvent * event)
 {
-
-	if (watched == propertyListWidget) {
-		switch (event->type()) {
-			case QEvent::MouseButtonPress: {
-				break;
-			}
-
-			case QEvent::MouseButtonRelease: {
-				break;
-			}
-
-			case QEvent::MouseMove: {
-				auto evt = static_cast<QMouseEvent*>(event);
-
-				if (evt->buttons() & Qt::LeftButton) {
-
-					auto wid = propertyListWidget->currentWidget;
-					if (!wid) return true;
-					if (!wid->pressed) return true;
-
-
-					auto drag = new QDrag(this);
-					auto mimeData = new QMimeData;
-					QByteArray arr;
-					arr.setNum(wid->index);
-					drag->setMimeData(mimeData);
-					auto p = propertyListWidget->mapToGlobal(QPoint(wid->x(), wid->y()));
-                    drag->setPixmap(wid->grab());
-					drag->setHotSpot(QPoint(wid->width()/2.0, wid->height()/2.0));
-
-					mimeData->setText(wid->modelProperty->displayName);
-					mimeData->setData("index", arr);
-					Qt::DropAction dropev = drag->exec(Qt::CopyAction); 
-				}
-
-				break;
-			}
-
-			default: break;
-		}
-	}
-
+	// (the graph-global property list and its drag-to-canvas flow died with
+	// §3b — nothing page-level to intercept any more)
 	return QObject::eventFilter(watched, event);
 }
 
@@ -1850,7 +1782,16 @@ void EffectsPage::configureConnections()
     connect(materialSettingsWidget, &MaterialSettingsWidget::settingsChanged,[=](MaterialSettings settings){
 		auto command = new MaterialSettingsChangeCommand(graph, settings, materialSettingsWidget);
 		stack->push(command);
+		nodePropertiesPanel->refreshSettings();
     });
+
+	// §3a: the panel's master/graph settings views push through the SAME
+	// undo command the left settings dock uses — one edit stack
+	connect(nodePropertiesPanel, &NodePropertiesPanel::settingsEdited, [=](MaterialSettings settings) {
+		auto command = new MaterialSettingsChangeCommand(graph, settings, materialSettingsWidget);
+		stack->push(command);
+		nodePropertiesPanel->refreshSettings();
+	});
 
     //connection for renaming item
     connect(effects->itemDelegate(), &QAbstractItemDelegate::commitData,[=](){

@@ -45,6 +45,10 @@ struct MaterialSettings {
 	BlendMode blendMode = BlendMode::Opaque;
 	CullMode cullMode = CullMode::Back;
 	RenderLayer renderLayer = RenderLayer::Opaque;
+	// MATERIALS_EVALUATOR_SPEC §2: per-material final-bake resolution
+	// (128-4096, default 1024) — serialized as "bakeResolution" and consumed
+	// by the per-texel baker; edited in the master-node panel view (§3a).
+	int bakeResolution = 1024;
 };
 
 class ModelContext

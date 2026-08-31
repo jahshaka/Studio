@@ -582,8 +582,48 @@ GraphNodeScene::GraphNodeScene(QWidget* parent) :
 	conGroup = new QGraphicsItemGroup;
 	addItem(conGroup);
 	stack = new QUndoStack;
-	
+
 	selectedNode = nullptr;
+
+	// §3a: surface selection as a model-level signal the properties panel
+	// (and the graph.selectNode verbs) can follow
+	connect(this, &QGraphicsScene::selectionChanged, this, [this]() {
+		emit nodeSelected(selectedNodeModel());
+	});
+}
+
+bool GraphNodeScene::selectNodeById(const QString& id)
+{
+	auto node = getNodeById(id);
+	if (node == nullptr)
+		return false;
+	clearSelection();
+	node->setSelected(true);
+	return true;
+}
+
+NodeModel* GraphNodeScene::selectedNodeModel()
+{
+	GraphNode* single = nullptr;
+	for (auto item : selectedItems()) {
+		if (item->type() != (int)GraphicsItemType::Node)
+			continue;
+		if (single != nullptr)
+			return nullptr; // multi-selection: no single node
+		single = static_cast<GraphNode*>(item);
+	}
+	return single != nullptr ? single->model : nullptr;
+}
+
+QString GraphNodeScene::selectedNodeId()
+{
+	auto model = selectedNodeModel();
+	return model != nullptr ? model->id : QString();
+}
+
+void GraphNodeScene::deselectAll()
+{
+	clearSelection();
 }
 
 void GraphNodeScene::undo()

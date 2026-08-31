@@ -123,6 +123,13 @@ public:
 	void deleteNode(GraphNode* node);
 	void clearDragHighlight();
 
+	// selection API (§3a): the panel and the graph.selectNode/selectedNode/
+	// deselect verbs drive selection through these
+	bool selectNodeById(const QString& id);
+	QString selectedNodeId();
+	NodeModel* selectedNodeModel();
+	void deselectAll();
+
 	// clipboard copy/paste/duplicate of the selected nodes and the
 	// connections that run between them
 	void copySelectedToClipboard();
@@ -143,6 +150,8 @@ signals:
 	void connectionRemoved(SocketConnection* connection);
 	void nodeRemoved(GraphNode* connection);
 	void nodeValueChanged(NodeModel* nodeModel, int socketIndex);
+	// exactly one node selected -> its model; empty or multi selection -> null
+	void nodeSelected(NodeModel* model);
 	void loadGraph(QListWidgetItem *item);
 	void loadGraphFromPreset(QString name);
 	void loadGraphFromPreset2(QString name);

@@ -106,6 +106,15 @@ public:
 
 	}
 
+	// The one write path (§3a panel): callers set a value through
+	// deserializeWidgetValue and then announce it here so every editor
+	// (inline node widget, properties panel, scripts) flows through the
+	// same valueChanged -> graphInvalidated pipeline.
+	void notifyValueChanged(int socketIndex = 0)
+	{
+		emit valueChanged(this, socketIndex);
+	}
+
 	static QString getEnumString(NodeCategory type);
 
 signals:

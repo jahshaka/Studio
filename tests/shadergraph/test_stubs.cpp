@@ -22,7 +22,18 @@ GraphTexture* TextureManager::createTexture()
 
 void TextureManager::removeTexture(GraphTexture* tex)
 {
-    textures.removeAt(textures.indexOf(tex));
+    int index = textures.indexOf(tex);
+    if (index >= 0) textures.removeAt(index);
+}
+
+// §3b migration: TextureNode::setTextureGuid resolves through this. The test
+// slice has no database, so mirror the real no-database branch: keep the guid,
+// leave the path unresolved.
+GraphTexture* TextureManager::loadTextureFromGuid(QString guid)
+{
+    auto tex = createTexture();
+    tex->guid = guid;
+    return tex;
 }
 
 void GraphTexture::setImage(QString path)
