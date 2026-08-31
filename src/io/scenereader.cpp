@@ -27,6 +27,9 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 
 #include "viewport/editordata.h"
 
@@ -167,6 +170,29 @@ void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcess
 	*/
 }
 
+QString SceneReader::resolveAssetPath(const QString &guid)
+{
+    if (guid.isEmpty()) return QString();
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+
+    QString path;
+    if (!useAlternativeLocation && project && !project->getProjectGuid().isEmpty())
+        path = AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
+    else
+        path = AssetCas::resolveSource(conn, root, guid);
+
+    if (path.isEmpty() && useAlternativeLocation && handle) {
+        // Preview loads may pass an explicit directory (a store view).
+        const QString name = handle->fetchAsset(guid).name;
+        if (!name.isEmpty()) {
+            const QString candidate = QDir(assetDirectory).filePath(name);
+            if (QFileInfo::exists(candidate)) path = candidate;
+        }
+    }
+    return path;
+}
+
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 {
     auto scene = iris::Scene::create();
@@ -177,10 +203,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	scene->ambientMusicGuid = sceneObj["ambientMusicGuid"].toString();
 	auto volume = sceneObj["ambientMusicVolume"].toDouble(50);
 	scene->setAmbientMusicVolume(volume);
-	auto asset = handle->fetchAsset(scene->ambientMusicGuid);
-	if (!asset.name.isEmpty()) {
-		QString fullPathToAudio = IrisUtils::join(project->getProjectFolder(), asset.name);
-		scene->setAmbientMusic(fullPathToAudio);
+	const QString ambientMusicPath = resolveAssetPath(scene->ambientMusicGuid);
+	if (!ambientMusicPath.isEmpty()) {
+		scene->setAmbientMusic(ambientMusicPath);
 		scene->startPlayingAmbientMusic();
 	}
 
@@ -214,24 +239,23 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 
 		case iris::SkyType::EQUIRECTANGULAR: {
 			QString textureGuid = scene->skyData.value("Equirectangular").value("equiSkyGuid").toString();
-			auto image = IrisUtils::join(project->getProjectFolder(), handle->fetchAsset(textureGuid).name);
+			auto image = resolveAssetPath(textureGuid);
 			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
 			break;
 		}
 
         case iris::SkyType::CUBEMAP: {
 			auto cubeDefs = scene->skyData.value("Cubemap");
-			auto front = handle->fetchAsset(cubeDefs["front"].toString()).name;
-			auto back = handle->fetchAsset(cubeDefs["back"].toString()).name;
-			auto left = handle->fetchAsset(cubeDefs["left"].toString()).name;
-			auto right = handle->fetchAsset(cubeDefs["right"].toString()).name;
-			auto top = handle->fetchAsset(cubeDefs["top"].toString()).name;
-			auto bottom = handle->fetchAsset(cubeDefs["bottom"].toString()).name;
+			auto front = resolveAssetPath(cubeDefs["front"].toString());
+			auto back = resolveAssetPath(cubeDefs["back"].toString());
+			auto left = resolveAssetPath(cubeDefs["left"].toString());
+			auto right = resolveAssetPath(cubeDefs["right"].toString());
+			auto top = resolveAssetPath(cubeDefs["top"].toString());
+			auto bottom = resolveAssetPath(cubeDefs["bottom"].toString());
 
 			QVector<QString> sides = { front, back, top, bottom, left, right };
 			for (int i = 0; i < sides.count(); ++i) {
-				QString path = IrisUtils::join(project->getProjectFolder(), sides[i]);
-				sides[i] = QFileInfo(path).isFile() ? path : QString();
+				sides[i] = QFileInfo(sides[i]).isFile() ? sides[i] : QString();
 			}
 
 			// We need at least one valid image to get some metadata from
@@ -504,13 +528,10 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
 	// Without a database handle the mesh GUID cannot be resolved to a file
 	// name; the node still loads for the ":"-prefixed built-in primitives.
-	AssetRecord asset;
-	if (handle) asset = handle->fetchAsset(nodeObj["mesh"].toString(""));
-
     QString source = nodeObj["mesh"].toString("");
 	// Keep a special reference to embedded asset primitives for now
 	if (!source.startsWith(":")) {
-        source = IrisUtils::join(assetDirectory, asset.name);
+        source = resolveAssetPath(source);
 	}
 
     int meshIndex = nodeObj["meshIndex"].toInt(0);
@@ -642,8 +663,9 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
 
     if (handle) {
-        QString textureStr = QDir(assetDirectory).filePath(handle->fetchAsset(nodeObj["texture"].toString()).name);
-        particleNode->setTexture(iris::Texture2D::load(getAbsolutePath(textureStr)));
+        const QString texturePath = resolveAssetPath(nodeObj["texture"].toString());
+        if (!texturePath.isEmpty())
+            particleNode->setTexture(iris::Texture2D::load(texturePath));
     }
 	particleNode->setVisible(nodeObj["visible"].toBool(true));
 
@@ -723,14 +745,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			const QString stored = val.toString();
 			QString path;
 			if (!stored.isEmpty()) {
-				if (handle) {
-					const QString assetName = handle->fetchAsset(stored).name;
-					if (!assetName.isEmpty()) {
-						path = useAlternativeLocation
-							? QDir(assetDirectory).filePath(assetName)
-							: IrisUtils::join(project->getProjectFolder(), assetName);
-					}
-				}
+				path = resolveAssetPath(stored);
 				if (path.isEmpty()) path = getAbsolutePath(stored);
 			}
 			mat->setValue(prop->name, path);
@@ -794,8 +809,12 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
                 auto vAsset = handle->fetchAsset(shaderDefinition["vertex_shader"].toString());
                 auto fAsset = handle->fetchAsset(shaderDefinition["fragment_shader"].toString());
 
-                if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(assetDirectory).filePath(vAsset.name);
-                if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(assetDirectory).filePath(fAsset.name);
+                const QString vPath = resolveAssetPath(shaderDefinition["vertex_shader"].toString());
+                const QString fPath = resolveAssetPath(shaderDefinition["fragment_shader"].toString());
+                if (!vPath.isEmpty()) shaderDefinition["vertex_shader"] = vPath;
+                else if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(assetDirectory).filePath(vAsset.name);
+                if (!fPath.isEmpty()) shaderDefinition["fragment_shader"] = fPath;
+                else if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(assetDirectory).filePath(fAsset.name);
                 
                 m->generate(shaderDefinition);
             }
@@ -886,6 +905,18 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, Q
 {
     auto relPath = filePath;
     filePath = this->getAbsolutePath(filePath);
+    // Pin world: project folders no longer hold asset files, so a persisted
+    // scene-relative source usually resolves to nothing. Re-home it through
+    // the catalog: the mesh asset row with the source's file name, resolved
+    // pin-first (same bytes the mesh itself loads from).
+    if ((filePath.isEmpty() || !QFileInfo::exists(filePath)) && handle && project) {
+        const QString byName = handle->fetchAssetGUIDByName(
+            QFileInfo(relPath).fileName(), project->getProjectGuid());
+        if (!byName.isEmpty()) {
+            const QString resolved = resolveAssetPath(byName);
+            if (!resolved.isEmpty()) filePath = resolved;
+        }
+    }
     extractAssetsFromAssimpScene(filePath);
 
     auto animMap = animations[filePath];

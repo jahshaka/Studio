@@ -235,13 +235,6 @@ public:
                              const QString &projectGuid,
                              const QString &parent = QString());
 
-    QString copyAsset(const ModelTypes &jafType,
-                      const QString &guid,
-                      const QMap<QString, QString> &newNames,
-                      QVector<AssetRecord> &oldAssetRecords,
-                      const QString &parent,
-					  AssetViewFilter view_filter_to,
-					  const QString &projectGuid);
 
     // EXPORT ===============================================================================
     bool createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath);

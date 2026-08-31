@@ -2339,8 +2339,13 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     QSqlQuery selectAssetQuery;
     selectAssetQuery.prepare(
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
-        "license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets WHERE project_guid = ?"
+        "license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets "
+        "WHERE project_guid = ? "
+        "   OR guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)"
     );
+    // Reference-with-pin (phase 4): pinned LIBRARY assets (project_guid empty)
+    // are project members too and must ride along in the archive snapshot.
+    selectAssetQuery.addBindValue(projectGuid);
     selectAssetQuery.addBindValue(projectGuid);
     executeAndCheckQuery(selectAssetQuery, "selectAssetQuery");
 
@@ -2404,8 +2409,11 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
 
     QSqlQuery selectDep;
     selectDep.prepare(
-		"SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies WHERE project_guid = ?"
+		"SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies "
+		"WHERE project_guid = ? "
+		"   OR depender IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)"
 	);
+    selectDep.addBindValue(projectGuid);
     selectDep.addBindValue(projectGuid);
     executeAndCheckQuery(selectDep, "selectDep");
 
@@ -3503,156 +3511,6 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     importConnection.close();
     importConnection = QSqlDatabase();
     QSqlDatabase::removeDatabase("NodeImportConnection");
-
-    tx.commit();
-    return guidToReturn;
-}
-
-QString Database::copyAsset(
-	const ModelTypes & jafType,
-	const QString & guid,
-	const QMap<QString, QString>& newNames,
-	QVector<AssetRecord> &oldAssetRecords,
-	const QString &parent,
-	AssetViewFilter view_filter_to,
-	const QString &projectGuid)
-{
-    QMap<QString, QString> assetGuids; /* old x new guid */
-    const QString guidToReturn = GUIDManager::generateGUID();
-    QVector<AssetRecord> assetsToImport;
-
-    // Row-clone set + rewritten blobs + dependencies land atomically (phase 0).
-    DbTransaction tx(db);
-
-    QStringList fullAssetList = AssetHelper::fetchAssetAndAllDependencies(guid, this);
-
-    for (const auto &asset : fullAssetList) {
-        QSqlQuery selectAssetQuery;
-        selectAssetQuery.prepare(
-            "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
-            "license, hash, version, parent, tags, properties, asset, thumbnail FROM assets WHERE guid = ?"
-        );
-        selectAssetQuery.addBindValue(asset);
-        executeAndCheckQuery(selectAssetQuery, "fetchImportAssets");
-
-        while (selectAssetQuery.next()) {
-            AssetRecord data;
-            QSqlRecord record = selectAssetQuery.record();
-
-            for (int i = 0; i < record.count(); i++) {
-                if (selectAssetQuery.value(1).toInt() == static_cast<int>(jafType)) {
-                    data.guid = guidToReturn;
-                    assetGuids.insert(record.value(0).toString(), guidToReturn);
-                }
-                else {
-                    QString guid = GUIDManager::generateGUID();
-                    assetGuids.insert(record.value(0).toString(), guid);
-                    data.guid = guid;
-                }
-
-                data.type = record.value(1).toInt();
-
-                // If we find a file with the same name, rename it (may or may not change)
-                for (const auto &name : newNames) {
-                    if (!newNames.value(record.value(2).toString()).isEmpty()) {
-                        data.name = newNames.value(record.value(2).toString());
-                    }
-                    else data.name = record.value(2).toString();
-                }
-
-                data.collection = record.value(3).toInt();
-                data.timesUsed = record.value(4).toInt();
-                data.projectGuid = projectGuid;
-                data.dateCreated = record.value(6).toDateTime();
-                data.lastUpdated = record.value(7).toDateTime();
-                data.author = record.value(8).toString();
-                data.license = record.value(9).toString();
-                data.hash = record.value(10).toString();
-                data.version = record.value(11).toString();
-                data.parent = parent;
-                data.tags = record.value(13).toByteArray();
-                data.properties = record.value(14).toByteArray();
-                data.asset = record.value(15).toByteArray();
-                data.thumbnail = record.value(16).toByteArray();
-            }
-
-            assetsToImport.push_back(data);
-        }
-    }
-
-    for (auto &asset : assetsToImport) {
-        if (asset.type == static_cast<int>(ModelTypes::Object)   ||
-			asset.type == static_cast<int>(ModelTypes::Material) ||
-			asset.type == static_cast<int>(ModelTypes::Shader))
-        {
-            auto doc = QJsonDocument::fromJson(asset.asset);
-            QString docToString = doc.toJson(QJsonDocument::Compact);
-
-            QMapIterator<QString, QString> i(assetGuids);
-            while (i.hasNext()) {
-                i.next();
-                docToString.replace(i.key(), i.value());
-            }
-
-            QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
-            asset.asset = updatedDoc.toJson();
-        }
-    }
-
-	oldAssetRecords = assetsToImport;
-
-    for (const auto &asset : assetsToImport) {
-        QSqlQuery insertAssetQuery;
-        insertAssetQuery.prepare(
-            "INSERT INTO assets"
-            " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
-            " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
-            " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
-        );
-        insertAssetQuery.bindValue(":guid", asset.guid);
-        insertAssetQuery.bindValue(":type", asset.type);
-        insertAssetQuery.bindValue(":name", asset.name);
-        insertAssetQuery.bindValue(":collection", asset.collection);
-        insertAssetQuery.bindValue(":times_used", asset.timesUsed);
-        insertAssetQuery.bindValue(":project_guid", asset.projectGuid);
-        insertAssetQuery.bindValue(":date_created", asset.dateCreated);
-        insertAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-        insertAssetQuery.bindValue(":author", asset.author);
-        insertAssetQuery.bindValue(":license", asset.license);
-        insertAssetQuery.bindValue(":hash", asset.hash);
-        insertAssetQuery.bindValue(":version", asset.version);
-        insertAssetQuery.bindValue(":parent", asset.parent);
-        insertAssetQuery.bindValue(":tags", asset.tags);
-        insertAssetQuery.bindValue(":properties", asset.properties);
-        insertAssetQuery.bindValue(":asset", asset.asset);
-        insertAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-        insertAssetQuery.bindValue(":view_filter", view_filter_to);
-        executeAndCheckQuery(insertAssetQuery, "insertAssetQuery");
-    }
-
-	QVector<DependencyRecord> dependenciesToCopy;
-	for (const auto &asset : fullAssetList) {
-		auto deps = fetchAssetDependencies(fetchAsset(asset));
-		for (const auto &dep : deps) {
-			dependenciesToCopy.append(dep);
-		}
-	}
-
-    for (const auto &dep : dependenciesToCopy) {
-		QSqlQuery exportDep;
-		exportDep.prepare(
-			"INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-			"VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-		);
-        exportDep.bindValue(":depender_type", dep.dependerType);
-        exportDep.bindValue(":dependee_type", dep.dependeeType);
-        exportDep.bindValue(":project_guid", parent);
-        exportDep.bindValue(":depender", assetGuids.value(dep.depender));
-        exportDep.bindValue(":dependee", assetGuids.value(dep.dependee));
-        exportDep.bindValue(":id", GUIDManager::generateGUID());
-        executeAndCheckQuery(exportDep, "CopyDependency");
-    }
 
     tx.commit();
     return guidToReturn;

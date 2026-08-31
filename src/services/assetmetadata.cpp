@@ -28,7 +28,9 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "data/project.h"
 #include "irisgl/core/irisutils.h"
 #include "services/videoutils.h"
@@ -259,7 +261,22 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     if (props.contains("metadata")) return props["metadata"].toObject();
 
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
-    const QJsonObject meta = computeForStore(record.type, QDir(root).filePath(guid));
+    QJsonObject meta = computeForStore(record.type, QDir(root).filePath(guid));
+    if (meta.isEmpty()) {
+        // CAS-only rows (no per-guid view on disk): describe the resolved
+        // source object directly (phase 4 — guid-first resolution).
+        const QString source = AssetCas::resolveSource(QSqlDatabase::database(), root, guid);
+        if (!source.isEmpty()) {
+            switch (static_cast<ModelTypes>(record.type)) {
+            case ModelTypes::Object:
+            case ModelTypes::Mesh: meta = forModelFile(source); break;
+            case ModelTypes::Texture: meta = forImageFile(source); break;
+            case ModelTypes::Music: meta = forAudioFile(source); break;
+            case ModelTypes::Video: meta = forVideoFile(source); break;
+            default: meta = forGenericFile(source); break;
+            }
+        }
+    }
     if (meta.isEmpty()) return meta;   // nothing to describe — don't persist a stub
     // A video block computed off the GUI thread is degraded (no QMediaPlayer
     // there) — hand it back for display but let a GUI-thread call enrich later.

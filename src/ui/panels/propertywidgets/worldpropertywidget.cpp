@@ -9,6 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -124,9 +127,10 @@ void WorldPropertyWidget::onBackgroundAmbienceChanged(int index)
 	}
 
 	auto currentGuid = ambientMusicSelector->getCurrentItemData();
-	auto asset = db->fetchAsset(currentGuid);
-	auto name = asset.name;
-	QString fullPathToAudio = IrisUtils::join(project->getProjectFolder(), name);
+	// Pin-world resolution: project pin -> library source (phase 4).
+	QString fullPathToAudio = AssetCas::resolvePinned(
+		QSqlDatabase::database(), AssetStorePaths::root(),
+		project->getProjectGuid(), currentGuid);
 
 	// Start playing here
 	scene->ambientMusicGuid = currentGuid;

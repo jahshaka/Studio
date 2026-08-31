@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
+#include "services/projectassets.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
@@ -318,135 +319,16 @@ QString AssetsApi::addToProject(const QString &guid)
     if (!host.db) { fail("assets: not available in this session"); return QString(); }
     if (!requireProject()) return QString();
 
-    const auto record = host.db->fetchAsset(guid);
-    if (record.guid.isEmpty()) {
-        fail(QStringLiteral("assets.addToProject: no asset with guid '%1'").arg(guid));
+    // Reference-with-pin (phase 4): ONE implementation for verb and widget.
+    // The project pins the asset (and its dependency closure) at its current
+    // content - no file copies, no row clones. The returned guid IS the
+    // library asset's guid.
+    const auto result = ProjectAssets::addToProject(guid, host.db, host.project);
+    if (!result.ok()) {
+        fail(QStringLiteral("assets.addToProject: %1").arg(result.error));
         return QString();
     }
-    const int aType = record.type;
-
-    // The widget's post-Toast body (assetview.cpp addAssetItemToProject):
-    // copy the store folder's files into the project (deduplicating names),
-    // register them in AssetManager, then Database::copyAsset clones the rows.
-    const QDir sourceDir(storeFolderFor(guid));
-    const auto files = sourceDir.entryInfoList(QDir::Files);
-    const QString projectFolder = host.project->getProjectFolder();
-    const QString placeHolderGuid = GUIDManager::generateGUID();
-    QVector<QPair<QString, QString>> copied;   // original name -> new name
-
-    for (const auto &file : files) {
-        QString newName = file.fileName();
-        int increment = 1;
-        while (QFileInfo::exists(QDir(projectFolder).filePath(newName)))
-            newName = QStringLiteral("%1 %2.%3").arg(file.baseName()).arg(increment++).arg(file.suffix());
-        const QString destination = QDir(projectFolder).filePath(newName);
-        QFile::copy(file.absoluteFilePath(), destination);
-        copied.append({ file.fileName(), newName });
-
-        const ModelTypes fileType = AssetHelper::getAssetTypeFromExtension(file.suffix());
-        if (fileType == ModelTypes::File) {
-            auto asset = new AssetFile;
-            asset->fileName = newName;
-            asset->assetGuid = placeHolderGuid;
-            asset->path = destination;
-            AssetManager::addAsset(asset);
-        } else if (fileType == ModelTypes::Texture) {
-            auto asset = new AssetTexture;
-            asset->fileName = newName;
-            asset->assetGuid = placeHolderGuid;
-            asset->path = destination;
-            AssetManager::addAsset(asset);
-        } else if (fileType == ModelTypes::Mesh) {
-            // No SceneSource: the loader now owns a local importer when none
-            // is passed (the old `new` here leaked the whole parsed scene).
-            auto node = iris::MeshNode::loadAsSceneFragment(
-                destination, [](iris::MeshPtr, iris::MeshMaterialData &data) {
-                    auto mat = iris::CustomMaterial::create();
-                    mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-                    mat->setValue("diffuseColor", data.diffuseColor);
-                    mat->setValue("specularColor", data.specularColor);
-                    mat->setValue("ambientColor", data.ambientColor);
-                    mat->setValue("emissionColor", data.emissionColor);
-                    mat->setValue("shininess", data.shininess);
-                    return mat;
-                });
-            if (node) {
-                auto asset = new AssetNodeObject;
-                asset->fileName = newName;
-                asset->assetGuid = placeHolderGuid;
-                asset->path = destination;
-                asset->setValue(QVariant::fromValue(node));
-                AssetManager::addAsset(asset);
-            }
-        }
-    }
-    QMap<QString, QString> newNames;
-    for (const auto &pair : copied) newNames.insert(pair.first, pair.second);
-
-    ModelTypes jafType = ModelTypes::File;
-    switch (static_cast<ModelTypes>(aType)) {
-    case ModelTypes::Material:
-    case ModelTypes::Object:
-    case ModelTypes::Texture:
-    case ModelTypes::Shader:
-    case ModelTypes::Sky:
-    case ModelTypes::ParticleSystem:
-        jafType = static_cast<ModelTypes>(aType);
-        break;
-    default: break;
-    }
-
-    QVector<AssetRecord> newRecords;
-    const QString newGuid = host.db->copyAsset(jafType, guid, newNames, newRecords,
-                                               host.project->getProjectGuid(),
-                                               AssetViewFilter::Editor,
-                                               host.project->getProjectGuid());
-
-    // Post-copy registrations, per type (the widget's tail).
-    for (auto &asset : AssetManager::getAssets()) {
-        if (asset->assetGuid != placeHolderGuid) continue;
-        if (asset->type == ModelTypes::Object) {
-            asset->assetGuid = newGuid;
-            auto node = asset->getValue().value<iris::SceneNodePtr>();
-            if (node) {
-                auto definition = QJsonDocument::fromJson(host.db->fetchAssetData(newGuid)).object();
-                AssetHelper::updateNodeMaterial(node, definition);
-            }
-        } else {
-            // Files/textures: adopt the guid of the matching copied row.
-            for (const auto &rec : newRecords)
-                if (rec.name == asset->fileName) asset->assetGuid = rec.guid;
-            if (asset->assetGuid == placeHolderGuid) asset->assetGuid = newGuid;
-        }
-    }
-
-    if (jafType == ModelTypes::Material) {
-        auto matObject = QJsonDocument::fromJson(host.db->fetchAssetData(newGuid)).object();
-        MaterialReader reader;
-        reader.setProject(host.project);
-        auto material = reader.parseMaterialTyped(matObject, host.db);
-        auto asset = new AssetMaterial;
-        asset->assetGuid = newGuid;
-        asset->setValue(QVariant::fromValue(material));
-        AssetManager::addAsset(asset);
-    } else if (jafType == ModelTypes::Shader) {
-        for (const auto &rec : newRecords) {
-            if (rec.type != static_cast<int>(ModelTypes::Shader)) continue;
-            auto assetShader = new AssetShader;
-            assetShader->assetGuid = rec.guid;
-            assetShader->fileName = QFileInfo(rec.name).baseName();
-            assetShader->setValue(QVariant::fromValue(QJsonDocument::fromJson(rec.asset).object()));
-            AssetManager::addAsset(assetShader);
-        }
-    } else if (jafType == ModelTypes::ParticleSystem) {
-        auto particleObject = QJsonDocument::fromJson(host.db->fetchAssetData(newGuid)).object();
-        auto asset = new AssetParticleSystem;
-        asset->assetGuid = newGuid;
-        asset->setValue(QVariant::fromValue(particleObject));
-        AssetManager::addAsset(asset);
-    }
-
-    return newGuid;
+    return result.guid;
 }
 
 QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
@@ -628,9 +510,10 @@ QVariantMap AssetsApi::exportRaw(const QString &guid, const QString &dir, const 
         infos.append(info);
     }
 
-    // Explicit store root: exporters never derive storage paths themselves.
-    // storeRootPath() is the canonical helper Lane A folds into AssetStorePaths.
-    LegacyStoreContentSource source(AssetMetadata::storeRootPath(), hash);
+    // The resolver-backed source (final half): entries by oid through the
+    // catalog. Library exports carry no project pin context.
+    Q_UNUSED(hash);   // oids come from the catalog, not a re-hash
+    CasContentSource source(AssetMetadata::storeRootPath());
     const auto r = RawExporter::exportAssets(infos, source, dir.trimmed());
     if (!r.ok) { fail(QStringLiteral("assets.exportRaw: %1").arg(r.error)); return out; }
 

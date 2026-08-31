@@ -117,6 +117,9 @@ set(SRCS
     src/services/assetimporter.cpp
     src/services/import/assetimportservice.cpp
     src/services/import/assetimporters.cpp
+    src/services/projectassets.cpp
+    src/services/projectarchiver.cpp
+    src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
     src/services/assetcas.cpp
     src/services/assetmigration.cpp

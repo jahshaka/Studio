@@ -73,6 +73,13 @@ public:
         useAlternativeLocation = true;
     };
 
+    /// Pin-world byte resolution (ASSET_PIPELINE_SPEC §3.1.5, phase 4):
+    /// project loads resolve guid → project pin → CAS object; preview loads
+    /// (useAlternativeLocation) resolve guid → library source, then the
+    /// explicit directory by recorded name. The flat
+    /// join(projectFolder, name) resolution is GONE.
+    QString resolveAssetPath(const QString &guid);
+
 public:
     iris::ScenePtr readScene(const QString &projectPath,
                              const QByteArray &sceneBlob,

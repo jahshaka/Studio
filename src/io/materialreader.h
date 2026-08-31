@@ -46,6 +46,11 @@ public:
 	void setSource(TextureSource texSrc, QString globalSrcFolder);
 	void setProject(Project *p) { project = p; }
 
+	/// Pin-world texture resolution (phase 4): guid → project pin → library
+	/// source → the explicit global folder by recorded name (preview loads).
+	/// The flat join(projectFolder, name) resolution is GONE.
+	QString resolveTextureGuid(const QString &guid, Database *db);
+
     void readJahShader(const QString &filePath);
     QJsonObject getParsedShader();
 

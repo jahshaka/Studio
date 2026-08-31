@@ -57,7 +57,26 @@ public:
                                          const QString &nameHint = QString()) = 0;
 };
 
-/// Today's per-guid-folder store layout (front half).
+/// The resolver-backed source (final half, phase 4): entries come from the
+/// `asset_files`/`files` catalog and point into objects/. When a project
+/// guid is given, the SOURCE role serves the project's PINNED content
+/// (spec §3.1.5 — exports materialize the bytes the project renders with).
+class CasContentSource : public ExportContentSource
+{
+public:
+    explicit CasContentSource(const QString &storeRoot,
+                              const QString &projectGuid = QString());
+
+    QVector<Entry> filesForAsset(const QString &guid,
+                                 const QString &nameHint = QString()) override;
+
+private:
+    QString root;
+    QString project;
+};
+
+/// The per-guid-folder store layout (now a hardlink VIEW of the CAS —
+/// kept for sources outside the catalog).
 class LegacyStoreContentSource : public ExportContentSource
 {
 public:

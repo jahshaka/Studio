@@ -78,6 +78,7 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetimporter.h"
 #include "services/import/assetimportservice.h"
+#include "services/projectassets.h"
 #include "services/assetmetadata.h"
 #include "services/audiopeaks.h"
 #include "services/videoutils.h"
@@ -2023,252 +2024,25 @@ void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int
 
 void AssetView::addAssetItemToProject(AssetGridItem *item)
 {
-	//auto rx = _navPane->rect().x() + viewer->rect().x();
-	//auto ry = _navPane->rect().y() + viewer->rect().y();
-	//auto rw = _navPane->rect().width() + viewer->rect().width();
-	//auto rh = viewer->rect().height() + 32;
+	// Reference-with-pin (phase 4): the twin ~250-line transcription of the
+	// verb body (flat project-folder copies + Database::copyAsset clones)
+	// died here - ProjectAssets is the one implementation.
+	const QString guid = item->metadata["guid"].toString();
+	const auto result = ProjectAssets::addToProject(guid, db, project);
+	if (!result.ok()) {
+		QMessageBox::warning(this, tr("Add to project failed"),
+		                     result.error, QMessageBox::Ok);
+		return;
+	}
 
-	//auto endRect = QRect(parent->pos().x(), parent->pos().y(), rw, rh);
 	Toast *t = new Toast(this);
 	t->showToast(
 		"Asset Added To Project",
 		QString("%1 has been added successfully to the open project.").arg(item->metadata["name"].toString()),
 		0, parent->pos(), QRect()
 	);
-
-	// get the current project working directory
-	auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), Constants::PROJECT_FOLDER);
-	auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-	auto pDir = IrisUtils::join(defaultProjectDirectory, project->getProjectGuid());
-
-	QString guid = item->metadata["guid"].toString();
-	int assetType = item->metadata["type"].toInt();
-
-    auto assetsDir = AssetStorePaths::legacyFolder(guid);
-
-    const int aType = db->fetchAsset(guid).type;
-
-    QDirIterator projectDirIterator(assetsDir, QDir::NoDotAndDotDot | QDir::Files);
-
-    QStringList fileNames;
-    while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
-
-    // Create a pair that holds the original name and the new name (if any)
-    QVector<QPair<QString, QString>> files;	/* original x new */
-
-    ModelTypes jafType = ModelTypes::Undefined;
-
-    QString placeHolderGuid = GUIDManager::generateGUID();
-
-    for (const auto &file : fileNames) {
-        QFileInfo fileInfo(file);
-		ModelTypes jafType = AssetHelper::getAssetTypeFromExtension(fileInfo.suffix().toLower());
-
-        QString pathToCopyTo = project->getProjectFolder();
-        QString fileToCopyTo = IrisUtils::join(pathToCopyTo, fileInfo.fileName());
-
-        int increment = 1;
-        QFileInfo checkFile(fileToCopyTo);
-        // If we encounter the same file, make a duplicate...
-        QString newFileName = fileInfo.fileName();
-
-        while (checkFile.exists()) {
-            QString newName = fileInfo.baseName() + " " + QString::number(increment++);
-            checkFile = QFileInfo(IrisUtils::buildFileName(
-                IrisUtils::join(pathToCopyTo, newName), fileInfo.suffix())
-            );
-            newFileName = checkFile.fileName();
-			fileToCopyTo = checkFile.absoluteFilePath();
-        }
-
-        files.push_back(QPair<QString, QString>(file, fileToCopyTo));
-        
-		bool copyFile = QFile::copy(file, fileToCopyTo);
-
-		QFileInfo newFileInfo(fileToCopyTo);
-
-        if (jafType == ModelTypes::File) {
-            auto assetFile = new AssetFile;
-            assetFile->fileName = newFileInfo.fileName();
-            assetFile->assetGuid = placeHolderGuid;
-            assetFile->path = fileToCopyTo;
-            AssetManager::addAsset(assetFile);
-        }
-
-		if (jafType == ModelTypes::Texture) {
-			auto assetTexture = new AssetTexture;
-			assetTexture->fileName = newFileInfo.fileName();
-			assetTexture->assetGuid = placeHolderGuid;
-			assetTexture->path = fileToCopyTo;
-			AssetManager::addAsset(assetTexture);
-		}
-
-		if (jafType == ModelTypes::Music) {
-			// §3: imported audio becomes selectable in the World panel's
-			// Background Ambience combo (it lists the project's Music assets).
-			auto assetMusic = new AssetMusic;
-			assetMusic->fileName = newFileInfo.fileName();
-			assetMusic->assetGuid = placeHolderGuid;
-			assetMusic->path = fileToCopyTo;
-			AssetManager::addAsset(assetMusic);
-		}
-
-        if (jafType == ModelTypes::Mesh) {
-            auto ssource = new iris::SceneSource();
-            // load mesh as scene
-            auto node = iris::MeshNode::loadAsSceneFragment(
-				fileToCopyTo,
-                [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
-            {
-                auto mat = iris::CustomMaterial::create();
-                mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
-                return mat;
-            }, ssource);
-
-            QVariant variant = QVariant::fromValue(node);
-            auto nodeAsset = new AssetNodeObject;
-			nodeAsset->fileName = newFileInfo.fileName();
-			nodeAsset->path = fileToCopyTo;
-            nodeAsset->assetGuid = placeHolderGuid;	/* temp guid */
-            nodeAsset->setValue(variant);
-            AssetManager::addAsset(nodeAsset);
-        }
-    }
-
-    QMap<QString, QString> newNames;	/* original x new */
-    for (const auto &file : files) {
-        newNames.insert(
-            QFileInfo(file.first).fileName(),
-            QFileInfo(file.second).fileName()
-        );
-    }
-
-    // We can discern most types from their extension, we don't store material files so we use the manifest
-    if (aType == static_cast<int>(ModelTypes::Material)) {
-        jafType = ModelTypes::Material;
-    }
-    else if (aType == static_cast<int>(ModelTypes::Object)) {
-        jafType = ModelTypes::Object;
-    }
-	else if (aType == static_cast<int>(ModelTypes::Texture)) {
-		jafType = ModelTypes::Texture;
-	}
-	else if (aType == static_cast<int>(ModelTypes::Music)) {
-		jafType = ModelTypes::Music;
-	}
-	else if (aType == static_cast<int>(ModelTypes::Video)) {
-		// Copies like audio/textures (ASSET_MEDIA_SPEC §1, Music precedent).
-		// No runtime AssetManager entry yet — scene playback is §3.
-		jafType = ModelTypes::Video;
-	}
-    else if (aType == static_cast<int>(ModelTypes::Shader)) {
-        jafType = ModelTypes::Shader;
-    }
-	else if (aType == static_cast<int>(ModelTypes::Sky)) {
-		jafType = ModelTypes::Sky;
-	}
-    else if (aType == static_cast<int>(ModelTypes::ParticleSystem)) {
-        jafType = ModelTypes::ParticleSystem;
-    }
-    else {
-        // Default to files since we know what archives can contain
-        jafType = ModelTypes::File;
-    }
-
-    QVector<AssetRecord> oldAssetRecords;
-
-    QString guidReturned = db->copyAsset(
-        jafType, guid, newNames,
-        oldAssetRecords, project->getProjectGuid(),
-		AssetViewFilter::Editor,
-		project->getProjectGuid()
-    );
-
-    for (auto &asset : AssetManager::getAssets()) {
-        if (asset->type == ModelTypes::File) {
-            for (const auto &record : oldAssetRecords) {
-                if (record.name == asset->fileName) {
-                    asset->assetGuid = record.guid;
-                }
-            }
-        }
-    }
-
-    if (jafType == ModelTypes::Texture || jafType == ModelTypes::Music) {
-        for (auto &asset : AssetManager::getAssets()) {
-            if (asset->assetGuid == placeHolderGuid && asset->type == jafType) {
-                asset->assetGuid = guidReturned;
-            }
-        }
-    }
-
-    if (jafType == ModelTypes::Shader) {
-        QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guidReturned));
-        QJsonObject shaderDefinition = matDoc.object();
-
-        auto assetShader = new AssetShader;
-        assetShader->assetGuid = guidReturned;
-        assetShader->fileName = db->fetchAsset(guidReturned).name;
-        assetShader->setValue(QVariant::fromValue(shaderDefinition));
-        AssetManager::addAsset(assetShader);
-    }
-    else {
-        for (const auto &asset : oldAssetRecords) {
-            if (asset.type == static_cast<int>(ModelTypes::Shader)) {
-                QJsonDocument matDoc = QJsonDocument::fromJson(asset.asset);
-                QJsonObject shaderDefinition = matDoc.object();
-
-                auto assetShader = new AssetShader;
-                assetShader->assetGuid = asset.guid;
-                assetShader->fileName = asset.name;
-                assetShader->setValue(QVariant::fromValue(shaderDefinition));
-                AssetManager::addAsset(assetShader);
-            }
-        }
-    }
-
-    if (jafType == ModelTypes::ParticleSystem) {
-        QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guidReturned));
-        QJsonObject shaderDefinition = matDoc.object();
-
-        auto assetShader = new AssetParticleSystem;
-        assetShader->assetGuid = guidReturned;
-        assetShader->fileName = db->fetchAsset(guidReturned).name;
-        assetShader->setValue(QVariant::fromValue(shaderDefinition));
-        AssetManager::addAsset(assetShader);
-    }
-
-    if (jafType == ModelTypes::Object) {
-        for (auto &asset : AssetManager::getAssets()) {
-            if (asset->assetGuid == placeHolderGuid && asset->type == ModelTypes::Object) {
-                asset->assetGuid = guidReturned;
-                auto node = asset->getValue().value<iris::SceneNodePtr>();
-                auto material = db->fetchAssetData(guidReturned);
-                auto materialObj = QJsonDocument::fromJson(material);
-                AssetHelper::updateNodeMaterial(node, materialObj.object());
-            }
-        }
-    }
-
-    if (jafType == ModelTypes::Material) {
-        QJsonDocument matDoc = QJsonDocument::fromJson(db->fetchAssetData(guidReturned));
-        QJsonObject matObject = matDoc.object();
-
-		MaterialReader reader;
-		reader.setProject(project);
-		iris::CustomMaterialPtr material = reader.parseMaterial(matObject, db);
-
-        auto assetMat = new AssetMaterial;
-        assetMat->assetGuid = guidReturned;
-        assetMat->setValue(QVariant::fromValue(material));
-        AssetManager::addAsset(assetMat);
-    }
 }
 
-// Files an asset in a drawer — the tile drag-drop and the context menu's
-// Move to ▸ both land here (ASSET_DRAWERS_SPEC §1; replaced the old Change
-// Collections dialog).
 void AssetView::moveAssetToDrawer(AssetGridItem *item, int drawerId)
 {
 	const auto guid = item->metadata["guid"].toString();

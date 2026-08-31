@@ -160,6 +160,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
+#include "services/projectarchiver.h"
 #include "services/sceneeditservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
@@ -1341,86 +1342,17 @@ void MainWindow::exportSceneAsZip()
                     );
 
     if (filePath.isEmpty() || filePath.isNull()) return;
+    if (!filePath.endsWith(".zip")) filePath += ".zip";
     if (!!scene) saveScene();
 
-    // Maybe in the future one could add a way to using an in memory database
-    // and saving that as a blob which can be put into the zip as bytes (iKlsR)
-    // prepare our export database with the current scene, use the os temp location and remove after
-    db->createExportScene(QStandardPaths::writableLocation(QStandardPaths::TempLocation),
-                          project->getProjectGuid());
-
-    // get the current project working directory
-    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-                                 Constants::PROJECT_FOLDER);
-    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-    auto pDir = IrisUtils::join(defaultProjectDirectory, "Projects", project->getProjectGuid());
-
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(pDir);
-    QDirIterator projectDirIterator(pDir,
-                                    QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
-                                    QDirIterator::Subdirectories);
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
+    // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
+    // pinned CAS objects, through the one archive implementation the
+    // project.exportArchive verb also calls.
+    const auto result = ProjectArchiver::exportArchive(db, project, filePath);
+    if (!result.ok()) {
+        QMessageBox::warning(this, tr("Export failed"), result.error, QMessageBox::Ok);
     }
-
-    // finally add our exported scene
-    zip_entry_open(zip, QString(project->getProjectGuid() + ".db").toStdString().c_str());
-    zip_entry_fwrite(
-        zip,
-        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(project->getProjectGuid() + ".db").toStdString().c_str()
-    );
-    zip_entry_close(zip);
-
-    // empty manifest
-    QTemporaryFile tempManifestFile;
-    tempManifestFile.open();
-    zip_entry_open(zip, ".manifest");
-    zip_entry_fwrite(
-        zip,
-        QFileInfo(tempManifestFile.fileName()).absoluteFilePath().toStdString().c_str()
-    );
-    zip_entry_close(zip);
-
-    // close our now exported file
-    zip_close(zip);
-
-    // remove the temporary db created
-    QDir tempFile;
-    tempFile.remove(
-        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(project->getProjectGuid() + ".db")
-                );
 }
-
 void MainWindow::setupDockWidgets()
 {
     // Hierarchy Dock

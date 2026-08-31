@@ -52,6 +52,10 @@ For more information see the LICENSE file
 #include "ui/dialogs/newprojectdialog.h"
 #include "ui/dialogs/progressdialog.h"
 #include "io/assetmanager.h"
+#include "services/assetcas.h"
+#include "services/projectarchiver.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "io/materialreader.h"
 #include "ui/dialogs/customdialog.h"
 #include "ui/style/stylesheet.h"
@@ -207,102 +211,49 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     }
 
     progressDialog->setLabelText("Importing scene....");
-    progressDialog->setValue(0);
+    progressDialog->setValue(20);
     progressDialog->show();
 
-    // get the current project working directory
-    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-                                 Constants::PROJECT_FOLDER);
-    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
-
-    // create a temporary directory and extract our project into it
-    // we need a sure way to get the project name, so we have to extract it first and check the blob
-    QTemporaryDir temporaryDir;
-    //temporaryDir.setAutoRemove(false);
-    if (temporaryDir.isValid()) {
-        zip_extract(fileName.toStdString().c_str(),
-                    temporaryDir.path().toStdString().c_str(),
-                    on_extract_entry,
-                    Q_NULLPTR);
-    }
-
-    progressDialog->setValue(20);
-
-    // iterate
-    QDirIterator projectDirIterator(temporaryDir.path(), QDir::Files | QDir::Hidden);
-    QStringList fileNames;
-    while (projectDirIterator.hasNext()) fileNames << projectDirIterator.next();
-
-    bool allowLoading = false;
-    for (const auto &name : fileNames) {
-        QFileInfo info(name);
-        if (info.fileName() == ".manifest") {
-            allowLoading = true;
-            break;
-        }
-    }
-
-    if (!db->checkIfProjectVersionSupported(QDir(temporaryDir.path()).filePath(projectBlobGuid)+".db")) {
-        allowLoading = false;
-    }
-
-    if (!allowLoading) {
+    // Pin-world archives (phase 4): ProjectArchiver imports the catalog
+    // snapshot, ingests the archive's objects CAS-first and writes fresh
+    // pins. No flat project-folder extraction exists any more.
+    const auto result = ProjectArchiver::importArchive(db, fileName);
+    if (!result.ok()) {
+        progressDialog->close();
         QMessageBox::warning(
             this,
             "Incompatible Scene format",
-            "This Scene was made with a deprecated version of Jahshaka\n"
-            "You can extract the contents manually and recreate the scene.",
+            result.error + "\nYou can extract the contents manually and recreate the scene.",
             QMessageBox::Ok
         );
-
-        progressDialog->close();
         return;
-    }
-
-    // now extract the project to the default projects directory with the name
-    auto importGuid = GUIDManager::generateGUID();
-    auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(importGuid);
-    zip_extract(fileName.toStdString().c_str(), pDir.toStdString().c_str(), Q_NULLPTR, Q_NULLPTR);
-
-    progressDialog->setValue(40);
-
-    QDir dir;
-    if (!dir.remove(QDir(pDir).filePath(projectBlobGuid + ".db"))) {
-        // let's try again shall we...
-        remove(QDir(pDir).filePath(projectBlobGuid + ".db").toStdString().c_str());
     }
 
     progressDialog->setValue(80);
 
-    QString worldName;
-    auto canOpen = db->importProject(
-        QDir(temporaryDir.path()).filePath(projectBlobGuid),
-        importGuid,
-        worldName,
-        assetGuids
-    );
+    // Imported projects land on the desktop the user is looking at. The
+    // project folder is created empty (scenes may write their own files
+    // there later; assets never do).
+    db->updateProjectDesktop(result.projectGuid, currentDesktop);
 
-    // imported projects land on the desktop the user is looking at
-    db->updateProjectDesktop(importGuid, currentDesktop);
-
-    // Update files that reference guids
+    auto pFldr = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                 Constants::PROJECT_FOLDER);
+    auto defaultProjectDirectory = settings->getValue("default_directory", pFldr).toString();
+    auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
+    QDir().mkpath(pDir);
 
     if (shouldOpen) {
-        project->setProjectPath(pDir, worldName);
-        project->setProjectGuid(importGuid);
+        project->setProjectPath(pDir, result.worldName);
+        project->setProjectGuid(result.projectGuid);
         loadProjectAssets();
-	}
-	else {
-		// This is in the else since any other time the user would get redirected
-		// and this function of similar would get delegated...
-		addImportedTileToDesktop(importGuid);
-	}
+    }
+    else {
+        addImportedTileToDesktop(result.projectGuid);
+    }
 
     progressDialog->setValue(100);
-    temporaryDir.remove();
     progressDialog->close();
 }
-
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
     auto spath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + Constants::PROJECT_FOLDER;
@@ -796,19 +747,23 @@ void ProjectManager::registerProjectSessionAssets()
 	// Session AssetManager registrations for the opening project. Mesh
 	// assets are NOT pre-parsed (see loadProjectAssets); their bytes load on
 	// demand through the readers.
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), project->getProjectGuid())) {
+	QSqlDatabase conn = QSqlDatabase::database();
+	const QString storeRoot = AssetStorePaths::root();
+	const QString projectGuid = project->getProjectGuid();
+
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::File), projectGuid)) {
 		auto assetFile = new AssetFile;
 		assetFile->fileName = asset.name;
 		assetFile->assetGuid = asset.guid;
-		assetFile->path = IrisUtils::join(project->getProjectFolder(), asset.name);
+		assetFile->path = AssetCas::resolvePinned(conn, storeRoot, projectGuid, asset.guid);
 		AssetManager::addAsset(assetFile);
 	}
 
-	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), project->getProjectGuid())) {
+	for (const auto &asset : db->fetchAssetsByType(static_cast<int>(ModelTypes::Texture), projectGuid)) {
 		auto assetTexture = new AssetTexture;
 		assetTexture->fileName = asset.name;
 		assetTexture->assetGuid = asset.guid;
-		assetTexture->path = IrisUtils::join(project->getProjectFolder(), asset.name);
+		assetTexture->path = AssetCas::resolvePinned(conn, storeRoot, projectGuid, asset.guid);
 		AssetManager::addAsset(assetTexture);
 	}
 

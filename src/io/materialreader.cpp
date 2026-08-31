@@ -27,7 +27,9 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/thumbnailmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
@@ -121,6 +123,28 @@ iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString sha
 	return mat;
 }
 
+QString MaterialReader::resolveTextureGuid(const QString &guid, Database *db)
+{
+	if (guid.isEmpty()) return QString();
+	QSqlDatabase conn = QSqlDatabase::database();
+	const QString root = AssetStorePaths::root();
+
+	QString path;
+	if (textureSource == TextureSource::Project && project && !project->getProjectGuid().isEmpty())
+		path = AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
+	else
+		path = AssetCas::resolveSource(conn, root, guid);
+
+	if (path.isEmpty() && textureSource == TextureSource::GlobalAssets && db) {
+		const QString assetName = db->fetchAsset(guid).name;
+		if (!assetName.isEmpty()) {
+			const QString candidate = IrisUtils::join(globalSourceFolder, assetName);
+			if (QFileInfo::exists(candidate)) path = candidate;
+		}
+	}
+	return path;
+}
+
 iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Database* db, bool loadTextures)
 {
 	if (matObject["materialType"].toString() == "pbr")
@@ -180,18 +204,11 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			// as a path. Resolve the guid to the project/global file the same
 			// way parseMaterial does; fall back to treating it as a path.
 			const QString stored = val.toString();
-			QString path;
-			if (!stored.isEmpty()) {
-				if (db) {
-					const QString assetName = db->fetchAsset(stored).name;
-					if (!assetName.isEmpty()) {
-						path = (textureSource == TextureSource::Project && project)
-							? IrisUtils::join(project->getProjectFolder(), assetName)
-							: IrisUtils::join(globalSourceFolder, assetName);
-					}
+				QString path;
+				if (!stored.isEmpty()) {
+					path = resolveTextureGuid(stored, db);
+					if (path.isEmpty() && QFileInfo::exists(stored)) path = stored;
 				}
-				if (path.isEmpty() && QFileInfo::exists(stored)) path = stored;
-			}
 			mat->setValue(prop->name, path);
 			break;
 		}
@@ -235,19 +252,8 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 			material->setValue(prop->name, vec);
 		}
 		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
-			if (db != nullptr) {
-				auto texGuid = valuesObj.value(prop->name).toString();
-				QString materialName = db->fetchAsset(texGuid).name;
-				QString textureStr;
-
-				if (textureSource == TextureSource::Project) textureStr = IrisUtils::join(project->getProjectFolder(), materialName);
-				else textureStr = IrisUtils::join(globalSourceFolder, materialName);
-
-				material->setValue(prop->name, !materialName.isEmpty() ? textureStr : QString());
-			}
-			else {
-				// todo: resolve textures from assets instead
-			}
+			auto texGuid = valuesObj.value(prop->name).toString();
+			material->setValue(prop->name, resolveTextureGuid(texGuid, db));
 		}
 		else {
 			// float, int, bool
@@ -282,14 +288,12 @@ QJsonObject MaterialReader::getShaderObjectFromId(QString shaderGuid, Database* 
 		auto shader = db->fetchAssetData(shaderGuid);
         QJsonObject shaderDefinition = QJsonDocument::fromJson(shader).object();
 
-		if (textureSource == TextureSource::Project) globalSourceFolder = project->getProjectFolder();
-
 		if (!shaderDefinition.isEmpty()) {
-			auto vAsset = db->fetchAsset(shaderDefinition["vertex_shader"].toString());
-			auto fAsset = db->fetchAsset(shaderDefinition["fragment_shader"].toString());
+			const QString vPath = resolveTextureGuid(shaderDefinition["vertex_shader"].toString(), db);
+			const QString fPath = resolveTextureGuid(shaderDefinition["fragment_shader"].toString(), db);
 
-			if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(globalSourceFolder).filePath(vAsset.name);
-			if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(globalSourceFolder).filePath(fAsset.name);
+			if (!vPath.isEmpty()) shaderDefinition["vertex_shader"] = vPath;
+			if (!fPath.isEmpty()) shaderDefinition["fragment_shader"] = fPath;
 
 			return shaderDefinition;
 		}
@@ -360,13 +364,14 @@ iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shad
 	auto fragmentShader = shaderObject["fragment_shader"].toString();
 
 	if (textureSource == TextureSource::GlobalAssets) {
-		QString assetPath = AssetStorePaths::legacyFolder(globalSourceFolder);
-
-		auto vAsset = db->fetchAsset(vertexShader);
-		auto fAsset = db->fetchAsset(fragmentShader);
-
-		if (!vAsset.name.isEmpty()) shaderObject["vertex_shader"] = QDir(assetPath).filePath(vAsset.name);
-		if (!fAsset.name.isEmpty()) shaderObject["fragment_shader"] = QDir(assetPath).filePath(fAsset.name);
+		// Pin world: shader source files resolve by guid through the CAS
+		// (globalSourceFolder used to be a guid joined onto the store root).
+		QSqlDatabase conn = QSqlDatabase::database();
+		const QString root = AssetStorePaths::root();
+		const QString vPath = AssetCas::resolveSource(conn, root, vertexShader);
+		const QString fPath = AssetCas::resolveSource(conn, root, fragmentShader);
+		if (!vPath.isEmpty()) shaderObject["vertex_shader"] = vPath;
+		if (!fPath.isEmpty()) shaderObject["fragment_shader"] = fPath;
 	}
 	else {
 		for (auto asset : AssetManager::getAssets()) {

@@ -15,6 +15,11 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
+#include <QFileInfo>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+
+#include "services/assetstorepaths.h"
 
 namespace {
 
@@ -30,6 +35,62 @@ QString sha256Hex(const QString &path)
 }
 
 } // namespace
+
+CasContentSource::CasContentSource(const QString &storeRoot, const QString &projectGuid)
+    : root(storeRoot), project(projectGuid)
+{
+}
+
+QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QString &guid,
+                                                                    const QString &nameHint)
+{
+    Q_UNUSED(nameHint);   // the catalog IS the name authority
+    QVector<Entry> entries;
+    if (guid.isEmpty()) return entries;
+
+    QSqlDatabase conn = QSqlDatabase::database();
+
+    // The project's pinned source, when exporting in project context.
+    QString pin;
+    if (!project.isEmpty()) {
+        QSqlQuery pinQuery(conn);
+        pinQuery.prepare("SELECT oid_pin FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+        pinQuery.addBindValue(project);
+        pinQuery.addBindValue(guid);
+        if (pinQuery.exec() && pinQuery.next()) pin = pinQuery.value(0).toString();
+    }
+
+    QSqlQuery files(conn);
+    files.prepare("SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
+                  "ORDER BY AF.role, AF.name");
+    files.addBindValue(guid);
+    files.exec();
+    while (files.next()) {
+        Entry e;
+        e.role = files.value(0).toString();
+        e.name = files.value(1).toString();
+        e.oid = files.value(2).toString();
+        e.size = files.value(3).toLongLong();
+        QString ext = files.value(4).toString();
+
+        if (e.role == QStringLiteral("source") && !pin.isEmpty() && pin != e.oid) {
+            QSqlQuery pinned(conn);
+            pinned.prepare("SELECT size, ext FROM files WHERE oid = ?");
+            pinned.addBindValue(pin);
+            if (pinned.exec() && pinned.next()) {
+                e.oid = pin;
+                e.size = pinned.value(0).toLongLong();
+                ext = pinned.value(1).toString();
+            }
+        }
+
+        e.path = AssetStorePaths::objectPathIn(root, e.oid, ext);
+        if (!QFileInfo::exists(e.path)) continue;   // offline/purged object
+        entries.append(e);
+    }
+    return entries;
+}
 
 LegacyStoreContentSource::LegacyStoreContentSource(const QString &storeRoot, bool computeHashes,
                                                    const QString &fallbackDir)

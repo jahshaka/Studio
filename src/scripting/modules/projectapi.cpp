@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/projectservice.h"
 #include "services/services.h"
 #include "ui/pages/projectmanager.h"
+#include "services/projectarchiver.h"
 
 QVector<VerbInfo> ProjectApi::verbs() const
 {
@@ -78,6 +79,14 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "<project>/exports. The catalog half of the unified export (ASSET_PIPELINE_SPEC §3.3); "
           "project.exportArchive materializes the files in the final half.",
           Needs::Document },
+        { "exportArchive", "project.exportArchive(path) -> {path, assets, objects}",
+          "Exports the open project as a self-contained archive: catalog snapshot + manifest v2 + the "
+          "pinned CAS objects. A reference-based project leaves the machine whole.",
+          Needs::Document },
+        { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects}",
+          "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins. "
+          "Does not open it.",
+          Needs::Document },    
     };
 }
 
@@ -324,10 +333,9 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
     }
     if (infos.isEmpty()) { fail("project.exportManifest: the project has no assets"); return out; }
 
-    // Project rows resolve name-keyed against the flat project folder when
-    // they have no store folder — today's actual join, dies with the resolver.
-    LegacyStoreContentSource source(AssetMetadata::storeRootPath(), true,
-                                    host.project->getProjectFolder());
+    // The resolver-backed source (final half): entries by oid through the
+    // catalog, source role at the project's pinned content.
+    CasContentSource source(AssetMetadata::storeRootPath(), projectGuid);
     const auto r = RawExporter::exportAssets(infos, source, outDir,
                                              QStringLiteral("project"), /*copyFiles=*/false);
     if (!r.ok) { fail(QStringLiteral("project.exportManifest: %1").arg(r.error)); return out; }
@@ -337,5 +345,35 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
     out["assets"] = r.assetCount;
     out["totalBytes"] = r.totalBytes;
     out["warnings"] = QVariant(r.warnings);
+    return out;
+}
+
+QVariantMap ProjectApi::exportArchive(const QString &path)
+{
+    QVariantMap out;
+    if (!requireProject()) return out;
+    if (!host.db) { fail("project.exportArchive: no database in this session"); return out; }
+    if (path.trimmed().isEmpty()) { fail("project.exportArchive: a destination path is required"); return out; }
+
+    const auto r = ProjectArchiver::exportArchive(host.db, host.project, path);
+    if (!r.ok()) { fail(QStringLiteral("project.exportArchive: %1").arg(r.error)); return out; }
+    out["path"] = r.path;
+    out["assets"] = r.assets;
+    out["objects"] = r.objects;
+    return out;
+}
+
+QVariantMap ProjectApi::importArchive(const QString &path)
+{
+    QVariantMap out;
+    if (!host.db) { fail("project.importArchive: no database in this session"); return out; }
+    if (path.trimmed().isEmpty()) { fail("project.importArchive: an archive path is required"); return out; }
+
+    const auto r = ProjectArchiver::importArchive(host.db, path);
+    if (!r.ok()) { fail(QStringLiteral("project.importArchive: %1").arg(r.error)); return out; }
+    out["guid"] = r.projectGuid;
+    out["name"] = r.worldName;
+    out["assets"] = r.assets;
+    out["objects"] = r.objects;
     return out;
 }

@@ -312,8 +312,6 @@ protected slots:
     void createFolder();
     void importAssetB();
     void importAsset(const QStringList &path);
-    void importRegularAssets(const QList<directory_tupleA>&);
-    void importJafAssets(const QList<directory_tupleA>&);
 
     void onThumbnailResult(ThumbnailResult* result);
 
