@@ -309,11 +309,14 @@ void NodePropertiesPanel::showNode(NodeModel* node)
 
 void NodePropertiesPanel::rebuildNodeEditors()
 {
-	// drop the previous editors (everything but the trailing stretch)
+	// drop the previous editors (everything but the trailing stretch);
+	// hide before deleteLater so findChildren/visibility never see stale rows
 	while (mEditorLayout->count() > 1) {
 		auto item = mEditorLayout->takeAt(0);
-		if (item->widget() != nullptr)
+		if (item->widget() != nullptr) {
+			item->widget()->hide();
 			item->widget()->deleteLater();
+		}
 		delete item;
 	}
 	mNumberBoxes.clear();

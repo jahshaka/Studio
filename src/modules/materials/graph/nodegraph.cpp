@@ -214,7 +214,8 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 	auto propList = graphObj["properties"].toArray();
 	for (auto propObj : propList) {
 		auto prop = Property::parse(propObj.toObject());
-		graph->addProperty(prop);
+		if (prop != nullptr) // unknown/absent type parses to null
+			graph->addProperty(prop);
 	}
 
 	// read nodes
