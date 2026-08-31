@@ -12,12 +12,53 @@ For more information see the LICENSE file
 #ifndef PUBLISHMODULE_H
 #define PUBLISHMODULE_H
 
-// PublishModule — the first born-native StudioModule (audit §6.3.3): the
-// cheapest possible proof of the module pattern. Today it owns only the
-// Publish page stub; the publishing targets (web/glTF export first —
-// jahshaka-web-export direction) land inside this module, verbs first.
+// PublishModule — owns the Publish page. First real target: Web (WebGPU
+// viewer), per WEB_EXPORT_AUDIT §7.6: "Process" runs the same
+// ExportService::exportWeb seam as the `project.exportWeb` verb, then opens
+// the export in a detected Chromium-family browser as an owned `--app`
+// companion window (PreviewLauncher); "Open in browser" is the always-shown
+// fallback, "Show folder" opens the export directory.
+
+#include <QPointer>
+#include <QWidget>
 
 #include "modules/studiomodule.h"
+
+class QLabel;
+class QPushButton;
+class QProcess;
+
+class PublishPage : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit PublishPage(ModuleHost host, QWidget *parent = nullptr);
+
+protected:
+    void showEvent(QShowEvent *event) override;
+
+private slots:
+    void onProcess();
+    void onOpenBrowser();
+    void onOpenFolder();
+
+private:
+    QString exportDir() const;
+    QString lastIndexHtml() const;
+    void refreshState();
+    void setStatus(const QString &text, bool isError = false);
+    void closePreview();
+
+    ModuleHost host;
+    QLabel *statusLabel = nullptr;
+    QLabel *detailLabel = nullptr;
+    QLabel *dirLabel = nullptr;
+    QPushButton *processButton = nullptr;
+    QPushButton *browserButton = nullptr;
+    QPushButton *folderButton = nullptr;
+    QPointer<QProcess> preview;
+    bool previewRunning = false;
+};
 
 class PublishModule : public StudioModule
 {
