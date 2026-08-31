@@ -55,6 +55,9 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
 #include "services/projectassets.h"
+#include "services/assetcas.h"
+#include <QSqlDatabase>
+#include "io/ziphelper.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 #include "services/subscriber.h"
@@ -64,6 +67,19 @@ For more information see the LICENSE file
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
 #include <QActionGroup>
+
+namespace {
+// Pin-world byte resolution for the .jaf exporters (phase 4): an asset's
+// bytes live in the CAS, addressed through the project pin - the flat
+// project folder holds nothing.
+QString resolvePinnedAssetPath(Project *project, const QString &assetGuid, QString *nameOut)
+{
+    return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                   project ? project->getProjectGuid() : QString(),
+                                   assetGuid, nameOut);
+}
+} // namespace
+
 
 AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), ui(new Ui::AssetWidget)
 {
@@ -849,57 +865,17 @@ void AssetWidget::exportSky()
 
     for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db))
     {
-        auto asset = db->fetchAsset(assetGuid);
-        auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
-        QFileInfo assetInfo(assetPath);
-        if (assetInfo.exists())
-        {
-            QFile::copy(
-                IrisUtils::join(assetPath),
-                IrisUtils::join(writePath, "assets", assetInfo.fileName()));
-        }
+        QString name;
+        const QString assetPath = resolvePinnedAssetPath(project, assetGuid, &name);
+        if (assetPath.isEmpty()) continue;
+        if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
+        if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
+        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
     }
 
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(
-        writePath,
-        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden, QDirIterator::Subdirectories);
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext())
-        fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++)
-    {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir())
-        {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str());
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else
-        {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str());
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // close our now exported file
-    zip_close(zip);
+    // ONE zip loop (amendment 7): the shared helper replaces the
+    // hand-rolled zip_entry sweep this site duplicated.
+    ZipHelper::zipDirectory(writePath, filePath);
 }
 
 void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
@@ -1166,58 +1142,17 @@ void AssetWidget::exportTexture()
     if (exportCustomShader) fullFileList.append(db->fetchAssetAndDependencies(shaderGuid));
 
     for (const auto &asset : fullFileList) {
-        QFile::copy(
-            IrisUtils::join(project->getProjectFolder(), asset),
-            IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-        );
+        // Name-listed dependency files resolve name -> guid -> pinned bytes.
+        const QString depGuid = db->fetchAssetGUIDByName(asset, project->getProjectGuid());
+        const QString assetPath = depGuid.isEmpty() ? QString()
+                                                    : resolvePinnedAssetPath(project, depGuid, nullptr);
+        if (assetPath.isEmpty()) continue;
+        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName()));
     }
 
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(writePath,
-        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
-        QDirIterator::Subdirectories);
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    //ZipWrapper exportNode("path", "read / write", "folder / file list");
-    //exportNode.setOutputPath();
-    //exportNode.setMode();
-    //exportNode.setCompressionLevel();
-    //exportNode.setFolder();
-    //exportNode.setFileList();
-    //exportNode.createArchive();
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // close our now exported file
-    zip_close(zip);
+    // ONE zip loop (amendment 7): the shared helper replaces the
+    // hand-rolled zip_entry sweep this site duplicated.
+    ZipHelper::zipDirectory(writePath, filePath);
 }
 
 void AssetWidget::exportMaterial()
@@ -1263,59 +1198,18 @@ void AssetWidget::exportMaterial()
     }
     if (exportCustomShader) fullFileList.append(db->fetchAssetAndDependencies(shaderGuid));
 
-	for (const auto &asset : fullFileList) {
-		QFile::copy(
-			IrisUtils::join(project->getProjectFolder(), asset),
-			IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName())
-		);
-	}
+    for (const auto &asset : fullFileList) {
+        // Name-listed dependency files resolve name -> guid -> pinned bytes.
+        const QString depGuid = db->fetchAssetGUIDByName(asset, project->getProjectGuid());
+        const QString assetPath = depGuid.isEmpty() ? QString()
+                                                    : resolvePinnedAssetPath(project, depGuid, nullptr);
+        if (assetPath.isEmpty()) continue;
+        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", QFileInfo(asset).fileName()));
+    }
 
-	// get all the files and directories in the project working directory
-	QDir workingProjectDirectory(writePath);
-	QDirIterator projectDirIterator(writePath,
-		QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs,
-		QDirIterator::Subdirectories);
-
-	QVector<QString> fileNames;
-	while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-	//ZipWrapper exportNode("path", "read / write", "folder / file list");
-	//exportNode.setOutputPath();
-	//exportNode.setMode();
-	//exportNode.setCompressionLevel();
-	//exportNode.setFolder();
-	//exportNode.setFileList();
-	//exportNode.createArchive();
-
-	// open a basic zip file for writing, maybe change compression level later (iKlsR)
-	struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-	for (int i = 0; i < fileNames.count(); i++) {
-		QFileInfo fInfo(fileNames[i]);
-
-		// we need to pay special attention to directories since we want to write empty ones as well
-		if (fInfo.isDir()) {
-			zip_entry_open(
-				zip,
-				/* will only create directory if / is appended */
-				QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
-		else {
-			zip_entry_open(
-				zip,
-				workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-			);
-			zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-		}
-
-		// we close each entry after a successful write
-		zip_entry_close(zip);
-	}
-
-	// close our now exported file
-	zip_close(zip);
+    // ONE zip loop (amendment 7): the shared helper replaces the
+    // hand-rolled zip_entry sweep this site duplicated.
+    ZipHelper::zipDirectory(writePath, filePath);
 }
 
 void AssetWidget::exportMaterialPreview()
@@ -1385,56 +1279,17 @@ void AssetWidget::exportShader()
     manifest.close();
 
     for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-        auto asset = db->fetchAsset(assetGuid);
-        auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
-        QFileInfo assetInfo(assetPath);
-        if (assetInfo.exists()) {
-            QFile::copy(
-                IrisUtils::join(assetPath),
-                IrisUtils::join(writePath, "assets", assetInfo.fileName())
-            );
-        }
+        QString name;
+        const QString assetPath = resolvePinnedAssetPath(project, assetGuid, &name);
+        if (assetPath.isEmpty()) continue;
+        if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
+        if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
+        QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
     }
 
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(
-        writePath,
-        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden, QDirIterator::Subdirectories
-    );
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // close our now exported file
-    zip_close(zip);
+    // ONE zip loop (amendment 7): the shared helper replaces the
+    // hand-rolled zip_entry sweep this site duplicated.
+    ZipHelper::zipDirectory(writePath, filePath);
 }
 
 void AssetWidget::exportAssetPack()
@@ -1478,58 +1333,23 @@ void AssetWidget::exportAssetPack()
         assetDir.mkpath(guid);
 
         for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-            auto asset = db->fetchAsset(assetGuid);
-            auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
-            QFileInfo assetInfo(assetPath);
+            QString name;
+            const QString assetPath = resolvePinnedAssetPath(project, assetGuid, &name);
+            if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
+            if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
 
-            if (assetInfo.exists()) {
+            if (!assetPath.isEmpty()) {
                 QFile::copy(
                     IrisUtils::join(assetPath),
-                    IrisUtils::join(assetDir.absolutePath(), guid, assetInfo.fileName())
+                    IrisUtils::join(assetDir.absolutePath(), guid, name)
                 );
             }
         }
     }
 
-    // get all the files and directories in the project working directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(writePath,
-        QDir::NoDotAndDotDot | QDir::Files |
-        QDir::Dirs | QDir::Hidden,
-        QDirIterator::Subdirectories);
-
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // close our now exported file
-    zip_close(zip);
+    // ONE zip loop (amendment 7): the shared helper replaces the
+    // hand-rolled zip_entry sweep this site duplicated.
+    ZipHelper::zipDirectory(writePath, filePath);
 }
 
 void AssetWidget::searchAssets(QString searchString)

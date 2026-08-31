@@ -59,6 +59,7 @@ For more information see the LICENSE file
 #include "services/thumbnailgenerator.h"
 #include "bridge/enginehost.h"
 #include "io/assetmanager.h"
+#include "io/ziphelper.h"
 #include "io/materialreader.h"
 #include "io/scenereader.h"
 #include "io/scenewriter.h"
@@ -864,60 +865,19 @@ void SceneEditService::exportNodeTo(const iris::SceneNodePtr &node, ModelTypes m
 
     for (const auto &guid : assetGuids) {
         for (const auto &assetGuid : AssetHelper::fetchAssetAndAllDependencies(guid, db)) {
-            auto asset = db->fetchAsset(assetGuid);
-            auto assetPath = QDir(project->getProjectFolder()).filePath(asset.name);
-            QFileInfo assetInfo(assetPath);
-            if (assetInfo.exists()) {
-                QFile::copy(
-                    IrisUtils::join(assetPath),
-                    IrisUtils::join(writePath, "assets", assetInfo.fileName())
-                );
-            }
+            // Pin world (phase 4): bytes resolve through the project pin /
+            // library source — the flat project folder holds no assets.
+            QString name;
+            const QString assetPath = AssetCas::resolvePinned(
+                QSqlDatabase::database(), AssetStorePaths::root(),
+                project->getProjectGuid(), assetGuid, &name);
+            if (assetPath.isEmpty()) continue;
+            if (name.isEmpty()) name = db->fetchAsset(assetGuid).name;
+            if (name.isEmpty()) name = QFileInfo(assetPath).fileName();
+            QFile::copy(assetPath, IrisUtils::join(writePath, "assets", name));
         }
     }
 
-    // Get all the files and directories in the temporary directory
-    QDir workingProjectDirectory(writePath);
-    QDirIterator projectDirIterator(
-        writePath,
-        QDir::NoDotAndDotDot | QDir::Files | QDir::Dirs | QDir::Hidden,
-        QDirIterator::Subdirectories
-    );
-
-    // Create a zipped archive containing
-    // - A manifest (might be hidden when extracted on some platforms)
-    // - A sqlite blob
-    // - An assets folder containing textures, models, files etc
-    QVector<QString> fileNames;
-    while (projectDirIterator.hasNext()) fileNames.push_back(projectDirIterator.next());
-
-    // open a basic zip file for writing, maybe change compression level later (iKlsR)
-    struct zip_t *zip = zip_open(filePath.toStdString().c_str(), ZIP_DEFAULT_COMPRESSION_LEVEL, 'w');
-
-    for (int i = 0; i < fileNames.count(); i++) {
-        QFileInfo fInfo(fileNames[i]);
-
-        // we need to pay special attention to directories since we want to write empty ones as well
-        if (fInfo.isDir()) {
-            zip_entry_open(
-                zip,
-                /* will only create directory if / is appended */
-                QString(workingProjectDirectory.relativeFilePath(fileNames[i]) + "/").toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-        else {
-            zip_entry_open(
-                zip,
-                workingProjectDirectory.relativeFilePath(fileNames[i]).toStdString().c_str()
-            );
-            zip_entry_fwrite(zip, fileNames[i].toStdString().c_str());
-        }
-
-        // we close each entry after a successful write
-        zip_entry_close(zip);
-    }
-
-    // close our now exported file
-    zip_close(zip);
+    // ONE zip loop (amendment 7): shared helper.
+    ZipHelper::zipDirectory(writePath, filePath);
 }
