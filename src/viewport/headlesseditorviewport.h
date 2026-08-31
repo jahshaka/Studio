@@ -64,7 +64,8 @@ public:
     {
         if (!mEditorData) mEditorData = new EditorData();
         mEditorData->editorCamera = mEditorCam;
-        mEditorData->showLightWires = false;
+        mEditorData->showLightWires = true;   // matches the editor default —
+        // a scene saved from a headless run must not bake light wires OFF
         mEditorData->showDebugDrawFlags = false;
         return mEditorData;
     }

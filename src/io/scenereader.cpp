@@ -111,7 +111,9 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     auto editorData = new EditorData();
     editorData->editorCamera = camera;
     editorData->distFromPivot = (float)camObj["distanceFromPivot"].toDouble(5.0f);
-    editorData->showLightWires = editorObj["showLightWires"].toBool();
+    // Light wires default ON (owner 2026-08-31): scenes saved before the flag
+    // existed read back true; an explicitly saved false is honored.
+    editorData->showLightWires = editorObj["showLightWires"].toBool(true);
 	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool();
     // Grid defaults ON: scenes saved before the grid existed read back true.
     editorData->showGrid = editorObj["showGrid"].toBool(true);

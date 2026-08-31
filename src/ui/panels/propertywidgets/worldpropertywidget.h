@@ -38,6 +38,11 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
 	void setDatabase(Database*);
 
+    // Two-way binding to the View Options "Ground Grid" action — the action
+    // (and the per-scene EditorData flag behind it) stays the single source
+    // of truth; this row is just another face of it.
+    void setGridAction(QAction *action);
+
 public slots:
     void onGravityChanged(float value);
     void onAmbientColorChanged(QColor color);
@@ -47,6 +52,8 @@ public slots:
 private:
     QSharedPointer<iris::Scene> scene;
     CheckBoxWidget *flipView;
+    CheckBoxWidget *showGridToggle = nullptr;
+    QAction *gridAction = nullptr;
     ColorValueWidget *ambientColor;
     HFloatSliderWidget *worldGravity;
 	ComboBoxWidget *ambientMusicSelector;

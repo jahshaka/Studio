@@ -35,6 +35,7 @@ WorldPropertyWidget::WorldPropertyWidget()
 
 	worldGravity = this->addFloatValueSlider("Gravity", 0.f, 48.f);
     ambientColor = this->addColorPicker("Ambient Color");
+    showGridToggle = this->addCheckBox("Show Grid", true);
 
 	ambientMusicSelector = this->addComboBox("Background Ambience");
 	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
@@ -55,6 +56,24 @@ WorldPropertyWidget::WorldPropertyWidget()
 void WorldPropertyWidget::setDatabase(Database *db)
 {
 	this->db = db;
+}
+
+void WorldPropertyWidget::setGridAction(QAction *action)
+{
+    if (gridAction == action) return;
+    gridAction = action;
+    if (!gridAction || !showGridToggle) return;
+
+    // action -> row (CheckBoxWidget::setValue does not re-emit valueChanged,
+    // so there is no feedback loop); row -> action (QAction::setChecked is a
+    // no-op when unchanged, which also runs toggleGrid via its toggled signal)
+    showGridToggle->setValue(gridAction->isChecked());
+    connect(gridAction, &QAction::toggled, this, [this](bool on) {
+        if (showGridToggle) showGridToggle->setValue(on);
+    });
+    connect(showGridToggle, &CheckBoxWidget::valueChanged, this, [this](bool on) {
+        if (gridAction) gridAction->setChecked(on);
+    });
 }
 
 void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)

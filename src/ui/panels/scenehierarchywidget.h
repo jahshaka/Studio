@@ -23,6 +23,7 @@ For more information see the LICENSE file
 
 #include <qcombobox.h>
 #include "irisgl/irisglfwd.h"
+#include "ui/style/thememanager.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
 #include "data/project.h"
@@ -44,6 +45,30 @@ class TreeItemDelegate : public QStyledItemDelegate
 {
 public:
     TreeItemDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    // Qlementine's item-view metrics are airy for a dense scene tree: halve
+    // the vertical padding around the row text, and halve the horizontal
+    // padding around the icon-only eye/lock columns so more of the node name
+    // fits at the same panel width. Scoped to this tree via its delegate —
+    // not an app-wide density change. Classic keeps its own metrics.
+    QSize sizeHint(const QStyleOptionViewItem &option,
+                   const QModelIndex &index) const override
+    {
+        QSize size = QStyledItemDelegate::sizeHint(option, index);
+        if (ThemeManager::classicActive())
+            return size;
+
+        const int textHeight = option.fontMetrics.height();
+        if (size.height() > textHeight)
+            size.setHeight(textHeight + (size.height() - textHeight) / 2);
+
+        if (index.column() > 0) {
+            const int iconWidth = option.decorationSize.width();
+            if (size.width() > iconWidth)
+                size.setWidth(iconWidth + (size.width() - iconWidth) / 2);
+        }
+        return size;
+    }
     void setModelData(QWidget *editor, QAbstractItemModel *model,
         const QModelIndex &index) const
     {

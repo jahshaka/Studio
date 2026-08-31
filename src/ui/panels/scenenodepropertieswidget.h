@@ -93,6 +93,10 @@ private:
 private:
     QSharedPointer<iris::SceneNode> sceneNode;
 
+public:
+    WorldPropertyWidget *getWorldPropertyWidget() const { return worldPropView; }
+
+private:
     AccordianBladeWidget* transformPropView;
     TransformEditor* transformWidget;
 

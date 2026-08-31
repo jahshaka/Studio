@@ -117,6 +117,7 @@ For more information see the LICENSE file
 
 #include "ui/panels/scenehierarchywidget.h"
 #include "ui/panels/scenenodepropertieswidget.h"
+#include "ui/panels/propertywidgets/worldpropertywidget.h"
 
 #include "ui/panels/presets/skypresets.h"
 
@@ -1432,6 +1433,9 @@ void MainWindow::setupDockWidgets()
     sceneNodePropertiesDock->setObjectName(QStringLiteral("sceneNodePropertiesDock"));
     sceneNodePropertiesWidget = new SceneNodePropertiesWidget;
     sceneNodePropertiesWidget->setSceneView(sceneView);
+    // World blade's "Show Grid" row is a second face of the View Options
+    // Ground Grid action (created in setupViewPort, which runs before this)
+    sceneNodePropertiesWidget->getWorldPropertyWidget()->setGridAction(gridCheckAction);
     sceneNodePropertiesWidget->setDatabase(db);
     sceneNodePropertiesWidget->setServices(services);
     sceneNodePropertiesWidget->setProject(project);
