@@ -165,17 +165,21 @@ set_tests_properties(scripting.e2e.store_root PROPERTIES
 # The shipped sample scenes (the ONE data artifact Jahshaka ships): each
 # bundled archive must import through the consolidated pipeline and open
 # with content on a FRESH install (phase-4 archive format: catalog snapshot
-# + manifest v2 + CAS objects, pins written on import).
+# + manifest v2 + CAS objects, pins written on import). Runs ENGINE-UP (no
+# --headless) since the grey-dragon regression: the gate renders every
+# opened sample offscreen and asserts material fidelity at pixel probes
+# (the gold dragon must be gold), plus the document-level material and
+# texture-path assertions.
 configure_file(scripts/e2e_samples.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-samples)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.samples
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js --headless
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_samples.js
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.samples PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 480)
 
 # The ONE import pipeline (phase 3): determinism record + checkConsistency +
 # identical object sets on double import, in the real binary.

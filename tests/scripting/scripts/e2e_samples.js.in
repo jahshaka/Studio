@@ -5,37 +5,146 @@
 // (catalog snapshot + manifest v2 + CAS objects), re-exported by the
 // conversion in this program; import writes rows + objects + pins and the
 // readers resolve everything pin-first.
+//
+// MATERIAL FIDELITY GATE (2026-08-31, the grey-dragon regression): content
+// presence alone let the samples open with fallback-grey materials. Every
+// sample now also asserts
+//   - the materials the conversion owns (the dragons are the drawer's
+//     Gold/Silver/Glass PBR presets — scenes/tools/convert_legacy_materials.py),
+//   - texture properties resolve to store paths, never raw guids,
+//   - PIXELS: an engine screenshot with color probes (editor.screenshot's
+//     5x5-averaged probe points) — the gold dragon must BE gold, the blue
+//     character blue, the red pipe red. This suite runs engine-up (no
+//     --headless); probes are loose enough for driver variation
+//     (lavapipe CI == GPU per the headless-vulkan spike).
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
 
-var samples = [
-    { file: "Matcaps.zip", minNodes: 2 },
-    { file: "Particles.zip", minNodes: 2 },
-    { file: "Skeletal Animation.zip", minNodes: 2 },
-    { file: "World Background.zip", minNodes: 2 },
-    { file: "Physics.zip", minNodes: 2 },
-];
-
-for (var i = 0; i < samples.length; ++i) {
-    var sample = samples[i];
-    var path = "@SOURCE_DIR@/scenes/" + sample.file;
-
-    var imported = project.importArchive(path);
-    assert(imported && imported.guid && imported.guid.length > 10,
-           sample.file + ": importArchive -> " + imported.guid);
-    assert(imported.assets > 0, sample.file + ": catalog rows imported (" + imported.assets + ")");
-    assert(imported.objects > 0, sample.file + ": objects ingested (" + imported.objects + ")");
-
-    assert(project.open(imported.guid), sample.file + ": project.open");
-
-    var nodes = scene.nodes();
-    assert(nodes.length >= sample.minNodes,
-           sample.file + ": scene has content (" + nodes.length + " nodes)");
-
-    assert(project.close(), sample.file + ": project.close");
+function fmt(p) { return "(" + p.r + "," + p.g + "," + p.b + ")"; }
+function bright(p) { return (p.r + p.g + p.b) / 3; }
+function isNeutral(p, tol) {
+    var mx = Math.max(p.r, p.g, p.b), mn = Math.min(p.r, p.g, p.b);
+    return (mx - mn) <= tol;
 }
+
+var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function assertTexturePath(matName, key, v) {
+    assert(typeof v === "string" && v.length > 0 && !GUID_RE.test(v) && v.indexOf("/") >= 0,
+           matName + "." + key + " resolves to a file path (" + v + ")");
+}
+
+function meshesByName(name) {
+    var out = [];
+    var nodes = scene.nodes();
+    for (var i = 0; i < nodes.length; i++)
+        if (nodes[i].type === "mesh" && nodes[i].name === name) out.push(nodes[i]);
+    return out;
+}
+
+function shoot(name, probePoints) {
+    editor.frame(15);
+    var shot = editor.screenshot("samples_" + name + ".png", 960, 540, probePoints);
+    assert(shot.probes && shot.probes.length === probePoints.length,
+           name + ": screenshot with " + probePoints.length + " probes");
+    var line = name + " probes:";
+    for (var i = 0; i < shot.probes.length; i++) line += " " + fmt(shot.probes[i]);
+    console.log(line);
+    return shot.probes;
+}
+
+function importAndOpen(file, minNodes) {
+    var imported = project.importArchive("@SOURCE_DIR@/scenes/" + file);
+    assert(imported && imported.guid && imported.guid.length > 10,
+           file + ": importArchive -> " + imported.guid);
+    assert(imported.assets > 0, file + ": catalog rows imported (" + imported.assets + ")");
+    assert(imported.objects > 0, file + ": objects ingested (" + imported.objects + ")");
+    assert(project.open(imported.guid), file + ": project.open");
+    var nodes = scene.nodes();
+    assert(nodes.length >= minNodes, file + ": scene has content (" + nodes.length + " nodes)");
+}
+
+// ---- Matcaps: ONE dragon, Gold PBR (was the builtin Matcap shader) ----------
+importAndOpen("Matcaps.zip", 2);
+var dragons = meshesByName("StanfordDragon");
+assert(dragons.length === 1, "Matcaps: one dragon mesh");
+var m = material.get(dragons[0].id);
+assert(m.metallic === 1 && m.baseColor === "#ffd700",
+       "Matcaps: dragon is the Gold PBR preset (metallic=" + m.metallic + " baseColor=" + m.baseColor + ")");
+assertTexturePath("Matcaps ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
+var p = shoot("matcaps", [ { x: 0.49, y: 0.49 }, { x: 0.50, y: 0.40 }, { x: 0.15, y: 0.85 } ]);
+// Gold reads gold even in shadow: strong red-over-blue at two body points.
+assert(p[0].r > 40 && p[0].r > p[0].b + 30, "Matcaps: dragon body 1 is gold " + fmt(p[0]));
+assert(p[1].r > 40 && p[1].r > p[1].b + 30, "Matcaps: dragon body 2 is gold " + fmt(p[1]));
+assert(isNeutral(p[2], 25) && bright(p[2]) > 15 && bright(p[2]) < 160,
+       "Matcaps: checker ground is neutral grey " + fmt(p[2]));
+assert(project.close(), "Matcaps.zip: project.close");
+
+// ---- Particles: textures intact, fire sphere yellow -------------------------
+importAndOpen("Particles.zip", 2);
+var sphereMat = material.get(meshesByName("Sphere")[0].id);
+assert(sphereMat.color === "#ffcd37", "Particles: sphere keeps its edge-material colour (" + sphereMat.color + ")");
+assertTexturePath("Particles ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
+assertTexturePath("Particles fire pit", "diffuseTexture", material.get(meshesByName("Fire Pit")[0].id).diffuseTexture);
+var particleCount = 0;
+var nodes = scene.nodes();
+for (var i = 0; i < nodes.length; i++) if (nodes[i].type === "particles") particleCount++;
+assert(particleCount >= 4, "Particles: particle systems present (" + particleCount + ")");
+p = shoot("particles", [ { x: 0.49, y: 0.645 }, { x: 0.2, y: 0.9 } ]);
+assert(p[0].r > 120 && p[0].g > 90 && p[0].r > p[0].b + 60,
+       "Particles: sphere renders yellow " + fmt(p[0]));
+assert(isNeutral(p[1], 25), "Particles: ground is neutral grey " + fmt(p[1]));
+assert(project.close(), "Particles.zip: project.close");
+
+// ---- Skeletal Animation: the blue character ---------------------------------
+importAndOpen("Skeletal Animation.zip", 2);
+var limb = material.get(meshesByName("Beta_HighLimbsGeoMesh")[0].id);
+assert(limb.diffuseColor === "#5ebfe7", "Skeletal: character keeps its blue colour (" + limb.diffuseColor + ")");
+p = shoot("skeletal", [ { x: 0.458, y: 0.363 }, { x: 0.2, y: 0.9 } ]);
+assert(p[0].b > 60 && p[0].b > p[0].r + 20, "Skeletal: character torso is blue " + fmt(p[0]));
+assert(isNeutral(p[1], 25), "Skeletal: ground is neutral grey " + fmt(p[1]));
+assert(project.close(), "Skeletal Animation.zip: project.close");
+
+// ---- World Background: silver + gold + glass dragons, cubemap sky ----------
+importAndOpen("World Background.zip", 2);
+dragons = meshesByName("SceneNode24");
+assert(dragons.length === 3, "World: three dragon meshes");
+var byColor = {};
+for (i = 0; i < dragons.length; i++) {
+    m = material.get(dragons[i].id);
+    byColor[m.baseColor] = m;
+}
+assert(byColor["#f5f5f7"] && byColor["#f5f5f7"].metallic === 1,
+       "World: Silver PBR dragon present");
+assert(byColor["#ffd700"] && byColor["#ffd700"].metallic === 1,
+       "World: Gold PBR dragon present");
+assert(byColor["#eef4f8"] && byColor["#eef4f8"].alphaMode === 3 && byColor["#eef4f8"].alpha < 0.5,
+       "World: Glass PBR dragon present (alphaMode 3, alpha " + (byColor["#eef4f8"] ? byColor["#eef4f8"].alpha : "?") + ")");
+assertTexturePath("World ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
+p = shoot("world", [ { x: 0.45,  y: 0.478 },   // gold dragon body highlight
+                     { x: 0.194, y: 0.463 },   // silver dragon belly highlight
+                     { x: 0.829, y: 0.533 },   // glass dragon (floor shows through)
+                     { x: 0.512, y: 0.111 } ]); // cubemap sky: park foliage
+assert(p[0].r > p[0].b + 40 && p[0].g > p[0].b + 30, "World: gold dragon is gold " + fmt(p[0]));
+assert(bright(p[1]) > 100, "World: silver dragon renders bright " + fmt(p[1]));
+assert(bright(p[2]) > 70, "World: glass dragon area is translucent-bright " + fmt(p[2]));
+assert(p[3].g > p[3].b + 15 && p[3].g > 40, "World: cubemap sky shows the park foliage " + fmt(p[3]));
+assert(project.close(), "World Background.zip: project.close");
+
+// ---- Physics: coloured pipes + teapot ---------------------------------------
+importAndOpen("Physics.zip", 2);
+assert(material.get(meshesByName("pipe")[0].id).diffuseColor === "#c63030", "Physics: red pipe colour kept");
+assert(material.get(meshesByName("pipe 6")[0].id).diffuseColor === "#7872bf", "Physics: purple pipe colour kept");
+p = shoot("physics", [ { x: 0.327, y: 0.322 },  // red pipe cap
+                       { x: 0.627, y: 0.841 },  // purple pipe band
+                       { x: 0.463, y: 0.53 } ]); // teapot
+// Red reads red even in shade: strong hue ratio (grey fallback has r==g==b).
+assert(p[0].r > 45 && p[0].r > p[0].g * 2 && p[0].r > p[0].b * 2,
+       "Physics: red pipe cap is red " + fmt(p[0]));
+assert(p[1].b > 90 && p[1].b > p[1].g + 25, "Physics: purple pipe is purple " + fmt(p[1]));
+assert(bright(p[2]) > 120 && isNeutral(p[2], 35), "Physics: teapot is bright white " + fmt(p[2]));
+assert(project.close(), "Physics.zip: project.close");
 
 console.log("e2e_samples: ALL OK");
