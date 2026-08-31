@@ -92,6 +92,9 @@ set(SRCS
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
+    src/export/gltfexporter.cpp
+    src/export/exportservice.cpp
+    src/export/previewlauncher.cpp
     src/scripting/modules/studiomodules.cpp
     src/scripting/mcp/mcpserver.cpp
     src/scripting/mcp/mcptools.cpp
@@ -259,6 +262,9 @@ set(HEADERS
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
     src/modules/publish/publishmodule.h
+    src/export/gltfexporter.h
+    src/export/exportservice.h
+    src/export/previewlauncher.h
     src/modules/studiomodule.h
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
@@ -455,7 +461,8 @@ set (QRCS
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
-    ${CMAKE_SOURCE_DIR}/app/shaders.qrc 
+    ${CMAKE_SOURCE_DIR}/app/shaders.qrc
+    ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc
 )
 
 # Disable compiler specific warnings if we are building with MSVC

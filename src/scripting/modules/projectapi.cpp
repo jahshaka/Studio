@@ -12,8 +12,13 @@ For more information see the LICENSE file
 #include "scripting/modules/projectapi.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QJSEngine>
 #include <QStandardPaths>
+
+#include "export/exportservice.h"
+#include "export/previewlauncher.h"
+#include "services/sceneeditservice.h"
 
 #include "data/database/database.h"
 #include "data/project.h"
@@ -54,6 +59,14 @@ QVector<VerbInfo> ProjectApi::verbs() const
           Needs::Document },
         { "current", "project.current() -> {guid, name, folder} | null",
           "The open project, or null.",
+          Needs::Document },
+        { "exportWeb", "project.exportWeb(dir) -> {dir, indexHtml, glb, nodes, materials, extensions, warnings, ...}",
+          "Exports the open scene for the web (glTF 2.0 + self-contained WebGPU viewer): index.html (double-clickable), "
+          "viewer.html + scene.glb (served path), README.txt. dir defaults to <project>/exports/web. Document-only; works headless.",
+          Needs::Document },
+        { "previewWeb", "project.previewWeb(dir) -> {browser, mode}",
+          "Opens an existing web export (see exportWeb) in a Chromium-family browser as a chromeless --app window, "
+          "or the default browser when none is found. mode is 'kiosk' or 'browser'.",
           Needs::Document },
     };
 }
@@ -191,6 +204,68 @@ bool ProjectApi::setPosition(const QString &guid, double x, double y)
     if (!host.db->updateProjectPosition(guid, float(x), float(y)))
         return fail(QStringLiteral("project.setPosition: no project with guid '%1'").arg(guid));
     return true;
+}
+
+QVariantMap ProjectApi::exportWeb(const QString &dir)
+{
+    QVariantMap out;
+    if (!requireProject()) return out;
+    if (!host.services || !host.services->sceneEdit) { fail("project.exportWeb: no scene service"); return out; }
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) { fail("project.exportWeb: no scene is open"); return out; }
+
+    QString outDir = dir.trimmed();
+    if (outDir.isEmpty())
+        outDir = QDir(host.project->getProjectFolder()).filePath(QStringLiteral("exports/web"));
+
+    const auto r = ExportService::exportWeb(scene, host.project->getProjectName(), outDir);
+    if (!r.ok) { fail(QStringLiteral("project.exportWeb: %1").arg(r.error)); return out; }
+
+    out["dir"] = r.dir;
+    out["indexHtml"] = r.indexHtml;
+    out["viewerHtml"] = r.viewerHtml;
+    out["glb"] = r.glbPath;
+    out["glbSize"] = r.glbSize;
+    out["indexSize"] = r.indexSize;
+    out["inlined"] = r.inlined;
+    out["nodes"] = r.nodeCount;
+    out["meshes"] = r.meshCount;
+    out["materials"] = r.materialCount;
+    out["lights"] = r.lightCount;
+    out["cameras"] = r.cameraCount;
+    out["animations"] = r.animationCount;
+    out["extensions"] = QVariant(r.extensionsUsed);
+    out["warnings"] = QVariant(r.warnings);
+    return out;
+}
+
+QVariantMap ProjectApi::previewWeb(const QString &dir)
+{
+    QVariantMap out;
+    if (!requireProject()) return out;
+
+    QString outDir = dir.trimmed();
+    if (outDir.isEmpty())
+        outDir = QDir(host.project->getProjectFolder()).filePath(QStringLiteral("exports/web"));
+    const QString indexHtml = QDir(outDir).filePath(QStringLiteral("index.html"));
+    if (!QFileInfo::exists(indexHtml)) {
+        fail(QStringLiteral("project.previewWeb: no export at %1 — project.exportWeb() first").arg(indexHtml));
+        return out;
+    }
+
+    const QString browser = PreviewLauncher::findChromiumBrowser();
+    if (!browser.isEmpty() && PreviewLauncher::launchKiosk(indexHtml, this)) {
+        out["browser"] = browser;
+        out["mode"] = "kiosk";
+        return out;
+    }
+    if (!PreviewLauncher::openInBrowser(indexHtml)) {
+        fail("project.previewWeb: no browser could be launched");
+        return out;
+    }
+    out["browser"] = QStringLiteral("default");
+    out["mode"] = "browser";
+    return out;
 }
 
 QVariant ProjectApi::current()
