@@ -469,7 +469,13 @@ void ItemGridWidget::mouseDoubleClickEvent(QMouseEvent *event)
 
 void ItemGridWidget::projectContextMenu(const QPoint &pos)
 {
-    QMenu menu("Context Menu", this);
+    // Parent the menu to the top-level window, NOT the tile: DynamicGrid sets
+    // a selector-less "background: transparent" stylesheet, and selector-less
+    // declarations propagate to every descendant — a QMenu under it gets a
+    // transparent background RULE, so QStyleSheetStyle paints nothing behind
+    // the items (the see-through context menu). From the window, the menu
+    // inherits no background rule and the theme paints its panel normally.
+    QMenu menu("Context Menu", window());
     menu.setStyleSheet(StyleSheet::QMenuDarkGrid());
 
     QAction open("Open", this);

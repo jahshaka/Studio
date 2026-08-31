@@ -1626,6 +1626,14 @@ void MainWindow::setupViewPort()
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
+	// The header buttons are mouse-driven chrome: keep them out of the focus
+	// chain, or the theme's focus indicator rings the focused space button
+	// whenever the window is active (Qlementine only hijacks the policy of
+	// Strong/ClickFocus buttons, so NoFocus sticks).
+	for (auto *chrome : { worlds_menu, player_menu, editor_menu, effect_menu,
+	                      assets_menu, publish_menu, help, prefs })
+		chrome->setFocusPolicy(Qt::NoFocus);
+
 	ui->ohlayout->addWidget(jlogo, 0, 0, Qt::AlignLeft);
 	ui->ohlayout->addWidget(assets_panel, 0, 1, Qt::AlignCenter);
 	ui->ohlayout->addWidget(buttons, 0, 2, Qt::AlignRight);

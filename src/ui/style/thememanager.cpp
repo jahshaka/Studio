@@ -64,9 +64,19 @@ public:
         // painting and paints no panel background, while the menu window is
         // translucent — a see-through menu (the desktop tile context menu).
         // Menus in this app are painted by QStyleSheetStyle/palette anyway;
-        // plain QCommonStyle polish keeps them opaque and clickable.
-        if (qobject_cast<QMenu *>(w)) {
+        // plain QCommonStyle polish keeps them clickable. We do keep the
+        // translucent-window bits (and force PM_MenuPanelWidth to 0 below) so
+        // a popup is ONE rounded panel filling its window edge-to-edge —
+        // without them the rounded panel paints inside an opaque square
+        // window ("box in a box"). Attribute sets are idempotent, so the
+        // re-polish churn that stacked filters is harmless here.
+        if (auto *menu = qobject_cast<QMenu *>(w)) {
             QCommonStyle::polish(w);
+            menu->setBackgroundRole(QPalette::NoRole);
+            menu->setAutoFillBackground(false);
+            menu->setAttribute(Qt::WA_TranslucentBackground, true);
+            menu->setAttribute(Qt::WA_OpaquePaintEvent, false);
+            menu->setAttribute(Qt::WA_NoSystemBackground, true);
             return;
         }
 
@@ -89,6 +99,50 @@ public:
     // The base class overloads polish(QApplication*)/polish(QPalette&); keep
     // them reachable despite the QWidget override above.
     using oclero::qlementine::QlementineStyle::polish;
+
+    // Focus-visible semantics, app-wide: Qlementine rings every focused
+    // control (buttons included), so plain window activation showed a blue
+    // ring on whichever chrome button happened to hold initial focus (top
+    // menu, "Import Scene", ...). Qt flags the window with
+    // WA_KeyboardFocusChange the first time focus moves via the keyboard —
+    // until then the ring is suppressed; Tab users keep full focus
+    // visibility.
+    void drawControl(ControlElement element, const QStyleOption *opt,
+                     QPainter *p, const QWidget *w) const override
+    {
+        if (element == QStyle::CE_FocusFrame && w && w->window()
+            && !w->window()->testAttribute(Qt::WA_KeyboardFocusChange))
+            return;
+        oclero::qlementine::QlementineStyle::drawControl(element, opt, p, w);
+    }
+
+    // Same rule for the OTHER focus-ring path: widgets carrying a stylesheet
+    // are painted by QStyleSheetStyle, which draws focus as PE_FrameFocusRect
+    // (the classic dashed rectangle) and delegates that primitive here. The
+    // chrome-button sheets made footer buttons take this path — window
+    // activation then ringed "Import Scene" with a dashed box. Keyboard users
+    // keep the ring the moment focus first moves via Tab.
+    void drawPrimitive(PrimitiveElement element, const QStyleOption *opt,
+                       QPainter *p, const QWidget *w) const override
+    {
+        if (element == QStyle::PE_FrameFocusRect && w && w->window()
+            && !w->window()->testAttribute(Qt::WA_KeyboardFocusChange))
+            return;
+        oclero::qlementine::QlementineStyle::drawPrimitive(element, opt, p, w);
+    }
+
+    // Upstream reserves a drop-shadow band around every menu
+    // (PM_MenuPanelWidth) and repositions the window to compensate — from the
+    // MenuEventFilter we deliberately do not install. With the band at 0 the
+    // rounded panel fills the popup window exactly: correct position, single
+    // box, no shadow band. Inner item padding (PM_MenuHMargin/VMargin) stays.
+    int pixelMetric(PixelMetric metric, const QStyleOption *option = nullptr,
+                    const QWidget *widget = nullptr) const override
+    {
+        if (metric == QStyle::PM_MenuPanelWidth)
+            return 0;
+        return oclero::qlementine::QlementineStyle::pixelMetric(metric, option, widget);
+    }
 };
 
 } // namespace
