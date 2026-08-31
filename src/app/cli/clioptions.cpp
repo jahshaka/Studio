@@ -40,8 +40,12 @@ void CliOptions::applyPlatformPolicy() const
     if ((headlessScript && (!scriptPath.isEmpty() || mcpPort > 0)) || !dumpDocsPath.isEmpty())
         qputenv("QT_QPA_PLATFORM", "offscreen");
 
+#ifdef Q_OS_LINUX
     // The engine (Ogre-Next) has no Wayland backend: xcb, always — unless the
     // user chose a platform themselves (or a headless run went offscreen above).
+    // Linux-only: macOS (cocoa) and Windows (windows) must keep Qt's native
+    // platform — forcing xcb there aborts at startup.
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "xcb");
+#endif
 }
