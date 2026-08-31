@@ -17,3 +17,4 @@ compile_commands.json
 jahsettings.ini
 jahshaka-ogre.log
 *.log
+build-web/
