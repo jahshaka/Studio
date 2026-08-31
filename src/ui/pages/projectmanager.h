@@ -142,6 +142,7 @@ private:
     QString currentLayoutMode = QStringLiteral("rows");
     QMenu *desktopMenu = nullptr;
     QMenu *layoutMenu = nullptr;
+    QMenu *tileSizeMenu = nullptr;
     QVector<QAction*> desktopActions;
     QAction *rowsAction = nullptr;
     QAction *freeformAction = nullptr;

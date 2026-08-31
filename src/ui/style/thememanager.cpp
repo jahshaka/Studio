@@ -198,6 +198,29 @@ void ThemeManager::applyAtStartup(QApplication &app)
     QApplication::setStyle(style);
 }
 
+QString ThemeManager::chromeButtonSheet()
+{
+    if (s_classicActive) return QString();
+    return QStringLiteral(
+        "QPushButton, QToolButton { background: #444; color: #eee;"
+        " padding: 8px 12px; border-radius: 4px; }"
+        "QPushButton:hover, QToolButton:hover { background: #555; }"
+        "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
+        "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
+        "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+}
+
+QString ThemeManager::chromeAccentButtonSheet()
+{
+    if (s_classicActive) return QString();
+    return QStringLiteral(
+        "QPushButton { background: #3498db; color: white; padding: 8px 12px;"
+        " border-radius: 4px; }"
+        "QPushButton:hover { background: #4ba3e0; }"
+        "QPushButton:pressed { background: #2884c4; }"
+        "QPushButton:disabled { background: #24384a; color: #7d8fa3; }");
+}
+
 void ThemeManager::switchifyMenuToggles(QMenu *menu)
 {
     if (s_classicActive || !menu) return;

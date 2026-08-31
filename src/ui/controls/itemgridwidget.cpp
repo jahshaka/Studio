@@ -20,8 +20,33 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QApplication>
 
+#include <QPainter>
+#include <QPainterPath>
+
 #include "ui/dialogs/renameprojectdialog.h"
 #include "ui/style/stylesheet.h"
+
+// The tile reads as one rounded card: the image supplies the two top rounded
+// corners (clipped here — a stylesheet border-radius does not clip a QLabel's
+// pixmap), the black caption bar supplies the two bottom ones, and the seam
+// between them stays square so they join seamlessly.
+static const int kTileCornerRadius = 3;
+
+static QPixmap roundTopCorners(const QPixmap &src, int radius)
+{
+    if (src.isNull()) return src;
+    QPixmap out(src.size());
+    out.setDevicePixelRatio(src.devicePixelRatio());
+    out.fill(Qt::transparent);
+    QPainter p(&out);
+    p.setRenderHint(QPainter::Antialiasing);
+    QPainterPath path;
+    path.addRoundedRect(QRectF(0, 0, src.width(), src.height()), radius, radius);
+    path.addRect(QRectF(0, src.height() - radius, src.width(), radius));
+    p.setClipPath(path.simplified());
+    p.drawPixmap(0, 0, src);
+    return out;
+}
 
 ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
                                QSize size,
@@ -68,14 +93,25 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
 
     gridImageLabel->setObjectName("image");
 
-    // make things bigger at lower resolutions
-    if (devicePixelRatio() > 1) {
-        gridTextLabel->setStyleSheet(StyleSheet::ItemGridTileLabel(12));
-    } else {
-        gridTextLabel->setStyleSheet(StyleSheet::ItemGridTileLabel(15));
-    }
+    // caption bar: black band spanning the full tile width, white name.
+    // (make things bigger at lower resolutions, as before)
+    const int captionFontSize = devicePixelRatio() > 1 ? 12 : 15;
+    // owner-tuned: top of the bar hugs the text (perfect as-is); the bottom
+    // gets two extra pixels of breathing room
+    gridTextLabel->setStyleSheet(
+        QString("background-color: black; color: white; font-size: %1px;"
+                " padding-bottom: 2px;"
+                " border-bottom-left-radius: %2px; border-bottom-right-radius: %2px;")
+            .arg(captionFontSize)
+            .arg(kTileCornerRadius));
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+
+    // the bar sits verticalSpacing() below the image; give the tile the same
+    // spacing BELOW the caption instead of the layout's larger default margin
+    auto tileMargins = gameGridLayout->contentsMargins();
+    tileMargins.setBottom(gameGridLayout->verticalSpacing());
+    gameGridLayout->setContentsMargins(tileMargins);
 
 
     QPixmap pixmap;
@@ -91,7 +127,7 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     }
 
     oimage = pixmap;
-    image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    image = roundTopCorners(pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation), kTileCornerRadius);
 
     gridImageLabel->setPixmap(image);
     gridImageLabel->setAlignment(Qt::AlignCenter);
@@ -239,7 +275,7 @@ void ItemGridWidget::updateTile(const QByteArray &arr)
 	}
 
 	oimage = pixmap;
-	image = pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	image = roundTopCorners(pixmap.scaled(tileSize, Qt::KeepAspectRatio, Qt::SmoothTransformation), kTileCornerRadius);
 
 	gridImageLabel->setPixmap(image);
 	gridImageLabel->update();
@@ -265,7 +301,7 @@ void ItemGridWidget::setTileSize(QSize size, QSize iSize)
     setMinimumWidth(tileSize.width());
     setMaximumWidth(tileSize.width());
 
-    auto img = oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+    auto img = roundTopCorners(oimage.scaled(tileSize, Qt::KeepAspectRatio, Qt::FastTransformation), kTileCornerRadius);
 
     gridImageLabel->setPixmap(img);
     gridImageLabel->setAlignment(Qt::AlignCenter);

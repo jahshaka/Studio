@@ -55,11 +55,32 @@ For more information see the LICENSE file
 #include "io/materialreader.h"
 #include "ui/dialogs/customdialog.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 
 ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *parent)
     : QWidget(parent), ui(new Ui::ProjectManager)
 {
     ui->setupUi(this);
+
+    if (!ThemeManager::classicActive()) {
+        // The .ui root stylesheet is the classic desktop-page skin (flat #444
+        // square buttons, combo/lineedit/QMessageBox rules). Under Qlementine
+        // it fights the theme — buttons render square and flat instead of the
+        // themed rounded look — so drop it and let the style own the page.
+        // The deliberate accents survive below (New Scene keeps the primary
+        // blue). Classic keeps the sheet bit-for-bit.
+        setStyleSheet(QString());
+        ui->newProject->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
+        // one footer button spec (owner direction): every grey button matches
+        // the blue New Scene geometry exactly — same padding, same rounded
+        // corners, grey — regardless of what ancestor sheets interpose. The
+        // spec is shared with the editor toolbar (ThemeManager).
+        for (QPushButton *btn : { ui->importWorld, ui->downloadWorlds,
+                                  ui->tileSizeBtn, ui->desktopSwitcher,
+                                  ui->layoutToggle, ui->browseProjects })
+            btn->setStyleSheet(ThemeManager::chromeButtonSheet());
+    }
+
     db = handle;
     this->project = project;
 
@@ -184,11 +205,31 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
 
     ui->lineEdit->setAttribute(Qt::WA_MacShowFocusRect, false);
 
-    ui->tilePreview->setView(new QListView());
-    ui->tilePreview->setItemDelegate(new QStyledItemDelegate(ui->tilePreview));
-    ui->tilePreview->setCurrentText(settings->getValue("tileSize", "Normal").toString());
+    // Tile Size ▾ — same grey popup-button pattern as Desktops/Layouts: static
+    // label, the checked entry in the popup is where current state shows.
+    tileSizeMenu = new QMenu(this);
+    tileSizeMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
+    auto tileSizeGroup = new QActionGroup(tileSizeMenu);
+    tileSizeGroup->setExclusive(true);
+    const QString currentTileSize = settings->getValue("tileSize", "Normal").toString();
+    for (const QString &sizeName :
+         { QStringLiteral("Small"), QStringLiteral("Normal"),
+           QStringLiteral("Large"), QStringLiteral("Huge") }) {
+        QAction *action = tileSizeMenu->addAction(sizeName);
+        action->setCheckable(true);
+        action->setChecked(sizeName == currentTileSize);
+        tileSizeGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, sizeName]() {
+            settings->setValue("tileSize", sizeName);
+            changePreviewSize(sizeName);
+        });
+    }
+    ui->tileSizeBtn->setCursor(Qt::PointingHandCursor);
+    connect(ui->tileSizeBtn, &QPushButton::pressed, this, [this]() {
+        const QPoint corner = ui->tileSizeBtn->mapToGlobal(QPoint(0, 0));
+        tileSizeMenu->exec(corner - QPoint(0, tileSizeMenu->sizeHint().height()));
+    });
 
-    connect(ui->tilePreview,    SIGNAL(currentTextChanged(QString)), SLOT(changePreviewSize(QString)));
     connect(ui->newProject,     SIGNAL(pressed()), SLOT(newProject()));
     connect(ui->importWorld,    SIGNAL(pressed()), SLOT(importProjectFromFile()));
     connect(ui->browseProjects, SIGNAL(pressed()), SLOT(openSampleBrowser()));
@@ -205,10 +246,6 @@ ProjectManager::ProjectManager(Database *handle, Project *project, QWidget *pare
     connect(ui->lineEdit, &QLineEdit::textChanged, this, [this](const QString &searchTerm) {
         this->searchTerm = searchTerm;
         searchTimer->start(100);
-    });
-
-    connect(ui->tilePreview, &QComboBox::currentTextChanged, [this](const QString &changedText) {
-        settings->setValue("tileSize", changedText);
     });
 
 	connect(ui->downloadWorlds, &QPushButton::pressed, []() {
@@ -479,7 +516,7 @@ void ProjectManager::setupDesktopControls()
         desktopActions.push_back(action);
     }
 
-    ui->desktopSwitcher->setText(QString("Desktop %1 ▾").arg(currentDesktop));
+    // static "Desktops ▾" label; the checked popup entry shows the current one
     ui->desktopSwitcher->setCursor(Qt::PointingHandCursor);
     connect(ui->desktopSwitcher, &QPushButton::pressed, this, [this]() {
         // the footer sits at the bottom of the window; pop the menu up, not down
@@ -543,11 +580,10 @@ void ProjectManager::applyDesktopLayoutMode(const QString &modeName, bool persis
     freeformAction->setChecked(modeStr == "freeform");
     slidersAction->setChecked(modeStr == "sliders");
 
+    // static "Layouts ▾" label; the checked popup entry shows the current mode
     DynamicGrid::LayoutMode gridMode = DynamicGrid::LayoutMode::Rows;
-    QString label = QStringLiteral("Rows ▾");
-    if (modeStr == "freeform") { gridMode = DynamicGrid::LayoutMode::Freeform; label = QStringLiteral("Freeform ▾"); }
-    else if (modeStr == "sliders") { gridMode = DynamicGrid::LayoutMode::Sliders; label = QStringLiteral("Sliders ▾"); }
-    ui->layoutToggle->setText(label);
+    if (modeStr == "freeform") gridMode = DynamicGrid::LayoutMode::Freeform;
+    else if (modeStr == "sliders") gridMode = DynamicGrid::LayoutMode::Sliders;
 
     dynamicGrid->setLayoutMode(gridMode);
 }
@@ -597,7 +633,6 @@ void ProjectManager::switchDesktop(int desktop)
 
     for (int i = 0; i < desktopActions.size(); ++i)
         desktopActions[i]->setChecked(i + 1 == desktop);
-    ui->desktopSwitcher->setText(QString("Desktop %1 ▾").arg(desktop));
 
     dynamicGrid->setCurrentDesktop(desktop);
 
@@ -753,7 +788,13 @@ void ProjectManager::finishedFutureWatcher()
 
 void ProjectManager::openSampleBrowser()
 {
-    sampleDialog.setFixedSize(Constants::TILE_SIZE * 1.66);
+    // 3 columns x 2 rows of uniformly sized tiles: every preview center-cropped
+    // to the same 16:9 thumb (the physics preview's shape, at the smaller
+    // display scale), names on a black bar in white like the desktop tiles.
+    const QSize sampleIconSize(192, 108);
+    const QSize sampleGridSize(sampleIconSize.width() + 6,
+                               sampleIconSize.height() + 30);
+
     sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
     sampleDialog.setWindowTitle("Sample Scenes");
     sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
@@ -762,13 +803,18 @@ void ProjectManager::openSampleBrowser()
     QListWidget *sampleList = new QListWidget();
     sampleList->setAttribute(Qt::WA_MacShowFocusRect, false);
     sampleList->setObjectName("sampleList");
-    sampleList->setStyleSheet(StyleSheet::ProjectManagerSampleList());
+    sampleList->setStyleSheet(
+        "QListWidget { background: transparent; border: none; }"
+        "QListWidget::item { background: black; color: white; }"
+        "QListWidget::item:selected { background: #3498db; color: white; }");
     sampleList->setViewMode(QListWidget::IconMode);
-    sampleList->setSizeAdjustPolicy(QListWidget::AdjustToContents);
     sampleList->setSpacing(4);
     sampleList->setResizeMode(QListWidget::Adjust);
     sampleList->setMovement(QListView::Static);
-    sampleList->setIconSize(Constants::TILE_SIZE * 0.5);
+    sampleList->setIconSize(sampleIconSize);
+    sampleList->setGridSize(sampleGridSize);
+    sampleList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    sampleList->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
 
     QMap<QString, QString> samples;
@@ -780,19 +826,37 @@ void ProjectManager::openSampleBrowser()
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
 
+    // center-crop, never squash: scale so the thumb is fully covered, then
+    // cut the overhang symmetrically
+    const auto croppedThumb = [&sampleIconSize](const QString &path) {
+        const QPixmap src(path);
+        if (src.isNull()) return src;
+        QPixmap scaled = src.scaled(sampleIconSize, Qt::KeepAspectRatioByExpanding,
+                                    Qt::SmoothTransformation);
+        const QRect cropRect(QPoint((scaled.width() - sampleIconSize.width()) / 2,
+                                    (scaled.height() - sampleIconSize.height()) / 2),
+                             sampleIconSize);
+        return scaled.copy(cropRect);
+    };
+
     QMap<QString, QString>::const_iterator it;
     for (it = samples.begin(); it != samples.end(); ++it){
         auto item = new QListWidgetItem();
         item->setData(Qt::DisplayRole, it.value());
         item->setData(Qt::UserRole, QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
-        item->setIcon(QIcon(QDir(dir.absolutePath()).filePath(it.key())));
+        item->setIcon(QIcon(croppedThumb(QDir(dir.absolutePath()).filePath(it.key()))));
+        item->setSizeHint(sampleGridSize - QSize(4, 4));
         sampleList->addItem(item);
     }
 
-	
+    // fixed size that fits the 3x2 grid cleanly (title + grid + button row)
+    const int sampleColumns = 3, sampleRows = 2;
+    sampleList->setFixedSize(sampleColumns * sampleGridSize.width() + 16,
+                             sampleRows * sampleGridSize.height() + 12);
 
     auto instructions = new QLabel("Double click on a sample scene to import it in the editor");
     instructions->setObjectName("instructions");
+    instructions->setAlignment(Qt::AlignHCenter);
     instructions->setStyleSheet(StyleSheet::ProjectManagerInstructions());
 
 	auto cancel = new QPushButton("Cancel");
@@ -823,12 +887,15 @@ void ProjectManager::openSampleBrowser()
 
 
     layout->addWidget(instructions);
-    layout->addWidget(sampleList);
+    layout->addWidget(sampleList, 1, 0, Qt::AlignHCenter);
     layout->addWidget(wid);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    // a blank line's worth of air above the (centered) title; the button row
+    // supplies its own padding at the bottom
+    layout->setContentsMargins(12, 20, 12, 0);
+    layout->setSpacing(8);
 
     sampleDialog.setLayout(layout);
+    sampleDialog.setFixedSize(sampleDialog.sizeHint());
     sampleDialog.exec();
 }
 

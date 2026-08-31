@@ -55,6 +55,17 @@ public:
     // Call at the END of a constructor, after setupUi and sheet-pushing code.
     static void clearClassicSheets(QWidget *root);
 
+    // THE chrome button spec (owner direction, one definition for all page
+    // chrome): grey rounded button matching the blue accent buttons'
+    // geometry — same padding, same bevel, horizontal text gutters. Used by
+    // the desktop footer and the editor toolbar (and future chrome rows).
+    // Returns "" under Classic, whose .ui/classic sheets already style these.
+    static QString chromeButtonSheet();
+
+    // The blue accent variant of the same spec (primary actions: New Scene,
+    // Add to Project, Update). Same geometry, primary color.
+    static QString chromeAccentButtonSheet();
+
     // Qlementine mode: replaces every checkable QAction in the menu with a
     // qlementine Switch row (QWidgetAction). The original QAction stays alive
     // and authoritative — the switch and the action mirror each other — so

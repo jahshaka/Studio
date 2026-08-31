@@ -65,7 +65,7 @@ QPushButton, QToolButton {
 	border: 0;
 	padding: 8px 12px;
 	background: #444;
-	border-radius: 1px;
+	border-radius: 4px;
 }
 
 QPushButton::hover {
@@ -293,8 +293,12 @@ QComboBox::down-arrow:!enabled {
       <property name="topMargin">
        <number>6</number>
       </property>
+      <!-- footer symmetry (owner): the page grid has a legacy padding column
+           (miscPadding at 0,0) that insets the left edge ~16px beyond the
+           root margin; mirror it here so the gutter right of New Scene
+           matches the gutter left of Import Scene. -->
       <property name="rightMargin">
-       <number>0</number>
+       <number>16</number>
       </property>
       <property name="bottomMargin">
        <number>4</number>
@@ -327,58 +331,19 @@ QComboBox::down-arrow:!enabled {
        </spacer>
       </item>
       <item>
-       <widget class="QLabel" name="tilePreviewLabel">
-        <property name="text">
-         <string>Tile Size</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QComboBox" name="tilePreview">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
+       <widget class="QPushButton" name="tileSizeBtn">
         <property name="minimumSize">
          <size>
-          <width>84</width>
+          <width>96</width>
           <height>32</height>
          </size>
         </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>16777215</height>
-         </size>
+        <property name="toolTip">
+         <string>Tile size</string>
         </property>
-        <property name="currentText">
-         <string>Normal</string>
+        <property name="text">
+         <string>Tile Size ▾</string>
         </property>
-        <property name="currentIndex">
-         <number>1</number>
-        </property>
-        <item>
-         <property name="text">
-          <string>Small</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Normal</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Large</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Huge</string>
-         </property>
-        </item>
        </widget>
       </item>
       <item>
@@ -441,7 +406,7 @@ QComboBox::down-arrow:!enabled {
          <string>Switch desktop</string>
         </property>
         <property name="text">
-         <string>Desktop 1 ▾</string>
+         <string>Desktops ▾</string>
         </property>
        </widget>
       </item>
@@ -457,7 +422,7 @@ QComboBox::down-arrow:!enabled {
          <string>Desktop layout: sequential rows, freeform (drag tiles anywhere), or sliders (filmstrip rows)</string>
         </property>
         <property name="text">
-         <string>Rows ▾</string>
+         <string>Layouts ▾</string>
         </property>
        </widget>
       </item>

@@ -1786,7 +1786,12 @@ void MainWindow::setupViewPort()
 	playSimBtn->setStyleSheet(StyleSheet::BackgroundTransparent());
 
 	cameraView = new QPushButton;
-	cameraView->setStyleSheet("QPushButton{background:rgba(0,0,0,0);}");	
+	cameraView->setStyleSheet("QPushButton{background:rgba(0,0,0,0);}");
+	// The icon used to appear only after the first changeProjection() call —
+	// invisible on a transparent background, but an empty grey pill under the
+	// chrome button spec. The editor camera starts perspective; say so.
+	cameraView->setIcon(QIcon(":/icons/perspective-view-80.png"));
+	cameraView->setToolTip(tr("Perspective view | Toggle to switch to orthogonal view"));
 
     controlBarLayout->setSpacing(8);
     controlBarLayout->addWidget(screenShotBtn);
@@ -1802,6 +1807,17 @@ void MainWindow::setupViewPort()
 
     controlBar->setLayout(controlBarLayout);
     controlBar->setStyleSheet(StyleSheet::ControlBar());
+
+    if (!ThemeManager::classicActive()) {
+        // ONE chrome button spec across the app (shared with the desktop
+        // footer, owner direction): rounded grey, consistent height,
+        // horizontal text gutters — replaces the square edge-tight look.
+        for (QWidget *chromeBtn :
+             std::initializer_list<QWidget *>{ screenShotBtn, cameraView,
+                                               wireFramesButton, viewsButton,
+                                               playSceneBtn, playSimBtn })
+            chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
+    }
 
     playerControls = new QWidget;
     if (ThemeManager::classicActive())
