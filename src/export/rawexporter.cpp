@@ -100,6 +100,9 @@ RawExporter::Result RawExporter::exportAssets(const QVector<AssetInfo> &assets,
                 written = dedupedName(e.name, attempt + 1);
 
             const QString destPath = dir.filePath(written);
+            // Re-export regenerates in place (the Publish model): a leftover
+            // from a prior run must not turn the copy into a silent no-op.
+            if (QFile::exists(destPath)) QFile::remove(destPath);
             if (!QFile::copy(e.path, destPath)) {
                 res.warnings.append(
                     QStringLiteral("could not copy %1 (asset %2)").arg(e.path, info.guid));
