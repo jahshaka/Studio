@@ -52,6 +52,18 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
     auto *graphApi = new GraphApi(host);
     auto *materialsApi = new MaterialsApi(host);
     materialsApi->setGraphModule(graphApi);
+
+    // §3a: graph.selectNode/selectedNode/deselect drive the Effects page's
+    // canvas selection (and with it the properties panel) whenever the page
+    // knows the node id; headless graphs keep an API-local selection.
+    if (page) {
+        GraphApi::SelectionDelegate delegate;
+        auto *effectsPage = page;
+        delegate.select = [effectsPage](const QString &id) { return effectsPage->selectGraphNode(id); };
+        delegate.selected = [effectsPage]() { return effectsPage->selectedGraphNodeId(); };
+        delegate.deselect = [effectsPage]() { effectsPage->deselectGraphNodes(); };
+        graphApi->setSelectionDelegate(delegate);
+    }
     engine.addModule(materialsApi);
     engine.addModule(new MaterialApi(host));
     engine.addModule(graphApi);

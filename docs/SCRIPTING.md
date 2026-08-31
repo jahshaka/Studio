@@ -159,4 +159,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `graph.evaluate() -> {values, unsupported, hasPbrMaster}` | document | Folds the current graph to PBR material values (the evaluator is GL-free by design). |
 | `graph.toMaterial(nodeId) -> bool` | document | Evaluates the current graph and applies the resulting PBR material to a mesh node. |
 | `graph.save() -> bool` | document | Serializes the current graph back into its shader asset (only for graphs opened from an asset guid). |
+| `graph.selectNode(id) -> bool` | document | Selects a node. When the Effects page has a node with this id its canvas selection (and the properties panel) follows; otherwise the id must belong to the current script graph. |
+| `graph.selectedNode() -> id\|null` | document | The selected node's id: the Effects page's canvas selection when one exists, else the script-side selection. |
+| `graph.deselect() -> bool` | document | Clears the selection (canvas and script-side). |
 
