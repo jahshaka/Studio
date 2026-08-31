@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "../models/nodemodel.h"
 #include "../models/properties.h"
 #include "../models/socketmodel.h"
-#include "../nodes/test.h" // PropertyNode, TextureNode
+#include "../nodes/test.h" // TextureNode
 
 namespace materials {
 
@@ -400,11 +400,6 @@ struct Compiler
 		if (source->typeName == "texture") {
 			stored = static_cast<TextureNode*>(source)->getTexturePath();
 		}
-		else if (source->typeName == "property") {
-			auto prop = static_cast<PropertyNode*>(source)->getProperty();
-			if (prop && prop->type == PropertyType::Texture)
-				stored = prop->getValue().toString();
-		}
 		if (stored.isEmpty()) return false;
 
 		const QString path = resolve ? resolve(stored) : stored;
@@ -496,49 +491,6 @@ struct Compiler
 				op.literal = Value(obj["x"].toDouble(), obj["y"].toDouble(),
 				                   obj["z"].toDouble(), obj["w"].toDouble());
 			op.hasLiteral = true;
-		}
-		else if (type == "property") {
-			auto prop = static_cast<PropertyNode*>(node)->getProperty();
-			if (!prop) {
-				markUnsupported(op, "property");
-			}
-			else switch (prop->type) {
-			case PropertyType::Float:
-			case PropertyType::Int:
-				op.literal = Value(prop->getValue().toDouble());
-				op.hasLiteral = true;
-				break;
-			case PropertyType::Color: {
-				const QColor c = prop->getValue().value<QColor>();
-				op.literal = Value(c.redF(), c.greenF(), c.blueF(), c.alphaF());
-				op.hasLiteral = true;
-				break;
-			}
-			case PropertyType::Texture: {
-				// out 0: the texture itself (image carrier). out 1: sampled
-				// RGBA at the uv input. out 2: rgba.xyz * 2 - 1 (the node's
-				// GLSL normal decode).
-				const QString stored = prop->getValue().toString();
-				const QString path = (resolve && !stored.isEmpty()) ? resolve(stored) : stored;
-				if (!path.isEmpty()) {
-					op.imagePath = path;
-					op.imageStamp = imageStampFor(path);
-					QImage image(path);
-					if (!image.isNull())
-						op.image = image.convertToFormat(QImage::Format_RGBA8888);
-				}
-				if (op.outIndex == 0) op.isTextureCarrier = true;
-				if (op.outIndex > 0) {
-					op.typeName = "textureSampler"; // same sampling semantics
-					op.inputs.append(makeRef(op, node, 0)); // uv input
-					if (op.outIndex == 2) op.typeName = "propertyNormalSample";
-				}
-				break;
-			}
-			default:
-				markUnsupported(op, QStringLiteral("property(%1)").arg(prop->displayName));
-				break;
-			}
 		}
 		else if (type == "texture") {
 			// image carrier; consumers read op.image, the master binds it directly

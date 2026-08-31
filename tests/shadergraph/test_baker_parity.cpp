@@ -580,22 +580,6 @@ int main(int argc, char** argv)
         QFile::remove(texPath);
     }
 
-    // ================= vec-typed property stays unsupported (until phase 4) ====
-    {
-        Rig r;
-        auto prop = new Vec3Property();
-        prop->displayName = "myVec";
-        prop->name = "myVec";
-        r.graph->addProperty(prop);
-        auto node = new PropertyNode();
-        node->setProperty(prop);
-        r.graph->addNode(node);
-        r.toMaster(node, 0, 0);
-        auto res = r.eval();
-        CHECK(res.unsupportedNodes.size() == 1 && res.unsupportedNodes.first().contains("property(myVec)"),
-              "property: vec3 property reported unsupported (phase 4 retires PropertyNode)");
-    }
-
     // ================= legacy Surface master (Shininess inversion) ============
     {
         Rig r(false);
