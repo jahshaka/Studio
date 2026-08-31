@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
+#include "services/videoutils.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
@@ -207,7 +208,8 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
         break;
 
     case ModelTypes::Texture:
-    case ModelTypes::Music: {
+    case ModelTypes::Music:
+    case ModelTypes::Video: {
         // One row at the file's guid, view_filter AssetsView — a first-class
         // library asset, not the Editor-filtered ghost the old path made.
         const QString guid = GUIDManager::generateGUID();
@@ -222,20 +224,27 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
             return result;
         }
 
-        // Tile thumbnail: the image itself, or the music icon (waveforms later).
+        // Tile thumbnail: the image itself, a first-second video frame grab
+        // (film icon when decode fails — ASSET_MEDIA_SPEC §1), or the music icon.
         QPixmap thumbnail;
         if (type == ModelTypes::Texture) {
             auto thumb = ThumbnailManager::createThumbnail(copied, 256, 256);
             if (thumb && thumb->thumb) thumbnail = QPixmap::fromImage(*thumb->thumb);
         }
+        else if (type == ModelTypes::Video) {
+            thumbnail = VideoUtils::thumbnailFor(copied);
+        }
         else {
             thumbnail = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
         }
 
-        // Import-time metadata: image header / wav header + format + byte size.
+        // Import-time metadata: image header / wav header / video probe
+        // + format + byte size.
         const QJsonObject meta = (type == ModelTypes::Texture)
                                      ? AssetMetadata::forImageFile(copied)
-                                     : AssetMetadata::forAudioFile(copied);
+                                     : (type == ModelTypes::Video)
+                                           ? AssetMetadata::forVideoFile(copied)
+                                           : AssetMetadata::forAudioFile(copied);
         db->createAssetEntry(guid, sourceInfo.fileName(), static_cast<int>(type),
                              QString(), project ? project->getProjectGuid() : QString(),
                              QString(), QString(), AssetHelper::makeBlobFromPixmap(thumbnail),
@@ -248,7 +257,7 @@ AssetImporter::Result AssetImporter::importFile(const QString &filePath, Databas
 
     default:
         result.error = QStringLiteral("'%1' is not an importable library file "
-                                      "(models, images or audio)").arg(sourceInfo.fileName());
+                                      "(models, images, audio or video)").arg(sourceInfo.fileName());
         return result;
     }
 

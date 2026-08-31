@@ -56,7 +56,9 @@ For more information see the LICENSE file
 #include <QProgressDialog>
 #include <QAudioOutput>
 #include <QMediaPlayer>
+#include <QScrollArea>
 #include <QSlider>
+#include <QWheelEvent>
 #include <QFutureWatcher>
 #include <QLocale>
 #include <QPointer>
@@ -74,6 +76,11 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetimporter.h"
 #include "services/assetmetadata.h"
+#include "services/audiopeaks.h"
+#include "services/videoutils.h"
+#include "ui/controls/videopreviewwidget.h"
+#include "ui/controls/waveformwidget.h"
+#include "ui/pages/previewrouter.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "services/thumbnailgenerator.h"
@@ -124,6 +131,24 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 
 			default: break;
 		}
+	}
+
+	// Image viewer (ASSET_MEDIA_SPEC §2): wheel = zoom (drops fit mode),
+	// viewport resize = refit while in fit mode.
+	if (imageScroll && watched == imageScroll->viewport()) {
+		if (event->type() == QEvent::Wheel) {
+			auto *wheel = static_cast<QWheelEvent*>(event);
+			if (!imageOriginal.isNull()) {
+				const double step = wheel->angleDelta().y() > 0 ? 1.25 : 0.8;
+				imageFitMode = false;
+				if (imageFitButton) imageFitButton->setChecked(false);
+				imageZoom = qBound(0.05, imageZoom * step, 16.0);
+				applyImageZoom();
+			}
+			return true;
+		}
+		if (event->type() == QEvent::Resize && imageFitMode && !imageOriginal.isNull())
+			applyImageZoom();
 	}
 
 	return QObject::eventFilter(watched, event);
@@ -217,7 +242,7 @@ void AssetView::closeViewer()
 void AssetView::clearViewer()
 {
 	viewer->clearScene();
-	stopAudioPreview();
+	stopMediaPreviews();
 	if (assetNodeTree) assetNodeTree->clear();
 }
 
@@ -255,6 +280,7 @@ QString AssetView::getAssetType(int id)
 		case static_cast<int>(ModelTypes::Object):			return "Object";			break;
 		case static_cast<int>(ModelTypes::Sky):				return "Sky";				break;
 		case static_cast<int>(ModelTypes::Music):			return "Audio";				break;
+		case static_cast<int>(ModelTypes::Video):			return "Video";				break;
 		case static_cast<int>(ModelTypes::Mesh):			return "Mesh";				break;
 		case static_cast<int>(ModelTypes::File):			return "File";				break;
 		case static_cast<int>(ModelTypes::ParticleSystem):	return "Particle System";	break;
@@ -287,12 +313,53 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     viewersWidget = new QWidget;
     viewers = new QStackedLayout;
 
+    // Image page (ASSET_MEDIA_SPEC §2): scrollable canvas, Fit / 1:1 toggle,
+    // wheel zoom (the wheel drops fit mode and zooms around the current view).
     assetImageViewer = new QWidget;
-    auto imgl = new QGridLayout;
     assetImageCanvas = new QLabel;
-    imgl->addWidget(assetImageCanvas);
-    imgl->setAlignment(Qt::AlignCenter);
+    assetImageCanvas->setAlignment(Qt::AlignCenter);
+    imageScroll = new QScrollArea;
+    imageScroll->setWidget(assetImageCanvas);
+    imageScroll->setWidgetResizable(false);
+    imageScroll->setAlignment(Qt::AlignCenter);
+    imageScroll->setFrameShape(QFrame::NoFrame);
+    imageScroll->viewport()->installEventFilter(this);
+
+    imageFitButton = new QPushButton(tr("Fit"));
+    imageFitButton->setCheckable(true);
+    imageFitButton->setChecked(true);
+    imageFitButton->setFixedWidth(48);
+    imageFitButton->setCursor(Qt::PointingHandCursor);
+    imageActualButton = new QPushButton(tr("1:1"));
+    imageActualButton->setFixedWidth(48);
+    imageActualButton->setCursor(Qt::PointingHandCursor);
+    imageZoomLabel = new QLabel;
+    imageZoomLabel->setStyleSheet("color: #BABABA;");
+
+    auto imageBar = new QHBoxLayout;
+    imageBar->setContentsMargins(12, 6, 12, 6);
+    imageBar->addWidget(imageFitButton);
+    imageBar->addWidget(imageActualButton);
+    imageBar->addWidget(imageZoomLabel);
+    imageBar->addStretch();
+
+    auto imgl = new QVBoxLayout;
+    imgl->setContentsMargins(0, 0, 0, 0);
+    imgl->setSpacing(0);
+    imgl->addLayout(imageBar);
+    imgl->addWidget(imageScroll, 1);
     assetImageViewer->setLayout(imgl);
+
+    connect(imageFitButton, &QPushButton::toggled, this, [this](bool fit) {
+        imageFitMode = fit;
+        applyImageZoom();
+    });
+    connect(imageActualButton, &QPushButton::clicked, this, [this]() {
+        imageFitMode = false;
+        imageFitButton->setChecked(false);
+        imageZoom = 1.0;
+        applyImageZoom();
+    });
 
     // Page 2 of the viewers stack: the audio preview (ASSET_DRAWERS_SPEC §3) —
     // filename, play/pause, seek, time. Qt Multimedia was already linked; this
@@ -318,10 +385,17 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     audioControls->addWidget(audioSeekSlider);
     audioControls->addWidget(audioTimeLabel);
 
+    // The waveform strip (ASSET_MEDIA_SPEC §2): peak envelope, playhead,
+    // click-to-seek. Peaks are cached per guid — see loadWaveform().
+    waveform = new WaveformWidget;
+    waveform->setFixedHeight(96);
+
     auto audioLayout = new QVBoxLayout;
     audioLayout->addStretch();
     audioLayout->addWidget(audioNameLabel);
     audioLayout->addSpacing(12);
+    audioLayout->addWidget(waveform);
+    audioLayout->addSpacing(6);
     audioLayout->addLayout(audioControls);
     audioLayout->addStretch();
     audioLayout->setContentsMargins(48, 0, 48, 0);
@@ -350,6 +424,33 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     connect(audioSeekSlider, &QSlider::sliderMoved, this, [this](int position) {
         mediaPlayer->setPosition(position);
     });
+
+    // Waveform ↔ player wiring (§2): playhead follows playback, clicks seek.
+    connect(mediaPlayer, &QMediaPlayer::durationChanged, waveform, &WaveformWidget::setDuration);
+    connect(mediaPlayer, &QMediaPlayer::positionChanged, waveform, &WaveformWidget::setPosition);
+    connect(waveform, &WaveformWidget::seekRequested, this, [this](qint64 ms) {
+        mediaPlayer->setPosition(ms);
+    });
+
+    // Video page (PreviewPage::Video) — ASSET_MEDIA_SPEC §2.
+    assetVideoViewer = new VideoPreviewWidget;
+
+    // Placeholder page (PreviewPage::Placeholder): icon + name, so File rows
+    // never leave a stale 3D scene or image on screen.
+    assetFileViewer = new QWidget;
+    fileIconLabel = new QLabel;
+    fileIconLabel->setAlignment(Qt::AlignCenter);
+    fileIconLabel->setPixmap(QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png")));
+    fileNameLabel = new QLabel;
+    fileNameLabel->setAlignment(Qt::AlignCenter);
+    fileNameLabel->setStyleSheet("font-size: 14px; color: #EEEEEE;");
+    auto filePageLayout = new QVBoxLayout;
+    filePageLayout->addStretch();
+    filePageLayout->addWidget(fileIconLabel);
+    filePageLayout->addSpacing(8);
+    filePageLayout->addWidget(fileNameLabel);
+    filePageLayout->addStretch();
+    assetFileViewer->setLayout(filePageLayout);
 
     settings = SettingsManager::getDefaultManager();
 	//prefsDialog = new PreferencesDialog(this, db, settings);
@@ -794,7 +895,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     connect(fastGrid, &AssetViewGrid::selectedTile, [&](AssetGridItem *gridItem) {
 		fastGrid->deselectAll();
-		stopAudioPreview();   // switching tiles/pages stops playback (§3)
+		stopMediaPreviews();   // switching tiles/pages stops playback (§2)
 
 		renameWidget->setVisible(false);
 		tagWidget->setVisible(false);
@@ -869,92 +970,64 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 			gridItem->showLoadingOverlay();
 			QApplication::processEvents();
 
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Object) ||
-                gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::ParticleSystem)) {
-                viewers->setCurrentIndex(0);
+            // PreviewRouter (ASSET_MEDIA_SPEC §2): ONE type→page map decides
+            // the viewer; the old flat if-chain per type is gone.
+            const QString guid = gridItem->metadata["guid"].toString();
+            const QString name = gridItem->metadata["name"].toString();
+            const auto type = static_cast<ModelTypes>(gridItem->metadata["type"].toInt());
+            const PreviewPage page = PreviewRouter::pageFor(type);
+            // The switch also stops whatever the previous page was playing
+            // (the currentChanged hook), before the new page starts.
+            viewers->setCurrentIndex(static_cast<int>(page));
 
-                QString path;
-                // if model
-                QDir dir(assetPath);
-                foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-                    if (Constants::MODEL_EXTS.contains(file.suffix())) {
-                        path = file.absoluteFilePath();
-                        break;
+            // Store-file path for the media pages (the row's primary file).
+            const QString storeFile = IrisUtils::join(
+                QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
+                "AssetStore", guid, db->fetchAsset(guid).name);
+
+            switch (page) {
+            case PreviewPage::Viewer3D: {
+                if (type == ModelTypes::Object || type == ModelTypes::ParticleSystem) {
+                    QString path;
+                    QDir dir(assetPath);
+                    foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
+                        if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                            path = file.absoluteFilePath();
+                            break;
+                        }
                     }
-                }
-
-                if (viewer->cachedAsset(gridItem->metadata["guid"].toString())) {
-                    viewer->addNodeToScene(viewer->cachedAsset(gridItem->metadata["guid"].toString()), gridItem->metadata["guid"].toString(), true, false);
+                    if (viewer->cachedAsset(guid))
+                        viewer->addNodeToScene(viewer->cachedAsset(guid), guid, true, false);
+                    else
+                        viewer->loadJafModel(path, guid, false, true, !cached);
                     viewer->orientCamera(pos, rot, distObj);
                 }
-                else {
-                    viewer->loadJafModel(path, gridItem->metadata["guid"].toString(), false, true, !cached);
+                else if (type == ModelTypes::Material) {
+                    viewer->loadJafMaterial(guid);
                     viewer->orientCamera(pos, rot, distObj);
                 }
+                else if (type == ModelTypes::Shader) {
+                    QMap<QString, QString> map;
+                    viewer->loadJafShader(guid, map);
+                    viewer->orientCamera(pos, rot, distObj);
+                }
+                else if (type == ModelTypes::Sky) {
+                    viewer->loadJafSky(guid);
+                }
+                break;
             }
-
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Material)) {
-                viewers->setCurrentIndex(0);
-                if (viewer->cachedAsset(gridItem->metadata["guid"].toString())) {
-                    viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
-                    viewer->orientCamera(pos, rot, distObj);
-                }
-                else {
-                    viewer->loadJafMaterial(gridItem->metadata["guid"].toString());
-                    viewer->orientCamera(pos, rot, distObj);
-                }
-            }
-
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Shader)) {
-                viewers->setCurrentIndex(0);
-                if (viewer->cachedAsset(gridItem->metadata["guid"].toString())) {
-					QMap<QString, QString> map;
-                    viewer->loadJafShader(gridItem->metadata["guid"].toString(), map);
-                    viewer->orientCamera(pos, rot, distObj);
-                }
-                else {
-					QMap<QString, QString> map;
-                    viewer->loadJafShader(gridItem->metadata["guid"].toString(), map);
-                    viewer->orientCamera(pos, rot, distObj);
-                }
-            }
-
-			if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Sky)) {
-				viewers->setCurrentIndex(0);
-				viewer->loadJafSky(gridItem->metadata["guid"].toString());
-			}
-
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Texture)) {
-                viewers->setCurrentIndex(1);
-                auto assetPath = IrisUtils::join(
-                    QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-                    "AssetStore",
-                    gridItem->metadata["guid"].toString(),
-                    db->fetchAsset(gridItem->metadata["guid"].toString()).name
-                );
-
-                QPixmap image(assetPath);
-                // Null-pixmap guard (§3): scaling a null pixmap warns and
-                // leaves the last image on the canvas.
-                if (image.isNull()) {
-                    assetImageCanvas->setPixmap(QPixmap());
-                    assetImageCanvas->setText(tr("No preview available"));
-                }
-                else {
-                    assetImageCanvas->setText(QString());
-                    assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
-                }
-            }
-
-            if (gridItem->metadata["type"].toInt() == static_cast<int>(ModelTypes::Music)) {
-                // Page 2 + autoplay (§3).
-                auto assetPath = IrisUtils::join(
-                    QStandardPaths::writableLocation(QStandardPaths::AppDataLocation),
-                    "AssetStore",
-                    gridItem->metadata["guid"].toString(),
-                    db->fetchAsset(gridItem->metadata["guid"].toString()).name
-                );
-                showAudioPreview(assetPath, gridItem->metadata["name"].toString());
+            case PreviewPage::Image:
+                showImagePreview(storeFile);
+                break;
+            case PreviewPage::Audio:
+                showAudioPreview(guid, storeFile, name);
+                break;
+            case PreviewPage::Video:
+                showVideoPreview(storeFile, name);
+                break;
+            case PreviewPage::Placeholder:
+                showFilePlaceholder(name);
+                break;
             }
 
 			selectedGridItem = gridItem;
@@ -1028,6 +1101,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		for (const auto &ext : Constants::MODEL_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::IMAGE_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::AUDIO_EXTS) patterns << "*." + ext;
+		for (const auto &ext : Constants::VIDEO_EXTS) patterns << "*." + ext;
 		patterns << "*." + Constants::ASSET_EXT;
 
 		const auto files = QFileDialog::getOpenFileNames(this,
@@ -1127,10 +1201,21 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
     _metadataPane->setLayout(metaLayout);
 
-    viewers->addWidget(viewer->asWidget());
-    viewers->addWidget(assetImageViewer);
-    viewers->addWidget(assetAudioViewer);
+    // Page order IS the PreviewPage enum (ui/pages/previewrouter.h).
+    viewers->addWidget(viewer->asWidget());      // PreviewPage::Viewer3D
+    viewers->addWidget(assetImageViewer);        // PreviewPage::Image
+    viewers->addWidget(assetAudioViewer);        // PreviewPage::Audio
+    viewers->addWidget(assetVideoViewer);        // PreviewPage::Video
+    viewers->addWidget(assetFileViewer);         // PreviewPage::Placeholder
     viewersWidget->setLayout(viewers);
+
+    // Leaving a media page stops its player (§2: viewers stop on page change).
+    connect(viewers, &QStackedLayout::currentChanged, this, [this](int index) {
+        if (index != static_cast<int>(PreviewPage::Audio) && mediaPlayer)
+            mediaPlayer->stop();
+        if (index != static_cast<int>(PreviewPage::Video) && assetVideoViewer)
+            assetVideoViewer->stop();
+    });
 
 	//split->addWidget(viewer);
 	split->addWidget(viewersWidget);
@@ -1946,6 +2031,7 @@ void AssetView::importFiles(const QStringList &fileNames)
 		switch (type) {
 		case ModelTypes::Texture:
 		case ModelTypes::Music:
+		case ModelTypes::Video:
 			importImageOrAudio(fileName);
 			break;
 		default:
@@ -2000,18 +2086,112 @@ void AssetView::importImageOrAudio(const QString &fileName)
 	filterFromSelection();
 }
 
-void AssetView::stopAudioPreview()
+void AssetView::stopMediaPreviews()
 {
 	if (mediaPlayer) mediaPlayer->stop();
+	if (assetVideoViewer) assetVideoViewer->stop();
 }
 
-void AssetView::showAudioPreview(const QString &filePath, const QString &displayName)
+void AssetView::showAudioPreview(const QString &guid, const QString &filePath,
+                                 const QString &displayName)
 {
-	viewers->setCurrentIndex(2);
+	viewers->setCurrentIndex(static_cast<int>(PreviewPage::Audio));
 	audioNameLabel->setText(displayName);
 	audioSeekSlider->setValue(0);
+	waveform->setPosition(0);
+	loadWaveform(guid, filePath);
 	mediaPlayer->setSource(QUrl::fromLocalFile(filePath));
-	mediaPlayer->play();   // double-click a Music tile -> page 2 + autoplay (§3)
+	mediaPlayer->play();   // double-click a Music tile -> audio page + autoplay
+}
+
+void AssetView::loadWaveform(const QString &guid, const QString &filePath)
+{
+	waveformGuid = guid;
+
+	// Cached per guid in the row's properties JSON, beside "metadata"
+	// (ASSET_MEDIA_SPEC §2) — reselects render instantly.
+	const auto record = db->fetchAsset(guid);
+	const QJsonArray cached =
+	    QJsonDocument::fromJson(record.properties).object()["waveform"].toArray();
+	if (!cached.isEmpty()) {
+		waveform->setPeaks(AudioPeaks::fromJson(cached));
+		return;
+	}
+
+	// First decode: QtConcurrent worker ("…" meanwhile), persist on arrival
+	// on the UI thread — it owns the SQLite connection.
+	waveform->showComputing();
+	auto *watcher = new QFutureWatcher<AudioPeaks::Peaks>(this);
+	connect(watcher, &QFutureWatcher<AudioPeaks::Peaks>::finished, this, [this, watcher, guid]() {
+		watcher->deleteLater();
+		const AudioPeaks::Peaks peaks = watcher->result();
+		if (peaks.isEmpty()) {
+			if (waveformGuid == guid) waveform->clear();
+			return;
+		}
+		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
+		if (!props.contains("waveform")) {
+			props["waveform"] = AudioPeaks::toJson(peaks);
+			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
+		}
+		if (waveformGuid == guid) waveform->setPeaks(peaks);
+	});
+	watcher->setFuture(QtConcurrent::run(
+	    [filePath]() { return AudioPeaks::compute(filePath); }));
+}
+
+void AssetView::showVideoPreview(const QString &filePath, const QString &displayName)
+{
+	viewers->setCurrentIndex(static_cast<int>(PreviewPage::Video));
+	assetVideoViewer->showVideo(filePath, displayName);
+}
+
+void AssetView::showImagePreview(const QString &filePath)
+{
+	imageOriginal = QPixmap(filePath);
+	imageFitMode = true;
+	imageZoom = 1.0;
+	if (imageFitButton) imageFitButton->setChecked(true);
+	applyImageZoom();
+}
+
+void AssetView::showFilePlaceholder(const QString &displayName)
+{
+	fileNameLabel->setText(displayName);
+}
+
+void AssetView::applyImageZoom()
+{
+	if (imageOriginal.isNull()) {
+		assetImageCanvas->setPixmap(QPixmap());
+		assetImageCanvas->setText(tr("No preview available"));
+		assetImageCanvas->adjustSize();
+		if (imageZoomLabel) imageZoomLabel->setText(QString());
+		return;
+	}
+
+	assetImageCanvas->setText(QString());
+	if (imageFitMode) {
+		const QSize viewport = imageScroll->viewport()->size();
+		QSize target = imageOriginal.size();
+		target.scale(viewport, Qt::KeepAspectRatio);
+		if (target.width() > imageOriginal.width())   // never upscale in fit
+			target = imageOriginal.size();
+		imageZoom = imageOriginal.width() > 0
+		                ? double(target.width()) / imageOriginal.width() : 1.0;
+		assetImageCanvas->setPixmap(imageOriginal.scaled(
+		    target, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+	}
+	else {
+		const QSize target = imageOriginal.size() * imageZoom;
+		assetImageCanvas->setPixmap(
+		    imageZoom == 1.0 ? imageOriginal
+		                     : imageOriginal.scaled(target, Qt::KeepAspectRatio,
+		                                            Qt::SmoothTransformation));
+	}
+	assetImageCanvas->adjustSize();
+	if (imageZoomLabel)
+		imageZoomLabel->setText(QStringLiteral("%1%").arg(qRound(imageZoom * 100)));
 }
 
 void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
@@ -2295,6 +2475,16 @@ static QString metadataDetailsText(const QJsonObject &meta, const QDateTime &imp
 			                                       : QString::number(channels));
 		}
 	}
+	else if (kind == "video") {
+		if (meta.contains("width"))
+			lines << QStringLiteral("Resolution: %1×%2")
+			             .arg(meta["width"].toInt()).arg(meta["height"].toInt());
+		if (meta.contains("duration")) lines << "Duration: " + formatDuration(meta["duration"].toInteger());
+		if (meta.contains("frameRate"))
+			lines << QStringLiteral("Frame Rate: %1 fps")
+			             .arg(meta["frameRate"].toDouble(), 0, 'g', 4);
+		if (meta.contains("videoCodec")) lines << "Codec: " + meta["videoCodec"].toString();
+	}
 
 	if (meta.contains("files")) lines << "Files: " + formatCount(meta["files"].toInt());
 	if (meta.contains("fileSize")) lines << "Size: " + formatBytes(meta["fileSize"].toInteger());
@@ -2377,6 +2567,19 @@ void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int
 {
 	const QString folder = IrisUtils::join(AssetMetadata::storeRootPath(), guid);
 	QPointer<AssetGridItem> tile(widget);
+
+	// Video is the one kind whose rich fields need the GUI thread
+	// (QMediaPlayer probe — ASSET_MEDIA_SPEC §1): compute right here, where
+	// ensure() persists the complete block, instead of on the worker where
+	// it would come back degraded.
+	if (assetType == static_cast<int>(ModelTypes::Video)) {
+		const QJsonObject meta = AssetMetadata::ensure(db, guid);
+		if (tile) {
+			if (!meta.isEmpty()) tile->sceneProperties["metadata"] = meta;
+			if (selectedGridItem == tile) fetchMetadata(tile);
+		}
+		return;
+	}
 
 	auto *watcher = new QFutureWatcher<QJsonObject>(this);
 	connect(watcher, &QFutureWatcher<QJsonObject>::finished, this, [this, watcher, tile, guid]() {
@@ -2542,6 +2745,11 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	}
 	else if (aType == static_cast<int>(ModelTypes::Music)) {
 		jafType = ModelTypes::Music;
+	}
+	else if (aType == static_cast<int>(ModelTypes::Video)) {
+		// Copies like audio/textures (ASSET_MEDIA_SPEC §1, Music precedent).
+		// No runtime AssetManager entry yet — scene playback is §3.
+		jafType = ModelTypes::Video;
 	}
     else if (aType == static_cast<int>(ModelTypes::Shader)) {
         jafType = ModelTypes::Shader;
@@ -2830,6 +3038,10 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 	}
 	case ModelTypes::Music:
 		pixmap = QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+		break;
+	case ModelTypes::Video:
+		// Re-grab the first-second frame (film icon when decode fails).
+		pixmap = VideoUtils::thumbnailFor(IrisUtils::join(assetFolder, record.name));
 		break;
 	case ModelTypes::Object:
 	case ModelTypes::ParticleSystem: {

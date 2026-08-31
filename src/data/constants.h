@@ -54,6 +54,7 @@ namespace Constants
 	extern QString DB_ASSETS_TABLE;
 
     extern QList<QString> AUDIO_EXTS;
+    extern QList<QString> VIDEO_EXTS;
     extern QList<QString> IMAGE_EXTS;
     extern QList<QString> MODEL_EXTS;
     extern QList<QString> WHITELIST;

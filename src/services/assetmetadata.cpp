@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "irisgl/core/irisutils.h"
+#include "services/videoutils.h"
 
 namespace {
 
@@ -173,6 +174,22 @@ QJsonObject AssetMetadata::forAudioFile(const QString &filePath)
     return meta;
 }
 
+QJsonObject AssetMetadata::forVideoFile(const QString &filePath)
+{
+    QJsonObject meta;
+    meta["kind"] = "video";
+    meta["format"] = formatOf(filePath);
+    meta["fileSize"] = sizeOf(filePath);
+    // The rich fields need the GUI thread (QMediaPlayer); on a worker this
+    // stays a degraded block and ensure() will not persist it.
+    if (VideoUtils::canUseMultimedia()) {
+        const QJsonObject probed = VideoUtils::probeFile(filePath);
+        for (auto it = probed.begin(); it != probed.end(); ++it)
+            meta[it.key()] = it.value();
+    }
+    return meta;
+}
+
 QJsonObject AssetMetadata::forGenericFile(const QString &filePath)
 {
     QJsonObject meta;
@@ -202,6 +219,11 @@ QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFo
     case ModelTypes::Music: {
         const QString audio = findByExtension(storeFolder, Constants::AUDIO_EXTS);
         if (!audio.isEmpty()) return forAudioFile(audio);
+        break;
+    }
+    case ModelTypes::Video: {
+        const QString video = findByExtension(storeFolder, Constants::VIDEO_EXTS);
+        if (!video.isEmpty()) return forVideoFile(video);
         break;
     }
     default:
@@ -236,6 +258,9 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
     const QJsonObject meta = computeForStore(record.type, QDir(root).filePath(guid));
     if (meta.isEmpty()) return meta;   // nothing to describe — don't persist a stub
+    // A video block computed off the GUI thread is degraded (no QMediaPlayer
+    // there) — hand it back for display but let a GUI-thread call enrich later.
+    if (meta["kind"].toString() == "video" && !meta.contains("duration")) return meta;
 
     props["metadata"] = meta;
     db->updateAssetProperties(guid, QJsonDocument(props).toJson());
