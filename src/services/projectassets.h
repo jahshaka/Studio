@@ -46,6 +46,15 @@ public:
     /// the session AssetManager entries from CAS-resolved bytes. Idempotent.
     static Result addToProject(const QString &guid, Database *db, Project *project);
 
+    /// THE one session-hydration routine (IMAGE_PLANE_SPEC §6): registers the
+    /// AssetManager entry for `guid`, bytes resolved pin-first through the CAS
+    /// (AssetCas::resolvePinned falls back to the library source). Skips guids
+    /// already registered, unknown guids and types with no session shape.
+    /// Called by addToProject (the adding session) and by
+    /// ProjectManager::registerProjectSessionAssets (project open/reopen) so
+    /// the two sessions hydrate identically.
+    static bool registerSessionAsset(const QString &guid, Database *db, Project *project);
+
     /// Move the project's pin of `guid` to the asset's CURRENT source oid
     /// (the "Update to latest" affordance).
     static bool updatePinToLatest(const QString &guid, Database *db, Project *project);

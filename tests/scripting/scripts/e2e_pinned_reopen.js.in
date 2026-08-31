@@ -1,0 +1,68 @@
+// scripting.e2e.pinned_reopen — IMAGE_PLANE_SPEC §6: pinned library assets
+// hydrate into the session on project REOPEN, not only in the adding session.
+//
+// Before the fix, ProjectManager::registerProjectSessionAssets read only the
+// legacy per-project rows; pin rows (the pin world's ONLY membership shape)
+// were registered exclusively by ProjectAssets::addToProject in the ADDING
+// session — after reopen the panel listed them but every AssetManager lookup
+// missed (material drag no-op). The fix unions fetchProjectPinnedAssets into
+// session registration through ProjectAssets::registerSessionAsset, THE one
+// hydration routine.
+//
+// Gate flow (spec §6): add-to-project → close → reopen → drag-equivalent
+// apply (material.apply by guid) onto a cube → document material asserted.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+
+// Library-side imports first (the store; no project open yet, so nothing can
+// pin them prematurely).
+var matGuid = assets.importFile(fixtures + "/pinned_red.material");
+assert(matGuid && matGuid.length > 10, "importFile(.material) -> library material");
+var texGuid = assets.importFile(fixtures + "/tiny.png");
+assert(texGuid && texGuid.length > 10, "importFile(.png) -> library texture");
+
+var proj = project.create("Pinned Reopen " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// Reference-with-pin membership: the returned guid IS the library guid.
+assert(assets.addToProject(matGuid) === matGuid, "assets.addToProject(material) -> pin, not clone");
+assert(assets.addToProject(texGuid) === texGuid, "assets.addToProject(texture) -> pin, not clone");
+
+var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+assert(cube.length > 10, "scene.addPrimitive(cube)");
+
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (REOPEN — the fixed session)");
+
+// The pinned members are project members after reopen.
+var listed = assets.list({ scope: "project" }).map(function (a) { return a.guid; });
+assert(listed.indexOf(matGuid) >= 0, "pinned material listed after reopen");
+assert(listed.indexOf(texGuid) >= 0, "pinned texture listed after reopen");
+
+// THE §6 assertion: the reopened session HYDRATED the pin members — the
+// AssetManager entries the viewport's drag lookups read. This is exactly
+// what failed before the fix (the pre-fix registration read only legacy
+// per-project rows).
+var session = assets.list({ scope: "session" }).map(function (a) { return a.guid; });
+assert(session.indexOf(matGuid) >= 0, "pinned material HYDRATED into the session after reopen");
+assert(session.indexOf(texGuid) >= 0, "pinned texture HYDRATED into the session after reopen");
+
+// Guids survive the round-trip.
+var cubeAgain = scene.find("Cube");
+assert(cubeAgain === cube, "cube re-found by name with the same guid");
+
+// The drag-equivalent apply, by the PINNED guid, in the REOPENED session.
+assert(material.apply(cube, matGuid) === true, "material.apply(pinned material guid)");
+var mat = material.get(cube);
+assert(mat && Object.keys(mat).length > 0, "document material present after apply");
+if (mat.diffuseColor !== undefined)
+    assert(("" + mat.diffuseColor).toLowerCase() === "#ff0000",
+           "applied material carries the fixture's diffuse red");
+
+console.log("pinned_reopen: ALL OK");

@@ -148,6 +148,10 @@ public:
 	/// tile's thumbnail (3D types through the asset viewer screenshot path,
 	/// images via ThumbnailManager, audio/files back to their type icon).
 	void rebuildTileThumbnail(AssetGridItem *item);
+	/// Tile context menu → "Create Material from Image" (IMAGE_PLANE_SPEC
+	/// option B1): mints the companion PBR material asset, pins it into the
+	/// open project and adds its library tile.
+	void createMaterialFromImageTile(AssetGridItem *item);
 	void showEvent(QShowEvent *event) override;
 
 	/// THE import dispatch (ASSET_DRAWERS_SPEC §3): every path (drop pad,

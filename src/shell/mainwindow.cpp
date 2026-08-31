@@ -1995,6 +1995,10 @@ void MainWindow::setupViewPort()
         addAssetParticleSystem(v, pos, guid, name);
     });
 
+    connect(events, &EditorViewportEvents::addDroppedImagePlane, this, [this](QVector3D pos, QString guid) {
+        sceneEditService->addImagePlane(guid, pos);
+    });
+
     connect(events, &EditorViewportEvents::sceneNodeSelected,
             this,   qOverload<iris::SceneNodePtr>(&MainWindow::sceneNodeSelected));
 

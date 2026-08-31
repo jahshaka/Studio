@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
+#include "services/imagematerial.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -78,13 +79,48 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
 
     // Session registrations — the ORIGINAL guids, bytes CAS-resolved through
     // the fresh pins (identical to what the readers will resolve).
-    for (const QString &member : members) {
-        if (sessionHas(member)) continue;
-        const auto memberRecord = db->fetchAsset(member);
-        if (memberRecord.guid.isEmpty()) continue;
-        const QString path = AssetCas::resolvePinned(conn, root, projectGuid, member);
+    for (const QString &member : members)
+        registerSessionAsset(member, db, project);
 
-        switch (static_cast<ModelTypes>(memberRecord.type)) {
+    // Owner call (IMAGE_PLANE_SPEC §8.1, 2026-08-31): an image added to a
+    // project ALSO gets its companion material asset — created in the
+    // library, then pinned in through this same function so it lands in the
+    // bin, session-registered and droppable. BOUNDARY: only the DIRECTLY
+    // added asset auto-creates — dependency textures riding an object's
+    // closure never do (an object with 30 textures must not explode into 30
+    // materials), and re-adding the same image is a no-op (a Material
+    // depending on the texture already exists). The recursive addToProject
+    // cannot loop: the companion is a Material, and Materials never
+    // auto-create.
+    if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture
+        && !ImageMaterial::hasCompanionMaterial(guid)) {
+        const QString materialGuid = ImageMaterial::createMaterialAsset(guid, db, project);
+        if (!materialGuid.isEmpty()) {
+            const Result companion = addToProject(materialGuid, db, project);
+            result.pinnedGuids.append(companion.pinnedGuids);
+            result.pinnedGuids.removeDuplicates();
+        }
+    }
+
+    result.guid = guid;
+    return result;
+}
+
+bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
+                                         Project *project)
+{
+    if (!db || !project || project->getProjectGuid().isEmpty()) return false;
+    if (sessionHas(guid)) return true;
+    const auto memberRecord = db->fetchAsset(guid);
+    if (memberRecord.guid.isEmpty()) return false;
+
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QString projectGuid = project->getProjectGuid();
+    const QString member = guid;
+    const QString path = AssetCas::resolvePinned(conn, root, projectGuid, member);
+
+    switch (static_cast<ModelTypes>(memberRecord.type)) {
         case ModelTypes::Object: {
             if (path.isEmpty()) break;
             auto node = iris::MeshNode::loadAsSceneFragment(
@@ -164,12 +200,9 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
             break;
         }
         default:
-            break;
+            return false;   // no session shape for this type (Mesh rows etc.)
         }
-    }
-
-    result.guid = guid;
-    return result;
+    return true;
 }
 
 bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project *project)

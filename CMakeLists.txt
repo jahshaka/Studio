@@ -119,6 +119,7 @@ set(SRCS
     src/services/import/assetimporters.cpp
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
+    src/services/imagematerial.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
@@ -328,6 +329,7 @@ set(HEADERS
     src/services/audiopeaks.h
     src/services/videoutils.h
     src/services/projectservice.h
+    src/services/imagematerial.h
     src/services/sceneeditservice.h
     src/services/thumbnailservice.h
     src/services/undoservice.h

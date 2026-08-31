@@ -1,0 +1,111 @@
+// scripting.e2e.image_material — IMAGE_PLANE_SPEC option B1: the companion
+// image material, both routes.
+//
+//   1. AUTOMATIC (owner call §8.1, 2026-08-31): adding an image to a project
+//      also creates its material asset, pinned into the bin;
+//   2. the boundary: dependency textures riding an OBJECT's closure do NOT
+//      auto-create (an object with N textures must not mint N materials);
+//   3. materials.createFromImage — the manual/store-side verb, same helper;
+//   4. the material is real: PBR, image as baseColorMap, and it APPLIES to a
+//      mesh by guid (the bin-drag equivalent), surviving save/close/reopen.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b) { return Math.abs(a - b) < 1e-3; }
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+var modelFixture = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+
+var texGuid = assets.importFile(fixtures + "/implane_wide.png");
+assert(texGuid.length > 10, "image imported to the library");
+
+var proj = project.create("Image Material " + Date.now());
+assert(proj.length > 10, "project.create");
+
+function projectMaterials() {
+    return assets.list({ scope: "project", type: "material" });
+}
+var materialsBefore = projectMaterials().length;
+
+// ---- 1. automatic companion on a DIRECT image add-to-project ----
+assert(assets.addToProject(texGuid) === texGuid, "assets.addToProject(image)");
+var afterImage = projectMaterials();
+assert(afterImage.length === materialsBefore + 1,
+       "direct image add-to-project auto-created exactly ONE companion material");
+
+var companion = null;
+for (var i = 0; i < afterImage.length; i++) {
+    if (assets.dependencies(afterImage[i].guid).indexOf(texGuid) >= 0) companion = afterImage[i].guid;
+}
+assert(companion !== null, "companion material carries the Material->Texture dependency row");
+
+// The companion is a session registration too (bin-droppable after the add).
+var session = assets.list({ scope: "session" }).map(function (a) { return a.guid; });
+assert(session.indexOf(companion) >= 0, "companion material hydrated into the session");
+
+// Re-adding the same image does NOT mint a second material (idempotent).
+assets.addToProject(texGuid);
+assert(projectMaterials().length === materialsBefore + 1,
+       "re-adding the same image creates no second material");
+
+// ---- 2. boundary: an object's dependency textures do NOT auto-create ----
+var objGuid = assets.import(modelFixture);
+assert(objGuid.length > 10, "textured model imported to the library");
+var beforeObject = projectMaterials().length;
+assets.addToProject(objGuid);
+var objectTextures = assets.dependencies(objGuid).filter(function (g) {
+    var m = assets.metadata(g);
+    return m.type === "texture";
+});
+assert(objectTextures.length > 0, "the model really does carry dependency textures");
+var afterObject = projectMaterials();
+for (var j = 0; j < afterObject.length; j++) {
+    var deps = assets.dependencies(afterObject[j].guid);
+    for (var k = 0; k < objectTextures.length; k++)
+        assert(deps.indexOf(objectTextures[k]) < 0,
+               "no auto-material for dependency texture " + objectTextures[k]);
+}
+
+// ---- 3. the manual verb ----
+var manual = materials.createFromImage(texGuid);
+assert(manual.length > 10, "materials.createFromImage -> material guid");
+assert(manual !== companion, "the manual verb mints a distinct asset");
+assert(assets.dependencies(manual).indexOf(texGuid) >= 0,
+       "manual material carries the dependency row too");
+var listedNow = projectMaterials().map(function (m) { return m.guid; });
+assert(listedNow.indexOf(manual) >= 0, "manual material is pinned into the project bin");
+
+var thrown = false;
+try { materials.createFromImage("no-such-guid"); } catch (e) { thrown = true; }
+assert(thrown, "materials.createFromImage refuses a non-texture guid");
+
+// ---- 3b. the B2 graph twin: an editable Shader graph asset ----
+var shaderGuid = materials.createFromImage(texGuid, { graph: true });
+assert(shaderGuid.length > 10, "createFromImage({graph:true}) -> shader guid");
+var shaders = assets.list({ scope: "project", type: "shader" }).map(function (s) { return s.guid; });
+assert(shaders.indexOf(shaderGuid) >= 0, "graph twin registered as a project Shader asset");
+var loaded = materials.loadGraph(shaderGuid);
+assert(loaded.nodes === 3, "graph twin loads: master + texture + textureSampler (3 nodes)");
+assert(("" + loaded.master).length > 0, "graph twin has a master node");
+
+// ---- 4. it is a REAL material: applies to a mesh and survives a reopen ----
+var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
+assert(material.apply(cube, companion) === true, "companion material applies to a mesh by guid");
+var mat = material.get(cube);
+assert(("" + mat.baseColorMap).length > 0, "applied material carries the image as baseColorMap");
+assert(near(mat.roughness, 1), "roughness 1");
+assert(near(mat.metallic, 0), "metallic 0");
+
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (reopen)");
+
+var cubeAgain = scene.find("Cube");
+var matAgain = material.get(cubeAgain);
+assert(("" + matAgain.baseColorMap).length > 0, "baseColorMap survives save/close/reopen");
+assert(projectMaterials().map(function (m) { return m.guid; }).indexOf(companion) >= 0,
+       "companion material still a project member after reopen");
+
+console.log("image_material: ALL OK");

@@ -307,6 +307,9 @@ protected slots:
 
 	void editFileExternally();
 	void exportTexture();
+	/// Image items (IMAGE_PLANE_SPEC option B1): mints the companion PBR
+	/// material asset for the selected image and pins it into the project.
+	void createMaterialFromImage();
     void exportSky();
     void exportMaterial();
 	void exportMaterialPreview();

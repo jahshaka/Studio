@@ -21,9 +21,12 @@ For more information see the LICENSE file
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMatrix3x3>
 #include <QPixmap>
+#include <QQuaternion>
 #include <QTemporaryDir>
 #include <QSqlDatabase>
 #include <QTextStream>
@@ -53,6 +56,8 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/materialpreset.h"
+#include "services/assetmetadata.h"
+#include "services/imagematerial.h"
 #include "services/scenenodehelper.h"
 #include "services/thumbnailmanager.h"
 #include "viewport/ieditorviewport.h"
@@ -350,6 +355,97 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, QVector
     node->setLocalPos(position);
 
     addNodeToScene(node, ignore);
+}
+
+iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
+                                                  QVector3D position,
+                                                  const ImagePlaneOptions &opts)
+{
+    // Material first — ImageMaterial::fromTexture is the shared builder
+    // (IMAGE_PLANE_SPEC §3): it resolves the bytes pin-first and probes the
+    // alpha channel. No material means no resolvable image: refuse cleanly.
+    QString resolvedPath;
+    auto material = ImageMaterial::fromTexture(textureGuid, db, project, &resolvedPath);
+    if (!material) {
+        qWarning() << "addImagePlane: texture" << textureGuid << "resolves to no readable image";
+        return iris::MeshNodePtr();
+    }
+
+    // Aspect from the import-time metadata block (lazy backfill for old
+    // rows); a header-only decode is the fallback for rows with no block.
+    const QJsonObject meta = AssetMetadata::ensure(db, textureGuid);
+    int w = meta.value("width").toInt();
+    int h = meta.value("height").toInt();
+    if (w <= 0 || h <= 0) {
+        const QSize size = QImageReader(resolvedPath).size();
+        w = size.width();
+        h = size.height();
+    }
+    if (w <= 0 || h <= 0) w = h = 1;
+
+    const auto record = db->fetchAsset(textureGuid);
+    const QString baseName = QFileInfo(record.name).completeBaseName();
+    const QString nodeGuid = GUIDManager::generateGUID();
+
+    iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
+        ":/content/primitives/plane.obj",
+        baseName.isEmpty() ? QStringLiteral("Image Plane") : baseName,
+        nodeGuid);
+
+    // plane.obj is a 2x2 XZ quad — 0.5 * the aspect-normalized extents caps
+    // the long side at exactly 1 m.
+    const float wf = static_cast<float>(w), hf = static_cast<float>(h);
+    node->setLocalScale(0.5f * QVector3D(w >= h ? 1.0f : wf / hf,
+                                         1.0f,
+                                         h > w ? 1.0f : hf / wf));
+
+    // Billboard-once (§5, owner call §8.4): rotate the +Y plane normal onto
+    // the direction to the editor camera, roll aligned to the camera's up.
+    // Afterwards the node is completely ordinary.
+    if (viewport && viewport->editorCamera()) {
+        auto cam = viewport->editorCamera();
+        const QVector3D toCam = (cam->getGlobalPosition() - position).normalized();
+        if (!toCam.isNull()) {
+            QVector3D upHint = cam->getGlobalRotation().rotatedVector(QVector3D(0, 1, 0));
+            QVector3D right = QVector3D::crossProduct(upHint, toCam);
+            if (right.lengthSquared() < 1e-6f)  // camera straight above/below
+                right = QVector3D::crossProduct(QVector3D(0, 0, -1), toCam);
+            right.normalize();
+            // Local +X → right, +Y (the normal) → toCam, +Z → right × toCam
+            // (the plane's V axis runs along +Z, so the image top faces the
+            // camera's up).
+            const QVector3D zAxis = QVector3D::crossProduct(right, toCam);
+            const float m[9] = { right.x(), toCam.x(), zAxis.x(),
+                                 right.y(), toCam.y(), zAxis.y(),
+                                 right.z(), toCam.z(), zAxis.z() };
+            node->setLocalRot(QQuaternion::fromRotationMatrix(QMatrix3x3(m)));
+        }
+    }
+
+    node->setMaterial(material);
+    if (!opts.doubleSided) {
+        // createBasicMeshNode defaults to cull-none (double-sided) — exactly
+        // the §8.3 default for image planes; single-sided culls back faces.
+        node->setFaceCullingMode(iris::FaceCullingMode::Back);
+    }
+
+    // A DB object row like the built-in primitives get (the dependency row
+    // below and the export walkers hang off it).
+    QJsonObject props;
+    props["type"] = "builtin";
+    db->createAssetEntry(nodeGuid, node->getName(),
+                         static_cast<int>(ModelTypes::Object),
+                         project->getProjectGuid(), project->getProjectGuid(),
+                         QString(), QString(), QByteArray(),
+                         QJsonDocument(props).toJson(), QByteArray(), QByteArray());
+    db->createDependency(static_cast<int>(ModelTypes::Object),
+                         static_cast<int>(ModelTypes::Texture),
+                         nodeGuid, textureGuid, project->getProjectGuid());
+
+    // Position is already decided (the drop point) — ignore the spawn offset.
+    node->setLocalPos(position);
+    addNodeToScene(node, /*ignore=*/true);
+    return node;
 }
 
 void SceneEditService::addAssetParticleSystem(bool ignore, QVector3D position, QString guid,
