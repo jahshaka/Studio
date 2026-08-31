@@ -32,6 +32,24 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
 {
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto materialDefinition = definition.value("material").toObject();
+
+        // PBR-tagged blobs (materialType "pbr" — every GLB imported since the
+        // importer fix) rebuild an iris::PbrMaterial from the saved values.
+        // The legacy path below would leave a blank CustomMaterial: no builtin
+        // shader guid matches, generate() never runs, no properties exist.
+        if (materialDefinition.value("materialType").toString() == QStringLiteral("pbr")) {
+            auto pbr = iris::PbrMaterial::create();
+            const QJsonObject values = materialDefinition.value("values").toObject();
+            for (const iris::Property* property : pbr->properties) {
+                if (!values.contains(property->name)) continue;
+                if (property->type == iris::PropertyType::Color)
+                    pbr->setValue(property->name,
+                                  QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
+                else
+                    pbr->setValue(property->name, values.value(property->name).toVariant());
+            }
+            node.staticCast<iris::MeshNode>()->setMaterial(pbr);
+        } else {
         auto nodeMaterial = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
 
         QFileInfo shaderFile;
@@ -86,6 +104,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
             else {
                 nodeMaterial->setValue(property->name, QVariant::fromValue(materialDefinition.value(property->name)));
             }
+        }
         }
     }
 
