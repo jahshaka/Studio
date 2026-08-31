@@ -6,6 +6,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
 add_executable(test_pbr_evaluator
     test_pbr_evaluator.cpp
     test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
@@ -42,6 +43,7 @@ set_tests_properties(shadergraph.pbr_evaluator PROPERTIES ENVIRONMENT "QT_QPA_PL
 add_executable(test_node_regressions
     test_node_regressions.cpp
     test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
@@ -74,6 +76,47 @@ target_include_directories(test_node_regressions PRIVATE
 target_link_libraries(test_node_regressions PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 add_test(NAME shadergraph.node_regressions COMMAND test_node_regressions WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.node_regressions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
+
+# Materials Evaluator parity suite (MATERIALS_EVALUATOR_SPEC section 6): the
+# audit's probe table as fixtures, one hand-computed case per op node,
+# sockethelper coercion parity, fake-fragment-context approximations, and the
+# graph.bakeInfo classifier. Same slice as test_node_regressions.
+add_executable(test_baker_parity
+    test_baker_parity.cpp
+    test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/sockethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/generator/shadercontext.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
+set_target_properties(test_baker_parity PROPERTIES
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_baker_parity PRIVATE EFFECT_BUILD_AS_LIB)
+target_include_directories(test_baker_parity PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+   ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_baker_parity PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+add_test(NAME shadergraph.baker_parity COMMAND test_baker_parity WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadergraph.baker_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
 
 # Fuzzy matcher for the tab-search node palette: pure QString logic.
 add_executable(test_fuzzy_search test_fuzzy_search.cpp)

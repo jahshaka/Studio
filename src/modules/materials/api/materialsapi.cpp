@@ -363,8 +363,12 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "getValue", "graph.getValue(nodeId) -> value",
           "Reads a node's value back.",
           Needs::Document },
-        { "evaluate", "graph.evaluate() -> {values, unsupported, hasPbrMaster}",
-          "Folds the current graph to PBR material values (the evaluator is GL-free by design).",
+        { "evaluate", "graph.evaluate() -> {values, unsupported, approximated, animated, hasPbrMaster}",
+          "Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; "
+          "approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...).",
+          Needs::Document },
+        { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}}",
+          "Classifies each master input: 'uniform' | 'passthrough' | 'baked' | 'unsupported' | 'unconnected'.",
           Needs::Document },
         { "toMaterial", "graph.toMaterial(nodeId) -> bool",
           "Evaluates the current graph and applies the resulting PBR material to a mesh node.",
@@ -502,8 +506,18 @@ QVariantMap GraphApi::evaluate()
     const auto result = PbrGraphEvaluator::evaluate(graph, MaterialHelper::textureResolver());
     out["values"] = result.values.toVariantMap();
     out["unsupported"] = QVariant(result.unsupportedNodes);
+    out["approximated"] = QVariant(result.approximatedNodes);
+    out["animated"] = result.animated;
     out["hasPbrMaster"] = result.hasPbrMaster;
     return out;
+}
+
+QVariantMap GraphApi::bakeInfo()
+{
+    QVariantMap out;
+    auto graph = graphOrFail(QStringLiteral("graph.bakeInfo"));
+    if (!graph) return out;
+    return PbrGraphEvaluator::bakeInfo(graph, MaterialHelper::textureResolver()).toVariantMap();
 }
 
 bool GraphApi::toMaterial(const QString &nodeId)

@@ -82,7 +82,9 @@ ComposeVectorNode::ComposeVectorNode()
 	addInputSocket(new FloatSocketModel("Y"));
 	addInputSocket(new FloatSocketModel("Z"));
 	addInputSocket(new FloatSocketModel("W"));
-	addOutputSocket(new Vector3SocketModel("Vector"));
+	// the emitted expression is vec4(x,y,z,w); the socket used to say vec3,
+	// which silently rewired W as Z through coercion (audit D11)
+	addOutputSocket(new Vector4SocketModel("Vector"));
 }
 
 void ComposeVectorNode::process(ModelContext* context)

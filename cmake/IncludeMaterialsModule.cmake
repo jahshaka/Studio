@@ -17,6 +17,7 @@ add_definitions(-DEFFECT_BUILD_AS_LIB )
 set(SRCS
 	${SRCS}
 	#main.cpp
+	src/modules/materials/core/bakeprogram.cpp
 	src/modules/materials/core/materialhelper.cpp
 	src/modules/materials/core/materialwriter.cpp
 	src/modules/materials/core/pbrgraphevaluator.cpp
@@ -79,6 +80,7 @@ set(SRCS
 
 set(HEADERS
 	${HEADERS}
+	src/modules/materials/core/bakeprogram.h
 	src/modules/materials/core/guidhelper.h
 	src/modules/materials/core/materialhelper.h
 	src/modules/materials/core/materialwriter.h

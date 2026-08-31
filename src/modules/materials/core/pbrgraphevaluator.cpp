@@ -20,23 +20,12 @@ For more information see the LICENSE file
 #include "../models/nodemodel.h"
 #include "../models/properties.h"
 #include "../models/socketmodel.h"
-#include "../nodes/test.h" // PropertyNode, TextureNode
+#include "bakeprogram.h"
 
 #include "irisgl/document/materials/pbrmaterial.h"
 
 namespace
 {
-
-// What one evaluated connection folded down to.
-struct InputValue
-{
-	enum Kind { None, Scalar, Color, TexturePath, Unsupported };
-	Kind kind = None;
-	float scalar = 0.0f;
-	QColor color;
-	QString path;
-	QString describe; // node typeName for unsupported reporting
-};
 
 QJsonObject colorToJson(const QColor& c)
 {
@@ -54,102 +43,23 @@ QColor colorFromJson(const QJsonObject& obj)
 	                        obj["b"].toDouble(), obj["a"].toDouble(1.0));
 }
 
-// Folds the node feeding `socket` to a constant, a color or a texture path.
-// This is the phase-2 seam: a chain this cannot fold is where the per-texel
-// baker plugs in. TODO(bake).
-InputValue evaluateInput(SocketModel* socket, const PbrGraphEvaluator::TextureResolver& resolve)
+// The QColor a folded chain value lands as on a color slot. arity 1 splats
+// to grayscale (GLSL-exact float->vec3); arity 2 lands (x, y, 0) - the
+// audit D5 contract for vector2, generalized to every vec2-valued root
+// (documented divergence from GLSL's v.xyy, spec section 1.2); wider
+// values land their leading components with w as alpha when present.
+QColor colorFromValue(const materials::Value& v)
 {
-	InputValue result;
-	if (!socket || !socket->hasConnection()) return result;
+	auto c = [](double d) { return qBound(0.0, d, 1.0); };
+	if (v.arity == 1) return QColor::fromRgbF(c(v.x), c(v.x), c(v.x));
+	if (v.arity == 2) return QColor::fromRgbF(c(v.x), c(v.y), 0.0);
+	return QColor::fromRgbF(c(v.x), c(v.y), c(v.z), v.arity == 4 ? c(v.w) : 1.0);
+}
 
-	auto con = socket->getConnection();
-	auto leftSock = con->leftSocket;
-	auto node = leftSock->getNode();
-	if (!node) return result;
-	int outIndex = node->outSockets.indexOf(leftSock);
-
-	const auto& type = node->typeName;
-
-	if (type == "float") {
-		result.kind = InputValue::Scalar;
-		result.scalar = (float)node->serializeWidgetValue().toDouble();
-		return result;
-	}
-
-	if (type == "color") {
-		auto obj = node->serializeWidgetValue().toObject();
-		QColor c = QColor::fromRgbF(obj["r"].toDouble(), obj["g"].toDouble(),
-		                            obj["b"].toDouble(), obj["a"].toDouble(1.0));
-		// out socket 0 is RGBA; 1-4 are the R,G,B,A channels as floats
-		if (outIndex <= 0) {
-			result.kind = InputValue::Color;
-			result.color = c;
-		}
-		else {
-			result.kind = InputValue::Scalar;
-			switch (outIndex) {
-			case 1: result.scalar = (float)c.redF(); break;
-			case 2: result.scalar = (float)c.greenF(); break;
-			case 3: result.scalar = (float)c.blueF(); break;
-			default: result.scalar = (float)c.alphaF(); break;
-			}
-		}
-		return result;
-	}
-
-	if (type == "vector2" || type == "vector3" || type == "vector4") {
-		// vector2 folds like its siblings (audit D5): (x, y, 0)
-		auto obj = node->serializeWidgetValue().toObject();
-		result.kind = InputValue::Color;
-		result.color = QColor::fromRgbF(qBound(0.0, obj["x"].toDouble(), 1.0),
-		                                qBound(0.0, obj["y"].toDouble(), 1.0),
-		                                type == "vector2" ? 0.0 : qBound(0.0, obj["z"].toDouble(), 1.0),
-		                                type == "vector4" ? qBound(0.0, obj["w"].toDouble(), 1.0) : 1.0);
-		return result;
-	}
-
-	if (type == "property") {
-		auto prop = ((PropertyNode*)node)->getProperty();
-		if (!prop) return result;
-		switch (prop->type) {
-		case PropertyType::Float:
-		case PropertyType::Int:
-			result.kind = InputValue::Scalar;
-			result.scalar = prop->getValue().toFloat();
-			return result;
-		case PropertyType::Color:
-			result.kind = InputValue::Color;
-			result.color = prop->getValue().value<QColor>();
-			return result;
-		case PropertyType::Texture: {
-			auto stored = prop->getValue().toString();
-			auto path = resolve ? resolve(stored) : stored;
-			if (path.isEmpty()) return result; // empty slot, not an error
-			result.kind = InputValue::TexturePath;
-			result.path = path;
-			return result;
-		}
-		default:
-			break;
-		}
-		result.kind = InputValue::Unsupported;
-		result.describe = QString("property(%1)").arg(prop->displayName);
-		return result;
-	}
-
-	if (type == "texture") {
-		auto path = ((TextureNode*)node)->getTexturePath();
-		if (path.isEmpty()) return result;
-		result.kind = InputValue::TexturePath;
-		result.path = path;
-		return result;
-	}
-
-	// TODO(bake): phase 2 - evaluate PURE/UV chains per texel into a baked
-	// texture and return it as a TexturePath. Until then: unsupported.
-	result.kind = InputValue::Unsupported;
-	result.describe = type;
-	return result;
+QString rootTypeName(const materials::BakeProgram& program)
+{
+	if (program.rootOp < 0 || program.rootOp >= program.ops.size()) return QStringLiteral("?");
+	return program.ops[program.rootOp].typeName;
 }
 
 // How one master socket lands on the PbrMaterial.
@@ -225,49 +135,63 @@ PbrGraphEvaluator::Result PbrGraphEvaluator::evaluate(NodeGraph* graph, TextureR
 		resolver = [](const QString& value) { return value; };
 	}
 
+	const materials::EvalContext ctx; // fake fragment context, t = 0
+
 	for (const auto& spec : specsForMaster(master->typeName)) {
 		auto sock = findInSocket(master, spec.socketName);
 		if (!sock || !sock->hasConnection()) continue;
 
-		auto input = evaluateInput(sock, resolver);
+		auto program = materials::BakeProgram::compile(sock, resolver);
 		auto unsupported = [&](const QString& what) {
 			result.unsupportedNodes.append(spec.socketName + " <- " + what);
 		};
 
-		switch (input.kind) {
-		case InputValue::None:
+		using SocketClass = materials::BakeProgram::SocketClass;
+		switch (program.classification) {
+		case SocketClass::Unconnected:
 			break;
-		case InputValue::Unsupported:
-			unsupported(input.describe);
+		case SocketClass::Unsupported:
+			for (const auto& what : program.unsupportedNodes) unsupported(what);
 			break;
-		case InputValue::TexturePath:
-			if (!spec.mapKey.isEmpty()) result.values[spec.mapKey] = input.path;
+		case SocketClass::Passthrough:
+			if (!spec.mapKey.isEmpty()) result.values[spec.mapKey] = program.passthroughPath;
 			else unsupported("texture");
 			break;
-		case InputValue::Color:
-			if (spec.target == SlotSpec::ColorSlot) result.values[spec.valueKey] = colorToJson(input.color);
-			else unsupported("color");
+		case SocketClass::Baked:
+			// the per-texel baker (GraphBaker) plugs in here; a plain
+			// evaluate() does not bake, so defaults are used and the chain
+			// is honestly reported
+			unsupported(rootTypeName(program));
 			break;
-		case InputValue::Scalar:
+		case SocketClass::Uniform: {
+			const materials::Value v = program.evaluate(ctx);
 			if (spec.target == SlotSpec::FloatSlot) {
-				float v = input.scalar;
+				double s = v.x; // vecN -> float: leading component; double math
+				                // end-to-end (uniform folds are exact doubles)
 				if (spec.invertToRoughness) {
-					float gloss = v > 1.0f ? v / 100.0f : v;
-					v = 1.0f - qBound(0.0f, gloss, 1.0f);
+					double gloss = s > 1.0 ? s / 100.0 : s;
+					s = 1.0 - qBound(0.0, gloss, 1.0);
 				}
 				// every FloatSlot (metallic, roughness, occlusionFactor,
 				// alpha, alphaCutoff) is a 0-1 quantity on PbrMaterial;
 				// clamp at the landing site (audit D6)
-				result.values[spec.valueKey] = qBound(0.0f, v, 1.0f);
+				result.values[spec.valueKey] = qBound(0.0, s, 1.0);
 			}
 			else if (spec.target == SlotSpec::ColorSlot) {
-				// a bare float feeding a color slot: grayscale
-				result.values[spec.valueKey] = colorToJson(QColor::fromRgbF(
-					qBound(0.0f, input.scalar, 1.0f), qBound(0.0f, input.scalar, 1.0f),
-					qBound(0.0f, input.scalar, 1.0f)));
+				result.values[spec.valueKey] = colorToJson(colorFromValue(v));
 			}
-			else unsupported("float");
+			else {
+				unsupported(rootTypeName(program)); // Normal is a map-only slot
+			}
 			break;
+		}
+		}
+
+		if (program.classification == SocketClass::Uniform
+		    || program.classification == SocketClass::Baked) {
+			for (const auto& name : program.approximatedNodes)
+				result.approximatedNodes.append(spec.socketName + " <- " + name);
+			result.animated |= program.animated;
 		}
 	}
 
@@ -278,11 +202,52 @@ PbrGraphEvaluator::Result PbrGraphEvaluator::evaluate(NodeGraph* graph, TextureR
 	if (!result.unsupportedNodes.isEmpty()) {
 		qWarning() << "PbrGraphEvaluator: unsupported inputs on"
 		           << graph->settings.name << "- material defaults used for:"
-		           << result.unsupportedNodes.join(", ")
-		           << "(per-texel baking is Option B phase 2)";
+		           << result.unsupportedNodes.join(", ");
 	}
 
 	return result;
+}
+
+QJsonObject PbrGraphEvaluator::bakeInfo(NodeGraph* graph, TextureResolver resolver)
+{
+	QJsonObject out;
+	QJsonObject perSocket;
+	if (!graph || !graph->getMasterNode()) {
+		out["perSocket"] = perSocket;
+		return out;
+	}
+	if (!resolver) resolver = [](const QString& value) { return value; };
+
+	auto master = graph->getMasterNode();
+	for (const auto& spec : specsForMaster(master->typeName)) {
+		auto sock = findInSocket(master, spec.socketName);
+		if (!sock) continue;
+		if (!sock->hasConnection()) {
+			perSocket[spec.socketName] = "unconnected";
+			continue;
+		}
+
+		auto program = materials::BakeProgram::compile(sock, resolver);
+		using SocketClass = materials::BakeProgram::SocketClass;
+		QString cls = materials::BakeProgram::classToString(program.classification);
+
+		// per-socket landing rules (spec section 1.3)
+		if (spec.target == SlotSpec::NoTarget) {
+			cls = "unsupported"; // Vertex Offset / Extrusion: Option C future
+		}
+		else if (program.classification == SocketClass::Baked && spec.socketName == "Alpha Cutoff") {
+			cls = "unsupported"; // a varying cutoff cannot land
+		}
+		else if (program.classification == SocketClass::Passthrough && spec.mapKey.isEmpty()) {
+			cls = "unsupported"; // texture into a value-only slot
+		}
+		else if (program.classification == SocketClass::Uniform && spec.target == SlotSpec::NormalSlot) {
+			cls = "unsupported"; // Normal is a map-only slot
+		}
+		perSocket[spec.socketName] = cls;
+	}
+	out["perSocket"] = perSocket;
+	return out;
 }
 
 iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& values)

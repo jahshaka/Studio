@@ -20,21 +20,18 @@ class NodeGraph;
 class NodeModel;
 class SocketModel;
 
-// Option B phase 1: CPU evaluation of a shader graph into iris::PbrMaterial
-// inputs. No GL, no engine calls - pure graph walking, so it is safe in any
-// viewport mode and in headless tests.
+// CPU evaluation of a shader graph into iris::PbrMaterial inputs. No GL, no
+// engine calls - pure graph walking, so it is safe in any viewport mode and
+// in headless tests.
 //
-// Covers the subset the 15 shipped .effect presets actually use (audit
-// MATERIALS_EFFECTS_AUDIT.md section 0.4): constants ("float", "color",
-// "vector3"/"vector4") and "property" nodes (float/int/color/texture) feeding
-// the master sockets directly, plus the inline "texture" node. Anything else
-// (math chains, procedural, animated or view-dependent nodes) falls back to
-// the material's defaults and is reported in Result::unsupportedNodes.
-//
-// TODO(bake): phase 2 replaces the "unsupported" fallback for PURE/UV node
-// chains with a per-texel bake to a texture asset, which then feeds the same
-// map keys this evaluator emits. The seam is evaluateInput() below - a chain
-// it cannot fold becomes a bake request there.
+// Since the Materials Evaluator program (SPECS/MATERIALS_EVALUATOR_SPEC.md)
+// this is the front end over materials::BakeProgram: every pure chain folds
+// to a uniform value (float -> add -> Base Color folds), bare texture chains
+// bind their source image (Passthrough), and UV-varying chains classify as
+// Baked - the per-texel baker's input (GraphBaker). Approximated/animated
+// nodes (worldNormal, fresnel, depth, time, pulsate, ...) evaluate against
+// the fake fragment context and are named in Result::approximatedNodes;
+// nothing silently produces a wrong value without being listed.
 class PbrGraphEvaluator
 {
 public:
@@ -54,7 +51,17 @@ public:
 
 		// "Socket <- nodeType" entries for connections that could not be
 		// folded to a constant or a map. Defaults were used for these.
+		// (Until the per-texel baker runs, UV-varying chains land here too.)
 		QStringList unsupportedNodes;
+
+		// "Socket <- nodeType" entries for chains that evaluated against the
+		// fake fragment context (worldNormal/fresnel/depth/time/pulsate...).
+		// Info, not an error: the value is a documented approximation.
+		QStringList approximatedNodes;
+
+		// True when any time-dependent node fed a connected master socket
+		// (evaluated at the bake parameter t, default 0).
+		bool animated = false;
 
 		// True when the graph's master is a PbrMasterNode (typeName
 		// "PbrMaterial"); false for the legacy SurfaceMasterNode ("Material"),
@@ -63,6 +70,12 @@ public:
 	};
 
 	static Result evaluate(NodeGraph* graph, TextureResolver resolver = {});
+
+	// The classifier exposed (graph.bakeInfo): master socket name ->
+	// "uniform" | "passthrough" | "baked" | "unsupported" | "unconnected",
+	// after the per-socket landing rules (a varying Alpha Cutoff or a fed
+	// Vertex Offset/Extrusion socket reports "unsupported").
+	static QJsonObject bakeInfo(NodeGraph* graph, TextureResolver resolver = {});
 
 	// Builds an iris::PbrMaterial from an evaluation result / a stored
 	// "pbrMaterial.values" object, applying every key through setValue so the

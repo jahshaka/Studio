@@ -151,12 +151,13 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | verb | needs | description |
 |---|---|---|
 | `graph.nodes() -> [{id, type, master}]` | document | The current graph's nodes. |
-| `graph.nodeTypes() -> [type]` | document | Every node type the library can create (plus the master types PbrMaterial and Material). |
+| `graph.nodeTypes() -> [type]` | document | Every node type the library can create (plus the master type PbrMaterial). |
 | `graph.addNode(type) -> id` | document | Adds a node to the current graph ('PbrMaterial' adds and sets the master). |
 | `graph.connect(fromId, fromSocket, toId, toSocket) -> bool` | document | Connects an output socket to an input socket; sockets by index or name (e.g. 'Base Color'). |
 | `graph.setValue(nodeId, value) -> bool` | document | Sets a node's value through the same path the editor uses (numbers, {r,g,b,a} colors, {x,y,z} vectors). |
 | `graph.getValue(nodeId) -> value` | document | Reads a node's value back. |
-| `graph.evaluate() -> {values, unsupported, hasPbrMaster}` | document | Folds the current graph to PBR material values (the evaluator is GL-free by design). |
+| `graph.evaluate() -> {values, unsupported, approximated, animated, hasPbrMaster}` | document | Folds the current graph to PBR material values (the evaluator is GL-free by design). Pure math chains fold; approximated lists nodes evaluated against the fake fragment context (worldNormal, fresnel, time at t=0, ...). |
+| `graph.bakeInfo() -> {perSocket: {socketName: class}}` | document | Classifies each master input: 'uniform' \| 'passthrough' \| 'baked' \| 'unsupported' \| 'unconnected'. |
 | `graph.toMaterial(nodeId) -> bool` | document | Evaluates the current graph and applies the resulting PBR material to a mesh node. |
 | `graph.save() -> bool` | document | Serializes the current graph back into its shader asset (only for graphs opened from an asset guid). |
 

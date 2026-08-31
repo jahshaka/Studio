@@ -176,8 +176,10 @@ int main(int argc, char** argv)
               "graph 2: bound texture carries the source path");
     }
 
-    // ---- graph 3: unsupported chain falls back, does not crash ---------------
-    // pulsate (animated, non-bakeable) -> Roughness
+    // ---- graph 3: animated chain folds at t=0 and is listed ------------------
+    // pulsate -> Roughness: since the Materials Evaluator program this folds
+    // to sin(0*speed)*0.5+0.5 = 0.5 and the node is named in approximatedNodes
+    // (it used to be honest-unsupported; the bake seam now evaluates it).
     {
         auto graph = new NodeGraph();
         auto master = new PbrMasterNode();
@@ -189,14 +191,15 @@ int main(int argc, char** argv)
         graph->addConnection(pulsate, 0, master, 2); // Result -> Roughness
 
         auto result = PbrGraphEvaluator::evaluate(graph);
-        CHECK(result.unsupportedNodes.size() == 1, "graph 3: pulsate reported unsupported");
-        CHECK(!result.unsupportedNodes.isEmpty()
-                  && result.unsupportedNodes.first().contains("pulsate"),
-              "graph 3: report names the node type");
-        CHECK(!result.values.contains("roughness"), "graph 3: no roughness emitted");
+        CHECK(result.unsupportedNodes.isEmpty(), "graph 3: pulsate no longer unsupported");
+        CHECK(result.values["roughness"].toDouble() == 0.5, "graph 3: pulsate folds to 0.5 at t=0");
+        CHECK(result.approximatedNodes.size() == 1
+                  && result.approximatedNodes.first().contains("pulsate"),
+              "graph 3: pulsate named in approximatedNodes");
+        CHECK(result.animated, "graph 3: result carries animated=true");
 
         auto material = PbrGraphEvaluator::createMaterial(graph);
-        CHECK(!!material, "graph 3: material still created (defaults)");
+        CHECK(!!material, "graph 3: material created");
     }
 
     // ---- graph 4: legacy Surface master approximates onto PBR keys -----------
