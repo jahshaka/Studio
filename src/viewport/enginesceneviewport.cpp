@@ -846,6 +846,7 @@ void EngineSceneViewport::end()
 
 void EngineSceneViewport::cleanup()
 {
+    mActive = false;
     clearScene();
     destroyView();
 }
@@ -857,10 +858,17 @@ void EngineSceneViewport::clearScene()
     // valid across project close/open. Script sessions never leave the editor
     // page, so no showEvent would ever recreate a destroyed view (the
     // "engine viewport is not available after project.open" defect).
-    mActive = false;
+    // mActive is deliberately NOT cleared here: syncFrame's members are all
+    // null-guarded, and clearing it would leave the viewport silently frozen
+    // if no space switch follows (mActive belongs to begin()/end()).
     if (mOverlay) { mOverlay->clear(); mOverlay.reset(); }
     if (mMirror) { mMirror->setSource(nullptr); mMirror.reset(); }
-    if (view()) view()->setScene(nullptr);
+    if (view()) {
+        view()->setScene(nullptr);
+        // The next project may not drive the background (only SINGLE_COLOR
+        // skies do) — reset to the editor grey the view was created with.
+        view()->setBackground(Colour(0.10f, 0.11f, 0.14f));
+    }
     if (mEngineScene && mEngine) { mEngine->destroyScene(mEngineScene); mEngineScene = nullptr; }
     mScene.clear();
     mSelectedNode.clear();

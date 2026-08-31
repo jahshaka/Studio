@@ -142,8 +142,13 @@ bool ProjectService::saveProjectBlob()
                                       (viewport && viewport->isInitialized()) ? viewport->getEditorData() : nullptr);
 
     bool ok;
-    if (viewport && viewport->isInitialized()) {
-        auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+    // A null screenshot (engine scene mid-swap, or a readback failure) must
+    // never overwrite the stored tile with an empty PNG — fall back to the
+    // blob-only save.
+    QImage img;
+    if (viewport && viewport->isInitialized())
+        img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+    if (!img.isNull()) {
         QByteArray thumb;
         QBuffer buffer(&thumb);
         buffer.open(QIODevice::WriteOnly);
@@ -172,6 +177,11 @@ void ProjectService::saveOpenScene()
                                       viewport->getEditorData());
 
     auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+    if (img.isNull()) {                 // never store an empty tile
+        db->updateProjectBlob(blob, project->getProjectGuid());
+        undo->markSaved();
+        return;
+    }
     QByteArray thumb;
     QBuffer buffer(&thumb);
     buffer.open(QIODevice::WriteOnly);
@@ -196,9 +206,11 @@ void ProjectService::saveInitialScene(const QString &projectPath)
     QByteArray thumb;
     if (viewport->isInitialized()) {
         auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
-        QBuffer buffer(&thumb);
-        buffer.open(QIODevice::WriteOnly);
-        img.save(&buffer, "PNG");
+        if (!img.isNull()) {
+            QBuffer buffer(&thumb);
+            buffer.open(QIODevice::WriteOnly);
+            img.save(&buffer, "PNG");
+        }
     }
 
     db->updateProject(sceneObject, thumb, project->getProjectGuid());
@@ -209,6 +221,7 @@ void ProjectService::saveInitialScene(const QString &projectPath)
 void ProjectService::updateCurrentSceneThumbnail()
 {
     auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+    if (img.isNull()) return;           // never wipe the tile with an empty PNG
     QByteArray thumb;
     QBuffer buffer(&thumb);
     buffer.open(QIODevice::WriteOnly);
