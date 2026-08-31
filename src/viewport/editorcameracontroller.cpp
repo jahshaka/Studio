@@ -201,6 +201,14 @@ void EditorCameraController::clearKeys()
 /**
  * @brief EditorCameraController::updateCameraRot
  */
+void EditorCameraController::setAxisView(float yawDeg, float pitchDeg)
+{
+    if (!camera) return;
+    yaw = yawDeg;
+    pitch = pitchDeg;
+    updateCameraRot();
+}
+
 void EditorCameraController::updateCameraRot()
 {
     //QQuaternion yawQuat = QQuaternion::fromEulerAngles(0,yaw,0);

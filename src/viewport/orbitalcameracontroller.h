@@ -69,6 +69,12 @@ public:
 
 	void focusOnNode(iris::SceneNodePtr sceneNode);
 
+	/// Snap to a canonical view (Views dropdown / view.* shortcuts): orbits
+	/// to the axis around the current pivot, animated by update()'s lerp —
+	/// the same math the old raw X/Y/Z keys used before they moved to the
+	/// ShortcutRegistry.
+	void setAxisView(float yawDeg, float pitchDeg);
+
     void updateCameraRot();
 
 	bool canLeftMouseDrag();

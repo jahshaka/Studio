@@ -52,6 +52,12 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
+        { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
+          "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Axis views switch to orthographic projection; \"perspective\" restores perspective and keeps the orientation. Works in both camera modes.",
+          Needs::Engine },
+        { "view", "editor.view() -> string",
+          "The last canonical view requested via editor.setView (\"perspective\" until one is set). Informational — free orbiting afterwards does not reset it.",
+          Needs::Engine },
         { "snapSize", "editor.snapSize() -> number",
           "The translate snap size (world units) — also the ground grid's spacing. Editor-global, persisted.",
           Needs::Document },
@@ -163,6 +169,25 @@ bool EditorApi::isGameView()
 {
     if (!requireEngine()) return false;
     return host.viewport->isGameView();
+}
+
+bool EditorApi::setView(const QString &view)
+{
+    if (!requireEngine()) return false;
+    // Go through MainWindow when one exists so the projection icon and the
+    // Views dropdown checks stay in sync; the viewport alone otherwise
+    // (headless --script runs).
+    const bool ok = host.mainWindow ? host.mainWindow->applyCameraView(view)
+                                    : host.viewport->setCameraView(view);
+    if (!ok)
+        return fail("editor.setView: unknown view — use top/bottom/left/right/front/back/perspective");
+    return true;
+}
+
+QString EditorApi::view()
+{
+    if (!requireEngine()) return QString();
+    return host.viewport->cameraView();
 }
 
 double EditorApi::snapSize()

@@ -160,6 +160,13 @@ public:
 
 	WindowSpaces getWindowSpace();
 	void deselectViewports();
+
+	/// Views dropdown / view.* shortcuts / editor.setView verb — ONE path:
+	/// snaps the editor camera to a canonical view ("top", "bottom", "left",
+	/// "right", "front", "back", "perspective"), switches projection (axis
+	/// views are orthographic) and keeps the toolbar + dropdown checks in
+	/// sync. Returns false for an unknown name.
+	bool applyCameraView(const QString &name);
     void switchSpace(WindowSpaces space, bool force = false);
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
@@ -528,6 +535,9 @@ private:
     QMenu *wireFramesMenu;
     QCheckBox *wireCheckBtn;
     QToolButton *wireFramesButton;
+    QToolButton *viewsButton = nullptr;
+    QMenu *viewsMenu = nullptr;
+    QVector<QAction *> viewsActions;   // checkable, ordered as built
     QPushButton *restartBtn;
     QPushButton *playBtn;
     QPushButton *stopBtn;

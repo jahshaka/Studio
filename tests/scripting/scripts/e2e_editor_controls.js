@@ -83,4 +83,33 @@ editor.select(null);
 try { editor.snapToFloor(); throw new Error("snapToFloor without selection must throw"); }
 catch (e) { assert(String(e).indexOf("selected") >= 0, "snapToFloor refuses with nothing selected"); }
 
+// ---- canonical views (editor.setView / editor.view — Views dropdown) ----
+// After the focus/snapToFloor phases the camera hangs high up staring at
+// where the cube USED to be (empty sky) — a flat frame. setView(bottom)
+// would turn it to MORE empty sky (same flat grey), so the pixel proof uses
+// "top": looking straight down guarantees the ground plane fills the frame.
+assert(editor.view() === "perspective", "view defaults to perspective");
+editor.frame(2);
+var perspShot = editor.screenshot("view_persp.png", 256, 256);
+assert(editor.setView("bottom"), "setView(bottom)");
+assert(editor.view() === "bottom", "view reads back bottom");
+editor.frame(2);
+assert(editor.setView("top"), "setView(top)");
+assert(editor.view() === "top", "view reads back top");
+editor.frame(30);   // the arcball controller animates to the target
+var topShot = editor.screenshot("view_top.png", 256, 256);
+var viewChanged = !near(perspShot.center.r, topShot.center.r, 2) ||
+                  !near(perspShot.center.g, topShot.center.g, 2) ||
+                  !near(perspShot.center.b, topShot.center.b, 2);
+assert(viewChanged, "camera turned: sky-facing perspective frame vs the ground plane from the top view (persp " +
+    perspShot.center.r + "," + perspShot.center.g + "," + perspShot.center.b +
+    " -> top " + topShot.center.r + "," + topShot.center.g + "," + topShot.center.b + ")");
+var badViewRefused = false;
+try { editor.setView("diagonal"); } catch (e) { badViewRefused = true; }
+assert(badViewRefused, "setView refuses an unknown view");
+assert(editor.view() === "top", "refused setView left the view alone");
+assert(editor.setView("perspective"), "back to perspective");
+assert(editor.view() === "perspective", "view reads back perspective");
+editor.frame(2);
+
 console.log("editor_controls: verbs verified");

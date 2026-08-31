@@ -167,49 +167,17 @@ void OrbitalCameraController::onKeyReleased(Qt::Key key)
 
 void OrbitalCameraController::keyReleaseEvent(QKeyEvent *event)
 {
-	// checks if crtl is being pressed
-	if (event->modifiers() == Qt::ControlModifier)
-	{
-		// gets the key being pressed
-		switch (event->key())
-		{
-		case Qt::Key_X: // right?
-			targetYaw = -90;
-			targetPitch = 0;
-			return;
-
-		case Qt::Key_Y: // bottom
-			targetYaw = 0;
-			targetPitch = 90;
-			return;
-
-		// NOTE: no Ctrl+Z case — it is undo everywhere (EDITOR_SHORTCUTS_SPEC:
-		// the old Ctrl+Z "view from back" collision with the undo shortcut is
-		// removed; the X/Y views keep their modifiers).
-		}
-		return;   // never let a Ctrl combo reach the plain view keys below
-	}
-	// gets the key being pressed
-	switch (event->key())
-	{
-	case Qt::Key_X: // left?
-		targetYaw = 90;
-		targetPitch = 0;
-		return;
-
-	case Qt::Key_Y: // top
-		targetYaw = 0;
-		targetPitch = -90;
-		return;
-
-	case Qt::Key_Z: // front
-		targetYaw = 0;
-		targetPitch = 0;
-		return;
-
-	}
-
+	// The old raw X/Y/Z axis-view keys that lived here moved to the
+	// ShortcutRegistry (view.top/bottom/left/right/front/back): registered
+	// shortcuts are remappable, appear in Preferences -> Shortcuts, and work
+	// in BOTH camera modes. They land in setAxisView() below.
 	onKeyReleased((Qt::Key)event->key());
+}
+
+void OrbitalCameraController::setAxisView(float yawDeg, float pitchDeg)
+{
+	targetYaw = yawDeg;
+	targetPitch = pitchDeg;
 }
 
 void OrbitalCameraController::focusOnNode(iris::SceneNodePtr sceneNode)

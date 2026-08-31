@@ -97,6 +97,39 @@ void EngineSceneViewport::setCameraController(CameraControllerBase *c)
 void EngineSceneViewport::setFreeCameraMode()   { setCameraController(mFreeCam); }
 void EngineSceneViewport::setArcBallCameraMode() { setCameraController(mOrbitCam); }
 
+// Views dropdown / view.* shortcuts / editor.setView verb: snap to a canonical
+// view. Axis views go orthographic (the orbital controller animates there via
+// its lerp; the free camera turns in place); "perspective" restores the
+// perspective projection and keeps the current orientation.
+bool EngineSceneViewport::setCameraView(const QString &view)
+{
+    if (view == QLatin1String("perspective")) {
+        if (mScene && mScene->camera)
+            mScene->camera->setProjection(iris::CameraProjection::Perspective);
+        mCameraView = view;
+        return true;
+    }
+
+    struct AxisView { const char *name; float yaw; float pitch; };
+    static const AxisView axisViews[] = {
+        { "top", 0.f, -90.f }, { "bottom", 0.f, 90.f },
+        { "left", 90.f, 0.f }, { "right", -90.f, 0.f },
+        { "front", 0.f, 0.f }, { "back", 180.f, 0.f },
+    };
+    for (const auto &v : axisViews) {
+        if (view != QLatin1String(v.name)) continue;
+        if (mCamController == mOrbitCam && mOrbitCam)
+            mOrbitCam->setAxisView(v.yaw, v.pitch);
+        else if (mFreeCam)
+            mFreeCam->setAxisView(v.yaw, v.pitch);
+        if (mScene && mScene->camera)
+            mScene->camera->setProjection(iris::CameraProjection::Orthogonal);
+        mCameraView = view;
+        return true;
+    }
+    return false;
+}
+
 void EngineSceneViewport::setActiveGizmo(Gizmo *g)
 {
     if (mGizmo == g) return;

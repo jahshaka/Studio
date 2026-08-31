@@ -59,6 +59,8 @@ public:
     void resetEditorCam() override;
     void setFreeCameraMode() override;
     void setArcBallCameraMode() override;
+    bool setCameraView(const QString &view) override;
+    QString cameraView() const override { return mCameraView; }
     void setEditorData(EditorData *data) override;
     EditorData *getEditorData() override;
 
@@ -181,6 +183,7 @@ private:
     EditorData *mEditorData = nullptr;
     bool mShowLightWires = true;
     bool mShowGrid = true;              // per-scene (EditorData), default ON
+    QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
     bool mShowDebugDraw = false;

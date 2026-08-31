@@ -62,6 +62,10 @@ public:
     //incomplete
     void pan(float angle);
 
+    /// Snap to a canonical view (Views dropdown / view.* shortcuts): the free
+    /// camera keeps its position and turns to the axis orientation.
+    void setAxisView(float yawDeg, float pitchDeg);
+
     void onMouseMove(int x,int y) override;
     void onMouseWheel(int delta) override;
 	void onKeyPressed(Qt::Key key) override;

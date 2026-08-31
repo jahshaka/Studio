@@ -1729,6 +1729,38 @@ void MainWindow::setupViewPort()
     wireFramesButton->setText("View Options ");
     wireFramesButton->setPopupMode(QToolButton::InstantPopup);
 
+    // Views ▾ — canonical camera views (owner request): Perspective plus the
+    // six orthographic axis views. Same path as the view.* shortcuts and the
+    // editor.setView verb (applyCameraView).
+    viewsButton = new QToolButton;
+    viewsButton->setStyleSheet("padding: 0 8px 0 0; margin: 0");
+    viewsMenu = new QMenu;
+    viewsMenu->setStyleSheet(StyleSheet::QMenuFlat());
+    auto viewsGroup = new QActionGroup(viewsMenu);
+    viewsGroup->setExclusive(true);
+    const QVector<QPair<QString, QString>> canonicalViews = {
+        { QStringLiteral("perspective"), QStringLiteral("Perspective") },
+        { QStringLiteral("top"), QStringLiteral("Top") },
+        { QStringLiteral("bottom"), QStringLiteral("Bottom") },
+        { QStringLiteral("left"), QStringLiteral("Left") },
+        { QStringLiteral("right"), QStringLiteral("Right") },
+        { QStringLiteral("front"), QStringLiteral("Front") },
+        { QStringLiteral("back"), QStringLiteral("Back") },
+    };
+    for (const auto &entry : canonicalViews) {
+        QAction *action = viewsMenu->addAction(entry.second);
+        action->setCheckable(true);
+        action->setChecked(entry.first == QLatin1String("perspective"));
+        action->setData(entry.first);
+        viewsGroup->addAction(action);
+        connect(action, &QAction::triggered, this,
+                [this, entry]() { applyCameraView(entry.first); });
+        viewsActions.push_back(action);
+    }
+    viewsButton->setMenu(viewsMenu);
+    viewsButton->setText("Views ");
+    viewsButton->setPopupMode(QToolButton::InstantPopup);
+
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
     QVariantMap options;
@@ -1751,6 +1783,7 @@ void MainWindow::setupViewPort()
     controlBarLayout->addWidget(screenShotBtn);
 	controlBarLayout->addWidget(cameraView);
     controlBarLayout->addWidget(wireFramesButton);
+    controlBarLayout->addWidget(viewsButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
     controlBarLayout->addSpacing(2);
@@ -2174,6 +2207,22 @@ void MainWindow::setupShortcuts()
             [this]() { emit projectionChangeRequested(false); });
     reg.add("view.perspective", "Perspective Projection", "Camera", QKeySequence(Qt::Key_P), this,
             [this]() { emit projectionChangeRequested(true); });
+    // Canonical axis views (historical X/Y/Z keys, moved out of the arcball
+    // controller's raw key handling so they are remappable, listed in
+    // Preferences -> Shortcuts, and work in the free camera too). Ctrl+Z
+    // stays undo — "back" gets Shift+Z instead.
+    reg.add("view.top", "Top View", "Camera", QKeySequence(Qt::Key_Y), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("top"); });
+    reg.add("view.bottom", "Bottom View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_Y), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("bottom"); });
+    reg.add("view.left", "Left View", "Camera", QKeySequence(Qt::Key_X), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("left"); });
+    reg.add("view.right", "Right View", "Camera", QKeySequence(Qt::CTRL | Qt::Key_X), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("right"); });
+    reg.add("view.front", "Front View", "Camera", QKeySequence(Qt::Key_Z), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("front"); });
+    reg.add("view.back", "Back View", "Camera", QKeySequence(Qt::SHIFT | Qt::Key_Z), this,
+            [this]() { if (currentSpace == WindowSpaces::EDITOR) applyCameraView("back"); });
     reg.addFixed("camera.fly", "Fly Camera (free camera)", "Camera",
                  "RMB (hold) + W/A/S/D + Q/E \xc2\xb7 Shift: 3x");
     reg.addFixed("camera.wheel", "Zoom / Dolly", "Camera", "Mouse Wheel");
@@ -2704,6 +2753,19 @@ void MainWindow::applyPlayModeUi()
     options.insert("color", QColor(231, 76, 60));
     options.insert("color-active", QColor(231, 76, 60));
     playSceneBtn->setIcon(fontIcons->icon(fa::stop, options));
+}
+
+bool MainWindow::applyCameraView(const QString &name)
+{
+    if (!sceneView || !sceneView->setCameraView(name)) return false;
+
+    // projection icon + tooltip stay in sync (changeProjection re-applies the
+    // projection the viewport already set — idempotent)
+    changeProjection(name == QLatin1String("perspective"));
+
+    for (QAction *action : viewsActions)
+        action->setChecked(action->data().toString() == name);
+    return true;
 }
 
 void MainWindow::changeProjection(bool val)

@@ -86,6 +86,16 @@ public:
     virtual void resetEditorCam() = 0;
     virtual void setFreeCameraMode() = 0;
     virtual void setArcBallCameraMode() = 0;
+    /// Snap the editor camera to a canonical view — "top", "bottom", "left",
+    /// "right", "front", "back" (orthographic), or "perspective" (restores
+    /// perspective projection, orientation kept). Works in both camera modes.
+    /// Returns false for an unknown name. Optional; headless viewports may
+    /// leave it unimplemented.
+    virtual bool setCameraView(const QString &) { return false; }
+    /// The last canonical view requested via setCameraView ("perspective"
+    /// until one is set). Purely informational — free orbiting afterwards
+    /// does not reset it.
+    virtual QString cameraView() const { return QStringLiteral("perspective"); }
     virtual void setEditorData(EditorData *data) = 0;
     virtual EditorData *getEditorData() = 0;
 

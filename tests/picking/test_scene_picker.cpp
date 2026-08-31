@@ -1,7 +1,9 @@
 // ScenePicker characterisation: picking on the document, no renderer, no GL.
 #include <QGuiApplication>
 #include <QMatrix4x4>
+#include <QQuaternion>
 #include <QVector3D>
+#include <cmath>
 #include <algorithm>
 #include <cstdio>
 #include "irisgl/irisglfwd.h"
@@ -121,6 +123,41 @@ int main(int argc, char **argv) {
     auto r5 = ScenePicker::resolveRootSelection(front, front, true);
     CHECK(r5 == front, "re-click on the selected part keeps it");
     CHECK(ScenePicker::resolveRootSelection(front, nullptr, false) == front, "rule disabled: the child");
+
+    // ---- orthographic picking (Views dropdown, 2026-08-31): rays must be
+    // PARALLEL (view forward), origin offset across the ortho extent — not
+    // fanned out from the eye like perspective. The engine renders the same
+    // extent (OgreView setOrthoWindow spans 2*orthoSize, the document's
+    // ortho(-s..+s) convention), so clicks land where the pixels are.
+    {
+        auto odoc = iris::Scene::create();
+        auto ocam = iris::CameraNode::create();
+        ocam->setLocalPos(QVector3D(0, 10, 0));
+        ocam->setLocalRot(QQuaternion::fromEulerAngles(-90, 0, 0)); // straight down
+        ocam->nearClip = 0.1f; ocam->farClip = 100.0f;
+        ocam->setProjection(iris::CameraProjection::Orthogonal);
+        ocam->setOrthagonalZoom(5.0f);             // half-extent: world x in [-5, 5]
+        odoc->getRootNode()->addChild(ocam);
+        auto east = cubeAt(odoc, QVector3D(4, 0, 0), "east");
+        auto west = cubeAt(odoc, QVector3D(-4, 0, 0), "west");
+
+        QVector3D a1, b1, a2, b2;
+        // world x=+4 with half-extent 5 -> screen x fraction 0.5 + 4/10 = 0.9
+        ScenePicker::screenSegment(ocam, W, H, QPointF(W * 0.9, H * 0.5), a1, b1);
+        auto oh = ScenePicker::pickAll(odoc, a1, b1, ocam->getGlobalPosition());
+        CHECK(!oh.isEmpty() && ScenePicker::nearest(oh).node == east,
+              "ortho: right-side click picks the east cube");
+        ScenePicker::screenSegment(ocam, W, H, QPointF(W * 0.1, H * 0.5), a2, b2);
+        oh = ScenePicker::pickAll(odoc, a2, b2, ocam->getGlobalPosition());
+        CHECK(!oh.isEmpty() && ScenePicker::nearest(oh).node == west,
+              "ortho: left-side click picks the west cube");
+        const QVector3D d1 = (b1 - a1).normalized(), d2 = (b2 - a2).normalized();
+        CHECK(QVector3D::dotProduct(d1, d2) > 0.9999f, "ortho rays are parallel (not eye-fanned)");
+        CHECK(std::abs(a1.x() - 4.0f) < 0.05f, "ortho ray origin offsets across the extent (x=+4)");
+        ScenePicker::screenSegment(ocam, W, H, QPointF(W * 0.5, H * 0.5), a1, b1);
+        CHECK(ScenePicker::pickAll(odoc, a1, b1, ocam->getGlobalPosition()).isEmpty(),
+              "ortho: centre click (no cube at origin) misses");
+    }
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return failures ? 1 : 0;

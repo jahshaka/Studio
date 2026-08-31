@@ -64,6 +64,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `editor.focusSelection() -> bool` | engine | Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. |
 | `editor.gameView(enabled) -> bool` | engine | Game View (the G key): hides every in-viewport editor helper — grid, light wires, selection outline, gizmo. Docks stay; not persisted. |
 | `editor.isGameView() -> bool` | engine | Whether Game View is active. |
+| `editor.setView("top"\|"bottom"\|"left"\|"right"\|"front"\|"back"\|"perspective") -> bool` | engine | Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Axis views switch to orthographic projection; "perspective" restores perspective and keeps the orientation. Works in both camera modes. |
+| `editor.view() -> string` | engine | The last canonical view requested via editor.setView ("perspective" until one is set). Informational — free orbiting afterwards does not reset it. |
 | `editor.snapSize() -> number` | document | The translate snap size (world units) — also the ground grid's spacing. Editor-global, persisted. |
 | `editor.setSnapSize(size) -> bool` | document | Sets the translate snap / grid size ([ and ] step it in the viewport). Refuses size <= 0; clamped to 0.01..100. |
 | `editor.snapToFloor() -> bool` | engine | Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable. |
