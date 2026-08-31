@@ -615,7 +615,8 @@ void MainWindow::setupUndoRedo()
         updateWindowTitle();
     });
 
-    ui->actionEditUndo->setShortcuts(QKeySequence::Undo);
+    // (shortcut moved to ShortcutRegistry "edit.undo" — this action is not
+    // attached to any widget, so a QKeySequence here never fired anyway)
 
     connect(ui->actionRedo, &QAction::triggered, [this]() {
         redo();
@@ -627,7 +628,7 @@ void MainWindow::setupUndoRedo()
         updateWindowTitle();
     });
 
-    ui->actionEditRedo->setShortcuts(QKeySequence::Redo);
+    // (shortcut moved to ShortcutRegistry "edit.redo")
 }
 
 WindowSpaces MainWindow::getWindowSpace()
@@ -2258,6 +2259,18 @@ void MainWindow::setupShortcuts()
     reg.addFixed("snap.relative", "Snap While Dragging", "Snapping", "Ctrl (hold)");
     reg.addFixed("snap.altdrag", "Duplicate While Dragging", "Snapping", "Alt + drag gizmo");
     reg.addFixed("snap.vertex", "Snap To Vertex", "Snapping", "V (hold) while moving");
+
+    // ---- editing ----
+    // Ctrl+Z/Ctrl+Shift+Z had been DEAD since the menubar went away: the .ui's
+    // actionEditUndo/actionEditRedo carried the QKeySequence but were attached
+    // to no widget, so the shortcut never fired (the toolbar buttons were the
+    // only working trigger). Registered here like every other binding.
+    // Redo is explicit Ctrl+Shift+Z — QKeySequence::Redo's Ctrl+Y alternate
+    // would collide with view.bottom.
+    reg.add("edit.undo", "Undo", "Editing", QKeySequence(Qt::CTRL | Qt::Key_Z), this,
+            [this]() { undo(); updateWindowTitle(); });
+    reg.add("edit.redo", "Redo", "Editing", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z), this,
+            [this]() { redo(); updateWindowTitle(); });
 
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
