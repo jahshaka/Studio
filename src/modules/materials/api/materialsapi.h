@@ -110,6 +110,8 @@ public:
     Q_INVOKABLE bool selectNode(const QString &nodeId);
     Q_INVOKABLE QVariant selectedNode();
     Q_INVOKABLE bool deselect();
+    Q_INVOKABLE QVariantMap settings();
+    Q_INVOKABLE bool setBlendMode(const QString &mode);
 
 private:
     NodeGraph *graphOrFail(const QString &verb);

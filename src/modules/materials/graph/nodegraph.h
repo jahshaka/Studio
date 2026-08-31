@@ -15,10 +15,16 @@ class NodeModel;
 class ConnectionModel;
 class NodeLibrary;
 
+// Unreal-order blend modes for the master material (serialized as STRINGS in
+// serializeMaterialSettings, so the numeric order can match the settings-view
+// combo). Opaque keeps the baker's auto rules (a connected cutoff -> Masked, a
+// baked alpha chain -> Translucent); the others force the material's alphaMode.
 enum class BlendMode {
-	Opaque ,
-	Blend,
-	Additive,
+	Opaque,
+	Masked,       // alpha cutout (material alphaMode 1)
+	Translucent,  // plain alpha blend — the mode formerly named "Blend" (alphaMode 2)
+	Additive,     // Final = Src + Dest (alphaMode 4)
+	Modulate,     // Final = Src × Dest (alphaMode 5)
 };
 
 enum class CullMode {

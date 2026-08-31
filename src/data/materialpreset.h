@@ -54,7 +54,8 @@ struct MaterialPreset
     QColor  emissiveColor;
     float   emissiveIntensity;
     QString emissiveMap;
-    int     alphaMode;      // 0 opaque, 1 cutout, 2 blend (glass)
+    int     alphaMode;      // 0 opaque, 1 masked, 2 translucent, 3 glass,
+                            // 4 additive, 5 modulate (PbrMaterial::alphaMode)
     float   alpha;
     float   alphaCutoff;
 };

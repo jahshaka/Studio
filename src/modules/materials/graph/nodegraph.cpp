@@ -388,11 +388,19 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 	case BlendMode::Opaque:
 		blendType = "Opaque";
 		break;
-	case BlendMode::Blend:
+	case BlendMode::Masked:
+		blendType = "Masked";
+		break;
+	case BlendMode::Translucent:
+		// legacy string kept so old builds still read new files as alpha blend
 		blendType = "Blend";
 		break;
 	case BlendMode::Additive:
-		blendType = "Blend";
+		// was serialized as "Blend" — Additive never survived a save/load
+		blendType = "Additive";
+		break;
+	case BlendMode::Modulate:
+		blendType = "Modulate";
 	}
 
 	QString cullMode;
@@ -441,9 +449,12 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 {
 
 	auto getBlendmode = [](QJsonObject obj) {
-		if (obj["blendMode"].toString().toLower() == "opaque") return BlendMode::Opaque;
-		if (obj["blendMode"].toString().toLower() == "blend") return BlendMode::Blend;
-		if (obj["blendMode"].toString().toLower() == "additive") return BlendMode::Additive;
+		const QString mode = obj["blendMode"].toString().toLower();
+		if (mode == "opaque") return BlendMode::Opaque;
+		if (mode == "masked") return BlendMode::Masked;
+		if (mode == "blend" || mode == "translucent") return BlendMode::Translucent;
+		if (mode == "additive") return BlendMode::Additive;
+		if (mode == "modulate") return BlendMode::Modulate;
 		return BlendMode::Opaque;
 	};
 	auto getCullMode = [](QJsonObject obj) {

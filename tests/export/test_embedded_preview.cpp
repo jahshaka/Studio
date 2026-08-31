@@ -257,6 +257,13 @@ int main(int argc, char **argv)
         CHECK(js.contains("[jah-gpu-ready]"), "viewer emits the gpu-ready marker");
         CHECK(js.contains("[jah-no-gpu]"), "viewer emits the no-gpu marker");
         CHECK(js.contains("jahembed=1"), "markers gated on the jahembed query");
+        // Unreal-parity blend modes ride extras.jah.blendMode (no core glTF
+        // equivalent) — the viewer half must stay in place, and three only
+        // implements MultiplyBlending on the premultiplied path.
+        CHECK(js.contains("AdditiveBlending") && js.contains("MultiplyBlending"),
+              "viewer patches three blending for jah blend modes");
+        CHECK(js.contains("premultipliedAlpha"),
+              "modulate sets premultipliedAlpha (three blends nothing without it)");
     }
 
     std::printf(failures ? "FAILED: %d checks\n" : "ALL OK\n", failures);

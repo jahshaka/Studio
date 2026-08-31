@@ -1,0 +1,51 @@
+// shadergraph.blend_verbs — graph.settings/setBlendMode end-to-end in the real
+// app (--script --headless): the master-panel blend modes (Unreal-parity set,
+// IMAGE_PLANE_SPEC §9) round-trip through the verbs and land on the evaluated
+// material's alphaMode (Additive=4, Modulate=5; 3 stays Glass).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var info = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/silver.effect");
+assert(info.master === "PbrMaterial", "silver.effect loaded with a PBR master");
+
+// default settings expose a blendMode
+var s = graph.settings();
+assert(typeof s.blendMode === "string", "graph.settings() returns blendMode");
+assert(s.blendMode === "Opaque", "shipped preset defaults to Opaque (got " + s.blendMode + ")");
+
+// the full Unreal set round-trips through the verb
+var modes = ["Opaque", "Masked", "Translucent", "Additive", "Modulate"];
+for (var i = 0; i < modes.length; i++) {
+    assert(graph.setBlendMode(modes[i]) === true, "setBlendMode('" + modes[i] + "') accepted");
+    assert(graph.settings().blendMode === modes[i], "settings() reads back " + modes[i]);
+}
+
+// legacy alias
+assert(graph.setBlendMode("Blend") === true, "legacy 'Blend' accepted");
+assert(graph.settings().blendMode === "Translucent", "'Blend' lands as Translucent");
+
+// unknown mode -> catchable error, setting unchanged
+var threw = false;
+try { graph.setBlendMode("Screen"); } catch (e) { threw = true; }
+assert(threw, "setBlendMode throws on an unknown mode");
+assert(graph.settings().blendMode === "Translucent", "failed set leaves the mode alone");
+
+// the setting drives the evaluated material's alphaMode (material state only)
+assert(graph.setBlendMode("Additive") === true, "set Additive for evaluation");
+var result = graph.evaluate();
+assert(result.values.alphaMode === 4, "Additive evaluates to alphaMode 4");
+var metallicWithAdditive = result.values.metallic;
+
+assert(graph.setBlendMode("Modulate") === true, "set Modulate for evaluation");
+result = graph.evaluate();
+assert(result.values.alphaMode === 5, "Modulate evaluates to alphaMode 5");
+assert(result.values.metallic === metallicWithAdditive,
+       "blend mode is material state: other folded values unchanged");
+
+assert(graph.setBlendMode("Masked") === true, "set Masked for evaluation");
+assert(graph.evaluate().values.alphaMode === 1, "Masked evaluates to alphaMode 1");
+
+console.log("shadergraph.blend_verbs: all ok");

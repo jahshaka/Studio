@@ -269,6 +269,20 @@ set_tests_properties(shadergraph.selection_verbs PROPERTIES
     LABELS "shadergraph"
     TIMEOUT 120)
 
+# graph.settings/setBlendMode verbs end-to-end (Unreal-parity blend modes,
+# IMAGE_PLANE_SPEC §9): master-panel blend state round-trips through the verbs
+# and lands on the evaluated material's alphaMode.
+configure_file(e2e_blend_settings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js @ONLY)
+set(_home_blend ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-blend)
+file(MAKE_DIRECTORY ${_home_blend}/run)
+add_test(NAME shadergraph.blend_verbs
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_blend_settings.js --headless
+         WORKING_DIRECTORY ${_home_blend}/run)
+set_tests_properties(shadergraph.blend_verbs PROPERTIES
+    ENVIRONMENT "HOME=${_home_blend}"
+    LABELS "shadergraph"
+    TIMEOUT 120)
+
 # One-shot §3b tool: re-saves a shipped preset through the real migration
 # (NOT a test — invoked by hand; the re-saved presets are committed).
 add_executable(resave_presets

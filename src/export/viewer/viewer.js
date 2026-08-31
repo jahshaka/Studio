@@ -157,12 +157,33 @@
             });
         }
 
-        // per-material IBL intensity
+        // per-material IBL intensity + jah blend modes (extras.jah.blendMode:
+        // core glTF has no additive/modulate — the exporter writes BLEND as the
+        // fallback and the real mode rides extras; IMAGE_PLANE_SPEC §9).
         scene.traverse(function (o) {
             if (o.isMesh && o.material && o.material.userData && o.material.userData.jah) {
                 var mj = o.material.userData.jah;
                 if (mj.iblIntensity !== undefined) o.material.envMapIntensity = mj.iblIntensity;
                 if (mj.useIbl === false) o.material.envMapIntensity = 0;
+                if (mj.blendMode === "additive" || mj.blendMode === "modulate") {
+                    if (mj.blendMode === "additive") {
+                        // AdditiveBlending is SRC_ALPHA/ONE: Final = Src*alpha
+                        // + Dest — the engine's blendblock exactly (alpha is
+                        // the glow intensity, carried in baseColorFactor.A).
+                        o.material.blending = THREE.AdditiveBlending;
+                    } else {
+                        // MultiplyBlending is only IMPLEMENTED on the
+                        // premultiplied path (DST_COLOR/ONE_MINUS_SRC_ALPHA);
+                        // without this flag three warns and blends nothing.
+                        // With alpha 1 (the exporter forces it for modulate)
+                        // that reduces to Final = Src * Dest.
+                        o.material.blending = THREE.MultiplyBlending;
+                        o.material.premultipliedAlpha = true;
+                    }
+                    o.material.transparent = true;
+                    o.material.depthWrite = false;
+                    o.material.needsUpdate = true;
+                }
             }
         });
     }

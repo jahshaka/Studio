@@ -192,6 +192,7 @@ GraphBaker::CompiledGraph GraphBaker::compile(NodeGraph* graph, BakeProgram::Tex
 	out.hasMaster = true;
 	out.hasPbrMaster = (master->typeName == "PbrMaterial");
 	out.name = graph->settings.name;
+	out.blendMode = graph->settings.blendMode;
 	if (!resolver) resolver = [](const QString& value) { return value; };
 
 	for (const auto& slot : masterSlotsFor(master->typeName)) {
@@ -476,6 +477,21 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 		out.eval.values["alphaMode"] = 1;
 	else if (alphaBaked)
 		out.eval.values["alphaMode"] = 2;
+
+	// ---- material-settings blend mode ----------------------------------
+	// The master's Blend Mode setting is material STATE, not texel math: the
+	// bakes above are untouched, only the landed alphaMode changes. Opaque
+	// (the default) keeps the auto rules so existing graphs behave as before;
+	// an explicit choice overrides them (PbrMaterial alphaMode values:
+	// 1 masked, 2 translucent, 4 additive, 5 modulate — 3 is Glass, not a
+	// graph blend mode).
+	switch (compiled.blendMode) {
+	case BlendMode::Opaque:                                       break;
+	case BlendMode::Masked:      out.eval.values["alphaMode"] = 1; break;
+	case BlendMode::Translucent: out.eval.values["alphaMode"] = 2; break;
+	case BlendMode::Additive:    out.eval.values["alphaMode"] = 4; break;
+	case BlendMode::Modulate:    out.eval.values["alphaMode"] = 5; break;
+	}
 
 	if (!out.eval.unsupportedNodes.isEmpty()) {
 		qWarning() << "GraphBaker: unsupported inputs on" << compiled.name
