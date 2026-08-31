@@ -85,7 +85,7 @@ class AssetView : public QWidget
 	Q_OBJECT
 
 public slots:
-	void fetchMetadata(AssetGridItem*);
+	void fetchMetadata(AssetGridItem*, bool allowBackfill = true);
 	/// Lazy metadata backfill for pre-metadata library rows: computes the
 	/// per-type block on a worker thread (assimp/header parse only, no GPU),
 	/// persists it into the row's properties JSON on arrival, refreshes the
@@ -228,17 +228,7 @@ private:
 
     QPushButton *normalize;
 	QLabel *metadataMissing;
-	QLabel *metadataName;
-	QLabel *metadataType;
-	QLabel *metadataVisibility;
-	QLabel *metadataLicense;
-	QLabel *metadataAuthor;
-	QLabel *metadataTags;
-	QLabel *metadataDetails;   // rich per-type block (counts, resolution, size…)
-    QWidget *metadataWidget;
-    QHBoxLayout *metadataLayout;
-    QPushButton *changeMetaCollection;
-	QLabel *metadataCollection;
+	QLabel *metadataDetails;   // the two-column metadata table (all rows)
 
     SettingsManager* settings;
 	IAssetViewer *viewer;

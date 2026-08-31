@@ -1512,14 +1512,28 @@ void AssetWidget::exportAssetPack()
 
 void AssetWidget::searchAssets(QString searchString)
 {
-	ui->assetView->clear();
-
-	if (!searchString.isEmpty()) {
-		// keep a list of last db fetch in memory OR search entire db...
-	}
-	else {
+	// Type-to-search filter (was an empty stub — any query showed NOTHING):
+	// shows every matching asset in the currently selected folder and its
+	// subfolders, honoring the type filter combo. Clearing the box restores
+	// the plain folder view.
+	const QString needle = searchString.trimmed();
+	if (needle.isEmpty()) {
 		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		return;
 	}
+
+	ui->assetView->clear();
+	std::function<void(const QString &)> addMatches = [&](const QString &folderGuid) {
+		for (const auto &folder : db->fetchChildFolders(folderGuid, project->getProjectGuid())) {
+			if (folder.name.contains(needle, Qt::CaseInsensitive)) addItem(folder);
+			addMatches(folder.guid);
+		}
+		for (const auto &asset : db->fetchChildAssets(folderGuid, project->getProjectGuid(),
+		                                              activeFilter, showDependencies)) {
+			if (asset.name.contains(needle, Qt::CaseInsensitive)) addItem(asset);
+		}
+	};
+	addMatches(assetItem.selectedGuid);
 }
 
 void AssetWidget::OnLstItemsCommitData(QWidget *listItem)

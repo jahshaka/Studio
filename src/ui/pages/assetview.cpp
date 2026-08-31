@@ -584,6 +584,12 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	// Left column split: top half keeps the collections tree (future asset
 	// groups), bottom half shows the selected asset's contents.
+	// Frameless like the Materials/Editor left columns: Qlementine draws the
+	// default QFrame border around item views that the classic sheets used to
+	// suppress — the assets nav column must not grow an inner frame.
+	treeWidget->setFrameShape(QFrame::NoFrame);
+	assetNodeTree->setFrameShape(QFrame::NoFrame);
+
 	auto leftSplit = new QSplitter(Qt::Vertical);
 	leftSplit->setHandleWidth(1);
 	leftSplit->addWidget(treeWidget);
@@ -783,7 +789,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     if (ThemeManager::classicActive())
         _metadataPane->setStyleSheet("background: #202020");
     QVBoxLayout *metaLayout = new QVBoxLayout;
-    metaLayout->setContentsMargins(0, 0, 0, 0);
+    metaLayout->setContentsMargins(10, 10, 10, 10);
+    metaLayout->setSpacing(8);
 	assetDropPad = new QWidget;
 	assetDropPad->setAcceptDrops(true);
 	assetDropPad->installEventFilter(this);
@@ -830,6 +837,18 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     deleteFromLibrary = new QPushButton("Delete From Library");
 	deleteFromLibrary->setStyleSheet(StyleSheet::AssetViewDeleteButton());
     deleteFromLibrary->setEnabled(false);
+
+	if (!ThemeManager::classicActive()) {
+		// visible drop-target affordance (the classic dashed box was lost with
+		// the sheet kill-switch) + the shared chrome button spec
+		assetDropPad->setStyleSheet(
+			"#assetDropPad { border: 2px dashed #4a4a4a; border-radius: 6px; }");
+		for (QPushButton *chromeBtn : { browseButton, downloadWorld, normalize,
+		                                deleteFromLibrary })
+			chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
+		updateAsset->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
+		addToProject->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
+	}
 
 	renameModel = new QLabel("Name:");
 	renameModelField = new QLineEdit();
@@ -1116,10 +1135,8 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     metaLayout->addWidget(assetDropPad);
 
 	auto metadata = new QWidget;
-	//metadata->setFixedHeight(256);
 	auto l = new QVBoxLayout;
-	l->setSpacing(12);
-	//l->setMargin(0);
+	l->setSpacing(8);
 	QSizePolicy policy2;
 	policy2.setVerticalPolicy(QSizePolicy::Preferred);
 	policy2.setHorizontalPolicy(QSizePolicy::Preferred);
@@ -1127,58 +1144,21 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	metadataMissing->setAlignment(Qt::AlignCenter);
 	metadataMissing->setStyleSheet("padding: 12px; text-align: center");
 	metadataMissing->setSizePolicy(policy2);
-	metadataName = new QLabel("Name: ");
-	metadataName->setSizePolicy(policy2);
-	metadataType = new QLabel("Type: ");
-	metadataType->setSizePolicy(policy2);
+	// ONE two-column label/value table (owner 2026-08-31) — replaces the old
+	// stack of "Key: value" labels. fetchMetadata() renders every row (type,
+	// the rich per-type block, public/author/license/collection) into it.
 	metadataDetails = new QLabel;
 	metadataDetails->setSizePolicy(policy2);
 	metadataDetails->setWordWrap(true);
+	metadataDetails->setTextFormat(Qt::RichText);
 	metadataDetails->setVisible(false);
-	metadataAuthor = new QLabel("Author: ");
-	metadataAuthor->setSizePolicy(policy2);
-	metadataLicense = new QLabel("License: ");
-	metadataLicense->setSizePolicy(policy2);
-	metadataTags = new QLabel("Tags: ");
-	metadataTags->setSizePolicy(policy2);
-	metadataVisibility = new QLabel("Public: ");
-	metadataVisibility->setSizePolicy(policy2);
-	metadataCollection = new QLabel("Collection: ");
-	metadataCollection->setSizePolicy(policy2);
-    metadataVisibility->setVisible(false);
-
-	metadataName->setVisible(false);
-	metadataType->setVisible(false);
-	metadataAuthor->setVisible(false);
-	metadataLicense->setVisible(false);
-	metadataTags->setVisible(false);
-
-    changeMetaCollection = new QPushButton(tr("change"));
-    changeMetaCollection->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
-    changeMetaCollection->setStyleSheet(StyleSheet::AssetViewChangeCollectionLink());
-    metadataLayout = new QHBoxLayout;
-    metadataLayout->setContentsMargins(0, 0, 0, 0);
-    metadataLayout->setSpacing(12);
-    metadataLayout->addWidget(metadataCollection);
-    // metadataLayout->addWidget(changeMetaCollection);
-    metadataLayout->addStretch();
-    metadataWidget = new QWidget;
-    metadataWidget->setLayout(metadataLayout);
-	metadataWidget->setVisible(false);
 
 	l->addWidget(metadataMissing);
 
 	l->addWidget(renameWidget);
 	l->addWidget(tagWidget);
 
-	//l->addWidget(metadataName);
-	l->addWidget(metadataType);
 	l->addWidget(metadataDetails);
-	l->addWidget(metadataVisibility);
-	l->addWidget(metadataAuthor);
-	l->addWidget(metadataLicense);
-	//l->addWidget(metadataTags);
-	l->addWidget(metadataWidget);
 	l->addWidget(updateAsset);
 
 	metadata->setLayout(l);
@@ -1228,6 +1208,11 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     _splitter->setStretchFactor(0, 0);
     _splitter->setStretchFactor(1, 3);
     _splitter->setStretchFactor(2, 1);
+    // Qlementine's larger control minimums inflated the metadata pane to a
+    // huge share of the page; keep it a sensible sidebar band (wide enough
+    // for its buttons to breathe, never dominating the grid).
+    _metadataPane->setMinimumWidth(280);
+    _metadataPane->setMaximumWidth(380);
     
     QGridLayout *layout = new QGridLayout;
     layout->setContentsMargins(0, 0, 0, 0);
@@ -2443,72 +2428,75 @@ static QString formatDuration(qint64 ms)
 }
 
 // The labeled list the pane shows under "Type:", per metadata kind.
-static QString metadataDetailsText(const QJsonObject &meta, const QDateTime &imported)
+// The rich per-type block as label/value rows for the metadata table.
+using MetadataRows = QList<QPair<QString, QString>>;
+
+static void appendMetadataRows(MetadataRows &rows, const QJsonObject &meta, const QDateTime &imported)
 {
-	QStringList lines;
 	const QString kind = meta["kind"].toString();
 	const QString format = meta["format"].toString();
 
 	if (!format.isEmpty())
-		lines << (kind == "model" ? QStringLiteral("Source: %1") : QStringLiteral("Format: %1"))
-		             .arg(format.toUpper());
+		rows.append({ kind == "model" ? QStringLiteral("Source") : QStringLiteral("Format"),
+		              format.toUpper() });
 
 	if (kind == "model") {
-		lines << "Vertices: " + formatCount(meta["vertices"].toInteger());
-		lines << "Triangles: " + formatCount(meta["triangles"].toInteger());
-		if (meta["meshes"].toInt() > 1) lines << "Meshes: " + formatCount(meta["meshes"].toInt());
-		lines << "Materials: " + formatCount(meta["materials"].toInt());
-		lines << "Textures: " + formatCount(meta["textures"].toInt());
+		rows.append({ "Vertices", formatCount(meta["vertices"].toInteger()) });
+		rows.append({ "Triangles", formatCount(meta["triangles"].toInteger()) });
+		if (meta["meshes"].toInt() > 1) rows.append({ "Meshes", formatCount(meta["meshes"].toInt()) });
+		rows.append({ "Materials", formatCount(meta["materials"].toInt()) });
+		rows.append({ "Textures", formatCount(meta["textures"].toInt()) });
 	}
 	else if (kind == "image") {
 		if (meta.contains("width"))
-			lines << QStringLiteral("Resolution: %1×%2")   // 1920×1080
-			             .arg(meta["width"].toInt()).arg(meta["height"].toInt());
+			rows.append({ "Resolution", QStringLiteral("%1×%2")   // 1920×1080
+			                                .arg(meta["width"].toInt()).arg(meta["height"].toInt()) });
 	}
 	else if (kind == "audio") {
-		if (meta.contains("duration")) lines << "Duration: " + formatDuration(meta["duration"].toInteger());
-		if (meta.contains("sampleRate")) lines << "Sample Rate: " + formatCount(meta["sampleRate"].toInteger()) + " Hz";
+		if (meta.contains("duration")) rows.append({ "Duration", formatDuration(meta["duration"].toInteger()) });
+		if (meta.contains("sampleRate")) rows.append({ "Sample Rate", formatCount(meta["sampleRate"].toInteger()) + " Hz" });
 		if (meta.contains("channels")) {
 			const int channels = meta["channels"].toInt();
-			lines << "Channels: " + (channels == 1 ? QStringLiteral("Mono")
-			                       : channels == 2 ? QStringLiteral("Stereo")
-			                                       : QString::number(channels));
+			rows.append({ "Channels", channels == 1 ? QStringLiteral("Mono")
+			                        : channels == 2 ? QStringLiteral("Stereo")
+			                                        : QString::number(channels) });
 		}
 	}
 	else if (kind == "video") {
 		if (meta.contains("width"))
-			lines << QStringLiteral("Resolution: %1×%2")
-			             .arg(meta["width"].toInt()).arg(meta["height"].toInt());
-		if (meta.contains("duration")) lines << "Duration: " + formatDuration(meta["duration"].toInteger());
+			rows.append({ "Resolution", QStringLiteral("%1×%2")
+			                                .arg(meta["width"].toInt()).arg(meta["height"].toInt()) });
+		if (meta.contains("duration")) rows.append({ "Duration", formatDuration(meta["duration"].toInteger()) });
 		if (meta.contains("frameRate"))
-			lines << QStringLiteral("Frame Rate: %1 fps")
-			             .arg(meta["frameRate"].toDouble(), 0, 'g', 4);
-		if (meta.contains("videoCodec")) lines << "Codec: " + meta["videoCodec"].toString();
+			rows.append({ "Frame Rate", QStringLiteral("%1 fps")
+			                                .arg(meta["frameRate"].toDouble(), 0, 'g', 4) });
+		if (meta.contains("videoCodec")) rows.append({ "Codec", meta["videoCodec"].toString() });
 	}
 
-	if (meta.contains("files")) lines << "Files: " + formatCount(meta["files"].toInt());
-	if (meta.contains("fileSize")) lines << "Size: " + formatBytes(meta["fileSize"].toInteger());
-	if (imported.isValid()) lines << "Imported: " + imported.toString("yyyy-MM-dd");
-
-	return lines.join('\n');
+	if (meta.contains("files")) rows.append({ "Files", formatCount(meta["files"].toInt()) });
+	if (meta.contains("fileSize")) rows.append({ "Size", formatBytes(meta["fileSize"].toInteger()) });
+	if (imported.isValid()) rows.append({ "Imported", imported.toString("yyyy-MM-dd") });
 }
 
-void AssetView::fetchMetadata(AssetGridItem *widget)
+static QString metadataTableHtml(const MetadataRows &rows)
+{
+	QString html = QStringLiteral("<table cellspacing='0' cellpadding='2'>");
+	for (const auto &row : rows)
+		html += QStringLiteral("<tr><td style='color:#9a9a9a; padding-right:14px;"
+		                       " white-space:nowrap;'>%1</td><td>%2</td></tr>")
+		            .arg(row.first.toHtmlEscaped(), row.second.toHtmlEscaped());
+	html += QStringLiteral("</table>");
+	return html;
+}
+
+void AssetView::fetchMetadata(AssetGridItem *widget, bool allowBackfill)
 {
 	if (!widget->metadata.isEmpty()) {
 		metadataMissing->setVisible(false);
-
-		//metadataName->setVisible(true);
-		metadataType->setVisible(true);
 		metadataDetails->setVisible(true);
-		metadataVisibility->setVisible(true);
-		metadataAuthor->setVisible(true);
-		metadataLicense->setVisible(true);
-		//metadataTags->setVisible(true);
-        metadataWidget->setVisible(true);
 
-		//metadataName->setText("Name: " + QFileInfo(widget->metadata["name"].toString()).baseName());
-		metadataType->setText("Type: " + getAssetType(widget->metadata["type"].toInt()));
+		MetadataRows rows;
+		rows.append({ tr("Type"), getAssetType(widget->metadata["type"].toInt()) });
 
 		// The rich per-type block: import-time for new assets, lazily
 		// backfilled (worker thread + update-on-arrival) for old libraries.
@@ -2522,29 +2510,21 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 				if (!meta.isEmpty()) widget->sceneProperties["metadata"] = meta;
 			}
 			if (!meta.isEmpty()) {
-				metadataDetails->setText(metadataDetailsText(meta, record.dateCreated));
+				appendMetadataRows(rows, meta, record.dateCreated);
 			}
-			else {
-				metadataDetails->setText(tr("Details: …"));
+			else if (allowBackfill) {
+				rows.append({ tr("Details"), QStringLiteral("…") });
 				backfillMetadata(widget, guid, record.type);
 			}
 		}
-		QString pub = widget->metadata["is_public"].toBool() ? "true" : "false";
-		metadataVisibility->setText("Public: " + pub);
-		metadataAuthor->setText("Author: " + widget->metadata["author"].toString());
-		metadataLicense->setText("License: " + widget->metadata["license"].toString());
+		rows.append({ tr("Public"), widget->metadata["is_public"].toBool() ? tr("true") : tr("false") });
+		rows.append({ tr("Author"), widget->metadata["author"].toString() });
+		rows.append({ tr("License"), widget->metadata["license"].toString() });
 		
-		//QString tags;
+		const QString collection = widget->metadata["collection_name"].toString();
+		if (!collection.isEmpty()) rows.append({ tr("Collection"), collection });
 
-		//QJsonArray children = widget->tags["tags"].toArray();
-
-		//for (auto childObj : children) {
-		//	auto tag = childObj.toString();
-		//	tags.append(tag + " ");
-		//}
-
-		//metadataTags->setText("Tags: " + tags);
-		metadataCollection->setText("Collection: " + widget->metadata["collection_name"].toString());
+		metadataDetails->setText(metadataTableHtml(rows));
 	}
 	else {
 		metadataMissing->setVisible(true);
@@ -2552,14 +2532,7 @@ void AssetView::fetchMetadata(AssetGridItem *widget)
 		addToProject->setEnabled(false);
 		deleteFromLibrary->setEnabled(false);
 
-		//metadataName->setVisible(false);
-		metadataType->setVisible(false);
 		metadataDetails->setVisible(false);
-		metadataVisibility->setVisible(false);
-		metadataAuthor->setVisible(false);
-		metadataLicense->setVisible(false);
-		//metadataTags->setVisible(false);
-        metadataWidget->setVisible(false);
 	}
 }
 
@@ -2586,8 +2559,9 @@ void AssetView::backfillMetadata(AssetGridItem *widget, const QString &guid, int
 		watcher->deleteLater();
 		const QJsonObject meta = watcher->result();
 		if (meta.isEmpty()) {
-			// nothing on disk to describe (e.g. a built-in) — leave basics only
-			if (tile && selectedGridItem == tile) metadataDetails->setText(QString());
+			// nothing on disk to describe (e.g. a built-in) — re-render the
+			// table with the basic rows only (no backfill retry loop)
+			if (tile && selectedGridItem == tile) fetchMetadata(tile, false);
 			return;
 		}
 
