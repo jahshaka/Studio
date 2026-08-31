@@ -172,7 +172,8 @@ set(SRCS
     src/data/database/projectdatabase.cpp 
     src/data/guidmanager.cpp 
     src/commands/transformscenenodecommand.cpp 
-    src/commands/changematerialpropertycommand.cpp 
+    src/commands/changematerialpropertycommand.cpp
+    src/commands/changematerialcommand.cpp
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp
@@ -357,7 +358,8 @@ set(HEADERS
     src/data/database/projectdatabase.h 
     src/data/guidmanager.h 
     src/commands/transformscenenodecommand.h 
-    src/commands/changematerialpropertycommand.h 
+    src/commands/changematerialpropertycommand.h
+    src/commands/changematerialcommand.h
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h

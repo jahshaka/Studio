@@ -231,7 +231,12 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
             mDragOriginalMaterial = meshNode->getMaterial();
             for (Asset *asset : AssetManager::getAssets()) {
                 if (asset->assetGuid == role.value(3).toString()) {
-                    auto material = asset->getValue().value<iris::CustomMaterialPtr>();
+                    // Project materials hydrate as MaterialPtr (PBR-aware);
+                    // the built-in defaults from trigger() still store a
+                    // CustomMaterialPtr — accept both.
+                    const QVariant value = asset->getValue();
+                    auto material = value.value<iris::MaterialPtr>();
+                    if (!material) material = value.value<iris::CustomMaterialPtr>();
                     if (material) meshNode->setMaterial(material);
                 }
             }
@@ -257,8 +262,18 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
                                     true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
     } else if (type == static_cast<int>(ModelTypes::Material)) {
         if (mDragPreviewNode && mMainWindow) {
+            auto target = mDragPreviewNode;
+            // Put the original material back BEFORE the real apply: the hover
+            // preview borrowed a shared AssetManager instance, and the undoable
+            // apply must capture (and on undo restore) the true original.
+            target.staticCast<iris::MeshNode>()->setMaterial(mDragOriginalMaterial);
+            // Select the drop TARGET first, then apply. The old order applied
+            // the preset to whatever was selected before the drag — usually a
+            // different node, or a container the apply silently refused — while
+            // the leaked preview material made the drop LOOK successful. The
+            // document never held the material, so it vanished on reopen.
+            mMainWindow->sceneNodeSelected(target);
             mMainWindow->applyMaterialPreset(role.value(3).toString());
-            mMainWindow->sceneNodeSelected(mDragPreviewNode);
         }
         mDragPreviewNode.reset(); mDragOriginalMaterial.reset(); mDragWasHit = false;
     } else if (type == static_cast<int>(ModelTypes::Texture)) {

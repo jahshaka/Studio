@@ -149,8 +149,9 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         MaterialReader reader;
         reader.setProject(project);
-        auto material = reader.parseMaterial(doc.object(), db);
-        return engineRenderer->renderMaterial(previewMaterialFor(material.staticCast<iris::Material>()), size);
+        // Typed: PBR material thumbnails render the real PbrMaterial.
+        auto material = reader.parseMaterialTyped(doc.object(), db);
+        return engineRenderer->renderMaterial(previewMaterialFor(material), size);
     }
     return QImage();
 }

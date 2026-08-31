@@ -953,9 +953,16 @@ void MainWindow::applyMaterialPreset(QString guid)
     for (const auto &material : defaultMats) {
         if (material.name == preset) {
             applyMaterialPreset(material);
-            break;
+            return;
         }
     }
+
+    // Not a built-in preset: a saved material asset (a project .material row,
+    // e.g. one registered under Presets/ by an earlier preset apply). This
+    // used to fall through silently — dropping a saved material onto an
+    // object applied NOTHING persistent while the drag preview made it look
+    // applied (the reopen-loses-materials report).
+    sceneEditService->applyMaterialAsset(guid, selectionService->selected());
 }
 
 void MainWindow::applyMaterialPreset(MaterialPreset preset)

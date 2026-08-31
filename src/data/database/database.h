@@ -217,6 +217,7 @@ public:
     void migrateProjectsTable();
     // Same contract for the collections table (asset drawers: parent column).
     void migrateCollectionsTable();
+    void migrateAssetsTable();
 
     QString getVersion();
 

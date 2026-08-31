@@ -288,6 +288,25 @@ void Database::migrateCollectionsTable()
     }
 }
 
+void Database::migrateAssetsTable()
+{
+    // Material-asset data heal: a shifted argument in the preset-apply
+    // registration (fixed alongside the PBR-materials data-loss audit) wrote
+    // every material definition into the TAGS column, leaving the ASSET
+    // column empty — so saved materials hydrated broken and could never be
+    // re-applied. Move the stranded JSON where it belongs. Idempotent: after
+    // the move the WHERE clause matches nothing, and rows written correctly
+    // (asset populated) are untouched.
+    QSqlQuery query;
+    query.prepare(
+        "UPDATE assets SET asset = tags, tags = NULL "
+        "WHERE type = ? AND (asset IS NULL OR length(asset) = 0) "
+        "AND tags LIKE '{%'"
+    );
+    query.addBindValue(static_cast<int>(ModelTypes::Material));
+    executeAndCheckQuery(query, "MigrateAssetsMaterialData");
+}
+
 QString Database::getVersion()
 {
     //QSqlQuery pquery;
@@ -469,6 +488,7 @@ void Database::createAllTables()
     if (!checkIfTableExists("collections"))     createCollectionsTable();
     migrateCollectionsTable();
     if (!checkIfTableExists("assets"))          createAssetsTable();
+    migrateAssetsTable();
     if (!checkIfTableExists("dependencies"))    createDependenciesTable();
     if (!checkIfTableExists("author"))          createAuthorTable();
     if (!checkIfTableExists("folders"))         createFoldersTable();

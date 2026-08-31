@@ -43,6 +43,10 @@ endfunction()
 
 add_script_e2e(build_scene e2e_build_scene.js)
 add_script_e2e(undo_macro e2e_undo_macro.js)
+# PBR material persistence: container applies (imported-model roots), saved
+# material assets by guid, and the full save/close/open round-trip of every
+# PBR property (the owner-reported "materials lost on reopen" data loss).
+add_script_e2e(pbr_materials e2e_pbr_materials.js)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 add_script_e2e(editor_controls e2e_editor_controls.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).

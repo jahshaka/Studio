@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeanimation.h"
 
 #include "commands/addscenenodecommand.h"
+#include "commands/changematerialcommand.h"
 #include "commands/deletescenenodecommand.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
@@ -476,20 +477,28 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     return node;
 }
 
-void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
+namespace {
+
+// Every mesh node at or under `node`. An imported model roots at an Empty
+// container node, and the viewport's click-selects-the-root rule hands exactly
+// that container to the material paths — a mesh-only guard silently dropped
+// the apply on the floor (the "PBR materials lost on reopen" data loss: the
+// materials never entered the document, so the writer had nothing to save).
+void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &out)
 {
-    auto activeSceneNode = selection->selected();
-    if (!activeSceneNode || activeSceneNode->sceneNodeType != iris::SceneNodeType::Mesh) return;
+    if (!node) return;
+    if (node->sceneNodeType == iris::SceneNodeType::Mesh)
+        out.append(node.staticCast<iris::MeshNode>());
+    for (const auto &child : node->children) collectMeshNodes(child, out);
+}
 
-    auto meshNode = activeSceneNode.staticCast<iris::MeshNode>();
-
-    // Both branches build into `mat` and then share the registration tail below -
-    // writing matgen.material, creating the asset entry, requesting a thumbnail
-    // and copying textures are all material-type agnostic.
+// Builds a fresh material instance from a preset. A PBR preset builds a
+// PbrMaterial; anything else takes the legacy CustomMaterial path, so existing
+// presets behave exactly as before.
+iris::MaterialPtr materialFromPreset(const MaterialPreset &preset)
+{
     iris::MaterialPtr mat;
 
-    // A PBR preset builds a PbrMaterial; anything else takes the legacy
-    // CustomMaterial path, so existing presets behave exactly as before.
     if (preset.type.compare("PBR", Qt::CaseInsensitive) == 0) {
         auto pbr = iris::PbrMaterial::create();
 
@@ -538,7 +547,74 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
     mat = m;
     }
 
-    meshNode->setMaterial(mat);
+    return mat;
+}
+
+} // namespace
+
+void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
+{
+    applyMaterialPreset(preset, selection->selected());
+}
+
+void SceneEditService::applyMaterialPreset(const MaterialPreset &preset, iris::SceneNodePtr target)
+{
+    QList<iris::MeshNodePtr> meshes;
+    collectMeshNodes(target, meshes);
+    if (meshes.isEmpty()) return;
+
+    // Each mesh gets its OWN instance: sharing one material across nodes makes
+    // a later per-node edit bleed across the whole model. One undo entry
+    // reverses the whole apply (a preset landing on a model root repaints
+    // every descendant mesh — that has to be reversible).
+    iris::MaterialPtr mat;
+    undo->stack()->beginMacro(QObject::tr("Apply Material Preset"));
+    for (const auto &meshNode : meshes) {
+        mat = materialFromPreset(preset);
+        undo->push(new ChangeMaterialCommand(meshNode, mat));
+    }
+    undo->stack()->endMacro();
+
+    // The registration tail below (texture copies, matgen.material, asset
+    // entry, thumbnail) is per-APPLY, not per-mesh; only the Object->Material
+    // dependency rows are per-mesh.
+
+    auto fguid = GUIDManager::generateGUID();
+    if (!db->checkIfRecordExists("name", "Presets", "folders", false, project->getProjectGuid())) {
+        if (!db->createFolder("Presets", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
+    }
+
+    // Copy the preset's textures into the project and register them FIRST:
+    // writeSceneNodeMaterial stores textures as asset guids resolved by file
+    // name, so serializing before these rows existed left the saved material
+    // asset with dangling texture references (the reapplied texture vanished).
+    QStringList textureGuids;
+    for (const auto &prop : mat->properties) {
+        if (prop->type == iris::PropertyType::Texture) {
+            auto file = prop->getValue().toString();
+            if (file.isEmpty()) continue;
+            const QString fileName = QFileInfo(file).fileName();
+            QFile::copy(file, QDir(project->getProjectFolder()).filePath(fileName));
+
+            // One row per file: reapplying a preset must not duplicate it.
+            QString fileGuid = db->fetchAssetGUIDByName(fileName, project->getProjectGuid());
+            if (fileGuid.isEmpty()) {
+                fileGuid = db->createAssetEntry(
+                    GUIDManager::generateGUID(),
+                    fileName,
+                    static_cast<int>(ModelTypes::Texture),
+                    fguid,
+                    project->getProjectGuid(),
+                    QString(),
+                    QString(),
+                    QByteArray(),
+                    QByteArray(),
+                    QByteArray()
+                );
+            }
+            textureGuids.append(fileGuid);
+        }
+    }
 
     QJsonObject material;
     SceneWriter::writeSceneNodeMaterial(material, mat);
@@ -547,23 +623,32 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
     jsonFile.open(QFile::WriteOnly);
     jsonFile.write(QJsonDocument(material).toJson());
 
-    auto fguid = GUIDManager::generateGUID();
-    if (!db->checkIfRecordExists("name", "Presets", "folders", false, project->getProjectGuid())) {
-        if (!db->createFolder("Presets", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
-    }
-
     QString guid = db->createAssetEntry(
         GUIDManager::generateGUID(),
         preset.name,
         static_cast<int>(ModelTypes::Material),
         fguid,
         project->getProjectGuid(),
-        QString(),
-        QString(),
-        QByteArray(),
-        QByteArray(),
+        QString(),      // license
+        QString(),      // author
+        QByteArray(),   // thumbnail
+        QByteArray(),   // properties
+        QByteArray(),   // tags
+        // The material definition goes into the ASSET column. One missing
+        // argument used to shift it into `tags`, leaving every registered
+        // preset material an empty shell — un-appliable and hydrating broken.
         QJsonDocument(material).toJson()
     );
+
+    for (const auto &textureGuid : textureGuids) {
+        db->createDependency(
+            static_cast<int>(ModelTypes::Material),
+            static_cast<int>(ModelTypes::Texture),
+            guid,
+            textureGuid,
+            project->getProjectGuid()
+        );
+    }
 
     ThumbnailGenerator::getSingleton()->requestThumbnail(
         ThumbnailRequestType::Material, QDir(project->getProjectFolder()).filePath("matgen.material"), guid
@@ -571,48 +656,58 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset)
 
     emit assetViewRefreshRequested();
 
-    for (const auto &prop : mat->properties) {
-        if (prop->type == iris::PropertyType::Texture) {
-            auto file = prop->getValue().toString();
-            if (file.isEmpty()) continue;
-            QFile::copy(
-                file,
-                QDir(project->getProjectFolder()).filePath(QFileInfo(file).fileName())
-            );
-
-            QString fileGuid = db->createAssetEntry(
-                GUIDManager::generateGUID(),
-                QFileInfo(file).fileName(),
-                static_cast<int>(ModelTypes::Texture),
-                fguid,
-                project->getProjectGuid(),
-                QString(),
-                QString(),
-                QByteArray(),
-                QByteArray(),
-                QByteArray()
-            );
-
-            db->createDependency(
-                static_cast<int>(ModelTypes::Material),
-                static_cast<int>(ModelTypes::Texture),
-                guid,
-                fileGuid,
-                project->getProjectGuid()
-            );
-        }
+    for (const auto &meshNode : meshes) {
+        db->createDependency(
+            static_cast<int>(ModelTypes::Object),
+            static_cast<int>(ModelTypes::Material),
+            meshNode->getGUID(),
+            guid,
+            project->getProjectGuid()
+        );
     }
-
-    db->createDependency(
-        static_cast<int>(ModelTypes::Object),
-        static_cast<int>(ModelTypes::Material),
-        meshNode->getGUID(),
-        guid,
-        project->getProjectGuid()
-    );
 
     // TODO: update node's material without updating the whole ui
     emit materialApplied(preset.type);
+}
+
+bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneNodePtr target)
+{
+    QList<iris::MeshNodePtr> meshes;
+    collectMeshNodes(target, meshes);
+    if (meshes.isEmpty()) return false;
+
+    const QJsonObject matObject =
+        QJsonDocument::fromJson(db->fetchAssetData(assetGuid)).object();
+    if (matObject.isEmpty()) return false;
+
+    MaterialReader reader;
+    reader.setProject(project);
+
+    undo->stack()->beginMacro(QObject::tr("Apply Material"));
+    for (const auto &meshNode : meshes) {
+        // Fresh instance per mesh; parseMaterialTyped dispatches on the stored
+        // materialType, so a saved PBR material comes back as a real
+        // PbrMaterial instead of a broken shader-less CustomMaterial.
+        auto mat = reader.parseMaterialTyped(matObject, db);
+        if (!mat) continue;
+        undo->push(new ChangeMaterialCommand(meshNode, mat));
+    }
+    undo->stack()->endMacro();
+
+    for (const auto &meshNode : meshes) {
+        db->createDependency(
+            static_cast<int>(ModelTypes::Object),
+            static_cast<int>(ModelTypes::Material),
+            meshNode->getGUID(),
+            assetGuid,
+            project->getProjectGuid()
+        );
+    }
+
+    emit materialApplied(matObject["materialType"].toString() == "pbr"
+                             ? QStringLiteral("PBR")
+                             : QStringLiteral("custom"));
+    return true;
 }
 
 void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid)
