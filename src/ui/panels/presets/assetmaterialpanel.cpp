@@ -53,7 +53,9 @@ AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
     connect(listView,   SIGNAL(customContextMenuRequested(const QPoint&)),
             this,       SLOT(showContextMenu(const QPoint&)));
 
-    connect(listView,   SIGNAL(itemClicked(QListWidgetItem*)),
+    // double-click applies (owner request): a single click on the preset
+    // image must not swap the selected object's material any more
+    connect(listView,   SIGNAL(itemDoubleClicked(QListWidgetItem*)),
             this,       SLOT(applyMaterialPreset(QListWidgetItem*)));
 
     setStyleSheet(

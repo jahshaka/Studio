@@ -44,6 +44,10 @@ public:
 
 	QWidget* widget;
 	QWidget* headerWidget; // compact editor shown in the node's title bar
+	// place `widget` beside the socket rows (left of a right-aligned out
+	// socket's text) instead of below them — used by the float node so its
+	// number box sits next to "value" inside the node body (owner request)
+	bool widgetBesideSockets = false;
 	QColor titleColor;
 	QIcon icon;
 	QString iconPath;

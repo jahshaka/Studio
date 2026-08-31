@@ -140,7 +140,14 @@ protected:
 	void dropEvent(QGraphicsSceneDragDropEvent *event) override;
     void drawBackground(QPainter *painter, const QRectF &rect) override;
 
+public:
+	// GraphNode calls this from itemChange so the page can persist node
+	// positions (the signal itself is protected to outsiders)
+	void notifyNodeMoved() { emit nodeMoved(); }
+
 signals:
+	// a node's position changed (drags fire it repeatedly - debounce)
+	void nodeMoved();
 	void newConnection(SocketConnection* connection);
 	// not emitted when a node is deleted
 	void connectionRemoved(SocketConnection* connection);

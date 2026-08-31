@@ -347,6 +347,9 @@ QVariant GraphNode::itemChange(QGraphicsItem::GraphicsItemChange change, const Q
 			model->setX(pos.x());
 			model->setY(pos.y());
 		}
+		// let the page persist moved positions (debounced there)
+		if (auto graphScene = dynamic_cast<GraphNodeScene*>(scene()))
+			graphScene->notifyNodeMoved();
 	}
 
 	return QGraphicsItem::itemChange(change, value);

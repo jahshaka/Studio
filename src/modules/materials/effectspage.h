@@ -156,6 +156,8 @@ private:
 	IMaterialPreviewWidget *enginePreview = nullptr;
 	QMainWindow *displayWindow = nullptr;   // the Display dock's inner window (menus + preview)
 	QTimer *previewUpdateTimer = nullptr;   // 300ms debounce: slider drags bake once, not per pixel
+	QTimer *positionSaveTimer = nullptr;    // 1.5s debounce: moved nodes persist without an explicit save
+	bool restoringGraph = false;            // suppress position-saves while a graph is being (re)built
 	quint64 previewGeneration = 0;          // latest-wins stamp for async preview bakes
 	NodeGraph *graph;
 	QSplitter *splitView;

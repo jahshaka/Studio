@@ -47,8 +47,9 @@ FloatNodeModel::FloatNodeModel() :
 	valueSock = new FloatSocketModel("value");
 	addOutputSocket(valueSock);
 
-	// compact in-node editor: one number box in the title bar,
-	// left of the "Float" label
+	// compact in-node editor: one number box in the node BODY, on the
+	// "value" socket's row (owner request - values live next to the socket
+	// text inside the box, not in the header)
 	valueBox = new QDoubleSpinBox;
 	valueBox->setRange(-99999.0, 99999.0);
 	valueBox->setDecimals(2);
@@ -62,7 +63,8 @@ FloatNodeModel::FloatNodeModel() :
 		" padding: 0 2px; background: rgba(0, 0, 0, 0.35); color: rgba(250,250,250,1); font-size: 11px;}"
 		"QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0; height:0;}"
 		"QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height:0;}");
-	this->headerWidget = valueBox;
+	this->widget = valueBox;
+	this->widgetBesideSockets = true;
 
 	connect(valueBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		editTextChanged(QString::number(val));
@@ -660,12 +662,12 @@ ColorPickerNode::ColorPickerNode()
 	title = "Color";
 	typeName = "color";
 
-	// compact in-node editor: a swatch button in the title bar that
-	// opens the color dialog (ColorPickerWidget paints itself and pops
-	// the dialog on click)
+	// in-node editor: the swatch lives INSIDE the node body, like the
+	// texture node's preview (owner request); clicking it pops the color
+	// dialog (ColorPickerWidget paints itself)
 	colorWidget = new ColorPickerWidget();
-	colorWidget->setFixedSize(40, 18);
-	this->headerWidget = colorWidget;
+	colorWidget->setFixedSize(120, 40);
+	this->widget = colorWidget;
 	connect(colorWidget, &ColorPickerWidget::onColorChanged, [=](QColor color) {
 		emit valueChanged(this, 0);
 	});

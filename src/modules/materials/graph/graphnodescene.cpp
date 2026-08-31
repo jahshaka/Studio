@@ -101,6 +101,9 @@ GraphNode* GraphNodeScene::addNodeModel(NodeModel *model, float x, float y, bool
 
 	if (model->widget != nullptr) {
 		nodeView->setWidget(model->widget);
+		// float-style editors sit on the socket row, not below it
+		if (model->widgetBesideSockets)
+			nodeView->resetPositionForColorWidget();
 	}
 
 	if (model->headerWidget != nullptr) {

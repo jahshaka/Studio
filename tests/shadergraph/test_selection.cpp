@@ -111,7 +111,9 @@ int main(int argc, char** argv)
                   "panel edit invalidates the graph exactly once (one write path)");
 
             // the node's inline title-bar editor is the same value
-            auto inline_ = qobject_cast<QDoubleSpinBox*>(floatNode->headerWidget);
+            // the float editor moved from the title bar into the node body
+            // (owner request, phase 5): it is `widget` now, not `headerWidget`
+            auto inline_ = qobject_cast<QDoubleSpinBox*>(floatNode->widget);
             CHECK(inline_ != nullptr && near(inline_->value(), 0.42),
                   "the inline node editor mirrors the panel edit");
 

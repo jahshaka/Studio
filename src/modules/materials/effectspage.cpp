@@ -104,6 +104,17 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 	previewUpdateTimer->setSingleShot(true);
 	previewUpdateTimer->setInterval(300); // MATERIALS_EVALUATOR_SPEC section 2
 	connect(previewUpdateTimer, &QTimer::timeout, this, &EffectsPage::updateEnginePreviewMaterial);
+
+	// Moved nodes persist on their own (owner request): a debounced save
+	// after the last position change, so re-opening a graph restores the
+	// arrangement without an explicit save click. serializeWithBake is
+	// hash-cached, so an unchanged graph re-saves cheaply.
+	positionSaveTimer = new QTimer(this);
+	positionSaveTimer->setSingleShot(true);
+	positionSaveTimer->setInterval(1500);
+	connect(positionSaveTimer, &QTimer::timeout, this, [this]() {
+		if (!currentShaderInformation.GUID.isEmpty()) saveShader();
+	});
 	fontIcons = new QtAwesome;
 	fontIcons->initFontAwesome();
 	configureUI();
@@ -132,6 +143,7 @@ EffectsPage::EffectsPage( QWidget *parent, Database *database) :
 
 void EffectsPage::setNodeGraph(NodeGraph *graph)
 {
+	restoringGraph = true;
 	TextureManager::getSingleton()->clearTextures();
 
     auto newScene = createNewScene();
@@ -154,6 +166,7 @@ void EffectsPage::setNodeGraph(NodeGraph *graph)
 
 	stack->clear(); // clears stack, later to add seperate routes for each node addition
 	this->graph = graph;
+	restoringGraph = false;
 
 	schedulePreviewUpdate();
 }
@@ -426,6 +439,7 @@ NodeGraph* EffectsPage::importGraphFromFilePath(QString filePath, bool assign)
 
 void EffectsPage::loadGraph(QString guid)
 {
+	restoringGraph = true;
 	auto progressDialog = new ProgressDialog;
 	
 	progressDialog->setRange(0, 10);
@@ -471,6 +485,7 @@ void EffectsPage::loadGraph(QString guid)
 	currentShaderInformation.GUID = currentProjectShader->data(MODEL_GUID_ROLE).toString();
 	oldName = currentShaderInformation.name = currentProjectShader->data(Qt::DisplayRole).toString(); 
 	restoreGraphPositions(obj["shadergraph"].toObject());
+	restoringGraph = false;
 	progressDialog->close();
 }
 
@@ -1389,6 +1404,11 @@ GraphNodeScene *EffectsPage::createNewScene()
 		// (graphInvalidated covers connections, deletions and value edits
 		// alike), so this one debounced hook keeps the Display dock live.
 		schedulePreviewUpdate();
+	});
+
+	connect(scene, &GraphNodeScene::nodeMoved, this, [this]() {
+		// drags fire per step; setPos during graph builds must not count
+		if (!restoringGraph && positionSaveTimer) positionSaveTimer->start();
 	});
 
 	connect(scene, &GraphNodeScene::loadGraph, [=](QListWidgetItem *item) {
