@@ -18,6 +18,10 @@ For more information see the LICENSE file
 
 #include "export/exportservice.h"
 #include "export/previewlauncher.h"
+#include "export/exportcontentsource.h"
+#include "export/rawexporter.h"
+#include "scripting/modules/moduleshared.h"
+#include "services/assetmetadata.h"
 #include "services/sceneeditservice.h"
 
 #include "data/database/database.h"
@@ -67,6 +71,12 @@ QVector<VerbInfo> ProjectApi::verbs() const
         { "previewWeb", "project.previewWeb(dir) -> {browser, mode}",
           "Opens an existing web export (see exportWeb) in a Chromium-family browser as a chromeless --app window, "
           "or the default browser when none is found. mode is 'kiosk' or 'browser'.",
+          Needs::Document },
+        { "exportManifest", "project.exportManifest(dir) -> {dir, manifest, assets, totalBytes}",
+          "Writes a manifest v2 (jah.manifest.json) describing the open project's assets — guids, types, dependency "
+          "edges, file names, sizes and sha256 content ids — without copying any bytes. dir defaults to "
+          "<project>/exports. The catalog half of the unified export (ASSET_PIPELINE_SPEC §3.3); "
+          "project.exportArchive materializes the files in the final half.",
           Needs::Document },
     };
 }
@@ -276,4 +286,56 @@ QVariant ProjectApi::current()
     m["name"] = host.project->getProjectName();
     m["folder"] = host.project->getProjectFolder();
     return m;
+}
+
+QVariantMap ProjectApi::exportManifest(const QString &dir)
+{
+    QVariantMap out;
+    if (!requireProject()) return out;
+    if (!host.db) { fail("project.exportManifest: no database in this session"); return out; }
+
+    QString outDir = dir.trimmed();
+    if (outDir.isEmpty())
+        outDir = QDir(host.project->getProjectFolder()).filePath(QStringLiteral("exports"));
+
+    const QString projectGuid = host.project->getProjectGuid();
+
+    // The same sweep assets.list({scope:'project'}) shows, closed over each
+    // asset's outgoing dependency edges so the manifest is self-describing.
+    QStringList guids;
+    for (const auto &record :
+         host.db->fetchChildAssets(projectGuid, projectGuid, -1, true))
+        if (!record.guid.isEmpty() && !guids.contains(record.guid)) guids.append(record.guid);
+    for (int i = 0; i < guids.size(); ++i)   // grows while iterating: transitive closure
+        for (const QString &dep : host.db->fetchAssetGUIDAndDependencies(guids.at(i), false))
+            if (!dep.isEmpty() && !guids.contains(dep)) guids.append(dep);
+
+    QVector<RawExporter::AssetInfo> infos;
+    for (const QString &g : guids) {
+        const auto rec = host.db->fetchAsset(g);
+        if (rec.guid.isEmpty()) continue;
+        RawExporter::AssetInfo info;
+        info.guid = rec.guid;
+        info.name = rec.name;
+        info.typeId = rec.type;
+        info.type = scriptmod::assetTypeName(rec.type);
+        info.dependencies = host.db->fetchAssetGUIDAndDependencies(rec.guid, false);
+        infos.append(info);
+    }
+    if (infos.isEmpty()) { fail("project.exportManifest: the project has no assets"); return out; }
+
+    // Project rows resolve name-keyed against the flat project folder when
+    // they have no store folder — today's actual join, dies with the resolver.
+    LegacyStoreContentSource source(AssetMetadata::storeRootPath(), true,
+                                    host.project->getProjectFolder());
+    const auto r = RawExporter::exportAssets(infos, source, outDir,
+                                             QStringLiteral("project"), /*copyFiles=*/false);
+    if (!r.ok) { fail(QStringLiteral("project.exportManifest: %1").arg(r.error)); return out; }
+
+    out["dir"] = r.dir;
+    out["manifest"] = r.manifestPath;
+    out["assets"] = r.assetCount;
+    out["totalBytes"] = r.totalBytes;
+    out["warnings"] = QVariant(r.warnings);
+    return out;
 }

@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include <QStandardPaths>
 
 #include "scripting/modules/moduleshared.h"
+#include "export/exportcontentsource.h"
+#include "export/rawexporter.h"
 #include "services/assetservice.h"
 #include "data/constants.h"
 #include "services/assethelper.h"
@@ -48,21 +50,7 @@ namespace {
 
 QString typeName(int type)
 {
-    switch (static_cast<ModelTypes>(type)) {
-    case ModelTypes::Material: return "material";
-    case ModelTypes::Texture: return "texture";
-    case ModelTypes::Video: return "video";
-    case ModelTypes::Sky: return "sky";
-    case ModelTypes::Object: return "object";
-    case ModelTypes::Mesh: return "mesh";
-    case ModelTypes::SoundEffect: return "soundeffect";
-    case ModelTypes::Music: return "music";
-    case ModelTypes::Shader: return "shader";
-    case ModelTypes::Variant: return "variant";
-    case ModelTypes::File: return "file";
-    case ModelTypes::ParticleSystem: return "particles";
-    default: return "undefined";
-    }
+    return scriptmod::assetTypeName(type);   // shared vocabulary (moduleshared.h)
 }
 
 int typeFromName(const QString &name)
@@ -136,6 +124,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
           "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
+          Needs::Document },
+        { "exportRaw", "assets.exportRaw(guid, dir, {dependencies: true, hash: true}) -> {dir, manifest, files, assets, totalBytes, warnings}",
+          "Exports a store asset's files (and, by default, its dependencies' files) as loose files with their original names into dir, plus a jah.manifest.json (manifest v2: guids, types, dependency edges, sizes, sha256 content ids — hashing skippable via {hash: false}). Identical bytes are written once; assets with no stored files still get manifest entries. The unified-export front half (ASSET_PIPELINE_SPEC §3.3); .jaf export joins it in the final half.",
           Needs::Document },
         { "dependencies", "assets.dependencies(guid) -> [guid]",
           "The asset plus all its dependencies, recursively.",
@@ -576,5 +567,56 @@ QVariantList AssetsApi::dependencies(const QString &guid)
     if (!host.db) { fail("assets: not available in this session"); return out; }
     for (const auto &dep : AssetHelper::fetchAssetAndAllDependencies(guid, host.db))
         out.append(dep);
+    return out;
+}
+
+QVariantMap AssetsApi::exportRaw(const QString &guid, const QString &dir, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.exportRaw: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    if (dir.trimmed().isEmpty()) {
+        fail("assets.exportRaw: a destination directory is required");
+        return out;
+    }
+    const bool withDeps = options.value("dependencies", true).toBool();
+    const bool hash = options.value("hash", true).toBool();
+
+    QStringList guids{ record.guid };
+    if (withDeps) {
+        for (const QString &g : AssetHelper::fetchAssetAndAllDependencies(record.guid, host.db))
+            if (!guids.contains(g)) guids.append(g);
+    }
+
+    QVector<RawExporter::AssetInfo> infos;
+    for (const QString &g : guids) {
+        const auto rec = host.db->fetchAsset(g);
+        if (rec.guid.isEmpty()) continue;   // dangling dependency edge — skip, not fatal
+        RawExporter::AssetInfo info;
+        info.guid = rec.guid;
+        info.name = rec.name;
+        info.typeId = rec.type;
+        info.type = typeName(rec.type);
+        info.dependencies = host.db->fetchAssetGUIDAndDependencies(rec.guid, false);
+        infos.append(info);
+    }
+
+    // Explicit store root: exporters never derive storage paths themselves.
+    // storeRootPath() is the canonical helper Lane A folds into AssetStorePaths.
+    LegacyStoreContentSource source(AssetMetadata::storeRootPath(), hash);
+    const auto r = RawExporter::exportAssets(infos, source, dir.trimmed());
+    if (!r.ok) { fail(QStringLiteral("assets.exportRaw: %1").arg(r.error)); return out; }
+
+    out["dir"] = r.dir;
+    out["manifest"] = r.manifestPath;
+    out["files"] = QVariant(r.exportedFiles);
+    out["assets"] = r.assetCount;
+    out["totalBytes"] = r.totalBytes;
+    out["warnings"] = QVariant(r.warnings);
     return out;
 }

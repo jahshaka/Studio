@@ -28,6 +28,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `project.current() -> {guid, name, folder} \| null` | document | The open project, or null. |
 | `project.exportWeb(dir) -> {dir, indexHtml, glb, nodes, materials, extensions, warnings, ...}` | document | Exports the open scene for the web (glTF 2.0 + self-contained WebGPU viewer): index.html (double-clickable), viewer.html + scene.glb (served path), README.txt. dir defaults to <project>/exports/web. Document-only; works headless. |
 | `project.previewWeb(dir) -> {browser, mode}` | document | Opens an existing web export (see exportWeb) in a Chromium-family browser as a chromeless --app window, or the default browser when none is found. mode is 'kiosk' or 'browser'. |
+| `project.exportManifest(dir) -> {dir, manifest, assets, totalBytes}` | document | Writes a manifest v2 (jah.manifest.json) describing the open project's assets — guids, types, dependency edges, file names, sizes and sha256 content ids — without copying any bytes. dir defaults to <project>/exports. The catalog half of the unified export (ASSET_PIPELINE_SPEC §3.3); project.exportArchive materializes the files in the final half. |
 
 ## scene
 
@@ -131,6 +132,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `assets.builtins() -> [{guid, name, kind}]` | document | The reserved built-ins: primitives, materials and shaders with their reserved guids. Guids collide across kinds — always pair guid with kind. |
 | `assets.remove(guid, {keepShared: true}) -> bool` | document | Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo. |
 | `assets.refreshThumbnail(guid) -> bool` | document | Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects and materials render on the engine (engine required); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only). |
+| `assets.exportRaw(guid, dir, {dependencies: true, hash: true}) -> {dir, manifest, files, assets, totalBytes, warnings}` | document | Exports a store asset's files (and, by default, its dependencies' files) as loose files with their original names into dir, plus a jah.manifest.json (manifest v2: guids, types, dependency edges, sizes, sha256 content ids — hashing skippable via {hash: false}). Identical bytes are written once; assets with no stored files still get manifest entries. The unified-export front half (ASSET_PIPELINE_SPEC §3.3); .jaf export joins it in the final half. |
 | `assets.dependencies(guid) -> [guid]` | document | The asset plus all its dependencies, recursively. |
 
 ## materials

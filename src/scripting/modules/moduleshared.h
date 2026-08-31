@@ -28,7 +28,31 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
+#include "data/project.h"   // ModelTypes
+
 namespace scriptmod {
+
+/// The assets.* type vocabulary for a ModelTypes value ("object", "texture",
+/// …; "undefined" for anything unmapped). Shared by every module that reports
+/// asset rows (assets.list/metadata, the export verbs' manifests).
+inline QString assetTypeName(int type)
+{
+    switch (static_cast<ModelTypes>(type)) {
+    case ModelTypes::Material: return QStringLiteral("material");
+    case ModelTypes::Texture: return QStringLiteral("texture");
+    case ModelTypes::Video: return QStringLiteral("video");
+    case ModelTypes::Sky: return QStringLiteral("sky");
+    case ModelTypes::Object: return QStringLiteral("object");
+    case ModelTypes::Mesh: return QStringLiteral("mesh");
+    case ModelTypes::SoundEffect: return QStringLiteral("soundeffect");
+    case ModelTypes::Music: return QStringLiteral("music");
+    case ModelTypes::Shader: return QStringLiteral("shader");
+    case ModelTypes::Variant: return QStringLiteral("variant");
+    case ModelTypes::File: return QStringLiteral("file");
+    case ModelTypes::ParticleSystem: return QStringLiteral("particles");
+    default: return QStringLiteral("undefined");
+    }
+}
 
 inline QVariantMap vecToJs(const QVector3D &v)
 {

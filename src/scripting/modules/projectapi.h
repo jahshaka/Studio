@@ -46,6 +46,7 @@ public:
     Q_INVOKABLE QVariant current();
     Q_INVOKABLE QVariantMap exportWeb(const QString &dir = QString());
     Q_INVOKABLE QVariantMap previewWeb(const QString &dir = QString());
+    Q_INVOKABLE QVariantMap exportManifest(const QString &dir = QString());
 
 private:
     QString resolveGuid(const QString &guidOrName, QString *nameOut = nullptr);

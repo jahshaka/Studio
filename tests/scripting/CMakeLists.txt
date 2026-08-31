@@ -101,6 +101,20 @@ set_tests_properties(scripting.e2e.export_web PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# Unified export front half (ASSET_PIPELINE_SPEC phase 5): assets.exportRaw +
+# project.exportManifest through the real binary. Document-only, --headless;
+# fixture paths configured in.
+configure_file(scripts/e2e_export_raw.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_raw)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.export_raw
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_export_raw.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.export_raw PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.metadata

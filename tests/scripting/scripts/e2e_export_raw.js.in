@@ -1,0 +1,57 @@
+// scripting.e2e.export_raw — ASSET_PIPELINE_SPEC phase-5 front half, end to
+// end in the real binary: assets.exportRaw (loose files + manifest v2) and
+// project.exportManifest (catalog manifest, no bytes). Every verb here is a
+// document verb, so this runs --headless; deep structural validation of the
+// manifest/files lives in the C++ suite (export.raw).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+// ---- library asset -> exportRaw ----
+var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(png.length > 10, "assets.importFile(png) -> " + png);
+
+var r = assets.exportRaw(png, "raw-out");
+assert(r && r.dir.length > 0, "exportRaw returned a dir: " + r.dir);
+assert(r.manifest.indexOf("jah.manifest.json") >= 0, "manifest path: " + r.manifest);
+assert(r.assets >= 1, "manifest entries: " + r.assets);
+assert(r.files.length >= 1, "files exported: " + r.files.join(", "));
+assert(r.files.indexOf("tiny.png") >= 0, "original file name kept");
+assert(r.totalBytes > 0, "bytes copied: " + r.totalBytes);
+assert(r.warnings.length === 0, "no warnings");
+
+// hashing can be skipped
+var r2 = assets.exportRaw(png, "raw-out-nohash", { hash: false });
+assert(r2.files.length >= 1, "exportRaw with {hash: false} works");
+
+// ---- error paths are catchable ----
+mustThrow(function () { assets.exportRaw("no-such-guid", "raw-out-x"); },
+          "exportRaw of an unknown guid throws");
+mustThrow(function () { assets.exportRaw(png, ""); },
+          "exportRaw without a destination throws");
+mustThrow(function () { project.exportManifest(); },
+          "project.exportManifest without an open project throws");
+
+// ---- project manifest ----
+var guid = project.create("Raw Export Test " + Date.now());
+assert(guid.length > 10, "project.create -> " + guid);
+var projectSide = assets.addToProject(png);
+assert(projectSide.length > 10, "assets.addToProject -> " + projectSide);
+
+var m = project.exportManifest();
+assert(m && m.manifest.indexOf("jah.manifest.json") >= 0, "project manifest path: " + m.manifest);
+assert(m.assets >= 1, "project manifest describes " + m.assets + " asset(s)");
+assert(m.totalBytes > 0, "project manifest sees stored bytes: " + m.totalBytes);
+
+// explicit dir honoured
+var m2 = project.exportManifest("manifest-explicit");
+assert(m2.dir.indexOf("manifest-explicit") >= 0, "explicit dir honoured: " + m2.dir);
+
+console.log("e2e_export_raw: ALL OK");
