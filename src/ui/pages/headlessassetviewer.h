@@ -19,6 +19,8 @@ public:
         mSource = new iris::SceneSource();
     }
 
+    ~HeadlessAssetViewer() override { delete mSource; }
+
     QWidget *asWidget() override { return mWidget; }
     void setDatabase(Database *db) override { Q_UNUSED(db); }
 

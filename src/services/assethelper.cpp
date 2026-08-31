@@ -203,9 +203,13 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
     QStringList &textureList,
     QStringList &texturesFullPath,
     bool& hasEmbeddedTexture,
-    QJsonObject *modelStats)
+    QJsonObject *modelStats,
+    const QString &extractDir)
 {
-    auto ssource = new iris::SceneSource();
+    // Owns the assimp importer (and with it the aiScene) for the duration of
+    // this function only — it used to be `new` with no delete, leaking the
+    // entire parsed scene per import.
+    QScopedPointer<iris::SceneSource> ssource(new iris::SceneSource());
     // load mesh as scene
     auto node = iris::MeshNode::loadAsSceneFragment(filePath, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
@@ -266,7 +270,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         }
 
         return iris::MaterialPtr(mat);
-    }, ssource);
+    }, ssource.data(), nullptr, extractDir);
 
     const aiScene *scene = ssource->importer.GetScene();
 

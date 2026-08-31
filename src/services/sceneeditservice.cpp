@@ -278,8 +278,8 @@ void SceneEditService::addMesh(const QString &path, bool ignore, QVector3D posit
 {
     if (path.isEmpty()) return;
 
-    iris::SceneSource *ssource = new iris::SceneSource();
-
+    // No SceneSource: the loader owns a local importer when none is passed
+    // (the old `new` here leaked the whole parsed scene per added mesh).
     auto node = iris::MeshNode::loadAsSceneFragment(path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         auto mat = iris::CustomMaterial::create();
@@ -302,7 +302,7 @@ void SceneEditService::addMesh(const QString &path, bool ignore, QVector3D posit
             mat->setValue("normalTexture", data.normalTexture);
 
         return mat;
-    }, ssource);
+    });
 
     // model file may be invalid so null gets returned
     if (!node) return;

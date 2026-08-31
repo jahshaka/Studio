@@ -52,6 +52,33 @@ void ensureCasSchema(QSqlDatabase conn);
 bool ingestLegacyFolder(QSqlDatabase conn, const QString &root, const QString &guid,
                         const QString &assetName, IngestStats *stats, QString *errorOut);
 
+/// CAS-FIRST ingest of ONE file (phase 3 — the import pipeline's store
+/// primitive): hash srcPath (wherever it lives — the import source, a
+/// staging dir), store the object, record the files row and an asset_files
+/// row {guid, role, name}. The recorded extension of already-known content
+/// wins (jpeg/jpg aliasing, as in ingestLegacyFolder). Idempotent.
+/// `oidOut` (optional) receives the content id.
+bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
+                const QString &guid, const QString &role, const QString &name,
+                QString *oidOut, QString *errorOut);
+
+/// Materialize the legacy per-guid folder <root>/<guid>/ as a HARDLINK VIEW
+/// of the asset's objects (copy on filesystems without links): one entry per
+/// asset_files row, named by its recorded display name. ~0 bytes. This keeps
+/// the not-yet-rerouted legacy readers (library preview, materials-module
+/// texture manager, thumbnails) working while the CAS rows are authoritative;
+/// it disappears with the last legacy read site. Existing files are left
+/// alone. Idempotent.
+bool materializeLegacyView(QSqlDatabase conn, const QString &root,
+                           const QString &guid, QString *errorOut);
+
+/// Resolve an asset's PRIMARY ('source'-role) file to an absolute path;
+/// `nameOut` (optional) receives its display name. Falls back to the single
+/// file when no row carries the source role. Empty when the asset has no
+/// stored bytes.
+QString resolveSource(QSqlDatabase conn, const QString &root,
+                      const QString &guid, QString *nameOut = nullptr);
+
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,

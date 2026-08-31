@@ -144,6 +144,119 @@ bool ingestLegacyFolder(QSqlDatabase conn, const QString &root, const QString &g
     return true;
 }
 
+bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
+                const QString &guid, const QString &role, const QString &name,
+                QString *oidOut, QString *errorOut)
+{
+    const QFileInfo info(srcPath);
+    if (!info.exists() || !info.isFile()) {
+        if (errorOut) *errorOut = QStringLiteral("no such file %1").arg(srcPath);
+        return false;
+    }
+
+    const QString oid = hashFile(srcPath);
+    if (oid.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("cannot hash %1").arg(srcPath);
+        return false;
+    }
+    if (oidOut) *oidOut = oid;
+
+    // Known content keeps its recorded extension (jpeg/jpg aliasing — one
+    // object per oid, never a sibling copy under another name).
+    QString ext = info.suffix().toLower();
+    {
+        QSqlQuery known(conn);
+        known.prepare("SELECT ext FROM files WHERE oid = ?");
+        known.addBindValue(oid);
+        if (known.exec() && known.next()) ext = known.value(0).toString();
+    }
+
+    if (!storeObject(srcPath, root, oid, ext, errorOut)) return false;
+
+    QSqlQuery insertFile(conn);
+    insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+    insertFile.addBindValue(oid);
+    insertFile.addBindValue(info.size());
+    insertFile.addBindValue(ext);
+    insertFile.exec();
+
+    QSqlQuery insertLink(conn);
+    insertLink.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) VALUES (?, ?, ?, ?)");
+    insertLink.addBindValue(guid);
+    insertLink.addBindValue(role);
+    insertLink.addBindValue(oid);
+    insertLink.addBindValue(name.isEmpty() ? info.fileName() : name);
+    insertLink.exec();
+    return true;
+}
+
+bool materializeLegacyView(QSqlDatabase conn, const QString &root,
+                           const QString &guid, QString *errorOut)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
+    query.addBindValue(guid);
+    if (!query.exec()) {
+        if (errorOut) *errorOut = QStringLiteral("asset_files query failed for %1").arg(guid);
+        return false;
+    }
+
+    const QString folder = AssetStorePaths::legacyFolderIn(root, guid);
+    bool any = false;
+    while (query.next()) {
+        const QString name = query.value(0).toString();
+        const QString objPath = AssetStorePaths::objectPathIn(
+            root, query.value(1).toString(), query.value(2).toString());
+        if (!QFileInfo::exists(objPath)) continue;
+        if (!any) {
+            if (!QDir().mkpath(folder)) {
+                if (errorOut) *errorOut = QStringLiteral("cannot create %1").arg(folder);
+                return false;
+            }
+            any = true;
+        }
+        const QString dstPath = QDir(folder).filePath(name);
+        if (QFileInfo::exists(dstPath)) continue;
+#ifdef Q_OS_UNIX
+        if (::link(QFile::encodeName(objPath).constData(),
+                   QFile::encodeName(dstPath).constData()) == 0)
+            continue;
+#endif
+        if (!QFile::copy(objPath, dstPath)) {
+            if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(objPath, dstPath);
+            return false;
+        }
+    }
+    return true;
+}
+
+QString resolveSource(QSqlDatabase conn, const QString &root,
+                      const QString &guid, QString *nameOut)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
+                  "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
+    query.addBindValue(guid);
+    if (query.exec() && query.next()) {
+        const QString path = AssetStorePaths::objectPathIn(
+            root, query.value(1).toString(), query.value(2).toString());
+        if (QFileInfo::exists(path)) {
+            if (nameOut) *nameOut = query.value(0).toString();
+            return path;
+        }
+        // Object missing (offline root, purged store): legacy fallback below.
+        const QString legacy = QDir(AssetStorePaths::legacyFolderIn(root, guid))
+                                   .filePath(query.value(0).toString());
+        if (QFileInfo::exists(legacy)) {
+            if (nameOut) *nameOut = query.value(0).toString();
+            return legacy;
+        }
+    }
+    return QString();
+}
+
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
                   QString *errorOut)
 {

@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "assimp/Importer.hpp"
 #include "assimp/material.h"
 #include "assimp/postprocess.h"
+#include "irisgl/import/importflags.h"
 #include "assimp/scene.h"
 
 #include "data/constants.h"
@@ -141,9 +142,10 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
 QJsonObject AssetMetadata::forModelFile(const QString &filePath)
 {
     Assimp::Importer importer;
-    // Triangulate only: counts must match what the import-time path saw
-    // (iris loads triangulated), and nothing else here needs post-processing.
-    const aiScene *scene = importer.ReadFile(filePath.toStdString(), aiProcess_Triangulate);
+    // THE canonical preset (ASSET_PIPELINE_SPEC §3.2.2): metadata counts must
+    // match the geometry import and every load produce — a third flag set here
+    // used to yield vertex/index counts matching neither.
+    const aiScene *scene = importer.ReadFile(filePath.toStdString(), iris::ImportFlags::Canonical);
     if (!scene) return forGenericFile(filePath);   // still format/size, never nothing
     return forModelScene(scene, filePath);
 }

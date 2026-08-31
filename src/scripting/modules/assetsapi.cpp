@@ -357,7 +357,8 @@ QString AssetsApi::addToProject(const QString &guid)
             asset->path = destination;
             AssetManager::addAsset(asset);
         } else if (fileType == ModelTypes::Mesh) {
-            auto ssource = new iris::SceneSource();   // required: the loader dereferences it
+            // No SceneSource: the loader now owns a local importer when none
+            // is passed (the old `new` here leaked the whole parsed scene).
             auto node = iris::MeshNode::loadAsSceneFragment(
                 destination, [](iris::MeshPtr, iris::MeshMaterialData &data) {
                     auto mat = iris::CustomMaterial::create();
@@ -368,7 +369,7 @@ QString AssetsApi::addToProject(const QString &guid)
                     mat->setValue("emissionColor", data.emissionColor);
                     mat->setValue("shininess", data.shininess);
                     return mat;
-                }, ssource);
+                });
             if (node) {
                 auto asset = new AssetNodeObject;
                 asset->fileName = newName;

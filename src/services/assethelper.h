@@ -31,11 +31,15 @@ public:
     /// modelStats (optional): filled with AssetMetadata::forModelScene counts
     /// from the aiScene this load already produced — the import-time source
     /// of the per-asset "metadata" properties block.
+    /// `extractDir`: where embedded textures / derived maps are written
+    /// (import staging). Empty = beside the source — wrong for read-only
+    /// sources; the import pipeline always passes a staging dir.
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
                                                                  QStringList &textureList,
                                                                  QStringList &texturesFullPath,
                                                                  bool& hasEmbeddedTexture,
-                                                                 QJsonObject *modelStats = nullptr);
+                                                                 QJsonObject *modelStats = nullptr,
+                                                                 const QString &extractDir = QString());
 };
 
 #endif
