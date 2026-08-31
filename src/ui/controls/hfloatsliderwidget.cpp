@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui_hfloatsliderwidget.h"
 
+#include <QSignalBlocker>
+
 HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     BaseWidget(parent),
     ui(new Ui::HFloatSliderWidget)
@@ -29,6 +31,15 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
 
     precision = 1000.f;
     ui->slider->setRange(0, precision);
+
+    // Initialize BEFORE setRange: the range clamp reads `value`, and every
+    // row is built fresh on each panel rebuild - an uninitialized read here
+    // handed the row an arbitrary starting value (proved by valgrind on
+    // ui.material_panel), which setValue() below then mistook for "already
+    // showing that number".
+    value = 0.0f;
+    minVal = 0.0f;
+    maxVal = 100.0f;
 
     this->setRange(0, 100.f);
 
@@ -61,17 +72,34 @@ void HFloatSliderWidget::setRange(float minVal, float maxVal)
     ui->spinbox->setRange(minVal, maxVal);
 }
 
+/**
+ * Sets the value AND pushes it onto the controls.
+ *
+ * The push is unconditional: a freshly built row's spinbox sits at its .ui
+ * default (0.00) no matter what `value` holds, so an early return whenever the
+ * member already matched left a wrong number on screen for a correct material
+ * (the image-plane Roughness anomaly - a row rebuilt into a recycled block).
+ * Only the SIGNAL stays conditional - panels connect valueChanged before
+ * populating their rows, and an unchanged value must not write back.
+ */
 void  HFloatSliderWidget::setValue( float value )
 {
-    if (this->value != value) {
-        this->value = value;
+    const bool changed = this->value != value;
+    this->value = value;
+
+    // Programmatic sync: the controls echo each other through the slots, which
+    // would emit a second valueChanged. Set both, silently, and emit once.
+    {
+        const QSignalBlocker blockSpinbox(ui->spinbox);
+        const QSignalBlocker blockSlider(ui->slider);
         ui->spinbox->setValue(value);
 
-        float mappedValue = (value - minVal) / (maxVal - minVal);
+        const float span = maxVal - minVal;
+        const float mappedValue = span > 0.0f ? (value - minVal) / span : 0.0f;
         ui->slider->setValue((int) (mappedValue * precision));
-
-        emit valueChanged(value);
     }
+
+    if (changed) emit valueChanged(value);
 }
 
 float HFloatSliderWidget::getValue()
