@@ -640,6 +640,8 @@ QVariantMap AssetsApi::exportRaw(const QString &guid, const QString &dir, const 
     out["totalBytes"] = r.totalBytes;
     out["warnings"] = QVariant(r.warnings);
     return out;
+}
+
 QString AssetsApi::storeRoot()
 {
     return AssetStorePaths::root();
