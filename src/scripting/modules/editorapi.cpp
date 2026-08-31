@@ -95,8 +95,8 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "frame", "editor.frame(n=1) -> bool",
           "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use.",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256) -> {path, width, height, center:{r,g,b}}",
-          "Offscreen render of the editor scene to a PNG; returns the centre pixel so scripts can assert on it. Headless-safe.",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+          "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe.",
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -311,7 +311,8 @@ bool EditorApi::frame(int n)
     return true;
 }
 
-QVariantMap EditorApi::screenshot(const QString &path, int width, int height)
+QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
+                                  const QVariantList &probes)
 {
     QVariantMap out;
     if (!requireEngine()) return out;
@@ -332,6 +333,33 @@ QVariantMap EditorApi::screenshot(const QString &path, int width, int height)
     out["width"] = img.width();
     out["height"] = img.height();
     out["center"] = QVariantMap{ { "r", center.red() }, { "g", center.green() }, { "b", center.blue() } };
+
+    // Optional probe points in normalized 0..1 image coordinates: the pixel
+    // gate for the shipped samples (scripting.e2e.samples) asserts material
+    // fidelity through these — the gold dragon must be gold, not fallback grey.
+    // Each probe returns the average of the 5x5 pixel block around the point
+    // so the assertions are stable across drivers and minor framing drift.
+    QVariantList probeResults;
+    for (const QVariant &p : probes) {
+        const QVariantMap pm = p.toMap();
+        const double px = qBound(0.0, pm.value("x").toDouble(), 1.0);
+        const double py = qBound(0.0, pm.value("y").toDouble(), 1.0);
+        const int ix = qMin(int(px * img.width()), img.width() - 1);
+        const int iy = qMin(int(py * img.height()), img.height() - 1);
+        int r = 0, g = 0, b = 0, n = 0;
+        for (int dy = -2; dy <= 2; ++dy) {
+            for (int dx = -2; dx <= 2; ++dx) {
+                const int x = ix + dx, y = iy + dy;
+                if (x < 0 || y < 0 || x >= img.width() || y >= img.height()) continue;
+                const QColor c = img.pixelColor(x, y);
+                r += c.red(); g += c.green(); b += c.blue(); ++n;
+            }
+        }
+        if (n > 0) { r /= n; g /= n; b /= n; }
+        probeResults.append(QVariantMap{ { "x", px }, { "y", py },
+                                         { "r", r }, { "g", g }, { "b", b } });
+    }
+    if (!probeResults.isEmpty()) out["probes"] = probeResults;
     return out;
 }
 

@@ -1021,7 +1021,9 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 
 void MainWindow::removeScene()
 {
-    sceneView->cleanup();
+    // Scene-scoped teardown only — the engine view must survive a project
+    // swap (script sessions never re-trigger the showEvent that recreates it).
+    sceneView->clearScene();
     sceneNodePropertiesWidget->setScene(iris::ScenePtr());
     sceneNodePropertiesWidget->setSceneNode(iris::SceneNodePtr());
 }

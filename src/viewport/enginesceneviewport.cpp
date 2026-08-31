@@ -568,6 +568,9 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     if (mPlaying) stopPlayingScene();
     mScene = scene;
     mSelectedNode.clear();
+    // After clearScene() the engine scene is gone but the view survives;
+    // rebuild the scene-scoped objects now (mirror/overlay pick up mScene).
+    if (scene && view() && !mEngineScene) ensureEngineScene();
     if (mPlayback && scene) {
         // Like the legacy viewport: the editor camera doubles as the play camera.
         if (mEditorCam) scene->setCamera(mEditorCam);
@@ -843,11 +846,24 @@ void EngineSceneViewport::end()
 
 void EngineSceneViewport::cleanup()
 {
+    clearScene();
+    destroyView();
+}
+
+void EngineSceneViewport::clearScene()
+{
+    // Project-swap teardown: destroy the scene-scoped objects (overlay, mirror,
+    // engine scene) but keep the View — its native window and swapchain stay
+    // valid across project close/open. Script sessions never leave the editor
+    // page, so no showEvent would ever recreate a destroyed view (the
+    // "engine viewport is not available after project.open" defect).
     mActive = false;
     if (mOverlay) { mOverlay->clear(); mOverlay.reset(); }
     if (mMirror) { mMirror->setSource(nullptr); mMirror.reset(); }
+    if (view()) view()->setScene(nullptr);
     if (mEngineScene && mEngine) { mEngine->destroyScene(mEngineScene); mEngineScene = nullptr; }
-    destroyView();
+    mScene.clear();
+    mSelectedNode.clear();
 }
 
 IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine,

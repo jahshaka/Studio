@@ -173,6 +173,14 @@ public:
     virtual void end() = 0;
     virtual bool isInitialized() = 0;
     virtual void cleanup() = 0;
+
+    /// Scene-scoped teardown for a project swap: drop the document scene and
+    /// everything derived from it, but KEEP the render view (native window,
+    /// swapchain) alive. cleanup() remains the full teardown. Script sessions
+    /// depend on this: they sit permanently on the editor page, so a view
+    /// destroyed on project close/open is never recreated by a showEvent and
+    /// every engine verb after project.open() used to fail.
+    virtual void clearScene() { cleanup(); }
 };
 
 #endif // IEDITORVIEWPORT_H

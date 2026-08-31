@@ -113,6 +113,7 @@ public:
     void end() override;
     bool isInitialized() override { return view() != nullptr; }
     void cleanup() override;
+    void clearScene() override;
 
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.

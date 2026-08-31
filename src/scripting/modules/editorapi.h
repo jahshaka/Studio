@@ -50,7 +50,8 @@ public:
     Q_INVOKABLE bool stop();
     Q_INVOKABLE bool simulate(bool enabled = true);
     Q_INVOKABLE bool frame(int n = 1);
-    Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256);
+    Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
+                                       const QVariantList &probes = QVariantList());
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
 
