@@ -17,13 +17,28 @@ For more information see the LICENSE file
 // ExportService::exportWeb seam as the `project.exportWeb` verb, then opens
 // the export in a detected Chromium-family browser as an owned `--app`
 // companion window (PreviewLauncher); "Open in browser" is the always-shown
-// fallback, "Show folder" opens the export directory.
+// fallback, "Show folder" opens the export directory, "Preview" (re)opens the
+// preview of the existing publish without re-exporting.
+//
+// A publish is LINKED to its project (owner decision): one publish per
+// project at the stable `<project>/exports/web` path. Process always
+// (re)generates it there, PublishRecord remembers it per project, and the
+// page shows the last publish (path + when, live buttons) whenever it opens —
+// the empty state exists only for a never-published project, and a publish on
+// record whose directory was deleted degrades to "previous publish missing —
+// Process to regenerate".
 //
 // On Linux/X11 with a Chromium-family browser detected, the preview is first
 // attempted EMBEDDED in the page (EmbeddedWebPreview adopts Chrome's X window
 // into previewSlot). Every embedding failure — no window, no WebGPU, browser
 // death — falls back silently to the companion window; "Pop out" switches an
 // embedded preview back to the companion window on demand.
+//
+// Re-entry lifecycle (the double-preview fix): Process and Preview ALWAYS run
+// closePreview() first — terminate the owned Chrome, destroy the container,
+// hide the embed area, reset state — before starting a fresh flow. The embed
+// area is visible ONLY while an adoption is live (its slot paints black by
+// design); every degraded path hides it.
 
 #include <QPointer>
 #include <QWidget>
@@ -47,10 +62,12 @@ protected:
 
 private slots:
     void onProcess();
+    void onPreviewToggle();
     void onOpenBrowser();
     void onOpenFolder();
 
 private:
+    QString projectFolder() const;
     QString exportDir() const;
     QString lastIndexHtml() const;
     void refreshState();
@@ -65,6 +82,7 @@ private:
     QLabel *detailLabel = nullptr;
     QLabel *dirLabel = nullptr;
     QPushButton *processButton = nullptr;
+    QPushButton *previewButton = nullptr;  // "Preview" / "Close preview"
     QPushButton *browserButton = nullptr;
     QPushButton *folderButton = nullptr;
     QFrame *previewFrame = nullptr;    // in-page area the embed lands in
@@ -73,6 +91,8 @@ private:
     EmbeddedWebPreview *embed = nullptr;
     QPointer<QProcess> preview;
     bool previewRunning = false;
+    QString previewSourceDir;          // export dir the live preview shows —
+                                       // a project switch tears it down
 };
 
 class PublishModule : public StudioModule

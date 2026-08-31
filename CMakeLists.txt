@@ -93,6 +93,7 @@ set(SRCS
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
+    src/modules/publish/publishrecord.cpp
     src/export/gltfexporter.cpp
     src/export/exportservice.cpp
     src/export/previewlauncher.cpp
@@ -277,6 +278,7 @@ set(HEADERS
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
     src/modules/publish/publishmodule.h
+    src/modules/publish/publishrecord.h
     src/export/gltfexporter.h
     src/export/exportservice.h
     src/export/previewlauncher.h

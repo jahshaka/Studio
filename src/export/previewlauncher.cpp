@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QDesktopServices>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStringList>
@@ -63,13 +64,23 @@ QProcess *PreviewLauncher::launchKiosk(const QString &indexHtml, QObject *parent
     const QString profileDir = info.absolutePath() + QStringLiteral("/.preview-profile");
     auto *process = new QProcess(parent);
     process->setProgram(browser);
-    process->setArguments({
+    QStringList args = {
         QStringLiteral("--app=%1").arg(QUrl::fromLocalFile(info.absoluteFilePath()).toString()),
         QStringLiteral("--window-size=1280,800"),
         QStringLiteral("--user-data-dir=%1").arg(profileDir),
         QStringLiteral("--no-first-run"),
         QStringLiteral("--no-default-browser-check"),
-    });
+    };
+#ifdef Q_OS_LINUX
+    // The app itself always runs on xcb (Ogre rule). Chrome left to its own
+    // backend choice picks Wayland from the session type — which EXITS
+    // immediately on an X-only display (rig, ssh-forwarded X). Pin it to X11
+    // like the embedded preview does; on a Wayland desktop that is XWayland,
+    // proven by the embed spike.
+    if (QGuiApplication::platformName() == QLatin1String("xcb"))
+        args.append(QStringLiteral("--ozone-platform=x11"));
+#endif
+    process->setArguments(args);
     process->start();
     return process;
 }
