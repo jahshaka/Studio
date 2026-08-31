@@ -145,6 +145,9 @@ For more information see the LICENSE file
 #include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
 #include "scripting/mcp/mcpserver.h"
+#include "scripting/claude/claudechathost.h"
+#include "scripting/claude/claudecliprobe.h"
+#include "ui/windows/claudechatwindow.h"
 #include "ui/panels/scriptconsole.h"
 #include "scripting/modules/studiomodules.h"
 
@@ -2186,6 +2189,14 @@ void MainWindow::setupToolBar()
 	viewDocks->setIcon(fontIcons->icon(fa::listalt, options));
 	toolBar->addAction(viewDocks);
 
+	QAction *actionClaude = new QAction;
+	actionClaude->setObjectName(QStringLiteral("actionClaudeChat"));
+	actionClaude->setCheckable(false);
+	actionClaude->setToolTip("Claude | Chat with Claude inside the editor (Ctrl+Shift+C)");
+	actionClaude->setIcon(fontIcons->icon(fa::magic, options));
+	toolBar->addAction(actionClaude);
+	connect(actionClaude, &QAction::triggered, this, &MainWindow::toggleClaudeChat);
+
 	cameraView->setIconSize(QSize(17, 17));
 
 	connect(cameraView, &QPushButton::clicked, [=](){ emit projectionChangeRequested(!sceneView->editorCamera()->isPerspective); });
@@ -2307,6 +2318,9 @@ void MainWindow::setupShortcuts()
             QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this, [this]() {
                 if (scriptConsoleDock) scriptConsoleDock->setVisible(!scriptConsoleDock->isVisible());
             });
+    reg.add("claude.toggle", "Claude Assistant", "Windows",
+            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,
+            [this]() { toggleClaudeChat(); });
     reg.add("space.desktop", "Desktop Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_1), this,
             [this]() { this->switchSpace(WindowSpaces::DESKTOP); });
     reg.add("space.player", "Player Space", "Windows", QKeySequence(Qt::CTRL | Qt::Key_2), this,
@@ -2672,6 +2686,53 @@ bool MainWindow::startMcpServer(quint16 port, QString *errorOut)
         scriptConsole->announce(mcpServer->connectCommand());
     }
     return true;
+}
+
+void MainWindow::toggleClaudeChat()
+{
+    if (claudeChatWindow && claudeChatWindow->isVisible()) {
+        claudeChatWindow->close();
+        return;
+    }
+    if (!claudeChatHost) claudeChatHost = new ClaudeChatHost(this);
+    if (!claudeChatWindow) {
+        claudeChatWindow = new ClaudeChatWindow(settings->settings, claudeChatHost, this);
+        connect(claudeChatWindow, &ClaudeChatWindow::enableMcpRequested, this, [this]() {
+            const quint16 port =
+                quint16(settings->getValue("mcp_port", McpServer::kDefaultPort).toUInt());
+            QString error;
+            if (startMcpServer(port, &error)) {
+                settings->setValue("mcp_enabled", true);
+            } else if (scriptConsole) {
+                scriptConsole->announce(QStringLiteral("MCP enable failed: %1").arg(error));
+            }
+            refreshClaudeChatContext();
+        });
+        // The one-time CLI probe (~ms when installed; renders the friendly
+        // install state when not).
+        claudeChatWindow->setCliState(ClaudeCliProbe::probe());
+    }
+    refreshClaudeChatContext();
+    claudeChatWindow->show();
+    claudeChatWindow->raise();
+    claudeChatWindow->activateWindow();
+}
+
+void MainWindow::refreshClaudeChatContext()
+{
+    if (!claudeChatWindow || !claudeChatHost) return;
+    const bool sceneOpen = projectService->isSceneOpen();
+    const bool mcpRunning = mcpServer && mcpServer->isRunning();
+    claudeChatWindow->setProjectOpen(sceneOpen);
+    claudeChatWindow->setMcpRunning(mcpRunning);
+    const QString folder = (sceneOpen && project) ? project->getProjectFolder() : QString();
+    QString error;
+    if (!claudeChatHost->configure(folder, mcpRunning,
+                                   mcpRunning ? mcpServer->port() : 0,
+                                   mcpRunning ? mcpServer->token() : QString(), &error)
+        && scriptConsole && !error.isEmpty()) {
+        scriptConsole->announce(QStringLiteral("Claude chat config: %1").arg(error));
+    }
 }
 
 void MainWindow::newProject(const QString &filename, const QString &projectPath)

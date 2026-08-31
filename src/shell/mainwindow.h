@@ -214,6 +214,12 @@ public:
     /// in the script console dock. False (with errorOut) when the bind fails.
     bool startMcpServer(quint16 port, QString *errorOut = nullptr);
 
+    /// The floating Claude chat popup (CLAUDE_EDITOR_SPEC phase 2) — created
+    /// lazily; toggled by the toolbar button and the claude.toggle shortcut.
+    void toggleClaudeChat();
+    /// Pushes the current project / MCP state into the chat window + host.
+    void refreshClaudeChatContext();
+
     //void setGizmoTransformMode(GizmoTransformMode mode);
 
     /**
@@ -595,6 +601,8 @@ private:
     QDockWidget *scriptConsoleDock = nullptr;
     class ScriptConsole *scriptConsole = nullptr;
     class McpServer *mcpServer = nullptr;
+    class ClaudeChatHost *claudeChatHost = nullptr;
+    class ClaudeChatWindow *claudeChatWindow = nullptr;
 };
 
 #endif // MAINWINDOW_H
