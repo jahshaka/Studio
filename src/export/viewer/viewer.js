@@ -8,6 +8,16 @@
 
     var cfg = window.JAH || {};
 
+    // Embed handshake (Linux in-app preview): when Jahshaka launches this page
+    // with ?jahembed=1 it adopts the browser window into the app ONLY after the
+    // title carries [jah-gpu-ready] — adopting during Chrome's GPU-process init
+    // permanently kills the WebGPU adapter. Never active for normal exports.
+    var embedMode = /[?&]jahembed=1/.test(window.location.search);
+    function embedMark(marker) {   // marker is the full literal the host greps for
+        if (!embedMode) return;
+        document.title = document.title.replace(/ \[jah-[a-z-]+\]$/, "") + " " + marker;
+    }
+
     function panel(html) {
         var el = document.getElementById("jah-panel");
         el.innerHTML = html;
@@ -16,6 +26,7 @@
     }
 
     function needsWebGpuPanel() {
+        embedMark("[jah-no-gpu]");
         panel(
             '<div class="jah-card">' +
             "<h1>This browser can’t show 3D yet</h1>" +
@@ -29,6 +40,7 @@
     }
 
     function fatal(message) {
+        embedMark("[jah-no-gpu]");   // embed host falls back fast instead of timing out
         panel('<div class="jah-card"><h1>Could not load the scene</h1><p>' + message + "</p></div>");
     }
 
@@ -240,7 +252,9 @@
                 };
 
                 document.getElementById("jah-loading").style.display = "none";
+                var firstFrame = true;
                 renderer.setAnimationLoop(function () {
+                    if (firstFrame) { firstFrame = false; embedMark("[jah-gpu-ready]"); }
                     if (mixer) mixer.update(clock.getDelta());
                     controls.update();
                     renderer.render(scene, camera);

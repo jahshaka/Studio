@@ -18,15 +18,23 @@ For more information see the LICENSE file
 // the export in a detected Chromium-family browser as an owned `--app`
 // companion window (PreviewLauncher); "Open in browser" is the always-shown
 // fallback, "Show folder" opens the export directory.
+//
+// On Linux/X11 with a Chromium-family browser detected, the preview is first
+// attempted EMBEDDED in the page (EmbeddedWebPreview adopts Chrome's X window
+// into previewSlot). Every embedding failure — no window, no WebGPU, browser
+// death — falls back silently to the companion window; "Pop out" switches an
+// embedded preview back to the companion window on demand.
 
 #include <QPointer>
 #include <QWidget>
 
 #include "modules/studiomodule.h"
 
+class QFrame;
 class QLabel;
 class QPushButton;
 class QProcess;
+class EmbeddedWebPreview;
 
 class PublishPage : public QWidget
 {
@@ -48,6 +56,9 @@ private:
     void refreshState();
     void setStatus(const QString &text, bool isError = false);
     void closePreview();
+    void startPreview(const QString &indexHtml, const QString &summary);
+    void launchCompanion(const QString &indexHtml, const QString &summary);
+    void onPopOut();
 
     ModuleHost host;
     QLabel *statusLabel = nullptr;
@@ -56,6 +67,10 @@ private:
     QPushButton *processButton = nullptr;
     QPushButton *browserButton = nullptr;
     QPushButton *folderButton = nullptr;
+    QFrame *previewFrame = nullptr;    // in-page area the embed lands in
+    QWidget *previewSlot = nullptr;
+    QPushButton *popOutButton = nullptr;
+    EmbeddedWebPreview *embed = nullptr;
     QPointer<QProcess> preview;
     bool previewRunning = false;
 };

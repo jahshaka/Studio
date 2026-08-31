@@ -96,6 +96,7 @@ set(SRCS
     src/export/gltfexporter.cpp
     src/export/exportservice.cpp
     src/export/previewlauncher.cpp
+    src/export/embeddedpreview.cpp
     src/scripting/modules/studiomodules.cpp
     src/scripting/mcp/mcpserver.cpp
     src/scripting/mcp/mcptools.cpp
@@ -274,6 +275,7 @@ set(HEADERS
     src/export/gltfexporter.h
     src/export/exportservice.h
     src/export/previewlauncher.h
+    src/export/embeddedpreview.h
     src/modules/studiomodule.h
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
@@ -462,6 +464,20 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINAR
 # --viewport=engine|legacy or env JAHSHAKA_VIEWPORT (see src/bridge/enginehost.h).
 option(JAHSHAKA_ENGINE_VIEWPORT "Default to the engine viewport" OFF)
 
+# libxcb (Linux only): EmbeddedWebPreview walks the X window tree on Qt's own
+# xcb connection to adopt the Chrome preview window into the Publish page.
+# Optional — without it the publish preview always uses the companion window
+# (JAH_HAVE_XCB unset). Detected before tests/ so test targets see it too.
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(JAH_XCB QUIET IMPORTED_TARGET xcb)
+        if(JAH_XCB_FOUND)
+            add_compile_definitions(JAH_HAVE_XCB)
+        endif()
+    endif()
+endif()
+
 option(JAHSHAKA_BUILD_TESTS "Build the headless engine test suite" ON)
 if(JAHSHAKA_BUILD_TESTS)
     include(CTest)
@@ -474,6 +490,9 @@ endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/qlementine)
 
 set(LIBS Qt6::Concurrent Qt6::Sql Qt6::Svg Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Qml Qt6::HttpServer IrisGL JahshakaEngine qlementine ${OPENGL_LIBRARIES})
+if(JAH_XCB_FOUND)
+    list(APPEND LIBS PkgConfig::JAH_XCB)
+endif()
 
 include(IncludeBreakpad)
 include(IncludeMaterialsModule)
