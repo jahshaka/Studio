@@ -8,47 +8,50 @@
     "fragment_shader": "shader.frag",
     "lighting": true,
     "name": "Grass",
+    "pbrMaterial": {
+        "surfaceType": "surface",
+        "unsupportedNodes": [
+        ],
+        "values": {
+        }
+    },
+    "properties": [
+    ],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "c07ce3ae-79e4-4cdf-be3d-f4c0ae9ed666",
+                "id": "5320fb96-0169-45b0-a418-8f1ee53e00b8",
                 "leftNodeId": "189672d2-87b0-4061-b303-cdb198909845",
-                "leftNodeSocketIndex": 1,
+                "leftNodeSocketIndex": 0,
                 "rightNodeId": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
                 "rightNodeSocketIndex": 0
             }
         ],
         "masternode": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
+        "materialGuid": "",
         "nodes": [
             {
                 "id": "189672d2-87b0-4061-b303-cdb198909845",
-                "type": "property",
-                "value": "096e6ee7-4f52-40ab-baff-53f702241491",
+                "title": "Texture Property",
+                "type": "texture",
+                "value": "grass.jpg",
                 "x": -399,
                 "y": 33
             },
             {
                 "id": "7cf4d9d3-5d33-4168-9251-a92f73bf9e49",
+                "title": "Surface Material",
                 "type": "Material",
                 "value": "",
                 "x": 141,
                 "y": -87
             }
         ],
-        "properties": [
-            {
-                "displayName": "Texture Property",
-                "id": "096e6ee7-4f52-40ab-baff-53f702241491",
-                "name": "property0",
-                "type": "texture",
-                "uniform": "input_property0",
-                "value": "f6985f08-207c-4c5d-92a5-5d4800cc39d7"
-            }
-        ],
         "settings": {
             "acceptLighting": true,
+            "bakeResolution": 1024,
             "blendMode": "Opaque",
             "castShadow": true,
             "cullMode": "Back",

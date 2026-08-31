@@ -1,25 +1,62 @@
 {
-    "name": "Silver",
-    "type": "shadergraph",
-    "builtin": false,
-    "surfaceType": "pbr",
-    "vertex_shader": ":assets/shaders/surface.vert",
-    "fragment_shader": "shader.frag",
     "blendMode": "Opaque",
+    "builtin": false,
+    "castShadows": true,
     "cullMode": "Back",
-    "renderLayer": "Opaque",
-    "zWrite": true,
     "depthTest": true,
     "fog": true,
-    "castShadows": true,
-    "receiveShadows": true,
+    "fragment_shader": "shader.frag",
     "lighting": true,
-    "uniforms": [],
+    "name": "Silver",
+    "pbrMaterial": {
+        "surfaceType": "pbr",
+        "unsupportedNodes": [
+        ],
+        "values": {
+            "baseColor": {
+                "a": 1,
+                "b": 0.9680018424987793,
+                "g": 0.9609979391098022,
+                "r": 0.9609979391098022
+            },
+            "metallic": 1,
+            "roughness": 0.2199999988079071
+        }
+    },
+    "properties": [
+    ],
+    "receiveShadows": true,
+    "renderLayer": "Opaque",
     "shadergraph": {
+        "connections": [
+            {
+                "id": "1cd25517-3c0c-42df-9777-228b62dfc745",
+                "leftNodeId": "b52e7d40-0002-4c1f-8e2a-44f02f0000aa",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
+                "rightNodeSocketIndex": 0
+            },
+            {
+                "id": "7137db93-4315-4f16-a2fa-dcd0d1521078",
+                "leftNodeId": "b52e7d40-0003-4c1f-8e2a-44f02f0000ab",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
+                "rightNodeSocketIndex": 1
+            },
+            {
+                "id": "b416b31e-579c-4393-9c44-a895365da729",
+                "leftNodeId": "b52e7d40-0004-4c1f-8e2a-44f02f0000ac",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
+                "rightNodeSocketIndex": 2
+            }
+        ],
         "masternode": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
+        "materialGuid": "",
         "nodes": [
             {
                 "id": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
+                "title": "PBR Material",
                 "type": "PbrMaterial",
                 "value": "",
                 "x": 260,
@@ -27,62 +64,52 @@
             },
             {
                 "id": "b52e7d40-0002-4c1f-8e2a-44f02f0000aa",
+                "title": "Color",
                 "type": "color",
-                "value": { "r": 0.961, "g": 0.961, "b": 0.968, "a": 1.0 },
+                "value": {
+                    "a": 1,
+                    "b": 0.9680018424987793,
+                    "g": 0.9609979391098022,
+                    "r": 0.9609979391098022
+                },
                 "x": -140,
                 "y": -60
             },
             {
                 "id": "b52e7d40-0003-4c1f-8e2a-44f02f0000ab",
+                "title": "Float",
                 "type": "float",
-                "value": 1.0,
+                "value": 1,
                 "x": -140,
                 "y": 120
             },
             {
                 "id": "b52e7d40-0004-4c1f-8e2a-44f02f0000ac",
+                "title": "Float",
                 "type": "float",
                 "value": 0.22,
                 "x": -140,
                 "y": 260
             }
         ],
-        "connections": [
-            {
-                "id": "b52e7d40-1001-4c1f-8e2a-44f02f0000c1",
-                "leftNodeId": "b52e7d40-0002-4c1f-8e2a-44f02f0000aa",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
-                "rightNodeSocketIndex": 0
-            },
-            {
-                "id": "b52e7d40-1002-4c1f-8e2a-44f02f0000c2",
-                "leftNodeId": "b52e7d40-0003-4c1f-8e2a-44f02f0000ab",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
-                "rightNodeSocketIndex": 1
-            },
-            {
-                "id": "b52e7d40-1003-4c1f-8e2a-44f02f0000c3",
-                "leftNodeId": "b52e7d40-0004-4c1f-8e2a-44f02f0000ac",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "b52e7d40-0001-4c1f-8e2a-44f02f0000ff",
-                "rightNodeSocketIndex": 2
-            }
-        ],
-        "properties": [],
         "settings": {
-            "name": "Silver",
-            "blendMode": "Opaque",
-            "cullMode": "Back",
-            "renderLayer": "Opaque",
             "acceptLighting": true,
+            "bakeResolution": 1024,
+            "blendMode": "Opaque",
             "castShadow": true,
-            "receiveShadow": true,
+            "cullMode": "Back",
             "depthTest": true,
             "fog": true,
+            "name": "Silver",
+            "receiveShadow": true,
+            "renderLayer": "Opaque",
             "zWrite": true
-        },
-        "materialGuid": ""
-    }
+        }
+    },
+    "surfaceType": "pbr",
+    "type": "shadergraph",
+    "uniforms": [
+    ],
+    "vertex_shader": ":assets/shaders/surface.vert",
+    "zWrite": true
 }

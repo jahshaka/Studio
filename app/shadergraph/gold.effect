@@ -8,43 +8,68 @@
     "fragment_shader": "shader.frag",
     "lighting": true,
     "name": "",
+    "pbrMaterial": {
+        "surfaceType": "surface",
+        "unsupportedNodes": [
+            "Specular <- float"
+        ],
+        "values": {
+            "baseColor": {
+                "a": 0,
+                "b": 0.009994659572839737,
+                "g": 0.8500038385391235,
+                "r": 1
+            },
+            "roughness": 0
+        }
+    },
+    "properties": [
+    ],
     "receiveShadows": true,
     "renderLayer": "Opaque",
     "shadergraph": {
         "connections": [
             {
-                "id": "2f3f8993-7499-49f9-80ac-c468d78c840c",
+                "id": "c2571e26-9000-4845-815e-ca66d5c68b50",
                 "leftNodeId": "19535b10-d252-43f7-a066-caf05a1372b6",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
                 "rightNodeSocketIndex": 0
             },
             {
-                "id": "655749ac-f311-41d1-af00-dd5628d590b5",
-                "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
-                "leftNodeSocketIndex": 0,
-                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
-                "rightNodeSocketIndex": 1
-            },
-            {
-                "id": "b79c1f79-79dc-4887-82aa-38e8de32c146",
+                "id": "d4ab85d8-9667-4fe9-bdbc-98f1f1b5fb5f",
                 "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
                 "leftNodeSocketIndex": 0,
                 "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
                 "rightNodeSocketIndex": 2
+            },
+            {
+                "id": "dca54c4d-c55c-4be1-b8f3-0a233e4d98ac",
+                "leftNodeId": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "leftNodeSocketIndex": 0,
+                "rightNodeId": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "rightNodeSocketIndex": 1
             }
         ],
         "masternode": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+        "materialGuid": "",
         "nodes": [
             {
                 "id": "19535b10-d252-43f7-a066-caf05a1372b6",
+                "title": "Color",
                 "type": "color",
-                "value": {"r":1.0, "g":0.85, "b":0.01, "a":0},
+                "value": {
+                    "a": 0,
+                    "b": 0.009994659572839737,
+                    "g": 0.8500038385391235,
+                    "r": 1
+                },
                 "x": -108,
                 "y": -31.68000030517578
             },
             {
                 "id": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
+                "title": "Float",
                 "type": "float",
                 "value": 1,
                 "x": -83.52001190185547,
@@ -52,16 +77,16 @@
             },
             {
                 "id": "c7e5a3cc-8894-4e03-8b20-8a6f7a932f52",
+                "title": "Surface Material",
                 "type": "Material",
                 "value": "",
                 "x": 200,
                 "y": 50
             }
         ],
-        "properties": [
-        ],
         "settings": {
             "acceptLighting": true,
+            "bakeResolution": 1024,
             "blendMode": "Opaque",
             "castShadow": true,
             "cullMode": "Back",
