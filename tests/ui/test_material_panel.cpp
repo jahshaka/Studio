@@ -1,0 +1,257 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+// ui.material_panel — the editor's material properties panel actually edits
+// the material (owner-reported regression, 2026-08-31).
+//
+// The bug class this guards: MaterialPropertyWidget rendered a generic
+// material's (PbrMaterial's) Property list and wrote edits back into the LIST
+// only. But what renders are the material's FIELDS (SceneMirror::toPbrParams
+// reads pbr->textureScale etc.), which only Material::setValue updates. Edits
+// looked dead live and only surfaced after a scene reload rebuilt the material
+// from JSON through setValue. This test drives the real widgets - the same
+// HFloatSliderWidget gestures a user makes - and asserts on the FIELDS,
+// plus the one-undo-entry-per-gesture contract.
+
+#include <QApplication>
+#include <QDoubleSpinBox>
+#include <QSlider>
+#include <QUndoStack>
+#include <QTest>
+#include <QTemporaryDir>
+#include <QImage>
+
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/core/properties/property.h"
+
+#include "ui/panels/propertywidgets/materialpropertywidget.h"
+#include "ui/controls/hfloatsliderwidget.h"
+#include "ui/controls/colorvaluewidget.h"
+#include "ui/controls/colorpickerwidget.h"
+#include "ui/controls/texturepickerwidget.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+
+static int failures = 0;
+#define CHECK(cond, name) do { \
+    if (cond) { printf("PASS %s\n", name); } \
+    else { printf("FAIL %s (%s:%d)\n", name, __FILE__, __LINE__); ++failures; } \
+} while (0)
+
+namespace {
+
+int propId(const iris::MaterialPtr &mat, const QString &name)
+{
+    for (auto *p : mat->properties)
+        if (p->name == name) return p->id;
+    return -1;
+}
+
+HFloatSliderWidget *sliderRow(QWidget *panel, int id)
+{
+    for (auto *w : panel->findChildren<HFloatSliderWidget *>())
+        if (w->index == id) return w;
+    return nullptr;
+}
+
+struct PanelRig {
+    QUndoStack stack;
+    UndoService undo{&stack};
+    StudioServices services;
+    iris::MeshNodePtr node;
+    QSharedPointer<iris::PbrMaterial> pbr;
+    MaterialPropertyWidget panel;
+
+    PanelRig()
+    {
+        services.undo = &undo;
+        pbr = iris::PbrMaterial::create();
+        node = iris::MeshNode::create();
+        node->setMaterial(pbr);
+        panel.setServices(&services);
+        // no database / project: the generic-material path must not need them
+        panel.setDatabase(nullptr);
+        panel.setSceneNode(node);
+        panel.show();
+    }
+};
+
+} // namespace
+
+// A slider drag: press, move (live preview must reach the FIELD the mirror
+// renders from), release (exactly one undo entry), undo (field reverts).
+static void testSliderDragLive()
+{
+    PanelRig rig;
+    auto *row = sliderRow(&rig.panel, propId(rig.pbr, "textureScale"));
+    CHECK(row != nullptr, "slider: textureScale row exists");
+    if (!row) return;
+
+    auto *slider = row->findChild<QSlider *>();
+    CHECK(slider != nullptr, "slider: QSlider child found");
+    if (!slider) return;
+
+    const int before = rig.stack.count();
+    slider->setSliderDown(true);           // emits sliderPressed -> changeStart
+    slider->setValue(800);                 // textureScale range 0..10 -> 8.0
+    // live preview DURING the drag: the field, not just the Property object
+    CHECK(qAbs(rig.pbr->textureScale - 8.0f) < 1e-3f, "slider: field updates live mid-drag");
+    slider->setValue(600);                 // keep dragging -> 6.0
+    CHECK(qAbs(rig.pbr->textureScale - 6.0f) < 1e-3f, "slider: field follows the drag");
+    CHECK(rig.stack.count() == before, "slider: no undo entries while dragging");
+    slider->setSliderDown(false);          // emits sliderReleased -> changeEnd
+    CHECK(rig.stack.count() == before + 1, "slider: exactly one undo entry on release");
+
+    rig.undo.undo();
+    CHECK(qAbs(rig.pbr->textureScale - 1.0f) < 1e-3f, "slider: undo restores the field");
+    rig.undo.redo();
+    CHECK(qAbs(rig.pbr->textureScale - 6.0f) < 1e-3f, "slider: redo reapplies the field");
+}
+
+// Typing a value into the spinbox: the value must reach the field as it is
+// typed and commit one undo entry on Enter.
+static void testTypedEntry()
+{
+    PanelRig rig;
+    auto *row = sliderRow(&rig.panel, propId(rig.pbr, "textureScale"));
+    CHECK(row != nullptr, "typed: textureScale row exists");
+    if (!row) return;
+
+    auto *box = row->findChild<QDoubleSpinBox *>();
+    CHECK(box != nullptr, "typed: spinbox child found");
+    if (!box) return;
+
+    QTest::qWaitForWindowExposed(&rig.panel);
+    rig.panel.activateWindow();
+    QTest::qWaitForWindowActive(&rig.panel, 1000);
+    box->setFocus();
+    QApplication::processEvents();
+    if (!box->hasFocus()) {
+        // offscreen platforms without focus support can't drive this path
+        printf("SKIP typed: no focus support on this platform\n");
+        return;
+    }
+
+    const int before = rig.stack.count();
+    box->selectAll();
+    QTest::keyClicks(box, "7");
+    CHECK(qAbs(rig.pbr->textureScale - 7.0f) < 1e-3f, "typed: field updates while typing");
+    CHECK(rig.stack.count() == before, "typed: no undo entry before Enter");
+    QTest::keyClick(box, Qt::Key_Return);
+    CHECK(rig.stack.count() == before + 1, "typed: one undo entry on Enter");
+
+    rig.undo.undo();
+    CHECK(qAbs(rig.pbr->textureScale - 1.0f) < 1e-3f, "typed: undo restores the field");
+}
+
+// The colour rows: live preview onto the field during the pick, one undo entry
+// per popup session.
+static void testColorPickSession()
+{
+    PanelRig rig;
+    auto pickers = rig.panel.findChildren<ColorValueWidget *>();
+    CHECK(pickers.size() >= 2, "color: baseColor+emissiveColor rows exist");
+    if (pickers.isEmpty()) return;
+
+    ColorPickerWidget *picker = pickers.first()->getPicker();  // Base Color
+    CHECK(picker != nullptr, "color: picker exists");
+    if (!picker) return;
+
+    const int before = rig.stack.count();
+    QMetaObject::invokeMethod(picker, "pickingStarted");     // popup opened
+    QMetaObject::invokeMethod(picker, "colorChanged",        // live change
+                              Q_ARG(QColor, QColor(255, 0, 0)));
+    CHECK(rig.pbr->baseColor == QColor(255, 0, 0), "color: field updates live");
+    CHECK(rig.stack.count() == before, "color: no undo entry mid-pick");
+    QMetaObject::invokeMethod(picker, "pickingEnded");       // popup closed
+    CHECK(rig.stack.count() == before + 1, "color: one undo entry per pick session");
+
+    rig.undo.undo();
+    CHECK(rig.pbr->baseColor == QColor(255, 255, 255), "color: undo restores the field");
+}
+
+// A cancelled gesture (opened and closed with no change) must not pollute the
+// undo stack.
+static void testNoOpGestureNoUndo()
+{
+    PanelRig rig;
+    auto pickers = rig.panel.findChildren<ColorValueWidget *>();
+    if (pickers.isEmpty()) { CHECK(false, "noop: color row exists"); return; }
+    ColorPickerWidget *picker = pickers.first()->getPicker();
+
+    const int before = rig.stack.count();
+    QMetaObject::invokeMethod(picker, "pickingStarted");
+    QMetaObject::invokeMethod(picker, "pickingEnded");
+    CHECK(rig.stack.count() == before, "noop: unchanged pick pushes no undo entry");
+}
+
+// Texture rows: choosing a map must load it onto the material (the textures
+// map the mirror binds from), as one undo entry; undo clears it again.
+static void testTextureRow()
+{
+    QTemporaryDir dir;
+    const QString imgPath = dir.filePath("map.png");
+    QImage img(4, 4, QImage::Format_RGBA8888);
+    img.fill(Qt::green);
+    img.save(imgPath);
+
+    PanelRig rig;
+    auto textures = rig.panel.findChildren<TexturePickerWidget *>();
+    CHECK(textures.size() >= 6, "texture: six map rows exist");
+    if (textures.isEmpty()) return;
+
+    // rows appear in property order; the first texture property is baseColorMap
+    TexturePickerWidget *baseMap = textures.first();
+    const int before = rig.stack.count();
+    QMetaObject::invokeMethod(baseMap, "valueChanged", Q_ARG(QString, imgPath));
+    CHECK(rig.pbr->textures.contains("u_baseColorMap"), "texture: map lands on the material");
+    CHECK(rig.stack.count() == before + 1, "texture: one undo entry per pick");
+
+    rig.undo.undo();
+    CHECK(!rig.pbr->textures.contains("u_baseColorMap"), "texture: undo clears the map");
+}
+
+// The Alpha Mode row is an IntProperty - it was rendered with no signal wiring
+// at all (a permanently dead row).
+static void testIntRow()
+{
+    PanelRig rig;
+    auto *row = sliderRow(&rig.panel, propId(rig.pbr, "alphaMode"));
+    CHECK(row != nullptr, "int: alphaMode row exists");
+    if (!row) return;
+
+    auto *slider = row->findChild<QSlider *>();
+    const int before = rig.stack.count();
+    slider->setSliderDown(true);
+    slider->setValue(1000);   // range 0..2 -> 2 (Blend)
+    CHECK(rig.pbr->alphaMode == 2, "int: field updates live");
+    slider->setSliderDown(false);
+    CHECK(rig.stack.count() == before + 1, "int: one undo entry on release");
+
+    rig.undo.undo();
+    CHECK(rig.pbr->alphaMode == 0, "int: undo restores the field");
+}
+
+int main(int argc, char *argv[])
+{
+    QApplication app(argc, argv);
+
+    testSliderDragLive();
+    testTypedEntry();
+    testColorPickSession();
+    testNoOpGestureNoUndo();
+    testTextureRow();
+    testIntRow();
+
+    printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
+    return failures == 0 ? 0 : 1;
+}

@@ -63,6 +63,11 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
             // Material::properties is all these types have in common.
             genericMaterial = meshNode->getMaterial();
             meshNodeGuid    = meshNode->getGUID();
+            for (auto prop : genericMaterial->properties) {
+                if (prop->type == iris::PropertyType::Texture) {
+                    existingTextures.insert(prop->name, prop->getValue().toString());
+                }
+            }
             setWidgetProperties();
             return;
         }
@@ -229,36 +234,53 @@ void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
     auto mat = currentMaterial();
     if (!mat) return;
 
-    for (auto property : mat->properties) {
-        if (property->name == prop->name) property->setValue(prop->getValue());
+    if (!material) {
+        // Generic material (PbrMaterial, ...): Material::setValue is the ONLY
+        // bridge onto the real fields the mirror reads (pbrmaterial.cpp:126 -
+        // toPbrParams reads pbr->textureScale etc., not the Property list).
+        // Writing the Property object alone changes what gets SAVED but not
+        // what RENDERS - that was the dead material panel: edits appeared to
+        // do nothing live and only showed up after a scene reload rebuilt the
+        // material from JSON through setValue.
+        mat->setValue(prop->name, prop->getValue());
+        if (prop->type == iris::PropertyType::Texture)
+            updateTextureDependency(prop);
+        return;
     }
 
-    // Texture handling below is shader-graph specific (setTextureWithUniform and
-    // the asset-dependency bookkeeping live on CustomMaterial). A generic
-    // material has had its property value set above and needs nothing further.
-    if (!material) return;
+    for (auto property : material->properties) {
+        if (property->name == prop->name) property->setValue(prop->getValue());
+    }
 
     // special case for textures since we have to generate these
     if (prop->type == iris::PropertyType::Texture) {
         material->setTextureWithUniform(prop->uniform, prop->getValue().toString());
-        
-        // HANDLE CASE where the widget isn't deselected
+        updateTextureDependency(prop);
+    }
+}
 
-        QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), project->getProjectGuid());
-        if (assetGuid.isEmpty()) {
-            db->deleteDependency(
-                meshNodeGuid,
-                db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName(), project->getProjectGuid())
-            );
-        }
-        else {
-            db->createDependency(
-                static_cast<int>(ModelTypes::Object),
-                static_cast<int>(ModelTypes::Texture),
-                meshNodeGuid, assetGuid,
-                project->getProjectGuid()
-            );
-        }
+// Keep the project database's object->texture dependency in step with a texture
+// property edit (the packaged .jaf carries the texture because of this row).
+// Works for both the shader-graph material and generic materials.
+void MaterialPropertyWidget::updateTextureDependency(iris::Property *prop)
+{
+    if (!db || !project) return;
+
+    // HANDLE CASE where the widget isn't deselected
+    QString assetGuid = db->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), project->getProjectGuid());
+    if (assetGuid.isEmpty()) {
+        db->deleteDependency(
+            meshNodeGuid,
+            db->fetchAssetGUIDByName(QFileInfo(existingTextures.value(prop->name)).fileName(), project->getProjectGuid())
+        );
+    }
+    else {
+        db->createDependency(
+            static_cast<int>(ModelTypes::Object),
+            static_cast<int>(ModelTypes::Texture),
+            meshNodeGuid, assetGuid,
+            project->getProjectGuid()
+        );
     }
 }
 
@@ -269,6 +291,11 @@ void MaterialPropertyWidget::onPropertyChangeStart(iris::Property* prop)
 
 void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
 {
+    // A gesture that ended on its starting value (slider pressed and released
+    // in place, colour dialog cancelled, Enter on an unchanged field) is not
+    // an edit - don't pollute the undo stack with a no-op command.
+    if (startValue == prop->getValue()) return;
+
     if (services && services->undo)
         // currentMaterial(), not the CustomMaterial member - that one is null
         // whenever the mesh carries a PbrMaterial and the command would crash.

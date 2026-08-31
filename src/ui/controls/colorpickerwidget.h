@@ -50,6 +50,11 @@ private slots:
 signals:
     void onSetColor(QColor col);
     void onColorChanged(QColor color);
+    // The colour-view popup session: started when the popup opens (before any
+    // live change), ended when it closes. Lets a listener treat the whole pick
+    // as one undoable gesture while onColorChanged streams live previews.
+    void pickingStarted();
+    void pickingEnded();
 
 private:
     Ui::ColorPickerWidget *ui;

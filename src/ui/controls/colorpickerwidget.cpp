@@ -63,9 +63,11 @@ void ColorPickerWidget::colorChanged(QColor col)
 void ColorPickerWidget::mouseReleaseEvent(QMouseEvent* event)
 {
 	view = ColorView::getSingleston();
+	emit pickingStarted();   // before any live change: listeners record the old colour
 	connect(view, SIGNAL(onColorChanged(QColor)), this, SLOT(colorChanged(QColor)));
 	connect(view, &ColorView::exiting, [=]() {
 		view->disconnect();
+		emit pickingEnded();
 	});
 	view->showAtPosition(event, color);
     this->repaint();

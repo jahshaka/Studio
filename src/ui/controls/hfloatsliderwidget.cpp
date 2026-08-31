@@ -18,6 +18,7 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
 {
     ui->setupUi(this);
     connect(ui->spinbox,    SIGNAL(valueChanged(double)),   SLOT(onValueSpinboxChanged(double)));
+    connect(ui->spinbox,    SIGNAL(editingFinished()),      SLOT(onSpinboxEditingFinished()));
     connect(ui->slider,     SIGNAL(valueChanged(int)),      SLOT(onValueSliderChanged(int)));
     connect(ui->slider,     SIGNAL(sliderPressed()),        SLOT(sliderPressed()));
     connect(ui->slider,     SIGNAL(sliderReleased()),       SLOT(sliderReleased()));
@@ -93,6 +94,16 @@ void HFloatSliderWidget::onValueSliderChanged(int val)
 
 void HFloatSliderWidget::onValueSpinboxChanged(double val)
 {
+    // A keyboard edit (typing, arrow steps, wheel) starts an editing session:
+    // announce the pre-edit value so the listener can record it for undo.
+    // Slider drags echo into the spinbox programmatically (onValueSliderChanged
+    // calls spinbox->setValue) - the slider-down and focus guards keep those,
+    // and programmatic setValue() from the panel, out of session bookkeeping.
+    if (!spinboxEditing && ui->spinbox->hasFocus() && !ui->slider->isSliderDown()) {
+        spinboxEditing = true;
+        emit valueChangeStart(this->value);
+    }
+
     this->value = val;
 
     float mappedValue = (value - minVal) / (maxVal - minVal);
@@ -102,6 +113,15 @@ void HFloatSliderWidget::onValueSpinboxChanged(double val)
     ui->slider->blockSignals(false);
 
     emit valueChanged(this->value);
+}
+
+void HFloatSliderWidget::onSpinboxEditingFinished()
+{
+    // Return pressed or focus left the field: the typed edit is committed.
+    if (spinboxEditing) {
+        spinboxEditing = false;
+        emit valueChangeEnd(this->value);
+    }
 }
 
 void HFloatSliderWidget::sliderPressed()

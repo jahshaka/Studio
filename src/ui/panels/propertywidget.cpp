@@ -130,9 +130,41 @@ void PropertyWidget::addIntProperty(iris::Property *prop)
     auto intWidget = addFloatValueSlider(intProp->displayName, intProp->minValue, intProp->maxValue);
 
     intWidget->index = prop->id;
+    intWidget->setValue(float(intProp->getValue().toInt()));
     ui->contentpane->layout()->addWidget(intWidget);
     properties.append(prop);
 
+    // Same wiring as the float rows (this row had none at all - the panel's int
+    // properties, e.g. a material's Alpha Mode, silently did nothing).
+    connect(intWidget, &HFloatSliderWidget::valueChanged, this, [this, intProp](float value) {
+        intProp->value = qRound(value);
+
+        if (listener) {
+            listener->onPropertyChanged(intProp);
+        }
+
+        emit onPropertyChanged(intProp);
+    });
+
+    connect(intWidget, &HFloatSliderWidget::valueChangeStart, this, [this, intProp](float value) {
+        intProp->value = qRound(value);
+
+        if (listener) {
+            listener->onPropertyChangeStart(intProp);
+        }
+
+        emit onPropertyChanged(intProp);
+    });
+
+    connect(intWidget, &HFloatSliderWidget::valueChangeEnd, this, [this, intProp](float value) {
+        intProp->value = qRound(value);
+
+        if (listener) {
+            listener->onPropertyChangeEnd(intProp);
+        }
+
+        emit onPropertyChanged(intProp);
+    });
 }
 
 void PropertyWidget::addColorProperty(iris::Property *prop)
@@ -156,6 +188,15 @@ void PropertyWidget::addColorProperty(iris::Property *prop)
 
         emit onPropertyChanged(colorProp);
     });
+
+    // The popup session brackets the live changes above into one undo entry
+    // (start fires before any change, so the listener records the old colour).
+    connect(colorWidget->getPicker(), &ColorPickerWidget::pickingStarted, this, [this, colorProp]() {
+        if (listener) listener->onPropertyChangeStart(colorProp);
+    });
+    connect(colorWidget->getPicker(), &ColorPickerWidget::pickingEnded, this, [this, colorProp]() {
+        if (listener) listener->onPropertyChangeEnd(colorProp);
+    });
 }
 
 void PropertyWidget::addBoolProperty(iris::Property *prop)
@@ -169,10 +210,14 @@ void PropertyWidget::addBoolProperty(iris::Property *prop)
     properties.append(prop);
 
     connect(boolWidget, &CheckBoxWidget::valueChanged, this, [this, boolProp](bool value) {
+        // A checkbox toggle is one discrete gesture - one undo entry.
+        if (listener) listener->onPropertyChangeStart(boolProp);
+
         boolProp->value = value;
 
         if (listener) {
             listener->onPropertyChanged(boolProp);
+            listener->onPropertyChangeEnd(boolProp);
         }
 
         emit onPropertyChanged(boolProp);
@@ -195,10 +240,16 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
     connect(textureWidget, &TexturePickerWidget::valueChanged, this,
            [this, textureProp](QString value)
     {
+        // Picking a texture is a single discrete gesture: bracket it with
+        // change start/end so it lands as one undo entry. Start must run
+        // BEFORE the write - the listener records the old value from the prop.
+        if (listener) listener->onPropertyChangeStart(textureProp);
+
         textureProp->value = value;
 
         if (listener) {
             listener->onPropertyChanged(textureProp);
+            listener->onPropertyChangeEnd(textureProp);
         }
 
         emit onPropertyChanged(textureProp);

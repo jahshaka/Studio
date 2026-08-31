@@ -46,6 +46,11 @@ class HFloatSliderWidget : public BaseWidget
     int precision;
     float value;
     float minVal, maxVal;
+    // A keyboard-editing session on the spinbox (typing, arrow steps, wheel):
+    // starts on the first focused spinbox change, ends on editingFinished
+    // (Return or focus-out). Brackets the edit with valueChangeStart/End so a
+    // typed value commits an undo entry exactly like a slider drag does.
+    bool spinboxEditing = false;
 
 public:
     int index;
@@ -67,6 +72,7 @@ signals:
 private slots:
     void onValueSliderChanged(int);
     void onValueSpinboxChanged(double);
+    void onSpinboxEditingFinished();
 
     void sliderPressed();
     void sliderReleased();
