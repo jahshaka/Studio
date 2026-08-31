@@ -12,8 +12,9 @@
 // asset folder at instantiation, so the re-saved presets need no property
 // list to find their images.
 //
-// The stale vertexShaderSource/fragmentShaderSource keys are preserved
-// verbatim (nothing consumes them for templates; phase 5 deletes them);
+// Stale vertexShaderSource/fragmentShaderSource keys, if present, pass
+// through verbatim (phase 5 deleted every writer; readers stay tolerant
+// and the shipped presets no longer carry them);
 // "pbrMaterial" is refreshed from the evaluator like MaterialHelper::serialize.
 #include <QApplication>
 #include <QFile>
