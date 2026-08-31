@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/claude">
+        <file alias="skills/jahshaka-scene-building.md">skills/jahshaka-scene-building.md</file>
+        <file alias="skills/jahshaka-materials.md">skills/jahshaka-materials.md</file>
+        <file alias="skills/jahshaka-assets.md">skills/jahshaka-assets.md</file>
+    </qresource>
+</RCC>

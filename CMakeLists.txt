@@ -99,6 +99,11 @@ set(SRCS
     src/scripting/modules/studiomodules.cpp
     src/scripting/mcp/mcpserver.cpp
     src/scripting/mcp/mcptools.cpp
+    src/scripting/claude/claudecliprobe.cpp
+    src/scripting/claude/claudelaunchconfig.cpp
+    src/scripting/claude/claudestreamparser.cpp
+    src/scripting/claude/claudechathost.cpp
+    src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/assetmetadata.cpp
@@ -277,6 +282,11 @@ set(HEADERS
     src/scripting/modules/studiomodules.h
     src/scripting/mcp/mcpserver.h
     src/scripting/mcp/mcptools.h
+    src/scripting/claude/claudecliprobe.h
+    src/scripting/claude/claudelaunchconfig.h
+    src/scripting/claude/claudestreamparser.h
+    src/scripting/claude/claudechathost.h
+    src/ui/windows/claudechatwindow.h
     src/ui/dialogs/preferences/mcpsettingswidget.h
     src/services/services.h
     src/services/assetimporter.h
@@ -484,6 +494,7 @@ set (QRCS
     ${CMAKE_SOURCE_DIR}/app/shaders.qrc
     ${CMAKE_SOURCE_DIR}/app/themes.qrc
     ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc
+    ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudeskills.qrc
 )
 
 # Disable compiler specific warnings if we are building with MSVC
