@@ -51,8 +51,25 @@ public:
     AssetImportService(Database *db, Project *project);
     ~AssetImportService();
 
-    /// The one entry point: run the full pipeline for one source file.
+    /// The one entry point: run the full pipeline for one source file,
+    /// synchronously on the calling thread (headless/verb imports). Equal to
+    /// prepare() + commit(); interactive imports run those halves on separate
+    /// threads through ImportBatchRunner instead.
     ImportResult import(const ImportRequest &request,
+                        const ImportProgressFn &progress = ImportProgressFn());
+
+    /// The CPU half: sniff → validate → convert (staging) + content hashing.
+    /// Thread-agnostic — touches neither the default DB connection nor any
+    /// GUI object, so ImportBatchRunner runs it on a worker. The returned
+    /// PreparedImport owns the staging dir backing the staged file paths.
+    PreparedImport prepare(const ImportRequest &request,
+                           const ImportProgressFn &progress = ImportProgressFn());
+
+    /// The DB half: store (CAS) + register + drawer filing, one transaction
+    /// with the existing rollback/orphan-cleanup semantics. MUST run on the
+    /// thread that owns the default QSqlDatabase connection (the UI thread in
+    /// the app). Hashing was prepaid by prepare (StagedAsset::fileOids).
+    ImportResult commit(PreparedImport &prepared,
                         const ImportProgressFn &progress = ImportProgressFn());
 
     /// Re-run the convert stage on an asset's stored source and diff the

@@ -91,7 +91,7 @@ void ensureCasSchema(QSqlDatabase conn)
 
 bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
                 const QString &guid, const QString &role, const QString &name,
-                QString *oidOut, QString *errorOut)
+                QString *oidOut, QString *errorOut, const QString &knownOid)
 {
     const QFileInfo info(srcPath);
     if (!info.exists() || !info.isFile()) {
@@ -99,7 +99,7 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
         return false;
     }
 
-    const QString oid = hashFile(srcPath);
+    const QString oid = knownOid.isEmpty() ? hashFile(srcPath) : knownOid;
     if (oid.isEmpty()) {
         if (errorOut) *errorOut = QStringLiteral("cannot hash %1").arg(srcPath);
         return false;

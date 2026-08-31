@@ -65,38 +65,49 @@ AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request
 ImportResult AssetImportService::import(const ImportRequest &request,
                                         const ImportProgressFn &progress)
 {
-    ImportResult result;
-    if (!db) { result.error = QStringLiteral("no database"); return result; }
+    PreparedImport prepared = prepare(request, progress);
+    if (!prepared.ok()) return prepared.result;
+    return commit(prepared, progress);
+}
+
+PreparedImport AssetImportService::prepare(const ImportRequest &request,
+                                           const ImportProgressFn &progress)
+{
+    PreparedImport prepared;
+    prepared.request = request;
+    ImportResult &result = prepared.result;
+
+    if (!db) { result.error = QStringLiteral("no database"); return prepared; }
 
     const QFileInfo sourceInfo(request.sourcePath);
     if (!sourceInfo.exists() || !sourceInfo.isFile()) {
         result.error = QStringLiteral("no such file '%1'").arg(request.sourcePath);
-        return result;
+        return prepared;
     }
 
     // ---- sniff ----
     if (progress && !progress(QStringLiteral("sniff"), 0, 0)) {
         result.error = QStringLiteral("cancelled");
-        return result;
+        return prepared;
     }
     AssetImporterBase *importer = pickImporter(request, &result.error);
-    if (!importer) return result;
+    if (!importer) return prepared;
 
     // ---- validate ----
-    if (!importer->validate(request.sourcePath, &result.error)) return result;
+    if (!importer->validate(request.sourcePath, &result.error)) return prepared;
 
-    // ---- convert (private staging) ----
-    QTemporaryDir staging;
-    if (!staging.isValid()) {
+    // ---- convert (private staging; the dir must outlive commit) ----
+    prepared.staging = std::make_shared<QTemporaryDir>();
+    if (!prepared.staging->isValid()) {
         result.error = QStringLiteral("cannot create an import staging directory");
-        return result;
+        return prepared;
     }
 
-    StagedAsset staged;
-    if (!importer->convert(request, staging.path(), db, project, staged,
+    StagedAsset &staged = prepared.staged;
+    if (!importer->convert(request, prepared.staging->path(), db, project, staged,
                            &result.error, progress)) {
         if (result.error.isEmpty()) result.error = QStringLiteral("import failed");
-        return result;
+        return prepared;
     }
     result.warnings = staged.warnings;
 
@@ -111,6 +122,29 @@ ImportResult AssetImportService::import(const ImportRequest &request,
                         .arg(aiGetVersionMinor()).arg(aiGetVersionRevision()) },
         { "settings", request.settings },
     };
+
+    // Prepay the content hashing (the CPU cost of the store stage) so the
+    // DB-thread commit never re-hashes; a cancel here still costs nothing —
+    // no store/DB writes have happened yet.
+    for (const StagedFile &file : staged.files) {
+        if (staged.fileOids.contains(file.path)) continue;
+        if (progress && !progress(QStringLiteral("hash"),
+                                  staged.fileOids.size(), staged.files.size())) {
+            result.error = QStringLiteral("cancelled");
+            return prepared;
+        }
+        const QString oid = AssetCas::hashFile(file.path);
+        if (!oid.isEmpty()) staged.fileOids.insert(file.path, oid);
+    }
+    return prepared;
+}
+
+ImportResult AssetImportService::commit(PreparedImport &prepared,
+                                        const ImportProgressFn &progress)
+{
+    const ImportRequest &request = prepared.request;
+    StagedAsset &staged = prepared.staged;
+    ImportResult result = prepared.result;
 
     // ---- store + register (one transaction) ----
     if (!commitStagedAsset(request, staged, result, progress)) return result;
@@ -259,7 +293,8 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             }
             QString oid;
             if (!AssetCas::ingestFile(conn, root, file.path, file.forGuid,
-                                      file.role, file.name, &oid, &result.error)) {
+                                      file.role, file.name, &oid, &result.error,
+                                      staged.fileOids.value(file.path))) {
                 cleanupObjects();
                 return false;
             }

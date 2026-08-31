@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QSqlRecord>
 #include <QDateTime>
 #include <QMessageBox>
+#include <QUuid>
 
 Database::Database()
 {
@@ -1209,6 +1210,20 @@ QStringList Database::fetchLibraryAssetGuids()
     QStringList guids;
     while (query.next()) guids << query.value(0).toString();
     return guids;
+}
+
+QMap<QString, qint64> Database::fetchAssetFileSizes()
+{
+    QSqlQuery query;
+    query.prepare(
+        "SELECT af.asset_guid, SUM(f.size) FROM asset_files af "
+        "JOIN files f ON f.oid = af.oid GROUP BY af.asset_guid");
+    executeAndCheckQuery(query, "FetchAssetFileSizes");
+
+    QMap<QString, qint64> sizes;
+    while (query.next())
+        sizes.insert(query.value(0).toString(), query.value(1).toLongLong());
+    return sizes;
 }
 
 QVector<AssetRecord> Database::fetchAssetsForAssetView()
@@ -3533,47 +3548,49 @@ bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &t
 {
     bool result = false;
 
-    QSqlDatabase importConnection = QSqlDatabase();
-    importConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeImportConnection");
-    importConnection.setDatabaseName(pathToDb);
+    // A UNIQUE, same-thread connection (was the hard-coded name
+    // "NodeImportConnection"): the import pipeline's version probe now runs
+    // on ImportBatchRunner's worker thread — a fixed name would collide with
+    // the jaf commit path's connection of the same name on the UI thread,
+    // and QSqlDatabase connections must be created and used on one thread.
+    // Scoped so the QSqlDatabase/QSqlQuery handles die before removeDatabase.
+    const QString connectionName =
+        QStringLiteral("JafVersionProbe-%1").arg(QUuid::createUuid().toString(QUuid::Id128));
+    {
+        QSqlDatabase importConnection =
+            QSqlDatabase::addDatabase(Constants::DB_DRIVER, connectionName);
+        importConnection.setDatabaseName(pathToDb);
 
-    if (importConnection.isValid()) {
-        if (!importConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
+        if (importConnection.isValid()) {
+            if (!importConnection.open()) {
+                irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
+                QSqlDatabase::removeDatabase(connectionName);
+                return result;
+            }
+        }  else {
+            irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
+            QSqlDatabase::removeDatabase(connectionName);
             return result;
         }
-    }  else {
-        irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
-        return result;
-    }
 
-    QSqlQuery selectAssetQuery(importConnection);
-    selectAssetQuery.prepare(QString("SELECT  version FROM %1 LIMIT 1").arg(table_name));
-    if (!selectAssetQuery.exec()) {
-        importConnection.close();
-        return result;
-    }
+        QSqlQuery selectAssetQuery(importConnection);
+        selectAssetQuery.prepare(QString("SELECT  version FROM %1 LIMIT 1").arg(table_name));
+        if (selectAssetQuery.exec() && selectAssetQuery.first()) {
+            QString version = selectAssetQuery.value(0).toString();
+            bool version_ok(false);
+            QString import_version = version.mid(0, 3);
+            int version_int = import_version.toFloat(&version_ok) * 10;
 
-    if (selectAssetQuery.first()) {
-        QString version = selectAssetQuery.value(0).toString();
-        bool version_ok(false);
-        QString import_version = version.mid(0, 3);
-        int version_int = import_version.toFloat(&version_ok) * 10;
-
-        qDebug() << version_ok << version_int;
-
-        if (version_ok) {
-            if (version_int >= Constants::MIN_JAF_VERSION) {
-                result = true;
+            if (version_ok) {
+                if (version_int >= Constants::MIN_JAF_VERSION) {
+                    result = true;
+                }
             }
         }
 
-        // if (Constants::CONTENT_VERSION.compare(version) == 0) {
-        //     result = true;
-        // }
+        importConnection.close();
     }
-
-    importConnection.close();
+    QSqlDatabase::removeDatabase(connectionName);
     return result;
 }
 

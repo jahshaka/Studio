@@ -18,6 +18,7 @@ namespace Ui {
 
 class Database;
 class Project;
+class ImportBatchRunner;
 class Subscriber;
 
 #include <QListWidget>
@@ -322,6 +323,10 @@ private:
     Database *db;
     Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
 	ProgressDialog *progressDialog;
+	// Threaded import batch (UI-freeze fix): heavy pipeline half on a worker,
+	// pin + refresh back on the UI thread. One batch at a time.
+	ImportBatchRunner *importRunner = nullptr;
+	QStringList importErrors;
 
     QString currentPath;
 

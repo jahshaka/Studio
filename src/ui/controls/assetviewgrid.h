@@ -40,6 +40,13 @@ public:
 	void addTo(QJsonObject details, QImage image, int count, QJsonObject properties, QJsonObject tags, bool select = false);
 	/// The tile showing this asset, or null.
 	AssetGridItem *tileByGuid(const QString &guid);
+	/// Every tile (visible or filtered out) — the list view renders from the
+	/// same set the grid owns.
+	const QList<AssetGridItem*> &tiles() const { return originalItems; }
+	/// Programmatic equivalents of the tile gestures, so the list view's rows
+	/// drive the very same selection/preview plumbing.
+	void selectTile(AssetGridItem *item) { emit selectedTile(item); }
+	void lightSelectTile(AssetGridItem *item);
 	/// Rewrites tiles' drawer metadata after a drawer delete moved their
 	/// assets to Uncategorized (ASSET_DRAWERS_SPEC §2).
 	void reassignCollections(const QVector<int> &from, int to, const QString &toName);

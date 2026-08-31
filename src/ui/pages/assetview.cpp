@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include <QSlider>
 #include <QWheelEvent>
 #include <QFutureWatcher>
+#include <QActionGroup>
 #include <QLocale>
 #include <QPointer>
 #include <QtConcurrent>
@@ -78,6 +79,8 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetimporter.h"
 #include "services/import/assetimportservice.h"
+#include "services/import/importbatchrunner.h"
+#include "ui/dialogs/toast.h"
 #include "services/projectassets.h"
 #include "services/assetmetadata.h"
 #include "services/audiopeaks.h"
@@ -669,6 +672,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	connect(searchTimer, &QTimer::timeout, this, [this]() {
 		fastGrid->searchTiles(searchTerm.toLower());
+		rebuildAssetList();   // the list mirrors the grid's filtered set
 	});
 
 	filterPane = new QWidget;
@@ -703,6 +707,33 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		//}
 	});
 
+	// Tiles/List switch (owner request 2026-08-31): the same grey "▾"
+	// popup-button pattern as the editor panel's Display ▾ — the checked
+	// entry is the current mode; persisted per user.
+	viewModeButton = new QPushButton(tr("View ▾"));
+	viewModeButton->setCursor(Qt::PointingHandCursor);
+	viewModeMenu = new QMenu(this);
+	viewModeMenu->setStyleSheet(StyleSheet::QMenuDarkDesktop());
+	auto viewModeGroup = new QActionGroup(viewModeMenu);
+	viewModeGroup->setExclusive(true);
+	viewTilesAction = viewModeMenu->addAction(tr("Tiles"));
+	viewTilesAction->setCheckable(true);
+	viewTilesAction->setChecked(true);
+	viewModeGroup->addAction(viewTilesAction);
+	viewListAction = viewModeMenu->addAction(tr("List"));
+	viewListAction->setCheckable(true);
+	viewModeGroup->addAction(viewListAction);
+	connect(viewModeButton, &QPushButton::pressed, this, [this]() {
+		viewModeMenu->exec(viewModeButton->mapToGlobal(QPoint(0, viewModeButton->height())));
+	});
+	connect(viewTilesAction, &QAction::triggered, this,
+	        [this]() { setAssetViewMode(QStringLiteral("tiles")); });
+	connect(viewListAction, &QAction::triggered, this,
+	        [this]() { setAssetViewMode(QStringLiteral("list")); });
+	if (!ThemeManager::classicActive())
+		viewModeButton->setStyleSheet(ThemeManager::chromeCompactButtonSheet());
+	filterLayout->addWidget(viewModeButton);
+
 	//filterLayout->addWidget(new QLabel("Filter: "));
 	//filterLayout->addWidget(filterGroup);
 	filterLayout->addStretch();
@@ -722,14 +753,53 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	filterPane->setFixedHeight(48);
 	filterPane->setStyleSheet(StyleSheet::AssetViewFilterPane());
 
+	// The list view (owner request 2026-08-31): mirrors the editor panel's
+	// list mode — name/type/size rows from the catalog, driving the very
+	// same tile selection/preview/context plumbing.
+	assetListView = new QTreeWidget;
+	assetListView->setColumnCount(3);
+	assetListView->setHeaderLabels({ tr("Name"), tr("Type"), tr("Size") });
+	assetListView->setRootIsDecorated(false);
+	assetListView->setAlternatingRowColors(false);
+	assetListView->setUniformRowHeights(true);
+	assetListView->setFrameShape(QFrame::NoFrame);
+	assetListView->header()->setStretchLastSection(false);
+	assetListView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+	assetListView->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	assetListView->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+	assetListView->setContextMenuPolicy(Qt::CustomContextMenu);
+	assetListView->setVisible(false);
+	if (ThemeManager::classicActive())
+		assetListView->setStyleSheet("background: #202020; border: 0");
+	connect(assetListView, &QTreeWidget::itemClicked, this,
+	        [this](QTreeWidgetItem *item, int) {
+		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString()))
+			fastGrid->lightSelectTile(tile);
+	});
+	connect(assetListView, &QTreeWidget::itemDoubleClicked, this,
+	        [this](QTreeWidgetItem *item, int) {
+		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString()))
+			fastGrid->selectTile(tile);
+	});
+	connect(assetListView, &QTreeWidget::customContextMenuRequested, this,
+	        [this](const QPoint &pos) {
+		QTreeWidgetItem *item = assetListView->itemAt(pos);
+		if (!item) return;
+		if (auto *tile = fastGrid->tileByGuid(item->data(0, Qt::UserRole).toString())) {
+			const QPoint global = assetListView->viewport()->mapToGlobal(pos);
+			tile->projectContextMenu(tile->mapFromGlobal(global));
+		}
+	});
+
 	auto views = new QWidget;
 	auto viewsL = new QVBoxLayout;
-	// The tile area runs flush to its pane edges (owner direction): no
-	// inset below the filter/search row, no frame around the scroll area.
-	viewsL->setContentsMargins(0, 0, 0, 0);
+	// Clear the filter/search toolbar (owner direction 2026-08-31 — was
+	// deliberately flush); the tile grid adds its own inner margins too.
+	viewsL->setContentsMargins(0, 6, 0, 0);
 	viewsL->setSpacing(0);
 	viewsL->addWidget(emptyGrid);
 	viewsL->addWidget(fastGrid);
+	viewsL->addWidget(assetListView);
 	views->setLayout(viewsL);
     if (ThemeManager::classicActive())
         views->setStyleSheet("background: #202020");
@@ -746,12 +816,16 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		if (count > 0) {
 			filterPane->setVisible(true);
 			emptyGrid->setVisible(false);
-			fastGrid->setVisible(true);
+			const bool listMode = assetViewMode == QStringLiteral("list");
+			fastGrid->setVisible(!listMode);
+			assetListView->setVisible(listMode);
+			rebuildAssetList();
 		}
 		else {
 			filterPane->setVisible(false);
 			emptyGrid->setVisible(true);
 			fastGrid->setVisible(false);
+			assetListView->setVisible(false);
 
             // closeViewer();
 		}
@@ -794,6 +868,10 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 
 	//QApplication::processEvents();
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
+
+	// Restore the persisted Tiles/List choice (owner request 2026-08-31).
+	setAssetViewMode(settings->getValue(QStringLiteral("assetView/viewMode"),
+	                                    QStringLiteral("tiles")).toString(), false);
 
     _metadataPane = new QWidget; 
 	_metadataPane->setObjectName(QStringLiteral("MetadataPane"));
@@ -1307,21 +1385,11 @@ int on_extract_entry_av(const char *filename, void *arg) {
 	return 0;
 }
 
-void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
+// The old importJahModel viewer/tile tail — the archive is already imported
+// (ImportBatchRunner committed it); this runs post-dialog on the UI thread.
+void AssetView::finishJafImport(const ImportResult &result, const QString &fileName)
 {
-    // ONE pipeline: the JafImporter extracts and validates the archive, the
-    // spine imports its catalog (bundles included) and ingests the payload
-    // CAS-first. This method keeps only the viewer/tile tail.
-    AssetImportService service(db, project);
-    ImportRequest request;
-    request.sourcePath = fileName;
-    const ImportResult result = service.import(request);
-
-    if (!result.ok()) {
-        QMessageBox::warning(this, tr("Incompatible Asset format"), result.error, QMessageBox::Ok);
-        return;
-    }
-    if (!addToLibrary || result.jafKind == QStringLiteral("bundle")) return;
+    if (result.jafKind == QStringLiteral("bundle")) return;
 
     const QString guid = result.assetGuid;
     filename = fileName;
@@ -1370,50 +1438,17 @@ void AssetView::importJahModel(const QString &fileName, bool addToLibrary)
     }
 }
 
-void AssetView::importModel(const QString &fileName, bool jfx)
+// The old importModel viewer/tile tail — the pipeline half already ran on the
+// batch runner's worker and committed; this engine-dependent half (viewer
+// preview + rendered thumbnail) runs post-dialog on the UI thread, the tile
+// updating live.
+void AssetView::finishMeshImport(const ImportResult &result, const QString &fileName)
 {
-    if (fileName.isEmpty()) {
-        return;
-    }
-
     // The grid tile and metadata pane read the `filename` member, which only
     // the browse dialog used to set — a drag-and-dropped model got a nameless
     // tile until restart (ASSETS_AUDIT.md finding 2). Every import path lands
     // here, so set it here.
     filename = fileName;
-
-    QApplication::processEvents();
-
-    // ONE pipeline (ASSET_PIPELINE_SPEC §3.2): the ~490-line body this
-    // replaces was the second of five parallel import implementations —
-    // directory sweeps, its own guid rewriting, its own registration blocks.
-    // The service owns sniff/validate/convert/store/register; this method
-    // keeps only the UI: progress, the viewer preview and the library tile.
-    progressDialog->setRange(0, 0);
-    progressDialog->setValue(0);
-    progressDialog->setLabelText(tr("Importing %1").arg(QFileInfo(fileName).fileName()));
-    progressDialog->show();
-
-    AssetImportService service(db, project);
-    ImportRequest request;
-    request.sourcePath = fileName;
-    request.typeHint = static_cast<int>(ModelTypes::Mesh);
-    const ImportResult result = service.import(
-        request, [this](const QString &stage, int done, int total) -> bool {
-            progressDialog->setLabelText(stage);
-            progressDialog->setRange(0, total);
-            progressDialog->setValue(done);
-            QApplication::processEvents();
-            return true;
-        });
-
-    progressDialog->hide();
-
-    if (!result.ok()) {
-        if (result.error != QStringLiteral("cancelled"))
-            QMessageBox::warning(this, tr("Import failed"), result.error);
-        return;
-    }
 
     renameModelField->setText(QFileInfo(fileName).baseName());
     const QString storedModel =
@@ -1434,35 +1469,176 @@ void AssetView::importModel(const QString &fileName, bool jfx)
         properties[it.key()] = it.value();
     db->updateAssetProperties(result.assetGuid, QJsonDocument(properties).toJson());
 
-    addToLibrary(result.assetGuid, jfx);
+    addToLibrary(result.assetGuid, false);
 }
 
 // THE import dispatch (ASSET_DRAWERS_SPEC §3): drop pad and browse dialog both
-// land here; one switch keyed on ModelTypes decides each file's path, so a new
-// library type (Video, …) is one case — here and in AssetImporter::importFile.
+// land here; one switch keyed on ModelTypes decides each file's request, so a
+// new library type (Video, …) is one case. The batch then runs THREADED —
+// ImportBatchRunner + the cancellable progress dialog (multi-file drops count
+// "N of M" through one dialog).
 void AssetView::importFiles(const QStringList &fileNames)
 {
+	QVector<ImportRequest> requests;
 	for (const auto &fileName : fileNames) {
 		if (fileName.isEmpty()) continue;
 
-		if (QFileInfo(fileName).suffix().toLower() == Constants::ASSET_EXT) {
-			importJahModel(fileName);
-			continue;
+		ImportRequest request;
+		request.sourcePath = fileName;
+
+		const QString suffix = QFileInfo(fileName).suffix().toLower();
+		if (suffix != Constants::ASSET_EXT) {   // .jaf sniffs importer-side
+			const ModelTypes type = AssetHelper::getAssetTypeFromExtension(suffix);
+			switch (type) {
+			case ModelTypes::Texture:
+			case ModelTypes::Music:
+			case ModelTypes::Video:
+				request.typeHint = static_cast<int>(type);
+				request.drawerId = selectedDrawerId();
+				break;
+			default:
+				// Meshes and everything they reference: the viewer-driven path.
+				request.typeHint = static_cast<int>(ModelTypes::Mesh);
+				break;
+			}
+		}
+		requests.append(request);
+	}
+	if (!requests.isEmpty()) runImportBatch(requests);
+}
+
+void AssetView::runImportBatch(const QVector<ImportRequest> &requests)
+{
+	if (importRunner && importRunner->isRunning()) {
+		Toast *t = new Toast(this);
+		t->showToast(tr("Import in progress"),
+		             tr("Wait for the current import to finish (or cancel it) first."),
+		             0, parent->pos(), QRect());
+		return;
+	}
+
+	importErrors.clear();
+	pendingViewerTails.clear();
+	pendingVideoThumbGuids.clear();
+
+	importRunner = new ImportBatchRunner(db, project, this);
+	importRunner->setRequests(requests);
+
+	progressDialog->resetCancel();
+	progressDialog->setCancelVisible(true);
+	progressDialog->setRange(0, 0);
+	progressDialog->setValue(0);
+	progressDialog->setLabelText(tr("Preparing import…"));
+	progressDialog->setStageText(QString());
+	progressDialog->show();
+
+	connect(progressDialog, &ProgressDialog::canceled,
+	        importRunner, &ImportBatchRunner::cancel);
+
+	connect(importRunner, &ImportBatchRunner::fileStarted, this,
+	        [this](int index, int total, const QString &name) {
+		const QString counter =
+		    total > 1 ? tr(" (%1 of %2)").arg(index + 1).arg(total) : QString();
+		progressDialog->setLabelText(tr("Importing %1%2").arg(name, counter));
+		progressDialog->setStageText(tr("Reading…"));
+		progressDialog->setRange(0, 0);
+	});
+
+	connect(importRunner, &ImportBatchRunner::stageProgress, this,
+	        [this](int, const QString &stage, int done, int total) {
+		QString text;
+		if (stage == QStringLiteral("sniff")) text = tr("Reading…");
+		else if (stage == QStringLiteral("convert")) text = tr("Converting…");
+		else if (stage == QStringLiteral("extract")) text = tr("Extracting archive…");
+		else if (stage == QStringLiteral("textures"))
+			text = tr("Extracting textures (%1/%2)…").arg(done + 1).arg(total);
+		else if (stage == QStringLiteral("hash"))
+			text = tr("Hashing content (%1/%2)…").arg(done + 1).arg(total);
+		else if (stage == QStringLiteral("store"))
+			text = tr("Storing (%1/%2)…").arg(done + 1).arg(total);
+		else text = stage;
+		progressDialog->setStageText(text);
+		progressDialog->setRange(0, total);
+		if (total > 0) progressDialog->setValue(done);
+	});
+
+	connect(importRunner, &ImportBatchRunner::fileFinished, this,
+	        [this](int, const ImportRequest &request, const ImportResult &result) {
+		handleImportedFile(request, result);
+	});
+
+	connect(importRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {
+		progressDialog->hide();
+		auto *runner = importRunner;
+		importRunner = nullptr;
+		if (runner) runner->deleteLater();
+
+		if (cancelled) {
+			Toast *t = new Toast(this);
+			t->showToast(tr("Import cancelled"),
+			             tr("The import was cancelled. Files already completed stay in the library."),
+			             0, parent->pos(), QRect());
+		}
+		if (!importErrors.isEmpty()) {
+			QMessageBox::warning(this, tr("Import failed"),
+			                     importErrors.join(QStringLiteral("\n")), QMessageBox::Ok);
+			importErrors.clear();
 		}
 
-		const ModelTypes type =
-		    AssetHelper::getAssetTypeFromExtension(QFileInfo(fileName).suffix().toLower());
-		switch (type) {
-		case ModelTypes::Texture:
-		case ModelTypes::Music:
-		case ModelTypes::Video:
-			importImageOrAudio(fileName);
-			break;
-		default:
-			// Meshes and everything they reference: the viewer-driven path.
-			importModel(fileName);
-			break;
-		}
+		// Engine-dependent tails AFTER the dialog closed (the dialog never
+		// waits on the viewer): mesh/.jaf previews + rendered thumbnails,
+		// video frame grabs — each tile updates live as its render lands.
+		runViewerTails();
+
+		fastGrid->updateGridColumns(fastGrid->lastWidth);
+		filterFromSelection();
+	});
+
+	importRunner->start();
+}
+
+void AssetView::handleImportedFile(const ImportRequest &request, const ImportResult &result)
+{
+	if (!result.ok()) {
+		if (result.error != QStringLiteral("cancelled"))
+			importErrors.append(QStringLiteral("%1: %2")
+			                        .arg(QFileInfo(request.sourcePath).fileName(), result.error));
+		return;
+	}
+
+	const bool isJaf =
+	    QFileInfo(request.sourcePath).suffix().toLower() == Constants::ASSET_EXT;
+	if (isJaf || request.typeHint == static_cast<int>(ModelTypes::Mesh)) {
+		// Viewer-driven types: the preview render happens post-dialog.
+		pendingViewerTails.append({ result, request.sourcePath });
+		return;
+	}
+
+	// Media (image/audio/video): the tile appears live, mid-batch.
+	addLibraryTileForAsset(result.assetGuid);
+	if (request.typeHint == static_cast<int>(ModelTypes::Video))
+		pendingVideoThumbGuids.append(result.assetGuid);   // real frame, post-dialog
+}
+
+void AssetView::runViewerTails()
+{
+	const auto tails = pendingViewerTails;
+	pendingViewerTails.clear();
+	for (const auto &tail : tails) {
+		if (QFileInfo(tail.fileName).suffix().toLower() == Constants::ASSET_EXT)
+			finishJafImport(tail.result, tail.fileName);
+		else
+			finishMeshImport(tail.result, tail.fileName);
+	}
+
+	const auto videoGuids = pendingVideoThumbGuids;
+	pendingVideoThumbGuids.clear();
+	for (const QString &guid : videoGuids) {
+		// The worker could not run QMediaPlayer (GUI-thread-only), so the row
+		// committed with the film icon; grab the real first-second frame now
+		// — the same path as tile right-click → Rebuild Thumbnail.
+		if (AssetGridItem *tile = fastGrid->tileByGuid(guid))
+			rebuildTileThumbnail(tile);
 	}
 }
 
@@ -1473,17 +1649,12 @@ int AssetView::selectedDrawerId() const
 	return id > 0 ? id : 0;   // root/none selected -> Uncategorized
 }
 
-void AssetView::importImageOrAudio(const QString &fileName)
+void AssetView::addLibraryTileForAsset(const QString &guid)
 {
-	// The same service the assets.importFile verb runs (§4: UI calls the
-	// verb's path) — the row, the store copy and the thumbnail happen there.
-	const auto result = AssetImporter::importFile(fileName, db, project, selectedDrawerId());
-	if (!result.ok()) {
-		QMessageBox::warning(this, tr("Import failed"), result.error);
-		return;
-	}
-
-	const auto record = db->fetchAsset(result.objectGuid);
+	// The committed row (the same rows the assets.importFile verb writes) —
+	// this is only the tile tail; the pipeline ran on the batch runner.
+	const auto record = db->fetchAsset(guid);
+	if (record.guid.isEmpty()) return;
 
 	QJsonObject object;
 	object["icon_url"] = "";
@@ -1505,7 +1676,6 @@ void AssetView::importImageOrAudio(const QString &fileName)
 	                                  QJsonObject());
 	wireTile(gridItem);
 	fastGrid->addTo(gridItem, 0);
-	QApplication::processEvents();
 	fastGrid->updateGridColumns(fastGrid->lastWidth);
 	filterFromSelection();
 }
@@ -2179,6 +2349,50 @@ void AssetView::filterFromSelection()
 {
 	fastGrid->filterAssets(treeWidget->currentItem()
 	    ? treeWidget->currentItem()->data(0, Qt::UserRole).toInt() : -1);
+	rebuildAssetList();   // the list mirrors the grid's filtered set
+}
+
+void AssetView::setAssetViewMode(const QString &mode, bool persist)
+{
+	assetViewMode = (mode == QStringLiteral("list")) ? QStringLiteral("list")
+	                                                 : QStringLiteral("tiles");
+	const bool listMode = assetViewMode == QStringLiteral("list");
+	if (viewTilesAction) viewTilesAction->setChecked(!listMode);
+	if (viewListAction) viewListAction->setChecked(listMode);
+
+	// Only swap the visible pane when the empty-state isn't showing.
+	if (!emptyGrid->isVisible()) {
+		fastGrid->setVisible(!listMode);
+		assetListView->setVisible(listMode);
+	}
+	if (listMode) rebuildAssetList();
+	if (persist && settings)
+		settings->setValue(QStringLiteral("assetView/viewMode"), assetViewMode);
+}
+
+void AssetView::rebuildAssetList()
+{
+	if (!assetListView || assetViewMode != QStringLiteral("list")) return;
+
+	const QMap<QString, qint64> sizes = db->fetchAssetFileSizes();
+	const QLocale locale;
+
+	assetListView->clear();
+	for (AssetGridItem *tile : fastGrid->tiles()) {
+		// Mirror the grid's search/drawer filtering: a tile hidden by
+		// searchTiles/filterAssets stays out of the list too (isVisibleTo
+		// ignores whether the grid pane itself is currently shown).
+		if (!tile->isVisibleTo(tile->parentWidget())) continue;
+
+		const QString guid = tile->metadata["guid"].toString();
+		auto *row = new QTreeWidgetItem(assetListView);
+		row->setText(0, tile->metadata["name"].toString());
+		row->setText(1, getAssetType(tile->metadata["type"].toInt()));
+		row->setText(2, sizes.contains(guid)
+		                    ? locale.formattedDataSize(sizes.value(guid))
+		                    : QStringLiteral("—"));
+		row->setData(0, Qt::UserRole, guid);
+	}
 }
 
 void AssetView::wireTile(AssetGridItem *gridItem)

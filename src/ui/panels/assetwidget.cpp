@@ -54,6 +54,7 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
+#include "services/import/importbatchrunner.h"
 #include "services/projectassets.h"
 #include "services/assetcas.h"
 #include <QSqlDatabase>
@@ -1787,26 +1788,77 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 		}
 	}
 
-	QStringList errors;
+	if (expanded.isEmpty()) return;
+
+	// THREADED (UI-freeze fix): the pipeline's heavy half runs on
+	// ImportBatchRunner's worker with one cancellable dialog for the whole
+	// drop; the pin + panel refresh land back here per file / at the end.
+	if (importRunner && importRunner->isRunning()) return;
+
+	progressDialog->resetCancel();
+	progressDialog->setCancelVisible(true);
+	progressDialog->setRange(0, 0);
+	progressDialog->setValue(0);
+	progressDialog->setLabelText(tr("Preparing import…"));
+	progressDialog->setStageText(QString());
+	progressDialog->show();
+
+	importRunner = new ImportBatchRunner(db, project, this);
+	QVector<ImportRequest> requests;
 	for (const QString &fileName : expanded) {
-		AssetImportService service(db, project);
 		ImportRequest request;
 		request.sourcePath = fileName;
-		const ImportResult result = service.import(request);
+		requests.append(request);
+	}
+	importRunner->setRequests(requests);
+
+	connect(progressDialog, &ProgressDialog::canceled,
+	        importRunner, &ImportBatchRunner::cancel);
+
+	connect(importRunner, &ImportBatchRunner::fileStarted, this,
+	        [this](int index, int total, const QString &name) {
+		const QString counter =
+		    total > 1 ? tr(" (%1 of %2)").arg(index + 1).arg(total) : QString();
+		progressDialog->setLabelText(tr("Importing %1%2").arg(name, counter));
+		progressDialog->setRange(0, 0);
+	});
+	connect(importRunner, &ImportBatchRunner::stageProgress, this,
+	        [this](int, const QString &stage, int done, int total) {
+		progressDialog->setStageText(
+		    total > 0 ? QStringLiteral("%1 (%2/%3)…").arg(stage).arg(done + 1).arg(total)
+		              : stage + QStringLiteral("…"));
+		progressDialog->setRange(0, total);
+		if (total > 0) progressDialog->setValue(done);
+	});
+	connect(importRunner, &ImportBatchRunner::fileFinished, this,
+	        [this](int, const ImportRequest &request, const ImportResult &result) {
 		if (!result.ok()) {
-			errors.append(result.error);
-			continue;
+			if (result.error != QStringLiteral("cancelled"))
+				importErrors.append(QStringLiteral("%1: %2").arg(
+				    QFileInfo(request.sourcePath).fileName(), result.error));
+			return;
 		}
 		const auto pinned = ProjectAssets::addToProject(result.assetGuid, db, project);
-		if (!pinned.ok()) errors.append(pinned.error);
-	}
+		if (!pinned.ok()) importErrors.append(pinned.error);
+	});
+	connect(importRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {
+		progressDialog->hide();
+		auto *runner = importRunner;
+		importRunner = nullptr;
+		if (runner) runner->deleteLater();
 
-	if (!errors.isEmpty()) {
-		QMessageBox::warning(this, tr("Import"), errors.join("\n"), QMessageBox::Ok);
-	}
+		if (cancelled)
+			progressDialog->setStageText(QString());
+		if (!importErrors.isEmpty()) {
+			QMessageBox::warning(this, tr("Import"),
+			                     importErrors.join(QStringLiteral("\n")), QMessageBox::Ok);
+			importErrors.clear();
+		}
+		populateAssetTree(false);
+		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+	});
 
-	populateAssetTree(false);
-	updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+	importRunner->start();
 }
 
 void AssetWidget::onThumbnailResult(ThumbnailResult *result)
