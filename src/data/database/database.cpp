@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "data/database/database.h"
+#include "data/database/casschema.h"
 #include "data/constants.h"
 #include "irisgl/irisglfwd.h"
 #include "data/guidmanager.h"
@@ -495,7 +496,44 @@ void Database::createAllTables()
     if (!checkIfTableExists("metadata"))        createMetadataTable();
     if (!checkIfTableExists("favorites"))       createFavoritesTable();
     createIndexes();
+    createCasTables();
     tx.commit();
+}
+
+void Database::createCasTables()
+{
+    // Content-addressed store catalog (ASSET_PIPELINE_SPEC §3.1.3, phase 2):
+    // files (oid → size/ext/refcount) + asset_files (guid → content mapping)
+    // + refcount triggers + PRAGMA user_version. Additive and idempotent —
+    // pre-CAS binaries ignore these tables completely.
+    QSqlQuery filesTable;
+    filesTable.prepare(CasSchema::kFilesTable);
+    executeAndCheckQuery(filesTable, "CreateFilesTable");
+
+    QSqlQuery assetFilesTable;
+    assetFilesTable.prepare(CasSchema::kAssetFilesTable);
+    executeAndCheckQuery(assetFilesTable, "CreateAssetFilesTable");
+
+    QSqlQuery oidIndex;
+    oidIndex.prepare(CasSchema::kAssetFilesOidIndex);
+    executeAndCheckQuery(oidIndex, "CreateAssetFilesOidIndex");
+
+    QSqlQuery incTrigger;
+    incTrigger.prepare(CasSchema::kRefcountInsertTrigger);
+    executeAndCheckQuery(incTrigger, "CreateRefcountInsertTrigger");
+
+    QSqlQuery decTrigger;
+    decTrigger.prepare(CasSchema::kRefcountDeleteTrigger);
+    executeAndCheckQuery(decTrigger, "CreateRefcountDeleteTrigger");
+
+    QSqlQuery versionQuery;
+    versionQuery.exec("PRAGMA user_version");
+    int current = 0;
+    if (versionQuery.next()) current = versionQuery.value(0).toInt();
+    if (current < CasSchema::kUserVersion) {
+        QSqlQuery setVersion;
+        setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion));
+    }
 }
 
 void Database::createIndexes()

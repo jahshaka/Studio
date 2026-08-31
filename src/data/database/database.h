@@ -89,6 +89,7 @@ public:
     bool createFavoritesTable();
     void createAllTables();
     void createIndexes();
+    void createCasTables();
 
     // INSERT ===============================================================================
     bool createProject(const QString &guid,

@@ -1,0 +1,71 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+#ifndef ASSETCAS_H
+#define ASSETCAS_H
+
+// Content-addressed store primitives (ASSET_PIPELINE_SPEC §3.1.3, phase 2).
+//
+// Everything here is parameterized by an explicit QSqlDatabase connection and
+// store root, so the same code serves the live library (default connection +
+// active root) AND the migration rehearsal against a copied library
+// (preflight §3.2). Object content is immutable (invariant I3): storeObject
+// hardlinks when it can (same filesystem — ~0 bytes), copies otherwise, and
+// an object that already exists is simply reused — the dedup.
+
+#include <QSqlDatabase>
+#include <QString>
+
+namespace AssetCas
+{
+struct IngestStats
+{
+    int files = 0;             // files seen in the legacy folder
+    int objectsCreated = 0;    // new objects written to objects/
+    int objectsReused = 0;     // content already in the store (dedup)
+    qint64 bytesHashed = 0;
+};
+
+/// sha256 hex (lowercase) of a file's bytes, streamed; empty on I/O error.
+QString hashFile(const QString &path);
+
+/// Put one file's bytes into <root>/objects/ under its oid (hardlink, then
+/// copy on failure/EXDEV). Idempotent: an existing object of the right size
+/// is left alone. The SOURCE file is never touched (legacy tree retained).
+bool storeObject(const QString &srcPath, const QString &root,
+                 const QString &oid, const QString &ext, QString *errorOut);
+
+/// Ensure the CAS tables/triggers/user_version exist on this connection.
+void ensureCasSchema(QSqlDatabase conn);
+
+/// Hash + store every file in <root>/<guid>/ (the legacy per-guid folder)
+/// and record files/asset_files rows on the connection. A MISSING legacy
+/// folder is ZERO files, not an error (preflight amendment 3 — most Editor
+/// rows have none). Idempotent: re-running changes nothing.
+bool ingestLegacyFolder(QSqlDatabase conn, const QString &root, const QString &guid,
+                        const QString &assetName, IngestStats *stats, QString *errorOut);
+
+/// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
+/// I2): identity, organization, metadata and the file manifest.
+bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
+                  QString *errorOut);
+
+/// Resolve an asset's file to an absolute path: asset_files → objects/ when
+/// the object exists, else the legacy folder+name fallback (one release,
+/// spec §3.1.3). Empty when neither exists.
+QString resolveFile(QSqlDatabase conn, const QString &root,
+                    const QString &guid, const QString &name);
+
+/// Write/refresh <root>/store.json (store id + format version — the sanity
+/// anchor for Use Existing Store). Keeps an existing store id stable.
+bool writeStoreInfo(const QString &root, QString *errorOut);
+} // namespace AssetCas
+
+#endif // ASSETCAS_H

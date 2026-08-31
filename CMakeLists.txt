@@ -110,6 +110,8 @@ set(SRCS
     src/ui/dialogs/preferences/assetssettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/assetmetadata.cpp
+    src/services/assetcas.cpp
+    src/services/assetmigration.cpp
     src/services/assetstore.cpp
     src/services/assetstorepaths.cpp
     src/services/audiopeaks.cpp
@@ -300,8 +302,11 @@ set(HEADERS
     src/services/services.h
     src/services/assetimporter.h
     src/services/assetmetadata.h
+    src/services/assetcas.h
+    src/services/assetmigration.h
     src/services/assetstore.h
     src/services/assetstorepaths.h
+    src/data/database/casschema.h
     src/services/audiopeaks.h
     src/services/videoutils.h
     src/services/projectservice.h

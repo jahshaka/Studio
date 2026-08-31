@@ -135,6 +135,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `assets.storeRoot() -> path` | document | The active asset-store root directory (the assets/storeRoot setting; the AppData default when unset). |
 | `assets.setStoreRoot(path, {move, force}) -> bool` | document | Repoints the asset store. Empty path returns to the default root. {move: true} copies the current store's contents to the new root first (verified; the old tree is retained). Without move, the target must already contain this library's store ({force: true} skips that check). Throws on failure; nothing changes on a failed call. |
 | `assets.storeStatus() -> {root, online, missing}` | document | Store reachability: the active root, whether it is reachable (offline mode keeps the catalog fully usable), and how many library rows have no folder under it. |
+| `assets.migrateStore({dbPath, root}) -> report` | document | Migrates a legacy per-guid store into the content-addressed store: hashes every library file (view_filter 2 and 3), hardlinks/copies into objects/, writes files/asset_files rows + rebuild sidecars + store.json. The legacy tree is RETAINED; a missing folder is zero files; idempotent (rerun = zero new objects). Refuses while another Jahshaka instance holds the library. dbPath/root default to the live library — pass both to rehearse against a copy. |
+| `assets.verify({dbPath, root}) -> report` | document | Re-hashes every catalogued object against its oid: reports corrupt (bit-rot) and missing objects with counts and bytes. Defaults to the live library. |
+| `assets.rebuildCatalog(dbPath, {root}) -> report` | document | Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered. |
 
 ## materials
 
