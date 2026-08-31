@@ -179,4 +179,6 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `graph.selectNode(id) -> bool` | document | Selects a node. When the Effects page has a node with this id its canvas selection (and the properties panel) follows; otherwise the id must belong to the current script graph. |
 | `graph.selectedNode() -> id\|null` | document | The selected node's id: the Effects page's canvas selection when one exists, else the script-side selection. |
 | `graph.deselect() -> bool` | document | Clears the selection (canvas and script-side). |
+| `graph.settings() -> {name, blendMode, bakeResolution}` | document | The current graph's material settings; blendMode is one of 'Opaque' \| 'Masked' \| 'Translucent' \| 'Additive' \| 'Modulate'. |
+| `graph.setBlendMode(mode) -> bool` | document | Sets the master material's blend mode ('Opaque' \| 'Masked' \| 'Translucent' \| 'Additive' \| 'Modulate' — the Unreal set; 'Blend' is accepted as the legacy name for 'Translucent'). Material state only: bakes are unaffected, the evaluated material's alphaMode changes. |
 

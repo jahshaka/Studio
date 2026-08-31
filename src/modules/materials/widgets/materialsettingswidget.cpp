@@ -123,7 +123,7 @@ MaterialSettingsWidget::MaterialSettingsWidget(QWidget *parent):
 
 
 	QStringList list;
-	list << "Opaque" << "Blend" << "Additive";
+	list << "Opaque" << "Masked" << "Translucent" << "Additive" << "Modulate";
 	comboBox->addItems(list);
 
 	list.clear();
@@ -272,18 +272,8 @@ void MaterialSettingsWidget::setAcceptLighting(bool val)
 
 void MaterialSettingsWidget::setBlendMode(BlendMode index)
 {
-	int i = 0;
-	switch (index) {
-	case BlendMode::Opaque:
-		i = 0;
-		break;
-	case BlendMode::Blend:
-		i = 1;
-		break;
-	case BlendMode::Additive:
-		i = 2;
-	}
-	comboBox->setCurrentIndex(i);
+	// combo items are declared in BlendMode enum order
+	comboBox->setCurrentIndex(static_cast<int>(index));
 }
 
 

@@ -258,6 +258,75 @@ int main(int argc, char** argv)
         }
     }
 
+    // ---- blend modes (IMAGE_PLANE_SPEC §9): MaterialSettings passes through --
+    // The master's Blend Mode is material state: the evaluator lands it on
+    // alphaMode (Additive=4, Modulate=5 — 3 is Glass), Opaque keeps the auto
+    // rules, and the setting round-trips serialization under the new names
+    // (legacy "Blend" still reads as Translucent).
+    {
+        auto makeGraph = []() {
+            auto graph = new NodeGraph();
+            auto master = new PbrMasterNode();
+            graph->addNode(master);
+            graph->setMasterNode(master);
+            return graph;
+        };
+
+        auto graph = makeGraph();
+        auto color = makeColor(graph, 1.0, 0.5, 0.25);
+        graph->addConnection(color, 0, graph->masterNode, 0);
+
+        auto result = PbrGraphEvaluator::evaluate(graph);
+        CHECK(!result.values.contains("alphaMode") || result.values["alphaMode"].toInt() == 0,
+              "blend: Opaque default leaves the auto alpha rules alone");
+
+        const struct { BlendMode mode; int alphaMode; const char* name; } rows[] = {
+            { BlendMode::Masked,      1, "Masked -> alphaMode 1" },
+            { BlendMode::Translucent, 2, "Translucent -> alphaMode 2" },
+            { BlendMode::Additive,    4, "Additive -> alphaMode 4" },
+            { BlendMode::Modulate,    5, "Modulate -> alphaMode 5" },
+        };
+        for (const auto& row : rows) {
+            MaterialSettings s = graph->settings;
+            s.blendMode = row.mode;
+            graph->setMaterialSettings(s);
+            result = PbrGraphEvaluator::evaluate(graph);
+            CHECK(result.values["alphaMode"].toInt() == row.alphaMode, row.name);
+            // material state only: the folded colour is untouched by blend mode
+            auto col = result.values["baseColor"].toObject();
+            CHECK(near(col["r"].toDouble(), 1.0) && near(col["g"].toDouble(), 0.5),
+                  "blend: bake output unaffected by blend mode");
+        }
+
+        // an explicit setting overrides the auto rule (cutoff would say Masked)
+        auto cutoff = makeFloat(graph, 0.5);
+        graph->addConnection(cutoff, 0, graph->masterNode, 7);
+        MaterialSettings s = graph->settings;
+        s.blendMode = BlendMode::Additive;
+        graph->setMaterialSettings(s);
+        result = PbrGraphEvaluator::evaluate(graph);
+        CHECK(result.values["alphaMode"].toInt() == 4,
+              "blend: explicit Additive overrides the connected-cutoff auto rule");
+
+        // serialization round-trip: every mode survives serialize/deserialize
+        const BlendMode all[] = { BlendMode::Opaque, BlendMode::Masked, BlendMode::Translucent,
+                                  BlendMode::Additive, BlendMode::Modulate };
+        for (BlendMode mode : all) {
+            MaterialSettings ms = graph->settings;
+            ms.blendMode = mode;
+            graph->setMaterialSettings(ms);
+            const QJsonObject obj = graph->serializeMaterialSettings();
+            const MaterialSettings back = NodeGraph::deserializeMaterialSettings(obj);
+            CHECK(back.blendMode == mode, "blend: mode survives settings serialize round-trip");
+        }
+        // legacy files: "Blend" (also what Additive wrongly serialized as
+        // before this feature) reads as Translucent
+        QJsonObject legacy = graph->serializeMaterialSettings();
+        legacy["blendMode"] = "Blend";
+        CHECK(NodeGraph::deserializeMaterialSettings(legacy).blendMode == BlendMode::Translucent,
+              "blend: legacy 'Blend' string reads as Translucent");
+    }
+
     QFile::remove(texPath);
     std::printf(failures ? "FAILED: %d check(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;

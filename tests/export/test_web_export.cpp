@@ -12,6 +12,7 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -82,6 +83,27 @@ int main(int argc, char **argv)
     glass->setMaterial(glassMat);
     scene->rootNode->addChild(glass);
 
+    // additive + modulate (Unreal-parity blend modes, IMAGE_PLANE_SPEC §9:
+    // no core glTF equivalent — alphaMode falls back to BLEND, the real mode
+    // rides extras.jah.blendMode for the viewer)
+    auto additive = iris::MeshNode::create();
+    additive->setName("additive");
+    additive->setMesh(":assets/models/cube.obj");
+    auto additiveMat = iris::PbrMaterial::create();
+    additiveMat->setAlphaMode(4);
+    additiveMat->setAlpha(0.6f);
+    additive->setMaterial(additiveMat);
+    scene->rootNode->addChild(additive);
+
+    auto modulate = iris::MeshNode::create();
+    modulate->setName("modulate");
+    modulate->setMesh(":assets/models/cube.obj");
+    auto modulateMat = iris::PbrMaterial::create();
+    modulateMat->setAlphaMode(5);
+    modulateMat->setAlpha(0.3f);   // ignored: modulate has no alpha semantics
+    modulate->setMaterial(modulateMat);
+    scene->rootNode->addChild(modulate);
+
     // lights: point + spot (+softness) + area
     auto point = iris::LightNode::create();
     point->setName("point");
@@ -141,9 +163,32 @@ int main(int argc, char **argv)
     // nodes: 2 meshes + 2 punctual shims + 2 punctual lights... count explicitly:
     // cube, glass, point(+shim), spot(+shim), area(+shim), camera = 9
     const QJsonArray nodes = root["nodes"].toArray();
-    CHECK(nodes.size() == 9, "9 nodes (6 document + 3 orientation shims)");
-    CHECK(root["meshes"].toArray().size() == 2, "2 meshes");
-    CHECK(root["materials"].toArray().size() == 2, "2 materials");
+    CHECK(nodes.size() == 11, "11 nodes (8 document + 3 orientation shims)");
+    CHECK(root["meshes"].toArray().size() == 4, "4 meshes");
+    CHECK(root["materials"].toArray().size() == 4, "4 materials");
+
+    // additive/modulate ride extras.jah.blendMode with a BLEND core fallback
+    {
+        bool foundAdditive = false, foundModulate = false;
+        for (const auto &mv : root["materials"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QString blend = m["extras"].toObject()["jah"].toObject()["blendMode"].toString();
+            const QJsonArray bcf = m["pbrMetallicRoughness"].toObject()["baseColorFactor"].toArray();
+            if (blend == "additive") {
+                foundAdditive = true;
+                CHECK(m["alphaMode"].toString() == "BLEND", "additive: core alphaMode falls back to BLEND");
+                CHECK(bcf.size() == 4 && std::abs(bcf[3].toDouble() - 0.6) < 0.001,
+                      "additive: alpha carries into baseColorFactor.A (scales the glow)");
+            } else if (blend == "modulate") {
+                foundModulate = true;
+                CHECK(m["alphaMode"].toString() == "BLEND", "modulate: core alphaMode falls back to BLEND");
+                CHECK(bcf.size() == 4 && std::abs(bcf[3].toDouble() - 1.0) < 0.001,
+                      "modulate: alpha ignored (baseColorFactor.A stays 1)");
+            }
+        }
+        CHECK(foundAdditive, "additive material writes extras.jah.blendMode");
+        CHECK(foundModulate, "modulate material writes extras.jah.blendMode");
+    }
     CHECK(root["cameras"].toArray().size() == 1, "1 camera");
     CHECK(g.lightCount == 3, "3 lights counted");
 

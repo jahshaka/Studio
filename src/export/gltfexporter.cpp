@@ -281,7 +281,10 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     const float uvScale = pbr->textureScale;
     const QColor bc = pbr->baseColor;
     const float bf = pbr->baseColorFactor;
-    const float alpha = pbr->alphaMode == 2 ? pbr->alpha : 1.0f;
+    // Translucent (2) and Additive (4) carry alpha into baseColorFactor.A
+    // (three's AdditiveBlending is SrcAlpha/One, so alpha scales the glow —
+    // matching the engine's Fade-scaled SBT_ADD). Modulate ignores alpha.
+    const float alpha = (pbr->alphaMode == 2 || pbr->alphaMode == 4) ? pbr->alpha : 1.0f;
     mr["baseColorFactor"] = colorArray(float(bc.redF()) * bf, float(bc.greenF()) * bf,
                                        float(bc.blueF()) * bf, alpha);
 
@@ -422,6 +425,14 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         m["extensions"] = ext;
         break;
     }
+    // Additive/Modulate (IMAGE_PLANE_SPEC §9): no additive/modulate in core
+    // glTF — alphaMode falls back to BLEND so any stock viewer still renders
+    // a transparent surface, and the real mode rides extras.jah.blendMode for
+    // our viewer (three.js AdditiveBlending/MultiplyBlending, viewer.js).
+    case 4:
+    case 5:
+        m["alphaMode"] = "BLEND";
+        break;
     default: break;   // OPAQUE is the glTF default
     }
 
@@ -431,6 +442,8 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     QJsonObject jah;
     jah["useIbl"] = pbr->useIbl;
     jah["iblIntensity"] = double(pbr->iblIntensity);
+    if (pbr->alphaMode == 4) jah["blendMode"] = "additive";
+    else if (pbr->alphaMode == 5) jah["blendMode"] = "modulate";
     QJsonObject extras; extras["jah"] = jah;
     m["extras"] = extras;
 

@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "ui_texturepickerwidget.h"
 #include "ui/controls/filepickerwidget.h"
 #include "ui_filepickerwidget.h"
+#include "ui/controls/comboboxwidget.h"
 #include <QDir>
 #include "data/database/database.h"
 
@@ -127,6 +128,38 @@ void PropertyWidget::addFloatProperty(iris::Property *prop)
 void PropertyWidget::addIntProperty(iris::Property *prop)
 {
     auto intProp = static_cast<iris::IntProperty*>(prop);
+
+    // A material's Alpha Mode is an enum wearing an IntProperty: a slider row
+    // reads as a meaningless 0..5. Render it as a labeled dropdown instead —
+    // combo index == stored int value (PbrMaterial's alphaMode contract).
+    if (intProp->name == "alphaMode") {
+        auto combo = new ComboBoxWidget();
+        combo->setLabel(intProp->displayName);
+        // Unreal-familiar names; Glass stays value 3 (the engine's
+        // realistic-transparency mode — shipped scenes/presets depend on it).
+        for (const QString &label : { tr("Opaque"), tr("Masked"), tr("Translucent"),
+                                      tr("Glass"), tr("Additive"), tr("Modulate") })
+            combo->addItem(label);
+        combo->index = prop->id;
+        combo->setCurrentIndex(intProp->getValue().toInt());
+        progressiveHeight += combo->height() + stretch;
+        ui->contentpane->layout()->addWidget(combo);
+        properties.append(prop);
+        connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+                this, [this, intProp](int idx) {
+            if (intProp->getValue().toInt() == idx) return;
+            // Start must see the OLD value (it records the undo baseline),
+            // End the new one — a combo pick is a complete one-shot gesture.
+            if (listener) listener->onPropertyChangeStart(intProp);
+            intProp->value = idx;
+            if (listener) {
+                listener->onPropertyChanged(intProp);
+                listener->onPropertyChangeEnd(intProp);
+            }
+            emit onPropertyChanged(intProp);
+        });
+        return;
+    }
     auto intWidget = addFloatValueSlider(intProp->displayName, intProp->minValue, intProp->maxValue);
 
     intWidget->index = prop->id;

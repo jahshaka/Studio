@@ -458,6 +458,15 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "deselect", "graph.deselect() -> bool",
           "Clears the selection (canvas and script-side).",
           Needs::Document },
+        { "settings", "graph.settings() -> {name, blendMode, bakeResolution}",
+          "The current graph's material settings; blendMode is one of "
+          "'Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate'.",
+          Needs::Document },
+        { "setBlendMode", "graph.setBlendMode(mode) -> bool",
+          "Sets the master material's blend mode ('Opaque' | 'Masked' | 'Translucent' | 'Additive' | 'Modulate' — "
+          "the Unreal set; 'Blend' is accepted as the legacy name for 'Translucent'). Material state only: bakes are "
+          "unaffected, the evaluated material's alphaMode changes.",
+          Needs::Document },
     };
 }
 
@@ -693,6 +702,52 @@ bool GraphApi::deselect()
 {
     if (mSelection.deselect) mSelection.deselect();
     mSelectedNodeId.clear();
+    return true;
+}
+
+namespace {
+// One name per BlendMode, matching the settings-view combo labels and the
+// serialized strings (nodegraph.cpp keeps "Blend" on disk for Translucent).
+const char *blendModeName(BlendMode mode)
+{
+    switch (mode) {
+    case BlendMode::Opaque:      return "Opaque";
+    case BlendMode::Masked:      return "Masked";
+    case BlendMode::Translucent: return "Translucent";
+    case BlendMode::Additive:    return "Additive";
+    case BlendMode::Modulate:    return "Modulate";
+    }
+    return "Opaque";
+}
+} // namespace
+
+QVariantMap GraphApi::settings()
+{
+    QVariantMap out;
+    auto graph = graphOrFail(QStringLiteral("graph.settings"));
+    if (!graph) return out;
+    out["name"] = graph->settings.name;
+    out["blendMode"] = QString::fromLatin1(blendModeName(graph->settings.blendMode));
+    out["bakeResolution"] = graph->settings.bakeResolution;
+    return out;
+}
+
+bool GraphApi::setBlendMode(const QString &mode)
+{
+    auto graph = graphOrFail(QStringLiteral("graph.setBlendMode"));
+    if (!graph) return false;
+    const QString m = mode.trimmed().toLower();
+    BlendMode want;
+    if      (m == "opaque")                       want = BlendMode::Opaque;
+    else if (m == "masked")                       want = BlendMode::Masked;
+    else if (m == "translucent" || m == "blend")  want = BlendMode::Translucent;
+    else if (m == "additive")                     want = BlendMode::Additive;
+    else if (m == "modulate")                     want = BlendMode::Modulate;
+    else return fail(QStringLiteral("graph.setBlendMode: unknown mode '%1' "
+                     "(Opaque | Masked | Translucent | Additive | Modulate)").arg(mode));
+    MaterialSettings s = graph->settings;
+    s.blendMode = want;
+    graph->setMaterialSettings(s);
     return true;
 }
 

@@ -38,6 +38,7 @@ For more information see the LICENSE file
 #include "ui/controls/colorvaluewidget.h"
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/texturepickerwidget.h"
+#include "ui/controls/comboboxwidget.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 
@@ -220,25 +221,32 @@ static void testTextureRow()
     CHECK(!rig.pbr->textures.contains("u_baseColorMap"), "texture: undo clears the map");
 }
 
-// The Alpha Mode row is an IntProperty - it was rendered with no signal wiring
-// at all (a permanently dead row).
+// The Alpha Mode row is an IntProperty rendered as a labeled dropdown (the
+// Unreal-parity blend modes; combo index == stored alphaMode value). It was
+// once a dead slider row — this guards both the wiring and the enum labels.
 static void testIntRow()
 {
     PanelRig rig;
-    auto *row = sliderRow(&rig.panel, propId(rig.pbr, "alphaMode"));
-    CHECK(row != nullptr, "int: alphaMode row exists");
+    ComboBoxWidget *row = nullptr;
+    for (auto *w : rig.panel.findChildren<ComboBoxWidget *>())
+        if (w->index == propId(rig.pbr, "alphaMode")) { row = w; break; }
+    CHECK(row != nullptr, "int: alphaMode row exists as a dropdown");
     if (!row) return;
 
-    auto *slider = row->findChild<QSlider *>();
+    auto *combo = row->getWidget();
+    CHECK(combo->count() == 6, "int: six blend modes listed");
+    CHECK(combo->itemText(4) == "Additive" && combo->itemText(5) == "Modulate",
+          "int: Additive/Modulate entries present");
+
     const int before = rig.stack.count();
-    slider->setSliderDown(true);
-    slider->setValue(1000);   // range 0..2 -> 2 (Blend)
-    CHECK(rig.pbr->alphaMode == 2, "int: field updates live");
-    slider->setSliderDown(false);
-    CHECK(rig.stack.count() == before + 1, "int: one undo entry on release");
+    combo->setCurrentIndex(4);   // Additive
+    CHECK(rig.pbr->alphaMode == 4, "int: field updates on pick");
+    CHECK(rig.stack.count() == before + 1, "int: one undo entry per pick");
 
     rig.undo.undo();
     CHECK(rig.pbr->alphaMode == 0, "int: undo restores the field");
+    rig.undo.redo();
+    CHECK(rig.pbr->alphaMode == 4, "int: redo reapplies the field");
 }
 
 int main(int argc, char *argv[])

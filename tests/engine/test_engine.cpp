@@ -1096,6 +1096,70 @@ void pbr_alpha_cutout_discards_below_cutoff() {
     CHECK_MSG(back.g > 100 && back.g > back.b, "cutoff below texture alpha keeps the cube: %d %d %d", back.r, back.g, back.b);
 }
 
+// Unreal-parity blend modes (IMAGE_PLANE_SPEC §9): Additive = Src + Dest,
+// Modulate = Src × Dest. Comparative pixel asserts only — the framebuffer
+// encode is monotone, so "brighter than" / "darker than" survive it.
+void pbr_additive_adds_modulate_multiplies() {
+    Fixture fx;
+    const Colour bgDark(0.10f, 0.10f, 0.45f);   // dark blue background
+    View *v = fx.view("srcdest-view", 96, 96, bgDark); REQUIRE(v);
+    Scene *s = fx.scene("srcdest-scene");             REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.5f, 0.5f, 0.5f), Colour(0.4f, 0.4f, 0.4f));
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange; p.roughness = 0.8f;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    s->setNodeTransform(n, Vec3(0,0,0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    const Px opaque = centre(img);
+    CHECK_MSG(opaque.r > 100 && opaque.b < 90, "opaque cube is solid orange: %d %d %d",
+              opaque.r, opaque.g, opaque.b);
+    // Additive at alpha 1: Final = cube + background — the background's blue
+    // must ADD to the cube instead of being occluded, and the cube's red stays.
+    p.alphaMode = PbrAlphaMode::Additive; p.alpha = 1.0f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px add = centre(img);
+    std::printf("    opaque %d %d %d -> additive %d %d %d\n",
+                opaque.r, opaque.g, opaque.b, add.r, add.g, add.b);
+    CHECK_MSG(add.b > opaque.b + 40, "background blue adds through: b %d -> %d", opaque.b, add.b);
+    CHECK_MSG(add.r >= opaque.r - 12, "cube red still contributes: %d vs %d", add.r, opaque.r);
+    CHECK_MSG(add.b >= int(std::lround(bgDark.b * 255)) - 12,
+              "additive never darkens the background: b %d", add.b);
+    // Additive alpha scales the contribution (Fade-scaled colour into ONE/ONE):
+    // a faint glow leaves the centre close to the background.
+    p.alpha = 0.15f;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px faint = centre(img);
+    CHECK_MSG(faint.r < add.r - 30, "alpha 0.15 scales the glow down: r %d vs %d", faint.r, add.r);
+    CHECK_MSG(faint.b >= int(std::lround(bgDark.b * 255)) - 12, "background survives: b %d", faint.b);
+    // Modulate with a mid-grey cube: Final = Src × Dest darkens the background
+    // and can never brighten any channel past it.
+    p.alphaMode = PbrAlphaMode::Modulate; p.alpha = 1.0f;
+    p.albedo = Colour(0.5f, 0.5f, 0.5f);
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px mod = centre(img);
+    std::printf("    modulate centre %d %d %d (bg %d %d %d)\n", mod.r, mod.g, mod.b,
+                int(std::lround(bgDark.r * 255)), int(std::lround(bgDark.g * 255)),
+                int(std::lround(bgDark.b * 255)));
+    CHECK_MSG(mod.b < int(std::lround(bgDark.b * 255)) - 20,
+              "modulate darkens the background blue: %d", mod.b);
+    CHECK_MSG(mod.r <= int(std::lround(bgDark.r * 255)) + 10 &&
+              mod.g <= int(std::lround(bgDark.g * 255)) + 10 &&
+              mod.b <= int(std::lround(bgDark.b * 255)) + 10,
+              "modulate never brightens: %d %d %d", mod.r, mod.g, mod.b);
+    // Back to opaque: blendblock and depth write restore, cube solid again.
+    p.alphaMode = PbrAlphaMode::Opaque; p.albedo = kOrange;
+    CHECK(s->setPbrMaterial(mat, p));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK(centre(img).r > 100 && centre(img).b < 90);
+}
+
 void pbr_two_sided_shows_inside_faces() {
     Fixture fx;
     View *v = fx.view("twosided-view", 96, 96, kBlue); REQUIRE(v);
@@ -1276,6 +1340,7 @@ int main(int argc, char **argv) {
         { "overlay_lines_draw_on_top",              overlay_lines_draw_on_top },
         { "pbr_alpha_blend_mixes_with_background",  pbr_alpha_blend_mixes_with_background },
         { "pbr_alpha_cutout_discards_below_cutoff", pbr_alpha_cutout_discards_below_cutoff },
+        { "pbr_additive_adds_modulate_multiplies",  pbr_additive_adds_modulate_multiplies },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
         { "pbr_texture_scale_tiles_uvs",            pbr_texture_scale_tiles_uvs },
         { "fog_fades_distant_surfaces_to_fog_colour", fog_fades_distant_surfaces_to_fog_colour },

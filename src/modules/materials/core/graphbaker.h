@@ -38,6 +38,7 @@ For more information see the LICENSE file
 
 #include "bakeprogram.h"
 #include "pbrgraphevaluator.h"
+#include "../graph/nodegraph.h"   // BlendMode (CompiledGraph snapshots it)
 
 class NodeGraph;
 class NodeModel;
@@ -96,6 +97,9 @@ public:
 		bool hasMaster = false;
 		bool hasPbrMaster = false;
 		QString name;
+		// The master's Blend Mode setting (material state, not texel math):
+		// runCompiled lands it on the emitted alphaMode after the auto rules.
+		BlendMode blendMode = BlendMode::Opaque;
 		QVector<CompiledSlot> sockets;
 	};
 

@@ -142,8 +142,10 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	formLayout->addRow(tr("Name"), form.name);
 
 	form.blend = new QComboBox;
-	form.blend->addItems({ tr("Opaque"), tr("Blend"), tr("Additive") });
-	formLayout->addRow(tr("Blend"), form.blend);
+	// Unreal-parity blend modes; combo index == BlendMode enum value.
+	form.blend->addItems({ tr("Opaque"), tr("Masked"), tr("Translucent"),
+	                       tr("Additive"), tr("Modulate") });
+	formLayout->addRow(tr("Blend Mode"), form.blend);
 
 	form.cull = new QComboBox;
 	form.cull->addItems({ tr("Front"), tr("Back"), tr("None") });
