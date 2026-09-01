@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
+#include <QTimer>
 
 namespace {
 // Sky texture references are asset guids: resolve them through the CAS
@@ -120,6 +121,13 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 	skySelector->setCurrentIndex(skyRowFor(static_cast<iris::SkyType>(index)));
 
 	// Combo rows are NOT SkyType values (MATERIAL is gone): translate via the table.
+	// The rebuild is DEFERRED by one event-loop turn on purpose: skyTypeChanged
+	// clearPanel()s, which deletes the very combo whose currentIndexChanged is
+	// running (and its popup container, mid-teardown) and then builds fresh
+	// widgets in its place. Doing that synchronously crashed the renderer
+	// reproducibly (3/3) once the rebuilt panel contained a second QComboBox —
+	// the Qt 6.10 + qlementine combo-container hazard CLAUDE.md records, hit
+	// from the other end. One queued turn lets the popup finish dying first.
 	connect(skySelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged), this, [this](int row) {
 		if (row >= 0 && row < kSkyRowCount)
 			skyTypeChanged(static_cast<int>(kSkyRows[row]));
@@ -139,50 +147,83 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::REALISTIC: {
-			luminance = addFloatValueSlider("Intensity", .01f, 1.f, 1.f);
-			reileigh = addFloatValueSlider("Light Scattering", 0, 10.f, 2.5f);
-			mieCoefficient = addFloatValueSlider("Sun Glow", 0, 1.f, .053f);
-			mieDirectionalG = addFloatValueSlider("Sun Glare", 0, 1.f, .75f);
-			turbidity = addFloatValueSlider("Turbidity", 0, 1.f, .32f);
-			sunPosY = addFloatValueSlider("Sun Height", -0.99f, 10.f, 7.f);
-			sunPosX = addFloatValueSlider("Strafe X", 0, 1.f, 10.f);
-			sunPosZ = addFloatValueSlider("Strafe Z", 0, 1.f, 10.f);
+			// Ranges are the MODEL's, not the legacy panel's (VISUAL_PARITY_SPEC
+			// item 1). The old rows — Sun Height -0.99..10, Strafe X/Z 0..1,
+			// Turbidity 0..1 — sat in a corner where the analytic sky cannot
+			// react: its sunfade divides sunPosY by 450000 and Preetham's
+			// turbidity band is 1..20. The sun is a polar control now (the three
+			// stored sunPos floats remain the truth, at the model's radius), and
+			// every scattering dial spans the range the bake actually uses.
+			const iris::SkyRealistic defaults = iris::SkyRealistic::defaults();
+			iris::SkyRealistic loaded = defaults;
+			if (!skyDefinition.isEmpty()) {
+				loaded.luminance       = skyDefinition.value("luminance").toDouble(defaults.luminance);
+				loaded.reileigh        = skyDefinition.value("reileigh").toDouble(defaults.reileigh);
+				loaded.mieCoefficient  = skyDefinition.value("mieCoefficient").toDouble(defaults.mieCoefficient);
+				loaded.mieDirectionalG = skyDefinition.value("mieDirectionalG").toDouble(defaults.mieDirectionalG);
+				loaded.turbidity       = skyDefinition.value("turbidity").toDouble(defaults.turbidity);
+				loaded.sunPosX         = skyDefinition.value("sunPosX").toDouble(defaults.sunPosX);
+				loaded.sunPosY         = skyDefinition.value("sunPosY").toDouble(defaults.sunPosY);
+				loaded.sunPosZ         = skyDefinition.value("sunPosZ").toDouble(defaults.sunPosZ);
+			}
+			// Legacy documents hold values outside the model's ranges (turbidity
+			// .32 against Preetham's 1..20 was the panel default for years). The
+			// sliders would clamp the DISPLAY and silently disagree with the
+			// document, so clamp the document instead: an old scene migrates to
+			// the nearest value its dials can actually express.
+			loaded.turbidity       = qBound(1.0f,  loaded.turbidity,       20.0f);
+			loaded.reileigh        = qBound(0.0f,  loaded.reileigh,         4.0f);
+			loaded.mieCoefficient  = qBound(0.0f,  loaded.mieCoefficient,   0.1f);
+			loaded.mieDirectionalG = qBound(0.0f,  loaded.mieDirectionalG, 0.99f);
+			loaded.luminance       = qBound(0.01f, loaded.luminance,        2.0f);
+			loaded.setSunAngles(loaded.sunAzimuth(), qBound(-10.0f, loaded.sunElevation(), 90.0f));
+			scene->skyRealistic = loaded;
+
+			sunAzimuth = addFloatValueSlider("Sun Azimuth", 0.f, 360.f, defaults.sunAzimuth());
+			sunElevation = addFloatValueSlider("Sun Elevation", -10.f, 90.f, defaults.sunElevation());
+			turbidity = addFloatValueSlider("Turbidity", 1.f, 20.f, defaults.turbidity);
+			reileigh = addFloatValueSlider("Rayleigh Scattering", 0.f, 4.f, defaults.reileigh);
+			mieCoefficient = addFloatValueSlider("Mie Coefficient", 0.f, .1f, defaults.mieCoefficient);
+			mieDirectionalG = addFloatValueSlider("Mie Directional G", 0.f, .99f, defaults.mieDirectionalG);
+			luminance = addFloatValueSlider("Exposure", .01f, 2.f, defaults.luminance);
+			skyDetail = this->addComboBox("Sky Detail");
+			skyDetail->addItem("Normal (256)");
+			skyDetail->addItem("High (512)");
+			skyDetail->addItem("Ultra (1024)");
+			skyDetail->setToolTip(QStringLiteral(
+				"Width of the equirectangular image the sky is baked into. Higher is a sharper "
+				"sun disc on a big display, at the cost of a longer bake on every change."));
+			skyDetail->setCurrentIndex(scene->skyBakeResolution >= 1024 ? 2
+									 : scene->skyBakeResolution >= 512  ? 1 : 0);
+
+			sunAzimuth->setValue(loaded.sunAzimuth());
+			sunElevation->setValue(loaded.sunElevation());
+			turbidity->setValue(loaded.turbidity);
+			reileigh->setValue(loaded.reileigh);
+			mieCoefficient->setValue(loaded.mieCoefficient);
+			mieDirectionalG->setValue(loaded.mieDirectionalG);
+			luminance->setValue(loaded.luminance);
 
 			connect(luminance, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onLuminanceChanged);
 			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onReileighChanged);
 			connect(mieCoefficient, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onMieCoeffGChanged);
 			connect(mieDirectionalG, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onMieDireChanged);
 			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onTurbidityChanged);
-			connect(sunPosX, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunPosXChanged);
-			connect(sunPosY, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunPosYChanged);
-			connect(sunPosZ, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunPosZChanged);
-	
-			reileigh->setValue(skyDefinition.value("reileigh").toDouble());
-			luminance->setValue(skyDefinition.value("luminance").toDouble());
-			mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
-			mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
-			turbidity->setValue(skyDefinition.value("turbidity").toDouble());
-			sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
-			sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
-			sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
+			connect(sunAzimuth, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunAzimuthChanged);
+			connect(sunElevation, &HFloatSliderWidget::valueChanged, this, &WorldSkyPropertyWidget::onSunElevationChanged);
+			connect(skyDetail, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+					this, &WorldSkyPropertyWidget::onSkyDetailChanged);
 
-			realisticDefinition.insert("luminance", luminance->getValue());
-			realisticDefinition.insert("reileigh", reileigh->getValue());
-			realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
-			realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
-			realisticDefinition.insert("turbidity", turbidity->getValue());
-			realisticDefinition.insert("sunPosX", sunPosX->getValue());
-			realisticDefinition.insert("sunPosY", sunPosY->getValue());
-			realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
-
-			scene->skyRealistic.luminance = skyDefinition["luminance"].toDouble();
-			scene->skyRealistic.reileigh = skyDefinition["reileigh"].toDouble();
-			scene->skyRealistic.mieCoefficient = skyDefinition["mieCoefficient"].toDouble();
-			scene->skyRealistic.mieDirectionalG = skyDefinition["mieDirectionalG"].toDouble();
-			scene->skyRealistic.turbidity = skyDefinition["turbidity"].toDouble();
-			scene->skyRealistic.sunPosX = skyDefinition["sunPosX"].toDouble();
-			scene->skyRealistic.sunPosY = skyDefinition["sunPosY"].toDouble();
-			scene->skyRealistic.sunPosZ = skyDefinition["sunPosZ"].toDouble();
+			// The stored blob is still sunPos*: azimuth/elevation are a view of it.
+			realisticDefinition.insert("luminance", double(loaded.luminance));
+			realisticDefinition.insert("reileigh", double(loaded.reileigh));
+			realisticDefinition.insert("mieCoefficient", double(loaded.mieCoefficient));
+			realisticDefinition.insert("mieDirectionalG", double(loaded.mieDirectionalG));
+			realisticDefinition.insert("turbidity", double(loaded.turbidity));
+			realisticDefinition.insert("sunPosX", double(loaded.sunPosX));
+			realisticDefinition.insert("sunPosY", double(loaded.sunPosY));
+			realisticDefinition.insert("sunPosZ", double(loaded.sunPosZ));
+			updateAssetAndKeys();
 
 			break;
 		}
@@ -258,6 +299,30 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 		}
 	}
 
+	addAmbientFromSkyRow();
+}
+
+void WorldSkyPropertyWidget::addAmbientFromSkyRow()
+{
+	// VISUAL_PARITY_SPEC item 3b. Only offered where there is a sky to
+	// integrate: a single-colour sky has no hemispheres, so it always falls back
+	// to the flat World > Ambient Color.
+	if (!scene || scene->skyType == iris::SkyType::SINGLE_COLOR) { ambientFromSky = nullptr; return; }
+	ambientFromSky = this->addCheckBox("Ambient From Sky", scene->ambientFromSky);
+	// DEFECT (pre-existing, accordionbladewidget.cpp:216): addCheckBox drops its
+	// `value` argument on the floor — every caller has to set it afterwards.
+	ambientFromSky->setValue(scene->ambientFromSky);
+	ambientFromSky->setToolTip(QStringLiteral(
+		"Light the scene's ambient with the sky itself: the upper and lower hemisphere colours "
+		"are integrated from the sky image, so a red sky reddens what it lights. World > Ambient "
+		"Color then sets the strength and tint of that instead of being the ambient itself."));
+	connect(ambientFromSky, &CheckBoxWidget::valueChanged,
+			this, &WorldSkyPropertyWidget::onAmbientFromSkyChanged);
+}
+
+void WorldSkyPropertyWidget::onAmbientFromSkyChanged(bool on)
+{
+	if (!!scene) scene->ambientFromSky = on;
 }
 
 void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
@@ -508,32 +573,28 @@ void WorldSkyPropertyWidget::onMieDireChanged(float val)
 	}
 }
 
-void WorldSkyPropertyWidget::onSunPosXChanged(float val)
+// Azimuth/elevation are a lossless view of the three stored sunPos floats — the
+// panel edits the angles, the document (and the saved blob) keeps the vector.
+void WorldSkyPropertyWidget::writeSunAngles()
 {
-	realisticDefinition.insert("sunPosX", val);
-	if (!!scene) {
-		scene->skyRealistic.sunPosX = val;
-		updateAssetAndKeys();
-	}
+	if (!scene || !sunAzimuth || !sunElevation) return;
+	scene->skyRealistic.setSunAngles(sunAzimuth->getValue(), sunElevation->getValue());
+	realisticDefinition.insert("sunPosX", double(scene->skyRealistic.sunPosX));
+	realisticDefinition.insert("sunPosY", double(scene->skyRealistic.sunPosY));
+	realisticDefinition.insert("sunPosZ", double(scene->skyRealistic.sunPosZ));
+	updateAssetAndKeys();
 }
 
-void WorldSkyPropertyWidget::onSunPosYChanged(float val)
+void WorldSkyPropertyWidget::onSkyDetailChanged(int row)
 {
-	realisticDefinition.insert("sunPosY", val);
-	if (!!scene) {
-		scene->skyRealistic.sunPosY = val;
-		updateAssetAndKeys();
-	}
+	if (!scene) return;
+	// Not a sky *parameter* (it never enters skyData): a scene render setting,
+	// serialized beside antiAliasing. SceneMirror re-bakes when it changes.
+	scene->skyBakeResolution = row >= 2 ? 1024 : row >= 1 ? 512 : 256;
 }
 
-void WorldSkyPropertyWidget::onSunPosZChanged(float val)
-{
-	realisticDefinition.insert("sunPosZ", val);
-	if (!!scene) {
-		scene->skyRealistic.sunPosZ = val;
-		updateAssetAndKeys();
-	}
-}
+void WorldSkyPropertyWidget::onSunAzimuthChanged(float)   { writeSunAngles(); }
+void WorldSkyPropertyWidget::onSunElevationChanged(float) { writeSunAngles(); }
 
 void WorldSkyPropertyWidget::onGradientTopColorChanged(QColor color)
 {

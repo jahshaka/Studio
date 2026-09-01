@@ -119,23 +119,25 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		}
 
 		case iris::SkyType::REALISTIC: {
-			luminance = addFloatValueSlider("Intensity", .01f, 1.f, 1.f);
-			reileigh = addFloatValueSlider("Light Scattering", 0, 10.f, 2.5f);
-			mieCoefficient = addFloatValueSlider("Sun Glow", 0, 1.f, .053f);
-			mieDirectionalG = addFloatValueSlider("Sun Glare", 0, 1.f, .75f);
-			turbidity = addFloatValueSlider("Turbidity", 0, 1.f, .32f);
-			sunPosY = addFloatValueSlider("Sun Height", -0.99f, 10.f, 7.f);
-			sunPosX = addFloatValueSlider("Strafe X", 0, 1.f, 10.f);
-			sunPosZ = addFloatValueSlider("Strafe Z", 0, 1.f, 10.f);
+			// Same re-range as the World panel (VISUAL_PARITY_SPEC item 1) —
+			// these two panels have always been copies of each other, and a sky
+			// ASSET has to place its sun with the same dials a scene does.
+			const iris::SkyRealistic skyDefaults = iris::SkyRealistic::defaults();
+			sunAzimuth = addFloatValueSlider("Sun Azimuth", 0.f, 360.f, skyDefaults.sunAzimuth());
+			sunElevation = addFloatValueSlider("Sun Elevation", -10.f, 90.f, skyDefaults.sunElevation());
+			turbidity = addFloatValueSlider("Turbidity", 1.f, 20.f, skyDefaults.turbidity);
+			reileigh = addFloatValueSlider("Rayleigh Scattering", 0.f, 4.f, skyDefaults.reileigh);
+			mieCoefficient = addFloatValueSlider("Mie Coefficient", 0.f, .1f, skyDefaults.mieCoefficient);
+			mieDirectionalG = addFloatValueSlider("Mie Directional G", 0.f, .99f, skyDefaults.mieDirectionalG);
+			luminance = addFloatValueSlider("Exposure", .01f, 2.f, skyDefaults.luminance);
 
 			connect(luminance, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onLuminanceChanged);
 			connect(reileigh, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onReileighChanged);
 			connect(mieCoefficient, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieCoeffGChanged);
 			connect(mieDirectionalG, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onMieDireChanged);
 			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onTurbidityChanged);
-			connect(sunPosX, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosXChanged);
-			connect(sunPosY, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosYChanged);
-			connect(sunPosZ, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunPosZChanged);
+			connect(sunAzimuth, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunAzimuthChanged);
+			connect(sunElevation, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunElevationChanged);
 
 			if (skyDefinition.isEmpty()) {
 				realisticDefinition.insert("luminance", luminance->getValue());
@@ -143,19 +145,38 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 				realisticDefinition.insert("mieCoefficient", mieCoefficient->getValue());
 				realisticDefinition.insert("mieDirectionalG", mieDirectionalG->getValue());
 				realisticDefinition.insert("turbidity", turbidity->getValue());
-				realisticDefinition.insert("sunPosX", sunPosX->getValue());
-				realisticDefinition.insert("sunPosY", sunPosY->getValue());
-				realisticDefinition.insert("sunPosZ", sunPosZ->getValue());
+				realisticDefinition.insert("sunPosX", double(skyDefaults.sunPosX));
+				realisticDefinition.insert("sunPosY", double(skyDefaults.sunPosY));
+				realisticDefinition.insert("sunPosZ", double(skyDefaults.sunPosZ));
 			}
 			else {
-				reileigh->setValue(skyDefinition.value("reileigh").toDouble());
-				luminance->setValue(skyDefinition.value("luminance").toDouble());
-				mieCoefficient->setValue(skyDefinition.value("mieCoefficient").toDouble());
-				mieDirectionalG->setValue(skyDefinition.value("mieDirectionalG").toDouble());
-				turbidity->setValue(skyDefinition.value("turbidity").toDouble());
-				sunPosX->setValue(skyDefinition.value("sunPosX").toDouble());
-				sunPosY->setValue(skyDefinition.value("sunPosY").toDouble());
-				sunPosZ->setValue(skyDefinition.value("sunPosZ").toDouble());
+				iris::SkyRealistic loaded = skyDefaults;
+				loaded.luminance       = skyDefinition.value("luminance").toDouble(skyDefaults.luminance);
+				loaded.reileigh        = skyDefinition.value("reileigh").toDouble(skyDefaults.reileigh);
+				loaded.mieCoefficient  = skyDefinition.value("mieCoefficient").toDouble(skyDefaults.mieCoefficient);
+				loaded.mieDirectionalG = skyDefinition.value("mieDirectionalG").toDouble(skyDefaults.mieDirectionalG);
+				loaded.turbidity       = skyDefinition.value("turbidity").toDouble(skyDefaults.turbidity);
+				loaded.sunPosX         = skyDefinition.value("sunPosX").toDouble(skyDefaults.sunPosX);
+				loaded.sunPosY         = skyDefinition.value("sunPosY").toDouble(skyDefaults.sunPosY);
+				loaded.sunPosZ         = skyDefinition.value("sunPosZ").toDouble(skyDefaults.sunPosZ);
+				// Legacy documents hold values outside the model's ranges (turbidity
+				// .32 against Preetham's 1..20 was the panel default for years). The
+				// sliders would clamp the DISPLAY and silently disagree with the
+				// document, so clamp the document instead: an old scene migrates to
+				// the nearest value its dials can actually express.
+				loaded.turbidity       = qBound(1.0f,  loaded.turbidity,       20.0f);
+				loaded.reileigh        = qBound(0.0f,  loaded.reileigh,         4.0f);
+				loaded.mieCoefficient  = qBound(0.0f,  loaded.mieCoefficient,   0.1f);
+				loaded.mieDirectionalG = qBound(0.0f,  loaded.mieDirectionalG, 0.99f);
+				loaded.luminance       = qBound(0.01f, loaded.luminance,        2.0f);
+				loaded.setSunAngles(loaded.sunAzimuth(), qBound(-10.0f, loaded.sunElevation(), 90.0f));
+				reileigh->setValue(loaded.reileigh);
+				luminance->setValue(loaded.luminance);
+				mieCoefficient->setValue(loaded.mieCoefficient);
+				mieDirectionalG->setValue(loaded.mieDirectionalG);
+				turbidity->setValue(loaded.turbidity);
+				sunAzimuth->setValue(loaded.sunAzimuth());
+				sunElevation->setValue(loaded.sunElevation());
 			}
 
 			break;
@@ -505,35 +526,25 @@ void SkyPropertyWidget::onMieDireChanged(float val)
 	}
 }
 
-void SkyPropertyWidget::onSunPosXChanged(float val)
+// Azimuth/elevation are a lossless view of the three stored sunPos floats — the
+// panel edits the angles, the asset blob keeps the vector.
+void SkyPropertyWidget::writeSunAngles()
 {
-	realisticDefinition.insert("sunPosX", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.sunPosX = val;
-		}
+	if (!sunAzimuth || !sunElevation) return;
+	iris::SkyRealistic s;
+	s.setSunAngles(sunAzimuth->getValue(), sunElevation->getValue());
+	realisticDefinition.insert("sunPosX", double(s.sunPosX));
+	realisticDefinition.insert("sunPosY", double(s.sunPosY));
+	realisticDefinition.insert("sunPosZ", double(s.sunPosZ));
+	if (!!scene && scene->skyGuid == skyGuid) {
+		scene->skyRealistic.sunPosX = s.sunPosX;
+		scene->skyRealistic.sunPosY = s.sunPosY;
+		scene->skyRealistic.sunPosZ = s.sunPosZ;
 	}
 }
 
-void SkyPropertyWidget::onSunPosYChanged(float val)
-{
-	realisticDefinition.insert("sunPosY", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.sunPosY = val;
-		}
-	}
-}
-
-void SkyPropertyWidget::onSunPosZChanged(float val)
-{
-	realisticDefinition.insert("sunPosZ", val);
-	if (!!scene) {
-		if (scene->skyGuid == skyGuid) {
-			scene->skyRealistic.sunPosZ = val;
-		}
-	}
-}
+void SkyPropertyWidget::onSunAzimuthChanged(float)   { writeSunAngles(); }
+void SkyPropertyWidget::onSunElevationChanged(float) { writeSunAngles(); }
 
 void SkyPropertyWidget::onGradientTopColorChanged(QColor color)
 {

@@ -66,9 +66,8 @@ protected slots:
     void onTurbidityChanged(float val);
     void onMieCoeffGChanged(float val);
     void onMieDireChanged(float val);
-    void onSunPosXChanged(float val);
-    void onSunPosYChanged(float val);
-    void onSunPosZChanged(float val);
+    void onSunAzimuthChanged(float val);
+    void onSunElevationChanged(float val);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -76,6 +75,9 @@ protected slots:
 	void onGradientOffsetChanged(float offset);
 
 private:
+    /// Pushes the two angle sliders into the stored sun vector.
+    void writeSunAngles();
+
     Database *db;
     QSharedPointer<iris::Scene> scene;
     iris::SkyType currentSky;
@@ -105,9 +107,10 @@ private:
     HFloatSliderWidget *mieCoefficient;
     HFloatSliderWidget *mieDirectionalG;
     HFloatSliderWidget *turbidity;
-    HFloatSliderWidget *sunPosX;
-    HFloatSliderWidget *sunPosY;
-    HFloatSliderWidget *sunPosZ;
+    // The sun is a polar control (VISUAL_PARITY_SPEC item 1); the asset blob
+    // still stores sunPosX/Y/Z, these two are the readable view of them.
+    HFloatSliderWidget *sunAzimuth = nullptr;
+    HFloatSliderWidget *sunElevation = nullptr;
 
 	QJsonObject singleColorDefinition;
 	QJsonObject cubeMapDefinition;

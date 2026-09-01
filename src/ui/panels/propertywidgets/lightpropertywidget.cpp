@@ -53,6 +53,14 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     shadowSize->addItem("1024");
     shadowSize->addItem("2048");
     shadowSize->addItem("4096");
+    // The renderer has ONE shadow atlas for the whole scene, so this is a
+    // request and not a guarantee (VISUAL_PARITY_SPEC item 2): the largest
+    // request among the scene's shadow-casting lights sizes the atlas, and the
+    // World panel's Shadow Quality row can override the lot.
+    shadowSize->setToolTip(
+        QStringLiteral("A REQUEST, not a guarantee. Every light shares one shadow atlas: the "
+                       "largest Shadow Size in the scene sizes it, and World > Shadows > "
+                       "Shadow Quality overrides that."));
     //shadowBias = this->addFloatValueSlider("Shadow Bias",0,1);
 
 	shadowAlpha = this->addFloatValueSlider("Shadow Transparency", 0, 1.f);

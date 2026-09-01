@@ -44,6 +44,23 @@ var thrown = false;
 try { world.sky("volumetric"); } catch (e) { thrown = true; }
 assert(thrown, "unknown sky type refused");
 
+// ---- realistic sky by azimuth/elevation (VISUAL_PARITY_SPEC item 1) ----
+world.sky("realistic", { azimuth: 217.5, elevation: 12.5, turbidity: 6, detail: 512 });
+sky = world.get().sky;
+assert(sky.type === "Realistic", "realistic sky type set");
+assert(near(sky.azimuth, 217.5, 0.05) && near(sky.elevation, 12.5, 0.05),
+       "sun azimuth/elevation round-trip (" + sky.azimuth + ", " + sky.elevation + ")");
+assert(near(sky.data.turbidity, 6), "turbidity reaches skyData (save-safe)");
+assert(sky.detail === 512, "Sky Detail (bake width) round-trips");
+// The stored truth is still the sun VECTOR, on the model's 450000 scale.
+assert(Math.abs(sky.data.sunPosY) > 90000, "elevation wrote sunPosY on the model's scale");
+
+// ---- sky-driven ambient (VISUAL_PARITY_SPEC item 3b) ----
+assert(world.get().ambientFromSky === true, "sky-driven ambient is on by default");
+world.ambientFromSky(false);
+assert(world.get().ambientFromSky === false, "ambientFromSky can be turned off");
+world.ambientFromSky(true);
+
 // ---- world anti-aliasing (WORLD_AA_SPEC.md phase 1) ----
 assert(world.antiAliasing() === 1, "anti-aliasing starts off (1 sample)");
 var aa = world.setAntiAliasing(4);   // 4x is the one MSAA level Vulkan guarantees
@@ -53,6 +70,20 @@ thrown = false;
 try { world.setAntiAliasing(3); } catch (e) { thrown = true; }
 assert(thrown, "invalid sample count refused");
 assert(world.get().antiAliasing === 4, "refused AA call left the setting alone");
+
+// ---- world shadow resolution (VISUAL_PARITY_SPEC item 2, option A) ----
+assert(world.get().shadowResolution === 0, "shadow quality starts on Auto (0)");
+var sr = world.setShadowResolution(1024);
+assert(sr === 1024, "setShadowResolution(1024) applied (got " + sr + ")");
+assert(world.get().shadowResolution === 1024, "document stores the shadow-resolution override");
+assert(world.shadowResolution() === 1024, "the renderer reports the override");
+// Out-of-window values clamp rather than throw; the engine's window is 256..8192.
+assert(world.setShadowResolution(100) === 256, "below-range resolution clamps up to 256");
+assert(world.setShadowResolution(99999) === 8192, "above-range resolution clamps down to 8192");
+thrown = false;
+try { world.setShadowResolution(-1); } catch (e) { thrown = true; }
+assert(thrown, "negative resolution refused");
+world.setShadowResolution(2048);
 
 // ---- assets.* ----
 var builtins = assets.builtins();
@@ -136,6 +167,17 @@ assert(project.open(guid) === true, "project.open");
 assert(world.get().antiAliasing === 4, "antiAliasing round-trips through save/load");
 editor.frame(2);   // let the mirror push the reloaded value and the view rebuild
 assert(world.antiAliasing() === 4, "reloaded scene achieves 4x again");
+// The VISUAL_PARITY_SPEC lane-A fields ride the same serializer block.
+var reloaded = world.get();
+assert(reloaded.shadowResolution === 2048, "shadowResolution round-trips through save/load");
+assert(reloaded.ambientFromSky === true, "ambientFromSky round-trips through save/load");
+assert(reloaded.sky.type === "Realistic" && reloaded.sky.detail === 512,
+       "realistic sky + Sky Detail round-trip through save/load");
+assert(near(reloaded.sky.azimuth, 217.5, 0.05) && near(reloaded.sky.elevation, 12.5, 0.05),
+       "sun azimuth/elevation survive save/load (" + reloaded.sky.azimuth + ", " +
+       reloaded.sky.elevation + ")");
+assert(world.shadowResolution() === 2048, "the reloaded scene drives the renderer's atlas");
 world.setAntiAliasing(1);   // leave the scratch project the way defaults expect
+world.setShadowResolution(0);
 
 console.log("e2e_full_surface: ALL OK");

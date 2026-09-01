@@ -38,6 +38,13 @@ WorldPropertyWidget::WorldPropertyWidget()
 
 	worldGravity = this->addFloatValueSlider("Gravity", 0.f, 48.f);
     ambientColor = this->addColorPicker("Ambient Color");
+    // With Sky > Ambient From Sky on (the default, VISUAL_PARITY_SPEC item 3b)
+    // this colour stops being the ambient and becomes a per-channel GAIN on the
+    // sky's own hemisphere integrals. Say so, or the row looks broken.
+    ambientColor->setToolTip(QStringLiteral(
+        "Flat ambient light. When Sky > Ambient From Sky is on, the ambient colour comes from "
+        "the sky instead and this becomes its strength and tint: white = the sky at full "
+        "strength, black = no ambient."));
     showGridToggle = this->addCheckBox("Show Grid", true);
 
 	ambientMusicSelector = this->addComboBox("Background Ambience");

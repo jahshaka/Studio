@@ -61,9 +61,10 @@ public slots:
     void onTurbidityChanged(float val);
     void onMieCoeffGChanged(float val);
     void onMieDireChanged(float val);
-    void onSunPosXChanged(float val);
-    void onSunPosYChanged(float val);
-    void onSunPosZChanged(float val);
+    void onSunAzimuthChanged(float val);
+    void onSunElevationChanged(float val);
+    void onSkyDetailChanged(int row);
+    void onAmbientFromSkyChanged(bool on);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -75,6 +76,12 @@ private:
     QSharedPointer<iris::Scene> scene;
 
 	void updateAssetAndKeys();
+	/// Pushes the two angle sliders into the document's sun vector and the
+	/// serialized blob (they are one and the same three floats).
+	void writeSunAngles();
+	/// Adds the "Ambient From Sky" row for sky types that have something to
+	/// integrate; single-colour skies always use the flat Ambient Color.
+	void addAmbientFromSkyRow();
 
 
     ComboBoxWidget *skySelector;
@@ -97,9 +104,12 @@ private:
     HFloatSliderWidget *mieCoefficient;
     HFloatSliderWidget *mieDirectionalG;
     HFloatSliderWidget *turbidity;
-    HFloatSliderWidget *sunPosX;
-    HFloatSliderWidget *sunPosY;
-    HFloatSliderWidget *sunPosZ;
+    // The sun is a polar control (VISUAL_PARITY_SPEC item 1): the document
+    // still stores sunPosX/Y/Z, these two are the readable view of them.
+    HFloatSliderWidget *sunAzimuth = nullptr;
+    HFloatSliderWidget *sunElevation = nullptr;
+    ComboBoxWidget *skyDetail = nullptr;          // realistic-sky bake width
+    CheckBoxWidget *ambientFromSky = nullptr;     // sky-driven ambient (item 3b)
 
 	QJsonObject singleColorDefinition;
 	QJsonObject cubeMapDefinition;

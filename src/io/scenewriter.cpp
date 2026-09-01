@@ -134,6 +134,14 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // count is a per-machine runtime fact and is never serialized.
     sceneObj["antiAliasing"] = scene->antiAliasing;
 
+    // Shadow-map atlas base resolution; 0 = Auto (derive from the lights).
+    sceneObj["shadowResolution"] = scene->shadowResolution;
+    // Realistic-sky bake width (VISUAL_PARITY item 1) and sky-driven ambient
+    // (item 3b). Both are scene-wide render settings, not sky *parameters*, so
+    // they live beside antiAliasing rather than inside skyData.
+    sceneObj["skyBakeResolution"] = scene->skyBakeResolution;
+    sceneObj["ambientFromSky"] = scene->ambientFromSky;
+
     // Global illumination (world panel). Mode/quality are written as stable
     // strings — the enum ints must stay free to be reordered.
     static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };

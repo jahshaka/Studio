@@ -165,6 +165,12 @@ public:
     /// the engine viewport reports it; the legacy viewport has no MSAA (1).
     virtual int sampleCount() const { return 1; }
 
+    /// The shadow-map atlas base resolution the renderer is CURRENTLY using —
+    /// global, one atlas for every light (VISUAL_PARITY_SPEC item 2). The scene
+    /// field (0 = Auto) is a request; this is what came out of it. Only the
+    /// engine viewport reports it; 0 means "no engine to ask".
+    virtual int shadowResolution() const { return 0; }
+
     /// Deterministic frame stepping for scripts and tests (editor.frame(n)):
     /// document→engine sync + renderOneFrame, n times, synchronously — the exact
     /// pattern of the headless suites. Only the engine viewport implements it;

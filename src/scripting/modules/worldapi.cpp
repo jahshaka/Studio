@@ -51,8 +51,17 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "setAntiAliasing", "world.setAntiAliasing(samples) -> int",
           "Sets the scene's anti-aliasing: 1 (off), 2, 4 or 8 MSAA samples. Returns the achieved sample count (the driver may clamp; with no engine viewport, the requested value).",
           Needs::Document },
+        { "shadowResolution", "world.shadowResolution() -> int",
+          "Reads the shadow-map atlas base resolution in pixels. With the engine viewport live this is the value the renderer is actually using; otherwise the scene's setting, or 0 when it is on Auto with no shadow-casting light to derive from.",
+          Needs::Document },
+        { "setShadowResolution", "world.setShadowResolution(pixels) -> int",
+          "Sets the scene's shadow-map atlas base resolution: 0 = Auto (derive from the largest per-light Shadow Size), otherwise 256..8192 pixels. There is ONE atlas for every light in the scene, sized R x 3.5R at 32-bit depth: 1024 costs ~14 MB, 2048 ~56 MB, 4096 ~224 MB, 8192 ~896 MB of VRAM. Returns the applied value after clamping.",
+          Needs::Document },
+        { "ambientFromSky", "world.ambientFromSky(enabled) -> bool",
+          "Sky-driven ambient light: when on (the default), the ambient hemisphere colours are integrated from the live sky (equirect, gradient, realistic or cubemap) instead of being the flat Ambient Color; the Ambient Color then becomes the per-channel strength/tint of that sky ambient (white = full strength, black = none). Single-colour skies always use the flat colour.",
+          Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
-          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, sunPosX, sunPosY, sunPosZ}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project).",
+          "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024).",
           Needs::Document },
         { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky}",
           "Reads the current world settings.",
@@ -168,6 +177,59 @@ int WorldApi::setAntiAliasing(int samples)
     return samples;
 }
 
+int WorldApi::shadowResolution()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.shadowResolution"));
+    if (!scene) return 0;
+    // Like world.antiAliasing(): the live renderer beats the request, because
+    // Auto (0) resolves against the light list and the engine clamps.
+    if (host.isEngineReady() && host.viewport) {
+        const int live = host.viewport->shadowResolution();
+        if (live > 0) return live;
+    }
+    return scene->shadowResolution;
+}
+
+int WorldApi::setShadowResolution(int pixels)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.setShadowResolution"));
+    if (!scene) return 0;
+    if (pixels < 0) {
+        fail(QStringLiteral("world.setShadowResolution: pixels must be 0 (Auto) or 256..8192"));
+        return 0;
+    }
+    if (pixels == 0) {
+        scene->shadowResolution = 0;
+    } else {
+        // Non-fatal guard-rails: the value still applies (scripts are allowed
+        // the full engine window), but a 4096+ atlas is a VRAM decision the
+        // caller should see. The editor UI caps at 4096 instead.
+        if (pixels < 256 || pixels > 8192)
+            qWarning("world.setShadowResolution: %d clamped to the renderer's 256..8192 window", pixels);
+        else if (pixels > 4096)
+            qWarning("world.setShadowResolution: %d allocates roughly %d MB of VRAM for the shadow "
+                     "atlas; the editor UI caps at 4096",
+                     pixels, int(qRound(4.0 * 3.5 * double(pixels) * double(pixels) / (1024.0 * 1024.0))));
+        scene->shadowResolution = qBound(256, pixels, 8192);
+    }
+    // SceneMirror pushes the document value at the next sync; step a frame so
+    // the atlas rebuild lands and the readback below is the applied truth.
+    if (host.isEngineReady() && host.viewport) {
+        host.viewport->renderFrames(2);
+        const int live = host.viewport->shadowResolution();
+        if (scene->shadowResolution > 0 && live > 0) return live;
+    }
+    return scene->shadowResolution;
+}
+
+bool WorldApi::ambientFromSky(bool enabled)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.ambientFromSky"));
+    if (!scene) return false;
+    scene->ambientFromSky = enabled;
+    return true;
+}
+
 bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut)
 {
     if (!host.db || !host.project) return false;
@@ -231,6 +293,14 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         r.sunPosX = take("sunPosX", r.sunPosX);
         r.sunPosY = take("sunPosY", r.sunPosY);
         r.sunPosZ = take("sunPosZ", r.sunPosZ);
+        // azimuth/elevation are the readable spelling of the same three floats
+        // and win over raw sunPos* when both are given (VISUAL_PARITY item 1).
+        if (params.contains("azimuth") || params.contains("elevation"))
+            r.setSunAngles(take("azimuth", r.sunAzimuth()), take("elevation", r.sunElevation()));
+        if (params.contains("detail")) {
+            const int d = params.value("detail").toInt();
+            scene->skyBakeResolution = d >= 1024 ? 1024 : d >= 512 ? 512 : 256;
+        }
         QJsonObject def;
         def.insert("luminance", double(r.luminance));
         def.insert("reileigh", double(r.reileigh));
@@ -303,6 +373,8 @@ QVariantMap WorldApi::get()
     out["gravity"] = scene->gravity;
     out["shadows"] = scene->shadowEnabled;
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
+    out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
+    out["ambientFromSky"] = scene->ambientFromSky;
     out["fog"] = QVariantMap{ { "enabled", scene->fogEnabled },
                               { "color", colorToJs(scene->fogColor) },
                               { "start", scene->fogStart },
@@ -322,6 +394,13 @@ QVariantMap WorldApi::get()
     sky["type"] = scene->skyTypeToStr.at(typeIndex);
     sky["data"] = scene->skyData.value(scene->skyTypeToStr.at(typeIndex)).toVariantMap();
     if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(scene->skyColor);
+    if (scene->skyType == iris::SkyType::REALISTIC) {
+        // The panel's spelling of the same stored floats, so a script can read
+        // back what it set with {azimuth, elevation} (VISUAL_PARITY item 1).
+        sky["azimuth"] = scene->skyRealistic.sunAzimuth();
+        sky["elevation"] = scene->skyRealistic.sunElevation();
+    }
+    sky["detail"] = scene->skyBakeResolution;
     out["sky"] = sky;
     return out;
 }

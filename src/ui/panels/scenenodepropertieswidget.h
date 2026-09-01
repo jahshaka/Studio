@@ -43,6 +43,7 @@ class SkyPropertyWidget;
 class WorldSkyPropertyWidget;
 class WorldGiPropertyWidget;
 class WorldAaPropertyWidget;
+class WorldShadowPropertyWidget;
 
 /**
  * This class shows the properties of selected nodes in the scene
@@ -81,6 +82,7 @@ public:
 	WorldSkyPropertyWidget *worldSkyPropView;
 	WorldGiPropertyWidget *worldGiPropView;
 	WorldAaPropertyWidget *worldAaPropView;
+	WorldShadowPropertyWidget *worldShadowPropView;
 
 public slots:
 	void acceptCubemapTexturesFromSkyPresets(QStringList guids);

@@ -111,6 +111,8 @@ public:
     QImage takeScreenshot(QSize dimension) override;
     int sampleCount() const override
     { return view() ? int(view()->sampleCount()) : 1; }
+    int shadowResolution() const override
+    { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     void renderFrames(int n) override;
 
     void begin() override;
