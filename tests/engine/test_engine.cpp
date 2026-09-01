@@ -659,6 +659,7 @@ void shadow_resolution_rebuilds_the_atlas() {
         }
         return brightest - darkest;
     };
+    Image atLow, atHigh;
     for (unsigned res : { 512u, 4096u, 1024u }) {
         fx.e->setShadowResolution(res);
         CHECK_MSG(fx.e->shadowResolution() == res, "resolution %u did not stick", res);
@@ -667,6 +668,19 @@ void shadow_resolution_rebuilds_the_atlas() {
         const int contrast = groundContrast(img);
         std::printf("    shadow atlas @%-4u: ground row contrast %d\n", res, contrast);
         CHECK_MSG(contrast > 40, "shadows must keep rendering at %u: contrast %d", res, contrast);
+        if (res == 512u)  atLow = img;
+        if (res == 4096u) atHigh = img;
+    }
+    // The value sticking is not the point — the PIXELS must change. An 8x finer
+    // atlas moves the shadow's edge: count how many pixels differ beyond driver
+    // noise between the 512 and 4096 frames (VISUAL_PARITY_SPEC item 2).
+    if (atLow.width == atHigh.width && atLow.height == atHigh.height && atLow.width > 0) {
+        int moved = 0;
+        for (unsigned y = 0; y < atLow.height; ++y)
+            for (unsigned x = 0; x < atLow.width; ++x)
+                if (std::abs(lum(atLow, x, y) - lum(atHigh, x, y)) > 6) ++moved;
+        std::printf("    512 vs 4096 atlas: %d pixel(s) differ\n", moved);
+        CHECK_MSG(moved > 0, "a finer shadow atlas must change the shadow's edge, not just the number");
     }
     // Out-of-range values are clamped, not fatal.
     fx.e->setShadowResolution(1u);

@@ -226,14 +226,21 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		case iris::SkyType::REALISTIC: {
 			auto realisticDefinition = scene->skyData.value("Realistic");
 
-			scene->skyRealistic.luminance		= realisticDefinition["luminance"].toDouble(1.f);
-			scene->skyRealistic.reileigh		= realisticDefinition["reileigh"].toDouble(2.5f);
-			scene->skyRealistic.mieCoefficient	= realisticDefinition["mieCoefficient"].toDouble(.053f);
-			scene->skyRealistic.mieDirectionalG = realisticDefinition["mieDirectionalG"].toDouble(.75f);
-			scene->skyRealistic.turbidity		= realisticDefinition["turbidity"].toDouble(.32f);
-			scene->skyRealistic.sunPosX			= realisticDefinition["sunPosX"].toDouble(10.f);
-			scene->skyRealistic.sunPosY			= realisticDefinition["sunPosY"].toDouble(7.f);
-			scene->skyRealistic.sunPosZ			= realisticDefinition["sunPosZ"].toDouble(10.f);
+			// Per-key defaults are the *model's* working values (VISUAL_PARITY
+			// item 1), matching iris::Scene's constructor: a key missing from an
+			// older document lands on something the Preetham bake can use rather
+			// than the legacy panel's degenerate corner.
+			{
+				const iris::SkyRealistic d = iris::SkyRealistic::defaults();
+				scene->skyRealistic.luminance		= realisticDefinition["luminance"].toDouble(d.luminance);
+				scene->skyRealistic.reileigh		= realisticDefinition["reileigh"].toDouble(d.reileigh);
+				scene->skyRealistic.mieCoefficient	= realisticDefinition["mieCoefficient"].toDouble(d.mieCoefficient);
+				scene->skyRealistic.mieDirectionalG = realisticDefinition["mieDirectionalG"].toDouble(d.mieDirectionalG);
+				scene->skyRealistic.turbidity		= realisticDefinition["turbidity"].toDouble(d.turbidity);
+				scene->skyRealistic.sunPosX			= realisticDefinition["sunPosX"].toDouble(d.sunPosX);
+				scene->skyRealistic.sunPosY			= realisticDefinition["sunPosY"].toDouble(d.sunPosY);
+				scene->skyRealistic.sunPosZ			= realisticDefinition["sunPosZ"].toDouble(d.sunPosZ);
+			}
 			break;
 		}
 
@@ -330,6 +337,18 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int aa = sceneObj["antiAliasing"].toInt(1);
         scene->antiAliasing = aa >= 8 ? 8 : aa >= 4 ? 4 : aa >= 2 ? 2 : 1;
     }
+    // Shadow-map resolution: absent or <= 0 means Auto (derive from the lights);
+    // anything else is clamped to the engine's own [256, 8192] window.
+    {
+        const int sr = sceneObj["shadowResolution"].toInt(0);
+        scene->shadowResolution = sr <= 0 ? 0 : qBound(256, sr, 8192);
+    }
+    // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.
+    {
+        const int sb = sceneObj["skyBakeResolution"].toInt(256);
+        scene->skyBakeResolution = sb >= 1024 ? 1024 : sb >= 512 ? 512 : 256;
+    }
+    scene->ambientFromSky = sceneObj["ambientFromSky"].toBool(true);
 	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));
 
     auto rootNode = sceneObj["rootNode"].toObject();

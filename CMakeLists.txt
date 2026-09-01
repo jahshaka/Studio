@@ -160,6 +160,7 @@ set(SRCS
     src/ui/panels/propertywidgets/worldskypropertywidget.cpp
     src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     src/ui/panels/propertywidgets/worldaapropertywidget.cpp
+    src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
     src/ui/panels/propertywidgets/worldpropertywidget.cpp 
     src/ui/panels/propertywidgets/physicspropertywidget.cpp 
     src/ui/panels/propertywidgets/cubemapwidget.cpp 
@@ -353,6 +354,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/worldskypropertywidget.h
     src/ui/panels/propertywidgets/worldgipropertywidget.h 
     src/ui/panels/propertywidgets/worldaapropertywidget.h
+    src/ui/panels/propertywidgets/worldshadowpropertywidget.h
     src/ui/panels/propertywidgets/skypropertywidget.h 
     src/ui/panels/scenenodepropertieswidget.h 
     src/ui/panels/propertywidgets/worldpropertywidget.h 
