@@ -165,6 +165,16 @@ public:
     /// the engine viewport reports it; the legacy viewport has no MSAA (1).
     virtual int sampleCount() const { return 1; }
 
+    /// True when the viewport renders to an offscreen texture rather than to the
+    /// widget's own native window — i.e. the widget area stays blank. Document-only
+    /// stand-in viewports are always offscreen; the engine viewport reports what it
+    /// actually got, which is how --engine-selftest can assert that the on-screen
+    /// path was taken at all without asserting pixels (MACOS_VIEWPORT_SPEC §5.1).
+    virtual bool isOffscreen() const { return true; }
+    /// The viewport's current render-target size, or an empty size when there is
+    /// no render target. Used by the selftest to prove a resize was applied.
+    virtual QSize renderTargetSize() const { return QSize(); }
+
     /// The shadow-map atlas base resolution the renderer is CURRENTLY using —
     /// global, one atlas for every light (VISUAL_PARITY_SPEC item 2). The scene
     /// field (0 = Auto) is a request; this is what came out of it. Only the

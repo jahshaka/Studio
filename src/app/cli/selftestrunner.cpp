@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QColor>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QSize>
 #include <QThread>
 
 #include "bridge/enginehost.h"
@@ -39,13 +40,39 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     clock.start();
     // Resize twice on the way (the layout does this to the viewport in real use):
     // the engine must survive a swapchain rebuild without a stale depth buffer.
+    QSize afterFirstResize, afterSecondResize;
     for (int frame = 0; frame < 40; ++frame) {
         if (frame == 10) window.resize(1100, 760);
         if (frame == 25) window.resize(700, 520);
+        if (frame == 20) afterFirstResize = window.viewport()->renderTargetSize();
+        if (frame == 35) afterSecondResize = window.viewport()->renderTargetSize();
         app.processEvents(QEventLoop::AllEvents, 50);
         QThread::msleep(16);
     }
     app.processEvents();
+
+    // On-screen coverage that does NOT assert pixels (MACOS_VIEWPORT_SPEC §5.1):
+    // the pixel assertion below deliberately goes through a separate OFFSCREEN
+    // view, so without this the selftest would pass just as happily with a blank
+    // widget. Platforms where the on-screen path is a swapchain window must prove
+    // the view is not offscreen and that it survived both resizes with a real size.
+#ifdef Q_OS_MACOS
+    if (window.viewport()->isOffscreen()) {
+        std::fprintf(stderr, "engine-selftest: the editor viewport is OFFSCREEN — the on-screen "
+                             "window backend did not take\n");
+        return 1;
+    }
+    if (afterFirstResize.isEmpty() || afterSecondResize.isEmpty()) {
+        std::fprintf(stderr, "engine-selftest: viewport lost its render target across a resize "
+                             "(%dx%d then %dx%d)\n",
+                     afterFirstResize.width(), afterFirstResize.height(),
+                     afterSecondResize.width(), afterSecondResize.height());
+        return 1;
+    }
+    std::fprintf(stderr, "engine-selftest: on-screen view survived resizes: %dx%d then %dx%d\n",
+                 afterFirstResize.width(), afterFirstResize.height(),
+                 afterSecondResize.width(), afterSecondResize.height());
+#endif
 
     QImage img = window.viewport()->takeScreenshot(256, 256);
     if (img.isNull()) {

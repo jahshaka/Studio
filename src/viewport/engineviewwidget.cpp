@@ -1,11 +1,18 @@
 #include "viewport/engineviewwidget.h"
+#include <QGuiApplication>
 #include <QResizeEvent>
 
 EngineViewWidget::EngineViewWidget(QWidget *parent) : QWidget(parent)
 {
     // The engine draws into this widget's own native window.
     setAttribute(Qt::WA_NativeWindow);
+#ifdef Q_OS_LINUX
+    // Qt documents WA_PaintOnScreen as X11-only, and it is what stops Qt painting
+    // over the engine's xcb window. On cocoa QWidget::paintEngine() is already null
+    // and the engine composites through a CAMetalLayer sublayer, so setting it there
+    // would be misleading noise.
     setAttribute(Qt::WA_PaintOnScreen);
+#endif
     setAttribute(Qt::WA_NoSystemBackground);
     // Tell Qt this widget paints every pixel itself, so it neither erases the
     // background nor composites anything underneath into it.
@@ -22,23 +29,38 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
 {
     if (!engine || mView) return false;
     mEngine = engine;
-    mView = engine->createView(name.toStdString(),
-                               static_cast<jahshaka::engine::NativeWindowHandle>(winId()),
-                               static_cast<unsigned>(width()),
-                               static_cast<unsigned>(height()), background);
+    bool handleIsNative = true;
+#ifdef Q_OS_MACOS
+    // winId() is only an NSView* under the cocoa plugin. The offscreen/minimal
+    // plugins (every --headless run) hand out a synthetic WId, and sending an
+    // Objective-C message to that integer crashes the process — so on anything
+    // but cocoa go straight to the offscreen fallback below.
+    handleIsNative = QGuiApplication::platformName() == QLatin1String("cocoa");
+#endif
+    if (handleIsNative)
+        mView = engine->createView(name.toStdString(),
+                                   static_cast<jahshaka::engine::NativeWindowHandle>(winId()),
+                                   static_cast<unsigned>(width()),
+                                   static_cast<unsigned>(height()), background);
 #ifndef Q_OS_LINUX
-    // No native on-screen window backend on this platform yet (DOCS/HANDOFF.md
-    // §7): render the view offscreen so the editor, selftest and scripting all
-    // still run — the widget area itself stays blank until a real presenter
-    // (macOS: CAMetalLayer + VK_EXT_metal_surface) exists.
+    // Fallback, not the normal path: if the platform has no on-screen backend, or
+    // the handle is not one it can present to (an offscreen QPA plugin hands out no
+    // NSView), render the view offscreen so the editor, selftest and scripting all
+    // still run — the widget area then stays blank.
     if (!mView)
         mView = engine->createOffscreenView(name.toStdString(),
                                             static_cast<unsigned>(width()),
                                             static_cast<unsigned>(height()), background);
 #endif
     if (mView) {
+#ifdef Q_OS_LINUX
         // From here the engine owns this region entirely; Qt updates would fight it.
+        // Only on X11: on cocoa the engine's CAMetalLayer is a sublayer composited
+        // ABOVE the QNSView's own content, so Qt repaints underneath are invisible
+        // rather than a fight — and disabling updates would also freeze any Qt-drawn
+        // child of this widget.
         setUpdatesEnabled(false);
+#endif
         mView->setEnabled(isVisible());
     }
     return mView != nullptr;
