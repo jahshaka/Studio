@@ -210,7 +210,15 @@ int WorldApi::setShadowResolution(int pixels)
             qWarning("world.setShadowResolution: %d allocates roughly %d MB of VRAM for the shadow "
                      "atlas; the editor UI caps at 4096",
                      pixels, int(qRound(4.0 * 3.5 * double(pixels) * double(pixels) / (1024.0 * 1024.0))));
+        // The shadow atlas is 3.5x the resolution in height. 8192 -> 28672 rows,
+        // which Metal hard-aborts on (16384 max texture dimension; NVIDIA's 32768
+        // absorbed it). Cap per platform until the engine exposes its real max
+        // texture size (recorded debt: capability query on the Engine interface).
+#ifdef Q_OS_MACOS
+        scene->shadowResolution = qBound(256, pixels, 4096);
+#else
         scene->shadowResolution = qBound(256, pixels, 8192);
+#endif
     }
     // SceneMirror pushes the document value at the next sync; step a frame so
     // the atlas rebuild lands and the readback below is the applied truth.

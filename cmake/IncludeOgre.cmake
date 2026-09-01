@@ -55,7 +55,12 @@ endforeach()
 # Runtime locations. These are DEFAULTS the host may fall back to; the engine
 # itself takes them at runtime through EngineConfig (see engine/CMakeLists.txt,
 # which exposes them to the host and stages the Hlms templates next to the exe).
-set(OGRE_NEXT_PLUGIN_DIR "${OGRE_NEXT_PREFIX}/lib/OGRE-Next")
+if(EXISTS "${OGRE_NEXT_PREFIX}/lib/OGRE-Next")
+    set(OGRE_NEXT_PLUGIN_DIR "${OGRE_NEXT_PREFIX}/lib/OGRE-Next")
+else()
+    # macOS: the install puts RenderSystem_*.dylib directly in lib/ (no subdir).
+    set(OGRE_NEXT_PLUGIN_DIR "${OGRE_NEXT_PREFIX}/lib")
+endif()
 set(OGRE_NEXT_HLMS_SOURCE_DIR "${OGRE_NEXT_SOURCE}/Samples/Media/Hlms")
 # Where the build stages runtime media next to the executable (engine/ fills it).
 # Set here, at root scope, so engine/ and tests/ both see it.

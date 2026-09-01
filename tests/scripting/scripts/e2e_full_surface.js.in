@@ -77,9 +77,13 @@ var sr = world.setShadowResolution(1024);
 assert(sr === 1024, "setShadowResolution(1024) applied (got " + sr + ")");
 assert(world.get().shadowResolution === 1024, "document stores the shadow-resolution override");
 assert(world.shadowResolution() === 1024, "the renderer reports the override");
-// Out-of-window values clamp rather than throw; the engine's window is 256..8192.
+// Out-of-window values clamp rather than throw; the engine's window is 256 up
+// to a platform cap (8192 on desktop GL/Vulkan hosts, 4096 on Metal — its max
+// texture height divided by the 3.5x atlas would overflow at 8192).
 assert(world.setShadowResolution(100) === 256, "below-range resolution clamps up to 256");
-assert(world.setShadowResolution(99999) === 8192, "above-range resolution clamps down to 8192");
+var shadowCap = world.setShadowResolution(99999);
+assert(shadowCap === 8192 || shadowCap === 4096,
+       "above-range resolution clamps down to the platform cap, got " + shadowCap);
 thrown = false;
 try { world.setShadowResolution(-1); } catch (e) { thrown = true; }
 assert(thrown, "negative resolution refused");

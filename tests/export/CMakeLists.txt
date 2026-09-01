@@ -40,9 +40,13 @@ target_link_libraries(test_embedded_preview PRIVATE Qt6::Widgets)
 if(JAH_XCB_FOUND)
     target_link_libraries(test_embedded_preview PRIVATE PkgConfig::JAH_XCB)
 endif()
-add_test(NAME export.embed COMMAND test_embedded_preview
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(export.embed PROPERTIES LABELS "export")
+# X11-embedding is the feature under test (its main() forces xcb on purpose):
+# the suite is Linux-only by design; other platforms have no XEmbed to test.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(NAME export.embed COMMAND test_embedded_preview
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(export.embed PROPERTIES LABELS "export")
+endif()
 
 # Shared export walkers (ASSET_PIPELINE_SPEC §3.3 phase-5 front half):
 # traversal/skip/classification, scene inventory, mesh buffer readers.

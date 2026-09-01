@@ -631,6 +631,18 @@ add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/app/main.cpp ${SRCS} ${HE
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
+if(APPLE)
+    # The app is a bundle, so applicationDirPath() — where it extracts its app/
+    # content tree on first run — is Contents/MacOS inside the bundle. The
+    # standalone test binaries live in bin/ and resolve applicationDirPath()/app
+    # there. Expose the bundle's tree to them via a symlink (gate-verified:
+    # turns thumbnails/assets/materialpreview engine suites green on macOS).
+    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/app"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/app")
+endif()
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 
 # The executable finds its bundled shared libs beside itself when installed

@@ -43,6 +43,8 @@ bool EngineHost::start(QString &error)
 {
     if (mEngine) return true;
 
+    EngineConfig cfg = resolveConfig();
+#ifdef Q_OS_LINUX
     // Ogre has no Wayland backend: its Vulkan path uses VK_KHR_xcb_surface and needs a
     // real X11 window. main.cpp selects xcb for engine mode; refuse clearly otherwise
     // rather than hand the engine a Wayland handle and crash.
@@ -53,7 +55,6 @@ bool EngineHost::start(QString &error)
         return false;
     }
 
-    EngineConfig cfg = resolveConfig();
     // Hand the engine OUR X connection. Opening a second connection to the same
     // windows causes flicker and lets other windows' content bleed into the viewport.
     if (auto *x11 = qApp->nativeInterface<QNativeInterface::QX11Application>())
@@ -62,6 +63,12 @@ bool EngineHost::start(QString &error)
         error = QStringLiteral("Could not obtain the X11 display connection from Qt.");
         return false;
     }
+#else
+    // No X11 host connection on this platform: the engine runs headless (null
+    // window + offscreen views) until a native window backend exists
+    // (DOCS/HANDOFF.md §7). cfg.display stays 0 by design.
+    cfg.display = 0;
+#endif
 
     std::string err;
     std::unique_ptr<Engine> engine = Engine::create(cfg, err);
