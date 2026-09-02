@@ -183,6 +183,32 @@ int main(int argc, char **argv)
               "S3: segment count == bones - roots in every state");
     }
 
+    // --- S3c: what the 3D bone overlay needs beyond the two endpoints ---
+    // A bone is drawn as an octahedron parent-joint -> child-joint, and a bone
+    // with NO child gets a stub in its OWN axis. Which axis a rig's bones run
+    // along was MEASURED, not assumed: on this fixture and on a Mixamo
+    // character (Ely, 67 bones) the direction to the child is the bone's local
+    // +Y for 64 of 66 bones, and a leaf's own +Y is within 7 degrees of the
+    // direction it came from for 13 of 15 leaves.
+    {
+        model.setTime(0.0f);
+        const auto segs = model.boneSegments();
+        bool ok = segs.size() == 1;
+        if (ok) {
+            const auto &s = segs.first();
+            const QVector3D along = (s.to - s.from).normalized();
+            CHECK(s.toIsLeaf, "S3c: the tip bone is reported as a LEAF (nothing hangs off it)");
+            CHECK(qAbs(s.toAxis.length() - 1.0f) < 1e-3f,
+                  "S3c: the leaf's bone axis comes back normalized");
+            CHECK(QVector3D::dotProduct(s.toAxis, along) > 0.99f,
+                  "S3c: at rest the leaf's own +Y axis IS the bone direction (the rig's bone axis)");
+            std::printf("    leaf axis (%.3f %.3f %.3f)  bone direction (%.3f %.3f %.3f)\n",
+                        s.toAxis.x(), s.toAxis.y(), s.toAxis.z(), along.x(), along.y(), along.z());
+        } else {
+            CHECK(false, "S3c: one segment to inspect");
+        }
+    }
+
     // --- transport ---
     model.stop();
     CHECK(!model.isPlaying() && model.time() == 0.0f, "transport: stop pauses and rewinds");

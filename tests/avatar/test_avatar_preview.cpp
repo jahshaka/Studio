@@ -10,8 +10,24 @@
 //   mesh off / skeleton on   ZERO mesh pixels, > 10 overlay pixels   <- the ask
 //   mesh off / skeleton off  background only
 //
-// Plus S7: the pose reaches the overlay — the bone lines are somewhere else at
+// Plus S7: the pose reaches the overlay — the bones are somewhere else at
 // t = 0.5 than at t = 0.
+//
+// The overlay draws 3D BONES (octahedra parent joint -> child joint, a marker
+// at each joint, a stub past each leaf), not lines, so this suite also pins:
+//   * the counts are re-baselined, in a band, not loosened to "nonzero" —
+//     captured on this fixture at 160x160 on both an NVIDIA GPU and lavapipe,
+//     and verified to FAIL against the old line overlay;
+//   * a bone is a solid tapered SHAPE: a cross-section through the bone body
+//     (away from the joint markers) is 6 px, where lines gave exactly 1;
+//   * the structural counts (bones / leaf stubs / joint markers) for a rig
+//     whose shape the fixture fixes: 1 bone, 1 stub, 2 joints.
+//
+// DEPTH: bones are depth-tested now (the old line overlay had depth test OFF
+// and always drew on top). The fixture's mesh is a FLAT strip in the z = 0
+// plane and the bone octahedron straddles it, so the front half still shows
+// with the mesh on — on a real character the skeleton is inside the mesh and
+// is hidden, which is the accepted behaviour until an X-ray mode exists.
 #include <QApplication>
 #include <QColor>
 #include <cmath>
@@ -46,6 +62,41 @@ static int count(const Image &img, Pred pred)
     return n;
 }
 
+// The widest unbroken horizontal run of overlay pixels — how THICK the drawn
+// skeleton is. A 1-pixel line overlay can only ever reach 1 or 2 (2 where two
+// lines cross); a bone octahedron is as wide as its girth.
+static int widestOverlayRun(const Image &img)
+{
+    int widest = 0;
+    for (unsigned y = 0; y < img.height; ++y) {
+        int run = 0;
+        for (unsigned x = 0; x < img.width; ++x) {
+            if (isOverlay(img.at(x, y))) { ++run; if (run > widest) widest = run; }
+            else run = 0;
+        }
+    }
+    return widest;
+}
+
+// The widest overlay run in the row `f` of the way down the overlay's own
+// vertical extent — a cross-section of the drawn skeleton AWAY from the joint
+// markers, i.e. the thickness of the bone body itself.
+static int runAtFraction(const Image &img, float f)
+{
+    int top = -1, bottom = -1;
+    for (unsigned y = 0; y < img.height; ++y)
+        for (unsigned x = 0; x < img.width; ++x)
+            if (isOverlay(img.at(x, y))) { if (top < 0) top = int(y); bottom = int(y); break; }
+    if (top < 0) return 0;
+    const unsigned row = unsigned(top + int(f * float(bottom - top)));
+    int run = 0, widest = 0;
+    for (unsigned x = 0; x < img.width; ++x) {
+        if (isOverlay(img.at(x, row))) { ++run; if (run > widest) widest = run; }
+        else run = 0;
+    }
+    return widest;
+}
+
 // Vertical centroid of the overlay pixels (S7's assertion surface).
 static float overlayCentroidY(const Image &img)
 {
@@ -70,8 +121,11 @@ static Image render(AvatarPreviewScene &scene, Engine &engine, View *view, int f
 static void show(const char *tag, const Image &img)
 {
     const Colour c = img.at(img.width / 2, img.height / 2);
-    std::printf("    %-38s centre %3.0f %3.0f %3.0f   mesh px %4d   overlay px %4d\n",
-                tag, c.r * 255, c.g * 255, c.b * 255, count(img, isMesh), count(img, isOverlay));
+    std::printf("    %-38s centre %3.0f %3.0f %3.0f   mesh px %4d   overlay px %4d   widest run %2d"
+                "   cross-section .35/.5/.65 %2d %2d %2d\n",
+                tag, c.r * 255, c.g * 255, c.b * 255, count(img, isMesh), count(img, isOverlay),
+                widestOverlayRun(img), runAtFraction(img, 0.35f), runAtFraction(img, 0.5f),
+                runAtFraction(img, 0.65f));
 }
 
 int main(int argc, char **argv)
@@ -118,8 +172,13 @@ int main(int argc, char **argv)
     show("S6 mesh on / skeleton on", img);
     const int bothMesh = count(img, isMesh), bothOverlay = count(img, isOverlay);
     CHECK(bothMesh > 10, "S6: the mesh is still there with the skeleton on");
-    CHECK(bothOverlay > 10, "S6: the skeleton draws on TOP of the mesh (depth test off)");
-    CHECK(scene.overlaySegments() == 1, "S6: one segment for a two-bone rig (bones - roots)");
+    // Depth-tested bones: the fixture's mesh is a flat strip in z = 0 and the
+    // bone octahedron straddles it, so its front half survives. What is NOT
+    // claimed any more is that the skeleton draws on top of everything.
+    CHECK(bothOverlay > 10, "S6: the part of the skeleton in FRONT of the mesh still draws");
+    CHECK(scene.overlaySegments() == 1, "S6: one bone for a two-bone rig (bones - roots)");
+    CHECK(scene.overlayStubs() == 1, "S6: the tip bone is a leaf and gets one stub");
+    CHECK(scene.overlayJoints() == 2, "S6: one joint marker per distinct joint");
 
     // ---- S5: THE owner's case — mesh off, skeleton on ----
     model.setMeshVisible(false);
@@ -128,6 +187,25 @@ int main(int argc, char **argv)
     CHECK(count(img, isMesh) == 0, "S5: ZERO mesh pixels with the mesh hidden");
     const int skeletonOnly = count(img, isOverlay);
     CHECK(skeletonOnly > 10, "S5: the bone overlay is on screen by itself");
+    // Re-baselined for 3D bones by CAPTURE, not by loosening: 371 px at
+    // 160x160 with this fixture, the SAME number on an RTX 4080 SUPER and on
+    // lavapipe. The line overlay this replaced drew 178 here, and it FAILS this
+    // band (measured, by running this suite against the old overlay) — so the
+    // band is a real discriminator, not a rubber stamp. +-20% leaves room for a
+    // proportion tweak or a driver's edge rules.
+    CHECK(skeletonOnly > 297 && skeletonOnly < 445,
+          "S5: the skeleton-only pixel count is in the 3D-bone band (297 < n < 445)");
+    // Shape, not just quantity: a cross-section taken 65% of the way down the
+    // skeleton — between the joint markers, through the bone BODY — is 6 px of
+    // solid bone here and was exactly 1 px with the line overlay (0.35/0.5/0.65
+    // measured 2/4/6 for bones against 1/1/1 for lines). The widest run overall
+    // is NOT used for this: the old overlay's cube joint markers were as wide
+    // as a bone is.
+    const int bodyWidth = runAtFraction(img, 0.65f);
+    CHECK(bodyWidth >= 3 && bodyWidth <= 20,
+          "S5: a bone is a SOLID tapered shape (bone-body cross-section 3-20 px; lines gave 1)");
+    CHECK(bothOverlay <= skeletonOnly,
+          "S5/S6: with the mesh on, the mesh can only ever HIDE overlay pixels, never add any");
     const float centroid0 = overlayCentroidY(img);
 
     // ---- S7: the pose reaches the overlay ----

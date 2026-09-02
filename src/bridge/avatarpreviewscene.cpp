@@ -91,6 +91,16 @@ int AvatarPreviewScene::overlaySegments() const
     return mOverlay ? mOverlay->visibleSegments() : 0;
 }
 
+int AvatarPreviewScene::overlayStubs() const
+{
+    return mOverlay ? mOverlay->visibleStubs() : 0;
+}
+
+int AvatarPreviewScene::overlayJoints() const
+{
+    return mOverlay ? mOverlay->visibleJoints() : 0;
+}
+
 void AvatarPreviewScene::frameSubject()
 {
     if (!mModel) return;
@@ -219,7 +229,7 @@ void AvatarPreviewScene::step(float dt, int width, int height)
         QVector<BoneOverlaySegment> segments;
         if (mModel->skeletonVisible()) {
             for (const auto &s : mModel->boneSegments())
-                segments.append(BoneOverlaySegment{ s.from, s.to });
+                segments.append(BoneOverlaySegment{ s.from, s.to, s.toAxis, s.toIsLeaf });
         }
         mOverlay->update(segments, mModel->skeletonVisible());
     }

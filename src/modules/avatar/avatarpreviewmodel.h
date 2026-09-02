@@ -91,6 +91,13 @@ struct BoneSegment
     QString   toName;        ///< the child bone
     QVector3D from;
     QVector3D to;
+    /// World-space bone axis of the CHILD bone — its own local +Y, which is
+    /// the axis rig bones run along (measured on the synthetic fixture and on a
+    /// Mixamo character: 64 of 66 bones point at their child along local +Y).
+    /// The overlay draws a leaf bone's stub along this, not along `to - from`.
+    QVector3D toAxis;
+    /// The child bone has no bone children of its own — the end of a chain.
+    bool      toIsLeaf = false;
 };
 
 class AvatarPreviewModel

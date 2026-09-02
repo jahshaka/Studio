@@ -652,8 +652,17 @@ QVector<BoneInfo> AvatarPreviewModel::bones() const
 QVector<BoneSegment> AvatarPreviewModel::boneSegments() const
 {
     QHash<QString, QVector3D> positions;
-    for (const auto &bone : mBoneNodes)
-        if (bone.node) positions.insert(bone.name, bone.node->getGlobalTransform().column(3).toVector3D());
+    QHash<QString, QVector3D> axes;          // each bone's own local +Y, in world space
+    QSet<QString> hasChild;
+    for (const auto &bone : mBoneNodes) {
+        if (!bone.node) continue;
+        const QMatrix4x4 global = bone.node->getGlobalTransform();
+        positions.insert(bone.name, global.column(3).toVector3D());
+        QVector3D axis = global.column(1).toVector3D();      // scale is carried here too
+        if (axis.lengthSquared() > 1e-12f) axis.normalize();
+        axes.insert(bone.name, axis);
+        if (!bone.parent.isEmpty()) hasChild.insert(bone.parent);
+    }
 
     QVector<BoneSegment> out;
     for (const auto &bone : mBoneNodes) {
@@ -665,6 +674,8 @@ QVector<BoneSegment> AvatarPreviewModel::boneSegments() const
         seg.toName = bone.name;
         seg.from = parentPos.value();
         seg.to = positions.value(bone.name);
+        seg.toAxis = axes.value(bone.name);
+        seg.toIsLeaf = !hasChild.contains(bone.name);
         out.append(seg);
     }
     return out;

@@ -74,7 +74,11 @@ public:
     /// has ever been shown: the shot view becomes the first View if needed.
     QImage renderImage(int width, int height);
 
+    /// What the bone overlay drew last frame — the structural half of the
+    /// pixel suite (bones, leaf stubs, joint markers).
     int overlaySegments() const;
+    int overlayStubs() const;
+    int overlayJoints() const;
 
 private:
     void updateCameraRot();

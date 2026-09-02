@@ -1,9 +1,12 @@
 #include "viewport/boneoverlay.h"
 
+#include <QHash>
 #include <QMatrix4x4>
 #include <QQuaternion>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "irisgl/mirror/scenemirror.h"
 
@@ -11,30 +14,92 @@ using namespace jahshaka::engine;
 
 namespace {
 
-/// A unit cube centred on the origin — the joint marker. Small, but a solid
-/// pixel target where a 1-px line is not (the light-wire suite counts > 10
-/// coloured pixels at 96x96; a thin humanoid rig has fewer than a ring does).
-MeshData unitCube()
+// ---- the shape (see the header) -------------------------------------------
+// A bone octahedron is authored as the UNIT bone: base apex at the parent joint
+// (0,0,0), point at the child joint (0,1,0), a square ring of radius 0.5 at
+// kRingAt along the way. The per-bone transform scales it to
+// (girth, length, girth), so the authored radius 0.5 means "girth = the full
+// width of the bone".
+constexpr float kRingAt = 0.15f;
+
+// Girth as a fraction of the bone's own length, clamped into a band around the
+// rig's LIMB scale so one rule works for a 2-unit synthetic rig and a 179-unit
+// Mixamo character alike: long bones do not swallow the mesh, finger bones stay
+// thick enough to be a pixel target.
+//
+// The scale reference is the 75th PERCENTILE bone length, not the median: half
+// of a Mixamo humanoid's bones are hand bones (Ely: 30 of 66 bones are fingers,
+// 1.5-4 units, against 7-22 unit limbs), so a median-based ceiling clamps every
+// limb bone down to finger width and the skeleton renders as thin lines again.
+constexpr float kGirthRatio   = 0.14f;
+constexpr float kGirthMinFrac = 0.05f;
+constexpr float kGirthMaxFrac = 0.22f;
+
+// A leaf bone's stub: a short bone past the last joint, in the leaf's own axis.
+// Deliberately short — a Mixamo rig already ends every chain in an `_End` bone,
+// so the stub is a tip marker, not another limb.
+constexpr float kStubRatio   = 0.25f;   ///< of the bone that arrived at the leaf
+constexpr float kStubMaxFrac = 0.30f;   ///< ... clamped against the rig's limb scale
+
+/// Appends one triangle with a flat normal taken from the winding — the same
+/// convention the rest of the tree uses (outward normal = cross(b-a, c-a)).
+void addTriangle(MeshData &m, const QVector3D &a, const QVector3D &b, const QVector3D &c)
+{
+    QVector3D n = QVector3D::crossProduct(b - a, c - a);
+    if (n.lengthSquared() > 1e-12f) n.normalize();
+    const QVector3D v[3] = { a, b, c };
+    const unsigned base = unsigned(m.positions.size() / 3);
+    for (const QVector3D &p : v) {
+        m.positions.insert(m.positions.end(), { p.x(), p.y(), p.z() });
+        m.normals.insert(m.normals.end(), { n.x(), n.y(), n.z() });
+        m.uvs.insert(m.uvs.end(), { 0.0f, 0.0f });
+    }
+    m.indices.insert(m.indices.end(), { base, base + 1u, base + 2u });
+}
+
+/// A double pyramid about the +Y axis: apex at `baseY`, a square ring of radius
+/// `radius` at `ringY`, apex at `tipY`. Eight triangles, flat-shaded (the
+/// material is unlit, so the normals are documentation more than shading).
+MeshData octahedron(float baseY, float ringY, float tipY, float radius)
 {
     MeshData m;
-    const float h = 0.5f;
-    const float p[8][3] = { { -h, -h, -h }, { h, -h, -h }, { h, h, -h }, { -h, h, -h },
-                            { -h, -h,  h }, { h, -h,  h }, { h, h,  h }, { -h, h,  h } };
-    const int faces[6][4] = { { 0, 3, 2, 1 }, { 4, 5, 6, 7 }, { 0, 1, 5, 4 },
-                              { 3, 7, 6, 2 }, { 0, 4, 7, 3 }, { 1, 2, 6, 5 } };
-    const float n[6][3] = { { 0, 0, -1 }, { 0, 0, 1 }, { 0, -1, 0 },
-                            { 0, 1, 0 }, { -1, 0, 0 }, { 1, 0, 0 } };
-    for (int f = 0; f < 6; ++f) {
-        const unsigned base = unsigned(m.positions.size() / 3);
-        for (int v = 0; v < 4; ++v) {
-            const int idx = faces[f][v];
-            m.positions.insert(m.positions.end(), { p[idx][0], p[idx][1], p[idx][2] });
-            m.normals.insert(m.normals.end(), { n[f][0], n[f][1], n[f][2] });
-            m.uvs.insert(m.uvs.end(), { 0.0f, 0.0f });
-        }
-        m.indices.insert(m.indices.end(), { base, base + 1u, base + 2u, base, base + 2u, base + 3u });
+    const QVector3D base(0, baseY, 0), tip(0, tipY, 0);
+    const QVector3D ring[4] = { QVector3D(radius, ringY, 0), QVector3D(0, ringY, radius),
+                                QVector3D(-radius, ringY, 0), QVector3D(0, ringY, -radius) };
+    for (int i = 0; i < 4; ++i) {
+        const QVector3D &r0 = ring[i], &r1 = ring[(i + 1) % 4];
+        addTriangle(m, base, r0, r1);     // the wide end
+        addTriangle(m, tip, r1, r0);      // the point
     }
     return m;
+}
+
+/// The rig's LIMB scale: the 75th-percentile bone length. Every derived size
+/// (girth band, marker, stub cap) is expressed in it — see kGirthRatio for why
+/// it is not the median.
+float limbScale(const QVector<BoneOverlaySegment> &segments)
+{
+    std::vector<float> lengths;
+    lengths.reserve(size_t(segments.size()));
+    for (const auto &s : segments) {
+        const float len = (s.to - s.from).length();
+        if (len > 1e-6f) lengths.push_back(len);
+    }
+    if (lengths.empty()) return 0.0f;
+    const size_t k = (lengths.size() * 3) / 4 < lengths.size() ? (lengths.size() * 3) / 4
+                                                               : lengths.size() - 1;
+    std::nth_element(lengths.begin(), lengths.begin() + k, lengths.end());
+    return lengths[k];
+}
+
+/// translate(from) * rotate(+Y -> dir) * scale(girth, length, girth).
+QMatrix4x4 boneTransform(const QVector3D &from, const QVector3D &dir, float length, float girth)
+{
+    QMatrix4x4 xf;
+    xf.translate(from);
+    if (length > 1e-6f) xf.rotate(QQuaternion::rotationTo(QVector3D(0, 1, 0), dir));
+    xf.scale(girth, length > 1e-6f ? length : 1e-6f, girth);
+    return xf;
 }
 
 } // namespace
@@ -57,97 +122,139 @@ void BoneOverlay::setColour(const QColor &colour)
 bool BoneOverlay::ensureAssets()
 {
     if (!mTarget) return false;
-    if (!mLineMesh) {
-        // The one authored segment: +Y, unit length. Every bone is this mesh
-        // under a translate * align * scale(1, length, 1) transform.
-        mLineMesh = mTarget->createLineMesh({ Vec3(0, 0, 0), Vec3(0, 1, 0) }, false);
-    }
-    if (!mMarkerMesh) mMarkerMesh = mTarget->createMesh(unitCube());
+    // The two authored unit meshes. Everything else is a transform.
+    if (!mBoneMesh) mBoneMesh = mTarget->createMesh(octahedron(0.0f, kRingAt, 1.0f, 0.5f));
+    if (!mMarkerMesh) mMarkerMesh = mTarget->createMesh(octahedron(-0.5f, 0.0f, 0.5f, 0.5f));
     if (!mMaterial) {
-        // depthTest = false: the gizmo/wire convention — the skeleton reads
-        // through the skinned mesh when both toggles are on (§0.7).
+        // Depth-tested: solid bones have to occlude each other, and the
+        // skeleton belongs inside the character when the mesh is on (header).
         mMaterial = mTarget->createUnlitMaterial(
-            Colour(float(mColour.redF()), float(mColour.greenF()), float(mColour.blueF()), 1.0f), false);
+            Colour(float(mColour.redF()), float(mColour.greenF()), float(mColour.blueF()), 1.0f), true);
     }
-    return mLineMesh && mMaterial;
+    return mBoneMesh && mMaterial;
+}
+
+NodeId BoneOverlay::slot(QVector<NodeId> &pool, int index, MeshId mesh)
+{
+    while (pool.size() <= index) pool.append(NodeId(0));
+    if (!pool[index]) {
+        const NodeId node = mTarget->createNode();
+        if (node) mTarget->attachMesh(node, mesh, mMaterial);
+        pool[index] = node;
+    }
+    return pool[index];
+}
+
+void BoneOverlay::hideFrom(Scene *scene, const QVector<NodeId> &pool, int first)
+{
+    for (int i = first; i < pool.size(); ++i)
+        if (pool[i]) scene->setNodeVisible(pool[i], false);
 }
 
 void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visible)
 {
-    mVisibleSegments = 0;
+    mVisibleSegments = mVisibleStubs = mVisibleJoints = 0;
     if (!mTarget) return;
-    const int wanted = visible ? segments.size() : 0;
-    if (wanted > 0 && !ensureAssets()) return;
-
-    // Marker size from the MEDIAN bone length, so one scale works for a
-    // 2-unit test rig and a 179-unit Mixamo character alike (R0.7).
-    float marker = 0.0f;
-    if (wanted > 0 && mMarkerScale > 0.0f && mMarkerMesh) {
-        std::vector<float> lengths;
-        lengths.reserve(size_t(segments.size()));
-        for (const auto &s : segments) lengths.push_back((s.to - s.from).length());
-        std::nth_element(lengths.begin(), lengths.begin() + lengths.size() / 2, lengths.end());
-        marker = lengths[lengths.size() / 2] * mMarkerScale;
+    const bool draw = visible && !segments.isEmpty();
+    if (draw && !ensureAssets()) return;
+    if (!draw) {
+        hideFrom(mTarget, mBoneNodes, 0);
+        hideFrom(mTarget, mJointNodes, 0);
+        return;
     }
 
-    for (int i = 0; i < wanted; ++i) {
-        if (i >= mSlots.size()) mSlots.append(Slot());
-        Slot &slot = mSlots[i];
-        if (!slot.line) {
-            slot.line = mTarget->createNode();
-            if (slot.line) mTarget->attachMesh(slot.line, mLineMesh, mMaterial);
+    const float scale = limbScale(segments);
+    const float girthMin = scale * kGirthMinFrac;
+    const float girthMax = scale * kGirthMaxFrac;
+    const float stubMax  = scale * kStubMaxFrac;
+
+    // Joints are deduplicated by POSITION: a parent with three children is the
+    // `from` of three segments and must still get exactly one marker. The cell
+    // is a thousandth of the rig's limb scale, far below anything a rig resolves.
+    const float cell = std::max(scale * 1e-3f, 1e-6f);
+    QSet<qint64> seenJoints;
+    QVector<QVector3D> joints;
+    auto addJoint = [&](const QVector3D &p) {
+        const qint64 key = (qint64(std::llround(double(p.x() / cell))) * 73856093)
+                         ^ (qint64(std::llround(double(p.y() / cell))) * 19349663)
+                         ^ (qint64(std::llround(double(p.z() / cell))) * 83492791);
+        if (seenJoints.contains(key)) return;
+        seenJoints.insert(key);
+        joints.append(p);
+    };
+
+    int bone = 0;
+    for (const auto &seg : segments) {
+        const QVector3D delta = seg.to - seg.from;
+        const float len = delta.length();
+        const QVector3D dir = len > 1e-6f ? delta / len : QVector3D(0, 1, 0);
+        const float girth = qBound(girthMin, len * kGirthRatio, girthMax);
+
+        if (const NodeId node = slot(mBoneNodes, bone, mBoneMesh)) {
+            SceneMirror::pushTransform(mTarget, node, boneTransform(seg.from, dir, len, girth));
+            mTarget->setNodeVisible(node, true);
+            ++bone;
+            ++mVisibleSegments;
         }
-        if (!slot.line) continue;
+        addJoint(seg.from);
+        addJoint(seg.to);
+    }
 
-        const QVector3D from = segments[i].from;
-        const QVector3D dir = segments[i].to - from;
-        const float len = dir.length();
-        QMatrix4x4 xf;
-        xf.translate(from);
-        if (len > 1e-6f)
-            xf.rotate(QQuaternion::rotationTo(QVector3D(0, 1, 0), dir / len));
-        xf.scale(1.0f, len > 1e-6f ? len : 1e-6f, 1.0f);
-        SceneMirror::pushTransform(mTarget, slot.line, xf);
-        mTarget->setNodeVisible(slot.line, true);
-
-        if (marker > 0.0f) {
-            if (!slot.marker) {
-                slot.marker = mTarget->createNode();
-                if (slot.marker) mTarget->attachMesh(slot.marker, mMarkerMesh, mMaterial);
-            }
-            if (slot.marker) {
-                QMatrix4x4 m;
-                m.translate(segments[i].to);
-                m.scale(marker, marker, marker);
-                SceneMirror::pushTransform(mTarget, slot.marker, m);
-                mTarget->setNodeVisible(slot.marker, true);
-            }
-        } else if (slot.marker) {
-            mTarget->setNodeVisible(slot.marker, false);
+    // Leaf stubs, drawn in the LEAF's own bone axis (measured: Mixamo bones run
+    // along local +Y; the incoming direction is a decent but not exact stand-in,
+    // so it is only the fallback).
+    for (const auto &seg : segments) {
+        if (!seg.tipIsLeaf) continue;
+        const QVector3D delta = seg.to - seg.from;
+        const float len = delta.length();
+        QVector3D dir = seg.tipAxis;
+        if (dir.lengthSquared() > 1e-12f) dir.normalize();
+        else if (len > 1e-6f) dir = delta / len;
+        else continue;
+        const float stub = qMin(len * kStubRatio, stubMax);
+        if (stub <= 1e-6f) continue;
+        const float girth = qBound(girthMin, stub * kGirthRatio, girthMax);
+        if (const NodeId node = slot(mBoneNodes, bone, mBoneMesh)) {
+            SceneMirror::pushTransform(mTarget, node, boneTransform(seg.to, dir, stub, girth));
+            mTarget->setNodeVisible(node, true);
+            ++bone;
+            ++mVisibleStubs;
         }
-
-        slot.shown = true;
-        ++mVisibleSegments;
     }
+    hideFrom(mTarget, mBoneNodes, bone);
 
-    for (int i = wanted; i < mSlots.size(); ++i) {
-        if (!mSlots[i].shown) continue;
-        if (mSlots[i].line) mTarget->setNodeVisible(mSlots[i].line, false);
-        if (mSlots[i].marker) mTarget->setNodeVisible(mSlots[i].marker, false);
-        mSlots[i].shown = false;
+    const float marker = mMarkerScale > 0.0f && mMarkerMesh ? scale * mMarkerScale : 0.0f;
+    int drawn = 0;
+    if (marker > 0.0f) {
+        for (const QVector3D &joint : joints) {
+            const NodeId node = slot(mJointNodes, drawn, mMarkerMesh);
+            if (!node) continue;
+            QMatrix4x4 m;
+            m.translate(joint);
+            m.scale(marker, marker, marker);
+            SceneMirror::pushTransform(mTarget, node, m);
+            mTarget->setNodeVisible(node, true);
+            ++drawn;
+        }
     }
+    mVisibleJoints = drawn;
+    hideFrom(mTarget, mJointNodes, drawn);
 }
 
 void BoneOverlay::clear()
 {
-    if (!mTarget) { mSlots.clear(); mVisibleSegments = 0; return; }
-    for (Slot &s : mSlots) {
-        if (s.line) mTarget->removeNode(s.line);
-        if (s.marker) mTarget->removeNode(s.marker);
+    if (!mTarget) {
+        mBoneNodes.clear();
+        mJointNodes.clear();
+        mVisibleSegments = mVisibleStubs = mVisibleJoints = 0;
+        return;
     }
-    mSlots.clear();
-    if (mLineMesh) { mTarget->destroyMesh(mLineMesh); mLineMesh = 0; }
+    for (NodeId n : mBoneNodes) if (n) mTarget->removeNode(n);
+    for (NodeId n : mJointNodes) if (n) mTarget->removeNode(n);
+    mBoneNodes.clear();
+    mJointNodes.clear();
+    if (mBoneMesh) { mTarget->destroyMesh(mBoneMesh); mBoneMesh = 0; }
     if (mMarkerMesh) { mTarget->destroyMesh(mMarkerMesh); mMarkerMesh = 0; }
     if (mMaterial) { mTarget->destroyMaterial(mMaterial); mMaterial = 0; }
-    mVisibleSegments = 0;
+    mVisibleSegments = mVisibleStubs = mVisibleJoints = 0;
 }
