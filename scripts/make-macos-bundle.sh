@@ -267,8 +267,7 @@ if [ "$THIN_ARM64" = "1" ]; then
         if lipo -info "$f" 2>/dev/null | grep -q 'are: .*x86_64'; then
             tmp="$f.thin.$$"
             if lipo -thin arm64 "$f" -output "$tmp" 2>/dev/null; then
-                # Preserve mode; replace in place.
-                chmod --reference="$f" "$tmp" 2>/dev/null || chmod "$(stat -f '%Lp' "$f")" "$tmp"
+                chmod "$(stat -f '%Lp' "$f")" "$tmp"   # preserve mode; replace in place
                 mv -f "$tmp" "$f"
                 thinned=$((thinned+1))
             else

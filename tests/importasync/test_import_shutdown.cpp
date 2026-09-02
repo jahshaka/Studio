@@ -29,6 +29,7 @@
 #include <QNetworkRequest>
 #include <QProcess>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTcpServer>
 #include <QThread>
 #include <cstdio>
@@ -84,16 +85,40 @@ struct McpClient
     }
 };
 
-/// The app's settings live beside the binary in QT_DEBUG builds. Merge (never
-/// overwrite) the two keys the close path reads, so no modal donate dialog
-/// blocks the scripted quit and autosave keeps the close prompt-free.
+/// Merge (never overwrite) the two keys the close path reads, so no modal
+/// donate dialog blocks the scripted quit and autosave keeps the close
+/// prompt-free — in BOTH settings locations. SettingsManager reads
+/// jahsettings.ini from
+// applicationDirPath() under QT_DEBUG and from AppDataLocation otherwise
+// (src/data/settingsmanager.h:44-57), so seeding only the binary's directory
+// silently stopped working the first time this suite met a RelWithDebInfo
+// build: ddialog_seen stayed false, MainWindow::closeEvent ran
+// DonateDialog::exec(), and the modal nested event loop swallowed app.quit()
+// until the exit budget expired. Both cases of this test failed, for a reason
+// that had nothing to do with import shutdown.
 static void seedSettings()
 {
-    const QString ini = QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).dir().filePath("jahsettings.ini");
-    QSettings settings(ini, QSettings::IniFormat);
-    settings.setValue("ddialog_seen", true);
-    settings.setValue("auto_save", true);
-    settings.sync();
+    QStringList inis;
+    inis << QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).dir().filePath("jahsettings.ini");
+
+#ifndef QT_DEBUG
+    // Evaluate AppDataLocation exactly as the app does — under ITS application
+    // name, not this test binary's. Only in non-Debug builds, so a Debug tree
+    // does not gain a stray settings file in the developer's data directory.
+    const QString testName = QCoreApplication::applicationName();
+    QCoreApplication::setApplicationName(QStringLiteral("Jahshaka"));
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QCoreApplication::setApplicationName(testName);
+    if (!appData.isEmpty() && QDir().mkpath(appData))
+        inis << QDir(appData).filePath("jahsettings.ini");
+#endif
+
+    for (const QString &ini : inis) {
+        QSettings settings(ini, QSettings::IniFormat);
+        settings.setValue("ddialog_seen", true);
+        settings.setValue("auto_save", true);
+        settings.sync();
+    }
 }
 
 static bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut)

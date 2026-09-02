@@ -35,11 +35,9 @@ else()
 endif()
 endforeach()
 
-#change path base on ide. current pathe is xcode
-if (APPLE)
-    add_custom_command(
-        TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${DestDir}/downloader.app
-            ${DestDir}/${APP_OUTPUT_NAME}.app/Contents/MacOS/downloader.app)
-endif()
+# The downloader used to be copied into Contents/MacOS/downloader.app. It was
+# dead there: src/ui/dialogs/softwareupdatedialog.cpp:31 launches it from
+# QDir::currentPath(), not from the bundle, and the update check itself is
+# commented out in src/app/main.cpp. What it did do was add a nested application
+# bundle that has to be signed, deployed and shipped. The downloader target is
+# still built into bin/ — it is simply no longer embedded in the app.

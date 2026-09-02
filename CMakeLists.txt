@@ -26,12 +26,13 @@ set(APP_OUTPUT_NAME "Jahshaka")
 # expand to empty strings and codesign falls back to Jahshaka-<hash> with
 # "Info.plist=not bound". The packaging script rewrites the plist wholesale,
 # but the built bundle should be correct on its own.
+set(JAHSHAKA_VERSION "0.9.0")
 set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.jahshaka.studio")
 set(MACOSX_BUNDLE_BUNDLE_NAME "Jahshaka")
 set(MACOSX_BUNDLE_EXECUTABLE_NAME "${APP_OUTPUT_NAME}")
-set(MACOSX_BUNDLE_BUNDLE_VERSION "0.9.0")
-set(MACOSX_BUNDLE_SHORT_VERSION_STRING "0.9.0")
-set(MACOSX_BUNDLE_LONG_VERSION_STRING "0.9.0")
+set(MACOSX_BUNDLE_BUNDLE_VERSION "${JAHSHAKA_VERSION}")
+set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${JAHSHAKA_VERSION}")
+set(MACOSX_BUNDLE_LONG_VERSION_STRING "${JAHSHAKA_VERSION}")
 set(MACOSX_BUNDLE_INFO_STRING "Jahshaka Studio")
 set(MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2016-2026 EXEDOS LLC")
 
@@ -721,6 +722,7 @@ endif(USE_BREAKPAD)
 # target; the app is an executable, so PRIVATE is what the plain form already
 # meant in practice.
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LIBS} assimp)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_VERSION="${JAHSHAKA_VERSION}")
 if(JAHSHAKA_ENGINE_VIEWPORT)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_ENGINE_VIEWPORT_DEFAULT=1)
 else()

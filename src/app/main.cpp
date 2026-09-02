@@ -78,6 +78,23 @@ int main(int argc, char *argv[])
     const CliOptions cli = CliOptions::parse(argc, argv);
     cli.applyPlatformPolicy();
 
+    // Pin the application identity instead of letting Qt infer it from the
+    // executable's file name — that inference is what a renamed or bundled
+    // binary silently changes, and QStandardPaths::AppDataLocation (the library
+    // DB, the asset store, the settings file in non-Debug builds) is derived
+    // from it. "Jahshaka" is exactly what the inference already produced, so
+    // this pins today's location rather than moving it.
+    //
+    // setOrganizationName is deliberately NOT called: QStandardPaths appends the
+    // organization ABOVE the application name on every platform, so setting it
+    // would relocate AppDataLocation for every existing user, and no QSettings
+    // in this tree uses the default constructor anyway (they all take an
+    // explicit path — src/data/settingsmanager.h:62).
+    QCoreApplication::setApplicationName(QStringLiteral("Jahshaka"));
+#ifdef JAHSHAKA_VERSION
+    QCoreApplication::setApplicationVersion(QStringLiteral(JAHSHAKA_VERSION));
+#endif
+
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
