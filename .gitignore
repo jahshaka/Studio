@@ -1,8 +1,13 @@
 # out-of-source build directories
 build-linux/
+build-macos/
+build-macos-rel/
 build-mcp/
 build-media/
 build/
+
+# macOS packaging output (scripts/make-macos-bundle.sh)
+dist/
 
 # local tooling
 compile_commands.json

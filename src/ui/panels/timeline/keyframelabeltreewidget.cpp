@@ -274,8 +274,13 @@ KeyFrameData KeyFrameLabelTreeWidget::getPropertyKeyFrameData(QString propName)
         }
     }
 
-    // shouldnt be here
+    // shouldnt be here. Q_ASSERT compiles to qt_noop() once QT_NO_DEBUG is on,
+    // so without this return every non-Debug build fell off the end of a
+    // value-returning function — undefined behaviour, and a hard
+    // -Werror=return-type failure the moment a Release/RelWithDebInfo build was
+    // first attempted (macOS bundle work, 2026-09-02).
     Q_ASSERT(false);
+    return KeyFrameData();
 }
 
 void KeyFrameLabelTreeWidget::setPropertyKeyFrameData(QString propName, KeyFrameData keyFrameData)

@@ -1,6 +1,15 @@
 # =====================================================
-# Deploy target for Windows and Linux
+# Deploy target for Windows, Linux and macOS
 # =====================================================
+#
+# macOS is deliberately a no-op here for EVERY build type. CMake counts APPLE
+# as UNIX, so before MACOS_BUNDLE_SPEC §1.5 any non-Debug macOS build ran
+# deploy/data/linux/copy_linux_deps.sh (patchelf/ldd on Mach-O) and copied
+# .dylibs flat into bin/ beside the .app, which is not where a bundle looks.
+# Deployment on macOS is scripts/make-macos-bundle.sh's job: it runs
+# macdeployqt on a clean skeleton, adds the Vulkan payload and signs. Keeping
+# the build tree undeployed is the point — the packaging script must never
+# inherit a half-deployed bundle.
 
 set(DEPLOY_STAMP "${CMAKE_BINARY_DIR}/deploy.stamp")
 
@@ -20,6 +29,15 @@ if (WIN32)
         COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"
         DEPENDS ${CMAKE_PROJECT_NAME}
         COMMENT "[Deploy] Running windeployqt..."
+    )
+
+elseif(APPLE)
+    # No-op for EVERY build type — see the note at the top of this file.
+    add_custom_command(
+        OUTPUT "${DEPLOY_STAMP}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"
+        DEPENDS ${CMAKE_PROJECT_NAME}
+        COMMENT "[Deploy] macOS: nothing to do here (scripts/make-macos-bundle.sh)"
     )
 
 elseif(UNIX)

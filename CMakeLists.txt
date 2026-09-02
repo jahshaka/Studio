@@ -5,9 +5,35 @@ foreach(p CMP0071) # 3.10: Let AUTOMOC and AUTOUIC process GENERATED files
         cmake_policy(SET ${p} NEW)
     endif()
 endforeach()
+
+# macOS deployment floor. MUST be set before project() — CMake stamps it into
+# every Mach-O's LC_BUILD_VERSION at first compiler test. Left unset, the
+# toolchain uses the *SDK's* version (minos 26.0 on an Xcode 17 box), and the
+# redistributable bundle then refuses to launch on anything older, for no
+# reason of ours. 13.0 is the Qt 6.11.2 kit's own floor (MoltenVK ships 12.0),
+# so it is the lowest we can honestly claim; irisgl/scripts/build-ogre.sh
+# passes the same value to Ogre-Next. Non-APPLE builds never see this.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "macOS deployment target")
+endif()
+
 project(Jahshaka)
 
 set(APP_OUTPUT_NAME "Jahshaka")
+
+# Bundle identity (MACOS_BUNDLE_SPEC §1.8): CMake's MacOSXBundleInfo.plist.in
+# template fills CFBundleIdentifier/Name/Version from these. Left unset they
+# expand to empty strings and codesign falls back to Jahshaka-<hash> with
+# "Info.plist=not bound". The packaging script rewrites the plist wholesale,
+# but the built bundle should be correct on its own.
+set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.jahshaka.studio")
+set(MACOSX_BUNDLE_BUNDLE_NAME "Jahshaka")
+set(MACOSX_BUNDLE_EXECUTABLE_NAME "${APP_OUTPUT_NAME}")
+set(MACOSX_BUNDLE_BUNDLE_VERSION "0.9.0")
+set(MACOSX_BUNDLE_SHORT_VERSION_STRING "0.9.0")
+set(MACOSX_BUNDLE_LONG_VERSION_STRING "0.9.0")
+set(MACOSX_BUNDLE_INFO_STRING "Jahshaka Studio")
+set(MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2016-2026 EXEDOS LLC")
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -709,7 +735,12 @@ endif()
 include(CopyResources)
 include(CopyDependencies)
 
-if((WIN32 OR APPLE OR UNIX) AND CMAKE_BUILD_TYPE STREQUAL "Release")
+# The Qt-Installer-Framework config has a WIN32 branch and a LINUX branch and
+# nothing else: on APPLE it leaves PLATFORM_DATA_DIR undefined and then uses it
+# in a copy_directory (deploy/installer/config.cmake:57-66), so a Release
+# configure fails outright. macOS ships as a signed .app via
+# scripts/make-macos-bundle.sh, not as an IFW installer — exclude it.
+if((WIN32 OR (UNIX AND NOT APPLE)) AND CMAKE_BUILD_TYPE STREQUAL "Release")
     string(TIMESTAMP CURRENT_DATE "%Y-%m-%d")
     set(RELEASE_DATE "${CURRENT_DATE}")
     set(CMAKE_PROJECT_VERSION "0.9.0")
