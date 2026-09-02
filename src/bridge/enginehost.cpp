@@ -5,6 +5,7 @@
 #include <QGuiApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <cstring>
 
 using namespace jahshaka::engine;
@@ -35,11 +36,31 @@ void ensureVulkanIcdEnvironment()
         return;   // the host environment already resolved it
 
     const QString appDir = QCoreApplication::applicationDirPath();
-    QStringList candidates;
+
+    const auto pin = [](const QStringList &candidates) {
+        for (const QString &path : candidates) {
+            const QString canonical = QFileInfo(path).canonicalFilePath();
+            if (canonical.isEmpty()) continue;
+            qputenv("VK_DRIVER_FILES", canonical.toLocal8Bit());
+            qputenv("VK_ICD_FILENAMES", canonical.toLocal8Bit());   // pre-1.3.207 loaders
+            qInfo("Vulkan ICD not in the environment; using %s", qPrintable(canonical));
+            return true;
+        }
+        return false;
+    };
+
     // 1) Bundled with the app (Jahshaka.app/Contents/Resources/vulkan/...) — the
-    //    self-contained form; nothing ships there yet, it is simply looked at first.
-    candidates << appDir + QStringLiteral("/../Resources/vulkan/icd.d/MoltenVK_icd.json")
-               << appDir + QStringLiteral("/vulkan/icd.d/MoltenVK_icd.json");
+    //    self-contained form written by scripts/make-macos-bundle.sh. It wins
+    //    over everything else on the machine: a redistributed bundle must use
+    //    the MoltenVK it ships, not whatever the user happens to have.
+    //    (Ordering defect fixed 2026-09-02: the loader-default-directory probe
+    //    below used to run BEFORE this loop, so a system manifest in
+    //    /usr/local/share/vulkan/icd.d silently beat the bundled one.)
+    if (pin({ appDir + QStringLiteral("/../Resources/vulkan/icd.d/MoltenVK_icd.json"),
+              appDir + QStringLiteral("/vulkan/icd.d/MoltenVK_icd.json") }))
+        return;
+
+    QStringList candidates;
     // 2) The SDK this process was launched from, if any.
     const QByteArray sdk = qgetenv("VULKAN_SDK");
     if (!sdk.isEmpty())
@@ -62,14 +83,7 @@ void ensureVulkanIcdEnvironment()
                               QStringLiteral("/macOS/share/vulkan/icd.d/MoltenVK_icd.json");
     }
 
-    for (const QString &path : std::as_const(candidates)) {
-        const QString canonical = QFileInfo(path).canonicalFilePath();
-        if (canonical.isEmpty()) continue;
-        qputenv("VK_DRIVER_FILES", canonical.toLocal8Bit());
-        qputenv("VK_ICD_FILENAMES", canonical.toLocal8Bit());   // pre-1.3.207 loaders
-        qInfo("Vulkan ICD not in the environment; using %s", qPrintable(canonical));
-        return;
-    }
+    if (pin(candidates)) return;
     qWarning("No MoltenVK ICD manifest found: the engine will fail to start. "
              "Install the LunarG Vulkan SDK or set VK_DRIVER_FILES.");
 }
@@ -89,16 +103,44 @@ EngineConfig EngineHost::resolveConfig()
 
     const QByteArray envPlugins = qgetenv("JAHSHAKA_OGRE_PLUGINS");
     const QByteArray envMedia   = qgetenv("JAHSHAKA_OGRE_MEDIA");
-    const QString appMedia = QCoreApplication::applicationDirPath() + QStringLiteral("/media/");
+    const QString appDir   = QCoreApplication::applicationDirPath();
+    const QString appMedia = appDir + QStringLiteral("/media/");
+    // Inside a redistributed Jahshaka.app the render system lives beside the
+    // rest of the dylibs in Contents/Frameworks (it needs libOgreNextMain and
+    // libvulkan on its @loader_path). JAHSHAKA_OGRE_PLUGIN_DIR_DEFAULT is an
+    // absolute build-machine path baked at configure time, so without this
+    // probe a bundle on someone else's Mac loads no render system at all.
+    // Mirrors the hlmsMediaDir probe two lines down. (MACOS_BUNDLE_SPEC §4.2 A)
+    const QString appPlugins = appDir + QStringLiteral("/../Frameworks");
 
     if (!envPlugins.isEmpty())                      cfg.pluginDir = envPlugins.toStdString();
+#ifdef Q_OS_MACOS
+    else if (QFileInfo::exists(appPlugins + QStringLiteral("/RenderSystem_Vulkan.dylib")))
+        cfg.pluginDir = QDir(appPlugins).canonicalPath().toStdString();
+#endif
     else                                            cfg.pluginDir = JAHSHAKA_OGRE_PLUGIN_DIR_DEFAULT;
 
     if (!envMedia.isEmpty())                        cfg.hlmsMediaDir = envMedia.toStdString();
     else if (QDir(appMedia + "Hlms/Pbs").exists())  cfg.hlmsMediaDir = appMedia.toStdString();
     else                                            cfg.hlmsMediaDir = JAHSHAKA_OGRE_MEDIA_DIR_DEFAULT;
 
+    // The Ogre log is our only crash forensics on a user's machine, and
+    // Ogre::Log opens an ofstream without ever checking it (OgreLog.cpp:44-57),
+    // so a relative name is silently lost when cwd is not writable — which is
+    // exactly what a Finder launch gives you (cwd "/"). Ship builds therefore
+    // log to AppDataLocation, the same place the settings file goes when
+    // QT_DEBUG is off (src/data/settingsmanager.h:44-57).
+    // Debug builds keep the relative name so a dev run still drops the log
+    // beside the binary, where every existing doc and habit expects it.
+#ifdef QT_DEBUG
     cfg.logFile = "jahshaka-ogre.log";
+#else
+    const QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!logDir.isEmpty() && QDir().mkpath(logDir))
+        cfg.logFile = QDir(logDir).filePath(QStringLiteral("jahshaka-ogre.log")).toStdString();
+    else
+        cfg.logFile = "jahshaka-ogre.log";
+#endif
     return cfg;
 }
 
