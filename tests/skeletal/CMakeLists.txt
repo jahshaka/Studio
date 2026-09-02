@@ -19,3 +19,17 @@ target_link_libraries(test_skeletal_animation PRIVATE IrisGL JahshakaEngine Qt6:
 add_dependencies(test_skeletal_animation JahshakaEngineMedia)
 add_test(NAME skeletal.cpu_skinning COMMAND test_skeletal_animation WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.cpu_skinning PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+
+# GPU_SKINNING_SPEC phase 1 / T4: per-node pose ownership, document-only (no
+# engine, no window). Two MeshNodes on ONE mesh asset must hold two poses.
+add_executable(test_multi_avatar test_multi_avatar.cpp)
+set_target_properties(test_multi_avatar PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_multi_avatar PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_multi_avatar PRIVATE IrisGL Qt6::Gui)
+add_test(NAME skeletal.multi_avatar COMMAND test_multi_avatar WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.multi_avatar PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")

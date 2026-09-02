@@ -217,7 +217,9 @@ int main(int argc, char **argv)
     // Advance the DOCUMENT the way play mode does (PlayBack::update ->
     // Scene::updateSceneAnimation). No GL anywhere in this path.
     doc->updateSceneAnimation(0.5f);
-    auto skel = armMesh->getSkeleton();
+    // The NODE's skeleton, not the mesh asset's (GPU_SKINNING_SPEC §7): the
+    // asset's is the shared rig template and is never posed.
+    auto skel = arm->getSkeleton();
     QMatrix4x4 identity;
     CHECK(skel->boneTransforms.size() == 2, "skeleton has two bone transforms");
     CHECK(skel->boneTransforms[1] != identity, "document advance poses the tip bone");
