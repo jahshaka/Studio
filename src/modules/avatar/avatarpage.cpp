@@ -11,15 +11,17 @@ For more information see the LICENSE file
 
 #include "modules/avatar/avatarpage.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QCheckBox>
-#include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QListWidget>
+#include <QMenu>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSlider>
 #include <QSplitter>
@@ -99,6 +101,20 @@ QWidget *AvatarPage::buildLeftColumn()
     connect(mHistory, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
         if (item) loadPath(item->data(Qt::UserRole).toString());
     });
+    // Right-click Delete drops the row (avatar.forget) — the session list is
+    // module state, so removing a row deletes nothing on disk. Clearing the
+    // preview when it was the loaded file is the verb's business, not the
+    // widget's.
+    mHistory->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(mHistory, &QListWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        auto *item = mHistory->itemAt(pos);
+        if (!item || !mApi) return;
+        QMenu menu(this);
+        QAction *remove = menu.addAction(tr("Delete"));
+        if (menu.exec(mHistory->viewport()->mapToGlobal(pos)) != remove) return;
+        mApi->forget(item->data(Qt::UserRole).toString());
+        refreshFromModel();
+    });
     layout->addWidget(mHistory, 1);
 
     mLoadButton = new QPushButton(tr("Load..."), column);
@@ -144,28 +160,16 @@ QWidget *AvatarPage::buildCentreColumn()
     // The transport is a VIEW over the verbs, never a second clock: every
     // button calls avatar.*, which drives the module's own preview document.
     // The scene timeline keeps its own clock; they never collide (§8.3).
-    auto *strip = new QWidget(column);
-    auto *stripLayout = new QHBoxLayout(strip);
-    stripLayout->setContentsMargins(0, 0, 0, 0);
-    mPlayButton = new QPushButton(tr("Play"), strip);
-    mPauseButton = new QPushButton(tr("Pause"), strip);
-    mStopButton = new QPushButton(tr("Stop"), strip);
-    mLoopToggle = new QCheckBox(tr("Loop"), strip);
-    mClipCombo = new QComboBox(strip);
-    mScrub = new QSlider(Qt::Horizontal, strip);
+    //
+    // Two rows under the view: the scrub bar full width, then the transport
+    // CENTRED. The clip picker is not here — the ANIMATIONS list in the right
+    // column is the only clip switcher.
+    auto *scrubRow = new QWidget(column);
+    auto *scrubLayout = new QHBoxLayout(scrubRow);
+    scrubLayout->setContentsMargins(0, 0, 0, 0);
+    mScrub = new QSlider(Qt::Horizontal, scrubRow);
     mScrub->setRange(0, kScrubSteps);
-    mTimeLabel = new QLabel("0.00 / 0.00 s", strip);
-    connect(mPlayButton, &QPushButton::clicked, this, [this]() { if (mApi) mApi->playClip(QString()); });
-    connect(mPauseButton, &QPushButton::clicked, this, [this]() { if (mApi) mApi->pause(); });
-    connect(mStopButton, &QPushButton::clicked, this, [this]() { if (mApi) mApi->stop(); });
-    connect(mLoopToggle, &QCheckBox::toggled, this, [this](bool on) {
-        if (mUpdating || !mApi) return;
-        mApi->setLooping(on);
-    });
-    connect(mClipCombo, &QComboBox::currentTextChanged, this, [this](const QString &text) {
-        if (mUpdating || !mApi || text.isEmpty()) return;
-        mApi->setClip(text);
-    });
+    mTimeLabel = new QLabel("0.00 / 0.00 s", scrubRow);
     connect(mScrub, &QSlider::valueChanged, this, [this](int value) {
         if (mUpdating || !mApi || !mModel) return;
         const double duration = mModel->duration();
@@ -173,13 +177,39 @@ QWidget *AvatarPage::buildCentreColumn()
         mApi->pause();
         mApi->setTime(duration * value / double(kScrubSteps));
     });
+    scrubLayout->addWidget(mScrub, 1);
+    scrubLayout->addWidget(mTimeLabel);
+    layout->addWidget(scrubRow);
+
+    auto *strip = new QWidget(column);
+    auto *stripLayout = new QHBoxLayout(strip);
+    stripLayout->setContentsMargins(0, 0, 0, 0);
+    mPlayButton = new QPushButton(tr("Play"), strip);
+    mPauseButton = new QPushButton(tr("Pause"), strip);
+    mStopButton = new QPushButton(tr("Stop"), strip);
+    mLoopToggle = new QCheckBox(tr("Loop"), strip);
+    mRootMotionToggle = new QCheckBox(tr("Root Motion"), strip);
+    mRootMotionToggle->setToolTip(tr("Off: locomotion clips play in place. On: the clip's "
+                                     "authored travel moves the character."));
+    connect(mPlayButton, &QPushButton::clicked, this, [this]() { if (mApi) mApi->playClip(QString()); });
+    connect(mPauseButton, &QPushButton::clicked, this, [this]() { if (mApi) mApi->pause(); });
+    connect(mStopButton, &QPushButton::clicked, this, [this]() { if (mApi) mApi->stop(); });
+    connect(mLoopToggle, &QCheckBox::toggled, this, [this](bool on) {
+        if (mUpdating || !mApi) return;
+        mApi->setLooping(on);
+    });
+    connect(mRootMotionToggle, &QCheckBox::toggled, this, [this](bool on) {
+        if (mUpdating || !mApi) return;
+        mApi->setRootMotion(on);
+    });
+    stripLayout->addStretch(1);
     stripLayout->addWidget(mPlayButton);
     stripLayout->addWidget(mPauseButton);
     stripLayout->addWidget(mStopButton);
+    stripLayout->addSpacing(12);
     stripLayout->addWidget(mLoopToggle);
-    stripLayout->addWidget(mClipCombo, 1);
-    stripLayout->addWidget(mScrub, 2);
-    stripLayout->addWidget(mTimeLabel);
+    stripLayout->addWidget(mRootMotionToggle);
+    stripLayout->addStretch(1);
     layout->addWidget(strip);
     return column;
 }
@@ -204,10 +234,22 @@ QWidget *AvatarPage::buildRightColumn()
     mAnimations->setHeaderLabels({ tr("Clip"), tr("Length") });
     mAnimations->setRootIsDecorated(false);
     mAnimations->header()->setStretchLastSection(true);
+    mAnimations->setToolTip(tr("Double-click a clip to play it on the loaded character"));
+    // itemActivated is the double-click (and Enter) — the ONE clip switcher.
+    // It carries the DISPLAY name, which is what avatar.setClip takes.
     connect(mAnimations, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem *item, int) {
-        if (item && mApi) mApi->setClip(item->text(0));
+        if (!item || !mApi) return;
+        mApi->setClip(item->text(0));
+        refreshFromModel();
     });
     layout->addWidget(mAnimations, 1);
+
+    // The Mixamo workflow: the character comes from Load..., every clip after
+    // it from here. Same verb a script calls (avatar.loadAnimation).
+    mLoadAnimButton = new QPushButton(tr("Load Animation..."), column);
+    mLoadAnimButton->setToolTip(tr("Add clips from a separate animation file to the loaded character"));
+    connect(mLoadAnimButton, &QPushButton::clicked, this, &AvatarPage::onLoadAnimationClicked);
+    layout->addWidget(mLoadAnimButton);
     return column;
 }
 
@@ -233,6 +275,33 @@ void AvatarPage::onLoadClicked()
     loadPath(path);
 }
 
+void AvatarPage::onLoadAnimationClicked()
+{
+    if (!mApi || !mModel) return;
+    if (!mModel->isLoaded()) {
+        QMessageBox::information(this, tr("Load Animation"),
+                                 tr("Load a character first — an animation needs a rig to play on."));
+        return;
+    }
+    QStringList filters;
+    for (const auto &ext : Constants::MODEL_EXTS) filters.append("*." + ext);
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Load an animation"), QFileInfo(mModel->filePath()).absolutePath(),
+        tr("Animations (%1)").arg(filters.join(' ')));
+    if (path.isEmpty()) return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const QVariant result = mApi->loadAnimation(path);
+    QApplication::restoreOverrideCursor();
+    // A rig mismatch is a REFUSAL, not a silent no-op: the verb throws, and
+    // the message names the bones the loaded rig does not have.
+    if (!result.isValid())
+        QMessageBox::warning(this, tr("Load Animation"), mApi->lastError().isEmpty()
+                                 ? tr("That file could not be loaded as an animation.")
+                                 : mApi->lastError());
+    refreshFromModel();
+}
+
 void AvatarPage::loadPath(const QString &path)
 {
     if (!mApi || path.isEmpty()) return;
@@ -240,22 +309,25 @@ void AvatarPage::loadPath(const QString &path)
     // freezes the page for seconds. The stub accepts that with a busy cursor;
     // the threaded ImportBatchRunner is Part 1's problem if it becomes one.
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const QVariant result = mApi->loadPreview(path);
+    mApi->loadPreview(path);
     QApplication::restoreOverrideCursor();
-    if (result.isValid()) rememberPath(path);
     // Re-framing and the widget refresh ride the verb's own delegates
     // (AvatarModule::registerApi), so a scripted load looks identical.
     refreshFromModel();
 }
 
-void AvatarPage::rememberPath(const QString &path)
+void AvatarPage::refreshHistory()
 {
-    if (mSessionPaths.contains(path)) return;
-    mSessionPaths.append(path);
-    auto *item = new QListWidgetItem(QFileInfo(path).fileName(), mHistory);
-    item->setData(Qt::UserRole, path);
-    item->setToolTip(path);
-    mHistory->setCurrentItem(item);
+    // The session list lives in the MODEL (avatar.history/avatar.forget), so a
+    // scripted load shows up here exactly like a clicked one.
+    const QString current = mModel->filePath();
+    mHistory->clear();
+    for (const QString &path : mModel->history()) {
+        auto *item = new QListWidgetItem(QFileInfo(path).fileName(), mHistory);
+        item->setData(Qt::UserRole, path);
+        item->setToolTip(path);
+        if (path == current) mHistory->setCurrentItem(item);
+    }
 }
 
 void AvatarPage::refreshFromModel()
@@ -267,24 +339,28 @@ void AvatarPage::refreshFromModel()
     mMeshToggle->setChecked(mModel->meshVisible());
     mSkeletonToggle->setChecked(mModel->skeletonVisible());
     mLoopToggle->setChecked(mModel->looping());
+    mRootMotionToggle->setChecked(mModel->rootMotion());
     const QWidget *const transport[] = { mPlayButton, mPauseButton, mStopButton,
-                                         mLoopToggle, mClipCombo, mScrub };
+                                         mLoopToggle, mRootMotionToggle, mScrub };
     for (const QWidget *w : transport) const_cast<QWidget *>(w)->setEnabled(loaded);
+    mLoadAnimButton->setEnabled(loaded);
+
+    refreshHistory();
 
     const auto clips = mModel->clips();
-    mClipCombo->clear();
     mAnimations->clear();
     for (const auto &clip : clips) {
-        mClipCombo->addItem(clip.name);
-        mClipCombo->setItemData(mClipCombo->count() - 1, clip.rawName, Qt::ToolTipRole);
         auto *item = new QTreeWidgetItem(mAnimations);
         item->setText(0, clip.name);
         item->setText(1, QString::number(clip.length, 'f', 2) + " s");
-        item->setToolTip(0, tr("in the file: %1").arg(clip.rawName));
+        // A cross-file clip says which file it came from; a same-file one says
+        // what the file called it (every Mixamo clip says "mixamo.com").
+        item->setToolTip(0, clip.external
+                                ? tr("from %1 (in the file: %2)")
+                                      .arg(QFileInfo(clip.source).fileName(), clip.rawName)
+                                : tr("in the file: %1").arg(clip.rawName));
         if (clip.active) mAnimations->setCurrentItem(item);
     }
-    const int active = mClipCombo->findText(mModel->activeClip());
-    if (active >= 0) mClipCombo->setCurrentIndex(active);
 
     const float duration = mModel->duration();
     mScrub->setValue(duration > 0.0f ? int(mModel->time() / duration * kScrubSteps) : 0);

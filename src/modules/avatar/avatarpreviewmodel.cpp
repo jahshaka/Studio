@@ -19,7 +19,12 @@ For more information see the LICENSE file
 #include <cmath>
 #include <functional>
 
+#include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
+
 #include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
@@ -47,6 +52,22 @@ bool isJunkClipName(const QString &raw)
     };
     return raw.trimmed().isEmpty() || junk.contains(raw.trimmed().toLower());
 }
+
+// assimp's FBX importer preserves the exporter's pivots as extra nodes named
+// `<bone>_$AssimpFbx$_Rotation` / `_Translation` / `_Scaling`, and MOST of a
+// Mixamo clip's channels target those, not bones: 46 of Walking(1).fbx's 52.
+// A rig-match test that counted channels would therefore be measuring pivot
+// bookkeeping, so the match ratio is computed over the BONE channels only.
+bool isPivotChannel(const QString &name)
+{
+    return name.contains(QStringLiteral("$AssimpFbx$"));
+}
+
+// How much of a clip has to land on the loaded rig before it is worth playing.
+// A same-rig Mixamo clip scores 1.0 (verified: Ely + Walking/Running/Idle all
+// match 6 of 6 bone channels, and even their pivot channels match 48 of 52);
+// a foreign rig scores 0. Half is a wide gap to fall into.
+const double kRigMatchThreshold = 0.5;
 
 } // namespace
 
@@ -147,6 +168,7 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
     mFragment = node;
 
     collectRig();
+    captureRestPose();
 
     // Clip list, in the order the fragment carries them, with display names
     // uniquified the way Mesh::extractAnimations uniquifies raw ones.
@@ -155,7 +177,11 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
         if (!anim) continue;
         Clip clip;
         clip.raw = anim->getName();
-        clip.anim = anim;
+        clip.source = mFilePath;
+        clip.skel = anim->getSkeletalAnimation();
+        // Root motion is a policy of the PREVIEW, not of the file: the clip
+        // the document plays is built from the authored one either way.
+        clip.anim = clip.skel ? buildClipAnimation(clip.skel) : anim;
         const QString base = displayNameFor(clip.raw, mName);
         QString unique = base;
         for (int suffix = 2; used.contains(unique); ++suffix)
@@ -170,6 +196,8 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
     // FILE-order first clip instead, explicitly.
     mActiveClip = mClips.isEmpty() ? -1 : 0;
     if (mActiveClip >= 0) mFragment->setAnimation(mClips[0].anim);
+
+    if (!mHistory.contains(mFilePath)) mHistory.append(mFilePath);
 
     mTime = 0.0f;
     mPlaying = false;
@@ -187,6 +215,8 @@ void AvatarPreviewModel::clear()
     }
     mClips.clear();
     mBoneNodes.clear();
+    mNodeNames.clear();
+    mRestPose.clear();
     mActiveClip = -1;
     mBoneCount = mMeshCount = mVertexCount = 0;
     mFilePath.clear();
@@ -244,6 +274,241 @@ void AvatarPreviewModel::collectRig()
     walk(mFragment, QString());
 }
 
+void AvatarPreviewModel::captureRestPose()
+{
+    mRestPose.clear();
+    mNodeNames.clear();
+    if (!mFragment) return;
+    std::function<void(const iris::SceneNodePtr &)> walk =
+        [&](const iris::SceneNodePtr &node) {
+            RestTransform rest;
+            rest.node = node.data();
+            rest.pos = node->getLocalPos();
+            rest.rot = node->getLocalRot();
+            rest.scale = node->getLocalScale();
+            mRestPose.append(rest);
+            mNodeNames.insert(node->name);
+            for (const auto &child : node->children) walk(child);
+        };
+    walk(mFragment);
+}
+
+void AvatarPreviewModel::applyRestPose()
+{
+    // A clip only writes the nodes it has channels for (SceneNode::
+    // updateAnimation), so without this a bone the OLD clip moved and the NEW
+    // one does not mention would keep the old clip's last pose forever — which
+    // is exactly what a cross-file clip with fewer channels looks like.
+    for (const auto &rest : mRestPose) {
+        if (!rest.node) continue;
+        rest.node->setLocalPos(rest.pos);
+        rest.node->setLocalRot(rest.rot);
+        rest.node->setLocalScale(rest.scale);
+    }
+}
+
+QString AvatarPreviewModel::rootMotionChannel(const iris::SkeletalAnimationPtr &skel) const
+{
+    if (!skel || !mFragment) return QString();
+    // Root-most FIRST: a breadth-first walk of the fragment, taking the first
+    // node that the clip both animates and actually translates (more than one
+    // position key). For a Mixamo rig that is `mixamorig:Hips`, whose position
+    // channel carries the whole locomotion of the clip.
+    QVector<iris::SceneNode *> queue;
+    queue.append(mFragment.data());
+    for (int i = 0; i < queue.size(); ++i) {
+        auto *node = queue[i];
+        const auto it = skel->boneAnimations.constFind(node->name);
+        if (it != skel->boneAnimations.constEnd() && !it.value().isNull() &&
+            it.value()->posKeys->keys.size() > 1)
+            return node->name;
+        for (const auto &child : node->children) queue.append(child.data());
+    }
+    return QString();
+}
+
+iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAnimationPtr &skel) const
+{
+    // A ZERO-LENGTH clip must not loop: Animation::getSampleTime is
+    // `fmod(time, length)`, so a looping clip of length 0 samples at NaN and
+    // the pose it produces is undefined. Mixamo ships exactly such a clip in
+    // every CHARACTER download — a single-frame "mixamo.com" T-pose — and it
+    // is the clip the page selects by default.
+    const auto finish = [](iris::AnimationPtr anim) {
+        if (anim && !(anim->getLength() > 0.0f)) anim->setLooping(false);
+        return anim;
+    };
+    if (!skel) return iris::AnimationPtr();
+    if (mRootMotion) return finish(iris::Animation::createFromSkeletalAnimation(skel));
+
+    const QString rootChannel = rootMotionChannel(skel);
+    if (rootChannel.isEmpty()) return finish(iris::Animation::createFromSkeletalAnimation(skel));
+
+    // In-place playback: the root channel keeps its authored vertical motion
+    // (a jump still leaves the ground) and its rotation, but its HORIZONTAL
+    // translation is pinned to the first key. The other channels are shared,
+    // not copied — only one BoneAnimation is ever rebuilt.
+    auto source = skel->boneAnimations.value(rootChannel);
+    auto stripped = new iris::BoneAnimation();
+    for (const auto *key : source->rotKeys->keys) stripped->rotKeys->addKey(key->value, key->time);
+    for (const auto *key : source->scaleKeys->keys) stripped->scaleKeys->addKey(key->value, key->time);
+    const QVector3D anchor = source->posKeys->keys.isEmpty()
+                                 ? QVector3D()
+                                 : source->posKeys->keys.first()->value;
+    for (const auto *key : source->posKeys->keys)
+        stripped->posKeys->addKey(QVector3D(anchor.x(), key->value.y(), anchor.z()), key->time);
+
+    auto inPlace = iris::SkeletalAnimation::create();
+    inPlace->name = skel->name;
+    inPlace->source = skel->source;
+    inPlace->boneAnimations = skel->boneAnimations;
+    inPlace->boneAnimations[rootChannel] = QSharedPointer<iris::BoneAnimation>(stripped);
+    return finish(iris::Animation::createFromSkeletalAnimation(inPlace));
+}
+
+void AvatarPreviewModel::rebuildClipAnimations()
+{
+    for (auto &clip : mClips) {
+        if (!clip.skel) continue;
+        const bool looping = clip.anim ? clip.anim->getLooping() : true;
+        clip.anim = buildClipAnimation(clip.skel);
+        if (clip.anim) clip.anim->setLooping(looping);
+    }
+    if (mFragment && mActiveClip >= 0 && mActiveClip < mClips.size())
+        mFragment->setAnimation(mClips[mActiveClip].anim);
+    applyRestPose();
+    mDirty = true;
+    evaluate();
+}
+
+void AvatarPreviewModel::setRootMotion(bool on)
+{
+    if (mRootMotion == on) return;
+    mRootMotion = on;
+    rebuildClipAnimations();
+}
+
+bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, ClipLoadReport *report)
+{
+    const auto fail = [error](const QString &why) {
+        if (error) *error = why;
+        return false;
+    };
+
+    if (!isLoaded())
+        return fail(QStringLiteral("load a character first — an animation needs a rig to play on"));
+
+    const QFileInfo info(path);
+    if (!info.exists() || !info.isFile())
+        return fail(QStringLiteral("no such file: %1").arg(path));
+
+    // NOT AssetHelper/loadAsSceneFragment: those need a mesh and would build a
+    // second character. An animation file is parsed for its aiScene and read
+    // for clips only — which is also the only way an ANIMATION-ONLY export
+    // (zero meshes) can be read at all, since every mesh loader rejects those.
+    //
+    // No post-processing flags: every step in the canonical preset is
+    // geometry work, and node and channel NAMES — the only thing this path
+    // cares about — come out identical either way (measured on Ely +
+    // Walking(1).fbx: same 207 node names, same 52 channel names, 3x faster).
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(path.toStdString().c_str(), 0);
+    if (!scene)
+        return fail(QStringLiteral("could not read %1 (%2)")
+                        .arg(info.fileName(), QString::fromUtf8(importer.GetErrorString())));
+    if (scene->mNumAnimations == 0)
+        return fail(QStringLiteral("%1 contains no animation").arg(info.fileName()));
+
+    const auto anims = iris::Mesh::extractAnimations(scene, info.absoluteFilePath());
+
+    // The clip -> bone join is by SCENE-NODE NAME (SceneNode::updateAnimation
+    // matches `anim->boneAnimations.contains(node->name)`), so a clip from
+    // another rig loads, plays, and moves absolutely nothing. Score every clip
+    // against the loaded rig's node names and refuse the file when none lands.
+    struct Scored { QString raw; iris::SkeletalAnimationPtr skel; ClipLoadReport report; double ratio = 0.0; };
+    QVector<Scored> scored;
+    for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
+        Scored s;
+        s.raw = it.key();
+        s.skel = it.value();
+        if (!s.skel) continue;
+        for (auto ch = s.skel->boneAnimations.constBegin(); ch != s.skel->boneAnimations.constEnd(); ++ch) {
+            ++s.report.channels;
+            if (isPivotChannel(ch.key())) continue;
+            ++s.report.boneChannels;
+            if (mNodeNames.contains(ch.key())) ++s.report.matched;
+            else if (s.report.unmatched.size() < 5) s.report.unmatched.append(ch.key());
+        }
+        s.ratio = s.report.boneChannels > 0
+                      ? double(s.report.matched) / double(s.report.boneChannels)
+                      : 0.0;
+        scored.append(s);
+    }
+    if (scored.isEmpty()) return fail(QStringLiteral("%1 contains no animation").arg(info.fileName()));
+
+    int best = 0;
+    for (int i = 1; i < scored.size(); ++i)
+        if (scored[i].ratio > scored[best].ratio) best = i;
+    if (scored[best].ratio < kRigMatchThreshold) {
+        if (report) *report = scored[best].report;
+        const auto &r = scored[best].report;
+        const QString names = r.unmatched.isEmpty() ? QStringLiteral("(pivot channels only)")
+                                                    : r.unmatched.join(QStringLiteral(", "));
+        return fail(QStringLiteral("%1 is animating a different rig — %2 of its %3 bones exist "
+                                   "in '%4' (no match for %5)")
+                        .arg(info.fileName())
+                        .arg(r.matched)
+                        .arg(r.boneChannels)
+                        .arg(mName, names));
+    }
+
+    QSet<QString> used;
+    for (const auto &clip : mClips) used.insert(clip.display);
+
+    const QString sourceBase = info.completeBaseName();
+    ClipLoadReport out = scored[best].report;
+    for (const auto &s : scored) {
+        if (s.ratio < kRigMatchThreshold) continue;     // a foreign clip in a mixed file
+        Clip clip;
+        clip.raw = s.raw;
+        clip.source = info.absoluteFilePath();
+        clip.external = true;
+        clip.skel = s.skel;
+        clip.anim = buildClipAnimation(s.skel);
+        if (!clip.anim) continue;
+        // Every Mixamo clip is called "mixamo.com", so the ANIMATION file's
+        // base name is the display name — "Walking(1)", not a third
+        // "mixamo.com" row under the character's own.
+        const QString base = displayNameFor(clip.raw, sourceBase);
+        QString unique = base;
+        for (int suffix = 2; used.contains(unique); ++suffix)
+            unique = base + QStringLiteral(" %1").arg(suffix);
+        used.insert(unique);
+        clip.display = unique;
+        mFragment->addAnimation(clip.anim);
+        mClips.append(clip);
+        ++out.added;
+        if (out.firstClip.isEmpty()) out.firstClip = clip.display;
+    }
+    if (out.added == 0) return fail(QStringLiteral("%1 contains no usable clip").arg(info.fileName()));
+
+    // Accumulate: loading an animation never changes what is playing. The
+    // caller (a double-click in the ANIMATIONS list, or avatar.setClip)
+    // decides when to switch.
+    if (report) *report = out;
+    return true;
+}
+
+bool AvatarPreviewModel::forget(const QString &path)
+{
+    const QString absolute = QFileInfo(path).absoluteFilePath();
+    int removed = mHistory.removeAll(path);
+    if (absolute != path) removed += mHistory.removeAll(absolute);
+    if (removed == 0) return false;
+    if (mFilePath == absolute || mFilePath == path) clear();
+    return true;
+}
+
 void AvatarPreviewModel::applyMeshVisibility()
 {
     if (!mFragment) return;
@@ -276,6 +541,8 @@ QVector<ClipInfo> AvatarPreviewModel::clips() const
         info.length = mClips[i].anim ? mClips[i].anim->getLength() : 0.0f;
         info.looping = mClips[i].anim ? mClips[i].anim->getLooping() : false;
         info.active = (i == mActiveClip);
+        info.source = mClips[i].source;
+        info.external = mClips[i].external;
         out.append(info);
     }
     return out;
@@ -291,7 +558,13 @@ bool AvatarPreviewModel::setClip(const QString &name)
     for (int i = 0; i < mClips.size(); ++i) {
         if (mClips[i].display != name && mClips[i].raw != name) continue;
         mActiveClip = i;
+        // Rest first, THEN the new clip: a clip that does not mention a bone
+        // must not inherit the previous clip's last pose for it (a cross-file
+        // clip is routinely a different subset of the rig).
+        applyRestPose();
         if (mFragment) mFragment->setAnimation(mClips[i].anim);
+        // The transport state is deliberately untouched: switching while
+        // playing keeps playing, from the start of the new clip.
         mTime = 0.0f;
         mDirty = true;
         evaluate();

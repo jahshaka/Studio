@@ -34,7 +34,10 @@ For more information see the LICENSE file
 // A bone's parent is the NEAREST ANCESTOR that is also a bone.
 
 #include <QMap>
+#include <QQuaternion>
+#include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <QVector>
 #include <QVector3D>
@@ -45,8 +48,10 @@ For more information see the LICENSE file
 namespace avatar
 {
 
-/// One clip of the loaded file. `name` is the display name (§0.8: every Mixamo
-/// clip is literally called "mixamo.com"); `rawName` is what the file said.
+/// One clip the preview knows about. `name` is the display name (§0.8: every
+/// Mixamo clip is literally called "mixamo.com"); `rawName` is what the file
+/// said. Clips accumulate: the ones the character file carried, plus every one
+/// `loadAnimation` has added from a separate file since (`external`).
 struct ClipInfo
 {
     QString name;
@@ -54,6 +59,20 @@ struct ClipInfo
     float   length = 0.0f;
     bool    looping = true;
     bool    active = false;
+    QString source;             ///< the file this clip was read from
+    bool    external = false;   ///< came from a separate animation file
+};
+
+/// What `loadAnimation` found in an animation file: how well its channels
+/// matched the loaded rig, and what it added.
+struct ClipLoadReport
+{
+    int added = 0;              ///< clips appended to the list
+    int channels = 0;           ///< animation channels in the best clip
+    int boneChannels = 0;       ///< ... of which are NOT assimp pivot channels
+    int matched = 0;            ///< ... of which name a node of the loaded rig
+    QStringList unmatched;      ///< the first few bone channels with no node
+    QString firstClip;          ///< display name of the first clip added
 };
 
 /// A bone as the preview sees it: a scene node whose name is in the skeleton's
@@ -84,6 +103,16 @@ public:
     /// Loads `path` (any model extension assimp reads) as the one preview
     /// subject, replacing whatever was loaded. False + `error` on failure.
     bool load(const QString &path, QString *error = nullptr);
+    /// Reads `path` for CLIPS ONLY and appends them to the clip list of the
+    /// already-loaded character (the Mixamo workflow: one character file, then
+    /// one file per animation). Accepts both shapes an exporter produces — a
+    /// with-skin animation file (its mesh is ignored) and an animation-only
+    /// file (zero meshes, which every mesh loader in the tree rejects). The
+    /// join is by SCENE-NODE NAME, so a clip from a different rig is REFUSED
+    /// (false + `error` naming the first unmatched bones) instead of silently
+    /// loading a clip that moves nothing.
+    bool loadAnimation(const QString &path, QString *error = nullptr,
+                       ClipLoadReport *report = nullptr);
     void clear();
     bool isLoaded() const { return !mFragment.isNull(); }
 
@@ -111,10 +140,22 @@ public:
     /// The active clip's DISPLAY name, or "" when nothing is loaded.
     QString activeClip() const;
     /// Selects by display name or raw name; false when there is no such clip.
+    /// Rewinds to 0 and keeps the transport state (switching while playing
+    /// keeps playing, from the start of the new clip). Every node is put back
+    /// on its REST pose first, so channels the new clip does not carry cannot
+    /// inherit the previous clip's last pose.
     bool setClip(const QString &name);
     float duration() const;
     bool looping() const;
     void setLooping(bool on);
+
+    /// Root motion. Off (the default) plays locomotion clips IN PLACE: the
+    /// horizontal translation of the clip's root-most animated node is pinned
+    /// to its first key, so a walk cycle walks on the spot instead of leaving
+    /// the frame. On plays the clip exactly as authored. Vertical motion is
+    /// never stripped (a jump still leaves the ground).
+    bool rootMotion() const { return mRootMotion; }
+    void setRootMotion(bool on);
 
     // ---- transport (the preview's own clock; never the editor scene's) ----
     void play();
@@ -141,6 +182,14 @@ public:
     /// One segment per bone that has a bone ancestor: count == bones − roots.
     QVector<BoneSegment> boneSegments() const;
 
+    // ---- the session list the page's left column shows --------------------
+    /// Every character file loaded in this session, oldest first. Module-local
+    /// and deliberately not persisted: Part 1's library rows replace it.
+    QStringList history() const { return mHistory; }
+    /// Drops `path` from the session list (the left column's right-click
+    /// Delete). Clears the preview when the dropped file is the loaded one.
+    bool forget(const QString &path);
+
     /// The display name a clip gets: its own, unless it is empty or one of the
     /// exporter's junk names ("mixamo.com", "Take 001", …), in which case the
     /// source file's base name. Public because the docs and the suite pin it.
@@ -150,6 +199,17 @@ private:
     void buildDocument();
     void collectRig();
     void applyMeshVisibility();
+    /// Snapshots every node's local transform right after a load, and puts
+    /// them back before a clip switch.
+    void captureRestPose();
+    void applyRestPose();
+    /// Builds the AnimationPtr the document plays for a clip, applying the
+    /// root-motion policy. Called again for every clip when it is toggled.
+    iris::AnimationPtr buildClipAnimation(const iris::SkeletalAnimationPtr &skel) const;
+    void rebuildClipAnimations();
+    /// The name of the clip's root-most animated node that actually translates
+    /// — the one root motion lives on. Empty when the clip has none.
+    QString rootMotionChannel(const iris::SkeletalAnimationPtr &skel) const;
 
     iris::ScenePtr      mDocument;
     iris::CameraNodePtr mCamera;
@@ -159,14 +219,35 @@ private:
     QString mName;
     std::unique_ptr<QTemporaryDir> mScratch;
 
-    // Clip display names, in the order the node carries them.
-    struct Clip { QString display; QString raw; iris::AnimationPtr anim; };
+    // Clip display names, in the order they were added: the character file's
+    // own first, then each loadAnimation's. `skel` is the clip AS AUTHORED —
+    // `anim` is what the document plays, rebuilt when root motion is toggled.
+    struct Clip
+    {
+        QString display;
+        QString raw;
+        QString source;
+        bool external = false;
+        iris::SkeletalAnimationPtr skel;
+        iris::AnimationPtr anim;
+    };
     QVector<Clip> mClips;
     int mActiveClip = -1;
 
     // The rig, resolved once at load: bone node name -> nearest bone ancestor.
     struct BoneNode { iris::SceneNode *node = nullptr; QString name; QString parent; };
     QVector<BoneNode> mBoneNodes;
+
+    // Every scene-node name under the fragment — the set a foreign clip's
+    // channels are matched against (the clip -> bone join is by NAME).
+    QSet<QString> mNodeNames;
+
+    // The loaded file's own pose, so a clip switch starts from rest.
+    struct RestTransform { iris::SceneNode *node = nullptr; QVector3D pos; QQuaternion rot; QVector3D scale; };
+    QVector<RestTransform> mRestPose;
+
+    QStringList mHistory;
+    bool mRootMotion = false;
 
     int mBoneCount = 0;
     int mMeshCount = 0;

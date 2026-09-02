@@ -15,6 +15,8 @@ function isGreen(c) { return c.g > 110 && c.g > c.r * 1.8 && c.g > c.b * 1.8; }
 function isRed(c) { return c.r > 40 && c.r > c.g * 1.8 && c.r > c.b * 1.8; }
 
 var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
+var WALK = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_walk_anim.glb";
+var MISMATCH = "@SOURCE_DIR@/tests/avatar/fixtures/rig_mismatch_anim.glb";
 
 // ---- the space exists and the window switches to it ----
 assert(app.space("avatar"), "app.space('avatar')");
@@ -74,6 +76,55 @@ assert(avatar.preview().playing === false, "paused");
 avatar.setTime(0.4);
 assert(avatar.stop(), "avatar.stop()");
 assert(avatar.time() === 0, "stop rewinds to 0");
+
+// ---- cross-file clips: the Mixamo workflow, from a script ----
+// The character is already loaded; WALK is an ANIMATION-ONLY file (zero
+// meshes) for the same rig, MISMATCH one for a different rig.
+var clipsBefore = avatar.clips().length;
+var added = avatar.loadAnimation(WALK);
+assert(!!added && added.added === 1, "avatar.loadAnimation added one clip -> " + JSON.stringify(added.match));
+assert(added.match.matched === added.match.boneChannels && added.match.matched > 0,
+       "every bone channel of the clip matched the loaded rig");
+var clipsAfter = avatar.clips();
+assert(clipsAfter.length === clipsBefore + 1, "the clip list ACCUMULATED");
+var external = clipsAfter[clipsAfter.length - 1];
+assert(external.external === true && external.name === "rig2_walk_anim",
+       "the new clip is named after the ANIMATION file, and knows it is external");
+assert(avatar.preview().activeClip !== external.name,
+       "loading an animation does not switch what is playing");
+
+assert(avatar.setClip(external.name), "avatar.setClip(<cross-file clip>)");
+avatar.setTime(0);
+var xr = avatar.bones()[1].position;
+avatar.setTime(0.25);
+var xm = avatar.bones()[1].position;
+var xMoved = Math.abs(xm.x - xr.x) + Math.abs(xm.y - xr.y);
+assert(xMoved > 0.05, "the FOREIGN clip moves the character's bones (moved " + xMoved.toFixed(3) + ")");
+
+// the switch keeps the transport coherent
+assert(avatar.playClip(), "playing the cross-file clip");
+assert(avatar.setClip("Idle") && avatar.preview().playing === true && avatar.time() === 0,
+       "switching while playing keeps playing, from t=0");
+assert(avatar.stop(), "stop");
+
+// a clip for a DIFFERENT rig is refused by name, not silently loaded
+var refusedRig = "";
+try { avatar.loadAnimation(MISMATCH); } catch (e) { refusedRig = String(e); }
+assert(refusedRig.indexOf("hips") >= 0, "a foreign rig is refused, naming the bone: " + refusedRig);
+assert(avatar.clips().length === clipsBefore + 1, "... and nothing was added");
+
+// root motion is a preview policy, and it is OFF by default
+assert(avatar.preview().rootMotion === false, "root motion is off by default (walk in place)");
+assert(avatar.setRootMotion(true) && avatar.preview().rootMotion === true, "avatar.setRootMotion(true)");
+assert(avatar.setRootMotion(false) && avatar.preview().rootMotion === false, "avatar.setRootMotion(false)");
+
+// the session list the left column shows
+var hist = avatar.history();
+assert(hist.length === 1 && hist[0].loaded === true, "avatar.history() lists the loaded character");
+assert(avatar.forget(hist[0].file), "avatar.forget() drops it (the left column's Delete)");
+assert(avatar.history().length === 0 && !avatar.preview(),
+       "... and clears the preview, because it was the loaded file");
+assert(!!avatar.loadPreview(RIG), "reload for the remaining checks");
 
 // ---- refusals are clean errors, never crashes ----
 var refusedBadClip = false;

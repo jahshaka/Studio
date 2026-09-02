@@ -15,8 +15,15 @@ For more information see the LICENSE file
 // AvatarPage — the Avatar space's stacked page (AVATAR_MODULE_SPEC §0.8).
 //
 //   AVATARS            |  [x] Mesh  [x] Skeleton   |  DETAILS
-//   (session history)  |     (engine centre view)  |   file, bones, meshes...
-//   [ Load... ]        |  transport + clip + scrub |  ANIMATIONS
+//   (session history,  |     (engine centre view)  |   file, bones, meshes...
+//    right-click       |  ------- scrub bar ------ |  ANIMATIONS
+//    Delete)           |    < transport, centred > |   (double-click plays)
+//   [ Load... ]        |                           |  [ Load Animation... ]
+//
+// The clip list is the RIGHT column and nothing else (the Unreal shape): a
+// double-click on a row is what switches the active clip. There is no clip
+// combo in the centre — the centre is the view, the scrub bar and the
+// transport, in that order.
 //
 // Everything the widgets do goes through the SAME verbs a script calls: the
 // page holds no state of its own beyond widget state, and refreshFromModel()
@@ -30,7 +37,6 @@ For more information see the LICENSE file
 #include <QWidget>
 
 class QCheckBox;
-class QComboBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -66,8 +72,9 @@ private:
     QWidget *buildCentreColumn();
     QWidget *buildRightColumn();
     void onLoadClicked();
+    void onLoadAnimationClicked();
     void loadPath(const QString &path);
-    void rememberPath(const QString &path);
+    void refreshHistory();
     void refreshTransportReadout();
 
     AvatarPreviewModel   *mModel = nullptr;
@@ -78,20 +85,20 @@ private:
     QLabel      *mPreviewPlaceholder = nullptr;
     QListWidget *mHistory = nullptr;
     QPushButton *mLoadButton = nullptr;
+    QPushButton *mLoadAnimButton = nullptr;
     QCheckBox   *mMeshToggle = nullptr;
     QCheckBox   *mSkeletonToggle = nullptr;
     QPushButton *mPlayButton = nullptr;
     QPushButton *mPauseButton = nullptr;
     QPushButton *mStopButton = nullptr;
     QCheckBox   *mLoopToggle = nullptr;
-    QComboBox   *mClipCombo = nullptr;
+    QCheckBox   *mRootMotionToggle = nullptr;
     QSlider     *mScrub = nullptr;
     QLabel      *mTimeLabel = nullptr;
     QLabel      *mDetails = nullptr;
     QTreeWidget *mAnimations = nullptr;
 
     QTimer      *mTicker = nullptr;   // follows the clock while playing (label + scrub only)
-    QStringList mSessionPaths;
     bool mUpdating = false;
 };
 

@@ -54,7 +54,16 @@ public:
     void setSubjectDelegate(std::function<void()> fn) { mSubjectChanged = std::move(fn); }
 
     Q_INVOKABLE QVariant loadPreview(const QString &path);
+    Q_INVOKABLE QVariant loadAnimation(const QString &path);
     Q_INVOKABLE bool clearPreview();
+    Q_INVOKABLE QVariantList history();
+    Q_INVOKABLE bool forget(const QString &path);
+    Q_INVOKABLE bool setRootMotion(bool on);
+
+    /// The message of the last verb failure, for the widgets. ApiModule::fail
+    /// throws into the JS engine, which a button click has no access to — the
+    /// page still has to be able to show a rig-mismatch refusal to the user.
+    QString lastError() const { return mLastError; }
     Q_INVOKABLE QVariant preview();
     Q_INVOKABLE bool setMeshVisible(bool on);
     Q_INVOKABLE bool setSkeletonVisible(bool on);
@@ -74,6 +83,10 @@ private:
     QVariantMap previewState() const;
     void notifyChanged();
     void notifySubjectChanged();
+    /// fail(), plus a copy of the message the widgets can read back.
+    bool record(const QString &message);
+
+    QString mLastError;
 
     avatar::AvatarPreviewModel *mModel = nullptr;
     SnapshotFn mSnapshot;

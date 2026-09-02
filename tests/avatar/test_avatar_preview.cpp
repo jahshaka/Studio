@@ -151,9 +151,28 @@ int main(int argc, char **argv)
     // ---- avatar.snapshot's engine half ----
     model.setMeshVisible(true);
     model.setSkeletonVisible(false);
+    model.setClip("Idle");
+    model.setTime(0.0f);
     const QImage shot = scene.renderImage(96, 96);
     CHECK(!shot.isNull() && shot.width() == 96 && shot.height() == 96,
           "snapshot: an offscreen render of the preview scene comes back at the asked size");
+
+    // ---- S9: a SECOND snapshot shows the SECOND pose ----
+    // renderImage clears the current view when it is done with its shot view,
+    // and step() only mirrors when it has one — so this used to return the
+    // first snapshot's pixels forever, whatever the document did in between
+    // (the document advances, the engine never hears about it). A page that is
+    // not on screen has no other view, which is exactly the scripted /
+    // MCP-driven case.
+    model.setTime(0.5f);
+    const QImage moved = scene.renderImage(96, 96);
+    CHECK(!moved.isNull() && moved != shot,
+          "S9: a second snapshot at a different time renders a DIFFERENT pose");
+    model.setClip("rig2");           // the fixture's second clip, junk-named
+    model.setTime(0.25f);
+    const QImage switched = scene.renderImage(96, 96);
+    CHECK(!switched.isNull() && switched != moved && switched != shot,
+          "S9: a snapshot after a CLIP SWITCH renders the new clip's pose");
 
     // ---- teardown in the documented order ----
     scene.release();

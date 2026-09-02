@@ -34,6 +34,10 @@ static int failures = 0;
 static const QString kRig = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb");
 static const QString kProp = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/textured_pbr_quad.glb");
 static const QString kAnimProp = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/ticks_anim.glb");
+// The cross-file clip fixtures: animation-only glTF (zero meshes), one for
+// rig2.glb's own rig and one for a foreign rig (fixtures/make_rig_glb.py).
+static const QString kWalkAnim = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2_walk_anim.glb");
+static const QString kMismatchAnim = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig_mismatch_anim.glb");
 
 static iris::SkeletonPtr findSkeleton(const iris::SceneNodePtr &node)
 {
@@ -190,6 +194,130 @@ int main(int argc, char **argv)
     model.advance(0.25f);
     CHECK(!model.isPlaying() && qFuzzyCompare(model.time() + 1.0f, held + 1.0f),
           "transport: pause holds the clock");
+
+    // ================= X — cross-file clips (the Mixamo workflow) =========
+    // Load the character once, then load animations as separate files. The
+    // clip -> bone join is by SCENE-NODE NAME, so the fixtures are meshless
+    // glTF documents whose node names either do or do not match rig2.glb's.
+    {
+        avatar::AvatarPreviewModel cross;
+        CHECK(cross.load(kRig), "X: the character loads");
+        const int ownClips = cross.clips().size();
+
+        // --- X1: an ANIMATION-ONLY file (zero meshes) loads at all ---
+        // Every mesh loader in the tree rejects a meshless file outright
+        // (meshnode.cpp returns null on mNumMeshes == 0), which is why this
+        // path parses the aiScene itself and reads clips only.
+        QString error;
+        avatar::ClipLoadReport report;
+        const bool added = cross.loadAnimation(kWalkAnim, &error, &report);
+        if (!added) std::printf("    %s\n", qUtf8Printable(error));
+        CHECK(added, "X1: an animation-only file (0 meshes) loads onto the character");
+        CHECK(report.added == 1 && report.matched == 1 && report.boneChannels == 1,
+              "X1: one clip added, its one bone channel matched the rig");
+
+        // --- X2: clips ACCUMULATE and are named after the animation file ---
+        const auto all = cross.clips();
+        CHECK(all.size() == ownClips + 1, "X2: the clip list accumulates (no replacement)");
+        const auto &added_clip = all.last();
+        CHECK(added_clip.external && added_clip.source == QFileInfo(kWalkAnim).absoluteFilePath(),
+              "X2: the new clip records the file it came from");
+        CHECK(added_clip.rawName == "mixamo.com" &&
+                  added_clip.name == QFileInfo(kWalkAnim).completeBaseName(),
+              "X2: a junk clip name displays as the ANIMATION file's base name");
+        CHECK(!all.first().external && all.first().active,
+              "X2: loading an animation does not switch what is playing");
+
+        // --- X3: switching to it MOVES BONES, differently from the own clip -
+        cross.setClip("Idle");
+        cross.setTime(0.5f);
+        const QVector3D idleTip = cross.bones()[1].position;
+        CHECK(cross.setClip(added_clip.name), "X3: the cross-file clip is selectable by name");
+        CHECK(cross.activeClip() == added_clip.name, "X3: ... and becomes the active clip");
+        CHECK(cross.time() == 0.0f, "X3: ... rewound to 0");
+        const QVector3D restTip = cross.bones()[1].position;
+        // MID-clip, deliberately: the cross-file clip is 0.5 s and looping, so
+        // sampling it at exactly 0.5 wraps to 0 (Animation::getSampleTime is
+        // an fmod) and would read as "the clip does nothing".
+        cross.setTime(0.25f);
+        const QVector3D crossTip = cross.bones()[1].position;
+        std::printf("    jointTip: Idle@0.5 (%.3f, %.3f, %.3f)  cross@0 (%.3f, %.3f, %.3f)  "
+                    "cross@0.5 (%.3f, %.3f, %.3f)\n",
+                    idleTip.x(), idleTip.y(), idleTip.z(), restTip.x(), restTip.y(), restTip.z(),
+                    crossTip.x(), crossTip.y(), crossTip.z());
+        CHECK((crossTip - restTip).length() > 0.05f,
+              "X3: the foreign clip MOVES the rig's bones over time (non-identity pose)");
+        CHECK((crossTip - idleTip).length() > 0.05f,
+              "X3: ... to a different pose than the character's own clip reaches");
+
+        // --- X4: switching while playing keeps playing, from t = 0 ---
+        cross.play();
+        cross.advance(0.2f);
+        CHECK(cross.isPlaying() && cross.time() > 0.1f, "X4: playing the cross-file clip");
+        CHECK(cross.setClip("Idle") && cross.isPlaying() && cross.time() == 0.0f,
+              "X4: switching while playing keeps playing, from the start of the new clip");
+        cross.stop();
+
+        // --- X5: a foreign rig is REFUSED, by name ---
+        QString mismatchError;
+        avatar::ClipLoadReport mismatch;
+        const int before = cross.clips().size();
+        CHECK(!cross.loadAnimation(kMismatchAnim, &mismatchError, &mismatch),
+              "X5: a clip animating a different rig is refused, not silently loaded");
+        std::printf("    refusal: %s\n", qUtf8Printable(mismatchError));
+        CHECK(mismatchError.contains("hips"), "X5: ... and the message names the unmatched bone");
+        CHECK(cross.clips().size() == before, "X5: ... and nothing was added");
+        CHECK(mismatch.matched == 0 && mismatch.boneChannels == 1, "X5: ... 0 of 1 bones matched");
+
+        // --- X6: the error cases a script can hit ---
+        avatar::AvatarPreviewModel empty;
+        QString emptyError;
+        CHECK(!empty.loadAnimation(kWalkAnim, &emptyError) && !emptyError.isEmpty(),
+              "X6: loading an animation with no character loaded fails with a message");
+        QString missingError;
+        CHECK(!cross.loadAnimation(kRig + ".nope", &missingError) && missingError.contains("no such file"),
+              "X6: a missing file fails with a message");
+        QString noAnimError;
+        CHECK(!cross.loadAnimation(kProp, &noAnimError) && noAnimError.contains("no animation"),
+              "X6: a file with no clips at all fails with a message");
+    }
+
+    // ================= X7 — root motion (walk in place vs as authored) ====
+    {
+        avatar::AvatarPreviewModel rm;
+        CHECK(rm.load(kRig), "X7: character loaded");
+        CHECK(!rm.rootMotion(), "X7: root motion is OFF by default (locomotion plays in place)");
+        // rig2.glb's clips are rotation-only, so the stripping must be a no-op
+        // on them: the pose at t=0.5 has to be identical either way.
+        rm.setClip("Idle");
+        rm.setTime(0.5f);
+        const QVector3D inPlace = rm.bones()[1].position;
+        rm.setRootMotion(true);
+        CHECK(rm.rootMotion(), "X7: root motion toggles on");
+        rm.setTime(0.5f);
+        const QVector3D authored = rm.bones()[1].position;
+        CHECK((authored - inPlace).length() < 1e-4f,
+              "X7: a rotation-only clip is unaffected by the root-motion policy");
+        rm.setRootMotion(false);
+        rm.setTime(0.5f);
+        CHECK((rm.bones()[1].position - inPlace).length() < 1e-4f,
+              "X7: toggling back restores the same pose (the clip is rebuilt, not consumed)");
+    }
+
+    // ================= X8 — the session list the left column shows ========
+    {
+        avatar::AvatarPreviewModel hist;
+        CHECK(hist.history().isEmpty(), "X8: the session list starts empty");
+        hist.load(kRig);
+        CHECK(hist.history().size() == 1 && hist.history().first() == QFileInfo(kRig).absoluteFilePath(),
+              "X8: a load records the file");
+        hist.load(kRig);
+        CHECK(hist.history().size() == 1, "X8: re-loading the same file does not duplicate the row");
+        CHECK(!hist.forget(kProp), "X8: forgetting a file that is not listed fails");
+        CHECK(hist.forget(kRig), "X8: forget drops the row");
+        CHECK(hist.history().isEmpty() && !hist.isLoaded(),
+              "X8: ... and clears the preview when it was the loaded file");
+    }
 
     // --- clear ---
     const QString scratch = model.extractDir();

@@ -79,6 +79,8 @@ public:
 private:
     void updateCameraRot();
     void applyClipPlanes();
+    /// Ground grid spacing/extent for the current subject size.
+    void applyGrid();
     static QImage toQImage(const jahshaka::engine::Image &img);
 
     std::weak_ptr<jahshaka::engine::Engine> mEngine;

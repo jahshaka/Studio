@@ -28,7 +28,14 @@ Clips:
                            derives a display name from the source file, and the
                            suite asserts it)
 
-Run:  python3 make_rig_glb.py            (writes rig2.glb beside this script)
+Also generated here (cross-file animation loading — "the Mixamo workflow"):
+    rig2_walk_anim.glb      an ANIMATION-ONLY glTF (zero meshes) for the SAME
+                            rig, so its clip joins the loaded character by node
+                            name. Its clip is called "mixamo.com" too.
+    rig_mismatch_anim.glb   an animation-only glTF for a DIFFERENT rig, so
+                            loadAnimation has something to refuse.
+
+Run:  python3 make_rig_glb.py            (writes all three beside this script)
 """
 
 import json
@@ -168,16 +175,103 @@ gltf = {
     "buffers": [{"byteLength": len(blob)}],
 }
 
-json_chunk = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
-json_chunk += b" " * ((4 - len(json_chunk) % 4) % 4)
-bin_chunk = bytes(blob)
-bin_chunk += b"\0" * ((4 - len(bin_chunk) % 4) % 4)
+def write_glb(doc, payload, filename):
+    """Packs a glTF JSON document + its binary blob into a .glb beside this file."""
+    json_chunk = json.dumps(doc, separators=(",", ":")).encode("utf-8")
+    json_chunk += b" " * ((4 - len(json_chunk) % 4) % 4)
+    bin_chunk = bytes(payload)
+    bin_chunk += b"\0" * ((4 - len(bin_chunk) % 4) % 4)
 
-glb = struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(json_chunk) + 8 + len(bin_chunk))
-glb += struct.pack("<II", len(json_chunk), 0x4E4F534A) + json_chunk
-glb += struct.pack("<II", len(bin_chunk), 0x004E4942) + bin_chunk
+    glb = struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(json_chunk) + 8 + len(bin_chunk))
+    glb += struct.pack("<II", len(json_chunk), 0x4E4F534A) + json_chunk
+    glb += struct.pack("<II", len(bin_chunk), 0x004E4942) + bin_chunk
 
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rig2.glb")
-with open(out, "wb") as f:
-    f.write(glb)
-print("wrote %s (%d bytes)" % (out, len(glb)))
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+    with open(out, "wb") as f:
+        f.write(glb)
+    print("wrote %s (%d bytes)" % (out, len(glb)))
+
+
+write_glb(gltf, blob, "rig2.glb")
+
+
+# ===========================================================================
+# The two ANIMATION-ONLY fixtures (cross-file clip loading).
+#
+# A Mixamo animation download is usually a with-skin export (a mesh AND a clip)
+# — rig2.glb already stands in for that shape — but "Animation only" exports
+# exist and have ZERO meshes, which every mesh loader in the tree rejects
+# outright. These two are meshless glTF documents: nodes and one animation.
+#
+#   rig2_walk_anim.glb      the SAME node names as rig2.glb, so the clip joins
+#                           the loaded character by name. Its clip carries the
+#                           junk name every Mixamo clip has, so the display name
+#                           has to come from the ANIMATION file's base name.
+#   rig_mismatch_anim.glb   a foreign rig ("hips"/"spine"/"head"): nothing
+#                           matches, and loadAnimation must REFUSE it by name
+#                           instead of silently loading a clip that moves
+#                           nothing.
+# ===========================================================================
+
+
+def build_anim_only(nodes_spec, clip_name, target_index, times, quats):
+    """A meshless glTF: (name, translation) nodes in a single chain, one clip.
+
+    The translations matter and are not decoration. assimp SYNTHESISES the
+    position and scaling keys of a channel that only rotates, filling them from
+    the target node's own local transform — so an animation file's bind
+    translations travel with its clip onto whatever rig plays it. These
+    fixtures therefore mirror rig2.glb's chain exactly (jointRoot at the
+    origin, jointTip one unit up); getting it wrong moves the loaded character
+    instead of posing it.
+    """
+    global blob, views, accessors
+    blob = bytearray()
+    views = []
+    accessors = []
+
+    t_data = struct.pack("<%df" % len(times), *times)
+    acc_t = add_accessor(add_view(t_data), FLOAT, len(times), "SCALAR",
+                         [min(times)], [max(times)])
+    q_data = b"".join(struct.pack("<4f", *q) for q in quats)
+    acc_q = add_accessor(add_view(q_data), FLOAT, len(quats), "VEC4")
+
+    nodes = []
+    for i, (name, translation) in enumerate(nodes_spec):
+        node = {"name": name}
+        if i + 1 < len(nodes_spec):
+            node["children"] = [i + 1]
+        if translation is not None:
+            node["translation"] = list(translation)
+        nodes.append(node)
+
+    doc = {
+        "asset": {"version": "2.0", "generator": "jahshaka tests/avatar make_rig_glb.py"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": nodes,
+        "bufferViews": views,
+        "accessors": accessors,
+        "animations": [{
+            "name": clip_name,
+            "samplers": [{"input": acc_t, "output": acc_q, "interpolation": "LINEAR"}],
+            "channels": [{"sampler": 0, "target": {"node": target_index, "path": "rotation"}}],
+        }],
+        "buffers": [{"byteLength": len(blob)}],
+    }
+    return doc
+
+
+# Same names AND the same bind chain as rig2.glb, and a rotation the file's own
+# "Idle" never reaches (+90 about Z at t = 0.5) so a test can tell the two clips
+# apart by pose.
+SAME_RIG = [("Armature", None), ("jointRoot", None), ("jointTip", (0.0, 1.0, 0.0))]
+write_glb(build_anim_only(SAME_RIG, "mixamo.com", 1,
+                          [0.0, 0.5], [quat_z(0.0), quat_z(90.0)]),
+          blob, "rig2_walk_anim.glb")
+
+# A different rig entirely: not one channel name exists in rig2.glb's tree.
+FOREIGN_RIG = [("Armature", None), ("hips", None), ("spine", (0.0, 1.0, 0.0))]
+write_glb(build_anim_only(FOREIGN_RIG, "Walk", 1,
+                          [0.0, 0.5], [quat_z(0.0), quat_z(90.0)]),
+          blob, "rig_mismatch_anim.glb")

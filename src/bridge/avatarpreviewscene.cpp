@@ -43,6 +43,14 @@ bool AvatarPreviewScene::attach(View *view)
         mScene->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.22f, 0.22f, 0.26f));
         mMirror.reset(new SceneMirror(mScene));
         mMirror->setLightWires(false);          // a preview never shows editor wires
+        // A PLAIN WHITE ground grid, so the character stands on something
+        // instead of floating in space. Colours and extent are the preview's,
+        // not the editor's (the editor keeps its blue-grey ±100 floor); the
+        // spacing follows the subject, because a Mixamo character imports
+        // ~170 units tall and a 1-unit grid under it is a white sheet.
+        mMirror->setGridColours(Colour(1.0f, 1.0f, 1.0f, 0.16f),
+                                Colour(1.0f, 1.0f, 1.0f, 0.38f));
+        applyGrid();
         mOverlay.reset(new BoneOverlay(mScene));
         if (mModel) mMirror->setSource(mModel->document());
     }
@@ -100,6 +108,7 @@ void AvatarPreviewScene::frameSubject()
     mSubjectRadius = bound.radius;
     mPivot = bound.pos;
     mDistFromPivot = preview::framingDistance(bound.radius, camera->angle);
+    applyGrid();                                  // the grid follows the subject's scale
     // A Mixamo character imports 138-179 units tall; iris's default farClip is
     // 500 and the framing distance is ~2.9 radii, so without this the subject
     // sits entirely beyond its own far plane and the view renders NOTHING.
@@ -108,6 +117,18 @@ void AvatarPreviewScene::frameSubject()
     mYaw = mTargetYaw = 0.0f;
     mPitch = mTargetPitch = -5.0f;
     updateCameraRot();
+}
+
+void AvatarPreviewScene::applyGrid()
+{
+    if (!mMirror) return;
+    // ~8 cells across the subject, and a floor four subjects wide. Both are
+    // derived, so a 2-unit test rig and a 179-unit character get the same
+    // picture at different scales. No subject, no floor: an empty page would
+    // otherwise show a grid framed for a 1-unit subject, edge-on.
+    const float spacing = qMax(mSubjectRadius, 0.25f) * 0.25f;
+    mMirror->setGridExtent(spacing * 20.0f);
+    mMirror->setGrid(mModel && mModel->isLoaded(), spacing);
 }
 
 void AvatarPreviewScene::applyClipPlanes()
@@ -186,6 +207,7 @@ void AvatarPreviewScene::step(float dt, int width, int height)
 
     // ORDER (§0.5.1): pose -> mirror (refreshes global transforms) -> overlay.
     mModel->advance(dt);
+    applyGrid();     // cheap (two floats); tracks load/clear without a signal
     auto camera = mModel->camera();
     if (camera) camera->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror && mView) {
@@ -229,6 +251,15 @@ QImage AvatarPreviewScene::renderImage(int width, int height)
     if (temporary && !attach(shot)) { engine->destroyView(shot); return QImage(); }
     shot->setScene(mScene);
     shot->setShadows(false);
+    // step() only mirrors when it has a view (`mMirror && mView`), and this
+    // function clears mView when it is done with a shot view. Without making
+    // the shot the current view for the duration, the SECOND and every later
+    // snapshot of a page that is not on screen renders whatever pose was
+    // current at the FIRST one — the document advances, the engine never hears
+    // about it. (Found by rendering two clips through avatar.snapshot: the
+    // second image came back byte-identical to the first.)
+    View *const previousView = mView;
+    mView = shot;
     step(0.0f, width, height);
     if (mMirror) {
         mMirror->applySky(shot);
@@ -243,7 +274,7 @@ QImage AvatarPreviewScene::renderImage(int width, int height)
     QImage result;
     if (shot->readPixels(img)) result = toQImage(img);
     shot->setScene(nullptr);
-    if (mView == shot) mView = nullptr;
+    mView = previousView == shot ? nullptr : previousView;
     engine->destroyView(shot);
     return result;
 }

@@ -1602,8 +1602,11 @@ void MainWindow::setupViewPort()
 	hl->addWidget(editor_menu);
 	hl->addWidget(effect_menu);
 	hl->addWidget(assets_menu);
-	hl->addWidget(publish_menu);
+	// Avatar sits before Publish: Publish is the end of the pipeline and stays
+	// last in the menu. This is BUTTON ORDER only — the stacked-widget indices
+	// switchSpace hard-codes are unchanged (AVATAR is still appended last).
 	hl->addWidget(avatar_menu);
+	hl->addWidget(publish_menu);
 
 	assets_panel->setLayout(hl);
 
