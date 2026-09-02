@@ -1,0 +1,90 @@
+// scripting.e2e.avatar — AVATAR_MODULE_SPEC PART 0, S8: the Avatar page's
+// whole surface driven from OUTSIDE the app, through the same verbs the
+// buttons call. Runs inside the real binary (--script, engine viewport up,
+// scratch HOME), which is the only way a script — or an MCP session — can
+// prove the skeleton-only view.
+//
+// Note what is NOT here: no project is created, no asset imported, no scene
+// touched. Part 0 is a viewer.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function isGreen(c) { return c.g > 110 && c.g > c.r * 1.8 && c.g > c.b * 1.8; }
+function isRed(c) { return c.r > 40 && c.r > c.g * 1.8 && c.r > c.b * 1.8; }
+
+var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
+
+// ---- the space exists and the window switches to it ----
+assert(app.space("avatar"), "app.space('avatar')");
+
+// ---- load, with no project open at all ----
+assert(!avatar.preview(), "nothing is loaded to begin with");
+var info = avatar.loadPreview(RIG);
+assert(!!info, "avatar.loadPreview -> " + JSON.stringify(info));
+assert(info.bones === 2, "the rig reports 2 bones");
+assert(info.meshes === 1, "one mesh (the single-mesh path ITEM ZERO fixed)");
+assert(info.influences === 4, "4 influences per vertex");
+assert(info.clips.length === 2, "two clips");
+
+// ---- display names: every Mixamo clip is called "mixamo.com" ----
+var junk = null;
+for (var i = 0; i < info.clips.length; ++i)
+    if (info.clips[i].rawName === "mixamo.com") junk = info.clips[i];
+assert(junk !== null, "the fixture carries a clip named 'mixamo.com'");
+assert(junk.name === "rig2", "a junk clip name displays as the file's base name");
+
+// ---- the pose reaches the document (ITEM ZERO, from a script) ----
+assert(avatar.setClip("Idle"), "avatar.setClip('Idle')");
+avatar.setTime(0);
+var tip0 = avatar.bones()[1];
+assert(tip0.name === "jointTip" && tip0.parent === "jointRoot",
+       "avatar.bones() reports the nearest-bone-ancestor link");
+avatar.setTime(0.5);
+var tipHalf = avatar.bones()[1];
+var moved = Math.abs(tipHalf.position.x - tip0.position.x) +
+            Math.abs(tipHalf.position.y - tip0.position.y);
+assert(moved > 0.05, "the bone moved between t=0 and t=0.5 (moved " + moved.toFixed(3) + ")");
+avatar.setTime(0);
+
+// ---- the four toggle combinations, at the pixel level ----
+assert(avatar.setMeshVisible(true) && avatar.setSkeletonVisible(false), "mesh only");
+var meshShot = avatar.snapshot("avatar_mesh.png", 160, 160, [{ x: 0.5, y: 0.5 }]);
+console.log("mesh-only centre: " + JSON.stringify(meshShot.center));
+assert(isRed(meshShot.center), "mesh on / skeleton off -> the mesh at the centre");
+
+assert(avatar.setMeshVisible(false) && avatar.setSkeletonVisible(true), "skeleton only");
+var boneShot = avatar.snapshot("avatar_skeleton.png", 160, 160, [{ x: 0.5, y: 0.5 }]);
+console.log("skeleton-only centre: " + JSON.stringify(boneShot.center));
+assert(isGreen(boneShot.center), "mesh off / skeleton on -> the bone overlay at the centre");
+assert(!isRed(boneShot.center), "... and no mesh there");
+
+assert(avatar.setSkeletonVisible(false), "neither");
+var emptyShot = avatar.snapshot("avatar_none.png", 160, 160, []);
+console.log("neither centre: " + JSON.stringify(emptyShot.center));
+assert(!isRed(emptyShot.center) && !isGreen(emptyShot.center),
+       "neither toggle -> background only");
+
+// ---- transport ----
+assert(avatar.playClip("Idle"), "avatar.playClip('Idle')");
+assert(avatar.preview().playing === true, "the transport is running");
+assert(avatar.pause(), "avatar.pause()");
+assert(avatar.preview().playing === false, "paused");
+avatar.setTime(0.4);
+assert(avatar.stop(), "avatar.stop()");
+assert(avatar.time() === 0, "stop rewinds to 0");
+
+// ---- refusals are clean errors, never crashes ----
+var refusedBadClip = false;
+try { avatar.setClip("no such clip"); } catch (e) { refusedBadClip = true; }
+assert(refusedBadClip, "avatar.setClip refuses an unknown clip");
+var refusedBadFile = false;
+try { avatar.loadPreview("/nowhere/at/all.fbx"); } catch (e) { refusedBadFile = true; }
+assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
+
+// ---- clear ----
+assert(avatar.clearPreview(), "avatar.clearPreview()");
+assert(!avatar.preview(), "nothing is loaded again");
+
+console.log("e2e_avatar: OK");

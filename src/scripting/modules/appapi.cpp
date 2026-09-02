@@ -23,7 +23,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "Switches to desktop 1-4; app.desktop() just returns the current one.",
           Needs::Window },
         { "space", "app.space(name) -> bool",
-          "Switches the main window space: desktop, player, editor, materials, assets, publish. player and editor need an open project.",
+          "Switches the main window space: desktop, player, editor, materials, assets, publish, avatar. player and editor need an open project.",
           Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -58,7 +58,8 @@ bool AppApi::space(const QString &name)
     else if (s == "materials" || s == "effects") space = WindowSpaces::EFFECT;
     else if (s == "assets")                      space = WindowSpaces::ASSETS;
     else if (s == "publish")                     space = WindowSpaces::PUBLISH;
-    else return fail(QStringLiteral("app.space: unknown space '%1' (desktop, player, editor, materials, assets, publish)").arg(name));
+    else if (s == "avatar")                      space = WindowSpaces::AVATAR;
+    else return fail(QStringLiteral("app.space: unknown space '%1' (desktop, player, editor, materials, assets, publish, avatar)").arg(name));
 
     const bool sceneOpen = host.services && host.services->project && host.services->project->isSceneOpen();
     if ((space == WindowSpaces::PLAYER || space == WindowSpaces::EDITOR) && !sceneOpen)

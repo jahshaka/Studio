@@ -270,3 +270,19 @@ set_tests_properties(scripting.e2e.shader_thumbnail PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 180)
+
+# Avatar module, Part 0 (AVATAR_MODULE_SPEC S8): the Avatar page's surface
+# driven from outside the app — space switch, loadPreview off disk (no project,
+# no library, no database), clip display names, the pose through avatar.bones(),
+# and avatar.snapshot proving all the toggle combinations at the pixel level.
+# NOT --headless: the snapshot needs the engine.
+configure_file(scripts/e2e_avatar.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-avatar)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.avatar
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_avatar.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.avatar PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 240)

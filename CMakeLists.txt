@@ -121,6 +121,13 @@ set(SRCS
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
     src/modules/publish/publishrecord.cpp
+    src/modules/avatar/avatarmodule.cpp
+    src/modules/avatar/avatarpage.cpp
+    src/modules/avatar/avatarpreviewmodel.cpp
+    src/modules/avatar/api/avatarapi.cpp
+    src/bridge/avatarpreviewscene.cpp
+    src/bridge/avatarpreview.cpp
+    src/viewport/boneoverlay.cpp
     src/export/gltfexporter.cpp
     src/export/exportservice.cpp
     src/export/previewlauncher.cpp
@@ -325,6 +332,14 @@ set(HEADERS
     src/modules/materials/materialsmodule.h
     src/modules/publish/publishmodule.h
     src/modules/publish/publishrecord.h
+    src/modules/avatar/avatarmodule.h
+    src/modules/avatar/avatarpage.h
+    src/modules/avatar/avatarpreviewmodel.h
+    src/modules/avatar/avatarpreviewwidget.h
+    src/modules/avatar/api/avatarapi.h
+    src/bridge/avatarpreviewscene.h
+    src/bridge/avatarpreview.h
+    src/viewport/boneoverlay.h
     src/export/gltfexporter.h
     src/export/exportservice.h
     src/export/previewlauncher.h

@@ -39,6 +39,7 @@ namespace materials { class EffectsPage; }
 class StudioModule;
 class MaterialsModule;
 class PublishModule;
+class AvatarModule;
 
 class QPushButton;
 class QStandardItem;
@@ -113,7 +114,11 @@ enum WindowSpaces : int {
     EDITOR,
 	EFFECT,
     ASSETS,
-    PUBLISH
+    PUBLISH,
+    // AVATAR is APPENDED, and its page is appended AFTER publishView: switchSpace
+    // uses hard-coded stack indices, so inserting anywhere else switches every
+    // space above it to the wrong widget (AVATAR_MODULE_SPEC R0.14).
+    AVATAR
 };
 
 enum class Widget
@@ -522,7 +527,9 @@ private:
 	QPushButton *effect_menu;
 	QPushButton *assets_menu;
 	QPushButton *publish_menu;
+	QPushButton *avatar_menu;
 	QWidget *publishView = nullptr;   // stacked page 5: publishing stub
+	QWidget *avatarView = nullptr;    // stacked page 6: the avatar module
 	QWidget *assets_panel;
 	QLabel *jlogo;
 	QPushButton *help;
@@ -596,6 +603,7 @@ private:
 	QVector<StudioModule*> modules;                  // audit §6.2: the shell's module list
 	MaterialsModule *materialsModule = nullptr;
 	PublishModule *publishModule = nullptr;
+	AvatarModule *avatarModule = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.

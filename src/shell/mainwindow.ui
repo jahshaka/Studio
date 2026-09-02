@@ -51,7 +51,7 @@ QToolButton:checked
 	border-bottom: 1px solid black;
 }
 
-#worlds_menu, #player_menu, #editor_menu, #assets_menu, #effects_menu, #publish_menu {
+#worlds_menu, #player_menu, #editor_menu, #assets_menu, #effects_menu, #publish_menu, #avatar_menu {
 	font-size: 17px;
 	padding: 14px;
 	border-bottom-width: 4px;

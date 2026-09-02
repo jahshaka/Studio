@@ -144,6 +144,7 @@ For more information see the LICENSE file
 #include "modules/materials/effectspage.h"
 #include "modules/materials/materialsmodule.h"
 #include "modules/publish/publishmodule.h"
+#include "modules/avatar/avatarmodule.h"
 #include "modules/studiomodule.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
@@ -832,6 +833,15 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			break;
 		}
 
+		case WindowSpaces::AVATAR: {
+			ui->stackedWidget->setCurrentIndex(6);
+			ui->stackedWidget->currentWidget()->setFocus();
+			toggleWidgets(false);
+			toolBar->setVisible(false);
+			if (projectService->isSceneOpen()) playSceneBtn->hide();
+			break;
+		}
+
         default: break;
     }
 
@@ -861,6 +871,9 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 	publish_menu->setStyleSheet(activeSpace == WindowSpaces::PUBLISH ? selectedMenu : unselectedMenu);
 	publish_menu->setCursor(Qt::PointingHandCursor);
 
+	avatar_menu->setStyleSheet(activeSpace == WindowSpaces::AVATAR ? selectedMenu : unselectedMenu);
+	avatar_menu->setCursor(Qt::PointingHandCursor);
+
 	editor_menu->setStyleSheet(activeSpace == WindowSpaces::EDITOR ? selectedMenu : unselectedMenu);
 	player_menu->setStyleSheet(activeSpace == WindowSpaces::PLAYER ? selectedMenu : unselectedMenu);
 
@@ -876,6 +889,7 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 		const QList<QPair<QPushButton *, WindowSpaces>> spaceButtons = {
 			{ worlds_menu, WindowSpaces::DESKTOP }, { assets_menu, WindowSpaces::ASSETS },
 			{ effect_menu, WindowSpaces::EFFECT }, { publish_menu, WindowSpaces::PUBLISH },
+			{ avatar_menu, WindowSpaces::AVATAR },
 			{ editor_menu, WindowSpaces::EDITOR }, { player_menu, WindowSpaces::PLAYER }
 		};
 		for (const auto &pair : spaceButtons)
@@ -1574,6 +1588,9 @@ void MainWindow::setupViewPort()
 	publish_menu = new QPushButton("Publish");
 	publish_menu->setObjectName("publish_menu");
 	publish_menu->setCursor(Qt::PointingHandCursor);
+	avatar_menu = new QPushButton("Avatar");
+	avatar_menu->setObjectName("avatar_menu");
+	avatar_menu->setCursor(Qt::PointingHandCursor);
 
 	assets_panel = new QWidget;
 
@@ -1586,6 +1603,7 @@ void MainWindow::setupViewPort()
 	hl->addWidget(effect_menu);
 	hl->addWidget(assets_menu);
 	hl->addWidget(publish_menu);
+	hl->addWidget(avatar_menu);
 
 	assets_panel->setLayout(hl);
 
@@ -1648,7 +1666,7 @@ void MainWindow::setupViewPort()
 	// whenever the window is active (Qlementine only hijacks the policy of
 	// Strong/ClickFocus buttons, so NoFocus sticks).
 	for (auto *chrome : { worlds_menu, player_menu, editor_menu, effect_menu,
-	                      assets_menu, publish_menu, help, prefs })
+	                      assets_menu, publish_menu, avatar_menu, help, prefs })
 		chrome->setFocusPolicy(Qt::NoFocus);
 
 	ui->ohlayout->addWidget(jlogo, 0, 0, Qt::AlignLeft);
@@ -1663,6 +1681,7 @@ void MainWindow::setupViewPort()
 	connect(assets_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::ASSETS); });
 	connect(effect_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::EFFECT); });
 	connect(publish_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::PUBLISH); });
+	connect(avatar_menu, &QPushButton::pressed, [this]() { switchSpace(WindowSpaces::AVATAR); });
 
     sceneContainer = new QWidget;
     QSizePolicy sceneContainerPolicy;
@@ -2057,7 +2076,8 @@ void MainWindow::setupDesktop()
 	moduleHost.shellWidget = this;
 	materialsModule = new MaterialsModule;
 	publishModule = new PublishModule;
-	modules = { materialsModule, publishModule };
+	avatarModule = new AvatarModule;
+	modules = { materialsModule, publishModule, avatarModule };
 	for (auto *module : modules) module->initialize(moduleHost);
 	materialsModule->setAssetView(_assetView);
 
@@ -2066,6 +2086,9 @@ void MainWindow::setupDesktop()
 	ui->stackedWidget->addWidget(playerView);
 	publishView = publishModule->createPage();
 	ui->stackedWidget->addWidget(publishView);
+	// AVATAR = stack index 6, APPENDED (R0.14: switchSpace's indices are hard-coded).
+	avatarView = avatarModule->createPage();
+	ui->stackedWidget->addWidget(avatarView);
 
 	connect(pmContainer, SIGNAL(fileToOpen(bool)), SLOT(openProject(bool)));
 	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));

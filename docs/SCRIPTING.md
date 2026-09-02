@@ -92,7 +92,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | verb | needs | description |
 |---|---|---|
 | `app.desktop(n=0) -> current` | window | Switches to desktop 1-4; app.desktop() just returns the current one. |
-| `app.space(name) -> bool` | window | Switches the main window space: desktop, player, editor, materials, assets, publish. player and editor need an open project. |
+| `app.space(name) -> bool` | window | Switches the main window space: desktop, player, editor, materials, assets, publish, avatar. player and editor need an open project. |
 | `app.quit() -> bool` | window | Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes. |
 
 ## desktop
@@ -189,4 +189,24 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `graph.deselect() -> bool` | document | Clears the selection (canvas and script-side). |
 | `graph.settings() -> {name, blendMode, bakeResolution}` | document | The current graph's material settings; blendMode is one of 'Opaque' \| 'Masked' \| 'Translucent' \| 'Additive' \| 'Modulate'. |
 | `graph.setBlendMode(mode) -> bool` | document | Sets the master material's blend mode ('Opaque' \| 'Masked' \| 'Translucent' \| 'Additive' \| 'Modulate' — the Unreal set; 'Blend' is accepted as the legacy name for 'Translucent'). Material state only: bakes are unaffected, the evaluated material's alphaMode changes. |
+
+## avatar
+
+| verb | needs | description |
+|---|---|---|
+| `avatar.loadPreview(path) -> {name, file, bones, meshes, vertices, influences, clips:[{name, rawName, length}]}` | document | Loads a rigged model file (fbx/glb/obj/...) into the Avatar page's own preview — no library row, no project pin, no database write, no undo command. Embedded textures are extracted to a per-session scratch dir. Replaces whatever was loaded (one subject at a time). |
+| `avatar.clearPreview() -> bool` | document | Removes the previewed model and deletes its scratch extract dir. |
+| `avatar.preview() -> {name, file, bones, meshes, vertices, influences, clips, activeClip, time, duration, playing, looping, meshVisible, skeletonVisible} \| undefined` | document | Everything the page shows about the loaded model, including transport and toggle state. Undefined (falsy) when nothing is loaded. |
+| `avatar.setMeshVisible(on) -> bool` | document | Shows or hides the skinned mesh. Independent of the skeleton toggle: all four combinations are valid. |
+| `avatar.setSkeletonVisible(on) -> bool` | document | Shows or hides the bone-line overlay. Independent of the mesh toggle. |
+| `avatar.clips() -> [{name, rawName, length, looping, active}]` | document | The clips embedded in the loaded file. `name` is the display name: every Mixamo clip is literally called 'mixamo.com', so junk names fall back to the source file's base name (`rawName` keeps what the file said). |
+| `avatar.setClip(name) -> bool` | document | Makes `name` (display or raw) the active clip and rewinds to 0. |
+| `avatar.playClip(name) -> bool` | document | Starts the preview transport. With a name, selects that clip first; without one, resumes the active clip. Drives the module's OWN preview document — never the editor scene's clock. |
+| `avatar.pause() -> bool` | document | Stops advancing time, keeping the current pose. |
+| `avatar.stop() -> bool` | document | Pauses and rewinds to time 0. |
+| `avatar.setLooping(on) -> bool` | document | Loops the active clip (default on). |
+| `avatar.setTime(seconds) -> bool` | document | Scrubs the preview to `seconds` and re-evaluates the pose immediately. |
+| `avatar.time() -> number` | document | The preview's current time in seconds. |
+| `avatar.bones() -> [{name, parent, position:{x,y,z}}]` | document | The rig as the preview resolves it: one entry per bone that has a scene node, `parent` being the NEAREST ancestor that is also a bone (assimp pivot nodes sit between real bones, and Bone::parentBone is empty for such rigs). World-space positions at the current time — the headless assertion surface for the pose and for the overlay. |
+| `avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}` | engine | Offscreen render of the Avatar page's preview scene to a PNG, with the centre pixel and each probe point ({x,y} normalized 0..1) returned so scripts can assert on colours — the way a script (or an MCP session) proves the skeleton-only view from outside the app. |
 
