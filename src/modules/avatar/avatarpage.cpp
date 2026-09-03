@@ -283,8 +283,10 @@ void AvatarPage::onLoadAnimationClicked()
                                  tr("Load a character first — an animation needs a rig to play on."));
         return;
     }
+    // ANIMATION_EXTS, not MODEL_EXTS: a mocap .bvh has no geometry, so it is
+    // loadable HERE (clips only) and nowhere else in the app.
     QStringList filters;
-    for (const auto &ext : Constants::MODEL_EXTS) filters.append("*." + ext);
+    for (const auto &ext : Constants::ANIMATION_EXTS) filters.append("*." + ext);
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Load an animation"), QFileInfo(mModel->filePath()).absolutePath(),
         tr("Animations (%1)").arg(filters.join(' ')));

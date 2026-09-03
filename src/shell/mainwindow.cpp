@@ -1264,7 +1264,16 @@ void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
 {
     QString filename;
     if (path.isEmpty()) {
-        filename = QFileDialog::getOpenFileName(this, "Load Mesh", "Mesh Files (*.obj *.fbx *.3ds *.dae *.c4d *.blend)");
+        // Built from MODEL_EXTS, like every other model dialog. The old literal
+        // was wrong twice over: it listed *.3ds and *.c4d, whose assimp
+        // importers are not compiled in (irisgl/CMakeLists.txt's allowlist) and
+        // never were, while omitting the glb/gltf everything else accepts — and
+        // it was passed in getOpenFileName's DIRECTORY parameter, so the dialog
+        // had no filter at all and opened on a nonexistent path.
+        QStringList patterns;
+        for (const auto &ext : Constants::MODEL_EXTS) patterns << "*." + ext;
+        filename = QFileDialog::getOpenFileName(this, tr("Load Mesh"), QString(),
+                                                tr("Mesh Files (%1)").arg(patterns.join(' ')));
     } else {
         filename = path;
     }

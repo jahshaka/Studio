@@ -11,7 +11,9 @@
 //   mesh off / skeleton off  background only
 //
 // Plus S7: the pose reaches the overlay — the bones are somewhere else at
-// t = 0.5 than at t = 0.
+// t = 0.5 than at t = 0. And S10: a MOCAP .bvh — a file with no geometry in it
+// at all — loaded onto the character through avatar.loadAnimation poses its
+// bones in the ENGINE and moves the drawn skeleton.
 //
 // The overlay draws 3D BONES (octahedra parent joint -> child joint, a marker
 // at each joint, a stub past each leaf), not lines, so this suite also pins:
@@ -45,6 +47,8 @@ static int failures = 0;
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 static const char *kRig = JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb";
+// S9's mocap clip: an ASCII .bvh on the same joint names (make_bvh_fixtures.py).
+static const char *kBvh = JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2_walk.bvh";
 
 // The fixture's material is baseColorFactor (0.9, 0.15, 0.15); the overlay is
 // the BoneOverlay default green; the sky is (28, 30, 36). Classify by
@@ -277,6 +281,54 @@ int main(int argc, char **argv)
         render(scene, *engine, view);
         CHECK((model.bones()[1].position - tip0).length() < 1e-4f,
               "S8: 0 -> 0.5 -> 0 restores the t=0 pose");
+    }
+
+    // ---- S10: a MOCAP .bvh clip poses the character, in the engine --------
+    // The document half of this lives in avatar.document B0-B4. Here is the
+    // claim that actually matters to a user: load a rigged character, load a
+    // separate mocap file onto it, and the BONES MOVE — evaluated by the
+    // engine, read back through Scene::bonePoses, and visible in the rendered
+    // overlay (its centroid shifts). A .bvh has no geometry at all, so this is
+    // the cross-file path at its purest.
+    //
+    // The sample time is 0.5 s, NOT the clip's 1.0 s length: a looping clip
+    // samples at fmod(t, length), so its end IS its start and the end of a
+    // clip can never be an assertion that anything moved.
+    {
+        QString error;
+        const int before = model.clips().size();
+        const bool added = model.loadAnimation(QString::fromUtf8(kBvh), &error);
+        if (!added) std::printf("    %s\n", qUtf8Printable(error));
+        CHECK(added, "S10: the mocap .bvh loads onto the loaded character");
+        CHECK(model.clips().size() == before + 1, "S10: its clip joins the list");
+        if (added) {
+            const QString name = model.clips().last().name;
+            CHECK(model.setClip(name), "S10: the mocap clip is selected");
+            model.setMeshVisible(false);
+            model.setSkeletonVisible(true);
+
+            model.setTime(0.0f);
+            Image a = render(scene, *engine, view);
+            const QVector3D tip0 = model.bones()[1].position;
+            const float centroid0 = overlayCentroidY(a);
+
+            model.setTime(0.5f);
+            Image b = render(scene, *engine, view);
+            const QVector3D tipHalf = model.bones()[1].position;
+            const float centroidHalf = overlayCentroidY(b);
+
+            show("S10 mocap t=0", a);
+            show("S10 mocap t=0.5", b);
+            std::printf("    jointTip (engine): t=0 (%.3f, %.3f, %.3f)  t=0.5 (%.3f, %.3f, %.3f)"
+                        "   overlay centroid %.1f -> %.1f\n",
+                        tip0.x(), tip0.y(), tip0.z(), tipHalf.x(), tipHalf.y(), tipHalf.z(),
+                        centroid0, centroidHalf);
+            CHECK((tipHalf - tip0).length() > 0.05f,
+                  "S10: THE CLAIM — the mocap clip moves the character's bones in the engine");
+            CHECK(count(b, isOverlay) > 10, "S10: the posed skeleton is still drawn");
+            CHECK(std::fabs(centroidHalf - centroid0) > 1.0f,
+                  "S10: ... and the drawn skeleton is somewhere else on screen for it");
+        }
     }
 
     // ---- teardown in the documented order ----

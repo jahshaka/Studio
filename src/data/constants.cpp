@@ -44,7 +44,23 @@ namespace Contants
     QList<QString> AUDIO_EXTS   = { "mp3", "wav", "ogg", "flac" };
     QList<QString> VIDEO_EXTS   = { "mp4", "mov", "webm", "mkv" };
     QList<QString> IMAGE_EXTS   = { "png", "jpg", "jpeg", "bmp", "tga" };
-    QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "blend", "glb", "gltf"};
+    // Model formats: what the ONE import pipeline sniffs as a mesh, what the
+    // model file dialogs offer, and what AssetHelper treats as geometry. Every
+    // entry MUST have its importer enabled in irisgl/CMakeLists.txt's assimp
+    // allowlist (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT is OFF) — an extension
+    // listed here whose importer is not compiled in fails at ReadFile, at
+    // runtime, with assimp's unhelpful "unknown file format" message.
+    // ply/stl are the scanner + 3D-print formats: geometry only, no materials,
+    // and for stl no UVs and no usable vertex normals (the canonical preset
+    // generates them).
+    QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "blend", "glb", "gltf", "ply", "stl"};
+    // Animation formats. bvh is MOCAP — the file is a joint hierarchy and a
+    // table of channel values, with no geometry in the format at all — so it
+    // belongs to the Avatar module's cross-file clip path and NOT to
+    // MODEL_EXTS: assimp synthesises a stick-figure mesh for a .bvh
+    // (SkeletonMeshBuilder), and importing one as a model would put that bogus
+    // stick figure in the asset library.
+    QList<QString> ANIMATION_EXTS = MODEL_EXTS + QList<QString>{ "bvh" };
     QList<QString> WHITELIST    = { "txt", "frag", "vert", "vs", "fs", "mtl"};
 	QString SHADER_EXT		    = "shader";
     QList<QString> MATERIAL_EXTS= { "material"};

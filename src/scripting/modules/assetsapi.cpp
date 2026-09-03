@@ -93,7 +93,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
           Needs::Document },
         { "import", "assets.import(path) -> guid",
-          "Imports a mesh file (obj, fbx, dae, blend, glb, gltf) into the global asset store. NOT undoable.",
+          "Imports a mesh file (obj, fbx, dae, blend, glb, gltf, ply, stl) into the global asset store. NOT undoable.",
           Needs::Document },
         { "importFile", "assets.importFile(path, drawerId?) -> guid",
           "Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable.",

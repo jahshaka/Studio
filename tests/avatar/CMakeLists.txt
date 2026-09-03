@@ -9,7 +9,12 @@
 #
 # The rigged fixture is GENERATED, not downloaded: fixtures/make_rig_glb.py
 # writes a ~3 KB two-bone skinned GLB with two named clips, one of them called
-# "mixamo.com" so the display-name rule is exercised by a real file.
+# "mixamo.com" so the display-name rule is exercised by a real file. Same for
+# the MOCAP fixtures: fixtures/make_bvh_fixtures.py writes two plain-ASCII
+# .bvh files (one on rig2.glb's joint names, one on a foreign rig) for the
+# avatar.document B-sections and avatar.preview's S10 — the .bvh importer only
+# exists because irisgl/CMakeLists.txt names ASSIMP_BUILD_BVH_IMPORTER in the
+# assimp allowlist, and those sections are what keeps that option honest.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia)
 
 # assethelper.cpp's link closure — the module's load route (D0.1 A) goes

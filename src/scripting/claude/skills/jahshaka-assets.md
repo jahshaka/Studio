@@ -20,7 +20,7 @@ drawer, `addToProject`, then `addToScene`.
 ## Importing
 
 ```js
-// Meshes (obj, fbx, dae, blend, glb, gltf) into the global store:
+// Meshes (obj, fbx, dae, blend, glb, gltf, ply, stl) into the global store:
 var guid = assets.import("/path/to/model.glb");
 
 // Anything the library supports — models, images, audio, video —

@@ -43,12 +43,20 @@ namespace {
 // Exporter placeholders that carry no information. Mixamo names EVERY clip
 // "mixamo.com"; the FBX SDK's default take names are the other three. A file
 // of N such clips would otherwise show as N identical rows (§0.8).
+//
+// "Motion" is the BVH case and it is not a heuristic: the format has no place
+// to record a clip name, so assimp's BVHLoader::CreateAnimation hard-codes
+// `anim->mName.Set("Motion")` for every .bvh file that will ever exist. Left
+// off this list, a mocap library loads as "Motion", "Motion 2", "Motion 3" —
+// with it, each clip shows as its own file's base name, which is the only
+// information the format actually carries.
 bool isJunkClipName(const QString &raw)
 {
     static const QSet<QString> junk = {
         QStringLiteral("mixamo.com"), QStringLiteral("take 001"),
         QStringLiteral("default take"), QStringLiteral("unreal take"),
         QStringLiteral("armature|mixamo.com|layer0"), QStringLiteral("animstack::take 001"),
+        QStringLiteral("motion"),
     };
     return raw.trimmed().isEmpty() || junk.contains(raw.trimmed().toLower());
 }

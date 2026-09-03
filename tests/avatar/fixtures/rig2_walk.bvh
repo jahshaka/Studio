@@ -1,0 +1,21 @@
+HIERARCHY
+ROOT jointRoot
+{
+  OFFSET 0.00 0.00 0.00
+  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation
+  JOINT jointTip
+  {
+    OFFSET 0.00 1.00 0.00
+    CHANNELS 3 Zrotation Xrotation Yrotation
+    End Site
+    {
+      OFFSET 0.00 1.00 0.00
+    }
+  }
+}
+MOTION
+Frames: 3
+Frame Time: 0.500000
+0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+0.50 0.00 0.00 -30.00 0.00 0.00 15.00 0.00 0.00
+1.00 0.00 0.00 -60.00 0.00 0.00 30.00 0.00 0.00

@@ -5,6 +5,9 @@
 //   every Mixamo character in existence, silently.
 //   The preview model (S1-S3b): clips and their display names, transport,
 //   the two independent toggles, and the bone tree the overlay draws.
+//   Cross-file clips (X1-X6) and MOCAP (B0-B4): a .bvh — animation-only by
+//   construction, the format every mocap library ships — loads onto a
+//   character through avatar.loadAnimation, and a foreign-rig one is refused.
 //
 // Everything here is what the `avatar` verbs call, which is why the verb
 // surface is testable with no engine at all.
@@ -16,6 +19,9 @@
 #include <QVector3D>
 #include <cmath>
 #include <cstdio>
+
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/animation/animation.h"
@@ -39,6 +45,10 @@ static const QString kAnimProp = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests
 // rig2.glb's own rig and one for a foreign rig (fixtures/make_rig_glb.py).
 static const QString kWalkAnim = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2_walk_anim.glb");
 static const QString kMismatchAnim = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig_mismatch_anim.glb");
+// The MOCAP fixtures (fixtures/make_bvh_fixtures.py): plain-ASCII .bvh, one on
+// rig2.glb's joint names and one on a foreign rig.
+static const QString kBvhWalk = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2_walk.bvh");
+static const QString kBvhMismatch = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig_mismatch.bvh");
 
 static iris::SkeletonPtr findSkeleton(const iris::SceneNodePtr &node)
 {
@@ -374,6 +384,127 @@ int main(int argc, char **argv)
         QString noAnimError;
         CHECK(!cross.loadAnimation(kProp, &noAnimError) && noAnimError.contains("no animation"),
               "X6: a file with no clips at all fails with a message");
+    }
+
+    // ================= B — MOCAP (.bvh), the headline of the format lane ==
+    // A .bvh is animation-only BY CONSTRUCTION: the format is a joint hierarchy
+    // and a table of per-frame channel values, with no geometry in it at all.
+    // That makes it the purest test of the cross-file clip path — and the one
+    // real-world format the Avatar module's Load Animation dialog exists for
+    // (every mocap library on earth ships .bvh).
+    //
+    // Its importer is only present because irisgl/CMakeLists.txt names
+    // ASSIMP_BUILD_BVH_IMPORTER in the allowlist (ALL_IMPORTERS_BY_DEFAULT is
+    // OFF): drop that option and B1 goes red instead of the app going quietly
+    // deaf to .bvh.
+    {
+        avatar::AvatarPreviewModel mocap;
+        CHECK(mocap.load(kRig), "B: the character loads");
+        const int ownClips = mocap.clips().size();
+
+        // --- B0: what assimp actually hands over for a .bvh ---------------
+        // NOT zero meshes, despite the format having no geometry: BVHLoader
+        // runs SkeletonMeshBuilder and synthesises a stick-figure mesh over the
+        // joint hierarchy (AI_CONFIG_IMPORT_NO_SKELETON_MESHES would suppress
+        // it; nothing in this tree sets it). loadAnimation never looks at
+        // meshes so it is harmless there — but it is exactly why .bvh must
+        // stay OUT of Constants::MODEL_EXTS: importing one as a model would
+        // put that stick figure in the asset library as a real object.
+        {
+            Assimp::Importer importer;
+            const aiScene *scene = importer.ReadFile(kBvhWalk.toStdString().c_str(), 0);
+            if (!scene) std::printf("    assimp: %s\n", importer.GetErrorString());
+            CHECK(scene != nullptr, "B0: the BVH importer is compiled in (ASSIMP_BUILD_BVH_IMPORTER)");
+            if (scene) {
+                CHECK(scene->mNumAnimations == 1, "B0: one clip");
+                CHECK(scene->mNumMeshes == 1,
+                      "B0: assimp SYNTHESISES a stick-figure mesh for a .bvh "
+                      "(why bvh is not a MODEL_EXT)");
+                CHECK(QString(scene->mAnimations[0]->mName.C_Str()) == "Motion",
+                      "B0: every BVH clip is hard-coded 'Motion' (BVHLoader::CreateAnimation)");
+                // Channel names are the ROOT/JOINT names verbatim; `End Site`
+                // blocks become EndSite_<parent> nodes and carry no channels,
+                // so they never reach the rig-match score.
+                CHECK(scene->mAnimations[0]->mNumChannels == 2,
+                      "B0: two channels — the two JOINTs, not the End Site");
+                QSet<QString> channels;
+                for (unsigned c = 0; c < scene->mAnimations[0]->mNumChannels; ++c)
+                    channels.insert(QString(scene->mAnimations[0]->mChannels[c]->mNodeName.C_Str()));
+                CHECK(channels.contains("jointRoot") && channels.contains("jointTip"),
+                      "B0: ... named exactly like the loaded rig's scene nodes");
+                // Ticks are FRAMES here: tps = 1/FrameTime, duration = Frames-1.
+                CHECK(std::fabs(scene->mAnimations[0]->mTicksPerSecond - 2.0) < 1e-6,
+                      "B0: mTicksPerSecond = 1 / Frame Time (2.0 for 0.5 s frames)");
+            }
+        }
+
+        // --- B1: the .bvh loads onto the character ------------------------
+        QString error;
+        avatar::ClipLoadReport report;
+        const bool added = mocap.loadAnimation(kBvhWalk, &error, &report);
+        if (!added) std::printf("    %s\n", qUtf8Printable(error));
+        CHECK(added, "B1: a mocap .bvh loads onto the character through avatar.loadAnimation");
+        CHECK(report.added == 1 && report.matched == 2 && report.boneChannels == 2,
+              "B1: one clip added, BOTH its bone channels matched the rig");
+        CHECK(mocap.clips().size() == ownClips + 1, "B1: the clip list accumulates");
+
+        // --- B2: the clip is named after the FILE, not "Motion" -----------
+        const auto all = mocap.clips();
+        const auto &clip = all.last();
+        CHECK(clip.rawName == "Motion", "B2: the raw name is kept verbatim");
+        CHECK(clip.name == QFileInfo(kBvhWalk).completeBaseName(),
+              "B2: 'Motion' is junk (EVERY bvh clip is called that) so the row "
+              "shows the animation file's base name");
+        CHECK(clip.external && clip.source == QFileInfo(kBvhWalk).absoluteFilePath(),
+              "B2: the clip records the .bvh it came from");
+        CHECK(std::fabs(clip.length - 1.0f) < 0.01f,
+              "B2: 3 frames at 0.5 s is a 1.0 s clip (frames -> seconds via mTicksPerSecond)");
+
+        // --- B3: and it MOVES the rig's bones ------------------------------
+        // Clip translation, the same assertion X3 makes for the glTF case: the
+        // engine is what poses bones now, so document-side the sharp statement
+        // is that the mocap clip becomes bone tracks with motion in them.
+        CHECK(mocap.setClip(clip.name), "B3: the mocap clip is selectable by name");
+        {
+            auto fragment = mocap.fragment();
+            auto skinned = findSkinnedNode(fragment);
+            auto skel = findSkeleton(fragment);
+            iris::AnimationPtr last;
+            for (const auto &a : fragment->getAnimations())
+                if (!a.isNull() && a->hasSkeletalAnimation()) last = a;
+            iris::ExtractedClip extracted;
+            QString err;
+            const bool ok = !last.isNull() &&
+                            iris::ClipExtractor::extract(fragment, skinned, skel,
+                                                         last->getSkeletalAnimation(), clip.name,
+                                                         last->getLength(), nullptr, extracted, &err);
+            if (!ok) std::printf("    %s\n", qUtf8Printable(err));
+            CHECK(ok, "B3: the mocap clip translates into bone tracks");
+            std::printf("    driven bones: %d, keys %d -> %d\n", extracted.tracks.size(),
+                        extracted.sourceKeyCount, extracted.emittedKeyCount);
+            CHECK(extracted.tracks.size() >= 1, "B3: at least one bone is driven");
+            bool moves = false;
+            for (const auto &t : extracted.tracks)
+                if (t.keys.size() >= 2 && t.keys.first().rotation != t.keys.last().rotation)
+                    moves = true;
+            CHECK(moves, "B3: and a track really moves between its first and last key");
+        }
+
+        // --- B4: a foreign-rig .bvh is refused, by name --------------------
+        // The honest limit of BVH support: the join is by joint NAME, and a
+        // real Mixamo character's joints are prefixed "mixamorig:" while a BVH
+        // of the same motion usually is not. Matching names are the user's job
+        // (rename in the mocap tool); what the module owes them is a refusal
+        // that says so, not a clip that silently moves nothing.
+        QString mismatchError;
+        avatar::ClipLoadReport mismatch;
+        const int before = mocap.clips().size();
+        CHECK(!mocap.loadAnimation(kBvhMismatch, &mismatchError, &mismatch),
+              "B4: a .bvh animating a different rig is refused, not silently loaded");
+        std::printf("    refusal: %s\n", qUtf8Printable(mismatchError));
+        CHECK(mismatchError.contains("hips"), "B4: ... and the message names the unmatched joint");
+        CHECK(mocap.clips().size() == before, "B4: ... and nothing was added");
+        CHECK(mismatch.matched == 0 && mismatch.boneChannels == 2, "B4: ... 0 of 2 joints matched");
     }
 
     // ================= X7 — root motion (walk in place vs as authored) ====

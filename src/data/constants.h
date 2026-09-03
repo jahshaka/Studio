@@ -57,6 +57,12 @@ namespace Constants
     extern QList<QString> VIDEO_EXTS;
     extern QList<QString> IMAGE_EXTS;
     extern QList<QString> MODEL_EXTS;
+    /// Extensions the Avatar module's "Load Animation" dialog offers: every
+    /// MODEL_EXT (a Mixamo clip ships as .fbx/.glb WITH a mesh) plus the
+    /// animation-only formats, which must never appear in MODEL_EXTS because
+    /// they carry no geometry to import as a library object. Kept in sync with
+    /// the assimp importer allowlist in irisgl/CMakeLists.txt.
+    extern QList<QString> ANIMATION_EXTS;
     extern QList<QString> WHITELIST;
 	extern QString SHADER_EXT;
     extern QList<QString> MATERIAL_EXTS;
