@@ -47,3 +47,21 @@ add_test(NAME importer.glb COMMAND test_importer_glb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.glb PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 600 LABELS "importer")
+
+# FBX importer regression suite (assimp-patches/0001): a skin cluster that
+# references a control point no polygon uses must not abort the importer.
+# Pure assimp + the canonical preset — no Qt, no display, no engine.
+add_executable(test_importer_fbx test_importer_fbx.cpp)
+set_target_properties(test_importer_fbx PROPERTIES CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_importer_fbx PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include)
+target_compile_definitions(test_importer_fbx PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_importer_fbx PRIVATE assimp)
+add_test(NAME importer.fbx COMMAND test_importer_fbx
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.fbx PROPERTIES TIMEOUT 120 LABELS "importer")
