@@ -76,7 +76,10 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
     setCameraController(mFreeCam);
     mFrameTimer.start();
     if (mDriver)
-        connect(mDriver, &EngineRenderDriver::beforeFrame, this, &EngineSceneViewport::syncFrame);
+        // A lambda, not a direct member connect: syncFrame grew a default
+        // argument (the fixed-dt override) and Qt's new-style connect refuses a
+        // slot that takes more arguments than the signal provides.
+        connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() { syncFrame(); });
 }
 
 EngineSceneViewport::~EngineSceneViewport()
@@ -803,11 +806,15 @@ EditorData *EngineSceneViewport::getEditorData()
     return mEditorData;
 }
 
-void EngineSceneViewport::syncFrame()
+void EngineSceneViewport::syncFrame(float dtOverride)
 {
     if (!mActive || !view()) return;
     if (!ensureEngineScene()) return;
-    const float dt = float(mFrameTimer.restart()) / 1000.0f;
+    // The wall clock, unless a caller supplied a step. mFrameTimer is restarted
+    // either way: after a fixed-dt frame the NEXT free-running frame must not
+    // charge the document for the time the scripted one took.
+    const float wall = float(mFrameTimer.restart()) / 1000.0f;
+    const float dt = dtOverride >= 0.0f ? dtOverride : wall;
     if (mPlaying && mPlayback) {
         iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
         mPlayback->update(vp, dt);        // physics, animation, play controllers move the document
@@ -867,12 +874,25 @@ QImage EngineSceneViewport::takeScreenshot(QSize dimension)
 
 void EngineSceneViewport::renderFrames(int n)
 {
-    // editor.frame(n): the deterministic document→engine sync + render pattern of
-    // the headless suites, synchronously — scripts step exact frames instead of
-    // sleeping against the driver timer.
+    renderFrames(n, -1.0f);
+}
+
+void EngineSceneViewport::renderFrames(int n, float dt)
+{
+    // editor.frame(n, dt): the deterministic document→engine sync + render
+    // pattern of the headless suites, synchronously — scripts step exact frames
+    // instead of sleeping against the driver timer.
+    //
+    // WITHOUT `dt` this was only half deterministic: syncFrame pulls
+    // mFrameTimer.restart(), so in PLAY mode each stepped frame advanced the
+    // document's animation clock by however long the previous statement
+    // happened to take. Every scripted play-mode assertion was therefore timing
+    // dependent — the last thing standing between us and a play-mode pixel
+    // gate, now that clip evaluation is the engine's and everything else in the
+    // chain is driven by absolute time.
     if (!mEngine) return;
     for (int i = 0; i < n; ++i) {
-        syncFrame();
+        syncFrame(dt);
         mEngine->renderOneFrame();
     }
 }

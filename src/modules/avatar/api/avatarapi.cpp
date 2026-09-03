@@ -69,8 +69,8 @@ QVector<VerbInfo> AvatarApi::verbs() const
           Needs::Document },
         { "time", "avatar.time() -> number", "The preview's current time in seconds.", Needs::Document },
         { "bones", "avatar.bones() -> [{name, parent, position:{x,y,z}}]",
-          "The rig as the preview resolves it: one entry per bone that has a scene node, `parent` being the NEAREST ancestor that is also a bone (assimp pivot nodes sit between real bones, and Bone::parentBone is empty for such rigs). World-space positions at the current time — the headless assertion surface for the pose and for the overlay.",
-          Needs::Document },
+          "The rig as the preview resolves it: one entry per bone that has a scene node, `parent` being the NEAREST ancestor that is also a bone (assimp pivot nodes sit between real bones, and Bone::parentBone is empty for such rigs). World-space positions AT THE CURRENT TIME, read back from the engine's evaluated skeleton — clip evaluation is the engine's, so a pose only exists where an engine does. Under --headless the rig's shape (names, parents, hierarchy) is still reported but the positions are the REST pose.",
+          Needs::Engine },
         { "snapshot", "avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the Avatar page's preview scene to a PNG, with the centre pixel and each probe point ({x,y} normalized 0..1) returned so scripts can assert on colours — the way a script (or an MCP session) proves the skeleton-only view from outside the app.",
           Needs::Engine },
@@ -293,6 +293,10 @@ QVariantList AvatarApi::bones()
 {
     QVariantList out;
     if (!mModel) { fail("avatar: not available in this session"); return out; }
+    // The pose lives in the engine's evaluated skeleton, and the engine
+    // evaluates during a render — so a script that sets a time and asks for a
+    // bone in the next statement would otherwise read the previous frame.
+    if (mResolvePose) mResolvePose();
     for (const auto &b : mModel->bones()) {
         out.append(QVariantMap{
             { "name", b.name }, { "parent", b.parent },

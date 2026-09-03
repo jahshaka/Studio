@@ -46,6 +46,11 @@ public:
     /// headless hosts: avatar.snapshot then fails cleanly instead of crashing.
     using SnapshotFn = std::function<QImage(int, int)>;
     void setSnapshotDelegate(SnapshotFn fn) { mSnapshot = std::move(fn); }
+    /// Makes the engine evaluate the current clip time before a pose is read.
+    /// Injected by AvatarModule when the engine is up; unset in headless hosts,
+    /// where `bones()` reports the rig's shape at its REST pose (documented in
+    /// the verb, and why `bones` is Needs::Engine).
+    void setPoseResolver(std::function<void()> fn) { mResolvePose = std::move(fn); }
     /// Called after any verb that changes what the page shows, so the widgets
     /// follow scripted state (the materials module's selection-delegate shape).
     void setChangedDelegate(std::function<void()> fn) { mChanged = std::move(fn); }
@@ -90,6 +95,7 @@ private:
 
     avatar::AvatarPreviewModel *mModel = nullptr;
     SnapshotFn mSnapshot;
+    std::function<void()> mResolvePose;
     std::function<void()> mChanged;
     std::function<void()> mSubjectChanged;
 };

@@ -417,6 +417,47 @@ int main(int argc, char **argv)
         CHECK(jointsInGraph, "joint nodes present in the node graph");
     }
 
+    // ---- F1: exported joints carry a REAL bind pose ------------------------
+    // ANIMATION_ENGINE_MIGRATION_SPEC §1.5 F1 / §8.5. The exporter writes every
+    // joint's TRS from Bone::bindingPos/bindingRot/bindingScale
+    // (gltfexporter.cpp), and NOTHING on the live import path ever wrote those
+    // fields — the only writers were in irisgl/import/modelloader.cpp, which
+    // the editor does not go through. So every rig ever exported to the web came
+    // out structurally right and BIND-POSED WRONG: translation (0,0,0), identity
+    // rotation, and a scale saved only by a zero-guard in the writer.
+    //
+    // The block above cannot catch that: it builds its skeleton in code and
+    // assigns bindingPos by hand. This one goes through the REAL importer.
+    {
+        auto fragment = iris::MeshNode::loadAsSceneFragment(
+            QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb"),
+            [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
+                return iris::PbrMaterial::create();
+            },
+            nullptr, nullptr, tmp.path());
+        CHECK(!fragment.isNull(), "the generated rig fixture imports");
+        if (!fragment.isNull()) {
+            auto rigScene = iris::Scene::create();
+            rigScene->rootNode->addChild(fragment);
+            const auto gr = GltfExporter::exportScene(rigScene, "Rig");
+            CHECK(gr.ok && gr.skinCount == 1, "an imported rig exports with a skin");
+            double tipY = 0.0;
+            bool foundTip = false;
+            for (const auto &nv : gr.json["nodes"].toArray()) {
+                const QJsonObject n = nv.toObject();
+                if (n["name"].toString() != QStringLiteral("jointTip")) continue;
+                foundTip = true;
+                tipY = n["translation"].toArray().at(1).toDouble();
+            }
+            CHECK(foundTip, "the exported node graph has a jointTip joint");
+            std::printf("    exported jointTip bind translation.y = %.4f\n", tipY);
+            // jointTip binds one unit above jointRoot. Before the fix this read
+            // 0.0 for every joint of every rig, on every platform.
+            CHECK(std::fabs(tipY - 1.0) < 1e-4,
+                  "the exported joint carries its real bind translation, not identity");
+        }
+    }
+
     // ---- PreviewLauncher: detection only (never spawn a browser in tests) ----
     const QString browser = PreviewLauncher::findChromiumBrowser();
     std::printf("    detected chromium-family browser: %s\n",

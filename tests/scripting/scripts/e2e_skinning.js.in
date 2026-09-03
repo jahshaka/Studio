@@ -93,4 +93,62 @@ for (var q = 0; q < 40; ++q) {
 console.log("probe samples that changed across the clip: " + changed + "/40");
 assert(changed >= 2, "playing the clip moved the GPU-skinned character's pixels");
 
+// ---- editor.frame(n, dt): deterministic stepping IN PLAY MODE ------------
+// Without a dt, syncFrame pulls the wall clock, so every stepped frame advanced
+// the document's animation clock by however long the previous statement
+// happened to take — every scripted play-mode assertion was timing dependent.
+// With a fixed dt the same script produces the same pose, byte for byte, and
+// that is what makes a play-mode pixel gate possible at all.
+function stepRun(name) {
+    assert(editor.play(), "editor.play (" + name + ")");
+    editor.frame(20, 1 / 60);                     // exactly 1/3 of the 1 s clip
+    var shot = editor.screenshot(name, 192, 192, probes);
+    editor.stop();
+    return shot;
+}
+var runA = stepRun("skinning_fixed_a.png");
+var runB = stepRun("skinning_fixed_b.png");
+var identical = 0, differing = 0;
+for (var r = 0; r < probes.length; ++r) {
+    var pa = runA.probes[r], pb = runB.probes[r];
+    if (pa.r === pb.r && pa.g === pb.g && pa.b === pb.b) ++identical; else ++differing;
+}
+console.log("fixed-dt runs: " + identical + " identical probes, " + differing + " differing");
+assert(differing === 0,
+       "editor.frame(n, dt) gives the SAME play-mode pose twice (F3: it did not without dt)");
+// ...and it is a pose that actually moved, so the check is not "two blanks".
+var movedProbes = 0;
+for (var v = 0; v < probes.length; ++v)
+    if (Math.abs(bind.probes[v].r - runA.probes[v].r) > 8) ++movedProbes;
+assert(movedProbes >= 2, "the fixed-dt run really advanced the clip");
+
+// ---- THE FBX PIVOT RIG, through the import pipeline ---------------------
+// ANIMATION_ENGINE_MIGRATION_SPEC R1. Every other rigged fixture in the tree is
+// glTF and has no pivot nodes; a pivot-preserving FBX puts a bone's motion on
+// its `$AssimpFbx$` ancestors, which is exactly where a naive clip translation
+// silently produces a frozen character. The PIXEL half of this claim lives in
+// scripting.e2e.avatar, where the preview frames its subject by itself; what is
+// asserted here is that the production import pipeline preserves the chain and
+// still recognises the character as GPU-skinned.
+{
+    var fguid = assets.import("@SOURCE_DIR@/tests/skeletal/fixtures/pivot_rig.fbx");
+    assert(fguid.length > 10, "assets.import(pivot_rig.fbx) -> " + fguid);
+    assert(assets.addToProject(fguid) === fguid, "the FBX rig joins the project");
+    var froot = assets.addToScene(fguid, { position: { x: 0, y: 0, z: 0 } });
+    assert(froot && froot.length > 10, "the FBX rig is instantiated");
+
+    var fnodes = scene.nodes();
+    var pivots = 0, fmesh = null;
+    for (var a = 0; a < fnodes.length; ++a) {
+        if (fnodes[a].name.indexOf("$AssimpFbx$") >= 0) ++pivots;
+        if (node.skinningMode(fnodes[a].id) === "gpu" && fnodes[a].id !== meshId) fmesh = fnodes[a].id;
+    }
+    console.log("pivot nodes in the scene: " + pivots);
+    assert(pivots >= 5, "the $AssimpFbx$ pivot chain survived the import pipeline");
+    assert(fmesh !== null, "the FBX character is GPU-skinned in the scene");
+    var fbones = node.boneNames(fmesh);
+    assert(fbones.length === 2 && fbones.indexOf("jointTip") >= 0,
+           "its rig reaches the engine through five non-bone nodes: " + JSON.stringify(fbones));
+}
+
 console.log("e2e_skinning: ALL OK");

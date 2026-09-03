@@ -89,3 +89,45 @@ target_compile_definitions(test_library_import PRIVATE JAHSHAKA_TEST_SOURCE_DIR=
 target_link_libraries(test_library_import PRIVATE IrisGL Qt6::Gui)
 add_test(NAME skeletal.library_import COMMAND test_library_import WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.library_import PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
+
+# ANIMATION_ENGINE_MIGRATION_SPEC M0 / G1 + G4(extract half): the pivot-composing
+# clip extractor, proved against the CURRENT document evaluator on a glTF rig
+# AND on the tree's first FBX fixture (fixtures/pivot_rig.fbx — five $AssimpFbx$
+# pivot nodes between two bones, every clip channel on a pivot node). Fails
+# loudest, runs in milliseconds, needs no engine.
+add_executable(test_clip_extract test_clip_extract.cpp)
+set_target_properties(test_clip_extract PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_clip_extract PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_clip_extract PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_clip_extract PRIVATE IrisGL Qt6::Gui)
+add_test(NAME skeletal.clip_extract COMMAND test_clip_extract WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.clip_extract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "document")
+
+# ANIMATION_ENGINE_MIGRATION_SPEC gates G2-G6: the clip boundary. Same rig, same
+# clip, same absolute times, driven through the document evaluator and through
+# Ogre's SkeletonAnimation, compared at the bone matrices the vertex shader is
+# handed AND at the pixels — plus per-bone weight normalization, the manual-bone
+# override rule, determinism, and the FBX pivot rig end to end. This is the
+# comparison that has to exist before the document evaluator is deleted.
+add_executable(test_gpu_clips test_gpu_clips.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_gpu_clips PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_gpu_clips PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_gpu_clips PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gpu_clips PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_gpu_clips JahshakaEngineMedia)
+add_test(NAME skeletal.gpu_clips COMMAND test_gpu_clips WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.gpu_clips PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "mirror")

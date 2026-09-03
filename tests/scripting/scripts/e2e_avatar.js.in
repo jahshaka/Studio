@@ -17,6 +17,7 @@ function isRed(c) { return c.r > 40 && c.r > c.g * 1.8 && c.r > c.b * 1.8; }
 var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
 var WALK = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_walk_anim.glb";
 var MISMATCH = "@SOURCE_DIR@/tests/avatar/fixtures/rig_mismatch_anim.glb";
+var PIVOT_FBX = "@SOURCE_DIR@/tests/skeletal/fixtures/pivot_rig.fbx";
 
 // ---- the space exists and the window switches to it ----
 assert(app.space("avatar"), "app.space('avatar')");
@@ -133,6 +134,45 @@ assert(refusedBadClip, "avatar.setClip refuses an unknown clip");
 var refusedBadFile = false;
 try { avatar.loadPreview("/nowhere/at/all.fbx"); } catch (e) { refusedBadFile = true; }
 assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
+
+// ---- THE PIVOT-PRESERVING FBX, all the way to pixels ----------------------
+// ANIMATION_ENGINE_MIGRATION_SPEC R1, end to end and from outside the app.
+// Every other rigged fixture here is glTF and has NO pivot nodes; in an FBX a
+// bone's motion lives on its `$AssimpFbx$` ancestors, and a clip translation
+// that does not compose that chain produces a frozen character while passing
+// every glTF test in the tree.
+{
+    var fbx = avatar.loadPreview(PIVOT_FBX);
+    assert(!!fbx && fbx.bones === 2, "the pivot FBX loads: " + JSON.stringify(fbx.clips));
+    assert(fbx.activeClip === "Walk",
+           "the REAL clip is active, not the zero-length T-pose the file also carries");
+    assert(avatar.setMeshVisible(true) && avatar.setSkeletonVisible(false), "mesh only");
+
+    avatar.setTime(0);
+    var boneRest = avatar.bones()[1].position;
+    var restShot = avatar.snapshot("fbx_rest.png", 160, 160, [{ x: 0.5, y: 0.5 }]);
+    avatar.setTime(0.5);
+    var boneMid = avatar.bones()[1].position;
+    var midShot = avatar.snapshot("fbx_mid.png", 160, 160, [{ x: 0.5, y: 0.5 }]);
+
+    var boneMoved = Math.abs(boneMid.x - boneRest.x) + Math.abs(boneMid.y - boneRest.y);
+    console.log("FBX pivot rig — jointTip t=0 " + JSON.stringify(boneRest) +
+                "  t=0.5 " + JSON.stringify(boneMid));
+    assert(boneMoved > 0.05,
+           "R1: the engine's evaluated bone moved, so the pivot chain composed (moved " +
+           boneMoved.toFixed(3) + ")");
+
+    var dCentre = Math.abs(restShot.center.r - midShot.center.r) +
+                  Math.abs(restShot.center.g - midShot.center.g) +
+                  Math.abs(restShot.center.b - midShot.center.b);
+    console.log("FBX pivot rig — centre pixel t=0 " + JSON.stringify(restShot.center) +
+                "  t=0.5 " + JSON.stringify(midShot.center) + "  delta " + dCentre);
+    assert(dCentre > 30,
+           "R1: and the PIXELS moved with it — a pivot-preserving FBX animates end to end");
+
+    assert(avatar.clearPreview(), "the FBX preview clears");
+    assert(!!avatar.loadPreview(RIG), "reload the glTF rig for the remaining checks");
+}
 
 // ---- clear ----
 assert(avatar.clearPreview(), "avatar.clearPreview()");

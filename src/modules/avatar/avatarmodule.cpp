@@ -47,6 +47,7 @@ void AvatarModule::registerApi(ScriptEngine &engine)
     if (mPreview) {
         auto *preview = mPreview;
         mApi->setSnapshotDelegate([preview](int w, int h) { return preview->renderPreview(w, h); });
+        mApi->setPoseResolver([preview]() { preview->resolvePose(); });
     }
     if (mPage) {
         auto *page = mPage;

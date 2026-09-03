@@ -83,7 +83,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `editor.play() -> bool` | document | Enters play mode (PlayBack drives physics, animations and controllers in place). |
 | `editor.stop() -> bool` | document | Leaves play mode back to editing. |
 | `editor.simulate(enabled=true) -> bool` | document | Starts/stops the in-place physics simulation without entering play mode. |
-| `editor.frame(n=1) -> bool` | engine | Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. |
+| `editor.frame(n=1, dt=-1) -> bool` | engine | Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 the document's clock advances by exactly that many seconds per frame instead of by the wall clock, which is what makes stepping deterministic IN PLAY MODE (without it, each stepped frame charged the document for however long the previous statement took). |
 | `editor.screenshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}` | engine | Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. |
 | `editor.beginBatch() -> bool` | document | Opens a nested undo macro inside the script's run (finer-grained grouping). |
 | `editor.endBatch() -> bool` | document | Closes the macro opened by editor.beginBatch(). |
@@ -213,6 +213,6 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `avatar.setLooping(on) -> bool` | document | Loops the active clip (default on). |
 | `avatar.setTime(seconds) -> bool` | document | Scrubs the preview to `seconds` and re-evaluates the pose immediately. |
 | `avatar.time() -> number` | document | The preview's current time in seconds. |
-| `avatar.bones() -> [{name, parent, position:{x,y,z}}]` | document | The rig as the preview resolves it: one entry per bone that has a scene node, `parent` being the NEAREST ancestor that is also a bone (assimp pivot nodes sit between real bones, and Bone::parentBone is empty for such rigs). World-space positions at the current time — the headless assertion surface for the pose and for the overlay. |
+| `avatar.bones() -> [{name, parent, position:{x,y,z}}]` | engine | The rig as the preview resolves it: one entry per bone that has a scene node, `parent` being the NEAREST ancestor that is also a bone (assimp pivot nodes sit between real bones, and Bone::parentBone is empty for such rigs). World-space positions AT THE CURRENT TIME, read back from the engine's evaluated skeleton — clip evaluation is the engine's, so a pose only exists where an engine does. Under --headless the rig's shape (names, parents, hierarchy) is still reported but the positions are the REST pose. |
 | `avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}` | engine | Offscreen render of the Avatar page's preview scene to a PNG, with the centre pixel and each probe point ({x,y} normalized 0..1) returned so scripts can assert on colours — the way a script (or an MCP session) proves the skeleton-only view from outside the app. |
 

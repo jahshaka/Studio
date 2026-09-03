@@ -74,6 +74,11 @@ public:
     /// has ever been shown: the shot view becomes the first View if needed.
     QImage renderImage(int width, int height);
 
+    /// Makes sure the engine has EVALUATED the current clip time, so a pose
+    /// read straight after a setTime is this time's pose and not the last
+    /// frame's. One mirror sync and one frame.
+    void resolvePose();
+
     /// What the bone overlay drew last frame — the structural half of the
     /// pixel suite (bones, leaf stubs, joint markers).
     int overlaySegments() const;
@@ -90,6 +95,10 @@ private:
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
     jahshaka::engine::View  *mView  = nullptr;
     jahshaka::engine::Scene *mScene = nullptr;
+    /// Points the mirror at the model's document AND installs the pose source
+    /// that reads the engine's evaluated bones back for the overlay.
+    void bindModel(avatar::AvatarPreviewModel *model);
+
     std::unique_ptr<SceneMirror> mMirror;
     std::unique_ptr<BoneOverlay> mOverlay;
     avatar::AvatarPreviewModel *mModel = nullptr;

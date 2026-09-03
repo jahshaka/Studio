@@ -36,6 +36,24 @@ static int failures = 0;
 
 static void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
 
+// The pose, in closed form. It used to come from the document evaluator
+// (updateSceneAnimation -> Skeleton::boneTransforms -> toBonePoses); that
+// evaluator is retired (ANIMATION_ENGINE_MIGRATION_SPEC), and an analytic pose
+// is the better oracle anyway — it cannot drift with the thing it checks, and
+// skeletal.rig_translation proves the engine reproduces exactly these matrices.
+static std::vector<BonePose> armPoses(float t)
+{
+    const QVector<armrig::ArmPose> local = armrig::swingLocalPoses(-90.0f, t);
+    std::vector<BonePose> out(size_t(local.size()));
+    for (int i = 0; i < local.size(); ++i) {
+        out[size_t(i)].position = Vec3(local[i].pos.x(), local[i].pos.y(), local[i].pos.z());
+        out[size_t(i)].rotation = Quat(local[i].rot.x(), local[i].rot.y(),
+                                       local[i].rot.z(), local[i].rot.scalar());
+        out[size_t(i)].scale = Vec3(local[i].scale.x(), local[i].scale.y(), local[i].scale.z());
+    }
+    return out;
+}
+
 // ---- the fixture ----------------------------------------------------------
 // A skinned strip: `rows` x 2 vertices spanning y in [0,2], the top half
 // weighted to bone 1 ("jointTip", bind at y=1) and the bottom to bone 0, with a
@@ -187,18 +205,16 @@ int main(int argc, char **argv)
 
         int worstOverall = 0;
         for (float t : { 0.0f, 0.25f, 0.5f, 0.75f, 0.95f }) {
-            doc.scene->updateSceneAnimation(t);
-            const QVector<QMatrix4x4> &pose = doc.node->getSkeleton()->boneTransforms;
-
-            // CPU: skin every vertex and re-upload the whole buffer.
+            // CPU: skin every vertex with the ANALYTIC skin matrices and
+            // re-upload the whole buffer.
             std::vector<float> pos, nrm;
-            SceneMirror::skinVertices(pose, strip.cpuData.positions, strip.cpuData.normals,
+            SceneMirror::skinVertices(armrig::swingSkinMatrices(-90.0f, t),
+                                      strip.cpuData.positions, strip.cpuData.normals,
                                       bi, bw, pos, nrm);
             CHECK(sCpu->updateMeshVertices(cpuMesh, pos, nrm) || t < 0, "CPU vertices pushed");
 
-            // GPU: push bone matrices.
-            std::vector<BonePose> poses;
-            SceneMirror::toBonePoses(doc.node->getSkeleton(), poses);
+            // GPU: push the same pose as parent-local bone TRS.
+            std::vector<BonePose> poses = armPoses(t);
             CHECK(sGpu->setBonePoses(nGpu, poses.data(), poses.size()) || t < 0, "GPU pose pushed");
 
             render(engine.get());
@@ -217,13 +233,11 @@ int main(int argc, char **argv)
 
         // Sanity: the picture actually MOVED across the swing, so parity is not
         // "both paths rendered nothing".
-        doc.scene->updateSceneAnimation(0.0f);
-        std::vector<BonePose> p0; SceneMirror::toBonePoses(doc.node->getSkeleton(), p0);
+        std::vector<BonePose> p0 = armPoses(0.0f);
         sGpu->setBonePoses(nGpu, p0.data(), p0.size());
         render(engine.get());
         Image bind; vGpu->readPixels(bind);
-        doc.scene->updateSceneAnimation(0.5f);
-        std::vector<BonePose> p5; SceneMirror::toBonePoses(doc.node->getSkeleton(), p5);
+        std::vector<BonePose> p5 = armPoses(0.5f);
         sGpu->setBonePoses(nGpu, p5.data(), p5.size());
         render(engine.get());
         Image bent; vGpu->readPixels(bent);
@@ -244,9 +258,21 @@ int main(int argc, char **argv)
         auto b = armrig::buildArmNode(docMesh, "b");
         a->setLocalPos(QVector3D(-1.2f, 0, 0));
         b->setLocalPos(QVector3D( 1.2f, 0, 0));
-        auto clip = armrig::buildSwingClip(-90.0f);
-        a->addAnimation(clip); a->setAnimation(clip);
-        b->addAnimation(clip); b->setAnimation(clip);
+        // TWO clips, one per avatar. Since the clip evaluator moved to the
+        // engine the document states {which clip, one absolute clock} and the
+        // engine samples it, so "pose A at 0.5 while B stays at 0" is no longer
+        // expressible by poking one node's updateAnimation — and it never should
+        // have been, that was reaching past the scene's clock. The claim T4
+        // actually makes — two nodes on ONE mesh asset hold two independent
+        // poses in one frame — is stated here as two different clips at the same
+        // time, which also proves the clip sets are per node.
+        auto swing = armrig::buildSwingClip(-90.0f);
+        swing->setName("swing");
+        auto still = armrig::buildSwingClip(0.0f);
+        still->setName("still");
+        a->addAnimation(swing); a->setAnimation(still);
+        a->addAnimation(still);
+        b->addAnimation(swing); b->addAnimation(still); b->setAnimation(still);
         scene->getRootNode()->addChild(a);
         scene->getRootNode()->addChild(b);
 
@@ -260,20 +286,20 @@ int main(int argc, char **argv)
         mirror.setSource(scene);
         mirror.setLightWires(false);
 
-        // Frame 1: both at bind.
-        a->updateAnimation(0.0f);
-        b->updateAnimation(0.0f);
+        // Frame 1: both on the still clip.
+        scene->updateSceneAnimation(0.0f);
         mirror.sync();
         render(engine.get());
         Image f1;
         CHECK(v->readPixels(f1), "T4: readPixels (both at bind)");
 
-        // Frame 2: move ONLY A. B must not budge — which is the whole claim: two
-        // nodes on ONE mesh asset, two independent poses, one frame. On the CPU
-        // path this was impossible by construction (one engine mesh per mesh
-        // asset means one vertex buffer for both).
-        a->updateAnimation(0.5f);
-        b->updateAnimation(0.0f);
+        // Frame 2: A switches to the swinging clip; B stays on the still one.
+        // B must not budge — which is the whole claim: two nodes on ONE mesh
+        // asset, two independent poses, one frame. On the CPU path this was
+        // impossible by construction (one engine mesh per mesh asset means one
+        // vertex buffer for both).
+        a->setAnimation(swing);
+        scene->updateSceneAnimation(0.5f);
         mirror.sync();
         render(engine.get());
         Image f2;
@@ -347,9 +373,7 @@ int main(int argc, char **argv)
         NodeId nSkinned = s->createNode();
         SkeletonDesc rig; SceneMirror::toSkeletonDesc(doc.node->getSkeleton(), rig);
         CHECK(s->attachSkinnedMesh(nSkinned, skinned, mat, rig), "T5: skinned strip attached");
-        doc.scene->updateSceneAnimation(1.0f);          // the full -90 degree swing
-        std::vector<BonePose> poses;
-        SceneMirror::toBonePoses(doc.node->getSkeleton(), poses);
+        std::vector<BonePose> poses = armPoses(1.0f);   // the full -90 degree swing
         s->setBonePoses(nSkinned, poses.data(), poses.size());
         render(engine.get());
         Image gpu; v->readPixels(gpu);
@@ -359,7 +383,7 @@ int main(int argc, char **argv)
         MeshData staticData = strip.gpuData;
         staticData.blendIndices.clear(); staticData.blendWeights.clear();
         {
-            const QMatrix4x4 m = doc.node->getSkeleton()->boneTransforms[1];
+            const QMatrix4x4 m = armrig::swingSkinMatrices(-90.0f, 1.0f)[1];
             for (size_t i = 0; i < staticData.vertexCount(); ++i) {
                 const QVector3D p(staticData.positions[i*3], staticData.positions[i*3+1], staticData.positions[i*3+2]);
                 const QVector3D n(staticData.normals[i*3], staticData.normals[i*3+1], staticData.normals[i*3+2]);
@@ -441,10 +465,9 @@ int main(int argc, char **argv)
             double uploadedMb = 0;
             for (int f = 0; f < frames; ++f) {
                 const float t = float(f) / float(frames);
+                const QVector<QMatrix4x4> skin = armrig::swingSkinMatrices(-90.0f, t);
                 for (int i = 0; i < count; ++i) {
-                    docs[size_t(i)].scene->updateSceneAnimation(t);
-                    SceneMirror::skinVertices(docs[size_t(i)].node->getSkeleton()->boneTransforms,
-                                              big.cpuData.positions, big.cpuData.normals,
+                    SceneMirror::skinVertices(skin, big.cpuData.positions, big.cpuData.normals,
                                               bi, bw, pos, nrm);
                     s->updateMeshVertices(cpuMeshes[size_t(i)], pos, nrm);
                     uploadedMb += double(nv * 12 * sizeof(float)) / (1024.0 * 1024.0);
@@ -457,15 +480,12 @@ int main(int argc, char **argv)
             // --- GPU path ---
             for (auto n : cpuNodes) s->setNodeVisible(n, false);
             for (auto n : gpuNodes) s->setNodeVisible(n, true);
-            std::vector<BonePose> poses;
             timer.restart();
             for (int f = 0; f < frames; ++f) {
                 const float t = float(f) / float(frames);
-                for (int i = 0; i < count; ++i) {
-                    docs[size_t(i)].scene->updateSceneAnimation(t);
-                    SceneMirror::toBonePoses(docs[size_t(i)].node->getSkeleton(), poses);
+                const std::vector<BonePose> poses = armPoses(t);
+                for (int i = 0; i < count; ++i)
                     s->setBonePoses(gpuNodes[size_t(i)], poses.data(), poses.size());
-                }
                 engine->renderOneFrame();
             }
             const double gpuMs = double(timer.nsecsElapsed()) / 1e6 / frames;

@@ -252,6 +252,33 @@ int main(int argc, char **argv)
     CHECK(!switched.isNull() && switched != moved && switched != shot,
           "S9: a snapshot after a CLIP SWITCH renders the new clip's pose");
 
+    // ---- S8: avatar.bones() reads the ENGINE's pose ----------------------
+    // This used to live in avatar.document, driven by the document's clip
+    // evaluator. That evaluator is retired (ANIMATION_ENGINE_MIGRATION_SPEC):
+    // a bone position only exists where an engine has evaluated a clip, so the
+    // assertion moved to the suite that has one. The pose source
+    // AvatarPreviewScene installs is what brings Scene::bonePoses back out.
+    {
+        model.setMeshVisible(true);
+        model.setSkeletonVisible(true);
+        CHECK(model.setClip("Idle"), "S8: 'Idle' selected");
+        CHECK(model.hasPoseSource(), "S8: the preview scene installed an engine pose source");
+        model.setTime(0.0f);
+        render(scene, *engine, view);
+        const QVector3D tip0 = model.bones()[1].position;
+        model.setTime(0.5f);
+        render(scene, *engine, view);
+        const QVector3D tipHalf = model.bones()[1].position;
+        std::printf("    jointTip (engine): t=0 (%.3f, %.3f, %.3f)  t=0.5 (%.3f, %.3f, %.3f)\n",
+                    tip0.x(), tip0.y(), tip0.z(), tipHalf.x(), tipHalf.y(), tipHalf.z());
+        CHECK((tipHalf - tip0).length() > 0.05f,
+              "S8: the tip bone moved between t=0 and t=0.5");
+        model.setTime(0.0f);
+        render(scene, *engine, view);
+        CHECK((model.bones()[1].position - tip0).length() < 1e-4f,
+              "S8: 0 -> 0.5 -> 0 restores the t=0 pose");
+    }
+
     // ---- teardown in the documented order ----
     scene.release();
     engine->destroyView(view);

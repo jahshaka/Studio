@@ -52,7 +52,7 @@ bool AvatarPreviewScene::attach(View *view)
                                 Colour(1.0f, 1.0f, 1.0f, 0.38f));
         applyGrid();
         mOverlay.reset(new BoneOverlay(mScene));
-        if (mModel) mMirror->setSource(mModel->document());
+        if (mModel) bindModel(mModel);
     }
     mView = view;
     mView->setScene(mScene);
@@ -63,6 +63,8 @@ bool AvatarPreviewScene::attach(View *view)
 void AvatarPreviewScene::release()
 {
     auto engine = mEngine.lock();
+    // The pose source captures this scene's mirror; it must not outlive it.
+    if (mModel) mModel->setPoseSource(nullptr);
     if (mOverlay) {
         if (engine && mScene) mOverlay->clear();
         mOverlay.reset();
@@ -79,10 +81,26 @@ void AvatarPreviewScene::release()
     mView = nullptr;
 }
 
+void AvatarPreviewScene::bindModel(avatar::AvatarPreviewModel *model)
+{
+    if (!mMirror) return;
+    mMirror->setSource(model ? model->document() : iris::ScenePtr());
+    if (!model) return;
+    // WHERE THE POSE COMES FROM, since the document stopped computing one.
+    // The bone scene nodes still describe the rig's shape and its REST
+    // transforms; the pose lives in the engine's SkeletonInstance, and this is
+    // the wire that brings it back for the overlay and for avatar.bones().
+    SceneMirror *mirror = mMirror.get();
+    model->setPoseSource([mirror](QHash<QString, QMatrix4x4> &out) {
+        return mirror->boneWorldTransforms(out);
+    });
+}
+
 void AvatarPreviewScene::setModel(avatar::AvatarPreviewModel *model)
 {
+    if (mModel && mModel != model) mModel->setPoseSource(nullptr);
     mModel = model;
-    if (mMirror) mMirror->setSource(model ? model->document() : iris::ScenePtr());
+    bindModel(model);
     if (model) frameSubject();
 }
 
@@ -233,6 +251,20 @@ void AvatarPreviewScene::step(float dt, int width, int height)
         }
         mOverlay->update(segments, mModel->skeletonVisible());
     }
+}
+
+void AvatarPreviewScene::resolvePose()
+{
+    // A bone's transform is resolved by the engine's scene-graph update, i.e.
+    // during a render. A verb that READS a pose (avatar.bones, and the overlay
+    // through it) therefore has to make sure one has happened since the last
+    // setTime — otherwise a script that sets a time and immediately asks for a
+    // bone gets the previous frame's answer, which reads as "the clip does
+    // nothing". Cheap: one sync and one frame of an already-live view.
+    auto engine = mEngine.lock();
+    if (!engine || !mScene || !mView || !mMirror || !mModel) return;
+    mMirror->sync();
+    engine->renderOneFrame();
 }
 
 QImage AvatarPreviewScene::toQImage(const Image &img)

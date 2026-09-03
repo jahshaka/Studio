@@ -44,6 +44,11 @@ QImage AvatarPreview::renderPreview(int width, int height)
     return mScene->renderImage(width, height);
 }
 
+void AvatarPreview::resolvePose()
+{
+    mScene->resolvePose();
+}
+
 void AvatarPreview::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
