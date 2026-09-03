@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "ui/pages/projectmanager.h"
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
+#include "bridge/enginehost.h"
 
 QVector<VerbInfo> AppApi::verbs() const
 {
@@ -42,6 +43,26 @@ QVector<VerbInfo> AppApi::verbs() const
           "The heartbeat probe's readings (see app.heartbeat). maxGapMs is the longest the UI thread went "
           "without servicing its event loop since the probe started.",
           Needs::Window },
+        { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
+                         "pipelineCacheLoaded, microcodeLoaded, microcodeEntries, hlmsCachesLoaded, "
+                         "compiledThisRun, loadedThisRun, expectedShaders, lastSaved}",
+          "The persistent shader cache (SHADER_CACHE_SPEC.md): what is on disk and what this run "
+          "did with it. compiledThisRun counts shaders the compiler actually built; loadedThisRun "
+          "counts shaders served straight from the cache, so a warm launch shows the second number "
+          "high and the first near zero. expectedShaders is what the last saved run needed in "
+          "total — the startup progress counter's denominator, 0 before any cache has been "
+          "written. The counters work whether or not the cache itself is enabled.",
+          Needs::Engine },
+        { "clearShaderCache", "app.clearShaderCache() -> bool",
+          "Deletes every cached shader artifact. The running session is unaffected (its shaders are "
+          "already in memory); the NEXT launch is cold. Our r.InvalidateCachedShaders — the same "
+          "thing --clear-shader-cache does before the engine starts.",
+          Needs::Engine },
+        { "saveShaderCache", "app.saveShaderCache() -> bool",
+          "Writes the shader cache now instead of waiting for the burst-settle watchdog or a clean "
+          "quit. A no-op returning true when nothing new has been compiled. Mostly for tests: the "
+          "app saves on its own.",
+          Needs::Engine },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
           Needs::Window },
@@ -63,6 +84,45 @@ bool AppApi::heartbeat(int intervalMs)
 QVariantMap AppApi::heartbeatStats()
 {
     return MainThreadHeartbeat::stats();
+}
+
+QVariantMap AppApi::shaderCache()
+{
+    QVariantMap m;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { m["enabled"] = false; return m; }
+    const jahshaka::engine::ShaderCacheStats s = engine->shaderCacheStats();
+    m["enabled"]             = s.enabled;
+    m["dir"]                 = QString::fromStdString(s.dir);
+    m["fingerprint"]         = QString::fromStdString(s.fingerprint);
+    m["sizeBytes"]           = QVariant::fromValue(qulonglong(s.sizeBytes));
+    m["files"]               = s.files;
+    m["pipelineCacheLoaded"] = s.pipelineCacheLoaded;
+    m["microcodeLoaded"]     = s.microcodeLoaded;
+    m["microcodeEntries"]    = s.microcodeEntries;
+    m["hlmsCachesLoaded"]    = s.hlmsCachesLoaded;
+    m["compiledThisRun"]     = s.compiledThisRun;
+    m["loadedThisRun"]       = s.loadedThisRun;
+    m["expectedShaders"]     = s.expectedShaders;
+    m["lastSaved"]           = QVariant::fromValue(qlonglong(s.lastSavedUnixMs));
+    return m;
+}
+
+bool AppApi::clearShaderCache()
+{
+    // Two halves on purpose: the engine drops what it wrote, and the host
+    // removes the directory itself — clearing must work in a session whose
+    // engine never started (a headless run) exactly as in one where it did.
+    bool ok = EngineHost::clearShaderCacheOnDisk();
+    if (auto engine = EngineHost::instance().engine()) ok = engine->clearShaderCache() && ok;
+    return ok;
+}
+
+bool AppApi::saveShaderCache()
+{
+    auto engine = EngineHost::instance().engine();
+    if (!engine) return fail("app.saveShaderCache: the engine is not running");
+    return engine->saveShaderCache();
 }
 
 bool AppApi::quit()

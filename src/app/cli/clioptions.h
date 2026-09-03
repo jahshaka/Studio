@@ -32,6 +32,11 @@ struct CliOptions
     /// the session token is printed to stdout). With --headless: offscreen,
     /// document verbs only; otherwise windowed with the engine viewport up.
     quint16 mcpPort = 0;
+    /// --clear-shader-cache: deletes the persistent shader cache BEFORE the
+    /// engine starts, then continues into a normal run (SHADER_CACHE_SPEC §4.5).
+    /// Our `r.InvalidateCachedShaders`, and the flag every benchmark of a cold
+    /// start has to use.
+    bool clearShaderCache = false;
 
     static CliOptions parse(int argc, char *argv[]);
 

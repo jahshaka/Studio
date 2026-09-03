@@ -34,3 +34,6 @@ add_subdirectory(importasync)
 add_subdirectory(openasync)
 add_subdirectory(ui)
 add_subdirectory(avatar)
+# The shader cache's container (SHADER_CACHE_SPEC §4.5). AFTER tests/engine:
+# it reuses that directory's JAHSHAKA_ASAN option and its sanitised backend.
+add_subdirectory(shadercache)

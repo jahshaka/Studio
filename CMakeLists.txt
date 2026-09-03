@@ -169,6 +169,7 @@ set(SRCS
     src/scripting/claude/claudechathost.cpp
     src/ui/windows/claudechatwindow.cpp
     src/ui/dialogs/preferences/mcpsettingswidget.cpp
+    src/ui/dialogs/preferences/cachesettingswidget.cpp
     src/ui/dialogs/preferences/assetssettingswidget.cpp
     src/services/assetimporter.cpp
     src/services/import/assetimportservice.cpp
@@ -394,6 +395,7 @@ set(HEADERS
     src/scripting/claude/claudechathost.h
     src/ui/windows/claudechatwindow.h
     src/ui/dialogs/preferences/mcpsettingswidget.h
+    src/ui/dialogs/preferences/cachesettingswidget.h
     src/ui/dialogs/preferences/assetssettingswidget.h
     src/services/services.h
     src/services/assetimporter.h
@@ -708,7 +710,8 @@ add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/app/main.cpp ${SRCS} ${HE
     src/app/cli/clioptions.h
     src/app/cli/scriptrunner.h
     src/app/cli/selftestrunner.h
-    src/app/versionsplashscreen.h src/app/versionsplashscreen.cpp)
+    src/app/versionsplashscreen.h src/app/versionsplashscreen.cpp
+    src/app/shaderbuildgate.h src/app/shaderbuildgate.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 

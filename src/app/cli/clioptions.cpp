@@ -25,6 +25,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0 && i + 1 < argc) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]);
         else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt());
         else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) o.mcpPort = quint16(QByteArray(argv[++i]).toUInt());
+        else if (qstrcmp(argv[i], "--clear-shader-cache") == 0) o.clearShaderCache = true;
         else if (qstrncmp(argv[i], "--viewport", 10) == 0) {
             // Accepted for compatibility; the engine viewport is the only
             // renderer since the legacy GL viewport was deleted (step 14).

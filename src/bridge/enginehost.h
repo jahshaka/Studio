@@ -26,6 +26,20 @@ public:
     /// The native display is NOT filled in here; start() does that.
     static jahshaka::engine::EngineConfig resolveConfig();
 
+    // ---- Persistent shader cache (SHADER_CACHE_SPEC.md) ----
+    /// Where the cache lives: AppDataLocation/shadercache. Empty when the
+    /// platform gives us no writable data location. Static because
+    /// --clear-shader-cache runs BEFORE any engine exists.
+    static QString shaderCacheDirectory();
+    /// Deletes that directory. Safe with no engine running; the next launch is
+    /// cold. This is our `r.InvalidateCachedShaders`.
+    static bool clearShaderCacheOnDisk();
+    /// Starts the burst-settle save watchdog: once shaders have been compiled
+    /// and then NOT compiled for a few seconds, the cache is written. Without
+    /// it a crash (or a pkill, which this codebase's history is full of) throws
+    /// away the whole session's compile work. Idempotent.
+    void startShaderCacheWatchdog();
+
     /// Creates the Engine and its render driver (idempotent: true if already
     /// running). Requires the xcb platform and a QApplication. The driver is
     /// created stopped; whoever shows the first view starts it.
@@ -48,6 +62,10 @@ private:
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
     EngineRenderDriver *mDriver = nullptr;
+    class QTimer *mCacheWatchdog = nullptr;
+    unsigned mShadersSeen = 0;    ///< compiled+cached at the last watchdog tick
+    unsigned mShadersSaved = 0;   ///< the value at the last successful save
+    int      mQuietTicks = 0;
 };
 
 /// Factory for the engine-backed editor viewport (defined in

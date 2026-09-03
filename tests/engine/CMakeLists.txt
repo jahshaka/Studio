@@ -72,6 +72,11 @@ if(JAHSHAKA_ASAN)
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
     target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})
+    # Same shader-cache fingerprint terms as the real library (irisgl/engine/
+    # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them.
+    target_compile_definitions(JahshakaEngineAsan PRIVATE
+        JAHSHAKA_ENGINE_BUILD_ID="${JAHSHAKA_ENGINE_BUILD_ID}"
+        JAHSHAKA_OGRE_PATCH_SERIES="${JAHSHAKA_OGRE_PATCH_SERIES}")
     set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     target_compile_options(JahshakaEngineAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(JahshakaEngineAsan PUBLIC -fsanitize=address)

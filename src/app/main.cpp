@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
+#include "app/shaderbuildgate.h"
 #include "ui/style/thememanager.h"
 
 
@@ -144,6 +145,16 @@ int main(int argc, char *argv[])
     QDir dataDir(dataPath);
     if (!dataDir.exists()) dataDir.mkpath(dataPath);
 
+    // --clear-shader-cache: our r.InvalidateCachedShaders. It runs HERE, before
+    // MainWindow starts the engine, and the run then continues normally — which
+    // is exactly what a cold-start benchmark needs and what a user with a
+    // suspect cache needs (SHADER_CACHE_SPEC §4.5).
+    if (cli.clearShaderCache) {
+        const bool ok = EngineHost::clearShaderCacheOnDisk();
+        std::fprintf(stderr, "shader cache: %s\n",
+                     ok ? "cleared" : "could not be cleared");
+    }
+
     // Relocatable store root (ASSET_PIPELINE_SPEC §3.1.1): point the path
     // authority at the assets/storeRoot setting before anything derives a
     // store path. Only the DEFAULT root is ever created implicitly — a
@@ -185,6 +196,19 @@ int main(int argc, char *argv[])
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
+
+    // THE STARTUP SHADER BUILD RUNS HERE, behind the splash (owner decision,
+    // 2026-09-04). MainWindow's constructor has started the engine, created the
+    // views and registered the Hlms; what it has NOT done is render, and the
+    // Hlms compiles per renderable on first use. So the gate pumps frames with
+    // the window still hidden, shows "Building shaders N/M" on the splash, and
+    // returns when the count settles. A cold first launch pays for its whole
+    // build here; a warm one races through cache hits.
+    holdSplashForShaderBuild(app, splash);
+    // From now on any NEW compile burst (a scene open, a material edit) is
+    // written to disk a few seconds after it settles, so a crash costs at most
+    // that much recompilation.
+    EngineHost::instance().startShaderCacheWatchdog();
 
     // Hide the splash as soon as the window shows — including the CLI paths
     // below (script/MCP runs show the window themselves). A splash left

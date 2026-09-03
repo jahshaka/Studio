@@ -35,6 +35,9 @@ public:
     Q_INVOKABLE QVariantList openTimings();
     Q_INVOKABLE bool heartbeat(int intervalMs = 250);
     Q_INVOKABLE QVariantMap heartbeatStats();
+    Q_INVOKABLE QVariantMap shaderCache();
+    Q_INVOKABLE bool clearShaderCache();
+    Q_INVOKABLE bool saveShaderCache();
 };
 
 #endif // SCRIPTING_APPAPI_H

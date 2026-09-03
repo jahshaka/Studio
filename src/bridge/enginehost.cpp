@@ -1,6 +1,9 @@
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
 #include "data/settingsmanager.h"
+#include "data/constants.h"
+
+#include <QTimer>
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -151,7 +154,48 @@ EngineConfig EngineHost::resolveConfig()
     cfg.optimizeShadowMeshes =
         SettingsManager::getDefaultManager()->getValue("shadow_mesh_optimization", true).toBool();
 
+    // ---- Persistent shader cache (SHADER_CACHE_SPEC.md §4.1) ----
+    // AppDataLocation/shadercache: the same root the library DB and the asset
+    // store already live in, a sibling directory. It is DERIVED DATA — nothing
+    // a user could lose is ever written there, which is what makes "delete the
+    // whole directory on any doubt" an acceptable failure mode.
+    //
+    // The setting exists so a machine with a broken driver cache can turn the
+    // feature off without a rebuild; the default is on.
+    if (SettingsManager::getDefaultManager()->getValue("shader_cache_enabled", true).toBool()) {
+        const QString dataDir = shaderCacheDirectory();
+        if (!dataDir.isEmpty()) cfg.shaderCacheDir = dataDir.toStdString();
+    }
+    // The app's contribution to the cache fingerprint. Version + commit, because
+    // OUR C++ decides which Hlms properties are set and which datablocks exist;
+    // no hash inside Ogre can see a change to src/. A user updating the app
+    // therefore pays exactly one cold launch, which is correct and is the same
+    // property Unreal's DDC has.
+    cfg.appBuildId = QStringLiteral("%1/%2/%3")
+                         .arg(Constants::CONTENT_VERSION,
+                              QStringLiteral(GIT_COMMIT_HASH),
+                              QStringLiteral(GIT_COMMIT_DATE))
+                         .toStdString();
+
     return cfg;
+}
+
+QString EngineHost::shaderCacheDirectory()
+{
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (base.isEmpty()) return QString();
+    return QDir(base).filePath(QStringLiteral("shadercache"));
+}
+
+bool EngineHost::clearShaderCacheOnDisk()
+{
+    const QString dir = shaderCacheDirectory();
+    if (dir.isEmpty()) return false;
+    QDir d(dir);
+    if (!d.exists()) return true;
+    // removeRecursively, not rmdir: the directory is entirely ours and entirely
+    // derived. The next launch rebuilds it.
+    return d.removeRecursively();
 }
 
 bool EngineHost::start(QString &error)
@@ -199,8 +243,39 @@ bool EngineHost::start(QString &error)
     return true;
 }
 
+void EngineHost::startShaderCacheWatchdog()
+{
+    if (mCacheWatchdog || !mEngine) return;
+    // One second is a deliberate compromise: fast enough that a crash loses at
+    // most a few seconds of compiling, slow enough that the check itself (two
+    // atomic reads) is free. The SAVE only happens after three consecutive
+    // quiet ticks — vkGetPipelineCacheData is documented as fragile when called
+    // close to PSO creation (OgreVulkanRenderSystem.cpp:680-700), so "the burst
+    // has settled" is a correctness condition, not just an optimisation.
+    mCacheWatchdog = new QTimer(nullptr);
+    mCacheWatchdog->setInterval(1000);
+    QObject::connect(mCacheWatchdog, &QTimer::timeout, mCacheWatchdog, [this]() {
+        if (!mEngine) return;
+        unsigned compiled = 0, cached = 0, expected = 0;
+        mEngine->shaderBuildProgress(compiled, cached, expected);
+        const unsigned total = compiled + cached;
+        if (total != mShadersSeen) { mShadersSeen = total; mQuietTicks = 0; return; }
+        if (mShadersSeen == mShadersSaved) return;         // nothing new since the last save
+        if (++mQuietTicks < 3) return;                     // still inside the burst
+        if (mEngine->saveShaderCache()) mShadersSaved = mShadersSeen;
+        mQuietTicks = 0;
+    });
+    mCacheWatchdog->start();
+}
+
 void EngineHost::shutdown()
 {
+    if (mCacheWatchdog) { mCacheWatchdog->stop(); delete mCacheWatchdog; mCacheWatchdog = nullptr; }
+    // THE clean-quit save (SHADER_CACHE_SPEC §4.4). The engine's destructor
+    // saves too, but a viewport that still holds the shared_ptr can defer that
+    // destructor past Qt's own teardown — this is the point we can prove runs,
+    // with the render loop stopped a line below and nothing compiling.
+    if (mEngine) mEngine->saveShaderCache();
     if (mDriver) {
         mDriver->stop();
         delete mDriver;

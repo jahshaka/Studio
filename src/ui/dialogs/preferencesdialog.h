@@ -25,6 +25,7 @@ class SettingsManager;
 class WorldSettingsWidget;
 class McpSettingsWidget;
 class AssetsSettingsWidget;
+class CacheSettingsWidget;
 class McpServer;
 class IEditorViewport;
 class ShortcutRegistry;
@@ -58,6 +59,9 @@ public:
 	WorldSettingsWidget* worldSettings;
 	McpSettingsWidget* mcpSettings = nullptr;
 	AssetsSettingsWidget* assetsSettings = nullptr;
+	/// The Cache page (SHADER_CACHE_SPEC §4.5): shader-cache size, location and
+	/// the confirm-guarded rebuild button. Reads the verbs, never the directory.
+	CacheSettingsWidget* cacheSettings = nullptr;
 	Database *db;
 
 protected:
