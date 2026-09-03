@@ -53,3 +53,24 @@ target_link_libraries(test_rig_translation PRIVATE IrisGL JahshakaEngine Qt6::Gu
 add_dependencies(test_rig_translation JahshakaEngineMedia)
 add_test(NAME skeletal.rig_translation COMMAND test_rig_translation WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.rig_translation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+
+# GPU_SKINNING_SPEC phase 3 / T3-T6: THE gate. The same rig and the same pose,
+# rendered through the retained CPU oracle and through the GPU path, must agree
+# to 2/255 — plus two avatars of one mesh in one frame, the tangent fix, and the
+# per-frame cost of both paths at 1/4/8 characters.
+add_executable(test_gpu_parity test_gpu_parity.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_gpu_parity PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_gpu_parity PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_gpu_parity PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gpu_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_gpu_parity JahshakaEngineMedia)
+add_test(NAME skeletal.gpu_parity COMMAND test_gpu_parity WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.gpu_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "mirror")
