@@ -17,6 +17,7 @@ target_include_directories(test_web_export PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_web_export PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_web_export PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
 add_test(NAME export.web COMMAND test_web_export
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

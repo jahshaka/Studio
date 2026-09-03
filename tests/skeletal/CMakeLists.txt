@@ -89,3 +89,21 @@ target_compile_definitions(test_library_import PRIVATE JAHSHAKA_TEST_SOURCE_DIR=
 target_link_libraries(test_library_import PRIVATE IrisGL Qt6::Gui)
 add_test(NAME skeletal.library_import COMMAND test_library_import WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.library_import PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
+
+# ANIMATION_ENGINE_MIGRATION_SPEC M0 / G1 + G4(extract half): the pivot-composing
+# clip extractor, proved against the CURRENT document evaluator on a glTF rig
+# AND on the tree's first FBX fixture (fixtures/pivot_rig.fbx — five $AssimpFbx$
+# pivot nodes between two bones, every clip channel on a pivot node). Fails
+# loudest, runs in milliseconds, needs no engine.
+add_executable(test_clip_extract test_clip_extract.cpp)
+set_target_properties(test_clip_extract PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_clip_extract PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_clip_extract PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_clip_extract PRIVATE IrisGL Qt6::Gui)
+add_test(NAME skeletal.clip_extract COMMAND test_clip_extract WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.clip_extract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "document")
