@@ -216,7 +216,6 @@ void AvatarPreviewModel::clear()
     mClips.clear();
     mBoneNodes.clear();
     mNodeNames.clear();
-    mRestPose.clear();
     mActiveClip = -1;
     mBoneCount = mMeshCount = mVertexCount = 0;
     mFilePath.clear();
@@ -276,35 +275,26 @@ void AvatarPreviewModel::collectRig()
 
 void AvatarPreviewModel::captureRestPose()
 {
-    mRestPose.clear();
+    // WHAT THIS IS NOW: the set of scene-node NAMES, which loadAnimation scores
+    // a foreign clip's channels against.
+    //
+    // WHAT IT USED TO BE: also a snapshot of every node's local transform, which
+    // applyRestPose wrote back before every clip switch — because the document's
+    // clip evaluator only wrote the nodes a clip had channels for, so a bone the
+    // OLD clip moved and the NEW one does not mention kept the old pose forever.
+    // That evaluator is retired (ANIMATION_ENGINE_MIGRATION_SPEC): the document
+    // does not pose bones at all, and an engine skeleton resets every bone to
+    // its bind pose before a clip accumulates, so the whole hack is unnecessary
+    // by construction. The rest transforms themselves live on the scene nodes
+    // now (SceneNode::applyDefaultPose captures them, ClipExtractor reads them).
     mNodeNames.clear();
     if (!mFragment) return;
     std::function<void(const iris::SceneNodePtr &)> walk =
         [&](const iris::SceneNodePtr &node) {
-            RestTransform rest;
-            rest.node = node.data();
-            rest.pos = node->getLocalPos();
-            rest.rot = node->getLocalRot();
-            rest.scale = node->getLocalScale();
-            mRestPose.append(rest);
             mNodeNames.insert(node->name);
             for (const auto &child : node->children) walk(child);
         };
     walk(mFragment);
-}
-
-void AvatarPreviewModel::applyRestPose()
-{
-    // A clip only writes the nodes it has channels for (SceneNode::
-    // updateAnimation), so without this a bone the OLD clip moved and the NEW
-    // one does not mention would keep the old clip's last pose forever — which
-    // is exactly what a cross-file clip with fewer channels looks like.
-    for (const auto &rest : mRestPose) {
-        if (!rest.node) continue;
-        rest.node->setLocalPos(rest.pos);
-        rest.node->setLocalRot(rest.rot);
-        rest.node->setLocalScale(rest.scale);
-    }
 }
 
 QString AvatarPreviewModel::rootMotionChannel(const iris::SkeletalAnimationPtr &skel) const
@@ -376,7 +366,6 @@ void AvatarPreviewModel::rebuildClipAnimations()
     }
     if (mFragment && mActiveClip >= 0 && mActiveClip < mClips.size())
         mFragment->setAnimation(mClips[mActiveClip].anim);
-    applyRestPose();
     mDirty = true;
     evaluate();
 }
@@ -558,10 +547,9 @@ bool AvatarPreviewModel::setClip(const QString &name)
     for (int i = 0; i < mClips.size(); ++i) {
         if (mClips[i].display != name && mClips[i].raw != name) continue;
         mActiveClip = i;
-        // Rest first, THEN the new clip: a clip that does not mention a bone
-        // must not inherit the previous clip's last pose for it (a cross-file
-        // clip is routinely a different subset of the rig).
-        applyRestPose();
+        // No rest-pose restore any more: an engine skeleton resets every bone to
+        // its BIND pose before a clip accumulates, so a bone the new clip does
+        // not mention cannot inherit the old clip's last value.
         if (mFragment) mFragment->setAnimation(mClips[i].anim);
         // The transport state is deliberately untouched: switching while
         // playing keeps playing, from the start of the new clip.
@@ -634,16 +622,34 @@ void AvatarPreviewModel::evaluate()
     mDirty = false;
 }
 
+QHash<QString, QMatrix4x4> AvatarPreviewModel::boneWorldMatrices() const
+{
+    // The engine is where a pose lives now. The bone scene nodes still describe
+    // the rig's SHAPE (names, parents, and the rest transform the file
+    // authored), but nothing writes a clip's pose into them any more, so a
+    // source that reads the engine back is the only thing that makes these
+    // positions move.
+    QHash<QString, QMatrix4x4> world;
+    if (mPoseSource && mPoseSource(world) && !world.isEmpty()) return world;
+    world.clear();
+    for (const auto &bone : mBoneNodes)
+        if (bone.node) world.insert(bone.name, bone.node->getGlobalTransform());
+    return world;
+}
+
 QVector<BoneInfo> AvatarPreviewModel::bones() const
 {
+    const QHash<QString, QMatrix4x4> world = boneWorldMatrices();
     QVector<BoneInfo> out;
     out.reserve(mBoneNodes.size());
     for (const auto &bone : mBoneNodes) {
         if (!bone.node) continue;
+        const auto it = world.constFind(bone.name);
+        if (it == world.constEnd()) continue;
         BoneInfo info;
         info.name = bone.name;
         info.parent = bone.parent;
-        info.position = bone.node->getGlobalTransform().column(3).toVector3D();
+        info.position = it->column(3).toVector3D();
         out.append(info);
     }
     return out;
@@ -651,12 +657,15 @@ QVector<BoneInfo> AvatarPreviewModel::bones() const
 
 QVector<BoneSegment> AvatarPreviewModel::boneSegments() const
 {
+    const QHash<QString, QMatrix4x4> world = boneWorldMatrices();
     QHash<QString, QVector3D> positions;
     QHash<QString, QVector3D> axes;          // each bone's own local +Y, in world space
     QSet<QString> hasChild;
     for (const auto &bone : mBoneNodes) {
         if (!bone.node) continue;
-        const QMatrix4x4 global = bone.node->getGlobalTransform();
+        const auto it = world.constFind(bone.name);
+        if (it == world.constEnd()) continue;
+        const QMatrix4x4 global = *it;
         positions.insert(bone.name, global.column(3).toVector3D());
         QVector3D axis = global.column(1).toVector3D();      // scale is carried here too
         if (axis.lengthSquared() > 1e-12f) axis.normalize();

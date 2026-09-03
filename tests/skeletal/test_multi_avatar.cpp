@@ -1,16 +1,29 @@
-// GPU_SKINNING_SPEC phase 1 / T4 (document variant): per-node pose ownership.
+// GPU_SKINNING_SPEC phase 1 / T4 (document variant): per-node RIG ownership.
 //
 // The defect this pins: MeshNode::createDuplicate passes the SAME MeshPtr to
 // the duplicate, and pose state used to live on that shared asset
 // (iris::Skeleton::boneTransforms). Two nodes on one mesh asset therefore
 // shared one pose and the last writer per frame won — multiple avatars of one
-// rig were impossible regardless of where skinning ran.
+// rig were impossible regardless of where skinning ran. The fix was to clone
+// the rig per node, and that clone is what this suite guards.
 //
-// Document-only: no engine, no window, no GL. Runs in milliseconds and fails
-// loudly if pose ownership ever moves back onto the asset.
+// WHAT MOVED (ANIMATION_ENGINE_MIGRATION_SPEC, full retirement). The document
+// no longer computes a pose at all — Skeleton::boneTransforms is gone with the
+// clip evaluator — so the "two nodes hold two different POSES" half of this
+// suite moved to where a pose now lives: skeletal.gpu_parity T4 renders two
+// nodes of ONE mesh asset playing two clips in ONE frame and pixel-asserts that
+// each moved independently, and skeletal.gpu_clips proves the per-node clip
+// sets. What is left here is the document-side precondition for all of it: each
+// node owns its own rig object, cloned, with the hierarchy re-pointed at its own
+// bones — which is exactly the thing that regressed.
+//
+// Document-only: no engine, no window, no GL. Runs in milliseconds.
 #include <QGuiApplication>
 #include <cstdio>
 
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/clipextractor.h"
+#include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "../skeletal/armrig.h"
 
@@ -52,39 +65,24 @@ int main(int argc, char **argv)
 
     doc->updateSceneAnimation(0.5f);
 
-    const QVector<QMatrix4x4> poseA = a->getSkeleton()->boneTransforms;
-    const QVector<QMatrix4x4> poseB = b->getSkeleton()->boneTransforms;
-    CHECK(poseA.size() == 2 && poseB.size() == 2, "both poses have two bone transforms");
-    CHECK(poseA[1] != QMatrix4x4(), "A's tip bone is posed");
-    CHECK(poseB[1] != QMatrix4x4(), "B's tip bone is posed");
-    // THE assertion: fails by construction before phase 1.
-    CHECK(poseA != poseB, "two duplicates of ONE rig hold DIFFERENT skin matrices");
-
-    // The rig template is never posed.
-    int templateNonIdentity = 0;
-    for (const auto &m : mesh->getSkeleton()->boneTransforms)
-        if (!m.isIdentity()) ++templateNonIdentity;
-    CHECK(templateNonIdentity == 0, "the mesh asset's rig template stayed at identity");
-
-    // ---- 2. same clip, different TIMES ------------------------------------
-    // (What a crowd of one animation with per-character offsets looks like.)
+    // The two nodes carry DIFFERENT clips, and each translates against its own
+    // rig clone — which is what makes two independent SkeletonInstances
+    // possible engine-side. (The rendered proof is skeletal.gpu_parity T4.)
     {
-        auto mesh2 = armrig::buildArmMesh();
-        auto doc2 = iris::Scene::create();
-        auto n0 = armrig::buildArmNode(mesh2, "arm0");
-        auto n1 = armrig::buildArmNode(mesh2, "arm1");
-        doc2->getRootNode()->addChild(n0);
-        doc2->getRootNode()->addChild(n1);
-        auto clip = armrig::buildSwingClip(-90.0f);
-        n0->addAnimation(clip); n0->setAnimation(clip);
-        n1->addAnimation(clip); n1->setAnimation(clip);
-
-        // Advance them independently — updateAnimation is per node.
-        n0->updateAnimation(0.25f);
-        n1->updateAnimation(0.75f);
-        CHECK(n0->getSkeleton()->boneTransforms != n1->getSkeleton()->boneTransforms,
-              "one clip at two times gives two poses");
+        iris::ExtractedClip exA, exB;
+        CHECK(iris::ClipExtractor::extract(a, a, a->getSkeleton(), clipA->getSkeletalAnimation(),
+                                           "A", clipA->getLength(), nullptr, exA, nullptr) &&
+              iris::ClipExtractor::extract(b, b, b->getSkeleton(), clipB->getSkeletalAnimation(),
+                                           "B", clipB->getLength(), nullptr, exB, nullptr),
+              "both nodes' clips translate against their OWN rig");
+        CHECK(exA.tracks.size() == 1 && exB.tracks.size() == 1, "one driven bone each");
+        CHECK(exA.tracks[0].keys.last().rotation != exB.tracks[0].keys.last().rotation,
+              "two duplicates of ONE rig carry DIFFERENT clip data");
     }
+
+    // The rig template is shared and must never be mistaken for a node's rig.
+    CHECK(b->getSkeleton().data() != mesh->getSkeleton().data(),
+          "the second node does not alias the mesh asset's rig template either");
 
     // ---- 3. through the real duplicate() path -----------------------------
     // SceneNode::duplicate deep-copies the child hierarchy AND goes through
@@ -108,15 +106,18 @@ int main(int argc, char **argv)
         CHECK(dup->children.size() == 1 && dup->children[0]->children.size() == 1,
               "the duplicate kept its own bone scene nodes");
 
-        // Pose them at different times; the duplicate is the only one that moves.
-        // (t == the clip length wraps to 0 through Animation::getSampleTime —
-        // 0.5 is mid-swing and unambiguous.)
-        orig->updateAnimation(0.0f);
-        dupMesh->updateAnimation(0.5f);
-        CHECK(!dupMesh->getSkeleton()->boneTransforms[1].isIdentity(),
-              "the duplicate's tip bone is posed");
-        CHECK(orig->getSkeleton()->boneTransforms != dupMesh->getSkeleton()->boneTransforms,
-              "the original and its duplicate hold different poses in one frame");
+        // The duplicate's rig is a real clone: same names and indices (the
+        // blend indices in the vertex data name them), its own Bone objects,
+        // hierarchy re-pointed at those.
+        CHECK(dupMesh->getSkeleton()->bones.size() == orig->getSkeleton()->bones.size() &&
+                  dupMesh->getSkeleton()->boneMap == orig->getSkeleton()->boneMap,
+              "the duplicate's rig has the same bones, names and INDEX ORDER");
+        CHECK(dupMesh->getSkeleton()->getBone("jointTip")->parentBone.data() ==
+                  dupMesh->getSkeleton()->getBone("jointRoot").data(),
+              "and its hierarchy points at its OWN bones, not the original's");
+        for (int i = 0; i < orig->getSkeleton()->bones.size(); ++i)
+            CHECK(dupMesh->getSkeleton()->bones[i].data() != orig->getSkeleton()->bones[i].data(),
+                  "every bone object is the duplicate's own");
     }
 
     std::printf(failures ? "FAILED: %d checks\n" : "all checks passed\n", failures);

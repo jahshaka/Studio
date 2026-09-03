@@ -106,4 +106,49 @@ inline iris::MeshNodePtr buildArmNode(const iris::MeshPtr &mesh, const QString &
     return arm;
 }
 
+/// The bone-parent-local TRS the swing clip implies at time `t`, in closed form.
+///
+/// This replaced `SceneNode::updateAnimation` + `SceneMirror::toBonePoses` as
+/// the suites' pose source when the document's clip evaluator was retired
+/// (ANIMATION_ENGINE_MIGRATION_SPEC). A closed form is the better oracle
+/// anyway: it cannot drift with the thing it is checking.
+///
+/// jointRoot never moves (the clip has no channel for it, so it stays at its
+/// authored local, which is the identity). jointTip sits at (0,1,0) and turns
+/// `degrees * t/length` about Z — slerped, exactly as QuaternionKeyFrame does
+/// between its two keys.
+struct ArmPose { QVector3D pos; QQuaternion rot; QVector3D scale{1, 1, 1}; };
+
+inline QVector<ArmPose> swingLocalPoses(float degrees, float t, float length = 1.0f)
+{
+    const float u = length > 0.0f ? qBound(0.0f, t / length, 1.0f) : 0.0f;
+    QVector<ArmPose> out(2);
+    out[1].pos = QVector3D(0, 1, 0);
+    out[1].rot = QQuaternion::slerp(QQuaternion(),
+                                    QQuaternion::fromAxisAndAngle(0, 0, 1, degrees), u);
+    return out;
+}
+
+/// The skin matrix each bone must end up with for that pose — the matrix the
+/// vertex shader multiplies a vertex by:
+///     derived_i = derived_parent * local_i ;  skin_i = derived_i * inverseBind_i
+/// with jointRoot binding at the mesh origin and jointTip one unit up.
+inline QVector<QMatrix4x4> swingSkinMatrices(float degrees, float t, float length = 1.0f)
+{
+    const QVector<ArmPose> local = swingLocalPoses(degrees, t, length);
+    QVector<QMatrix4x4> derived(2), skin(2);
+    for (int i = 0; i < 2; ++i) {
+        QMatrix4x4 m;
+        m.translate(local[i].pos);
+        m.rotate(local[i].rot);
+        m.scale(local[i].scale);
+        derived[i] = i == 0 ? m : derived[0] * m;
+    }
+    QMatrix4x4 invBindTip;
+    invBindTip.translate(0, -1, 0);
+    skin[0] = derived[0];
+    skin[1] = derived[1] * invBindTip;
+    return skin;
+}
+
 }  // namespace armrig

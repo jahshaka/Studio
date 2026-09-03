@@ -12,12 +12,15 @@
 // first FBX fixture (five pivot nodes between two bones, every clip channel on
 // a pivot node and none on a bone). Document-only: no engine, no window.
 //
-// The oracle is deliberately written out here rather than called: it is
-// SceneMirror::toBonePoses' formula, and toBonePoses is one of the things this
-// migration deletes. When it goes, this file keeps the definition of what the
-// old evaluator meant.
+// The oracle is FROZEN. The document evaluator this suite was written against
+// no longer exists — full retirement was the point of the program — so its
+// answers were recorded first, into fixtures/golden_document_poses.txt, and
+// that recording is what the extractor is checked against now.
+#include <QFile>
 #include <QGuiApplication>
 #include <QTemporaryDir>
+#include <QSet>
+#include <QTextStream>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -44,6 +47,27 @@ static const QString kGlbRig =
     QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb");
 static const QString kFbxRig =
     QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/pivot_rig.fbx");
+
+struct Trs { QVector3D pos; QQuaternion rot; QVector3D scale; };
+
+// THE FROZEN ORACLE.
+//
+// This suite's whole point is comparing the extractor against the document's
+// clip evaluator — and that evaluator is being deleted. A parity gate cannot
+// outlive its oracle unless the oracle's ANSWERS are kept, so they are: the
+// evaluator's bone-parent-local pose for every (fixture, clip, time, bone) this
+// suite samples, written out by `--write-golden` while the evaluator still
+// existed and committed beside the fixtures.
+//
+// Regenerating it is not possible any more, by design: the `--write-golden`
+// mode that produced it was deleted with the evaluator it read. The file
+// records what the document evaluator said before it was retired; if the
+// extractor stops agreeing with it, the extractor changed, and no amount of
+// re-running will make that go away.
+static const QString kGolden =
+    QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/golden_document_poses.txt");
+
+static QMap<QString, Trs> gGolden;      // "fixture|clip|time|bone" -> pose
 
 static iris::MaterialPtr makeMat(iris::MeshPtr, iris::MeshMaterialData &)
 {
@@ -73,37 +97,6 @@ static void collectNames(const iris::SceneNodePtr &n, QStringList &out)
     for (const auto &c : n->children) collectNames(c, out);
 }
 
-// ---------------------------------------------------------------------------
-// THE ORACLE: what the document evaluator says a bone's parent-local TRS is at
-// time t. Exactly SceneMirror::toBonePoses (scenemirror.cpp), which reads the
-// skin matrices SceneNode::updateAnimation just wrote:
-//      derived_i = skin_i * meshSpacePose_i          (undo the inverse bind)
-//      local_i   = inverse(derived_parent) * derived_i
-// A root bone's frame is the mesh node, which is where derived_i already lives.
-// ---------------------------------------------------------------------------
-struct Trs { QVector3D pos; QQuaternion rot; QVector3D scale; };
-
-static QVector<Trs> oraclePose(const iris::SkeletonPtr &skel)
-{
-    const QList<iris::BonePtr> &bones = skel->bones;
-    QVector<QMatrix4x4> derived(bones.size());
-    for (int i = 0; i < bones.size(); ++i)
-        derived[i] = skel->boneTransforms[i] * bones[i]->meshSpacePoseMatrix;
-
-    QVector<Trs> out(bones.size());
-    for (int i = 0; i < bones.size(); ++i) {
-        int parent = -1;
-        if (!bones[i]->parentBone.isNull()) {
-            const auto it = skel->boneMap.constFind(bones[i]->parentBone->name);
-            if (it != skel->boneMap.constEnd() && it.value() != i) parent = it.value();
-        }
-        const QMatrix4x4 local = parent >= 0 ? derived[parent].inverted() * derived[i]
-                                             : derived[i];
-        iris::decomposeTRS(local, out[i].pos, out[i].rot, out[i].scale);
-    }
-    return out;
-}
-
 /// Rotations are compared through the matrix they build: q and -q are the same
 /// rotation, and a component-wise compare would call them a failure.
 static float trsError(const Trs &a, const Trs &b)
@@ -114,6 +107,39 @@ static float trsError(const Trs &a, const Trs &b)
     for (int i = 0; i < 16; ++i)
         worst = std::max(worst, std::fabs(ma.constData()[i] - mb.constData()[i]));
     return worst;
+}
+
+/// The frozen evaluator's answer for one sample, or a null pose when the file
+/// has no entry — which is itself a failure: the samples this suite takes and
+/// the ones the file holds must be the same set.
+static bool frozen(const QString &fixture, const QString &clip, float t, int bone, Trs &out)
+{
+    const QString key = QStringLiteral("%1|%2|%3|%4")
+                            .arg(fixture, clip, QString::number(double(t), 'f', 6))
+                            .arg(bone);
+    const auto it = gGolden.constFind(key);
+    if (it == gGolden.constEnd()) return false;
+    out = it.value();
+    return true;
+}
+
+static bool loadGolden()
+{
+    QFile f(kGolden);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
+    QTextStream in(&f);
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+        const QStringList parts = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        if (parts.size() != 11) continue;
+        Trs v;
+        v.pos = QVector3D(parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat());
+        v.rot = QQuaternion(parts[7].toFloat(), parts[4].toFloat(), parts[5].toFloat(), parts[6].toFloat());
+        v.scale = QVector3D(parts[8].toFloat(), parts[9].toFloat(), parts[10].toFloat());
+        gGolden.insert(parts[0], v);
+    }
+    return !gGolden.isEmpty();
 }
 
 /// Sampling an extracted track the way an engine v1 track does: linear on
@@ -177,8 +203,8 @@ static bool load(const QString &path, const QString &extractDir, Loaded &out)
 /// The whole gate for one (rig, clip): the extractor's tracks reproduce the
 /// document evaluator's bone-parent-local pose EXACTLY at every key time the
 /// extractor emitted, and within the resampling tolerance in between.
-static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const char *label,
-                     float exactTol, float betweenTol)
+static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const QString &fixture,
+                     const char *label, float exactTol, float betweenTol)
 {
     f.fragment->setAnimation(anim);
     // Animation::getSampleTime is `fmod(time, length)` while looping, so the
@@ -219,13 +245,23 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const char *labe
     CHECK(wellFormed, (QString("[%1] tracks are sorted, strictly increasing, and pinned "
                                "at 0 and at the clip length (R4)").arg(label)).toUtf8().constData());
 
+    // THE ORACLE: what the document clip evaluator said this bone's
+    // parent-local TRS was at time t, read out of the frozen recording.
+    bool goldenComplete = true;
+    const int boneCount = f.mesh->getSkeleton()->bones.size();
+    const auto oracleAt = [&](float t) {
+        QVector<Trs> pose(boneCount);
+        for (int b = 0; b < boneCount; ++b)
+            if (!frozen(fixture, anim->getName(), t, b, pose[b])) goldenComplete = false;
+        return pose;
+    };
+
     // ---- G1: EXACT at every emitted key time ------------------------------
     float worstAtKeys = 0.0f;
     int   samplesAtKeys = 0;
     for (const auto &track : clip.tracks) {
         for (const auto &key : track.keys) {
-            f.doc->updateSceneAnimation(key.time);
-            const QVector<Trs> oracle = oraclePose(f.mesh->getSkeleton());
+            const QVector<Trs> oracle = oracleAt(key.time);
             const Trs mine{ key.position, key.rotation, key.scale };
             worstAtKeys = std::max(worstAtKeys, trsError(mine, oracle[track.bone]));
             ++samplesAtKeys;
@@ -246,8 +282,7 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const char *labe
     if (clip.length > 0.0f) {
         for (int s = 0; s <= 20; ++s) {
             const float t = clip.length * float(s) / 20.0f;
-            f.doc->updateSceneAnimation(t);
-            const QVector<Trs> oracle = oraclePose(f.mesh->getSkeleton());
+            const QVector<Trs> oracle = oracleAt(t);
             for (const auto &track : clip.tracks)
                 worstBetween = std::max(worstBetween, trsError(sampleTrack(track, t), oracle[track.bone]));
         }
@@ -256,6 +291,10 @@ static void gateClip(Loaded &f, const iris::AnimationPtr &anim, const char *labe
     CHECK(worstBetween < betweenTol,
           (QString("[%1] resampled error stays inside the documented tolerance (< %2)")
                .arg(label).arg(double(betweenTol))).toUtf8().constData());
+
+    CHECK(goldenComplete,
+          (QString("[%1] the frozen oracle covers every sample this suite takes")
+               .arg(label)).toUtf8().constData());
     anim->setLooping(wasLooping);
 }
 
@@ -264,6 +303,9 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     QTemporaryDir extract;
+
+    CHECK(loadGolden(), "the frozen document-evaluator oracle loads");
+    std::printf("    frozen oracle entries: %lld\n", (long long)gGolden.size());
 
     // =====================================================================
     // 1. The FBX fixture really is what it claims to be.
@@ -327,7 +369,8 @@ int main(int argc, char **argv)
 
         for (const auto &anim : f.fragment->getAnimations()) {
             if (!anim || !anim->hasSkeletalAnimation()) continue;
-            gateClip(f, anim, ("glTF/" + anim->getName()).toUtf8().constData(), 1e-5f, 1e-2f);
+            gateClip(f, anim, QStringLiteral("rig2.glb"),
+                     ("glTF/" + anim->getName()).toUtf8().constData(), 1e-5f, 1e-2f);
         }
     }
 
@@ -360,7 +403,8 @@ int main(int argc, char **argv)
             // The FBX composition is genuinely lossier than the glTF one: three
             // channels on one bone chain, sampled at 2, 3 and 3 times over a
             // second, are as sparse as a clip ever gets.
-            gateClip(f, anim, ("FBX/" + anim->getName()).toUtf8().constData(), 1e-5f, 6e-2f);
+            gateClip(f, anim, QStringLiteral("pivot_rig.fbx"),
+                     ("FBX/" + anim->getName()).toUtf8().constData(), 1e-5f, 6e-2f);
         }
         CHECK(walkClips == 1 && zeroLengthClips == 1,
               "the file carries one real clip and one ZERO-LENGTH clip (every Mixamo "

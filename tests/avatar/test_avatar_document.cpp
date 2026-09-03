@@ -20,6 +20,7 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/animation/clipextractor.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -52,6 +53,16 @@ static iris::SkeletonPtr findSkeleton(const iris::SceneNodePtr &node)
     return iris::SkeletonPtr();
 }
 
+static iris::SceneNodePtr findSkinnedNode(const iris::SceneNodePtr &node)
+{
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh &&
+        !node.staticCast<iris::MeshNode>()->getSkeleton().isNull())
+        return node;
+    for (const auto &child : node->children)
+        if (auto n = findSkinnedNode(child)) return n;
+    return iris::SceneNodePtr();
+}
+
 static int countNodes(const iris::SceneNodePtr &node)
 {
     int n = 1;
@@ -79,21 +90,34 @@ int main(int argc, char **argv)
         CHECK(model.bones().size() == 2, "Z1: both bones have a SCENE NODE (this is what was missing)");
 
         auto skel = findSkeleton(fragment);
-        CHECK(!skel.isNull() && skel->boneTransforms.size() == 2, "Z1: the skeleton reached the mesh");
+        CHECK(!skel.isNull() && skel->bones.size() == 2, "Z1: the skeleton reached the mesh");
 
+        // THE assertion, restated for the world after the clip evaluator moved
+        // to the engine (ANIMATION_ENGINE_MIGRATION_SPEC). What was broken is
+        // that a skinned SINGLE-MESH file produced one bare MeshNode and no bone
+        // scene nodes, so a clip's channels matched nothing and the character
+        // was frozen — silently, 0 of N bones. Clip translation is exactly the
+        // consumer of those scene nodes, so it states the same fact and needs no
+        // engine: pre-fix this yielded ZERO driven bones.
         model.setClip("Idle");
         model.setTime(0.0f);
-        const QVector<QMatrix4x4> bind = skel->boneTransforms;
-        int nonIdentityBind = 0;
-        for (const auto &m : bind) if (!m.isIdentity()) ++nonIdentityBind;
-
-        model.setTime(0.5f);
-        int nonIdentity = 0;
-        for (const auto &m : skel->boneTransforms) if (!m.isIdentity()) ++nonIdentity;
-        std::printf("    non-identity skin matrices: t=0 %d/2, t=0.5 %d/2\n", nonIdentityBind, nonIdentity);
-        // THE assertion the audit's failing probe becomes: pre-fix this was 0.
-        CHECK(nonIdentity >= 1, "Z1: at least one skin matrix is non-identity at t > 0");
-        CHECK(skel->boneTransforms != bind, "Z1: the pose actually changed between t=0 and t=0.5");
+        {
+            iris::ExtractedClip clip;
+            QString err;
+            const auto anim = fragment->getAnimation();
+            CHECK(!anim.isNull() && iris::ClipExtractor::extract(
+                      fragment, findSkinnedNode(fragment), skel, anim->getSkeletalAnimation(),
+                      anim->getName(), anim->getLength(), nullptr, clip, &err),
+                  "Z1: the loaded rig's clip translates into bone tracks");
+            std::printf("    driven bones: %d/2, keys %d -> %d\n", clip.tracks.size(),
+                        clip.sourceKeyCount, clip.emittedKeyCount);
+            CHECK(clip.tracks.size() >= 1, "Z1: at least one bone is driven at t > 0");
+            bool moves = false;
+            for (const auto &t : clip.tracks)
+                if (t.keys.size() >= 2 && t.keys.first().rotation != t.keys.last().rotation)
+                    moves = true;
+            CHECK(moves, "Z1: and the track actually moves between its first and last key");
+        }
     }
 
     // ================= Z2 — unskinned regression =================
@@ -152,18 +176,23 @@ int main(int argc, char **argv)
     CHECK(avatar::AvatarPreviewModel::displayNameFor("Take 001", "File") == "File",
           "S3b: 'Take 001' is junk too");
 
-    // --- S2: setTime moves the pose, and is exactly reversible ---
+    // --- S2: the transport moves the clock, and the rig shape is stable ---
+    // The POSE half of S2 moved to avatar.preview (S8), which has an engine:
+    // clip evaluation is the engine's now, so bone POSITIONS only exist where an
+    // engine does. Without a pose source this model reports the rig's REST
+    // pose — the right shape, honestly not a pose — and that is what
+    // `avatar.bones` is documented as returning under --headless.
     CHECK(model.setClip("Idle"), "S2: 'Idle' selected");
     model.setTime(0.0f);
     const QVector3D tip0 = model.bones()[1].position;
     model.setTime(0.5f);
-    const QVector3D tipHalf = model.bones()[1].position;
-    std::printf("    jointTip: t=0 (%.3f, %.3f, %.3f)  t=0.5 (%.3f, %.3f, %.3f)\n",
-                tip0.x(), tip0.y(), tip0.z(), tipHalf.x(), tipHalf.y(), tipHalf.z());
-    CHECK((tipHalf - tip0).length() > 0.05f, "S2: the tip bone moved between t=0 and t=0.5");
-    model.setTime(0.0f);
+    CHECK(std::fabs(model.time() - 0.5f) < 1e-5f, "S2: setTime moves the clock");
+    CHECK(!model.hasPoseSource(),
+          "S2: this suite has no engine, so no pose source is installed");
     CHECK((model.bones()[1].position - tip0).length() < 1e-5f,
-          "S2: 0 -> 0.5 -> 0 restores the t=0 pose exactly");
+          "S2: and with no pose source the bone list stays at the rig's REST pose");
+    model.setTime(0.0f);
+    CHECK(std::fabs(model.time()) < 1e-5f, "S2: 0 -> 0.5 -> 0 restores the clock exactly");
 
     // --- S3: the two toggles, all four combinations ---
     {
@@ -256,27 +285,64 @@ int main(int argc, char **argv)
         CHECK(!all.first().external && all.first().active,
               "X2: loading an animation does not switch what is playing");
 
-        // --- X3: switching to it MOVES BONES, differently from the own clip -
-        cross.setClip("Idle");
-        cross.setTime(0.5f);
-        const QVector3D idleTip = cross.bones()[1].position;
+        // --- X3: switching to it selects a DIFFERENT clip that really moves --
+        // The bone POSITIONS used to be the assertion here; they live in the
+        // engine now (ANIMATION_ENGINE_MIGRATION_SPEC), and this binary has no
+        // engine. Clip translation states the same fact document-side and is
+        // sharper: the cross-file clip must translate onto the LOADED rig into
+        // a track that moves, and to a different motion than the character's
+        // own clip. avatar.preview S8 makes the rendered version of the claim.
         CHECK(cross.setClip(added_clip.name), "X3: the cross-file clip is selectable by name");
         CHECK(cross.activeClip() == added_clip.name, "X3: ... and becomes the active clip");
         CHECK(cross.time() == 0.0f, "X3: ... rewound to 0");
-        const QVector3D restTip = cross.bones()[1].position;
-        // MID-clip, deliberately: the cross-file clip is 0.5 s and looping, so
-        // sampling it at exactly 0.5 wraps to 0 (Animation::getSampleTime is
-        // an fmod) and would read as "the clip does nothing".
-        cross.setTime(0.25f);
-        const QVector3D crossTip = cross.bones()[1].position;
-        std::printf("    jointTip: Idle@0.5 (%.3f, %.3f, %.3f)  cross@0 (%.3f, %.3f, %.3f)  "
-                    "cross@0.5 (%.3f, %.3f, %.3f)\n",
-                    idleTip.x(), idleTip.y(), idleTip.z(), restTip.x(), restTip.y(), restTip.z(),
-                    crossTip.x(), crossTip.y(), crossTip.z());
-        CHECK((crossTip - restTip).length() > 0.05f,
-              "X3: the foreign clip MOVES the rig's bones over time (non-identity pose)");
-        CHECK((crossTip - idleTip).length() > 0.05f,
-              "X3: ... to a different pose than the character's own clip reaches");
+        {
+            auto crossFragment = cross.fragment();
+            auto crossMesh = findSkinnedNode(crossFragment);
+            auto crossSkel = findSkeleton(crossFragment);
+            const auto extractOne = [&](const QString &clipName, iris::ExtractedClip &out) {
+                for (const auto &a : crossFragment->getAnimations()) {
+                    if (a.isNull() || !a->hasSkeletalAnimation()) continue;
+                    if (avatar::AvatarPreviewModel::displayNameFor(
+                            a->getName(), QFileInfo(kWalkAnim).completeBaseName()) != clipName &&
+                        a->getName() != clipName)
+                        continue;
+                    QString err;
+                    return iris::ClipExtractor::extract(crossFragment, crossMesh, crossSkel,
+                                                        a->getSkeletalAnimation(), clipName,
+                                                        a->getLength(), nullptr, out, &err);
+                }
+                return false;
+            };
+            iris::ExtractedClip own, foreign;
+            const bool gotOwn = extractOne(QStringLiteral("Idle"), own);
+            // The cross-file clip's raw name is the junk one; both clips in this
+            // fragment are called "mixamo.com" after the load, so the LAST one
+            // added is the foreign one.
+            bool gotForeign = false;
+            {
+                iris::AnimationPtr last;
+                for (const auto &a : crossFragment->getAnimations())
+                    if (!a.isNull() && a->hasSkeletalAnimation()) last = a;
+                if (!last.isNull()) {
+                    QString err;
+                    gotForeign = iris::ClipExtractor::extract(
+                        crossFragment, crossMesh, crossSkel, last->getSkeletalAnimation(),
+                        added_clip.name, last->getLength(), nullptr, foreign, &err);
+                }
+            }
+            CHECK(gotOwn && gotForeign, "X3: both the own and the cross-file clip translate");
+            bool foreignMoves = false;
+            for (const auto &t : foreign.tracks)
+                if (t.keys.size() >= 2 && t.keys.first().rotation != t.keys.last().rotation)
+                    foreignMoves = true;
+            CHECK(foreignMoves,
+                  "X3: the foreign clip MOVES the rig's bones (its track is not static)");
+            bool differs = own.tracks.size() != foreign.tracks.size();
+            if (!differs && !own.tracks.isEmpty() && !foreign.tracks.isEmpty())
+                differs = own.tracks[0].keys.last().rotation != foreign.tracks[0].keys.last().rotation;
+            CHECK(differs,
+                  "X3: ... to a different motion than the character's own clip reaches");
+        }
 
         // --- X4: switching while playing keeps playing, from t = 0 ---
         cross.play();

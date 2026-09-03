@@ -7,11 +7,14 @@
 // is 2% wrong". So the algebra is proved here, in a unit test, in milliseconds,
 // before a single pixel is asked for.
 //
-// The oracle is the CPU skinner the document has always used: for any pose, the
-// GPU path's per-bone matrix (which the shader multiplies the vertex by) must be
-// the SAME matrix the CPU path uses. Scene::boneMatrices reads back exactly what
-// HlmsPbs streams into the bone buffer per draw, so the check is against what the
-// shader will actually be handed, not against our own algebra restated.
+// The oracle is CLOSED FORM (armrig::swingSkinMatrices): for any pose, the
+// engine's per-bone matrix — which the shader multiplies the vertex by — must
+// equal derived_i * inverseBind_i computed by hand. It used to be the document
+// evaluator's skin matrices; that evaluator is retired
+// (ANIMATION_ENGINE_MIGRATION_SPEC), and a closed form is the better oracle
+// anyway because it cannot drift with the thing it checks. Scene::boneMatrices
+// reads back exactly what HlmsPbs streams into the bone buffer per draw, so the
+// check is against what the shader will actually be handed.
 //
 // An engine and an offscreen view exist because a live Ogre::Root is what the v1
 // resource managers and the VaoManager need — nothing here reads a pixel.
@@ -48,6 +51,20 @@ static Rig makeArm()
     r.node->addAnimation(clip); r.node->setAnimation(clip);
     r.doc->getRootNode()->addChild(r.node);
     return r;
+}
+
+/// The analytic pose as the boundary's BonePose array.
+static std::vector<BonePose> armPoses(float t)
+{
+    const QVector<armrig::ArmPose> local = armrig::swingLocalPoses(-90.0f, t);
+    std::vector<BonePose> out(size_t(local.size()));
+    for (int i = 0; i < local.size(); ++i) {
+        out[size_t(i)].position = Vec3(local[i].pos.x(), local[i].pos.y(), local[i].pos.z());
+        out[size_t(i)].rotation = Quat(local[i].rot.x(), local[i].rot.y(),
+                                       local[i].rot.z(), local[i].rot.scalar());
+        out[size_t(i)].scale = Vec3(local[i].scale.x(), local[i].scale.y(), local[i].scale.z());
+    }
+    return out;
 }
 
 // The engine's resolved bone matrix as a QMatrix4x4 (row-major 3x4 + [0,0,0,1]).
@@ -150,11 +167,9 @@ int main(int argc, char **argv)
           "T2: re-attaching still satisfies the v2/skinned invariants");
 
     // ================= T1: bind-pose round trip (R1) =================
-    // With the document at bind pose every skin matrix is identity, so every
-    // bone's full transform must be identity too.
-    rig.doc->updateSceneAnimation(0.0f);
-    std::vector<BonePose> poses;
-    CHECK(SceneMirror::toBonePoses(rig.node->getSkeleton(), poses), "toBonePoses succeeded");
+    // At bind pose every skin matrix is identity, so every bone's full
+    // transform must be identity too.
+    std::vector<BonePose> poses = armPoses(0.0f);
     CHECK(poses.size() == 2, "one pose per bone");
     CHECK(s->setBonePoses(node, poses.data(), poses.size()), "setBonePoses accepted the bind pose");
     engine->renderOneFrame();   // runs the engine's bone FK; no pixel is read
@@ -168,24 +183,25 @@ int main(int argc, char **argv)
     std::printf("    bind pose: worst |bone matrix - identity| = %.3e\n", worst);
     CHECK(worst < 1e-4, "T1: at bind pose every engine bone matrix is the identity");
 
-    // ---- T1 continued: a POSED rig. The engine's per-bone matrix must equal the
-    // document's skin matrix — the exact matrix the CPU skinner uses. This is the
-    // reconciliation; everything downstream is pixels.
+    // ---- T1 continued: a POSED rig. The engine's per-bone matrix must equal
+    // derived_i * inverseBind_i, computed by hand. This is the reconciliation —
+    // three places to be off by an inverse, and the symptom is "the character
+    // explodes", not "the character is 2% wrong". Everything downstream is
+    // pixels.
     for (float t : { 0.25f, 0.5f, 0.9f }) {
-        rig.doc->updateSceneAnimation(t);
-        SceneMirror::toBonePoses(rig.node->getSkeleton(), poses);
+        poses = armPoses(t);
         s->setBonePoses(node, poses.data(), poses.size());
         engine->renderOneFrame();
+        const QVector<QMatrix4x4> want = armrig::swingSkinMatrices(-90.0f, t);
         double w = 0.0;
         for (size_t b = 0; b < 2; ++b) {
-            const QMatrix4x4 want = rig.node->getSkeleton()->boneTransforms[int(b)];
             const QMatrix4x4 got = engineBone(s, node, b, 2);
             for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
-                w = std::max(w, std::fabs(double(got(r, c)) - double(want(r, c))));
+                w = std::max(w, std::fabs(double(got(r, c)) - double(want[int(b)](r, c))));
         }
-        std::printf("    t=%.2f: worst |engine bone matrix - document skin matrix| = %.3e\n", double(t), w);
+        std::printf("    t=%.2f: worst |engine bone matrix - analytic skin matrix| = %.3e\n", double(t), w);
         char msg[128];
-        std::snprintf(msg, sizeof(msg), "T1: engine bone matrices == document skin matrices at t=%.2f", double(t));
+        std::snprintf(msg, sizeof(msg), "T1: engine bone matrices == the analytic skin matrices at t=%.2f", double(t));
         CHECK(w < 1e-4, msg);
     }
 
@@ -196,12 +212,8 @@ int main(int argc, char **argv)
         NodeId n2 = s->createNode();
         CHECK(s->attachSkinnedMesh(n2, meshId, matId, desc),
               "a SECOND node attaches the same mesh and rig");
-        rig.doc->updateSceneAnimation(0.5f);
-        std::vector<BonePose> poseA;
-        SceneMirror::toBonePoses(rig.node->getSkeleton(), poseA);
-        rig.doc->updateSceneAnimation(0.0f);
-        std::vector<BonePose> poseB;
-        SceneMirror::toBonePoses(rig.node->getSkeleton(), poseB);
+        std::vector<BonePose> poseA = armPoses(0.5f);
+        std::vector<BonePose> poseB = armPoses(0.0f);
         s->setBonePoses(node, poseA.data(), poseA.size());
         s->setBonePoses(n2, poseB.data(), poseB.size());
         engine->renderOneFrame();

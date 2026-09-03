@@ -3,11 +3,15 @@
 // Three layers, one process (Ogre::Root is a singleton):
 //   1. Engine: Scene::updateMeshVertices on a MeshData::dynamic mesh moves pixels;
 //      non-dynamic meshes and wrong sizes are refused.
-//   2. Document: SceneNode::updateAnimation (via Scene::updateSceneAnimation, the
-//      exact call PlayBack::update makes in play mode) fills Skeleton::boneTransforms
-//      with no GL — proven on a programmatic two-bone arm.
-//   3. Mirror: the skinned mesh mirrors as a dynamic engine mesh; advancing the
-//      document bends the arm on screen — a limb pixel flips both ways.
+//   2. Document: the clip translates (iris::ClipExtractor) into a bone track
+//      that really moves — with no GL and no engine, on a programmatic two-bone
+//      arm. This used to assert Skeleton::boneTransforms after
+//      Scene::updateSceneAnimation; the document stopped computing a pose when
+//      the clip evaluator was retired (ANIMATION_ENGINE_MIGRATION_SPEC), so
+//      what it asserts now is the thing the document DOES own.
+//   3. Mirror: the skinned mesh mirrors and the engine plays the clip;
+//      advancing the document's clock bends the arm on screen — a limb pixel
+//      flips both ways.
 // No window; DISPLAY must be reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
 #include <QGuiApplication>
 #include <QMatrix4x4>
@@ -22,6 +26,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/animation/clipextractor.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexlayout.h"
@@ -214,22 +219,47 @@ int main(int argc, char **argv)
     CHECK(isRed(bind.at(64, 36)), "bind pose: straight arm covers the tip pixel");
     CHECK(isBlue(bind.at(81, 47)), "bind pose: nothing beside the arm");
 
-    // Advance the DOCUMENT the way play mode does (PlayBack::update ->
+    // Advance the DOCUMENT's clock the way play mode does (PlayBack::update ->
     // Scene::updateSceneAnimation). No GL anywhere in this path.
     doc->updateSceneAnimation(0.5f);
-    // The NODE's skeleton, not the mesh asset's (GPU_SKINNING_SPEC §7): the
-    // asset's is the shared rig template and is never posed.
+
+    // The document half, engine-free: the clip translates into a bone track
+    // that MOVES. The NODE's skeleton, not the mesh asset's
+    // (GPU_SKINNING_SPEC §7) — the asset's is the shared rig template.
     auto skel = arm->getSkeleton();
-    QMatrix4x4 identity;
-    CHECK(skel->boneTransforms.size() == 2, "skeleton has two bone transforms");
-    CHECK(skel->boneTransforms[1] != identity, "document advance poses the tip bone");
+    QVector<QMatrix4x4> skin(2);
+    {
+        iris::ExtractedClip clip;
+        QString err;
+        CHECK(iris::ClipExtractor::extract(arm, arm, skel, anim->getSkeletalAnimation(),
+                                           anim->getName(), anim->getLength(), nullptr, clip, &err),
+              "the clip translates into bone tracks");
+        CHECK(clip.tracks.size() == 1 && clip.tracks[0].bone == 1,
+              "exactly the tip bone is driven (the root has no channel)");
+        // derived_i = derived_parent * local_i ; skin_i = derived_i * inverseBind_i
+        QMatrix4x4 local;
+        {
+            const auto &track = clip.tracks[0];
+            // t = 0.5 sits between the two keys; slerp, as the keyframe does.
+            const auto &a = track.keys.first();
+            const auto &b = track.keys.last();
+            local.translate((a.position + b.position) * 0.5f);
+            local.rotate(QQuaternion::slerp(a.rotation, b.rotation, 0.5f));
+            local.scale(QVector3D(1, 1, 1));
+        }
+        QMatrix4x4 invBindTip;
+        invBindTip.translate(0, -1, 0);
+        skin[0] = QMatrix4x4();
+        skin[1] = local * invBindTip;
+        CHECK(!skin[1].isIdentity(), "the translated track really poses the tip bone");
+    }
 
     // Mirror-level: skinned positions differ from bind pose where weighted.
     {
         std::vector<float> pos, norm;
         MeshData bindData;
         SceneMirror::toMeshData(armMesh.data(), bindData);
-        SceneMirror::skinVertices(skel->boneTransforms, bindData.positions, bindData.normals,
+        SceneMirror::skinVertices(skin, bindData.positions, bindData.normals,
                                   bi, bw, pos, norm);
         const float dx = pos[4 * 3] - bindData.positions[4 * 3];       // vertex 4: (-hw, 2, 0)
         const float dy = pos[4 * 3 + 1] - bindData.positions[4 * 3 + 1];

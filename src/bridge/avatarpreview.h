@@ -31,6 +31,7 @@ public:
     void setPreviewModel(avatar::AvatarPreviewModel *model) override;
     void framePreview() override;
     QImage renderPreview(int width, int height) override;
+    void resolvePose() override;
 
     AvatarPreviewScene *previewScene() const { return mScene.get(); }
 

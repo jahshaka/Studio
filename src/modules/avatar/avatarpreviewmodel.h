@@ -33,7 +33,9 @@ For more information see the LICENSE file
 // and never from Bone::parentBone (§0.1: empty for pivot-preserving FBX rigs).
 // A bone's parent is the NEAREST ANCESTOR that is also a bone.
 
+#include <QHash>
 #include <QMap>
+#include <QMatrix4x4>
 #include <QQuaternion>
 #include <QSet>
 #include <QString>
@@ -41,6 +43,7 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 #include <QVector>
 #include <QVector3D>
+#include <functional>
 #include <memory>
 
 #include "irisgl/irisglfwd.h"
@@ -184,6 +187,21 @@ public:
     void setSkeletonVisible(bool on) { mSkeletonVisible = on; }
 
     // ---- the rig ----------------------------------------------------------
+    /// Where a POSE comes from.
+    ///
+    /// The document stopped computing one (ANIMATION_ENGINE_MIGRATION_SPEC:
+    /// clip evaluation is Ogre's now), so a bone's world matrix has to be read
+    /// back from the engine. AvatarPreviewScene installs a source that does
+    /// exactly that; with none installed the bone list still has the right
+    /// SHAPE — names, parents, hierarchy — but its positions are the rig's REST
+    /// pose, because there is no engine to have posed it.
+    using PoseSource = std::function<bool(QHash<QString, QMatrix4x4> &)>;
+    void setPoseSource(PoseSource source) { mPoseSource = std::move(source); }
+    bool hasPoseSource() const { return bool(mPoseSource); }
+
+    /// Every bone's WORLD matrix by name — from the pose source when one is
+    /// installed, from the rig's rest transforms otherwise.
+    QHash<QString, QMatrix4x4> boneWorldMatrices() const;
     /// Every bone that has a scene node, in tree order.
     QVector<BoneInfo> bones() const;
     /// One segment per bone that has a bone ancestor: count == bones − roots.
@@ -209,7 +227,6 @@ private:
     /// Snapshots every node's local transform right after a load, and puts
     /// them back before a clip switch.
     void captureRestPose();
-    void applyRestPose();
     /// Builds the AnimationPtr the document plays for a clip, applying the
     /// root-motion policy. Called again for every clip when it is toggled.
     iris::AnimationPtr buildClipAnimation(const iris::SkeletalAnimationPtr &skel) const;
@@ -244,14 +261,13 @@ private:
     // The rig, resolved once at load: bone node name -> nearest bone ancestor.
     struct BoneNode { iris::SceneNode *node = nullptr; QString name; QString parent; };
     QVector<BoneNode> mBoneNodes;
+    PoseSource mPoseSource;
 
     // Every scene-node name under the fragment — the set a foreign clip's
     // channels are matched against (the clip -> bone join is by NAME).
     QSet<QString> mNodeNames;
 
     // The loaded file's own pose, so a clip switch starts from rest.
-    struct RestTransform { iris::SceneNode *node = nullptr; QVector3D pos; QQuaternion rot; QVector3D scale; };
-    QVector<RestTransform> mRestPose;
 
     QStringList mHistory;
     bool mRootMotion = false;

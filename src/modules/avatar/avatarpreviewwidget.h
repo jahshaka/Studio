@@ -43,6 +43,11 @@ public:
     virtual void framePreview() = 0;
     /// Offscreen render + readback, for avatar.snapshot. Null image on failure.
     virtual QImage renderPreview(int width, int height) = 0;
+    /// Makes the engine evaluate the current clip time, so a pose read right
+    /// after a setTime is THIS time's pose. Clip evaluation is the engine's
+    /// since the document evaluator was retired, and the engine evaluates
+    /// during a render.
+    virtual void resolvePose() = 0;
 };
 
 }

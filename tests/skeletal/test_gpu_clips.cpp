@@ -125,6 +125,58 @@ static double worstBoneDiff(Scene *s, NodeId a, NodeId b, size_t boneCount)
     return worst;
 }
 
+/// The pose an EXTRACTED clip implies at time t, as the boundary's BonePose
+/// array — sampled the way a v1 engine track samples: linear on position and
+/// scale, shortest-arc nlerp on rotation, held outside the key range. Bones the
+/// clip does not drive sit at their BIND pose, which is exactly what the engine
+/// resets them to.
+///
+/// This is the manual-pose side of every comparison below. It used to be the
+/// document evaluator (updateSceneAnimation -> toBonePoses); that is retired
+/// (ANIMATION_ENGINE_MIGRATION_SPEC, full retirement), and the extractor is
+/// separately gated against a FROZEN recording of the evaluator's answers in
+/// skeletal.clip_extract — so the chain of trust is
+///     frozen document oracle  <-  extractor  <-  engine.
+static std::vector<BonePose> posesFrom(const SkeletonDesc &rig, const iris::ExtractedClip &clip,
+                                       float t)
+{
+    std::vector<BonePose> out(rig.bones.size());
+    for (size_t i = 0; i < rig.bones.size(); ++i) {
+        out[i].position = rig.bones[i].bindPosition;
+        out[i].rotation = rig.bones[i].bindRotation;
+        out[i].scale    = rig.bones[i].bindScale;
+    }
+    for (const auto &track : clip.tracks) {
+        if (track.bone < 0 || size_t(track.bone) >= out.size() || track.keys.isEmpty()) continue;
+        QVector3D pos, scale;
+        QQuaternion rot;
+        if (t <= track.keys.first().time) {
+            pos = track.keys.first().position; rot = track.keys.first().rotation;
+            scale = track.keys.first().scale;
+        } else if (t >= track.keys.last().time) {
+            pos = track.keys.last().position; rot = track.keys.last().rotation;
+            scale = track.keys.last().scale;
+        } else {
+            for (int k = 1; k < track.keys.size(); ++k) {
+                if (track.keys[k].time < t) continue;
+                const auto &a = track.keys[k - 1];
+                const auto &b = track.keys[k];
+                const float span = b.time - a.time;
+                const float u = span > 0.0f ? (t - a.time) / span : 0.0f;
+                pos = a.position + (b.position - a.position) * u;
+                scale = a.scale + (b.scale - a.scale) * u;
+                rot = QQuaternion::nlerp(a.rotation, b.rotation, u);
+                break;
+            }
+        }
+        BonePose &p = out[size_t(track.bone)];
+        p.position = Vec3(pos.x(), pos.y(), pos.z());
+        p.rotation = Quat(rot.x(), rot.y(), rot.z(), rot.scalar());
+        p.scale    = Vec3(scale.x(), scale.y(), scale.z());
+    }
+    return out;
+}
+
 static std::vector<float> flatten(const std::vector<BonePose> &p)
 {
     std::vector<float> out;
@@ -224,9 +276,7 @@ int main(int argc, char **argv)
     const float length = rig.clip->getLength();
     double worstPose = 0.0;
     for (float t : { 0.0f, 0.25f, 0.5f, 0.75f, length }) {
-        rig.doc->updateSceneAnimation(t);
-        std::vector<BonePose> poses;
-        SceneMirror::toBonePoses(rig.node->getSkeleton(), poses);
+        std::vector<BonePose> poses = posesFrom(desc, extracted, t);
         s->setBonePoses(nodeDoc, poses.data(), poses.size());
 
         ClipState st; st.name = "Swing"; st.enabled = true; st.time = t;
@@ -235,17 +285,16 @@ int main(int argc, char **argv)
         engine->renderOneFrame();
         const double d = worstBoneDiff(s, nodeDoc, nodeClip, boneCount);
         worstPose = std::max(worstPose, d);
-        std::printf("    t=%.2f: worst |engine-clip bone matrix - document bone matrix| = %.3e\n",
+        std::printf("    t=%.2f: worst |engine-clip bone matrix - manual-pose bone matrix| = %.3e\n",
                     double(t), d);
     }
     CHECK(worstPose < 1e-4,
-          "G2: the engine's clip reproduces the document evaluator's bone matrices (< 1e-4)");
+          "G2: the engine's clip reproduces the extracted track's own pose (< 1e-4) — the "
+          "bind-relative delta conversion, the def build and the sampling, end to end");
 
     // bonePoses reads back the same thing in the frame setBonePoses writes in.
     {
-        rig.doc->updateSceneAnimation(0.6f);
-        std::vector<BonePose> want;
-        SceneMirror::toBonePoses(rig.node->getSkeleton(), want);
+        const std::vector<BonePose> want = posesFrom(desc, extracted, 0.6f);
         ClipState st; st.name = "Swing"; st.time = 0.6f; st.looping = false;
         s->setClipStates(nodeClip, &st, 1);
         engine->renderOneFrame();
@@ -263,7 +312,7 @@ int main(int argc, char **argv)
             for (int k = 0; k < 16; ++k)
                 worst = std::max(worst, std::fabs(double(a.constData()[k]) - double(b.constData()[k])));
         }
-        std::printf("    bonePoses vs document parent-local pose: %.3e\n", worst);
+        std::printf("    bonePoses vs the extracted track's parent-local pose: %.3e\n", worst);
         CHECK(worst < 1e-4, "bonePoses is bone-parent-local, the same frame setBonePoses writes in");
     }
 
@@ -295,9 +344,18 @@ int main(int argc, char **argv)
         CHECK(s->attachClips(nSparse, &sd, 1), "the 2-key clip attaches");
         double atKeys = 0.0, between = 0.0;
         for (float t : { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f }) {
-            sparse.doc->updateSceneAnimation(t);
-            std::vector<BonePose> poses;
-            SceneMirror::toBonePoses(sparse.node->getSkeleton(), poses);
+            // The manual side samples the extracted track with SLERP, which is
+            // what our keyframes do; the engine nlerps. That difference is the
+            // whole point of this block.
+            std::vector<BonePose> poses = posesFrom(desc, sx, t);
+            {
+                // slerp, not nlerp, on the one animated bone
+                const auto &tr = sx.tracks.first();
+                const float u = std::min(std::max(t / sparse.clip->getLength(), 0.0f), 1.0f);
+                const QQuaternion q = QQuaternion::slerp(tr.keys.first().rotation,
+                                                         tr.keys.last().rotation, u);
+                poses[size_t(tr.bone)].rotation = Quat(q.x(), q.y(), q.z(), q.scalar());
+            }
             s->setBonePoses(nodeDoc, poses.data(), poses.size());
             ClipState st; st.name = "Sparse"; st.enabled = true; st.time = t;
             st.weight = 1.0f; st.looping = false;
@@ -478,9 +536,7 @@ int main(int argc, char **argv)
     {
         int worstPixel = 0;
         for (float t : { 0.0f, 0.3f, 0.7f, length }) {
-            rig.doc->updateSceneAnimation(t);
-            std::vector<BonePose> poses;
-            SceneMirror::toBonePoses(rig.node->getSkeleton(), poses);
+            std::vector<BonePose> poses = posesFrom(desc, extracted, t);
             s->setBonePoses(nodeDoc, poses.data(), poses.size());
             ClipState st; st.name = "Swing"; st.enabled = true; st.time = t;
             st.weight = 1.0f; st.looping = false;
@@ -490,7 +546,7 @@ int main(int argc, char **argv)
             s->setNodeVisible(nodeClip, false);
             for (int f = 0; f < 3; ++f) engine->renderOneFrame();
             Image a;
-            CHECK(view->readPixels(a), "the document-driven frame read back");
+            CHECK(view->readPixels(a), "the manually-posed frame read back");
 
             s->setNodeVisible(nodeDoc, false);
             s->setNodeVisible(nodeClip, true);
@@ -512,7 +568,7 @@ int main(int argc, char **argv)
             worstPixel = std::max(worstPixel, worst);
         }
         CHECK(worstPixel <= 2,
-              "G3: document-driven and engine-clip-driven frames agree to <= 2/255 per channel");
+              "G3: manually-posed and engine-clip-driven frames agree to <= 2/255 per channel");
         s->setNodeVisible(nodeDoc, true);
     }
 
@@ -576,9 +632,7 @@ int main(int argc, char **argv)
 
                 double worst = 0.0;
                 for (float t : { 0.0f, 0.25f, 0.5f, 1.0f }) {
-                    fbxDoc->updateSceneAnimation(t);
-                    std::vector<BonePose> poses;
-                    SceneMirror::toBonePoses(meshNode->getSkeleton(), poses);
+                    std::vector<BonePose> poses = posesFrom(fbxRig, fx, t);
                     s->setBonePoses(fDoc, poses.data(), poses.size());
                     ClipState st; st.name = fDesc.name; st.enabled = true; st.time = t;
                     st.weight = 1.0f; st.looping = false;
@@ -586,14 +640,14 @@ int main(int argc, char **argv)
                     engine->renderOneFrame();
                     worst = std::max(worst, worstBoneDiff(s, fDoc, fClip, fbxRig.bones.size()));
                 }
-                std::printf("    FBX pivot rig: worst |clip - document| bone matrix = %.3e\n", worst);
+                std::printf("    FBX pivot rig: worst |engine clip - manual pose| bone matrix = %.3e\n", worst);
                 // Looser than the glTF rig by design: the FBX clip's three
                 // channels key at three different times over one second, so the
                 // composed track is resampled onto their union and the values
                 // between those times are a lerp of composed rotations, not a
                 // composition of lerped ones.
                 CHECK(worst < 5e-2,
-                      "G4: the pivot-composed FBX clip tracks the document evaluator on the engine");
+                      "G4: the pivot-composed FBX clip reproduces its own track on the engine");
                 s->removeNode(fDoc);
                 s->removeNode(fClip);
             }
