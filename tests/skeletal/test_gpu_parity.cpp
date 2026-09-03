@@ -244,9 +244,21 @@ int main(int argc, char **argv)
         auto b = armrig::buildArmNode(docMesh, "b");
         a->setLocalPos(QVector3D(-1.2f, 0, 0));
         b->setLocalPos(QVector3D( 1.2f, 0, 0));
-        auto clip = armrig::buildSwingClip(-90.0f);
-        a->addAnimation(clip); a->setAnimation(clip);
-        b->addAnimation(clip); b->setAnimation(clip);
+        // TWO clips, one per avatar. Since the clip evaluator moved to the
+        // engine the document states {which clip, one absolute clock} and the
+        // engine samples it, so "pose A at 0.5 while B stays at 0" is no longer
+        // expressible by poking one node's updateAnimation — and it never should
+        // have been, that was reaching past the scene's clock. The claim T4
+        // actually makes — two nodes on ONE mesh asset hold two independent
+        // poses in one frame — is stated here as two different clips at the same
+        // time, which also proves the clip sets are per node.
+        auto swing = armrig::buildSwingClip(-90.0f);
+        swing->setName("swing");
+        auto still = armrig::buildSwingClip(0.0f);
+        still->setName("still");
+        a->addAnimation(swing); a->setAnimation(still);
+        a->addAnimation(still);
+        b->addAnimation(swing); b->addAnimation(still); b->setAnimation(still);
         scene->getRootNode()->addChild(a);
         scene->getRootNode()->addChild(b);
 
@@ -260,20 +272,20 @@ int main(int argc, char **argv)
         mirror.setSource(scene);
         mirror.setLightWires(false);
 
-        // Frame 1: both at bind.
-        a->updateAnimation(0.0f);
-        b->updateAnimation(0.0f);
+        // Frame 1: both on the still clip.
+        scene->updateSceneAnimation(0.0f);
         mirror.sync();
         render(engine.get());
         Image f1;
         CHECK(v->readPixels(f1), "T4: readPixels (both at bind)");
 
-        // Frame 2: move ONLY A. B must not budge — which is the whole claim: two
-        // nodes on ONE mesh asset, two independent poses, one frame. On the CPU
-        // path this was impossible by construction (one engine mesh per mesh
-        // asset means one vertex buffer for both).
-        a->updateAnimation(0.5f);
-        b->updateAnimation(0.0f);
+        // Frame 2: A switches to the swinging clip; B stays on the still one.
+        // B must not budge — which is the whole claim: two nodes on ONE mesh
+        // asset, two independent poses, one frame. On the CPU path this was
+        // impossible by construction (one engine mesh per mesh asset means one
+        // vertex buffer for both).
+        a->setAnimation(swing);
+        scene->updateSceneAnimation(0.5f);
         mirror.sync();
         render(engine.get());
         Image f2;
