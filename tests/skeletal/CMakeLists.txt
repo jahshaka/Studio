@@ -74,3 +74,18 @@ target_link_libraries(test_gpu_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6
 add_dependencies(test_gpu_parity JahshakaEngineMedia)
 add_test(NAME skeletal.gpu_parity COMMAND test_gpu_parity WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.gpu_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 900 LABELS "mirror")
+
+# The aiScene overload of loadAsSceneFragment: the library/import side of the
+# same single-mesh-rig defect. Document-only.
+add_executable(test_library_import test_library_import.cpp)
+set_target_properties(test_library_import PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_library_import PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_library_import PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_library_import PRIVATE IrisGL Qt6::Gui)
+add_test(NAME skeletal.library_import COMMAND test_library_import WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.library_import PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
