@@ -73,6 +73,31 @@ cmake --build build-linux -j$(nproc)
 This builds IrisGL, the engine layer, and the app in one go. (For development builds use
 `-DCMAKE_BUILD_TYPE=Debug -DDISABLE_BREAKPAD=ON` — breakpad swallows crash backtraces.)
 
+### Vendored-source patches
+
+Vendored trees are never edited in place. Our changes to **assimp** live as patch files in
+`irisgl/thirdparty/assimp-patches/` and are applied automatically at **configure time**,
+before assimp is added to the build — you will see lines like
+
+```
+-- vendor patch applied: 0001-fbx-meshgeometry-guard-oob-vertex-mapping.patch
+```
+
+on the first configure and `vendor patch already applied: …` on every one after. Nothing to
+run by hand; the assimp submodule simply ends up in the applied-not-committed state, exactly
+like Ogre-Next after `build-ogre.sh`. To apply them manually (after re-syncing the submodule,
+say):
+
+```bash
+cmake -DSRC=irisgl/thirdparty/assimp -DPATCHES=irisgl/thirdparty/assimp-patches \
+      -P irisgl/cmake/ApplyVendorPatches.cmake
+```
+
+If a patch stops applying, configure fails loudly with `PATCH DOES NOT APPLY` — that means
+upstream touched our lines. Read their change and adapt or drop the patch; do not edit the
+vendored source. The whole law, and what each patch is for:
+`irisgl/thirdparty/assimp-patches/README.md`.
+
 ## 5. Run
 
 ```bash
@@ -113,3 +138,4 @@ Vulkan platform plugin. On machines without a GPU:
 | App exits with a Vulkan error at startup | Check `vulkaninfo`; update GPU drivers |
 | `git submodule update` fails on ogre-next | Network access to github.com/OGRECave required (large repo; the clone is blob-filtered) |
 | A patch fails in build-ogre.sh after updating the submodule | Upstream changed a patched file — see `irisgl/docs/OGRE_BUILD.md`, "Updating Ogre" |
+| Configure fails with `PATCH DOES NOT APPLY` | An assimp patch no longer applies (upstream moved, or the submodule tree is dirty) — see `irisgl/thirdparty/assimp-patches/README.md` |

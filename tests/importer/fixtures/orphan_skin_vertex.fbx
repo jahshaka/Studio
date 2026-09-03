@@ -1,0 +1,94 @@
+; FBX 7.4.0 project file
+; ----------------------------------------------------
+; Hand-written regression fixture. See the sibling README/test for what it proves.
+
+FBXHeaderExtension:  {
+	FBXHeaderVersion: 1003
+	FBXVersion: 7400
+}
+GlobalSettings:  {
+	Version: 1000
+	Properties70:  {
+		P: "UpAxis", "int", "Integer", "",1
+		P: "UpAxisSign", "int", "Integer", "",1
+		P: "FrontAxis", "int", "Integer", "",2
+		P: "FrontAxisSign", "int", "Integer", "",1
+		P: "CoordAxis", "int", "Integer", "",0
+		P: "CoordAxisSign", "int", "Integer", "",1
+		P: "UnitScaleFactor", "double", "Number", "",1
+	}
+}
+Objects:  {
+	Geometry: 1000, "Geometry::orphanmesh", "Mesh" {
+		Vertices: *12 {
+			a: 0,0,0,1,0,0,0,1,0,9,9,9
+		}
+		PolygonVertexIndex: *3 {
+			a: 0,1,-3
+		}
+		GeometryVersion: 124
+		LayerElementNormal: 0 {
+			Version: 101
+			Name: ""
+			MappingInformationType: "ByPolygonVertex"
+			ReferenceInformationType: "Direct"
+			Normals: *9 {
+				a: 0,0,1,0,0,1,0,0,1
+			}
+		}
+		Layer: 0 {
+			Version: 100
+			LayerElement:  {
+				Type: "LayerElementNormal"
+				TypedIndex: 0
+			}
+		}
+	}
+	Model: 2000, "Model::orphanmesh", "Mesh" {
+		Version: 232
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,0,0
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+	Model: 5000, "Model::bone_root", "LimbNode" {
+		Version: 232
+		Properties70:  {
+			P: "Lcl Translation", "Lcl Translation", "", "A",0,0,0
+		}
+		Shading: T
+		Culling: "CullingOff"
+	}
+	Deformer: 3000, "Deformer::skin", "Skin" {
+		Version: 101
+		Link_DeformAcuracy: 50
+	}
+	; Indexes lists EVERY control point, including vertex 3, which no polygon
+	; references.  That is the whole point of the fixture: vertex 3 has
+	; mapping count 0 and a mapping offset equal to m_mappings.size().
+	Deformer: 4000, "SubDeformer::cluster_root", "Cluster" {
+		Version: 100
+		UserData: "", ""
+		Indexes: *4 {
+			a: 0,1,2,3
+		}
+		Weights: *4 {
+			a: 1,1,1,1
+		}
+		Transform: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
+		}
+		TransformLink: *16 {
+			a: 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
+		}
+	}
+}
+Connections:  {
+	C: "OO",2000,0
+	C: "OO",1000,2000
+	C: "OO",5000,0
+	C: "OO",3000,1000
+	C: "OO",4000,3000
+	C: "OO",5000,4000
+}
