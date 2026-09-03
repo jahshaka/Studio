@@ -96,6 +96,20 @@ set_tests_properties(scripting.e2e.drawers PROPERTIES
 # Rich asset metadata (ASSET_DRAWERS_SPEC addendum): import-time "metadata"
 # blocks + the assets.metadata verb (with its lazy backfill). Image/audio/mesh
 # imports here are all document-side, so this runs --headless too.
+# Library asset deletion (the 2026-09-03 silent-no-op defect): assets.remove
+# must report the database's real answer, and the row must actually go.
+# Document-only, so --headless; fixture paths configured in.
+configure_file(scripts/e2e_asset_delete.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-asset_delete)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.asset_delete
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_asset_delete.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.asset_delete PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # Web export (WEB_EXPORT_AUDIT): project.exportWeb through the real binary.
 # Document-only, so --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_web)

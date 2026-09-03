@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "data/database/casschema.h"
 #include "data/constants.h"
 #include "irisgl/irisglfwd.h"
+#include "irisgl/core/logger.h"
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"
@@ -149,7 +150,23 @@ Database::~Database()
 bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
 {
     if (!query.exec()) {
-        irisLog(QString("%1 query failed to execute! %2").arg(name, query.lastError().text()));
+        // LOUD, and at warn level: a failed query here silently no-ops a user
+        // action (the 2026-09-03 defect: every asset delete at shutdown failed
+        // and the log said so at [info], indistinguishable from chatter).
+        QString reason = query.lastError().text();
+        if (reason.isEmpty()) reason = QStringLiteral("(no driver error text)");
+
+        // The SQLite driver reports a CLOSED connection as the thoroughly
+        // misleading "Parameter count mismatch": prepare() failed quietly (its
+        // only complaint is a qWarning), so exec() compares the bind values
+        // against a null statement's zero placeholders. Say what actually
+        // happened, or the next reader goes hunting for a bad query string.
+        if (!db.isOpen())
+            reason += QStringLiteral(" [the database connection is CLOSED — this query ran "
+                                     "after teardown; nothing was written]");
+
+        iris::Logger::getSingleton()->warn(
+            QString("%1 query failed to execute! %2").arg(name, reason));
         return false;
     }
 
@@ -342,30 +359,32 @@ QString Database::getVersion()
     return QString();
 }
 
-void Database::updateGlobalDependencyDepender(const int &ertype, const QString & depender, const QString & dependee)
+// Both of these bound by NAME (":depender", ...) against POSITIONAL '?'
+// placeholders until 2026-09-03 — Qt's SQLite driver rejects that combination
+// wholesale ("Parameter count mismatch"), so neither statement had ever
+// updated a row. Positional SQL takes positional binds, in statement order.
+bool Database::updateGlobalDependencyDepender(const int &ertype, const QString & depender, const QString & dependee)
 {
     QSqlQuery query;
-    auto guid = GUIDManager::generateGUID();
     query.prepare("UPDATE dependencies SET depender = ? WHERE depender_type = ? AND dependee = ?");
 
-    query.bindValue(":depender", depender);
-    query.bindValue(":depender_type", ertype);
-    query.bindValue(":dependee", dependee);
+    query.addBindValue(depender);
+    query.addBindValue(ertype);
+    query.addBindValue(dependee);
 
-    executeAndCheckQuery(query, "updateGlobalDependencyDepender");
+    return executeAndCheckQuery(query, "updateGlobalDependencyDepender");
 }
 
-void Database::updateGlobalDependencyDependee(const int & ertype, const QString & depender, const QString & dependee)
+bool Database::updateGlobalDependencyDependee(const int & ertype, const QString & depender, const QString & dependee)
 {
     QSqlQuery query;
-    auto guid = GUIDManager::generateGUID();
     query.prepare("UPDATE dependencies SET dependee = ? WHERE depender_type = ? AND depender = ?");
 
-    query.bindValue(":depender", depender);
-    query.bindValue(":depender_type", ertype);
-    query.bindValue(":dependee", dependee);
+    query.addBindValue(dependee);
+    query.addBindValue(ertype);
+    query.addBindValue(depender);
 
-    executeAndCheckQuery(query, "updateGlobalDependencyDependee");
+    return executeAndCheckQuery(query, "updateGlobalDependencyDependee");
 }
 
 QString Database::getDependencyByType(const int &ertype, const QString &depender)
@@ -969,6 +988,17 @@ void Database::wipeDatabase()
 
 bool Database::deleteAsset(const QString &guid)
 {
+    // A delete that cannot run must NOT report success and must NOT scrub the
+    // in-memory catalog: doing both is how a no-op delete looked like a real
+    // one until the next restart brought the asset back.
+    if (!db.isOpen()) {
+        iris::Logger::getSingleton()->warn(
+            QString("DeleteAsset refused for '%1': the database connection is CLOSED. "
+                    "Nothing was deleted (asset row, content mapping and project pins all "
+                    "remain).").arg(guid));
+        return false;
+    }
+
     QSqlQuery query;
     query.prepare("DELETE FROM assets WHERE guid = ?");
     query.addBindValue(guid);
@@ -979,18 +1009,29 @@ bool Database::deleteAsset(const QString &guid)
     QSqlQuery dropFiles;
     dropFiles.prepare("DELETE FROM asset_files WHERE asset_guid = ?");
     dropFiles.addBindValue(guid);
-    executeAndCheckQuery(dropFiles, "DeleteAssetFiles");
+    bool ok = executeAndCheckQuery(dropFiles, "DeleteAssetFiles");
 
     QSqlQuery dropPins;
     dropPins.prepare("DELETE FROM project_assets WHERE asset_guid = ?");
     dropPins.addBindValue(guid);
-    executeAndCheckQuery(dropPins, "DeleteAssetPins");
+    ok = executeAndCheckQuery(dropPins, "DeleteAssetPins") && ok;
 
-    for (int i = 0; i < AssetManager::getAssets().count(); i++) {
-        if (AssetManager::getAssets()[i]->assetGuid == guid) AssetManager::getAssets().remove(i);
+    ok = executeAndCheckQuery(query, "DeleteAsset") && ok;
+
+    // Only once the rows are actually gone: the cache and the catalog must not
+    // disagree (a scrubbed cache over a surviving row is the silent failure).
+    if (ok) {
+        for (int i = 0; i < AssetManager::getAssets().count(); i++) {
+            if (AssetManager::getAssets()[i]->assetGuid == guid) AssetManager::getAssets().remove(i);
+        }
+    }
+    else {
+        iris::Logger::getSingleton()->warn(
+            QString("deleteAsset('%1') FAILED — the asset was not removed from the library.")
+                .arg(guid));
     }
 
-	return executeAndCheckQuery(query, "DeleteAsset");
+    return ok;
 }
 
 bool Database::deleteCollection(const int &collectionId)
@@ -2779,9 +2820,10 @@ QVector<DependencyRecord> Database::fetchAssetDependencies(const AssetRecord &re
     return dependencies;
 }
 
-QStringList Database::deleteFolderAndDependencies(const QString &guid)
+QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 {
 	QStringList files;
+	bool allOk = true;
 
 	// Get all child folders
 	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
@@ -2792,15 +2834,21 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid)
 				files.append(dep);
 			}
 
-			deleteAsset(asset);
-			
+			allOk = deleteAsset(asset) && allOk;
+
             for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
-                deleteDependency(asset, dep);
+                allOk = deleteDependency(asset, dep) && allOk;
             }
 		}
 
-		deleteFolder(folder);
+		allOk = deleteFolder(folder) && allOk;
 	}
+
+	if (!allOk)
+		iris::Logger::getSingleton()->warn(
+			QString("deleteFolderAndDependencies('%1') did NOT fully complete — some rows "
+			        "survive in the library.").arg(guid));
+	if (ok) *ok = allOk;
 
 	for (int i = 0; i < files.size(); ++i) {
 		if (QFileInfo(files[i]).suffix().isEmpty()) {
@@ -2812,9 +2860,10 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid)
 	return files;
 }
 
-QStringList Database::deleteAssetAndDependencies(const QString & guid)
+QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok)
 {
 	QStringList files;
+	bool allOk = true;
 
 	DbTransaction tx(db);
 
@@ -2824,14 +2873,20 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid)
 			files.append(dep);
 		}
 
-		deleteAsset(asset);
-		
+		allOk = deleteAsset(asset) && allOk;
+
         for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
-            deleteDependency(asset, dep);
+            allOk = deleteDependency(asset, dep) && allOk;
         }
 	}
 
-	tx.commit();
+	allOk = tx.commit() && allOk;
+
+	if (!allOk)
+		iris::Logger::getSingleton()->warn(
+			QString("deleteAssetAndDependencies('%1') did NOT fully complete — the asset "
+			        "and/or its dependency rows survive in the library.").arg(guid));
+	if (ok) *ok = allOk;
 
     for (int i = 0; i < files.size(); ++i) {
 	    if (QFileInfo(files[i]).suffix().isEmpty()) {
