@@ -17,6 +17,7 @@
 
 class SceneMirror;
 class EngineRenderDriver;
+class ViewportCover;
 class EditorData;
 class Gizmo;
 class TranslationGizmo;
@@ -28,6 +29,7 @@ class PlayBack;
 class EditorCameraController;
 class OrbitalCameraController;
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QPointF>
 #include <QHash>
 #include <QVector3D>
@@ -130,6 +132,32 @@ public:
     void cleanup() override;
     void clearScene() override;
 
+    // ---- the loading / no-scene cover (viewportcover.h) ----
+    /// The cover this viewport drives. It is a SIBLING widget (same layout cell,
+    /// never a child — a child of a setUpdatesEnabled(false) widget can never
+    /// repaint), created and owned by whoever builds the editor page. Null in
+    /// sessions that have no cover; every cover call is then a no-op.
+    void setCover(ViewportCover *cover) override;
+    QString presentationState() const override;
+    qulonglong framesPresented() const override;
+    void beginSceneLoad(const QString &title = QString()) override;
+    void coverIfNotPresenting() override;
+    void primeSceneSync() override;
+    /// Recomputes the cover's state from the view's present count. Called once
+    /// a frame (before the engine's frame, so it sees the presents already
+    /// made) and at every event that can change the answer.
+    void updateCover();
+    /// Frames presented since the CURRENT world was bound to this viewport.
+    /// Not simply View::framesPresented(): a project close/open reuses the
+    /// engine scene (MainWindow::closeProject leaves it bound), so the engine's
+    /// own counter does not restart — the viewport has to remember where the
+    /// new world started.
+    qulonglong presentsSinceBind() const;
+    /// Presented frames a scene needs before the cover comes down. Two, not
+    /// one: a Vulkan present is queued, so the frame counted first is not
+    /// guaranteed to be the one the compositor is showing.
+    static constexpr unsigned long long kPresentsBeforeReveal = 2;
+
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
     /// One document->engine sync. `dt` >= 0 overrides the wall clock: that is
@@ -219,6 +247,11 @@ private:
     Database *mDatabase = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::ScenePtr mScene;
+    /// Not owned (see setCover): a sibling widget in the same layout cell.
+    QPointer<ViewportCover> mCover;
+    /// View::framesPresented() at the moment the current world was bound
+    /// (setScene/clearScene/beginSceneLoad) — the zero of presentsSinceBind.
+    qulonglong mPresentBaseline = 0;
     iris::SceneNodePtr mSelectedNode;
     /// Alt+LMB orbit pivot when nothing is selected: the last focus point
     /// (F on a node), else the world origin.

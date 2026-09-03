@@ -27,6 +27,7 @@ class Database;
 class Project;
 class EditorData;
 class Gizmo;
+class ViewportCover;
 enum WindowSpaces : int;      // mainwindow.h
 enum class SceneMode;         // playbackservice.h
 
@@ -217,6 +218,43 @@ public:
     /// each, instead of by however long the wall clock says. A negative `dt`
     /// means "use the wall clock" and is identical to renderFrames(n).
     virtual void renderFrames(int n, float dt) { Q_UNUSED(n); Q_UNUSED(dt); }
+
+    // ---- the "nothing is presenting" cover (src/viewport/viewportcover.h) ----
+    /// What the viewport is showing RIGHT NOW, as a verb-friendly name:
+    ///   "presenting" — the engine's own frames are on screen
+    ///   "loading"    — a world is bound but no frame of it has presented yet
+    ///   "noscene"    — no world is open in this viewport
+    ///   "offscreen"  — this viewport never renders to the widget (headless
+    ///                  stand-ins, and the macOS offscreen fallback view)
+    /// Read-only, and the thing editor.viewportState() reports.
+    virtual QString presentationState() const { return QStringLiteral("offscreen"); }
+    /// Frames the viewport's render target has actually drawn AND presented
+    /// since the CURRENT WORLD was bound to this viewport — the honest "are
+    /// there real pixels of this world on screen yet?" count. Built on
+    /// View::framesPresented, but rebased per document scene: a project
+    /// close/open reuses the engine scene, so the engine's own counter does
+    /// not restart there.
+    virtual qulonglong framesPresented() const { return 0; }
+    /// "A world is about to be loaded into me": puts the loading cover up and
+    /// PAINTS it before returning, so the grey is on screen before the load
+    /// blocks the thread. `title` names the world (shown under the message).
+    /// A no-op for viewports that have no cover.
+    virtual void beginSceneLoad(const QString &title = QString()) { Q_UNUSED(title); }
+    /// The cover widget this viewport drives (owned by the editor page, not by
+    /// the viewport). Viewports without one ignore it and stay uncovered.
+    virtual void setCover(ViewportCover *) {}
+    /// "Show whatever you have": re-evaluates the cover and, if it is up,
+    /// paints it synchronously. Every route onto the editor page calls this —
+    /// a page switch reveals the viewport's native window, and until the engine
+    /// presents into it the X server shows whatever was there before.
+    virtual void coverIfNotPresenting() {}
+    /// Pushes the bound document into the renderer NOW, without rendering:
+    /// the mesh/material/texture uploads that would otherwise happen on the
+    /// first frame after the page switch. Called while the loading page is
+    /// still on screen so the editor page appears with a world already
+    /// uploaded. Optional and always skippable — a viewport with no render
+    /// target yet simply does nothing and lets the cover carry the wait.
+    virtual void primeSceneSync() {}
 
     // ---- lifecycle ----
     virtual void begin() = 0;

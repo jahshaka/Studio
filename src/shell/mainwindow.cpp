@@ -149,6 +149,7 @@ For more information see the LICENSE file
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
+#include "viewport/viewportcover.h"
 
 #include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
@@ -782,6 +783,12 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			isSceneOpen = true;
 
 			sceneView->begin();
+			// The viewport's native window has just been mapped. Until the
+			// engine presents into it the X server shows whatever was on that
+			// part of the screen before — the page we just left. Paint the
+			// cover NOW (synchronously; a posted paint would arrive after the
+			// rest of this open) unless the engine already owns those pixels.
+			sceneView->coverIfNotPresenting();
             break;
         }
 
@@ -955,6 +962,22 @@ void MainWindow::saveScene()
 
 void MainWindow::openProject(bool playMode)
 {
+	// ORDER MATTERS HERE (the viewport desktop-bleed defect, 2026-09-03).
+	// Everything that can be done before the page switch IS done before it:
+	// the document read, the session registrations (the project panel did
+	// those already) and the viewport's scene binding all happen while the
+	// desktop page — with its progress dialog — is still what the user sees.
+	// The page switch is the LAST step, and even then the engine has not put a
+	// frame of this world on screen yet, so the viewport wears its loading
+	// cover until it has (viewportcover.h). Without the cover, the viewport's
+	// native window shows whatever pixels were on that part of the screen
+	// before it was mapped: a copy of the desktop page.
+	//
+	// The cover goes up FIRST, before any teardown: opening a world from
+	// inside the editor (load in place) must not leave the previous world on
+	// screen while this one loads.
+	sceneView->beginSceneLoad(project ? project->getProjectName() : QString());
+
 	if(!!scene)
         removeScene();
 
@@ -983,6 +1006,12 @@ void MainWindow::openProject(bool playMode)
     assetWidget->trigger();
 
 	undoService->resetSavedCount();
+	// The LAST thing before the page switch: push the whole document into the
+	// renderer (meshes, materials, textures) while the desktop page is still
+	// the page on screen. Whatever this costs is spent under the progress
+	// dialog instead of under a viewport that has nothing to show. Skipped
+	// silently on the very first open, when no render view exists yet.
+	sceneView->primeSceneSync();
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
 	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 
@@ -2039,9 +2068,16 @@ void MainWindow::setupViewPort()
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
 
     QGridLayout* layout = new QGridLayout;
-    layout->addWidget(sceneView->asWidget());
+    layout->addWidget(sceneView->asWidget(), 0, 0);
+    // The viewport's "nothing is presenting" state (viewportcover.h). It goes
+    // in the SAME grid cell as the viewport, which gives it the viewport's
+    // geometry for free — and as a SIBLING, never a child: the viewport lives
+    // under setUpdatesEnabled(false), and a child of it could never repaint.
+    viewportCover = new ViewportCover(sceneContainer);
+    layout->addWidget(viewportCover, 0, 0);
     layout->setContentsMargins(0, 0, 0, 0);
     sceneContainer->setLayout(layout);
+    sceneView->setCover(viewportCover);
 
     auto events = sceneView->events();
     connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {

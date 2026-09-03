@@ -1,4 +1,5 @@
 #include "viewport/enginesceneviewport.h"
+#include "viewport/viewportcover.h"
 
 #include <QShowEvent>
 #include <QMouseEvent>
@@ -79,7 +80,12 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
         // A lambda, not a direct member connect: syncFrame grew a default
         // argument (the fixed-dt override) and Qt's new-style connect refuses a
         // slot that takes more arguments than the signal provides.
-        connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() { syncFrame(); });
+        connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() {
+            syncFrame();
+            // The cover comes down here, one frame BEHIND the present that
+            // earned it: framesPresented counts frames already on screen.
+            updateCover();
+        });
 }
 
 EngineSceneViewport::~EngineSceneViewport()
@@ -254,6 +260,9 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
     ensureEngineScene();
+    // Becoming visible with nothing presented yet is exactly the moment the
+    // stale pixels underneath would show through.
+    updateCover();
 }
 
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
@@ -631,6 +640,10 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
         mPlayback->setScene(scene);
     }
     if (mMirror) mMirror->setSource(scene);
+    // A new document scene means no frame of IT has presented yet, even when
+    // the engine scene underneath is the same object (close/open reuses it).
+    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    updateCover();
 }
 
 void EngineSceneViewport::startPlayingScene()
@@ -905,6 +918,9 @@ void EngineSceneViewport::renderFrames(int n, float dt)
         syncFrame(dt);
         mEngine->renderOneFrame();
     }
+    // Scripted stepping is the deterministic path: editor.frame(2) must be
+    // enough to take the cover down, exactly as two driver frames would.
+    updateCover();
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
@@ -956,12 +972,108 @@ void EngineSceneViewport::begin()
 {
     mActive = true;
     if (view()) view()->setEnabled(true);
+    updateCover();
 }
 
 void EngineSceneViewport::end()
 {
     mActive = false;
     if (view()) view()->setEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
+// The cover (viewportcover.h): what this viewport looks like while the engine
+// has no frame of the current world on screen.
+
+void EngineSceneViewport::setCover(ViewportCover *cover)
+{
+    mCover = cover;
+    updateCover();
+}
+
+qulonglong EngineSceneViewport::presentsSinceBind() const
+{
+    if (!view()) return 0;
+    const qulonglong now = qulonglong(view()->framesPresented());
+    // The engine resets its own counter when a scene is (re)bound; then `now`
+    // is below the baseline and IS the answer.
+    return now >= mPresentBaseline ? now - mPresentBaseline : now;
+}
+
+QString EngineSceneViewport::presentationState() const
+{
+    // No render target of our own, or one that never reaches the widget: the
+    // cover has no business here and the honest answer is "offscreen".
+    if (!view() || view()->isOffscreen()) return QStringLiteral("offscreen");
+    if (!mScene) return QStringLiteral("noscene");
+    return presentsSinceBind() >= kPresentsBeforeReveal
+               ? QStringLiteral("presenting")
+               : QStringLiteral("loading");
+}
+
+qulonglong EngineSceneViewport::framesPresented() const
+{
+    return presentsSinceBind();
+}
+
+void EngineSceneViewport::updateCover()
+{
+    if (!mCover) return;
+    const QString state = presentationState();
+    if (state == QLatin1String("loading"))
+        mCover->setState(ViewportCover::State::Loading);
+    else if (state == QLatin1String("noscene"))
+        mCover->setState(ViewportCover::State::NoScene);
+    else
+        mCover->setState(ViewportCover::State::Presenting);
+}
+
+void EngineSceneViewport::beginSceneLoad(const QString &title)
+{
+    // The world on screen (if any) is about to be replaced: nothing presented
+    // from here on belongs to the old one.
+    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    if (!mCover) return;
+    mCover->setSubtitle(title);
+    // Loading, not the computed state: the caller is telling us a world is on
+    // its way, and it is about to block this thread reading it. showNow paints
+    // synchronously so the grey is on screen before that happens — a posted
+    // paint would arrive after the load it exists to cover.
+    mCover->showNow(ViewportCover::State::Loading);
+}
+
+void EngineSceneViewport::primeSceneSync()
+{
+    // The SLOW half of "opening a world" is not reading the document — it is
+    // pushing it into the engine: every mesh, material and texture uploads on
+    // the first SceneMirror::sync(). That used to happen on the first driver
+    // tick AFTER the page switch, which is most of the time the viewport spent
+    // with nothing of its own on screen. Doing it here pays for it while the
+    // desktop page (and its progress dialog) is still what the user is looking
+    // at, exactly as MainWindow::openProject's ordering intends.
+    //
+    // This is the same push the frame loop makes, from the same place between
+    // frames — never inside one. It renders nothing: the view is disabled while
+    // the editor page is hidden, and this deliberately does not enable it.
+    // It is also entirely optional: on the very first open no View exists yet
+    // (it is created when the page is first shown), so this returns and the
+    // loading cover carries the wait instead.
+    if (!mScene || !view() || !ensureEngineScene()) return;
+    if (!mMirror) return;
+    const bool helpers = !mGameView;
+    mMirror->setLightWires(mShowLightWires && helpers);
+    mMirror->setHighlightWireframe(mSelectionWireframe);
+    mMirror->setGrid(mShowGrid && helpers, SnapSettings::translateSize());
+    mMirror->sync();
+    mMirror->applySky(view());
+    mMirror->applyEnvironment(view(), mEngine.get());
+    if (mEditorCam) mMirror->applyCamera(mEditorCam, view());
+}
+
+void EngineSceneViewport::coverIfNotPresenting()
+{
+    updateCover();
+    if (mCover && mCover->isVisible()) mCover->repaint();
 }
 
 void EngineSceneViewport::cleanup()
@@ -992,6 +1104,9 @@ void EngineSceneViewport::clearScene()
     if (mEngineScene && mEngine) { mEngine->destroyScene(mEngineScene); mEngineScene = nullptr; }
     mScene.clear();
     mSelectedNode.clear();
+    // No world bound: the cover says so (and the next bind starts from here).
+    mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
+    updateCover();
 }
 
 IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine,

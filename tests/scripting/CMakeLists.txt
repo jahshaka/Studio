@@ -58,6 +58,10 @@ add_script_e2e(desktops e2e_desktops.js)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
 add_script_e2e(planar e2e_planar.js)
+# The viewport's presentation state machine (editor.viewportState) — what
+# decides whether the editor viewport shows engine frames or its loading cover
+# (src/viewport/viewportcover.h). Gates the desktop-bleed fix, 2026-09-03.
+add_script_e2e(viewport_cover e2e_viewport_cover.js)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
