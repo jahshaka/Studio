@@ -54,6 +54,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
@@ -382,6 +383,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "particle system") {
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
+    } else if (nodeType == "decal") {
+        sceneNode = createDecal(nodeObj).staticCast<iris::SceneNode>();
     } else {
         sceneNode = iris::SceneNode::create();
     }
@@ -664,6 +667,31 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->iconSize = 0.5f;
 
     return lightNode;
+}
+
+iris::DecalNodePtr SceneReader::createDecal(QJsonObject& nodeObj)
+{
+    auto decalNode = iris::DecalNode::create();
+
+    decalNode->textureGuid  = nodeObj["decalTexture"].toString();
+    decalNode->normalGuid   = nodeObj["decalNormal"].toString();
+    decalNode->emissiveGuid = nodeObj["decalEmissive"].toString();
+    decalNode->width  = (float) nodeObj["width"].toDouble(1.0);
+    decalNode->height = (float) nodeObj["height"].toDouble(1.0);
+    decalNode->depth  = (float) nodeObj["depth"].toDouble(0.5);
+    decalNode->metalness = (float) nodeObj["metalness"].toDouble(0.0);
+    decalNode->roughness = (float) nodeObj["roughness"].toDouble(1.0);
+    decalNode->ignoreAlphaDiffuse = nodeObj["ignoreAlphaDiffuse"].toBool(false);
+    decalNode->setVisible(nodeObj["visible"].toBool(true));
+
+    // Bytes: pin-first through the CAS, exactly like material maps. A guid that
+    // no longer resolves leaves the path empty — the node still loads, draws its
+    // wire box and projects nothing, rather than failing the whole scene load.
+    decalNode->resolvedTexturePath  = resolveAssetPath(decalNode->textureGuid);
+    decalNode->resolvedNormalPath   = resolveAssetPath(decalNode->normalGuid);
+    decalNode->resolvedEmissivePath = resolveAssetPath(decalNode->emissiveGuid);
+
+    return decalNode;
 }
 
 iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)

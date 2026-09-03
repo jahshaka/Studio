@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
@@ -1012,6 +1013,27 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             jah["particles"] = p;
         } else if (kind == NodeKind::Viewer) {
             jah["viewpoint"] = true;
+        } else if (kind == NodeKind::Decal) {
+            // DECALS_SPEC §7 — DATA ONLY, DELIBERATELY NOT RENDERED.
+            // three.js' DecalGeometry is a different technique entirely: it
+            // clips a projector box against ONE target mesh at author time and
+            // emits new geometry, which cannot reproduce a Forward+ decal (which
+            // affects everything inside the box, animated receivers included).
+            // So the document round-trips and the viewer ignores it; the web
+            // target must NOT claim decal parity.
+            auto *decal = static_cast<iris::DecalNode *>(node.data());
+            QJsonObject d;
+            d["width"] = double(decal->width);
+            d["height"] = double(decal->height);
+            d["depth"] = double(decal->depth);
+            d["metalness"] = double(decal->metalness);
+            d["roughness"] = double(decal->roughness);
+            d["ignoreAlphaDiffuse"] = decal->ignoreAlphaDiffuse;
+            if (!decal->resolvedTexturePath.isEmpty()) {
+                const QImage img = loadDocumentImage(decal->resolvedTexturePath, c);
+                if (!img.isNull()) d["image"] = imageToDataUri(img, false);   // PNG always: the alpha channel IS the decal mask
+            }
+            jah["decal"] = d;
         }
 
         for (int ci : childHandles) children.append(ci);

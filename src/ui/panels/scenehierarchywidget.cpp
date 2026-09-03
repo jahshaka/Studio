@@ -21,10 +21,13 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/core/irisutils.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "services/sceneeditservice.h"
+#include "data/constants.h"
 #include "viewport/ieditorviewport.h"
 #include "bridge/enginehost.h"
 #include "io/scenewriter.h"
@@ -150,6 +153,13 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     lightMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addAreaLight()));
 
+    // Decal (DECALS_SPEC): a top-level entry, not under Light — it is its own
+    // object kind. It spawns without an image; the Decal panel's picker (or a
+    // drop from the asset bin) binds one.
+    action = new QAction("Decal", this);
+    addMenu->addAction(action);
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addDecal()));
+
     action = new QAction("Empty", this);
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addEmpty()));
@@ -195,12 +205,33 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         lastDraggedHiearchyItemSrc.clear();
         const bool internal = evt->source() == ui->sceneTree ||
                               evt->source() == ui->sceneTree->viewport();
+        // ASSET BIN -> DECAL is the ONE foreign drag this tree accepts
+        // (DECALS_SPEC §5.6). Everything else foreign stays refused: the
+        // reparent guard exists because Qt routes stray drags in here.
+        if (!internal && evt->mimeData() && evt->mimeData()->hasFormat(kTreeMime))
+            evt->acceptProposedAction();
         if (internal && evt->mimeData() && evt->mimeData()->hasFormat(kTreeMime)) {
             // The drag starts on the pressed item, which the press made current.
             auto selected = ui->sceneTree->selectedItems();
             if (selected.size() > 0) {
                 long itemId = selected[0]->data(0, Qt::UserRole).toLongLong();
                 lastDraggedHiearchyItemSrc = nodeList.value(itemId);
+            }
+        }
+    }
+
+    if (event->type() == QEvent::DragMove) {
+        // Qt only delivers a Drop when DragMove is accepted.
+        auto evt = static_cast<QDragMoveEvent*>(event);
+        const bool internal = evt->source() == ui->sceneTree ||
+                              evt->source() == ui->sceneTree->viewport();
+        if (!internal && evt->mimeData() && evt->mimeData()->hasFormat(kTreeMime)) {
+            QTreeWidgetItem *row = ui->sceneTree->itemAt(evt->position().toPoint());
+            iris::SceneNodePtr target =
+                row ? nodeList.value(row->data(0, Qt::UserRole).toLongLong()) : iris::SceneNodePtr();
+            if (target && target->getSceneNodeType() == iris::SceneNodeType::Decal) {
+                evt->acceptProposedAction();
+                return true;
             }
         }
     }
@@ -212,6 +243,27 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 
         const bool internal = dropEventPtr->source() == ui->sceneTree ||
                               dropEventPtr->source() == ui->sceneTree->viewport();
+
+        // ASSET BIN -> DECAL: bind a Texture asset as the decal's image.
+        if (!internal && dropEventPtr->mimeData() &&
+            dropEventPtr->mimeData()->hasFormat(kTreeMime) && mainWindow) {
+            QTreeWidgetItem *row = ui->sceneTree->itemAt(dropEventPtr->position().toPoint());
+            iris::SceneNodePtr target =
+                row ? nodeList.value(row->data(0, Qt::UserRole).toLongLong()) : iris::SceneNodePtr();
+            if (target && target->getSceneNodeType() == iris::SceneNodeType::Decal) {
+                QByteArray encoded = dropEventPtr->mimeData()->data(kTreeMime);
+                QDataStream stream(&encoded, QIODevice::ReadOnly);
+                QMap<int, QVariant> roleDataMap;
+                while (!stream.atEnd()) stream >> roleDataMap;
+                if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+                    mainWindow->studioServices()->sceneEdit->setDecalTexture(
+                        target.staticCast<iris::DecalNode>(), roleDataMap.value(3).toString());
+                    dropEventPtr->acceptProposedAction();
+                    return true;
+                }
+            }
+        }
+
         if (!internal || !dropEventPtr->mimeData() ||
             !dropEventPtr->mimeData()->hasFormat(kTreeMime) || !dragged) {
             dropEventPtr->setDropAction(Qt::IgnoreAction);
@@ -549,6 +601,10 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	else if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
 		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-virtual-reality-filled-50.png"), QIcon::Normal);
 		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-virtual-reality-filled-50.png"), QIcon::Selected);
+	}
+	else if (node->getSceneNodeType() == iris::SceneNodeType::Decal) {
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-picture-50.png"), QIcon::Normal);
+		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-picture-50.png"), QIcon::Selected);
 	}
 	else if (node->getSceneNodeType() == iris::SceneNodeType::Camera) {
 		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-camera-48.png"), QIcon::Normal);

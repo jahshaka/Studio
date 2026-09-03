@@ -1245,6 +1245,11 @@ void MainWindow::addAreaLight()
     sceneEditService->addAreaLight();
 }
 
+void MainWindow::addDecal()
+{
+    sceneEditService->addDecal(QString());
+}
+
 void MainWindow::addEmpty()
 {
     sceneEditService->addEmpty();

@@ -53,7 +53,8 @@ enum class NodeKind {
     Light,
     Camera,
     ParticleSystem,
-    Viewer
+    Viewer,
+    Decal
 };
 
 /// The export-side node classification (encodes the CameraNode enum quirk).
@@ -81,6 +82,7 @@ struct SceneInventory
     int cameras = 0;
     int particleSystems = 0;
     int viewers = 0;
+    int decals = 0;
     int empties = 0;
     QVector<iris::Material *> materials;   // unique, discovery order
     QStringList textureSources;            // unique texture source paths/resources,

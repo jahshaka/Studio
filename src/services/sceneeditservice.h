@@ -48,6 +48,22 @@ struct ImagePlaneOptions
     bool doubleSided = true;
 };
 
+/// Options for SceneEditService::addDecal (DECALS_SPEC §5.5). Defaults are a
+/// 1 m sticker half a metre deep — big enough to see, small enough not to
+/// swallow the scene.
+struct DecalOptions
+{
+    float width  = 1.0f;      ///< local X extent
+    float height = 1.0f;      ///< local Z extent (the image's V axis)
+    float depth  = 0.5f;      ///< local Y extent = projection thickness
+    float metalness = 0.0f;
+    float roughness = 1.0f;
+    bool  ignoreAlphaDiffuse = false;
+    /// Skip the spawn offset (a drop point decided the position already).
+    bool  positionGiven = false;
+    QVector3D position;
+};
+
 class SceneEditService : public QObject
 {
     Q_OBJECT
@@ -103,6 +119,23 @@ public:
     /// Returns null when the guid is not a resolvable image.
     iris::MeshNodePtr addImagePlane(const QString &textureGuid, QVector3D position,
                                     const ImagePlaneOptions &opts = ImagePlaneOptions());
+
+    /// DECALS_SPEC: spawns a projected-texture decal bound to a Texture asset.
+    /// `textureGuid` may be empty — the node is created with no image, drawing
+    /// its wire box until one is picked in the panel or dropped on it.
+    ///
+    /// The image is a BINDING, not a direct add: the guid is pinned into the
+    /// project as ProjectAssets::AddKind::Binding (no companion PBR material is
+    /// minted — the user asked for a decal, not a material) and an
+    /// Object->Texture dependency row is written for the export walkers.
+    /// Bytes resolve pin-first through the CAS.
+    /// Returns null when there is no scene. Undoable (one AddSceneNodeCommand).
+    iris::DecalNodePtr addDecal(const QString &textureGuid,
+                                const DecalOptions &opts = DecalOptions());
+    /// Rebinds a decal's image (the panel's picker and the asset-bin drop both
+    /// land here): pins the guid as a dependency, rewrites the dependency row
+    /// and re-resolves the path. False when the node is not a decal.
+    bool setDecalTexture(const iris::DecalNodePtr &decal, const QString &textureGuid);
 
     /// Imports a mesh file straight into the scene. The path must be a real
     /// file — the file dialog stays in the shell.

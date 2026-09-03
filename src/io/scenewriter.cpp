@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
@@ -232,6 +233,9 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         break;
         case iris::SceneNodeType::ParticleSystem:
             writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
+        break;
+        case iris::SceneNodeType::Decal:
+            writeDecalData(sceneNodeObj, sceneNode.staticCast<iris::DecalNode>());
         break;
         default: break;
     }
@@ -596,6 +600,22 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
 	sceneNodeObject["visible"] = lightNode->isVisible();
 }
 
+void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)
+{
+    // Guids, not paths: a project moves, the CAS resolves.
+    sceneNodeObject["decalTexture"] = decalNode->textureGuid;
+    // Phase 3 slots, written from phase 1 so files round-trip forward.
+    sceneNodeObject["decalNormal"] = decalNode->normalGuid;
+    sceneNodeObject["decalEmissive"] = decalNode->emissiveGuid;
+    sceneNodeObject["width"] = decalNode->width;
+    sceneNodeObject["height"] = decalNode->height;
+    sceneNodeObject["depth"] = decalNode->depth;
+    sceneNodeObject["metalness"] = decalNode->metalness;
+    sceneNodeObject["roughness"] = decalNode->roughness;
+    sceneNodeObject["ignoreAlphaDiffuse"] = decalNode->ignoreAlphaDiffuse;
+    sceneNodeObject["visible"] = decalNode->isVisible();
+}
+
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
 {
     switch (nodeType) {
@@ -609,6 +629,8 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
             return "viewer";
         case iris::SceneNodeType::ParticleSystem:
             return "particle system";
+        case iris::SceneNodeType::Decal:
+            return "decal";
         default:
             return "empty";
     }
