@@ -286,3 +286,18 @@ set_tests_properties(scripting.e2e.avatar PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 240)
+
+# GPU_SKINNING_SPEC T10: a rigged character through the ONE import pipeline into
+# a real project, reporting its rig through node.skinningMode / node.boneNames,
+# with the engine viewport up. NOT --headless: the point is the production
+# mirror and the production skinning path.
+configure_file(scripts/e2e_skinning.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-skinning)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.skinning
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_skinning.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.skinning PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 240)

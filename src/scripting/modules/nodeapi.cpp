@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/assets/skeleton.h"
 
 using namespace scriptmod;
 
@@ -44,6 +46,12 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale}",
           "Everything scene.nodes() reports, for one node.",
+          Needs::Document },
+        { "boneNames", "node.boneNames(id) -> [string]",
+          "The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged.",
+          Needs::Document },
+        { "skinningMode", "node.skinningMode(id) -> \"gpu\" | \"none\"",
+          "How the node deforms: \"gpu\" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), \"none\" when it is static. Diagnostic.",
           Needs::Document },
     };
 }
@@ -165,4 +173,34 @@ QVariant NodeApi::info(const QString &id)
     auto node = nodeOrFail(id, QStringLiteral("node.info"));
     if (!node) return QVariant();
     return nodeToJs(node);
+}
+
+// The node's OWN skeleton, not the mesh asset's: the asset carries the rig
+// template, shared by every node that references it, and is never posed
+// (GPU_SKINNING_SPEC §7).
+static iris::SkeletonPtr skeletonOf(const iris::SceneNodePtr &node)
+{
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return iris::SkeletonPtr();
+    return node.staticCast<iris::MeshNode>()->getSkeleton();
+}
+
+QVariant NodeApi::boneNames(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.boneNames"));
+    if (!node) return QVariant();
+    QVariantList out;
+    if (auto skel = skeletonOf(node))
+        for (const auto &bone : skel->bones) out.append(bone->name);
+    return out;
+}
+
+QString NodeApi::skinningMode(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.skinningMode"));
+    if (!node) return QString();
+    // "gpu" is the only skinned answer there is: the CPU renderer is gone
+    // (GPU_SKINNING_SPEC §6). A rig the engine refuses renders unskinned at bind
+    // pose, and the engine says so on its log — the document still has a rig, so
+    // this reports what the document asked for.
+    return skeletonOf(node).isNull() ? QStringLiteral("none") : QStringLiteral("gpu");
 }

@@ -42,8 +42,10 @@ static const QString kMismatchAnim = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/t
 static iris::SkeletonPtr findSkeleton(const iris::SceneNodePtr &node)
 {
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto mesh = node.staticCast<iris::MeshNode>()->getMesh();
-        if (mesh && mesh->hasSkeleton()) return mesh->getSkeleton();
+        // The MeshNode's OWN skeleton (GPU_SKINNING_SPEC §7): the one on the
+        // iris::Mesh is the shared rig template and is never posed.
+        auto skel = node.staticCast<iris::MeshNode>()->getSkeleton();
+        if (!skel.isNull()) return skel;
     }
     for (const auto &child : node->children)
         if (auto s = findSkeleton(child)) return s;

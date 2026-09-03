@@ -40,6 +40,8 @@ public:
     Q_INVOKABLE QVariant property(const QString &id, const QString &key);
     Q_INVOKABLE bool setProperty(const QString &id, const QString &key, const QVariant &value);
     Q_INVOKABLE QVariant info(const QString &id);
+    Q_INVOKABLE QVariant boneNames(const QString &id);
+    Q_INVOKABLE QString skinningMode(const QString &id);
 
 private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);

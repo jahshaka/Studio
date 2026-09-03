@@ -1,0 +1,96 @@
+// scripting.e2e.skinning — GPU_SKINNING_SPEC T10: a rigged character goes
+// through the ONE import pipeline into a real project, is instantiated in the
+// scene, and reports its rig through the verbs — then the SAME frame is proved
+// to move when the pose does.
+//
+// Runs inside the real binary (--script, engine viewport up, scratch HOME), so
+// this exercises the production import route, the production mirror and the
+// production skinning path, not a probe.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+project.create("skinning");
+
+// The generated two-bone rig: a skinned SINGLE-mesh glTF, the shape every
+// Mixamo export has and the one that used to animate not at all.
+var guid = assets.import("@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb");
+assert(guid.length > 10, "assets.import -> " + guid);
+assert(assets.addToProject(guid) === guid, "assets.addToProject");
+var rootId = assets.addToScene(guid, { position: { x: 0, y: 0, z: 0 } });
+assert(rootId && rootId.length > 10, "assets.addToScene -> " + rootId);
+
+// Find the mesh node inside the imported fragment.
+var nodes = scene.nodes();
+for (var d = 0; d < nodes.length; ++d)
+    console.log("node: " + nodes[d].name + " type=" + nodes[d].type +
+                " skin=" + node.skinningMode(nodes[d].id));
+var meshId = null;
+for (var i = 0; i < nodes.length; ++i)
+    if (node.skinningMode(nodes[i].id) === "gpu") meshId = nodes[i].id;
+assert(meshId !== null, "a node in the scene reports skinningMode 'gpu'");
+// The aiNode tree came with it — the bone scene nodes are what carry the pose
+// (a single-mesh rig used to arrive as one bare MeshNode and never move).
+var boneNodes = 0;
+for (var k = 0; k < nodes.length; ++k)
+    if (nodes[k].name === "jointRoot" || nodes[k].name === "jointTip") ++boneNodes;
+assert(boneNodes === 2, "both bone scene nodes came through the import pipeline");
+
+var bones = node.boneNames(meshId);
+console.log("bones: " + JSON.stringify(bones));
+assert(bones.length === 2, "node.boneNames lists both bones");
+assert(bones.indexOf("jointRoot") >= 0 && bones.indexOf("jointTip") >= 0,
+       "... by name, in rig order");
+
+// Anything unrigged says so.
+var unrigged = null;
+for (var j = 0; j < nodes.length; ++j)
+    if (nodes[j].name === "Ground") { unrigged = nodes[j].id; break; }
+assert(unrigged !== null, "the default scene's Ground mesh is there to compare against");
+assert(node.skinningMode(unrigged) === "none", "an unrigged MESH reports 'none'");
+assert(node.boneNames(unrigged).length === 0, "... and has no bones");
+
+// ---- the pose has to reach the PIXELS, through the production path --------
+// The fixture is a 0.3 x 2 unit strip — a few pixels wide against the editor's
+// 200-unit ground grid. Scale it up so the silhouette is assertable, then frame
+// it head-on.
+node.transform(rootId, { scale: { x: 30, y: 30, z: 30 } });
+editor.select(meshId);
+editor.setView("front");
+editor.focusSelection();
+editor.frame(3);
+
+// A horizontal line of probes across the UPPER arm — the half the tip bone
+// owns, and the half that swings.
+var probes = [];
+for (var px = 0; px < 40; ++px) probes.push({ x: 0.05 + px * 0.0225, y: 0.28 });
+
+var bind = editor.screenshot("skinning_bind.png", 256, 256, probes);
+assert(bind && bind.probes && bind.probes.length === 40, "editor.screenshot with probes");
+
+// The character has to be ON SCREEN before "it moved" means anything: at least
+// a few probes must differ from the darkest sample on the line.
+var lo = 255, hi = 0;
+for (var m = 0; m < 40; ++m) {
+    var lum = (bind.probes[m].r + bind.probes[m].g + bind.probes[m].b) / 3;
+    lo = Math.min(lo, lum); hi = Math.max(hi, lum);
+}
+console.log("probe line luminance range at bind: " + lo.toFixed(1) + " .. " + hi.toFixed(1));
+assert(hi - lo > 15, "the GPU-skinned character is visible on the probe line");
+
+assert(editor.play(), "editor.play");
+editor.frame(40);                                // advance the document clock
+var moved = editor.screenshot("skinning_moved.png", 256, 256, probes);
+editor.stop();
+
+var changed = 0;
+for (var q = 0; q < 40; ++q) {
+    var a = bind.probes[q], b = moved.probes[q];
+    if (Math.abs(a.r - b.r) > 8 || Math.abs(a.g - b.g) > 8 || Math.abs(a.b - b.b) > 8) ++changed;
+}
+console.log("probe samples that changed across the clip: " + changed + "/40");
+assert(changed >= 2, "playing the clip moved the GPU-skinned character's pixels");
+
+console.log("e2e_skinning: ALL OK");

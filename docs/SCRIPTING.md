@@ -56,6 +56,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `node.property(id, key) -> value` | document | Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). |
 | `node.setProperty(id, key, value) -> bool` | document | Writes a reflected property (same keys as node.property). Direct document write — not undoable yet. |
 | `node.info(id) -> {id, name, type, parent, position, rotation, scale}` | document | Everything scene.nodes() reports, for one node. |
+| `node.boneNames(id) -> [string]` | document | The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged. |
+| `node.skinningMode(id) -> "gpu" \| "none"` | document | How the node deforms: "gpu" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), "none" when it is static. Diagnostic. |
 
 ## editor
 
