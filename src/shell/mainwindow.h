@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include <QCheckBox>
 #include <QMenu>
 #include "irisgl/irisglfwd.h"
+#include "irisgl/import/meshprewarm.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "thirdparty/qtawesome/QtAwesomeAnim.h"
 #include "data/project.h"
@@ -419,6 +420,16 @@ public slots:
 
     void newProject(const QString&, const QString&);
     void openProject(bool playMode = false);
+    /// The RESPONSIVE open (services/sceneopenrunner.h): the model parses run
+    /// on a worker thread and the install runs one slice per event-loop turn,
+    /// so the window keeps pumping. Returns immediately; the open completes
+    /// through the event loop. Falls back to the synchronous openProject()
+    /// when no runner can be built (no project, or a run already in flight).
+    /// The synchronous path stays EXACTLY as it was — it is what
+    /// project.open() and every headless script use.
+    void openProjectAsync(bool playMode = false);
+    /// True while an asynchronous open is in flight.
+    bool isOpeningProject() const;
     void closeProject();
 
     void toggleWidgets(bool toggle);
@@ -465,9 +476,30 @@ private slots:
 
 private:
     void setupServices();
+
+    // ---- the open, in stages (shared by the synchronous and threaded paths) --
+    /// Cover up + tear the previous world down. Always first.
+    void openStageBegin();
+    /// Read the document (optionally out of a worker's prewarm), bind it to
+    /// the viewports and the panels that follow the scene. The threaded open
+    /// runs the two halves on separate turns — reading is the biggest slice
+    /// left once the model parses are on the worker.
+    void openStageReadDocument(bool playMode, const iris::MeshPrewarmPtr &prewarm);
+    void openStageRead(const iris::MeshPrewarmPtr &prewarm);
+    void openStageBind(bool playMode);
+
+    iris::ScenePtr openPendingScene;
+    class EditorData *openPendingEditorData = nullptr;
+    /// The asset panel rebuild + undo bookkeeping.
+    void openStagePanels();
+    /// The page switch, the root selection and autoplay. Always last.
+    void openStageReveal(bool playMode);
+
+    class SceneOpenRunner *openRunner = nullptr;
+
+    void applySelectionToUi(iris::SceneNodePtr sceneNode);
     /// The widget fan-out for a selection change (viewport, properties,
     /// hierarchy, timeline) — driven by SelectionService::selectionChanged.
-    void applySelectionToUi(iris::SceneNodePtr sceneNode);
     /// The play-button chrome halves of the old enterEditMode/enterPlayMode —
     /// driven by PlaybackService's mode signals.
     void applyEditModeUi();

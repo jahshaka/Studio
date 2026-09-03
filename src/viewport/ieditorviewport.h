@@ -254,7 +254,14 @@ public:
     /// still on screen so the editor page appears with a world already
     /// uploaded. Optional and always skippable — a viewport with no render
     /// target yet simply does nothing and lets the cover carry the wait.
-    virtual void primeSceneSync() {}
+    virtual void primeSceneSync() { primeSceneGeometry(); primeSceneEnvironment(); }
+    /// The two halves of primeSceneSync, so a threaded open can spend them on
+    /// SEPARATE event-loop turns (the window keeps pumping between them):
+    /// geometry = the mesh/material/texture uploads (SceneMirror::sync), and
+    /// environment = sky, world settings and the camera. Calling
+    /// primeSceneSync() is exactly calling both, in this order.
+    virtual void primeSceneGeometry() {}
+    virtual void primeSceneEnvironment() {}
 
     // ---- lifecycle ----
     virtual void begin() = 0;

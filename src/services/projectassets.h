@@ -28,6 +28,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include "irisgl/import/meshprewarm.h"
+
 class Database;
 class Project;
 
@@ -69,7 +71,17 @@ public:
     /// Called by addToProject (the adding session) and by
     /// ProjectManager::registerProjectSessionAssets (project open/reopen) so
     /// the two sessions hydrate identically.
-    static bool registerSessionAsset(const QString &guid, Database *db, Project *project);
+    /// `prewarm` (optional) carries model files already parsed on another
+    /// thread (irisgl/import/meshprewarm.h): an Object whose path is in there
+    /// builds its scene fragment from the ready aiScene instead of running
+    /// assimp on the calling thread. Null = the synchronous behaviour.
+    static bool registerSessionAsset(const QString &guid, Database *db, Project *project,
+                                     const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
+
+    /// The CAS-resolved path of `guid` when it is an Object row — the prewarm
+    /// PLAN for the session registrations, gathered before the worker starts.
+    /// Empty for every other type and for guids with no resolvable bytes.
+    static QString objectSourcePath(const QString &guid, Database *db, Project *project);
 
     /// Move the project's pin of `guid` to the asset's CURRENT source oid
     /// (the "Update to latest" affordance).

@@ -174,6 +174,9 @@ set(SRCS
     src/services/import/assetimporters.cpp
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
+    src/services/loadtimeline.cpp
+    src/services/mainthreadheartbeat.cpp
+    src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp

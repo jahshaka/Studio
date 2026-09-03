@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
+#include "services/loadtimeline.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -108,8 +109,19 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     return result;
 }
 
+QString ProjectAssets::objectSourcePath(const QString &guid, Database *db, Project *project)
+{
+    if (!db || !project || project->getProjectGuid().isEmpty()) return QString();
+    const auto record = db->fetchAsset(guid);
+    if (record.guid.isEmpty()) return QString();
+    if (static_cast<ModelTypes>(record.type) != ModelTypes::Object) return QString();
+    return AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                   project->getProjectGuid(), guid);
+}
+
 bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
-                                         Project *project)
+                                         Project *project,
+                                         const iris::MeshPrewarmPtr &prewarm)
 {
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
     if (sessionHas(guid)) return true;
@@ -125,6 +137,37 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
     switch (static_cast<ModelTypes>(memberRecord.type)) {
         case ModelTypes::Object: {
             if (path.isEmpty()) break;
+            // The SECOND assimp parse of the same model on an open: the
+            // session entry for a pinned Object is a parsed scene fragment.
+            // The threaded open hands us the aiScene already parsed on a
+            // worker (irisgl/import/meshprewarm.h) — then this is a build,
+            // not a parse.
+            const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
+                auto mat = iris::CustomMaterial::create();
+                mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
+                mat->setValue("diffuseColor", data.diffuseColor);
+                mat->setValue("specularColor", data.specularColor);
+                mat->setValue("ambientColor", data.ambientColor);
+                mat->setValue("emissionColor", data.emissionColor);
+                mat->setValue("shininess", data.shininess);
+                return iris::MaterialPtr(mat);
+            };
+            const aiScene *ready = prewarm ? prewarm->scene(path) : nullptr;
+            if (ready) {
+                LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sessionAssetHit"));
+                auto node = iris::MeshNode::loadAsSceneFragment(path, ready, makeMaterial);
+                if (!node) break;
+                const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
+                AssetHelper::updateNodeMaterial(node, definition, db);
+                auto *asset = new AssetNodeObject;
+                asset->assetGuid = member;
+                asset->fileName = memberRecord.name;
+                asset->path = path;
+                asset->setValue(QVariant::fromValue(node));
+                AssetManager::addAsset(asset);
+                break;
+            }
+            LoadTimeline::Accumulate parse(QStringLiteral("assimp:sessionAsset"));
             auto node = iris::MeshNode::loadAsSceneFragment(
                 path, [](iris::MeshPtr, iris::MeshMaterialData &data) {
                     auto mat = iris::CustomMaterial::create();

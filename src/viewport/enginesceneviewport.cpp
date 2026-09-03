@@ -44,6 +44,7 @@
 #include "viewport/enginerenderdriver.h"
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
+#include "services/loadtimeline.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
@@ -1053,7 +1054,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     mCover->showNow(ViewportCover::State::Loading);
 }
 
-void EngineSceneViewport::primeSceneSync()
+void EngineSceneViewport::primeSceneGeometry()
 {
     // The SLOW half of "opening a world" is not reading the document — it is
     // pushing it into the engine: every mesh, material and texture uploads on
@@ -1075,9 +1076,26 @@ void EngineSceneViewport::primeSceneSync()
     mMirror->setLightWires(mShowLightWires && helpers);
     mMirror->setHighlightWireframe(mSelectionWireframe);
     mMirror->setGrid(mShowGrid && helpers, SnapSettings::translateSize());
+    LoadTimeline::Accumulate mirror(QStringLiteral("engine:mirrorSync"));
     mMirror->sync();
-    mMirror->applySky(view());
-    mMirror->applyEnvironment(view(), mEngine.get());
+}
+
+void EngineSceneViewport::primeSceneEnvironment()
+{
+    // The other half (see primeSceneGeometry): sky, world settings, camera.
+    // A separate event-loop turn in the threaded open.
+    if (!mScene || !view() || !mMirror || !mEngineScene) return;
+    {
+        LoadTimeline::Accumulate sky(QStringLiteral("engine:applySky"));
+        mMirror->applySky(view());
+    }
+    {
+        // The world settings — and, at Epic, the VCT voxelize + light
+        // injection, the shadow atlas resize and the post chain's shader
+        // variants.
+        LoadTimeline::Accumulate env(QStringLiteral("engine:applyEnvironment"));
+        mMirror->applyEnvironment(view(), mEngine.get());
+    }
     if (mEditorCam) mMirror->applyCamera(mEditorCam, view());
 }
 

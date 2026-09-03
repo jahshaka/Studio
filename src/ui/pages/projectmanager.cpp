@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "services/projectassets.h"
+#include "services/loadtimeline.h"
 #include "ui/dialogs/customdialog.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -199,13 +200,11 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	// The tile-open path had NO feedback at all — a multi-second silent gap
 	// between click and editor (owner, 2026-09-03). Same dialog contract as
 	// the import path: visible through the load, closed when the scene is up.
-	progressDialog->resetCancel();
-	progressDialog->setCancelVisible(false);
-	progressDialog->setValueAndText(40, "Opening scene....");
-	progressDialog->show();
+	LoadTimeline::begin(QStringLiteral("open(tile) %1").arg(widget->tileData.name));
+	// The dialog is driven by the open runner's signals (showOpenProgress) now:
+	// the open is THREADED and sliced, so it returns before the scene is up
+	// and closing the dialog here would close it over an empty editor.
 	loadProjectAssets();
-	progressDialog->setValue(100);
-	progressDialog->close();
 }
 
 QString projectBlobGuid;
@@ -268,12 +267,14 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         progressDialog->setValueAndText(85, "Opening scene....");
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
+        LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));
+        // Hands over to the threaded open, which owns the dialog from here
+        // and closes it when the scene is actually up.
         loadProjectAssets();
-    }
-    else {
-        addImportedTileToDesktop(result.projectGuid);
+        return;
     }
 
+    addImportedTileToDesktop(result.projectGuid);
     progressDialog->setValue(100);
     progressDialog->close();
 }
@@ -754,19 +755,80 @@ void ProjectManager::loadProjectAssets()
 	// over every mesh up front â meshes parse once on demand (canonical
 	// preset) when the scene actually needs them. Only the session
 	// registrations remain.
+	// THREADED when there is a window to keep responsive (the runner's first
+	// slice does the registrations, after a worker has parsed the models).
+	// Without a shell — headless scripts, tests — the synchronous shape is
+	// kept exactly: registrations here, then the signal.
+	if (mainWindow) {
+		mainWindow->openProjectAsync(openInPlayMode);
+		return;
+	}
+	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
 	AssetManager::clearAssetList();
 	registerProjectSessionAssets();
 	emit fileToOpen(openInPlayMode);
 }
 
+void ProjectManager::showOpenProgress(int percent, const QString &text)
+{
+	if (!progressDialog) return;
+	progressDialog->setPumpsEventLoop(false);
+	if (!progressDialog->isVisible()) {
+		progressDialog->resetCancel();
+		progressDialog->setCancelVisible(false);
+		progressDialog->show();
+	}
+	progressDialog->setValueAndText(percent, text);
+}
+
+void ProjectManager::hideOpenProgress()
+{
+	if (!progressDialog) return;
+	progressDialog->setValue(100);
+	progressDialog->close();
+	// Back to the legacy behaviour for the remaining synchronous flows
+	// (archive import) that repaint by pumping.
+	progressDialog->setPumpsEventLoop(true);
+}
+
 void ProjectManager::loadProjectAssetsSync()
 {
 	// Headless twin of loadProjectAssets(): same registrations, no signal.
+	LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
 	AssetManager::clearAssetList();
 	registerProjectSessionAssets();
 }
 
-void ProjectManager::registerProjectSessionAssets()
+QStringList ProjectManager::plannedSessionModelPaths()
+{
+    // Same membership sweep as registerProjectSessionAssets, resolved to the
+    // Object files only — the plan the prewarm worker parses.
+    // Only PIN rows can carry an Object (registerProjectSessionAssets never
+    // registers legacy per-project Object/Mesh rows — see its comment), so the
+    // pin union is the whole plan.
+    QStringList paths;
+    const QString projectGuid = project->getProjectGuid();
+    for (const auto &asset : db->fetchProjectPinnedAssets(projectGuid)) {
+        const QString path = ProjectAssets::objectSourcePath(asset.guid, db, project);
+        if (!path.isEmpty() && !paths.contains(path)) paths.append(path);
+    }
+    return paths;
+}
+
+void ProjectManager::registerProjectSessionAssets(const iris::MeshPrewarmPtr &prewarm)
+{
+	registerSessionAssetGuids(sessionAssetGuids(), prewarm);
+}
+
+void ProjectManager::registerSessionAssetGuids(const QStringList &guids,
+                                               const iris::MeshPrewarmPtr &prewarm)
+{
+	for (const QString &guid : guids)
+		ProjectAssets::registerSessionAsset(guid, db, project, prewarm);
+	LoadTimeline::add(QStringLiteral("sessionAssets"), 0.0, guids.size());
+}
+
+QStringList ProjectManager::sessionAssetGuids()
 {
 	// Session AssetManager registrations for the opening project — every
 	// guid goes through ProjectAssets::registerSessionAsset, THE one
@@ -784,6 +846,7 @@ void ProjectManager::registerProjectSessionAssets()
 	const QString projectGuid = project->getProjectGuid();
 
 	QStringList guids;
+	LoadTimeline::Accumulate membershipQueries(QStringLiteral("db:membership"));
 	for (const int type : { static_cast<int>(ModelTypes::File),
 	                        static_cast<int>(ModelTypes::Texture),
 	                        static_cast<int>(ModelTypes::Shader),
@@ -797,8 +860,8 @@ void ProjectManager::registerProjectSessionAssets()
 	for (const auto &asset : db->fetchProjectPinnedAssets(projectGuid))
 		guids.append(asset.guid);
 
-	for (const QString &guid : guids)
-		ProjectAssets::registerSessionAsset(guid, db, project);
+	membershipQueries.stop();
+	return guids;
 }
 
 void ProjectManager::updateTile(const QString &id, const QByteArray & arr)

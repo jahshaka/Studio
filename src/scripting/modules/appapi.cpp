@@ -15,6 +15,8 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "ui/pages/projectmanager.h"
+#include "services/loadtimeline.h"
+#include "services/mainthreadheartbeat.h"
 
 QVector<VerbInfo> AppApi::verbs() const
 {
@@ -25,10 +27,42 @@ QVector<VerbInfo> AppApi::verbs() const
         { "space", "app.space(name) -> bool",
           "Switches the main window space: desktop, player, editor, materials, assets, publish, avatar. player and editor need an open project.",
           Needs::Window },
+        { "openTimings", "app.openTimings() -> [{stage, ms, items?, label?}]",
+          "The millisecond ledger of the most recent scene open (services/loadtimeline.h): one entry per stage, "
+          "the first entry being {stage:'total', ms, label}, plus 'counter:*' entries for the work that "
+          "accumulates inside the stages (assimp parses, database sweeps, the engine push). Empty before "
+          "the first open of the session.",
+          Needs::Document },
+        { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
+          "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
+          "records the WORST gap between ticks. The measurable definition of 'the window stayed responsive' — "
+          "a blocked UI thread cannot tick. Restarting resets the statistics.",
+          Needs::Window },
+        { "heartbeatStats", "app.heartbeatStats() -> {running, intervalMs, ticks, maxGapMs, sinceLastTickMs}",
+          "The heartbeat probe's readings (see app.heartbeat). maxGapMs is the longest the UI thread went "
+          "without servicing its event loop since the probe started.",
+          Needs::Window },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
           Needs::Window },
     };
+}
+
+QVariantList AppApi::openTimings()
+{
+    return LoadTimeline::lastRun();
+}
+
+bool AppApi::heartbeat(int intervalMs)
+{
+    if (intervalMs <= 0) { MainThreadHeartbeat::stop(); return true; }
+    MainThreadHeartbeat::start(intervalMs);
+    return true;
+}
+
+QVariantMap AppApi::heartbeatStats()
+{
+    return MainThreadHeartbeat::stats();
 }
 
 bool AppApi::quit()

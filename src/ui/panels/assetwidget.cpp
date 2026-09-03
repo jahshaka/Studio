@@ -65,6 +65,7 @@ For more information see the LICENSE file
 #include "services/subscriber.h"
 #include "data/materialpreset.h"
 #include "io/materialpresetreader.h"
+#include "services/loadtimeline.h"
 #include "io/materialreader.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -303,6 +304,7 @@ void AssetWidget::trigger()
     // AssetManager::clearAssetList(), so the built-in presets below register
     // exactly once per open.
 
+    LoadTimeline::Accumulate presets(QStringLiteral("panel:materialPresets"));
     auto dir = QDir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
     auto files = dir.entryInfoList(QStringList(), QDir::Files);
 
@@ -336,8 +338,14 @@ void AssetWidget::trigger()
         AssetManager::addAsset(assetMat);
     }
 
+	presets.stop();
+
 	// It's important that this gets called after a project has been loaded (iKlsR)
-	populateAssetTree(true);
+	{
+		LoadTimeline::Accumulate tree(QStringLiteral("panel:populateAssetTree"));
+		populateAssetTree(true);
+	}
+	LoadTimeline::Accumulate fragments(QStringLiteral("panel:objectFragments"));
 
 	for (auto &asset : AssetManager::getAssets()) {
 		if (asset->type == ModelTypes::Object) {
