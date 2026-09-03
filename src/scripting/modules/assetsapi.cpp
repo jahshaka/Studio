@@ -426,17 +426,25 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
     if (record.guid.isEmpty())
         return fail(QStringLiteral("assets.remove: no asset with guid '%1'").arg(guid));
 
+    // The result is reported honestly: a delete the database refused (closed
+    // connection, failed statement) used to return true here and leave the row
+    // in place — the caller had no way to know.
+    bool ok = true;
     const bool keepShared = options.value("keepShared", true).toBool();
     if (keepShared) {
         // Conservative: only the asset row and its dependency links go;
         // dependee assets (possibly shared) stay.
-        host.db->deleteAsset(guid);
-        host.db->deleteDependency(guid);
+        ok = host.db->deleteAsset(guid) && ok;
+        ok = host.db->deleteDependency(guid) && ok;
         for (const auto &dep : host.db->fetchAssetGUIDAndDependencies(guid, false))
-            host.db->deleteDependency(guid, dep);
+            ok = host.db->deleteDependency(guid, dep) && ok;
     } else {
-        host.db->deleteAssetAndDependencies(guid);
+        host.db->deleteAssetAndDependencies(guid, &ok);
     }
+
+    if (!ok)
+        return fail(QStringLiteral("assets.remove: the database refused the delete of '%1' — "
+                                   "the asset is still in the library").arg(guid));
 
     QDir storeDir(storeFolderFor(guid));
     if (storeDir.exists()) storeDir.removeRecursively();

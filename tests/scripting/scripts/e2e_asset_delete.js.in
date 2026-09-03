@@ -1,0 +1,52 @@
+// scripting.e2e.asset_delete — assets.remove tells the truth.
+//
+// The defect this guards (2026-09-03): every library delete in a live session
+// no-opped and reported success. Database::deleteAsset ran three statements
+// (assets / asset_files / project_assets) and returned only the last one's
+// result while ignoring the other two, and assets.remove threw that result
+// away entirely and returned true unconditionally. The DB errors were logged
+// at [info] as the SQLite driver's misleading "Parameter count mismatch".
+//
+// Runs the real binary with --script --headless (every verb here is a document
+// verb) against a scratch HOME — a fresh JahLibrary.db, never the user's.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function assetByGuid(guid) {
+    var all = assets.list({ scope: "store" });
+    for (var i = 0; i < all.length; i++) if (all[i].guid === guid) return all[i];
+    return null;
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+project.create("asset_delete_" + Date.now());
+
+// ---- a real library row, with stored content and a project pin ------------
+var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(png.length > 10, "assets.importFile(png) -> " + png);
+assert(assetByGuid(png) !== null, "the imported asset is listed in the library");
+
+// ---- remove, and the row is REALLY gone ----------------------------------
+assert(assets.remove(png) === true, "assets.remove reports success");
+assert(assetByGuid(png) === null, "the asset is no longer listed");
+
+// A second remove of the same guid must NOT claim success: there is no row.
+mustThrow(function () { assets.remove(png); },
+          "assets.remove of an already-deleted guid fails instead of lying");
+mustThrow(function () { assets.remove("no-such-guid-at-all"); },
+          "assets.remove of an unknown guid fails");
+
+// ---- the deep variant takes the dependency rows with it ------------------
+var wav = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(wav.length > 10, "assets.importFile(wav) -> " + wav);
+assert(assets.remove(wav, { keepShared: false }) === true,
+       "assets.remove(keepShared:false) reports success");
+assert(assetByGuid(wav) === null, "the deep-removed asset is gone too");
+
+console.log("asset delete e2e passed");

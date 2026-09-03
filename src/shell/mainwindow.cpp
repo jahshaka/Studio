@@ -2882,7 +2882,15 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 MainWindow::~MainWindow()
 {
-    this->db->closeDatabase();
+    // ORDER IS LOAD-BEARING. Undo commands write to the database when they die
+    // (DeleteSceneNodeCommand finalises the asset row once no undo can reach
+    // the delete any more), and undoStack is parented to this window — so it
+    // used to be destroyed AFTER this body, i.e. after closeDatabase(), and
+    // every pending asset delete failed against a closed connection. Silently:
+    // the SQLite driver's only complaint was "Parameter count mismatch" at
+    // [info] level. Drain the stack here, while the connection is still open.
+    if (undoStack) undoStack->clear();
+
     // The QObject services (selection/playback/sceneEdit) are parented to the
     // window; the plain ones are deleted here.
     delete services;
@@ -2891,6 +2899,8 @@ MainWindow::~MainWindow()
     delete assetService;
     delete undoService;
     delete ui;
+
+    this->db->closeDatabase();
 }
 
 void MainWindow::useFreeCamera()

@@ -2684,7 +2684,15 @@ void AssetView::removeAssetFromProject(AssetGridItem *item)
 	        fastGrid->deleteTile(item);
 			// if the item is being used soft delete it
 			//db->deleteAsset(item->metadata["guid"].toString());
-            db->deleteAssetAndDependencies(item->metadata["guid"].toString());
+            bool deleted = true;
+            db->deleteAssetAndDependencies(item->metadata["guid"].toString(), &deleted);
+            // A refused delete must not pass as a done one — the catalog rows
+            // survive and the asset comes back on the next library refresh.
+            if (!deleted) {
+                QMessageBox::warning(this, "Delete Failed!",
+                    "The library database refused the delete; the asset is still catalogued. "
+                    "See jahshaka.log for the failing query.", QMessageBox::Ok);
+            }
 
 			item->metadata = QJsonObject();
 			renameWidget->setVisible(false);

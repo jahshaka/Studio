@@ -144,8 +144,12 @@ public:
     bool deleteDependency(const QString &dependee);
     bool deleteDependency(const QString &depender, const QString &dependee);
     bool removeDependenciesByType(const QString &depender, const ModelTypes &type);
-    QStringList deleteFolderAndDependencies(const QString &guid);
-    QStringList deleteAssetAndDependencies(const QString &guid);
+    /// The returned list is the on-disk files the caller should unlink. The
+    /// optional `ok` reports whether every row actually went: a delete that
+    /// could not run (closed connection, failed statement) must never look
+    /// like a successful one to the caller.
+    QStringList deleteFolderAndDependencies(const QString &guid, bool *ok = nullptr);
+    QStringList deleteAssetAndDependencies(const QString &guid, bool *ok = nullptr);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================
@@ -272,8 +276,10 @@ public:
     QString getVersion();
 
     QByteArray getSceneBlobGlobal(const QString &projectGuid) const;
-	void updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
-	void updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
+	/// Both return false when the UPDATE did not run (they used to be void and
+	/// had never worked — positional SQL bound by name, see the .cpp).
+	bool updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
+	bool updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
 
 	QString getDependencyByType(const int &type, const QString &depender);
 
