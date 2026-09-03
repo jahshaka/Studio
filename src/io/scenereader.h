@@ -119,6 +119,8 @@ public:
      * @return
      */
     iris::LightNodePtr createLight(QJsonObject &nodeObj);
+    /// Decals (DECALS_SPEC): the stored guid resolves pin-first through the CAS.
+    iris::DecalNodePtr createDecal(QJsonObject &nodeObj);
 
     iris::ViewerNodePtr createViewer(QJsonObject &nodeObj);
 

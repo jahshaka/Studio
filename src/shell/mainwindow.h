@@ -393,6 +393,10 @@ public slots:
     void addDirectionalLight();
     void addAreaLight();
 
+    /// Adds an image-less decal (DECALS_SPEC): the node draws its wire box until
+    /// an image is picked in the Decal panel or dropped on it from the bin.
+    void addDecal();
+
     void addParticleSystem();
 
     void updateAnim();

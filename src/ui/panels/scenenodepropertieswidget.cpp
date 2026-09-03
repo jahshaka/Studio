@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
 #include "ui/panels/propertywidgets/lightpropertywidget.h"
+#include "ui/panels/propertywidgets/decalpropertywidget.h"
 #include "ui/panels/propertywidgets/materialpropertywidget.h"
 #include "ui/panels/propertywidgets/meshpropertywidget.h"
 #include "ui/panels/propertywidgets/nodepropertywidget.h"
@@ -109,6 +110,10 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     lightPropView->setDatabase(db);
     lightPropView->expand();
 
+    decalPropView = new DecalPropertyWidget();
+    decalPropView->setPanelTitle("Decal");
+    decalPropView->expand();
+
     emitterPropView = new EmitterPropertyWidget();
     emitterPropView->setPanelTitle("Emitter");
     emitterPropView->setDatabase(db);
@@ -178,6 +183,16 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     lightPropView->setParent(this);
                     lightPropView->setSceneNode(sceneNode);
                     widgetPropertyLayout->addWidget(lightPropView);
+                    break;
+                }
+
+                case iris::SceneNodeType::Decal: {
+                    decalPropView->setParent(this);
+                    decalPropView->setDatabase(db);
+                    decalPropView->setProject(project);
+                    decalPropView->setServices(services);
+                    decalPropView->setSceneNode(sceneNode);
+                    widgetPropertyLayout->addWidget(decalPropView);
                     break;
                 }
 

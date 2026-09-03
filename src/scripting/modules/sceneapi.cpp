@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "data/database/database.h"
 
 using namespace scriptmod;
 
@@ -57,6 +58,16 @@ QVector<VerbInfo> SceneApi::verbs() const
           Needs::Document },
         { "addImagePlane", "scene.addImagePlane(textureGuid, {position?, doubleSided?}) -> id",
           "Spawns an image plane for a Texture asset (IMAGE_PLANE_SPEC option A): a plane sized to the image's aspect (long side 1 m), facing the editor camera at creation, with a basic PBR material carrying the image as baseColorMap (roughness 1, metallic 0; images with an alpha channel blend). Bytes resolve pin-first through the CAS. doubleSided defaults true. Undoable.",
+          Needs::Document },
+        { "addDecal", "scene.addDecal(textureGuid, {position?, rotation?, scale?, parent?, width?, height?, depth?, metalness?, roughness?, ignoreAlphaDiffuse?}) -> id",
+          "Adds a projected-texture decal (DECALS_SPEC) bound to a Texture asset: an oriented box that "
+          "paints the image onto every surface inside it, projecting down the node's -Y (the light "
+          "convention) and masked by the image's alpha. width is the local-X extent, height the local-Z "
+          "extent (the image's V axis) and depth the projection thickness; the node's own scale "
+          "multiplies all three. textureGuid may be empty — the decal then draws its wire box and "
+          "projects nothing until an image is bound. The image is pinned into the project as a "
+          "BINDING (a dependency row, no companion PBR material is minted). There is deliberately no per-decal opacity "
+          "or colour tint: the renderer packs four floats per decal and neither fits. Undoable.",
           Needs::Document },
     };
 }
@@ -202,6 +213,44 @@ QString SceneApi::addImagePlane(const QString &textureGuid, const QVariantMap &o
     rest.remove("position");
     rest.remove("doubleSided");
     return finishAdd(rest, QStringLiteral("scene.addImagePlane"));
+}
+
+QString SceneApi::addDecal(const QString &textureGuid, const QVariantMap &options)
+{
+    if (!requireProject()) return QString();   // the decal gets a DB object row + dependency
+    if (!sceneOrFail()) return QString();
+
+    if (!textureGuid.isEmpty() && host.db &&
+        host.db->fetchAsset(textureGuid).guid.isEmpty()) {
+        fail(QStringLiteral("scene.addDecal: no asset with guid '%1'").arg(textureGuid));
+        return QString();
+    }
+
+    DecalOptions opts;
+    opts.width  = options.value("width",  double(opts.width)).toFloat();
+    opts.height = options.value("height", double(opts.height)).toFloat();
+    opts.depth  = options.value("depth",  double(opts.depth)).toFloat();
+    opts.metalness = options.value("metalness", double(opts.metalness)).toFloat();
+    opts.roughness = options.value("roughness", double(opts.roughness)).toFloat();
+    opts.ignoreAlphaDiffuse = options.value("ignoreAlphaDiffuse", false).toBool();
+    if (options.contains("position")) {
+        opts.positionGiven = true;
+        opts.position = vecFromJs(options.value("position"));
+    }
+
+    host.services->selection->select(iris::SceneNodePtr());
+    auto node = host.services->sceneEdit->addDecal(textureGuid, opts);
+    if (!node) {
+        fail(QStringLiteral("scene.addDecal: no scene is open"));
+        return QString();
+    }
+    // The service consumed the box/material options and (when given) the
+    // position; strip them so applyOptions does not re-apply a second transform.
+    QVariantMap rest = options;
+    for (const char *k : { "position", "width", "height", "depth",
+                           "metalness", "roughness", "ignoreAlphaDiffuse" })
+        rest.remove(QString::fromLatin1(k));
+    return finishAdd(rest, QStringLiteral("scene.addDecal"));
 }
 
 QString SceneApi::addMesh(const QString &path, const QVariantMap &options)

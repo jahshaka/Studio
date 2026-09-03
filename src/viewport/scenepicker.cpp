@@ -8,6 +8,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/assets/mesh.h"
@@ -67,7 +68,8 @@ void ScenePicker::pickMeshes(iris::SceneNodePtr node, const QVector3D &segStart,
 
 QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const QVector3D &segStart, const QVector3D &segEnd,
                                       const QVector3D &cameraPos, bool forcePickable,
-                                      bool includeLights, bool includeViewers)
+                                      bool includeLights, bool includeViewers,
+                                      bool includeDecals)
 {
     QList<ScenePick> hits;
     if (!scene || !scene->getRootNode()) return hits;
@@ -83,6 +85,17 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const QVector3D &seg
                 iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, light->getGlobalPosition(),
                                                               sphereRadius, t, hitPoint)) {
                 ScenePick p; p.node = light.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
+                p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
+                hits.append(p);
+            }
+        }
+    }
+    if (includeDecals) {
+        for (auto &decal : scene->decals) {
+            if (decal->isPickable() &&
+                iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, decal->getGlobalPosition(),
+                                                              sphereRadius, t, hitPoint)) {
+                ScenePick p; p.node = decal.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
                 p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
                 hits.append(p);
             }
