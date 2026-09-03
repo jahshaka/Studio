@@ -103,8 +103,32 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         engine->renderOneFrame();
         poll();
     }
+    // The SCENE goes; the VIEW stays, disabled, for the life of the process.
+    //
+    // That asymmetry is not tidiness, it is a DEFECT WORKAROUND, narrowed by
+    // bisection against scripting.e2e.particles:
+    //
+    //   destroy scene + view : a LATER editor.screenshot() reads back a
+    //                          completely black image — not the clear colour,
+    //                          zeroes — and the test that photographs a particle
+    //                          plume sees nothing at all.
+    //   destroy the view only: same failure.
+    //   destroy the scene only, keep the view: correct.
+    //   destroy nothing:                       correct.
+    //
+    // So destroying this offscreen View — at the one moment in the process when
+    // it is the ONLY view, since the editor's views do not exist until the
+    // window is shown — leaves engine state behind that a later offscreen
+    // readback trips over. Note EngineSceneViewport::takeScreenshot creates and
+    // destroys offscreen views constantly and is fine, so it is specifically
+    // "the last view in the process goes away". Adding frames after the destroy
+    // does not help, so it is not a pending-command flush.
+    //
+    // That is an engine defect and it is not this lane's to fix. The price of
+    // routing around it is one disabled 32x32 view (a 4 KB render target, a
+    // camera and a workspace) held for the session, which renderOneFrame skips.
     if (warmScene) engine->destroyScene(warmScene);
-    if (warmView)  engine->destroyView(warmView);
+    if (warmView)  warmView->setEnabled(false);
 
     // ---- Wait for it to settle --------------------------------------------
     // Anything the warm-up kicked off asynchronously, plus whatever the render

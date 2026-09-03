@@ -210,7 +210,18 @@ assert(particles.setColourKeys(plume, [
 editor.select(plume);
 editor.frame(2);
 editor.focusSelection();  // frames the selection, so the plume is in shot
-editor.frame(120);       // the ENGINE simulates these; nothing here ticks anything
+// A FIXED STEP, and the reason this assertion used to be a coin flip. The
+// renderer charges each frame the WALL time it took, and an offscreen frame
+// takes about a millisecond — so a bare editor.frame(120) buys a TENTH OF A
+// SECOND of plume on a fast machine and half a second on a busy one, and how
+// much fire this test sees was a measure of how loaded the box was rather than
+// of anything the engine did. It stopped being occasional and became reliable
+// the moment the persistent shader cache removed the compilation those first
+// frames used to hide behind. 1/60 s per frame is exactly two seconds of
+// simulation, every time, on every machine.
+// (editor.frame's dt argument has always existed for precisely this;
+//  the assertion simply never used it.)
+editor.frame(120, 1 / 60);   // the ENGINE simulates these; nothing here ticks anything
 
 var probes = [];
 for (var yi = 0; yi < 5; yi++)
