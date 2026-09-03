@@ -45,6 +45,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `scene.addMesh(path, {position, ...}) -> id` | document | Imports a mesh file (obj, fbx, dae, ...) straight into the scene — no dialog, the path is the argument. Undoable. |
 | `scene.addImagePlane(textureGuid, {position?, doubleSided?}) -> id` | document | Spawns an image plane for a Texture asset (IMAGE_PLANE_SPEC option A): a plane sized to the image's aspect (long side 1 m), facing the editor camera at creation, with a basic PBR material carrying the image as baseColorMap (roughness 1, metallic 0; images with an alpha channel blend). Bytes resolve pin-first through the CAS. doubleSided defaults true. Undoable. |
 | `scene.addDecal(textureGuid, {position?, rotation?, scale?, parent?, width?, height?, depth?, metalness?, roughness?, ignoreAlphaDiffuse?}) -> id` | document | Adds a projected-texture decal (DECALS_SPEC) bound to a Texture asset: an oriented box that paints the image onto every surface inside it, projecting down the node's -Y (the light convention) and masked by the image's alpha. width is the local-X extent, height the local-Z extent (the image's V axis) and depth the projection thickness; the node's own scale multiplies all three. textureGuid may be empty — the decal then draws its wire box and projects nothing until an image is bound. The image is pinned into the project as a BINDING (a dependency row, no companion PBR material is minted). There is deliberately no per-decal opacity or colour tint: the renderer packs four floats per decal and neither fits. Undoable. |
+| `scene.addParticles(preset?, {position?, rotation?, scale?, parent?, rate?, quota?}) -> id` | document | Adds a particle emitter, optionally stamped from a recipe (particles.presets() lists them; "fire" is the one the sample scene uses). The ENGINE simulates it — the document holds only authoring parameters — so it starts emitting on the next rendered frame with no tick from anyone. Scalar rows afterwards go through node.setProperty; the over-life ramps through particles.setColourKeys / setScaleKeys. NOTE the node's scale does not resize the spawn volume or the particles: both are numeric (extents, particleScale). Undoable. |
 
 ## node
 
@@ -171,6 +172,19 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `assets.checkConsistency(guid) -> {consistent, expected, produced, ...}` | document | Re-runs the import pipeline's convert stage on the stored source and diffs the produced object set against the catalog (Unity -consistencyCheck): non-deterministic importers surface here. |
 | `assets.verify({dbPath, root}) -> report` | document | Re-hashes every catalogued object against its oid: reports corrupt (bit-rot) and missing objects with counts and bytes. Defaults to the live library. |
 | `assets.rebuildCatalog(dbPath, {root}) -> report` | document | Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered. |
+
+## particles
+
+| verb | needs | description |
+|---|---|---|
+| `particles.presets() -> [name]` | document | Every emitter recipe particles.preset accepts: custom, fire, embers, smoke, rain, snow, steadyFlow, sparks. |
+| `particles.preset(id, name) -> bool` | document | Stamps a whole emitter recipe onto a particle node — rate, velocity, lifetime, size, cone, forces, turbulence, blend mode, quota and the over-life ramps, in one call. Leaves the node's identity, transform and texture alone. Fire and the other emissive recipes carry HDR colour keys (values above 1) and only look like fire with HDR and bloom on in the view's post chain. |
+| `particles.describe(id) -> {rate, velocity, lifetime, size, shape, orientation, quota, additive, colourKeys, scaleKeys, ...}` | document | The emitter's resolved authoring state, including the ramps that node.properties cannot carry. Read-only. |
+| `particles.colourKeys(id) -> [{time, r, g, b, a}]` | document | The colour-over-life ramp, in ascending time. Empty means no ramp. |
+| `particles.setColourKeys(id, [{time, r, g, b, a}]) -> bool` | document | Replaces the colour-over-life ramp (up to 6 keys, times as life fractions in 0..1). Channels are LINEAR and may exceed 1 — that is what makes fire bloom. An empty list clears the ramp. This is the single lever that turns quads into fire. |
+| `particles.scaleKeys(id) -> [{time, scale}]` | document | The scale-over-life ramp, in ascending time. Empty means constant size. |
+| `particles.setScaleKeys(id, [{time, scale}]) -> bool` | document | Replaces the scale-over-life ramp (up to 6 keys, times as life fractions in 0..1, scales as multipliers of particleScale). An empty list clears it. Note a system with a scale ramp draws SQUARE particles: the renderer's scale affector replaces both dimensions rather than multiplying them. |
+| `particles.timeScale(scale?) -> number` | document | The scene's particle simulation clock: 1 is real time, 0 freezes every emitter, 2 is double speed. Called with no argument it reads. SCENE-wide and, in the renderer, process-wide — there is exactly one frame-time source, so no per-emitter clock exists. |
 
 ## materials
 

@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "data/database/database.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
 
 using namespace scriptmod;
 
@@ -68,6 +69,14 @@ QVector<VerbInfo> SceneApi::verbs() const
           "projects nothing until an image is bound. The image is pinned into the project as a "
           "BINDING (a dependency row, no companion PBR material is minted). There is deliberately no per-decal opacity "
           "or colour tint: the renderer packs four floats per decal and neither fits. Undoable.",
+          Needs::Document },
+        { "addParticles", "scene.addParticles(preset?, {position?, rotation?, scale?, parent?, rate?, quota?}) -> id",
+          "Adds a particle emitter, optionally stamped from a recipe (particles.presets() lists them; "
+          "\"fire\" is the one the sample scene uses). The ENGINE simulates it — the document holds "
+          "only authoring parameters — so it starts emitting on the next rendered frame with no tick "
+          "from anyone. Scalar rows afterwards go through node.setProperty; the over-life ramps "
+          "through particles.setColourKeys / setScaleKeys. NOTE the node's scale does not resize the "
+          "spawn volume or the particles: both are numeric (extents, particleScale). Undoable.",
           Needs::Document },
     };
 }
@@ -251,6 +260,42 @@ QString SceneApi::addDecal(const QString &textureGuid, const QVariantMap &option
                            "metalness", "roughness", "ignoreAlphaDiffuse" })
         rest.remove(QString::fromLatin1(k));
     return finishAdd(rest, QStringLiteral("scene.addDecal"));
+}
+
+QString SceneApi::addParticles(const QString &preset, const QVariantMap &options)
+{
+    if (!requireProject()) return QString();   // the emitter gets a DB object row + a texture
+    if (!sceneOrFail()) return QString();
+
+    iris::ParticlePreset recipe = iris::ParticlePreset::Custom;
+    if (!preset.isEmpty()) {
+        const QStringList known = iris::ParticleSystemNode::presetNames();
+        const bool ok = std::any_of(known.begin(), known.end(), [&](const QString &k) {
+            return k.compare(preset, Qt::CaseInsensitive) == 0;
+        });
+        if (!ok) {
+            fail(QStringLiteral("scene.addParticles: unknown preset '%1' (try: %2)")
+                     .arg(preset, known.join(", ")));
+            return QString();
+        }
+        recipe = iris::ParticleSystemNode::presetFromName(preset);
+    }
+
+    host.services->selection->select(iris::SceneNodePtr());
+    auto node = host.services->sceneEdit->addParticleSystem(recipe);
+    if (!node) {
+        fail(QStringLiteral("scene.addParticles: the emitter was not created"));
+        return QString();
+    }
+    // Two convenience rows, applied AFTER the recipe so an explicit value wins:
+    // everything else goes through node.setProperty, which reaches every
+    // reflected field on the node and needs no duplication here.
+    if (options.contains("rate"))  node->particlesPerSecond = options.value("rate").toFloat();
+    if (options.contains("quota")) node->maxParticles = options.value("quota").toInt();
+    QVariantMap rest = options;
+    rest.remove("rate");
+    rest.remove("quota");
+    return finishAdd(rest, QStringLiteral("scene.addParticles"));
 }
 
 QString SceneApi::addMesh(const QString &path, const QVariantMap &options)

@@ -137,6 +137,7 @@ set(SRCS
     src/scripting/modules/desktopapi.cpp
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
+    src/scripting/modules/particlesapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
@@ -239,6 +240,7 @@ set(SRCS
     src/ui/controls/textinputwidget.cpp 
     src/ui/controls/comboboxwidget.cpp 
     src/ui/controls/hfloatsliderwidget.cpp 
+    src/ui/controls/particlerampwidget.cpp
     src/ui/controls/texturepickerwidget.cpp 
     src/io/materialreader.cpp 
     src/ui/controls/filepickerwidget.cpp 
@@ -354,6 +356,7 @@ set(HEADERS
     src/scripting/modules/appapi.h
     src/scripting/modules/desktopapi.h
     src/scripting/modules/worldapi.h
+    src/scripting/modules/particlesapi.h
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
@@ -457,6 +460,7 @@ set(HEADERS
     src/ui/controls/textinputwidget.h 
     src/ui/controls/comboboxwidget.h 
     src/ui/controls/hfloatsliderwidget.h 
+    src/ui/controls/particlerampwidget.h
     src/ui/controls/texturepickerwidget.h 
     src/io/materialreader.h 
     src/ui/controls/filepickerwidget.h 

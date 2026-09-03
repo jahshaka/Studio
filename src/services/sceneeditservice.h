@@ -105,7 +105,15 @@ public:
 
     void addEmpty();
     void addViewer();
-    void addParticleSystem();
+    /// Adds an emitter, optionally stamped from a preset recipe
+    /// (PARTICLES_FX2_SPEC §6). Returns the node so callers — the scripting
+    /// verb, chiefly — can address what they just made; null when there is no
+    /// scene. Undoable through addNodeToScene like every other add.
+    /// No default argument: iris::ParticlePreset is only forward-declared here
+    /// (naming an enumerator would pull particlesystemnode.h into every
+    /// translation unit that touches this service). Callers pass
+    /// iris::ParticlePreset::Custom for a plain emitter.
+    iris::ParticleSystemNodePtr addParticleSystem(iris::ParticlePreset preset);
 
     /// IMAGE_PLANE_SPEC Option A: spawns an image plane for a Texture asset
     /// at `position` — a plane.obj mesh scaled to the image's aspect (max

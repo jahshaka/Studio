@@ -216,14 +216,23 @@ void SceneEditService::addViewer()
     scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
 }
 
-void SceneEditService::addParticleSystem()
+iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePreset preset)
 {
+    if (!scene()) return iris::ParticleSystemNodePtr();
+
     auto node = iris::ParticleSystemNode::create();
-    node->setName("Particle System");
+    node->setName(preset == iris::ParticlePreset::Custom
+                      ? QStringLiteral("Particle System")
+                      : iris::ParticleSystemNode::presetName(preset).left(1).toUpper() +
+                            iris::ParticleSystemNode::presetName(preset).mid(1));
+    // The recipe first: it resets every authoring field, so anything set here
+    // afterwards (the texture, below) survives and anything set before does not.
+    if (preset != iris::ParticlePreset::Custom) node->applyPreset(preset);
 
     auto fguid = GUIDManager::generateGUID();
     if (!db->checkIfRecordExists("name", "Systems", "folders", false, project->getProjectGuid())) {
-        if (!db->createFolder("Systems", project->getProjectGuid(), fguid, project->getProjectGuid(), false)) return;
+        if (!db->createFolder("Systems", project->getProjectGuid(), fguid, project->getProjectGuid(), false))
+            return iris::ParticleSystemNodePtr();
     }
 
     auto nodeGuid = GUIDManager::generateGUID();
@@ -284,6 +293,7 @@ void SceneEditService::addParticleSystem()
     AssetManager::addAsset(assetTexture);
 
     addNodeToScene(node);
+    return node;
 }
 
 void SceneEditService::addMesh(const QString &path, bool ignore, QVector3D position)
