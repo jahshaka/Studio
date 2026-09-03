@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <QProcess>
 
 #include "services/shortcutregistry.h"
+#include "bridge/enginehost.h"
 
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
@@ -260,6 +261,16 @@ void WorldSettingsWidget::enableAutoSave(bool state)
 	settings->setValue("auto_save", autoSave = state);
 }
 
+void WorldSettingsWidget::shadowMeshOptimizationChanged(bool on)
+{
+	settings->setValue("shadow_mesh_optimization", on);
+	// Process-wide static inside the engine: push it now so meshes imported
+	// during this session honour the new choice without a restart. Meshes that
+	// already exist keep the buffers they were built with (POST_CHAIN_SPEC §11).
+	if (auto engine = EngineHost::instance().engine())
+		engine->setShadowMeshOptimization(on);
+}
+
 void WorldSettingsWidget::enableOpenInPlayer(bool state)
 {
 	settings->setValue("open_in_player", openInPlayer = state);
@@ -327,21 +338,38 @@ void WorldSettingsWidget::configureViewport()
 	auto selectionOutlineWidth = new QLabel("Selection Outline Width :");
 	auto selectionOutlineColor = new QLabel("Selection Outline Color :");
 	auto enableAutoSave = new QLabel("Enable Autosave :");
+	// POST_CHAIN_SPEC.md §11: process-wide and consumed at MESH BUILD time, so it
+	// cannot honestly be a per-scene (World Mode) row — a mesh built while it was
+	// on keeps its optimized shadow buffers in every scene that uses it.
+	auto optimizeShadowMeshes = new QLabel("Optimize Shadow Meshes :");
 
 	setSizePolicyForWidgets(selectionOutlineColor);
 	setSizePolicyForWidgets(selectionOutlineWidth);
 	setSizePolicyForWidgets(enableAutoSave);
+	setSizePolicyForWidgets(optimizeShadowMeshes);
 
 	auto spinbox = new QDoubleSpinBox;
 	auto colorPicker = new ColorPickerWidget;
 	auto checkbox = new QCheckBox;
+	auto shadowMeshCheckbox = new QCheckBox;
+	shadowMeshCheckbox->setToolTip(
+		"Give every mesh a compact, position-only vertex buffer for shadow-map "
+		"rendering. Shadow passes then read about 4x less vertex data; the cost is "
+		"a little extra VRAM per mesh and slightly slower importing. Applies to "
+		"meshes loaded after the change.");
 
 	auto checkboxLayout = new QHBoxLayout;
 	checkboxLayout->setContentsMargins(0, 0, 0, 0);
 	checkboxLayout->addStretch();
 	checkboxLayout->addWidget(checkbox);
 
-	StyleSheet::setStyle({ selectionOutlineColor,selectionOutlineWidth,enableAutoSave,spinbox,checkbox });
+	auto shadowMeshLayout = new QHBoxLayout;
+	shadowMeshLayout->setContentsMargins(0, 0, 0, 0);
+	shadowMeshLayout->addStretch();
+	shadowMeshLayout->addWidget(shadowMeshCheckbox);
+
+	StyleSheet::setStyle({ selectionOutlineColor,selectionOutlineWidth,enableAutoSave,
+	                       optimizeShadowMeshes,spinbox,checkbox,shadowMeshCheckbox });
 
 	layout->addWidget(selectionOutlineWidth, 0, 0);
 	layout->addWidget(spinbox, 0, 2);
@@ -349,6 +377,8 @@ void WorldSettingsWidget::configureViewport()
 	layout->addWidget(colorPicker, 1, 2);
 	layout->addWidget(enableAutoSave, 2, 0);
 	layout->addLayout(checkboxLayout, 2, 2);
+	layout->addWidget(optimizeShadowMeshes, 3, 0);
+	layout->addLayout(shadowMeshLayout, 3, 2);
 
 	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
@@ -363,10 +393,12 @@ void WorldSettingsWidget::configureViewport()
 	spinbox->setValue(storedOutlineWidth);
 	colorPicker->setColor(settings->getValue("outline_color", "#3498db").toString());
 	checkbox->setChecked(settings->getValue("auto_save", true).toBool());
+	shadowMeshCheckbox->setChecked(settings->getValue("shadow_mesh_optimization", true).toBool());
 
 	connect(spinbox, SIGNAL(valueChanged(double)), this, SLOT(outlineWidthChanged(double)));
 	connect(colorPicker, SIGNAL(onColorChanged(QColor)), this, SLOT(outlineColorChanged(QColor)));
 	connect(checkbox, SIGNAL(toggled(bool)), this, SLOT(enableAutoSave(bool)));
+	connect(shadowMeshCheckbox, SIGNAL(toggled(bool)), this, SLOT(shadowMeshOptimizationChanged(bool)));
 
 }
 

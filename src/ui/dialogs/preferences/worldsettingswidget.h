@@ -97,6 +97,7 @@ private slots:
 	void enableAutoUpdate(bool state);
 	void mouseControlChanged(const QString& value);
 	void sliderRowsChanged(int rows);
+	void shadowMeshOptimizationChanged(bool on);
 
 public slots:
 	void saveSettings();

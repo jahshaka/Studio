@@ -1432,6 +1432,179 @@ void fog_fades_distant_surfaces_to_fog_colour() {
               far2.r, far2.g, far2.b, far0.r, far0.g, far0.b);
 }
 
+
+// ---------------------------------------------------------------------------
+// The compositor chain (POST_CHAIN_SPEC.md phases 0-1).
+
+/// THE workspace seam. Six call sites used to create a workspace inline; they
+/// are now one function, and workspaceGeneration() counts it. This pins both
+/// halves of the contract the planar-reflection lane depends on: every
+/// structural change goes through the seam exactly once, and a push of a value
+/// that has not changed goes through it zero times.
+void workspace_seam_counts_every_rebuild() {
+    Fixture fx;
+    View *v = fx.view("seam-view", 64, 64, kBlue); REQUIRE(v);
+    CHECK_MSG(v->workspaceGeneration() == 0u,
+              "a view with no scene has no workspace yet: %u", v->workspaceGeneration());
+    Scene *s = fx.scene("seam-scene"); REQUIRE(s);
+    CHECK(v->setScene(s));
+    const unsigned afterBind = v->workspaceGeneration();
+    CHECK_MSG(afterBind == 1u, "binding a scene builds exactly one workspace: %u", afterBind);
+
+    // Same value = free. Hosts (SceneMirror) push these every frame.
+    v->setBackground(v->background());
+    v->setSampleCount(v->sampleCount());
+    v->setShadows(v->shadows());
+    CHECK_MSG(v->workspaceGeneration() == afterBind,
+              "re-pushing unchanged values must not rebuild: %u", v->workspaceGeneration());
+
+    // Each real change rebuilds once, and only once.
+    v->setBackground(kGreen);
+    CHECK_MSG(v->workspaceGeneration() == afterBind + 1, "background change: %u", v->workspaceGeneration());
+    v->setShadows(true);
+    CHECK_MSG(v->workspaceGeneration() == afterBind + 2, "shadow toggle: %u", v->workspaceGeneration());
+    v->resize(96, 96);
+    CHECK_MSG(v->workspaceGeneration() == afterBind + 3, "offscreen resize: %u", v->workspaceGeneration());
+    v->setSampleCount(4);
+    CHECK_MSG(v->workspaceGeneration() == afterBind + 4, "sample-count change: %u", v->workspaceGeneration());
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    CHECK(near(centre(img), kGreen, 12));
+
+    // Node definitions must not leak across view recreation: the chain is
+    // multi-node now, and a teardown that removed only one definition would
+    // make the next view of the same name throw at addNodeDefinition.
+    fx.e->destroyView(v); fx.forget(v);
+    View *again = fx.view("seam-view", 64, 64, kOrange); REQUIRE(again);
+    CHECK(again->setScene(s));
+    render(fx.e); REQUIRE(again->readPixels(img));
+    CHECK_MSG(near(centre(img), kOrange, 12),
+              "a view recreated under the same name renders: %d %d %d",
+              centre(img).r, centre(img).g, centre(img).b);
+}
+
+/// Shadow-caster VAO optimization (POST_CHAIN_SPEC.md §11) is on by default and
+/// static geometry still casts the same shadow with it either way.
+void shadow_mesh_optimization_keeps_static_shadows() {
+    Fixture fx;
+    CHECK_MSG(fx.e->shadowMeshOptimization(),
+              "the engine ships with shadow-mesh optimization on");
+    View *v = fx.view("smo-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("smo-scene");             REQUIRE(s);
+    v->setScene(s);
+    v->setShadows(true);
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.1f, 0.1f, 0.1f));
+    MeshId cubeMesh = s->createMesh(unitCubeData());
+    PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 0.9f;
+    MaterialId mat = s->createPbrMaterial(white);
+    NodeId ground = s->createNode();
+    CHECK(s->attachMesh(ground, cubeMesh, mat));
+    s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+    NodeId cube = s->createNode();
+    CHECK(s->attachMesh(cube, cubeMesh, mat));
+    s->setNodeTransform(cube, Vec3(0, 0.6f, 0), Quat(), Vec3(0.8f, 0.8f, 0.8f));
+    NodeId sun = s->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 3.0f; d.castShadows = true;
+    CHECK(s->setLight(sun, d));
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(0, 0, 0.3826834f, 0.9238795f), Vec3(1,1,1));
+    CameraDesc c; c.position = Vec3(0, 6, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f); c.fovDegrees = 50;
+    v->setCamera(c);
+    render(fx.e, 4); Image img; REQUIRE(v->readPixels(img));
+    auto contrast = [&](const Image &i) {
+        int lo = 255, hi = 0;
+        for (unsigned x = 62; x < 94; ++x) { const Px q = px(i, x, 48); const int l = (q.r+q.g+q.b)/3; lo = std::min(lo,l); hi = std::max(hi,l); }
+        for (unsigned x = 2;  x < 34; ++x) { const Px q = px(i, x, 48); const int l = (q.r+q.g+q.b)/3; lo = std::min(lo,l); hi = std::max(hi,l); }
+        return hi - lo;
+    };
+    const int optimized = contrast(img);
+    std::printf("    ground contrast with optimized shadow VAOs: %d\n", optimized);
+    CHECK_MSG(optimized > 40, "an optimized shadow mesh still casts a shadow (contrast %d)", optimized);
+
+    // Same scene, meshes built with the optimization OFF: the shadow must look
+    // the same. (A fresh mesh is needed — the flag is read at build time.)
+    fx.e->setShadowMeshOptimization(false);
+    CHECK(!fx.e->shadowMeshOptimization());
+    MeshId plainMesh = s->createMesh(unitCubeData());
+    CHECK(s->attachMesh(ground, plainMesh, mat));
+    CHECK(s->attachMesh(cube, plainMesh, mat));
+    render(fx.e, 4); REQUIRE(v->readPixels(img));
+    const int plain = contrast(img);
+    std::printf("    ground contrast with aliased shadow VAOs:   %d\n", plain);
+    CHECK_MSG(std::abs(plain - optimized) <= 12,
+              "the optimization must not change what a shadow looks like: %d vs %d",
+              optimized, plain);
+    fx.e->setShadowMeshOptimization(true);
+}
+
+/// The trap the rider exists to avoid (POST_CHAIN_SPEC.md §11): a CPU-skinned
+/// (MeshData::dynamic) mesh uploads its new pose into the NORMAL vertex buffer
+/// only. Give it an independent optimized shadow VAO and its shadow freezes at
+/// the pose it was built with — silent, and visually baffling. buildMeshV2
+/// therefore never optimizes a dynamic mesh, and this is the assertion.
+void dynamic_mesh_shadow_follows_its_pose() {
+    Fixture fx;
+    View *v = fx.view("dynshadow-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("dynshadow-scene");             REQUIRE(s);
+    v->setScene(s);
+    v->setShadows(true);
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.1f, 0.1f, 0.1f));
+    PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 0.9f;
+    MaterialId mat = s->createPbrMaterial(white);
+
+    MeshId groundMesh = s->createMesh(unitCubeData());
+    NodeId ground = s->createNode();
+    CHECK(s->attachMesh(ground, groundMesh, mat));
+    s->setNodeTransform(ground, Vec3(0, -0.55f, 0), Quat(), Vec3(8, 0.1f, 8));
+
+    // The caster: a DYNAMIC mesh, i.e. the CPU-skinning path.
+    MeshData casterData = unitCubeData();
+    casterData.dynamic = true;
+    MeshId casterMesh = s->createMesh(casterData);
+    REQUIRE(casterMesh != 0);
+    NodeId caster = s->createNode();
+    CHECK(s->attachMesh(caster, casterMesh, mat));
+    s->setNodeTransform(caster, Vec3(0, 0.6f, 0), Quat(), Vec3(1, 1, 1));
+
+    NodeId sun = s->createNode();
+    LightDesc d; d.type = LightType::Directional; d.intensity = 3.0f; d.castShadows = true;
+    CHECK(s->setLight(sun, d));
+    s->setNodeTransform(sun, Vec3(0, 5, 0), Quat(0, 0, 0.3826834f, 0.9238795f), Vec3(1,1,1));
+    CameraDesc c; c.position = Vec3(0, 6, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f); c.fovDegrees = 50;
+    v->setCamera(c);
+
+    // The sun is rolled 45 degrees about +Z, so it travels (+0.707, -0.707, 0):
+    // the caster at y=0.6 throws its shadow onto the y=-0.5 slab about 1.1 units
+    // toward +X, which lands in this strip of the 96x96 readback. The caster
+    // itself images left of it, around the centre, and never enters the strip.
+    auto stripDarkest = [&](const Image &i) {
+        int lo = 255;
+        for (unsigned x = 58; x < 94; ++x) { const Px q = px(i, x, 48); lo = std::min(lo, (q.r+q.g+q.b)/3); }
+        return lo;
+    };
+    render(fx.e, 4); Image img; REQUIRE(v->readPixels(img));
+    const int shadowed = stripDarkest(img);
+
+    // Deform the mesh the way the skinning path does: slide every vertex 2 units
+    // along -X. The caster stays inside the camera AND the shadow frustum (so it
+    // is not merely culled — that would prove nothing); only its SHADOW leaves
+    // the strip. A stale, independent shadow VAO would leave the shadow behind.
+    std::vector<float> moved;
+    for (size_t i = 0; i + 2 < casterData.positions.size(); i += 3) {
+        moved.push_back(casterData.positions[i] - 2.0f);
+        moved.push_back(casterData.positions[i+1]);
+        moved.push_back(casterData.positions[i+2]);
+    }
+    CHECK(s->updateMeshVertices(casterMesh, moved, casterData.normals));
+    render(fx.e, 4); REQUIRE(v->readPixels(img));
+    const int unshadowed = stripDarkest(img);
+    std::printf("    strip darkest: shadow in the strip %d, caster deformed away %d\n",
+                shadowed, unshadowed);
+    CHECK_MSG(unshadowed - shadowed > 25,
+              "a CPU-skinned mesh's shadow must follow its pose (%d -> %d)",
+              shadowed, unshadowed);
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -1467,6 +1640,9 @@ int main(int argc, char **argv) {
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
         { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },
+        { "workspace_seam_counts_every_rebuild",    workspace_seam_counts_every_rebuild },
+        { "shadow_mesh_optimization_keeps_static_shadows", shadow_mesh_optimization_keeps_static_shadows },
+        { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";
