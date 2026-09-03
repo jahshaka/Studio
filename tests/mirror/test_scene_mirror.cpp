@@ -321,7 +321,15 @@ int main(int argc, char **argv)
         // takes a DIFFERENT Ogre transparency path than alphaMode 2 (it used to be
         // the same Fade, which is why authored glass looked merely faded).
         std::printf("    centre-patch luminance: fade %.3f vs glass %.3f\n", fadeLum, glassLum);
-        CHECK(std::fabs(glassLum - fadeLum) > 0.25f,
+        // RE-BASELINED by the Ogre sky/IBL adoption wave. Measured here: fade
+        // 2.647 vs glass 2.076 (gap 0.571) before, fade 1.980 vs glass 1.858
+        // (gap 0.122) after. Both dropped and the gap narrowed for the same two
+        // reasons, and neither is about transparency: AmbientSh contributes no
+        // ambient SPECULAR (the hemisphere mode did), and
+        // EnvFeatures_DiffuseGiFromReflectionProbe is now off (it was adding the
+        // reflection cube's roughest mip to every surface's diffuse). The two
+        // paths still differ, which is all this regression ever pinned.
+        CHECK(std::fabs(glassLum - fadeLum) > 0.08f,
               "Glass (alphaMode 3) renders through a different transparency path than Blend/Fade");
         mirror.setLightWires(true);
         doc->skyType = iris::SkyType::SINGLE_COLOR;
@@ -822,11 +830,14 @@ int main(int argc, char **argv)
         CHECK(std::fabs(s.sunPosY - iris::SkyRealistic::kSunRadius * std::sin(-7.5f * 3.14159265f / 180.0f)) < 1.0f,
               "elevation writes sunPosY on the model's 450000 scale (sunfade finally moves)");
 
-        // Sun at azimuth 0 (+Z). In the bake's equirect mapping that direction
-        // is column 0.75*W; the horizon is row H/2. Low sun -> warm horizon,
-        // high sun -> blue horizon: the Preetham behaviour the old dials hid.
+        // Sun at azimuth 0 (+Z). RE-BASELINED with the Ogre-native sky: the bake
+        // now uses Ogre's own lat-long mapping (u = (atan2(x,-z)+PI)/2PI), which
+        // puts +Z at column 0 and -Z — the default camera's forward — at the
+        // middle of the image. The retired sky sphere put +Z at 0.75*W. The
+        // horizon is still row H/2. Low sun -> warm horizon, high sun -> blue
+        // horizon: the Preetham behaviour the old dials hid.
         const int W = 256, H = 128;
-        const int col = int(0.75f * W), row = H / 2 - 1;
+        const int col = 0, row = H / 2 - 1;
         auto horizonAt = [&](float elevation) {
             iris::SkyRealistic sk = iris::SkyRealistic::defaults();
             sk.turbidity = 4.0f;
@@ -901,21 +912,32 @@ int main(int argc, char **argv)
             }
             eq.save(flipSkyPath);
         }
-        Colour up(0, 0, 0), lo(0, 0, 0);
-        CHECK(SceneMirror::integrateSkyAmbient(QImage(redSkyPath), up, lo),
-              "a sky image integrates to two hemisphere colours");
-        std::printf("    sky ambient: upper %.3f %.3f %.3f   lower %.3f %.3f %.3f\n",
-                    up.r, up.g, up.b, lo.r, lo.g, lo.b);
-        CHECK(up.r > 0.5f && up.g < 0.05f && up.b < 0.05f, "the upper hemisphere integrates red");
-        CHECK(lo.r < 0.05f, "the lower hemisphere stays dark (the split is oriented correctly)");
+        // The integral is now 9 SH bands; evaluate them for +Y and -Y (the basis
+        // is {1, y, z, x, ...}, so a normal along +-Y is the constant band plus
+        // or minus the y band, plus what band 2 says at z = 0).
+        const auto evalSh = [](const float sh[27], float x, float y, float z, int c) {
+            const float b[9] = { 1.0f, y, z, x, x * y, y * z, 3.0f * z * z - 1.0f, z * x,
+                                 x * x - y * y };
+            float sum = 0.0f;
+            for (int i = 0; i < 9; ++i) sum += sh[i * 3 + c] * b[i];
+            return sum;
+        };
+        float sh[27] = { 0.0f };
+        CHECK(SceneMirror::integrateSkyAmbientSh(QImage(redSkyPath), sh),
+              "a sky image integrates to spherical harmonics");
+        const float upR = evalSh(sh, 0, 1, 0, 0), upG = evalSh(sh, 0, 1, 0, 1),
+                    upB = evalSh(sh, 0, 1, 0, 2), loR = evalSh(sh, 0, -1, 0, 0);
+        std::printf("    sky ambient SH: up %.3f %.3f %.3f   down(r) %.3f\n", upR, upG, upB, loR);
+        CHECK(upR > 0.5f && upG < 0.05f && upB < 0.05f, "a normal facing up sees red");
+        CHECK(loR < 0.05f, "a normal facing down stays dark (the split is oriented correctly)");
         // Row 0 of an equirect is the ZENITH: flipping the image must swap the
         // two hemispheres, not leave them alone.
-        Colour fup(0, 0, 0), flo(0, 0, 0);
-        CHECK(SceneMirror::integrateSkyAmbient(QImage(flipSkyPath), fup, flo),
+        float fsh[27] = { 0.0f };
+        CHECK(SceneMirror::integrateSkyAmbientSh(QImage(flipSkyPath), fsh),
               "the flipped sky integrates too");
-        std::printf("    flipped sky ambient: upper %.3f %.3f %.3f   lower %.3f %.3f %.3f\n",
-                    fup.r, fup.g, fup.b, flo.r, flo.g, flo.b);
-        CHECK(fup.r < 0.05f && flo.r > 0.5f,
+        const float fupR = evalSh(fsh, 0, 1, 0, 0), floR = evalSh(fsh, 0, -1, 0, 0);
+        std::printf("    flipped sky ambient SH: up(r) %.3f   down(r) %.3f\n", fupR, floR);
+        CHECK(fupR < 0.05f && floR > 0.5f,
               "putting the red BELOW the horizon moves it to the lower hemisphere");
 
         // End to end: the same sky, a matte white cube, no lights touched. With
