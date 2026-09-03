@@ -50,16 +50,30 @@ target_include_directories(OgreNext INTERFACE
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Pbs
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Unlit
     # Atmosphere component: its headers include each other by bare name.
-    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Atmosphere)
+    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Atmosphere
+    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/PlanarReflections)
+# Plain -I, deliberately NOT SYSTEM: OGRE_BUILD_COMPONENT_PLANAR_REFLECTIONS is
+# #ifdef-ed inside OgreHlmsPbs.h, so the installed OgreBuildSettings.h changes
+# HlmsPbs's member LAYOUT. generateAbiCookie() does not hash component defines,
+# so the only thing that catches a stale consumer is ninja's -MD dependency on
+# that installed header. SYSTEM includes can switch a toolchain to -MMD (system
+# headers dropped from depfiles) and would reintroduce a silent ABI mismatch.
+#
 # Absolute paths, not -l names: link directories do not propagate through a
 # static library's PRIVATE link, so -lOgreNextMain would not resolve in Jahshaka.
-foreach(_lib OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit OgreNextAtmosphere)
+foreach(_lib OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit OgreNextAtmosphere
+             OgreNextPlanarReflections)
     # Never trust a cached hit: a changed OGRE_NEXT_PREFIX must re-resolve.
     unset(OGRE_NEXT_${_lib}_LIB CACHE)
     find_library(OGRE_NEXT_${_lib}_LIB NAMES ${_lib}
                  PATHS ${OGRE_NEXT_PREFIX}/lib NO_DEFAULT_PATH)
     if(NOT OGRE_NEXT_${_lib}_LIB)
-        message(FATAL_ERROR "Ogre-Next library ${_lib} not found in ${OGRE_NEXT_PREFIX}/lib")
+        message(FATAL_ERROR
+            "Ogre-Next library ${_lib} not found in ${OGRE_NEXT_PREFIX}/lib.\n"
+            "If this is OgreNextPlanarReflections (or any component that used to build), "
+            "your engine install predates the current component pin: RE-RUN "
+            "irisgl/scripts/build-ogre.sh. That script is the single source of truth for "
+            "which Ogre components exist; the install is not reproducible without it.")
     endif()
     target_link_libraries(OgreNext INTERFACE ${OGRE_NEXT_${_lib}_LIB})
 endforeach()

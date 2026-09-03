@@ -70,9 +70,11 @@ locations.
 BUNDLE=dist/Jahshaka.app ./scripts/verify-macos-bundle.sh
 ```
 
-33 assertions in two stages. Static: every Mach-O in the bundle must reference only
+34 assertions in two stages. Static: every Mach-O in the bundle must reference only
 bundle-internal or `/usr/lib`//`/System/Library` paths; no stray rpaths; the ICD
-manifest is relative; `codesign -v --deep --strict` passes. Runtime: the bundle is
+manifest is relative; `libOgreNextPlanarReflections` is present by name (an engine
+install built before the component pin in `irisgl/scripts/build-ogre.sh` is the one
+way it goes missing); `codesign -v --deep --strict` passes. Runtime: the bundle is
 copied to a temp dir and made to render the engine selftest under a **fully emptied
 environment with a scratch home** — proving it finds Vulkan/Qt/media inside itself —
 with loader-level evidence that the *bundled* MoltenVK loaded, that user data went to

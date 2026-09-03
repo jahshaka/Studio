@@ -29,6 +29,8 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "data/constants.h"
 #include "viewport/ieditorviewport.h"
+#include "services/planarreflectors.h"
+#include <QMessageBox>
 #include "bridge/enginehost.h"
 #include "io/scenewriter.h"
 #include <qdialog.h>
@@ -351,6 +353,23 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	action = new QAction(QIcon(), "Focus Camera", this);
 	connect(action, SIGNAL(triggered()), this, SLOT(focusOnNode()));
 	menu.addAction(action);
+
+	// "Make Reflective" (PLANAR_REFLECTIONS_SPEC.md §7). The Properties row is
+	// the discoverable home for the flag; this is the one-click path for the
+	// case that actually happens — the user has just selected a floor. Same
+	// service call, so a mesh that cannot be a plane is refused and put back
+	// here exactly as it is there.
+	if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+		const bool isReflector = node->getPlanarReflector();
+		action = new QAction(QIcon(), isReflector ? "Stop Reflecting" : "Make Reflective", this);
+		connect(action, &QAction::triggered, this, [this, node, isReflector]() {
+			QString error;
+			IEditorViewport *vp = mainWindow ? mainWindow->viewport() : nullptr;
+			if (!planarreflectors::set(node, !isReflector, vp, &error))
+				QMessageBox::warning(this, tr("Not a reflection plane"), error);
+		});
+		menu.addAction(action);
+	}
 
 	if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
 		action = new QAction(QIcon(), "Make Active Character Controller", this);

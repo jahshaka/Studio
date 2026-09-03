@@ -45,6 +45,8 @@ public:
     Q_INVOKABLE int shadowResolution();
     Q_INVOKABLE int setShadowResolution(int pixels);
     Q_INVOKABLE bool ambientFromSky(bool enabled);
+    Q_INVOKABLE QVariantMap planarReflections();
+    Q_INVOKABLE QVariantMap setPlanarReflections(const QVariantMap &params);
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap get();
 

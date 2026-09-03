@@ -813,6 +813,14 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         QJsonObject jah;
         jah["guid"] = node->getGUID();
         if (!node->isVisible()) jah["visible"] = false;
+        // Planar reflections (PLANAR_REFLECTIONS_SPEC.md §9). glTF has no
+        // reflection extension, so the INTENT rides our extras convention and
+        // exported files already carry it. THE VIEWER IGNORES IT TODAY — this
+        // is deliberately a stub, not a half-built feature: three.js r185's
+        // WebGPU bundle does ship a TSL reflector(), but wiring it has its own
+        // budget story and would move the export suites' pixels. Written only
+        // when true, like "visible" above.
+        if (node->getPlanarReflector()) jah["planarReflector"] = true;
 
         int myIndexReserved = -1;   // filled at the end; children need our index order
         QJsonArray children;

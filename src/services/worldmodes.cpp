@@ -19,6 +19,26 @@ namespace worldmodes {
 
 namespace {
 
+/// The planar-reflection budget per tier, shared by the row below and by the
+/// resolver beside it (which cannot call rows() — it runs while rows() is being
+/// built). Low, Medium, High, Epic.
+const int kPlanarTier[4] = { 0, 0, 1, 2 };
+
+/// The row's `get`. iris::Scene::planarReflectionBudget carries -1 for "never
+/// set, follow the mode" — the one negative value the field can hold — and the
+/// registry's contract is that a row's get() returns the RESOLVED value. Every
+/// path that applies a mode writes a concrete number through, so -1 only ever
+/// survives in a Custom-mode scene or one loaded from a document written before
+/// the feature existed; both resolve to "off", which is also exactly what
+/// SceneMirror does with a negative budget.
+int planarBudgetOf(const iris::ScenePtr &s)
+{
+    if (!s) return 0;
+    if (s->planarReflectionBudget >= 0) return s->planarReflectionBudget;
+    const int m = s->worldMode;
+    return (m >= 0 && m <= 3) ? kPlanarTier[m] : 0;
+}
+
 /// The four tier columns, in order: Low, Medium, High, Epic.
 /// Values and reasons come from POST_CHAIN_SPEC.md §9.3 — the effect rows it
 /// also lists (HDR, bloom, SSAO, SMAA, SSR, refraction) are NOT here: they have
@@ -155,11 +175,20 @@ QVector<Row> buildRows()
         out.append(r);
     }
 
-    // ---- Contracts: declared, not yet implemented --------------------------
-    // A row with `available = false` renders disabled and its value lives only
-    // in worldOverrides. This is the seam PLANAR_REFLECTIONS_SPEC plugs into:
-    // its lane fills in get/set and flips `available`, and no consumer of this
-    // file changes.
+    // ---- Reflections -------------------------------------------------------
+    // This row was declared here with `available = false` before the engine
+    // could serve it; the planar lane filled in get/set and flipped the flag,
+    // and not one consumer of this file changed. That is what the contract-row
+    // idea was for.
+    //
+    // Epic is 2, not the 4 this row was drafted with. Each active plane is a
+    // FULL extra scene render inside the editor's per-frame loop, which shares
+    // the machine with Qt, the scripting host and the MCP server: four planes
+    // means five scene renders and an editor that stops feeling interactive on
+    // any scene heavier than a sample. Two mirrors facing the camera at once is
+    // already an unusual composition, so the visible payoff of 3 and 4 is small.
+    // The verb and this row still ACCEPT up to 8 for anyone who wants it, and
+    // an artist can force which mirror wins; only the preset is conservative.
     {
         Row r;
         r.id = QStringLiteral("planarBudget");
@@ -167,10 +196,16 @@ QVector<Row> buildRows()
         r.group = QStringLiteral("Reflections");
         r.type = RowType::Int;
         r.minValue = 0; r.maxValue = 8;
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 2; r.tier[3] = 4;
+        r.tier[0] = kPlanarTier[0]; r.tier[1] = kPlanarTier[1];
+        r.tier[2] = kPlanarTier[2]; r.tier[3] = kPlanarTier[3];
         r.cost = QStringLiteral("How many mirror planes may re-render the scene. One extra full "
-                                "scene render per plane — the most expensive row in the table.");
-        r.available = false;
+                                "scene render per plane — the most expensive row in the table. "
+                                "CHANGING IT REBUILDS SHADERS: the count is baked into the PBR "
+                                "shader, not passed as a uniform, so expect a pause on the next "
+                                "frame. Planes are placed per object (Properties > Planar "
+                                "Reflector); this is only the cap on how many of them render.");
+        r.get = [](const iris::ScenePtr &s) { return planarBudgetOf(s); };
+        r.set = [](const iris::ScenePtr &s, int v) { s->planarReflectionBudget = v; };
         out.append(r);
     }
 

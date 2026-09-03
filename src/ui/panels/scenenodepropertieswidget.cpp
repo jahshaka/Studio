@@ -217,6 +217,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView->setParent(this);
                     physicsPropView->setSceneNode(sceneNode);
                     physicsPropView->setSceneView(sceneView);
+                    meshPropView->setSceneView(sceneView);
                     meshPropView->setSceneNode(sceneNode);
                     materialPropView->setSceneNode(sceneNode);
 

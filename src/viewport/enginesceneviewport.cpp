@@ -872,6 +872,16 @@ QImage EngineSceneViewport::takeScreenshot(QSize dimension)
     return takeScreenshot(dimension.width(), dimension.height());
 }
 
+bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
+{
+    // "No engine to ask" answers true: a caller must not report a failure it
+    // cannot see (headless runs, the document-only stand-in viewport).
+    if (!mMirror || node.isNull() || !view() || !view()->scene()) return true;
+    const jahshaka::engine::NodeId id = mMirror->engineNode(node.data());
+    if (!id) return true;   // not mirrored yet — the next sync decides
+    return view()->scene()->nodePlanarReflector(id);
+}
+
 void EngineSceneViewport::renderFrames(int n)
 {
     renderFrames(n, -1.0f);

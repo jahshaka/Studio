@@ -30,9 +30,14 @@ assert(!!byId["msaa"], "row msaa is declared");
 assert(!!byId["shadowResolution"], "row shadowResolution is declared");
 assert(!!byId["shadowFilter"], "row shadowFilter is declared");
 assert(!!byId["giMode"], "row giMode is declared");
-assert(!!byId["planarBudget"], "row planarBudget is declared as a contract");
-assert(byId["planarBudget"].available === false,
-       "planarBudget renders disabled until the planar lane lands");
+assert(!!byId["planarBudget"], "row planarBudget is declared");
+// This row was the registry's proof that a CONTRACT row works: it was declared
+// here with available = false before any renderer could serve it, and the
+// planar-reflection lane later filled in its backing field and flipped the flag
+// without touching a single consumer of the table. It is now live, so this
+// assertion is the other half of that proof.
+assert(byId["planarBudget"].available === true,
+       "planarBudget is served by the renderer");
 for (var k = 0; k < table.rows.length; ++k) {
     var r = table.rows[k];
     assert(r.label.length > 0 && r.cost.length > 0, "row " + r.id + " has a label and a cost note");

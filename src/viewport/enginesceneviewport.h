@@ -117,6 +117,9 @@ public:
     { return view() ? QSize(int(view()->width()), int(view()->height())) : QSize(); }
     int shadowResolution() const override
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
+    int activePlanarReflectors() const override
+    { return (view() && view()->scene()) ? view()->scene()->activePlanarReflectors() : 0; }
+    bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
 

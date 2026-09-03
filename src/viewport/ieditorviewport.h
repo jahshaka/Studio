@@ -181,6 +181,24 @@ public:
     /// engine viewport reports it; 0 means "no engine to ask".
     virtual int shadowResolution() const { return 0; }
 
+    /// How many planar-reflection planes actually RENDERED last frame — the
+    /// achieved number against the scene's budget, in the same "the renderer
+    /// beats the request" spirit as sampleCount() and shadowResolution(). A
+    /// plane off screen is culled and does not count. 0 means reflections are
+    /// off, nothing has rendered yet, or there is no engine to ask.
+    virtual int activePlanarReflectors() const { return 0; }
+
+    /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
+    /// The plane, its size and its normal are derived from the mesh's own
+    /// bounds, so geometry that is not plate-like is refused — and only the
+    /// renderer has the bounds to judge it (the document model carries a
+    /// bounding SPHERE, which cannot tell a plate from a ball). The document
+    /// flag is the user's intent and is kept either way; this is what says
+    /// whether the intent could be honoured. True when there is no engine to
+    /// ask, so callers do not report a failure they cannot see.
+    virtual bool planarReflectorAccepted(iris::SceneNodePtr node) const
+    { Q_UNUSED(node); return true; }
+
     /// Deterministic frame stepping for scripts and tests (editor.frame(n)):
     /// document→engine sync + renderOneFrame, n times, synchronously — the exact
     /// pattern of the headless suites. Only the engine viewport implements it;

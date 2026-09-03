@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "scripting/modules/nodeapi.h"
 
 #include "scripting/modules/moduleshared.h"
+#include "viewport/ieditorviewport.h"
+#include "services/planarreflectors.h"
 #include "commands/reparentscenenodecommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
@@ -76,6 +78,12 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "decalTexture", "node.decalTexture(id) -> {guid, path}",
           "The decal's bound image: the library guid and the resolved file. Empty guid = none.",
           Needs::Document },
+        { "setPlanarReflector", "node.setPlanarReflector(id, enabled) -> bool",
+          "Makes this object a planar reflection plane — a mirror or a glossy floor. The plane, its size and its normal are derived from the object's own geometry, so the mesh must be FLAT: its thinnest extent no more than a tenth of the next, i.e. a plane or a thin box. A sphere or a cube is refused with a message. The reflecting face is the object's positive thin axis, so the top of a floor reflects and its underside does not. The object is excluded from its own reflection. Whether a plane actually RENDERS depends on world.setPlanarReflections' budget and on being on screen — each active plane is a whole extra scene render per frame. Direct document write — not undoable yet.",
+          Needs::Document },
+        { "planarReflector", "node.planarReflector(id) -> bool",
+          "Whether this object is a planar reflection plane.",
+          Needs::Document },
     };
 }
 
@@ -90,6 +98,27 @@ iris::SceneNodePtr NodeApi::nodeOrFail(const QString &id, const QString &verb)
     auto node = findNodeByGuid(scene->getRootNode(), id);
     if (!node) fail(QStringLiteral("%1: no node with id '%2'").arg(verb, id));
     return node;
+}
+
+bool NodeApi::setPlanarReflector(const QString &id, bool enabled)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setPlanarReflector"));
+    if (!node) return false;
+    // The Properties row and the "Make Reflective" context action come through
+    // the same service call — including the part that reverts the flag when the
+    // renderer refuses the geometry, which is the half a second copy forgets.
+    QString error;
+    IEditorViewport *vp = host.isEngineReady() ? host.viewport : nullptr;
+    if (!planarreflectors::set(node, enabled, vp, &error))
+        return fail(QStringLiteral("node.setPlanarReflector: %1").arg(error));
+    return true;
+}
+
+bool NodeApi::planarReflector(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.planarReflector"));
+    if (!node) return false;
+    return node->getPlanarReflector();
 }
 
 bool NodeApi::remove(const QString &id)

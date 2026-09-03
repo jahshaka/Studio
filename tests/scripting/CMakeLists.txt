@@ -55,6 +55,9 @@ add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 add_script_e2e(editor_controls e2e_editor_controls.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
 add_script_e2e(desktops e2e_desktops.js)
+# PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
+# settings, the World Mode row driving them, and the save/reopen round trip.
+add_script_e2e(planar e2e_planar.js)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.

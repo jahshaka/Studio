@@ -48,6 +48,8 @@ public:
     Q_INVOKABLE QVariant lightTexture(const QString &id);
     Q_INVOKABLE bool setDecalTexture(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant decalTexture(const QString &id);
+    Q_INVOKABLE bool setPlanarReflector(const QString &id, bool enabled);
+    Q_INVOKABLE bool planarReflector(const QString &id);
 
 private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);

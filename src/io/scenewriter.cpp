@@ -148,6 +148,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["shadowResolution"] = scene->shadowResolution;
     // Shadow FILTER quality; -1 = Auto (softest requesting light wins).
     sceneObj["shadowFilterTier"] = scene->shadowFilterTier;
+    // Planar reflections (PLANAR_REFLECTIONS_SPEC §6). Budget -1, resolution 0
+    // and shadows -1 all mean "follow the world mode"; anything else is an
+    // explicit per-scene value the user pinned.
+    sceneObj["planarReflectionBudget"] = scene->planarReflectionBudget;
+    sceneObj["planarReflectionResolution"] = scene->planarReflectionResolution;
+    sceneObj["planarReflectionShadows"] = scene->planarReflectionShadows;
     // World Mode (POST_CHAIN_SPEC §9): the tier, as a stable string, plus the
     // rows the user pinned. "custom" means no tier — the fields above are the
     // truth. Written as strings so the enum ints stay free to be reordered.
@@ -244,6 +250,10 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["rot"] = jsonVector3(rot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
+    // Written only when TRUE, like the exporter's jah["visible"]: the flag is
+    // off on every node in every scene but a handful, and a key on every node
+    // in the file for a feature almost nothing uses is noise.
+    if (sceneNode->getPlanarReflector()) sceneNodeObj["planarReflector"] = true;
 
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {

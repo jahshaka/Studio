@@ -173,6 +173,7 @@ set(SRCS
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
     src/services/worldmodes.cpp
+    src/services/planarreflectors.cpp
     src/services/playbackservice.cpp
     src/ui/panels/presets/assetfavorites.cpp 
     src/ui/panels/presets/assetmodelpanel.cpp 
@@ -385,6 +386,7 @@ set(HEADERS
     src/services/selectionservice.h
     src/services/shortcutregistry.h
     src/services/worldmodes.h
+    src/services/planarreflectors.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetfavorites.h 
     src/ui/panels/presets/assetpanel.h 

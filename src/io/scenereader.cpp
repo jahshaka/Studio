@@ -360,6 +360,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int sf = sceneObj["shadowFilterTier"].toInt(-1);
         scene->shadowFilterTier = (sf >= 0 && sf <= 2) ? sf : -1;
     }
+    // Planar reflections: absent means "follow the world mode" on all three
+    // (-1 / 0 / -1), which is what every document written before this feature
+    // says by omission. Explicit values are clamped to what the engine accepts.
+    {
+        const int pb = sceneObj["planarReflectionBudget"].toInt(-1);
+        scene->planarReflectionBudget = pb < 0 ? -1 : qBound(0, pb, 8);
+        const int pres = sceneObj["planarReflectionResolution"].toInt(0);
+        scene->planarReflectionResolution = pres <= 0 ? 0 : qBound(256, pres, 2048);
+        const int ps = sceneObj["planarReflectionShadows"].toInt(-1);
+        scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
+    }
     // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
     // above ARE the truth for a document written before modes existed, and for
     // one the user never put on a tier. (§12 decision 8 proposed reading absent
@@ -429,6 +440,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
+    // Absent = false: the writer only emits the key when the flag is on.
+    sceneNode->setPlanarReflector(nodeObj["planarReflector"].toBool(false));
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
 
