@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/controls/hfloatsliderwidget.h"
+
+#include <cmath>
 #include "ui_hfloatsliderwidget.h"
 
 #include <QSignalBlocker>
@@ -70,6 +72,12 @@ void HFloatSliderWidget::setRange(float minVal, float maxVal)
     this->maxVal = maxVal;
 
     ui->spinbox->setRange(minVal, maxVal);
+}
+
+void HFloatSliderWidget::setDecimals(int decimals)
+{
+    ui->spinbox->setDecimals(decimals);
+    ui->spinbox->setSingleStep(std::pow(10.0, -decimals));
 }
 
 /**
