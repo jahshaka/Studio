@@ -2417,6 +2417,188 @@ void postfx_epic_shape_with_msaa() {
               "the full stack plus SMAA renders something: %d %d %d", c2.r, c2.g, c2.b);
 }
 
+/// A SKY under the post chain must stay smooth AND keep its brightness.
+///
+/// The defect this pins (2026-09-03 defect lane): with the Epic chain on, an
+/// equirect / gradient / cubemap sky rendered as high-frequency dither and
+/// blocks of recycled-VRAM noise, while the same frame with the chain off was a
+/// perfect gradient. TWO causes, both in SSAO's inputs:
+///
+///  1. the refractive pass declared `StoreAction::DontCare` for the depth buffer
+///     the LATER SSAO march samples — DontCare means UNDEFINED contents in
+///     Vulkan, so the march read recycled tiles (OgreChain.cpp, our side);
+///  2. the stock SSAO_HS shader has no far-plane rejection, so sky pixels — no
+///     geometry, and a normals G-buffer the sky quad never wrote — got ~half
+///     occlusion modulated by the rotation noise (ogre-patch 0011).
+///
+/// So this case asserts both halves: the sky stays SMOOTH (neighbouring pixels
+/// differ by a couple of levels, because a sky IS a gradient) and it stays as
+/// BRIGHT as it is with ambient occlusion off (nothing occludes the sky).
+namespace skysmooth {
+/// Writes a vertical-gradient equirect PPM (dark blue at the zenith, warm at the
+/// horizon) — the shape "realistic" and "gradient" skies bake to.
+void writeGradient(const std::string &path, int w, int h) {
+    FILE *f = std::fopen(path.c_str(), "wb");
+    std::fprintf(f, "P6 %d %d 255\n", w, h);
+    for (int y = 0; y < h; ++y) {
+        const float t = float(y) / float(h - 1);   // 0 = zenith, 1 = nadir
+        const int r = int(30.0f + 150.0f * t), g = int(60.0f + 120.0f * t),
+                  b = int(150.0f - 40.0f * t);
+        for (int x = 0; x < w; ++x) {
+            std::fputc(r, f); std::fputc(g, f); std::fputc(b, f);
+        }
+    }
+    std::fclose(f);
+}
+/// The largest difference between horizontally or vertically adjacent pixels in
+/// the region, and how many pairs exceed `noisy` levels. A smooth gradient has
+/// max ~1-2 and zero noisy pairs; the defect gave max 54 with 10% noisy.
+struct Roughness { int maxDelta; int noisyPairs; int pairs; };
+Roughness roughness(const Image &img, unsigned y0, unsigned y1, int noisy = 6) {
+    Roughness out { 0, 0, 0 };
+    auto delta = [](const Px &a, const Px &b) {
+        return std::max(std::max(std::abs(a.r - b.r), std::abs(a.g - b.g)), std::abs(a.b - b.b));
+    };
+    for (unsigned y = y0; y < y1; ++y) {
+        for (unsigned x = 0; x + 1 < img.width; ++x) {
+            const int d = delta(px(img, x, y), px(img, x + 1, y));
+            out.maxDelta = std::max(out.maxDelta, d);
+            if (d > noisy) ++out.noisyPairs;
+            ++out.pairs;
+        }
+    }
+    for (unsigned y = y0; y + 1 < y1; ++y) {
+        for (unsigned x = 0; x < img.width; ++x) {
+            const int d = delta(px(img, x, y), px(img, x, y + 1));
+            out.maxDelta = std::max(out.maxDelta, d);
+            if (d > noisy) ++out.noisyPairs;
+            ++out.pairs;
+        }
+    }
+    return out;
+}
+}   // namespace skysmooth
+
+void sky_stays_smooth_under_the_post_chain() {
+    using namespace skysmooth;
+    Fixture fx;
+    View *v = fx.view("skyfx-view", 128, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("skyfx-scene");              REQUIRE(s);
+    v->setScene(s);
+    // Ground geometry so SSAO has something real to occlude (and so the frame is
+    // a plausible outdoor shot), with the top HALF of the frame pure sky.
+    s->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.3f, 0.3f, 0.3f));
+    enginetest::addDirectionalLight(s, Vec3(-0.4f, -0.8f, -0.4f), 3.14159f);
+    MeshId cube = s->createMesh(unitCubeData());
+    PbrParams grey; grey.albedo = Colour(0.6f, 0.6f, 0.6f); grey.roughness = 0.8f;
+    MaterialId mat = s->createPbrMaterial(grey);
+    NodeId floor = s->createNode(); CHECK(s->attachMesh(floor, cube, mat));
+    s->setNodeTransform(floor, Vec3(0, -0.6f, 0), Quat(), Vec3(12, 0.2f, 12));
+    NodeId box = s->createNode(); CHECK(s->attachMesh(box, cube, mat));
+    s->setNodeTransform(box, Vec3(0.8f, 0.0f, -1.0f), Quat(), Vec3(1, 1, 1));
+    // A REFRACTIVE pane: not decoration. It is what makes the chain build its
+    // refraction passes, and cause (1) above only exists when they run.
+    PbrParams glass;
+    glass.albedo = Colour(0.9f, 0.9f, 0.9f);
+    glass.roughness = 0.1f;
+    glass.alpha = 0.35f;
+    glass.alphaMode = PbrAlphaMode::Refractive;
+    glass.refractionStrength = 0.4f;
+    MaterialId glassMat = s->createPbrMaterial(glass);
+    NodeId pane = s->createNode(); CHECK(s->attachMesh(pane, cube, glassMat));
+    s->setNodeTransform(pane, Vec3(-0.9f, 0.1f, 0.4f), Quat(), Vec3(1.2f, 1.2f, 0.1f));
+    enginetest::testCameraLookAt(v, Vec3(0, 0.8f, 3.4f), Vec3(0, 0.75f, -1.0f));
+
+    const std::string path = "sky_test_gradient.ppm";
+    writeGradient(path, 256, 128);
+    TextureId skyTex = s->loadTexture(path, true);
+    CHECK_MSG(skyTex != 0, "%s", fx.e->lastError().c_str());
+    if (!skyTex) { std::remove(path.c_str()); return; }
+    CHECK(s->setSky(SkyMode::Equirectangular, skyTex));
+
+    // The sky band: the top third, which the camera framing keeps free of
+    // geometry (the horizon sits at about 60% of the frame height).
+    const unsigned skyY0 = 2u, skyY1 = v->height() / 3u;
+    auto skyLuma = [&](const Image &img) {
+        int sum = 0, n = 0;
+        for (unsigned y = skyY0; y < skyY1; ++y)
+            for (unsigned x = 0; x < img.width; x += 2) {
+                const Px q = px(img, x, y); sum += (q.r + q.g + q.b) / 3; ++n;
+            }
+        return n ? sum / n : 0;
+    };
+
+    // Every shape below keeps HDR OFF where a BRIGHTNESS comparison is made:
+    // auto-exposure would hide (or invent) a change in the sky's level.
+    struct Shape { const char *name; PostFxDesc desc; };
+    auto shape = [](bool hdr, bool bloom, bool ssao, int smaa) {
+        PostFxDesc d;
+        d.allowOffscreen = true;
+        d.refractions = true;   // the pane above; cause (1) needs this pass
+        d.hdr = hdr; d.bloom = bloom; d.ssao = ssao; d.smaaPreset = smaa;
+        d.ssaoScale = 1.0f; d.ssaoRadius = 2.0f; d.ssaoPower = 1.5f;
+        return d;
+    };
+
+    auto check = [&](const char *name, const PostFxDesc &desc, bool settle) {
+        v->setPostFx(desc);
+        if (settle) renderFor(fx.e, 0.7);   // auto-exposure adapts per second
+        else        render(fx.e, 4);
+        Image img;
+        if (!v->readPixels(img)) { CHECK_MSG(false, "readPixels failed for %s", name); return 0; }
+        const Roughness r = roughness(img, skyY0, skyY1);
+        const int luma = skyLuma(img);
+        std::printf("    %-14s: max neighbour delta %3d, noisy pairs %5d/%d, sky luma %3d\n",
+                    name, r.maxDelta, r.noisyPairs, r.pairs, luma);
+        CHECK_MSG(r.maxDelta <= 12 && r.noisyPairs * 100 <= r.pairs,
+                  "the sky must stay smooth with %s: max delta %d, %d/%d noisy pairs",
+                  name, r.maxDelta, r.noisyPairs, r.pairs);
+        return luma;
+    };
+
+    // The reference: no chain at all. This is the picture the user sees with
+    // post fx off, and the one every shape below has to keep.
+    PostFxDesc off;
+    off.allowOffscreen = true;
+    const int lumaPlain = check("chain off", off, false);
+
+    const int lumaNoSsao = check("refract only", shape(false, false, false, -1), false);
+    const int lumaSsao   = check("ssao",         shape(false, false, true,  -1), false);
+    check("smaa", shape(false, false, false, 1), false);
+    check("hdr+bloom", shape(true, true, false, -1), true);
+    check("epic (all)", shape(true, true, true, 1), true);
+
+    // Nothing occludes the sky: with ambient occlusion ON the sky band must keep
+    // the brightness it has with it OFF. Before ogre-patch 0011 it lost ~45%.
+    std::printf("    sky luma: chain off %d, refraction only %d, + ssao %d\n",
+                lumaPlain, lumaNoSsao, lumaSsao);
+    CHECK_MSG(lumaSsao * 100 >= lumaNoSsao * 90,
+              "ambient occlusion must not darken the SKY: %d -> %d", lumaNoSsao, lumaSsao);
+
+    // Cubemap skies ride a different material and were affected too (subtler,
+    // because a dark cubemap hides the noise) — one shape is enough here.
+    const std::string faceFiles[6] = { "skyfx_px.ppm", "skyfx_nx.ppm", "skyfx_py.ppm",
+                                       "skyfx_ny.ppm", "skyfx_pz.ppm", "skyfx_nz.ppm" };
+    TextureId faces[6] = { 0, 0, 0, 0, 0, 0 };
+    bool haveFaces = true;
+    for (int i = 0; i < 6; ++i) {
+        // Same gradient on the sides, flat at top/bottom: a smooth sky either way.
+        writeGradient(faceFiles[i], 64, 64);
+        faces[i] = s->loadTexture(faceFiles[i], true);
+        if (!faces[i]) haveFaces = false;
+    }
+    if (haveFaces && s->setSkyCubemap(faces)) {
+        check("cubemap epic", shape(true, true, true, 1), true);
+    } else {
+        std::printf("    cubemap sky unavailable: %s\n", fx.e->lastError().c_str());
+    }
+
+    v->setPostFx(PostFxDesc());
+    render(fx.e, 2);
+    std::remove(path.c_str());
+    for (const std::string &f : faceFiles) std::remove(f.c_str());
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -2467,6 +2649,7 @@ int main(int argc, char **argv) {
         { "smaa_smooths_edges",                     smaa_smooths_edges },
         { "refraction_bends_the_background",        refraction_bends_the_background },
         { "postfx_epic_shape_with_msaa",            postfx_epic_shape_with_msaa },
+        { "sky_stays_smooth_under_the_post_chain",  sky_stays_smooth_under_the_post_chain },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";
