@@ -301,3 +301,16 @@ set_tests_properties(scripting.e2e.skinning PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 240)
+
+# World Modes (POST_CHAIN_SPEC.md §9): the scalability registry, tier
+# write-through, pins that survive mode switches, and the save/open round-trip.
+# Every verb is a document verb -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_modes)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.world_modes
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_modes.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.world_modes PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)

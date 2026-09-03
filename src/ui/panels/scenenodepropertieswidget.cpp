@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/worldskypropertywidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
+#include "ui/panels/propertywidgets/worldmodespropertywidget.h"
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
 
 SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(parent)
@@ -59,6 +60,25 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	worldSkyPropView->setPanelTitle("Sky");
 	worldSkyPropView->setDatabase(db);
 	worldSkyPropView->expand();
+
+	// World Modes (POST_CHAIN_SPEC §9.6) sits FIRST among the quality sections:
+	// it is the tier every one of them resolves through.
+	worldModesPropView = new WorldModesPropertyWidget();
+	worldModesPropView->setPanelTitle("World Mode");
+	worldModesPropView->expand();
+	// A tier writes THROUGH to the very fields the Anti-Aliasing, Shadows, GI and
+	// Sky sections display, and those sections read their fields only when they
+	// are built. Rebuild them whenever a World Mode edit lands, or they keep
+	// showing the pre-switch values until the node is reselected.
+	connect(worldModesPropView, &WorldModesPropertyWidget::worldSettingsChanged,
+	        this, [this]() {
+		auto sc = scene;
+		if (!sc && !!sceneNode) sc = sceneNode->scene;
+		if (!sc) return;
+		worldAaPropView->setScene(sc);
+		worldShadowPropView->setScene(sc);
+		worldGiPropView->setScene(sc);
+	});
 
 	worldGiPropView = new WorldGiPropertyWidget();
 	worldGiPropView->setPanelTitle("Global Illumination");
@@ -128,6 +148,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             fogPropView->setScene(sceneNode->scene);
             worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->scene);
+            worldModesPropView->setParent(this);
+            worldModesPropView->setSceneView(sceneView);
+            worldModesPropView->setScene(sceneNode->scene);
             worldGiPropView->setParent(this);
             worldGiPropView->setScene(sceneNode->scene);
             worldAaPropView->setParent(this);
@@ -138,6 +161,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldShadowPropView->setScene(sceneNode->scene);
             widgetPropertyLayout->addWidget(worldPropView);
             widgetPropertyLayout->addWidget(worldSkyPropView);
+            widgetPropertyLayout->addWidget(worldModesPropView);
             widgetPropertyLayout->addWidget(worldGiPropView);
             widgetPropertyLayout->addWidget(worldAaPropView);
             widgetPropertyLayout->addWidget(worldShadowPropView);

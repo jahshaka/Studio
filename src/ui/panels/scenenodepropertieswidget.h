@@ -43,6 +43,7 @@ class SkyPropertyWidget;
 class WorldSkyPropertyWidget;
 class WorldGiPropertyWidget;
 class WorldAaPropertyWidget;
+class WorldModesPropertyWidget;
 class WorldShadowPropertyWidget;
 
 /**
@@ -82,6 +83,7 @@ public:
 	WorldSkyPropertyWidget *worldSkyPropView;
 	WorldGiPropertyWidget *worldGiPropView;
 	WorldAaPropertyWidget *worldAaPropView;
+	WorldModesPropertyWidget *worldModesPropView;
 	WorldShadowPropertyWidget *worldShadowPropView;
 
 public slots:

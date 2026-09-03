@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
+#include "services/worldmodes.h"
 
 namespace {
 // Combo rows in display order -> scene->shadowResolution values. 0 = Auto.
@@ -118,6 +119,10 @@ void WorldShadowPropertyWidget::onQualityChanged(int row)
     // its shadow node and every workspace on change, so this is deliberately a
     // combo and not a slider.
     scene->shadowResolution = kShadowRows[row];
+    // A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC
+    // §9.1): the World Modes section must show it as overridden, and the next
+    // mode switch must leave it alone.
+    worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
     if (sceneView && sceneView->isInitialized())
         sceneView->renderFrames(2);   // apply now so the readback below is the truth
     rebuild();

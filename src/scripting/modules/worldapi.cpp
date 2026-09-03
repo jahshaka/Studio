@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "services/worldmodes.h"
 
 using namespace scriptmod;
 
@@ -63,8 +64,26 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024).",
           Needs::Document },
-        { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky}",
+        { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky, mode, settings}",
           "Reads the current world settings.",
+          Needs::Document },
+        { "mode", "world.mode({mode}) -> string",
+          "The scene's World Mode — the scalability tier every quality row resolves through: low, medium, high, epic, or custom (no tier; the individual settings are the truth). Called with no argument it reads the current mode; with {mode: \"high\"} it applies that tier, writing each row's tier value into the scene EXCEPT rows the user pinned with world.override (pins survive mode switches). Returns the resulting mode.",
+          Needs::Document },
+        { "settings", "world.settings() -> { rowId: {value, valueId, label, source, tierValue, available} }",
+          "Every World Mode row and its RESOLVED value. 'source' is \"override\" (pinned by the user), \"mode\" (from the tier) or \"custom\" (no tier is applied). 'valueId' is the script-facing spelling the override verb takes; 'tierValue' is what the current mode would give the row; 'available' is false for rows declared but not yet implemented by the renderer.",
+          Needs::Document },
+        { "override", "world.override({id, value}) -> object",
+          "Pins one quality row to a value, whatever the mode says: world.override({id: \"msaa\", value: \"4x\"}). Values may be given as the row's id spelling (\"4x\", \"vct\", \"off\") or as the raw number. The pin survives mode switches until world.clearOverride drops it. Returns the row's new state, as in world.settings().",
+          Needs::Document },
+        { "clearOverride", "world.clearOverride({id}) -> object",
+          "Drops one pinned row and puts the current mode's value back. Returns the row's new state.",
+          Needs::Document },
+        { "clearOverrides", "world.clearOverrides() -> object",
+          "Drops every pinned row and re-applies the current mode. Returns world.settings().",
+          Needs::Document },
+        { "modeTable", "world.modeTable() -> object",
+          "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from.",
           Needs::Document },
     };
 }
@@ -123,6 +142,7 @@ bool WorldApi::gi(const QVariantMap &params)
         else if (m == "vct")               scene->giMode = iris::GiMode::VCT;
         else if (m == "vct_pcc_hybrid")    scene->giMode = iris::GiMode::VCT_PCC_HYBRID;
         else return fail(QStringLiteral("world.gi: unknown mode '%1' (off, instant_radiosity, vct, vct_pcc_hybrid)").arg(m));
+        worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
     }
     if (params.contains("quality")) {
         const QString q = params.value("quality").toString().trimmed().toLower();
@@ -130,6 +150,7 @@ bool WorldApi::gi(const QVariantMap &params)
         else if (q == "medium") scene->giQuality = iris::GiQuality::MEDIUM;
         else if (q == "high")   scene->giQuality = iris::GiQuality::HIGH;
         else return fail(QStringLiteral("world.gi: unknown quality '%1' (low, medium, high)").arg(q));
+        worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
     }
     if (params.contains("bounces"))
         scene->giNumBounces = qBound(1, params.value("bounces").toInt(), 4);
@@ -168,6 +189,9 @@ int WorldApi::setAntiAliasing(int samples)
         return 0;
     }
     scene->antiAliasing = samples;
+    // A direct edit of a backing field is a PIN (POST_CHAIN_SPEC §9.1): without
+    // this the next world.mode() switch would silently undo it.
+    worldmodes::pinRowValue(scene, QStringLiteral("msaa"), samples);
     // SceneMirror pushes the document value at the next sync; step two frames so
     // the pending target rebuild is applied and the achieved count is readable.
     if (host.isEngineReady() && host.viewport) {
@@ -220,6 +244,7 @@ int WorldApi::setShadowResolution(int pixels)
         scene->shadowResolution = qBound(256, pixels, 8192);
 #endif
     }
+    worldmodes::pinRowValue(scene, QStringLiteral("shadowResolution"), scene->shadowResolution);
     // SceneMirror pushes the document value at the next sync; step a frame so
     // the atlas rebuild lands and the readback below is the applied truth.
     if (host.isEngineReady() && host.viewport) {
@@ -235,6 +260,7 @@ bool WorldApi::ambientFromSky(bool enabled)
     auto scene = sceneOrFail(QStringLiteral("world.ambientFromSky"));
     if (!scene) return false;
     scene->ambientFromSky = enabled;
+    worldmodes::pinRowValue(scene, QStringLiteral("ambientFromSky"), enabled ? 1 : 0);
     return true;
 }
 
@@ -308,6 +334,8 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         if (params.contains("detail")) {
             const int d = params.value("detail").toInt();
             scene->skyBakeResolution = d >= 1024 ? 1024 : d >= 512 ? 512 : 256;
+            worldmodes::pinRowValue(scene, QStringLiteral("skyBakeResolution"),
+                                    scene->skyBakeResolution);
         }
         QJsonObject def;
         def.insert("luminance", double(r.luminance));
@@ -383,6 +411,10 @@ QVariantMap WorldApi::get()
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
     out["ambientFromSky"] = scene->ambientFromSky;
+    // World Mode (POST_CHAIN_SPEC §9.6): the tier plus every resolved row, so a
+    // script reads the whole quality picture from one call.
+    out["mode"] = worldmodes::modeName(worldmodes::mode(scene));
+    out["settings"] = settings();
     out["fog"] = QVariantMap{ { "enabled", scene->fogEnabled },
                               { "color", colorToJs(scene->fogColor) },
                               { "start", scene->fogStart },
@@ -410,5 +442,148 @@ QVariantMap WorldApi::get()
     }
     sky["detail"] = scene->skyBakeResolution;
     out["sky"] = sky;
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// World Modes (POST_CHAIN_SPEC.md §9.6). Nothing below knows a row by name:
+// every one of these verbs walks the worldmodes registry, so a new quality row
+// is a table entry in src/services/worldmodes.cpp and nothing else.
+
+QVariantMap WorldApi::rowState(const iris::ScenePtr &scene, const worldmodes::Row &r)
+{
+    const int value = worldmodes::resolved(scene, r);
+    const worldmodes::Mode m = worldmodes::mode(scene);
+    return QVariantMap{
+        { "value", value },
+        { "valueId", worldmodes::valueId(r, value) },
+        { "label", worldmodes::valueLabel(r, value) },
+        { "source", worldmodes::source(scene, r) },
+        { "tierValue", worldmodes::tierValue(r, m, scene) },
+        { "available", r.available },
+    };
+}
+
+QString WorldApi::mode(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.mode"));
+    if (!scene) return QString();
+    if (params.contains("mode")) {
+        bool ok = false;
+        const QString requested = params.value("mode").toString();
+        const worldmodes::Mode m = worldmodes::modeFromName(requested, &ok);
+        if (!ok) {
+            fail(QStringLiteral("world.mode: unknown mode '%1' (%2, custom)")
+                     .arg(requested, worldmodes::modeNames().join(QStringLiteral(", "))));
+            return QString();
+        }
+        worldmodes::setMode(scene, m);
+    }
+    return worldmodes::modeName(worldmodes::mode(scene));
+}
+
+QVariantMap WorldApi::settings()
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.settings"));
+    if (!scene) return out;
+    for (const worldmodes::Row &r : worldmodes::rows())
+        out.insert(r.id, rowState(scene, r));
+    return out;
+}
+
+QVariantMap WorldApi::override(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.override"));
+    if (!scene) return out;
+    const QString id = params.value("id").toString();
+    const worldmodes::Row *r = worldmodes::row(id);
+    if (!r) {
+        fail(QStringLiteral("world.override: unknown row '%1' — world.modeTable() lists them").arg(id));
+        return out;
+    }
+    if (!params.contains("value")) {
+        fail(QStringLiteral("world.override: 'value' is required"));
+        return out;
+    }
+    // A value may arrive as the row's id spelling ("4x", "vct", "off") or as
+    // the raw number; both resolve through the row's own option table.
+    const QVariant raw = params.value("value");
+    int value = 0;
+    bool resolvedValue = false;
+    if (raw.typeId() == QMetaType::Bool) {
+        value = raw.toBool() ? 1 : 0;
+        resolvedValue = true;
+    } else if (raw.typeId() == QMetaType::QString) {
+        resolvedValue = worldmodes::valueFromId(*r, raw.toString(), value);
+    } else {
+        bool ok = false;
+        value = raw.toInt(&ok);
+        resolvedValue = ok;
+    }
+    if (!resolvedValue || !worldmodes::setRowValue(scene, id, value)) {
+        fail(QStringLiteral("world.override: '%1' is not a valid value for row '%2'")
+                 .arg(raw.toString(), id));
+        return out;
+    }
+    return rowState(scene, *r);
+}
+
+QVariantMap WorldApi::clearOverride(const QVariantMap &params)
+{
+    QVariantMap out;
+    auto scene = sceneOrFail(QStringLiteral("world.clearOverride"));
+    if (!scene) return out;
+    const QString id = params.value("id").toString();
+    const worldmodes::Row *r = worldmodes::row(id);
+    if (!r) {
+        fail(QStringLiteral("world.clearOverride: unknown row '%1'").arg(id));
+        return out;
+    }
+    worldmodes::clearOverride(scene, id);
+    return rowState(scene, *r);
+}
+
+QVariantMap WorldApi::clearOverrides()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.clearOverrides"));
+    if (!scene) return QVariantMap();
+    worldmodes::clearOverrides(scene);
+    return settings();
+}
+
+QVariantMap WorldApi::modeTable()
+{
+    QVariantMap out;
+    QVariantList rowList;
+    for (const worldmodes::Row &r : worldmodes::rows()) {
+        QVariantMap row;
+        row["id"] = r.id;
+        row["label"] = r.label;
+        row["group"] = r.group;
+        row["type"] = r.type == worldmodes::RowType::Bool ? QStringLiteral("bool")
+                    : r.type == worldmodes::RowType::Enum ? QStringLiteral("enum")
+                                                          : QStringLiteral("int");
+        row["cost"] = r.cost;
+        row["available"] = r.available;
+        if (r.type == worldmodes::RowType::Int) {
+            row["min"] = r.minValue;
+            row["max"] = r.maxValue;
+        }
+        QVariantList options;
+        for (const worldmodes::EnumOption &o : r.options)
+            options.append(QVariantMap{ { "id", o.id }, { "label", o.label }, { "value", o.value } });
+        if (!options.isEmpty()) row["options"] = options;
+        QVariantMap tiers;
+        const QStringList names = worldmodes::modeNames();
+        for (int i = 0; i < names.size(); ++i)
+            tiers.insert(names[i], QVariantMap{ { "value", r.tier[i] },
+                                                { "valueId", worldmodes::valueId(r, r.tier[i]) } });
+        row["tiers"] = tiers;
+        rowList.append(row);
+    }
+    out["modes"] = worldmodes::modeNames();
+    out["rows"] = rowList;
     return out;
 }

@@ -24,6 +24,7 @@ For more information see the LICENSE file
 
 #include "scripting/apimodule.h"
 #include "irisgl/irisglfwd.h"
+#include "services/worldmodes.h"
 
 class WorldApi : public ApiModule
 {
@@ -47,11 +48,24 @@ public:
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap get();
 
+    // ---- World Modes (POST_CHAIN_SPEC.md §9.6) -----------------------------
+    // Every quality row is reached through these five verbs; there is no
+    // per-effect verb and there never will be. The rows themselves come from
+    // the worldmodes registry, so a new row is a table entry, not new API.
+    Q_INVOKABLE QString mode(const QVariantMap &params = QVariantMap());
+    Q_INVOKABLE QVariantMap settings();
+    Q_INVOKABLE QVariantMap override(const QVariantMap &params);
+    Q_INVOKABLE QVariantMap clearOverride(const QVariantMap &params);
+    Q_INVOKABLE QVariantMap clearOverrides();
+    Q_INVOKABLE QVariantMap modeTable();
+
 private:
     iris::ScenePtr sceneOrFail(const QString &verb);
     /// Resolves a texture reference (asset guid, or a file name/path matched by
     /// name in the project DB) to {guid, absolute path}; empty on failure.
     bool resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut);
+    /// One World Mode row, in the shape world.settings() reports.
+    static QVariantMap rowState(const iris::ScenePtr &scene, const worldmodes::Row &r);
 };
 
 #endif // SCRIPTING_WORLDAPI_H

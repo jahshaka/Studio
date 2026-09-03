@@ -136,6 +136,22 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 
     // Shadow-map atlas base resolution; 0 = Auto (derive from the lights).
     sceneObj["shadowResolution"] = scene->shadowResolution;
+    // Shadow FILTER quality; -1 = Auto (softest requesting light wins).
+    sceneObj["shadowFilterTier"] = scene->shadowFilterTier;
+    // World Mode (POST_CHAIN_SPEC §9): the tier, as a stable string, plus the
+    // rows the user pinned. "custom" means no tier — the fields above are the
+    // truth. Written as strings so the enum ints stay free to be reordered.
+    // Spelled out here rather than through the worldmodes registry on purpose:
+    // src/io/ is compiled straight into a dozen headless test targets, and the
+    // serializer must not drag the service (and iris::Scene's whole UI-side
+    // neighbourhood) into every one of them. The names are the same four
+    // strings worldmodes::modeName produces, and worldmodes has the test that
+    // says so.
+    static const char *worldModeNames[] = { "low", "medium", "high", "epic" };
+    sceneObj["worldMode"] = (scene->worldMode >= 0 && scene->worldMode <= 3)
+                                ? QString::fromLatin1(worldModeNames[scene->worldMode])
+                                : QStringLiteral("custom");
+    sceneObj["worldOverrides"] = scene->worldOverrides;
     // Realistic-sky bake width (VISUAL_PARITY item 1) and sky-driven ambient
     // (item 3b). Both are scene-wide render settings, not sky *parameters*, so
     // they live beside antiAliasing rather than inside skyData.
