@@ -68,6 +68,13 @@ add_script_e2e(particles e2e_particles.js)
 # decides whether the editor viewport shows engine frames or its loading cover
 # (src/viewport/viewportcover.h). Gates the desktop-bleed fix, 2026-09-03.
 add_script_e2e(viewport_cover e2e_viewport_cover.js)
+# The IBL-cubemap-swap crash guard (2026-09-03): a sky re-bake frees and
+# re-allocates the environment cubemap — usually AT THE SAME ADDRESS — while
+# metallic datablocks, planar reflection passes and offscreen post-fx shots are
+# all binding descriptor sets built from that pointer. The script's own header
+# says why each ingredient is there; surviving it is the assertion.
+add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
+set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
