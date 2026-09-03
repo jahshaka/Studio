@@ -60,6 +60,10 @@ public:
     float getValue();
     void setValue(float);
     void setRange(float min, float max);
+    /// Digits after the decimal point in the spinbox (Qt's default is 2, which
+    /// rounds small-magnitude rows -- fog density lives around 0.024 -- to
+    /// uselessness). Also scales the keyboard/wheel step to match.
+    void setDecimals(int decimals);
 
     Ui::HFloatSliderWidget* ui;
 

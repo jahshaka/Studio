@@ -63,6 +63,9 @@ public:
 	static void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
 	static void writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr mat, bool relative = true);
     static void writeLightData(QJsonObject& sceneNodeObject, iris::LightNodePtr node);
+    /// Decals (DECALS_SPEC): the IMAGE is stored as a guid, never a path — the
+    /// reader resolves it pin-first through the CAS like every other asset.
+    static void writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr node);
 
 	static QJsonObject jsonColor(QColor color);
 	static QJsonObject jsonVector2(QVector2D vec);

@@ -32,10 +32,13 @@ public:
                               const QPointF &point, QVector3D &segStart, QVector3D &segEnd);
 
     /// Every hit along the segment, unsorted. Meshes are tested against their
-    /// triangles in local space; lights and viewers as 0.5-unit spheres.
+    /// triangles in local space; lights, viewers and decals as 0.5-unit spheres
+    /// (a decal has no geometry to hit — its projector box is a helper, and
+    /// clicking anywhere near the origin marker selects it).
     static QList<ScenePick> pickAll(iris::ScenePtr scene, const QVector3D &segStart, const QVector3D &segEnd,
                                     const QVector3D &cameraPos, bool forcePickable = false,
-                                    bool includeLights = true, bool includeViewers = true);
+                                    bool includeLights = true, bool includeViewers = true,
+                                    bool includeDecals = true);
 
     /// The nearest hit, or a null node.
     static ScenePick nearest(const QList<ScenePick> &hits);

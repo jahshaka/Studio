@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
@@ -812,6 +813,14 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         QJsonObject jah;
         jah["guid"] = node->getGUID();
         if (!node->isVisible()) jah["visible"] = false;
+        // Planar reflections (PLANAR_REFLECTIONS_SPEC.md §9). glTF has no
+        // reflection extension, so the INTENT rides our extras convention and
+        // exported files already carry it. THE VIEWER IGNORES IT TODAY — this
+        // is deliberately a stub, not a half-built feature: three.js r185's
+        // WebGPU bundle does ship a TSL reflector(), but wiring it has its own
+        // budget story and would move the export suites' pixels. Written only
+        // when true, like "visible" above.
+        if (node->getPlanarReflector()) jah["planarReflector"] = true;
 
         int myIndexReserved = -1;   // filled at the end; children need our index order
         QJsonArray children;
@@ -1012,6 +1021,27 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             jah["particles"] = p;
         } else if (kind == NodeKind::Viewer) {
             jah["viewpoint"] = true;
+        } else if (kind == NodeKind::Decal) {
+            // DECALS_SPEC §7 — DATA ONLY, DELIBERATELY NOT RENDERED.
+            // three.js' DecalGeometry is a different technique entirely: it
+            // clips a projector box against ONE target mesh at author time and
+            // emits new geometry, which cannot reproduce a Forward+ decal (which
+            // affects everything inside the box, animated receivers included).
+            // So the document round-trips and the viewer ignores it; the web
+            // target must NOT claim decal parity.
+            auto *decal = static_cast<iris::DecalNode *>(node.data());
+            QJsonObject d;
+            d["width"] = double(decal->width);
+            d["height"] = double(decal->height);
+            d["depth"] = double(decal->depth);
+            d["metalness"] = double(decal->metalness);
+            d["roughness"] = double(decal->roughness);
+            d["ignoreAlphaDiffuse"] = decal->ignoreAlphaDiffuse;
+            if (!decal->resolvedTexturePath.isEmpty()) {
+                const QImage img = loadDocumentImage(decal->resolvedTexturePath, c);
+                if (!img.isNull()) d["image"] = imageToDataUri(img, false);   // PNG always: the alpha channel IS the decal mask
+            }
+            jah["decal"] = d;
         }
 
         for (int ci : childHandles) children.append(ci);
@@ -1169,8 +1199,22 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     QJsonObject jahScene;
     jahScene["sky"] = buildSkyExtras(scene, c);
     if (scene->fogEnabled) {
+        // The viewer gets THREE.FogExp2, whose curve is exp(-(rho*d)^2) against our
+        // 2^(-density*d). The shapes differ, so the export matches the two where it
+        // shows: the half-transmittance distance. 2^(-D*d) = 1/2 at d = 1/D;
+        // exp(-(rho*d)^2) = 1/2 at d = sqrt(ln2)/rho; equal distances give
+        // rho = sqrt(ln2)*D = 0.8326*D. A visual match, never a copy — and the
+        // height layer and breakthrough have no three.js equivalent at all, so
+        // they are exported for information only.
         QJsonObject fog;
         fog["color"] = scene->fogColor.name();
+        fog["density"] = double(scene->fogDensity);
+        fog["exp2Density"] = 0.83255461 * double(scene->fogDensity);
+        if (scene->fogHeightDensity > 0.0f) {
+            fog["heightDensity"] = double(scene->fogHeightDensity);
+            fog["heightFalloff"] = double(scene->fogHeightFalloff);
+            fog["heightLevel"] = double(scene->fogHeightLevel);
+        }
         fog["start"] = double(scene->fogStart);
         fog["end"] = double(scene->fogEnd);
         jahScene["fog"] = fog;

@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
@@ -125,9 +126,18 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
+    // fogStart/fogEnd are the RETIRED linear pair: written so a scene still opens
+    // in an older build, and so fogEnd keeps deriving the density for scenes
+    // written before fogDensity existed (iris::Scene documents the mapping).
     sceneObj["fogStart"] = scene->fogStart;
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
+    sceneObj["fogDensity"] = scene->fogDensity;
+    sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
+    sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
+    sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
+    sceneObj["fogBreakMinBrightness"] = scene->fogBreakMinBrightness;
+    sceneObj["fogBreakFalloff"] = scene->fogBreakFalloff;
     sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
     // Anti-aliasing: the REQUESTED MSAA sample count (1 = off). The achieved
@@ -152,6 +162,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ssrMode"] = scene->ssrMode;
     sceneObj["refractionsMode"] = scene->refractionsMode;
 
+    // Planar reflections (PLANAR_REFLECTIONS_SPEC §6). Budget -1, resolution 0
+    // and shadows -1 all mean "follow the world mode"; anything else is an
+    // explicit per-scene value the user pinned.
+    sceneObj["planarReflectionBudget"] = scene->planarReflectionBudget;
+    sceneObj["planarReflectionResolution"] = scene->planarReflectionResolution;
+    sceneObj["planarReflectionShadows"] = scene->planarReflectionShadows;
     // World Mode (POST_CHAIN_SPEC §9): the tier, as a stable string, plus the
     // rows the user pinned. "custom" means no tier — the fields above are the
     // truth. Written as strings so the enum ints stay free to be reordered.
@@ -248,6 +264,10 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["rot"] = jsonVector3(rot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
+    // Written only when TRUE, like the exporter's jah["visible"]: the flag is
+    // off on every node in every scene but a handful, and a key on every node
+    // in the file for a feature almost nothing uses is noise.
+    if (sceneNode->getPlanarReflector()) sceneNodeObj["planarReflector"] = true;
 
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
@@ -262,6 +282,9 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         break;
         case iris::SceneNodeType::ParticleSystem:
             writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
+        break;
+        case iris::SceneNodeType::Decal:
+            writeDecalData(sceneNodeObj, sceneNode.staticCast<iris::DecalNode>());
         break;
         default: break;
     }
@@ -626,6 +649,22 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
 	sceneNodeObject["visible"] = lightNode->isVisible();
 }
 
+void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)
+{
+    // Guids, not paths: a project moves, the CAS resolves.
+    sceneNodeObject["decalTexture"] = decalNode->textureGuid;
+    // Phase 3 slots, written from phase 1 so files round-trip forward.
+    sceneNodeObject["decalNormal"] = decalNode->normalGuid;
+    sceneNodeObject["decalEmissive"] = decalNode->emissiveGuid;
+    sceneNodeObject["width"] = decalNode->width;
+    sceneNodeObject["height"] = decalNode->height;
+    sceneNodeObject["depth"] = decalNode->depth;
+    sceneNodeObject["metalness"] = decalNode->metalness;
+    sceneNodeObject["roughness"] = decalNode->roughness;
+    sceneNodeObject["ignoreAlphaDiffuse"] = decalNode->ignoreAlphaDiffuse;
+    sceneNodeObject["visible"] = decalNode->isVisible();
+}
+
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
 {
     switch (nodeType) {
@@ -639,6 +678,8 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
             return "viewer";
         case iris::SceneNodeType::ParticleSystem:
             return "particle system";
+        case iris::SceneNodeType::Decal:
+            return "decal";
         default:
             return "empty";
     }

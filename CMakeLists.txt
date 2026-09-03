@@ -192,6 +192,7 @@ set(SRCS
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
     src/services/worldmodes.cpp
+    src/services/planarreflectors.cpp
     src/services/playbackservice.cpp
     src/ui/panels/presets/assetfavorites.cpp 
     src/ui/panels/presets/assetmodelpanel.cpp 
@@ -211,6 +212,7 @@ set(SRCS
     src/viewport/orbitalcameracontroller.cpp 
     src/ui/panels/scenenodepropertieswidget.cpp 
     src/ui/panels/propertywidgets/lightpropertywidget.cpp 
+    src/ui/panels/propertywidgets/decalpropertywidget.cpp 
     src/ui/panels/propertywidgets/materialpropertywidget.cpp 
     src/ui/panels/propertywidgets/skypropertywidget.cpp 
     src/ui/panels/propertywidgets/worldskypropertywidget.cpp
@@ -403,6 +405,7 @@ set(HEADERS
     src/services/selectionservice.h
     src/services/shortcutregistry.h
     src/services/worldmodes.h
+    src/services/planarreflectors.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetfavorites.h 
     src/ui/panels/presets/assetpanel.h 
@@ -417,6 +420,7 @@ set(HEADERS
     src/ui/panels/presets/skypresets.h 
     src/ui/panels/propertywidgets/transformpropertywidget.h 
     src/ui/panels/propertywidgets/lightpropertywidget.h 
+    src/ui/panels/propertywidgets/decalpropertywidget.h 
     src/ui/panels/propertywidgets/materialpropertywidget.h 
     src/ui/panels/propertywidgets/worldskypropertywidget.h
     src/ui/panels/propertywidgets/worldgipropertywidget.h 

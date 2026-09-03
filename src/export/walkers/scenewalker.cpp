@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/assets/texture2d.h"
 
@@ -31,6 +32,7 @@ NodeKind classifyNode(const iris::SceneNodePtr &node)
     case iris::SceneNodeType::Light:          return NodeKind::Light;
     case iris::SceneNodeType::ParticleSystem: return NodeKind::ParticleSystem;
     case iris::SceneNodeType::Viewer:         return NodeKind::Viewer;
+    case iris::SceneNodeType::Decal:          return NodeKind::Decal;
     default: break;
     }
     // CameraNode never writes SceneNodeType::Camera (document quirk — nothing
@@ -104,6 +106,17 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
             break;
         }
         case NodeKind::Viewer:         ++inv.viewers; break;
+        case NodeKind::Decal: {
+            ++inv.decals;
+            // A decal's image is a real texture dependency: packaging and the
+            // raw exporter must carry it even though nothing renders it as a
+            // material map.
+            auto *decal = static_cast<iris::DecalNode *>(node.data());
+            addTextureSource(decal->resolvedTexturePath);
+            addTextureSource(decal->resolvedNormalPath);
+            addTextureSource(decal->resolvedEmissivePath);
+            break;
+        }
         case NodeKind::Empty:          ++inv.empties; break;
         }
         return 0;

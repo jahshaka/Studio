@@ -28,6 +28,13 @@ sudo apt-get install -y libxrandr-dev libxaw7-dev rapidjson-dev libzzip-dev \
 A Vulkan-capable GPU and driver are required (`vulkaninfo` should succeed). CPU-only machines
 can still build and run the test suite via lavapipe (`mesa-vulkan-drivers`).
 
+`libfreetype-dev` is no longer load-bearing: Ogre's Overlay component was the only consumer
+and `irisgl/scripts/build-ogre.sh` now pins `OGRE_BUILD_COMPONENT_OVERLAY=OFF`. It is kept in
+the list because it costs nothing and other packages pull it in anyway. That script pins the
+**whole** component set explicitly (including `PLANAR_REFLECTIONS=ON`, which Jahshaka links) —
+previously most components rode upstream defaults, two of which were probe-dependent, so two
+boxes could end up with different engine installs from the same commit.
+
 `qt6-httpserver-dev` serves the in-app MCP endpoint (CLAUDE_EDITOR_SPEC phase 1);
 `qt6-websockets-dev` is its CMake-level dependency (Qt6HttpServerConfig requires
 Qt6WebSockets even though Jahshaka never opens a WebSocket).

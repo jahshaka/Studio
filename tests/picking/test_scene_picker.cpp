@@ -13,6 +13,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/scenepicker.h"
 
@@ -103,6 +104,24 @@ int main(int argc, char **argv) {
     hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, false);
     CHECK(ScenePicker::nearest(hits).node == front, "lights can be excluded");
     doc->getRootNode()->removeChild(light);
+
+    // decals pick as spheres too (DECALS_SPEC): a decal has no geometry of its
+    // own, so the projector box is a helper and the node's origin is the target.
+    auto decal = iris::DecalNode::create();
+    decal->setLocalPos(QVector3D(-2.5f, 0, 0));
+    doc->getRootNode()->addChild(decal);
+    CHECK(doc->decals.size() == 1, "Scene::decals sees the node (SceneNodeType::Decal is set)");
+    ScenePicker::screenSegment(cam, W, H, QPointF(W / 2, H / 2), a, b);
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
+    bool decalHit = false; for (auto &h : hits) if (h.node == decal) decalHit = true;
+    CHECK(!decalHit, "decal off the ray is not hit");
+    decal->setLocalPos(QVector3D(0, 0, 2.5f));      // between camera and cube
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
+    CHECK(ScenePicker::nearest(hits).node == decal, "decal sphere on the ray is nearest");
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, true, true, false);
+    CHECK(ScenePicker::nearest(hits).node == front, "decals can be excluded");
+    doc->getRootNode()->removeChild(decal);
+    CHECK(doc->decals.isEmpty(), "removing the node clears Scene::decals");
 
     // root-vs-child rule
     auto holder = iris::SceneNode::create();

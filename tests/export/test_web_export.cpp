@@ -163,6 +163,10 @@ int main(int argc, char **argv)
     scene->fogColor = QColor(180, 180, 190);
     scene->fogStart = 10.0f;
     scene->fogEnd = 200.0f;
+    scene->fogDensity = 0.02f;
+    scene->fogHeightDensity = 0.05f;
+    scene->fogHeightFalloff = 0.4f;
+    scene->fogHeightLevel = -1.0f;
 
     // ---- run the writer ----
     const auto g = GltfExporter::exportScene(scene, "Test Scene");
@@ -333,7 +337,17 @@ int main(int argc, char **argv)
         CHECK(sky["type"].toString() == "equirect" && sky["source"].toString() == "gradient",
               "gradient sky baked to equirect extras");
         CHECK(sky["image"].toString().startsWith("data:image/"), "sky image is a data URI");
-        CHECK(jah["fog"].toObject()["end"].toDouble() == 200.0, "fog extras");
+        const QJsonObject fog = jah["fog"].toObject();
+        CHECK(fog["end"].toDouble() == 200.0, "fog extras");
+        // float document fields, double JSON: compare with a tolerance, never ==.
+        CHECK(std::abs(fog["density"].toDouble() - 0.02) < 1e-7, "fog density exported");
+        // three.js has only FogExp2 (exp(-(rho*d)^2)) against our 2^(-density*d);
+        // the exporter matches them at half transmittance: rho = sqrt(ln2)*density.
+        CHECK(std::abs(fog["exp2Density"].toDouble() - 0.83255461 * 0.02) < 1e-7,
+              "fog density converted to three.js FogExp2 units");
+        CHECK(std::abs(fog["heightDensity"].toDouble() - 0.05) < 1e-7 &&
+              fog["heightLevel"].toDouble() == -1.0,
+              "height fog exported for information");
     }
 
     // ---- ExportService: the full folder ----

@@ -37,8 +37,15 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "gravity", "world.gravity(value) -> bool",
           "Sets world gravity (drives the physics world too).",
           Needs::Document },
-        { "fog", "world.fog({enabled, color, start, end}) -> bool",
-          "Sets any subset of the fog settings.",
+        { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel, breakMinBrightness, breakFalloff, end, start}) -> bool",
+          "Sets any subset of the fog settings. Fog is EXPONENTIAL: transmittance = 2^(-distance * density), "
+          "so density is the loss per world unit (a surface 1/density away keeps half its colour). "
+          "heightDensity > 0 adds a second layer of the same colour whose density falls off with world Y "
+          "(density(y) = heightDensity * 2^(-(y - heightLevel) * heightFalloff)). breakMinBrightness/"
+          "breakFalloff let bright pixels resist the fog (breakFalloff 0 = pure exponential). "
+          "`end` is the retired linear \"fully fogged\" distance, kept as a convenience: setting it "
+          "re-derives the density from the start/end pair (density = 2/(start+end), the distance where "
+          "both curves are half fogged). `start` no longer affects rendering on its own.",
           Needs::Document },
         { "shadows", "world.shadows({enabled}) -> bool",
           "Toggles shadow rendering.",
@@ -60,6 +67,12 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "ambientFromSky", "world.ambientFromSky(enabled) -> bool",
           "Sky-driven ambient light: when on (the default), the ambient hemisphere colours are integrated from the live sky (equirect, gradient, realistic or cubemap) instead of being the flat Ambient Color; the Ambient Color then becomes the per-channel strength/tint of that sky ambient (white = full strength, black = none). Single-colour skies always use the flat colour.",
+          Needs::Document },
+        { "planarReflections", "world.planarReflections() -> {enabled, budget, resolution, shadows, activeActors}",
+          "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' and 'shadows' are the per-plane render-target size and whether shadows are drawn inside the reflections; both report the value in force, derived from the budget when the scene has not pinned them. 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
+          Needs::Document },
+        { "setPlanarReflections", "world.setPlanarReflections({budget, resolution, shadows}) -> object",
+          "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024).",
@@ -118,7 +131,20 @@ bool WorldApi::fog(const QVariantMap &params)
     if (params.contains("enabled")) scene->fogEnabled = params.value("enabled").toBool();
     if (params.contains("color"))   scene->fogColor = colorFromJs(params.value("color"), scene->fogColor);
     if (params.contains("start"))   scene->fogStart = params.value("start").toFloat();
-    if (params.contains("end"))     scene->fogEnd = params.value("end").toFloat();
+    // `end` is the retired linear pair's far distance. It still sets the density
+    // (that is the whole migration story), so a script written against the linear
+    // fog keeps producing fog that looks the same.
+    if (params.contains("end")) {
+        scene->fogEnd = params.value("end").toFloat();
+        scene->fogDensity = iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd);
+    }
+    if (params.contains("density"))       scene->fogDensity = params.value("density").toFloat();
+    if (params.contains("heightDensity")) scene->fogHeightDensity = params.value("heightDensity").toFloat();
+    if (params.contains("heightFalloff")) scene->fogHeightFalloff = params.value("heightFalloff").toFloat();
+    if (params.contains("heightLevel"))   scene->fogHeightLevel = params.value("heightLevel").toFloat();
+    if (params.contains("breakMinBrightness"))
+        scene->fogBreakMinBrightness = params.value("breakMinBrightness").toFloat();
+    if (params.contains("breakFalloff")) scene->fogBreakFalloff = params.value("breakFalloff").toFloat();
     return true;
 }
 
@@ -262,6 +288,123 @@ bool WorldApi::ambientFromSky(bool enabled)
     scene->ambientFromSky = enabled;
     worldmodes::pinRowValue(scene, QStringLiteral("ambientFromSky"), enabled ? 1 : 0);
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Planar reflections (PLANAR_REFLECTIONS_SPEC.md §8).
+//
+// The BUDGET is a World Mode row (worldmodes "planarBudget"), so its resolved
+// value comes from the registry and an explicit set pins it exactly as
+// world.override would. Resolution and shadows are per-scene only: they follow
+// the budget unless pinned, which is how the mode tiers reach them without two
+// more dials in the World panel (see SceneMirror::applyEnvironment, which owns
+// the same derivation on the engine side — this verb must agree with it).
+namespace {
+
+/// The budget-driven defaults SceneMirror applies. Kept in one place here so
+/// the verb reports what the renderer will actually do, not what the document
+/// literally stores.
+int autoPlanarResolution(int budget) { return budget >= 2 ? 1024 : 512; }
+bool autoPlanarShadows(int budget)   { return budget >= 2; }
+
+/// Accepts a number, or "auto"/"" for the follow-the-mode sentinel. Returns
+/// false when the value is neither.
+bool planarAuto(const QVariant &v)
+{
+    if (v.typeId() == QMetaType::QString) {
+        const QString s = v.toString().trimmed().toLower();
+        return s == QLatin1String("auto") || s.isEmpty();
+    }
+    return false;
+}
+
+}   // namespace
+
+QVariantMap WorldApi::planarReflections()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.planarReflections"));
+    if (!scene) return QVariantMap();
+    const worldmodes::Row *row = worldmodes::row(QStringLiteral("planarBudget"));
+    const int budget = row ? worldmodes::resolved(scene, *row) : 0;
+    const int resolution = scene->planarReflectionResolution > 0
+                               ? scene->planarReflectionResolution
+                               : autoPlanarResolution(budget);
+    const bool shadows = scene->planarReflectionShadows >= 0
+                             ? scene->planarReflectionShadows != 0
+                             : autoPlanarShadows(budget);
+    // The ACHIEVED count, like world.antiAliasing() and world.shadowResolution():
+    // the renderer culls planes that are off screen, so this is usually lower
+    // than the budget and that is the point of reporting it.
+    const int active = (host.isEngineReady() && host.viewport)
+                           ? host.viewport->activePlanarReflectors() : 0;
+    return QVariantMap{ { QStringLiteral("enabled"), budget > 0 },
+                        { QStringLiteral("budget"), budget },
+                        { QStringLiteral("resolution"), resolution },
+                        { QStringLiteral("shadows"), shadows },
+                        { QStringLiteral("activeActors"), active } };
+}
+
+QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.setPlanarReflections"));
+    if (!scene) return QVariantMap();
+
+    if (params.contains(QStringLiteral("budget"))) {
+        const QVariant v = params.value(QStringLiteral("budget"));
+        if (planarAuto(v)) {
+            // "Follow the mode" = drop the pin and let the tier write through.
+            // In Custom mode there is no tier to fall back to, so the sentinel
+            // goes back into the field itself.
+            worldmodes::clearOverride(scene, QStringLiteral("planarBudget"));
+            if (worldmodes::mode(scene) == worldmodes::Mode::Custom)
+                scene->planarReflectionBudget = -1;
+        } else {
+            bool ok = false;
+            const int b = v.toInt(&ok);
+            if (!ok || b < -1 || b > 8) {
+                fail(QStringLiteral("world.setPlanarReflections: budget must be 0..8, or -1/\"auto\" "
+                                    "to follow the World Mode"));
+                return QVariantMap();
+            }
+            if (b < 0) {
+                worldmodes::clearOverride(scene, QStringLiteral("planarBudget"));
+                if (worldmodes::mode(scene) == worldmodes::Mode::Custom)
+                    scene->planarReflectionBudget = -1;
+            } else {
+                // setRowValue writes the field AND records the pin, so the value
+                // survives a later mode switch — the same contract world.override
+                // gives every other row.
+                worldmodes::setRowValue(scene, QStringLiteral("planarBudget"), b);
+            }
+        }
+    }
+
+    if (params.contains(QStringLiteral("resolution"))) {
+        const QVariant v = params.value(QStringLiteral("resolution"));
+        if (planarAuto(v)) {
+            scene->planarReflectionResolution = 0;
+        } else {
+            bool ok = false;
+            const int r = v.toInt(&ok);
+            if (!ok || (r != 0 && (r < 256 || r > 2048))) {
+                fail(QStringLiteral("world.setPlanarReflections: resolution must be 256..2048, or "
+                                    "0/\"auto\" to follow the budget"));
+                return QVariantMap();
+            }
+            scene->planarReflectionResolution = r;
+        }
+    }
+
+    if (params.contains(QStringLiteral("shadows"))) {
+        const QVariant v = params.value(QStringLiteral("shadows"));
+        if (planarAuto(v)) scene->planarReflectionShadows = -1;
+        else               scene->planarReflectionShadows = v.toBool() ? 1 : 0;
+    }
+
+    // Step the viewport so activeActors in the returned state is the truth
+    // rather than the previous frame's — the arm is rebuilt at the next sync.
+    if (host.isEngineReady() && host.viewport) host.viewport->renderFrames(2);
+    return planarReflections();
 }
 
 bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut)
@@ -411,12 +554,21 @@ QVariantMap WorldApi::get()
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
     out["ambientFromSky"] = scene->ambientFromSky;
+    // Resolved, not raw: the three document fields carry "follow" sentinels and
+    // a caller reading world.get() wants what the renderer will do.
+    out["planarReflections"] = planarReflections();
     // World Mode (POST_CHAIN_SPEC §9.6): the tier plus every resolved row, so a
     // script reads the whole quality picture from one call.
     out["mode"] = worldmodes::modeName(worldmodes::mode(scene));
     out["settings"] = settings();
     out["fog"] = QVariantMap{ { "enabled", scene->fogEnabled },
                               { "color", colorToJs(scene->fogColor) },
+                              { "density", scene->fogDensity },
+                              { "heightDensity", scene->fogHeightDensity },
+                              { "heightFalloff", scene->fogHeightFalloff },
+                              { "heightLevel", scene->fogHeightLevel },
+                              { "breakMinBrightness", scene->fogBreakMinBrightness },
+                              { "breakFalloff", scene->fogBreakFalloff },
                               { "start", scene->fogStart },
                               { "end", scene->fogEnd } };
     static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };

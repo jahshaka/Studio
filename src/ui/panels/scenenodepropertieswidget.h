@@ -26,6 +26,7 @@ class TransformEditor;
 class MaterialPropertyWidget;
 class WorldPropertyWidget;
 class LightPropertyWidget;
+class DecalPropertyWidget;
 class FogPropertyWidget;
 class EmitterPropertyWidget;
 class NodePropertyWidget;
@@ -108,6 +109,7 @@ private:
     EmitterPropertyWidget* emitterPropView;
     // NodePropertyWidget* nodePropView;
     LightPropertyWidget* lightPropView;
+    DecalPropertyWidget* decalPropView;
     WorldPropertyWidget* worldPropView;
     FogPropertyWidget*  fogPropView;
 	SkyPropertyWidget *skyPropView;

@@ -21,6 +21,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/defaultmaterial.h"
@@ -721,6 +722,127 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(meshNode2);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    }
+
+    // ---- decals: a DecalNode becomes exactly one engine decal (DECALS_SPEC §5.3) ----
+    {
+        // A big flat "floor" quad made from the cube mesh, lit straight down, with
+        // the camera looking down at it — the decal paints its image on the top face.
+        auto floorMat = iris::PbrMaterial::create();
+        floorMat->setValue("baseColor", QColor(128, 128, 128));
+        floorMat->setValue("roughness", 1.0f);
+        floorMat->setValue("metallic", 0.0f);
+        auto floorNode = iris::MeshNode::create();
+        floorNode->setName("decal floor");
+        floorNode->setMesh(":assets/models/cube.obj");
+        floorNode->setMaterial(floorMat);
+        CHECK(!!floorNode->getMesh(), "decal: floor mesh loaded");
+        floorNode->setLocalScale(QVector3D(8.0f, 0.2f, 8.0f));
+        floorNode->setLocalPos(QVector3D(0, -1.1f, 0));
+        doc->getRootNode()->addChild(floorNode);
+        auto sun = iris::LightNode::create();
+        sun->lightType = iris::LightType::Directional;   // identity = shines down -Y
+        sun->intensity = 1.0f;
+        sun->color = QColor(255, 255, 255);
+        sun->setLocalPos(QVector3D(0, 5, 0));
+        doc->getRootNode()->addChild(sun);
+
+        // Overhead camera looking straight down.
+        auto decalCam = iris::CameraNode::create();
+        decalCam->setLocalPos(QVector3D(0, 6, 0));
+        decalCam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), -90.0f));
+        decalCam->update(0.0f);
+        mirror.applyCamera(decalCam, view);
+
+        // The decal image: a solid red PNG written next to the test binary. The
+        // node stores a RESOLVED PATH (the reader/edit service fills it from the
+        // CAS); the mirror never sees a guid.
+        const QString redPath = QDir::current().filePath("mirror_decal_red.png");
+        { QImage im(32, 32, QImage::Format_RGBA8888); im.fill(QColor(255, 0, 0, 255)); im.save(redPath); }
+        const QString bluePath = QDir::current().filePath("mirror_decal_blue.png");
+        { QImage im(32, 32, QImage::Format_RGBA8888); im.fill(QColor(0, 0, 255, 255)); im.save(bluePath); }
+
+        mirror.setLightWires(false);   // the wire box would colour the readback
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const Colour bare = centre(img);
+        show("floor, no decal", img);
+
+        auto decal = iris::DecalNode::create();
+        CHECK(decal->getSceneNodeType() == iris::SceneNodeType::Decal,
+              "DecalNode SETS its SceneNodeType (the bug CameraNode never fixed)");
+        decal->width = 3.0f; decal->height = 3.0f; decal->depth = 2.0f;
+        decal->textureGuid = QStringLiteral("guid-red");
+        decal->resolvedTexturePath = redPath;
+        decal->setLocalPos(QVector3D(0, 0, 0));
+        doc->getRootNode()->addChild(decal);
+        CHECK(doc->decals.size() == 1, "Scene::decals registers the node by guid");
+
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const Colour painted = centre(img);
+        show("floor, red decal", img);
+        CHECK(painted.r > painted.g + 0.05f && painted.r > painted.b + 0.05f,
+              "a DecalNode paints its image onto the floor through the mirror");
+
+        // Changing the bound image re-binds (a different atlas slice).
+        decal->resolvedTexturePath = bluePath;
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        const Colour rebound = centre(img);
+        show("floor, blue decal", img);
+        CHECK(rebound.b > rebound.r + 0.05f, "changing the image re-binds the decal");
+
+        // Hiding the node hides the decal (the LAYER_VISIBILITY cascade).
+        decal->hide();
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(std::abs(centre(img).r - bare.r) < 0.02f, "hiding a decal node hides the projection");
+        decal->show();
+
+        // An UNRESOLVABLE image leaves the node decal-free rather than keeping the
+        // previous one bound (a stale decal would keep painting the old picture).
+        decal->resolvedTexturePath = QStringLiteral("/no/such/decal/image.png");
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(std::abs(centre(img).r - bare.r) < 0.02f,
+              "an unresolvable decal image projects NOTHING (no stale binding)");
+        decal->resolvedTexturePath = redPath;
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+
+        // The wire box: kind 4, amber while the decal projects.
+        mirror.setLightWires(true);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        int amber = 0;
+        for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            if (c.r > 0.8f && c.g > 0.5f && c.g < 0.9f && c.b < 0.4f) ++amber;
+        }
+        std::printf("    decal wire box: %d amber px\n", amber);
+        CHECK(amber > 10, "a selected-or-not decal draws its projector wire box");
+        mirror.setLightWires(false);
+
+        // Duplicate keeps every field, and the type.
+        auto dup = decal->createDuplicate().staticCast<iris::DecalNode>();
+        CHECK(dup->getSceneNodeType() == iris::SceneNodeType::Decal &&
+              dup->textureGuid == decal->textureGuid && dup->width == decal->width &&
+              dup->depth == decal->depth,
+              "duplicating a decal keeps its type, image guid and box");
+
+        // Removing the node removes the engine decal.
+        doc->getRootNode()->removeChild(decal);
+        CHECK(doc->decals.isEmpty(), "removing the node clears Scene::decals");
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(std::abs(centre(img).r - bare.r) < 0.02f, "removing a decal node clears the projection");
+
+        // Leave the scene as the sky tests below expect it.
+        doc->getRootNode()->removeChild(floorNode);
+        doc->getRootNode()->removeChild(sun);
+        mirror.applyCamera(cam, view);
+        target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
     }
 
     // ---- flat sky colour from the document becomes the background ----

@@ -51,6 +51,20 @@ add_dependencies(test_engine_recreate JahshakaEngineMedia)
 add_test(NAME test_engine_recreate COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(test_engine_recreate PROPERTIES TIMEOUT 600)
 
+# Decals (DECALS_SPEC.md): pixel-asserted projected textures, and the permanent
+# home of the phase-0 spike's UV / -Y / pool findings.
+add_executable(test_decals test_decals.cpp)
+set_target_properties(test_decals PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_decals PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_decals PRIVATE JahshakaEngine)
+add_dependencies(test_decals JahshakaEngineMedia)
+add_test(NAME decals.engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(decals.engine PROPERTIES TIMEOUT 600 LABELS "engine")
+
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.

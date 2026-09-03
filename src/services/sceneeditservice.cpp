@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
@@ -58,6 +59,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 #include "services/assetmetadata.h"
 #include "services/imagematerial.h"
+#include "services/projectassets.h"
 #include "services/scenenodehelper.h"
 #include "services/thumbnailmanager.h"
 #include "viewport/ieditorviewport.h"
@@ -446,6 +448,82 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     node->setLocalPos(position);
     addNodeToScene(node, /*ignore=*/true);
     return node;
+}
+
+iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
+                                              const DecalOptions &opts)
+{
+    if (!scene()) return iris::DecalNodePtr();
+
+    auto node = iris::DecalNode::create();
+    node->width  = std::max(0.001f, opts.width);
+    node->height = std::max(0.001f, opts.height);
+    node->depth  = std::max(0.001f, opts.depth);
+    node->metalness = qBound(0.0f, opts.metalness, 1.0f);
+    node->roughness = qBound(0.0f, opts.roughness, 1.0f);
+    node->ignoreAlphaDiffuse = opts.ignoreAlphaDiffuse;
+    node->setName(QStringLiteral("Decal"));
+
+    // The decal node gets a DB object row like the built-in primitives, so the
+    // Object->Texture dependency row below has something to hang off (the
+    // export walkers and the packaging closure read it).
+    const QString nodeGuid = GUIDManager::generateGUID();
+    node->setGUID(nodeGuid);
+    if (db && project && !project->getProjectGuid().isEmpty()) {
+        QJsonObject props;
+        props["type"] = "builtin";
+        db->createAssetEntry(nodeGuid, node->getName(),
+                             static_cast<int>(ModelTypes::Object),
+                             project->getProjectGuid(), project->getProjectGuid(),
+                             QString(), QString(), QByteArray(),
+                             QJsonDocument(props).toJson(), QByteArray(), QByteArray());
+        node->isBuiltIn = true;
+    }
+
+    if (!textureGuid.isEmpty()) {
+        // Name the node after the image, like the image plane does.
+        const QString baseName = QFileInfo(db ? db->fetchAsset(textureGuid).name : QString())
+                                     .completeBaseName();
+        if (!baseName.isEmpty()) node->setName(baseName);
+        setDecalTexture(node, textureGuid);
+    }
+
+    if (opts.positionGiven) {
+        node->setLocalPos(opts.position);
+        addNodeToScene(node, /*ignore=*/true);
+    } else {
+        addNodeToScene(node);
+    }
+    return node;
+}
+
+bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &decal, const QString &textureGuid)
+{
+    if (!decal) return false;
+    const QString oldGuid = decal->textureGuid;
+    decal->textureGuid = textureGuid;
+    decal->resolvedTexturePath.clear();
+    if (textureGuid.isEmpty()) {
+        if (db && project && !oldGuid.isEmpty() && !project->getProjectGuid().isEmpty())
+            db->deleteDependency(decal->getGUID(), oldGuid);
+        return true;
+    }
+    if (!db || !project || project->getProjectGuid().isEmpty()) return false;
+
+    // BINDING membership, never a direct add: a decal REFERS to an existing
+    // image, so no companion PBR material is minted for it (the shared rule the
+    // lights lane landed — LIGHTS_COMPLETION_SPEC D4 / ProjectAssets::AddKind).
+    ProjectAssets::addToProject(textureGuid, db, project, ProjectAssets::AddKind::Binding);
+    if (!oldGuid.isEmpty() && oldGuid != textureGuid)
+        db->deleteDependency(decal->getGUID(), oldGuid);
+    db->createDependency(static_cast<int>(ModelTypes::Object),
+                         static_cast<int>(ModelTypes::Texture),
+                         decal->getGUID(), textureGuid, project->getProjectGuid());
+
+    decal->resolvedTexturePath = AssetCas::resolvePinned(
+        QSqlDatabase::database(), AssetStorePaths::root(),
+        project->getProjectGuid(), textureGuid);
+    return true;
 }
 
 void SceneEditService::addAssetParticleSystem(bool ignore, QVector3D position, QString guid,

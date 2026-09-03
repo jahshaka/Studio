@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/viewernode.h"
@@ -312,6 +313,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogStart = sceneObj["fogStart"].toDouble(100);
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+    // Fog became EXPONENTIAL. No migration pass exists and none is needed: a scene
+    // written before the change has no fogDensity key, and its old linear pair is
+    // exactly what the default derives from.
+    scene->fogDensity = sceneObj["fogDensity"].toDouble(
+        double(iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd)));
+    scene->fogHeightDensity = sceneObj["fogHeightDensity"].toDouble(0.0);
+    scene->fogHeightFalloff = sceneObj["fogHeightFalloff"].toDouble(0.1);
+    scene->fogHeightLevel = sceneObj["fogHeightLevel"].toDouble(0.0);
+    scene->fogBreakMinBrightness = sceneObj["fogBreakMinBrightness"].toDouble(0.25);
+    scene->fogBreakFalloff = sceneObj["fogBreakFalloff"].toDouble(0.1);
 
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {
@@ -364,6 +375,17 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->ssrMode = qBound(0, sceneObj["ssrMode"].toInt(0), 2);
     scene->refractionsMode = qBound(0, sceneObj["refractionsMode"].toInt(0), 2);
 
+    // Planar reflections: absent means "follow the world mode" on all three
+    // (-1 / 0 / -1), which is what every document written before this feature
+    // says by omission. Explicit values are clamped to what the engine accepts.
+    {
+        const int pb = sceneObj["planarReflectionBudget"].toInt(-1);
+        scene->planarReflectionBudget = pb < 0 ? -1 : qBound(0, pb, 8);
+        const int pres = sceneObj["planarReflectionResolution"].toInt(0);
+        scene->planarReflectionResolution = pres <= 0 ? 0 : qBound(256, pres, 2048);
+        const int ps = sceneObj["planarReflectionShadows"].toInt(-1);
+        scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
+    }
     // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
     // above ARE the truth for a document written before modes existed, and for
     // one the user never put on a tier. (§12 decision 8 proposed reading absent
@@ -427,6 +449,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "particle system") {
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
+    } else if (nodeType == "decal") {
+        sceneNode = createDecal(nodeObj).staticCast<iris::SceneNode>();
     } else {
         sceneNode = iris::SceneNode::create();
     }
@@ -441,6 +465,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 	sceneNode->setGUID(nodeObj["guid"].toString(GUIDManager::generateGUID()));
     sceneNode->setAttached(nodeObj["attached"].toBool());
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
+    // Absent = false: the writer only emits the key when the flag is on.
+    sceneNode->setPlanarReflector(nodeObj["planarReflector"].toBool(false));
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
 
@@ -709,6 +735,31 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->iconSize = 0.5f;
 
     return lightNode;
+}
+
+iris::DecalNodePtr SceneReader::createDecal(QJsonObject& nodeObj)
+{
+    auto decalNode = iris::DecalNode::create();
+
+    decalNode->textureGuid  = nodeObj["decalTexture"].toString();
+    decalNode->normalGuid   = nodeObj["decalNormal"].toString();
+    decalNode->emissiveGuid = nodeObj["decalEmissive"].toString();
+    decalNode->width  = (float) nodeObj["width"].toDouble(1.0);
+    decalNode->height = (float) nodeObj["height"].toDouble(1.0);
+    decalNode->depth  = (float) nodeObj["depth"].toDouble(0.5);
+    decalNode->metalness = (float) nodeObj["metalness"].toDouble(0.0);
+    decalNode->roughness = (float) nodeObj["roughness"].toDouble(1.0);
+    decalNode->ignoreAlphaDiffuse = nodeObj["ignoreAlphaDiffuse"].toBool(false);
+    decalNode->setVisible(nodeObj["visible"].toBool(true));
+
+    // Bytes: pin-first through the CAS, exactly like material maps. A guid that
+    // no longer resolves leaves the path empty — the node still loads, draws its
+    // wire box and projects nothing, rather than failing the whole scene load.
+    decalNode->resolvedTexturePath  = resolveAssetPath(decalNode->textureGuid);
+    decalNode->resolvedNormalPath   = resolveAssetPath(decalNode->normalGuid);
+    decalNode->resolvedEmissivePath = resolveAssetPath(decalNode->emissiveGuid);
+
+    return decalNode;
 }
 
 iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)

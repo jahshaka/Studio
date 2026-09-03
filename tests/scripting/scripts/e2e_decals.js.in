@@ -1,0 +1,137 @@
+// scripting.e2e.decals — DECALS_SPEC: scene.addDecal end to end.
+//
+// Drives the verb the Add menu, the panel picker and the asset-bin drop all
+// funnel into, headless:
+//   - the node is a "decal" with the box/material values the options asked for;
+//   - the bound image is a project BINDING, not a direct add: a dependency row
+//     exists and NO companion PBR material is minted for it (the rule the
+//     lights lane landed, ProjectAssets::AddKind);
+//   - properties round-trip through node.setProperty/node.property;
+//   - duplicate keeps every field; removal takes the node out;
+//   - save -> close -> open: the decal survives with its guid, box and values.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b) { return Math.abs(a - b) < 1e-3; }
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+
+var imgGuid = assets.importFile(fixtures + "/implane_wide.png");
+assert(imgGuid.length > 10, "decal image imported to the library");
+
+var proj = project.create("Decals " + Date.now());
+assert(proj.length > 10, "project.create");
+
+function nodeById(id) {
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+}
+function materialGuids() {
+    return assets.list({ scope: "project", type: "material" })
+                 .map(function (a) { return a.guid; });
+}
+
+// The decal image must not exist as a project material before OR after: a
+// binding never mints the companion a direct add would.
+var materialsBefore = materialGuids().length;
+
+// ---- the verb ----------------------------------------------------------
+var id = scene.addDecal(imgGuid, {
+    position: { x: 1, y: 2, z: 3 },
+    width: 2.5, height: 1.25, depth: 0.75,
+    metalness: 0.25, roughness: 0.5
+});
+assert(id.length > 10, "scene.addDecal -> node id");
+
+var n = nodeById(id);
+assert(n !== null, "the decal is in the scene");
+assert(n.type === "decal", "node.type is 'decal' (SceneNodeType::Decal is SET)");
+assert(near(n.position.x, 1) && near(n.position.y, 2) && near(n.position.z, 3),
+       "position option honored");
+
+assert(near(node.property(id, "width"), 2.5), "width option honored");
+assert(near(node.property(id, "height"), 1.25), "height option honored");
+assert(near(node.property(id, "depth"), 0.75), "depth option honored");
+assert(near(node.property(id, "metalness"), 0.25), "metalness option honored");
+assert(near(node.property(id, "roughness"), 0.5), "roughness option honored");
+assert(node.property(id, "decalTexture") === imgGuid, "the image guid is bound");
+assert(node.decalTexture(id).guid === imgGuid, "node.decalTexture reports the binding");
+assert(node.decalTexture(id).path.length > 0, "node.decalTexture resolves the bytes through the CAS");
+
+// ---- the image is a BINDING, not a direct add --------------------------
+var deps = assets.dependencies(id);
+assert(deps.indexOf(imgGuid) >= 0, "Object->Texture dependency row created for the decal");
+assert(materialGuids().length === materialsBefore,
+       "binding an image to a decal mints NO companion PBR material");
+
+// ---- properties round-trip --------------------------------------------
+node.setProperty(id, "width", 4.0);
+node.setProperty(id, "roughness", 0.9);
+node.setProperty(id, "ignoreAlphaDiffuse", true);
+assert(near(node.property(id, "width"), 4.0), "node.setProperty width");
+assert(near(node.property(id, "roughness"), 0.9), "node.setProperty roughness");
+assert(node.property(id, "ignoreAlphaDiffuse") === true, "node.setProperty ignoreAlphaDiffuse");
+// Degenerate extents are clamped, never accepted: a zero-thickness projector
+// box would collapse, and a NEGATIVE one flips the accept half-space.
+node.setProperty(id, "depth", -3.0);
+assert(node.property(id, "depth") > 0, "a negative extent is clamped, not stored");
+node.setProperty(id, "depth", 0.75);
+
+// ---- duplicate keeps everything ---------------------------------------
+var copy = node.duplicate(id);
+assert(copy.length > 10 && copy !== id, "node.duplicate(decal)");
+assert(nodeById(copy).type === "decal", "the duplicate is still a decal");
+assert(node.property(copy, "decalTexture") === imgGuid, "the duplicate keeps the image guid");
+assert(near(node.property(copy, "width"), 4.0), "the duplicate keeps the box");
+
+// ---- removal ------------------------------------------------------------
+// UNDO cannot be asserted from inside a script run: the runner keeps ONE undo
+// macro open for the whole run and QUndoStack freezes its index while a macro
+// is open (see scripting.e2e.undo_macro). scene.addDecal goes through exactly
+// the same AddSceneNodeCommand funnel as every other add verb — no add verb in
+// this tree asserts undo in e2e for that reason. node.remove is the document
+// counterpart and IS assertable here.
+assert(node.remove(copy) === true, "node.remove(decal duplicate)");
+assert(nodeById(copy) === null, "the duplicated decal is gone");
+
+// ---- save / reopen -----------------------------------------------------
+assert(project.save() === true, "project.save");
+assert(project.open(proj) === true, "project.open (reopen)");
+var reopened = nodeById(id);
+assert(reopened !== null && reopened.type === "decal", "the decal survives a save/reopen");
+assert(node.property(id, "decalTexture") === imgGuid, "the image guid survives");
+assert(near(node.property(id, "width"), 4.0), "the box survives");
+assert(near(node.property(id, "roughness"), 0.9), "the material values survive");
+assert(node.property(id, "ignoreAlphaDiffuse") === true, "ignoreAlphaDiffuse survives");
+
+// ---- an image-less decal is legal (the Add menu spawns one) ------------
+var blank = scene.addDecal("");
+assert(blank.length > 10 && nodeById(blank).type === "decal",
+       "scene.addDecal('') spawns a decal with no image");
+assert(node.decalTexture(blank).guid === "", "a blank decal reports no image");
+
+// ---- the binding verb: the one path the panel and the bin drop share ----
+assert(node.setDecalTexture(blank, imgGuid) === true, "node.setDecalTexture binds an image");
+assert(node.decalTexture(blank).guid === imgGuid, "the binding took");
+assert(assets.dependencies(blank).indexOf(imgGuid) >= 0,
+       "node.setDecalTexture writes the dependency row");
+assert(materialGuids().length === materialsBefore,
+       "node.setDecalTexture still mints no companion material");
+assert(node.setDecalTexture(blank, "") === true, "node.setDecalTexture('') clears the image");
+assert(node.decalTexture(blank).guid === "", "clearing took");
+var badBind = false;
+try { node.setDecalTexture(blank, "no-such-guid"); } catch (e) { badBind = true; }
+assert(badBind, "node.setDecalTexture refuses a guid no asset has");
+var notDecal = false;
+try { node.setDecalTexture(scene.root(), imgGuid); } catch (e) { notDecal = true; }
+assert(notDecal, "node.setDecalTexture refuses a node that is not a decal");
+
+// ---- a junk guid is refused -------------------------------------------
+var thrown = false;
+try { scene.addDecal("no-such-guid"); } catch (e) { thrown = true; }
+assert(thrown, "scene.addDecal refuses a guid no asset has");
+
+console.log("decals: ALL OK");

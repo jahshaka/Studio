@@ -116,6 +116,15 @@ if [ -f "$ICD" ]; then
     fi
 fi
 
+head2 "static: OgreNext components"
+# The generic @rpath check above already fails if this went missing, but it would
+# report it as "libOgreNextHlmsPbs wants @rpath/..." — name it, because the cause
+# is always the same: an engine install built before the PLANAR_REFLECTIONS pin
+# in irisgl/scripts/build-ogre.sh. Re-run that script, then rebuild.
+PRDYLIB="Contents/Frameworks/libOgreNextPlanarReflections.4.0.dylib"
+[ -e "$BUNDLE/$PRDYLIB" ] && pass "$PRDYLIB" \
+    || fail "$PRDYLIB is missing (engine install predates the PlanarReflections component pin?)"
+
 head2 "static: content trees"
 for d in Contents/Resources/app Contents/Resources/scenes Contents/Resources/media/Hlms/Pbs \
          Contents/MacOS/app Contents/MacOS/scenes Contents/MacOS/media/Hlms/Pbs; do
