@@ -126,9 +126,18 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["ambientColor"] = jsonColor(scene->ambientColor);
 
     sceneObj["fogColor"] = jsonColor(scene->fogColor);
+    // fogStart/fogEnd are the RETIRED linear pair: written so a scene still opens
+    // in an older build, and so fogEnd keeps deriving the density for scenes
+    // written before fogDensity existed (iris::Scene documents the mapping).
     sceneObj["fogStart"] = scene->fogStart;
     sceneObj["fogEnd"] = scene->fogEnd;
     sceneObj["fogEnabled"] = scene->fogEnabled;
+    sceneObj["fogDensity"] = scene->fogDensity;
+    sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
+    sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
+    sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
+    sceneObj["fogBreakMinBrightness"] = scene->fogBreakMinBrightness;
+    sceneObj["fogBreakFalloff"] = scene->fogBreakFalloff;
     sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
     // Anti-aliasing: the REQUESTED MSAA sample count (1 = off). The achieved

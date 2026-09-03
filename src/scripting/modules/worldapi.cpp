@@ -37,8 +37,15 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "gravity", "world.gravity(value) -> bool",
           "Sets world gravity (drives the physics world too).",
           Needs::Document },
-        { "fog", "world.fog({enabled, color, start, end}) -> bool",
-          "Sets any subset of the fog settings.",
+        { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel, breakMinBrightness, breakFalloff, end, start}) -> bool",
+          "Sets any subset of the fog settings. Fog is EXPONENTIAL: transmittance = 2^(-distance * density), "
+          "so density is the loss per world unit (a surface 1/density away keeps half its colour). "
+          "heightDensity > 0 adds a second layer of the same colour whose density falls off with world Y "
+          "(density(y) = heightDensity * 2^(-(y - heightLevel) * heightFalloff)). breakMinBrightness/"
+          "breakFalloff let bright pixels resist the fog (breakFalloff 0 = pure exponential). "
+          "`end` is the retired linear \"fully fogged\" distance, kept as a convenience: setting it "
+          "re-derives the density from the start/end pair (density = 2/(start+end), the distance where "
+          "both curves are half fogged). `start` no longer affects rendering on its own.",
           Needs::Document },
         { "shadows", "world.shadows({enabled}) -> bool",
           "Toggles shadow rendering.",
@@ -118,7 +125,20 @@ bool WorldApi::fog(const QVariantMap &params)
     if (params.contains("enabled")) scene->fogEnabled = params.value("enabled").toBool();
     if (params.contains("color"))   scene->fogColor = colorFromJs(params.value("color"), scene->fogColor);
     if (params.contains("start"))   scene->fogStart = params.value("start").toFloat();
-    if (params.contains("end"))     scene->fogEnd = params.value("end").toFloat();
+    // `end` is the retired linear pair's far distance. It still sets the density
+    // (that is the whole migration story), so a script written against the linear
+    // fog keeps producing fog that looks the same.
+    if (params.contains("end")) {
+        scene->fogEnd = params.value("end").toFloat();
+        scene->fogDensity = iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd);
+    }
+    if (params.contains("density"))       scene->fogDensity = params.value("density").toFloat();
+    if (params.contains("heightDensity")) scene->fogHeightDensity = params.value("heightDensity").toFloat();
+    if (params.contains("heightFalloff")) scene->fogHeightFalloff = params.value("heightFalloff").toFloat();
+    if (params.contains("heightLevel"))   scene->fogHeightLevel = params.value("heightLevel").toFloat();
+    if (params.contains("breakMinBrightness"))
+        scene->fogBreakMinBrightness = params.value("breakMinBrightness").toFloat();
+    if (params.contains("breakFalloff")) scene->fogBreakFalloff = params.value("breakFalloff").toFloat();
     return true;
 }
 
@@ -417,6 +437,12 @@ QVariantMap WorldApi::get()
     out["settings"] = settings();
     out["fog"] = QVariantMap{ { "enabled", scene->fogEnabled },
                               { "color", colorToJs(scene->fogColor) },
+                              { "density", scene->fogDensity },
+                              { "heightDensity", scene->fogHeightDensity },
+                              { "heightFalloff", scene->fogHeightFalloff },
+                              { "heightLevel", scene->fogHeightLevel },
+                              { "breakMinBrightness", scene->fogBreakMinBrightness },
+                              { "breakFalloff", scene->fogBreakFalloff },
                               { "start", scene->fogStart },
                               { "end", scene->fogEnd } };
     static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };

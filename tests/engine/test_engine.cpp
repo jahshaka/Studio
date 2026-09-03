@@ -1654,23 +1654,44 @@ void pbr_texture_scale_tiles_uvs() {
     CHECK_MSG(transitions(imgBack) == t1, "uvScale back to 1 restores the single image");
 }
 
-void fog_fades_distant_surfaces_to_fog_colour() {
+// Fog is EXPONENTIAL (Ogre's AtmosphereNpr math, adopted whole): a surface keeps
+// the fraction 2^(-distance * density) of its own colour, and the rest is fog. It
+// therefore NEVER equals the fog colour at any distance, which is why this suite
+// asserts the law rather than an endpoint.
+//
+// Offscreen views render into PFG_RGBA8_UNORM (OgreView) and the Pbs shader emits
+// linear colour (hw_gamma_write: it expects the hardware to encode, and a non-sRGB
+// target does not), so a read-back byte IS the linear value — no decode, which is
+// what makes the arithmetic below exact enough to assert a law on.
+double linearOf(int channel8) { return channel8 / 255.0; }
+/// The surviving fraction of the surface's own colour, from a fogged pixel, its
+/// unfogged baseline, and the fog colour — per channel, in linear space.
+double transmittanceOf(int fogged, int baseline, double fogColourLinear) {
+    const double denom = linearOf(baseline) - fogColourLinear;
+    if (std::abs(denom) < 1e-6) return -1.0;
+    return (linearOf(fogged) - fogColourLinear) / denom;
+}
+
+/// The rig both fog tests use: near cube at the origin (eye distance ~3), and a
+/// huge cube 50 units down the view axis whose faces fill every pixel around it
+/// (measured eye distance ~8.2 at the sample point).
+void buildFogRig(View *v, Scene *s) {
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    const NodeId farNode = enginetest::addTestCube(s, kCyan, 0.0f, 0.6f);
+    enginetest::setNodePosition(s, farNode, Vec3(-28.6f, -23.4f, -33.8f));
+    enginetest::setNodeScale(s, farNode, Vec3(60.0f, 60.0f, 60.0f));
+}
+
+const Colour kMagenta(1.0f, 0.0f, 1.0f);   // 0/1 channels: sRGB-invariant
+
+void fog_transmittance_is_exponential() {
     Fixture fx;
     View *v = fx.view("fog-view", 96, 96, kBlue); REQUIRE(v);
     Scene *s = fx.scene("fog-scene");             REQUIRE(s);
-    v->setScene(s);
-    populate(s, kOrange);   // near cube at the origin; its front face is ~3.0 from the eye
-    aim(v);
-    // A huge cube 50 units down the view axis (half-extent 30 after scaling the
-    // ±0.5 test cube): its faces fill every pixel around the near cube. Measured
-    // eye distance of that backdrop is >= ~8.2 (the cube's near corner passes
-    // close to the camera), so with fogEnd = 7 it is fully fogged everywhere.
-    NodeId farNode = enginetest::addTestCube(s, kCyan, 0.0f, 0.6f);
-    REQUIRE(farNode != 0);
-    enginetest::setNodePosition(s, farNode, Vec3(-28.6f, -23.4f, -33.8f));
-    enginetest::setNodeScale(s, farNode, Vec3(60.0f, 60.0f, 60.0f));
+    buildFogRig(v, s);
 
-    const Colour kMagenta(1.0f, 0.0f, 1.0f);   // 0/1 channels: sRGB-invariant
     Image img;
     render(fx.e); REQUIRE(v->readPixels(img));
     const Px near0 = centre(img);
@@ -1678,31 +1699,160 @@ void fog_fades_distant_surfaces_to_fog_colour() {
     CHECK_MSG(!near(far0, kMagenta, 30),
               "baseline far surface is not fog-coloured: %d %d %d", far0.r, far0.g, far0.b);
 
-    // Fog on: the near cube (eye distance ~3.0, before fogStart) is untouched;
-    // the far surface (past fogEnd) must converge to exactly the fog colour.
-    s->setFog(true, kMagenta, 5.0f, 7.0f);
+    // Breakthrough off for the law: it deliberately bends the curve (see the
+    // breakthrough test below), and the law is about the curve.
+    FogDesc fog;
+    fog.enabled = true;
+    fog.colour = kMagenta;
+    fog.breakFalloff = 0.0f;
+    fog.density = 0.12f;
+    s->setFog(fog);
     render(fx.e); REQUIRE(v->readPixels(img));
     const Px near1 = centre(img);
     const Px far1  = px(img, img.width / 2, 6);
-    std::printf("    near %d %d %d -> %d %d %d | far %d %d %d -> %d %d %d\n",
-                near0.r, near0.g, near0.b, near1.r, near1.g, near1.b,
-                far0.r, far0.g, far0.b, far1.r, far1.g, far1.b);
-    CHECK_MSG(near(far1, kMagenta),
-              "fully fogged surface equals the fog colour: %d %d %d", far1.r, far1.g, far1.b);
-    CHECK_MSG(std::abs(near1.r - near0.r) <= 6 && std::abs(near1.g - near0.g) <= 6 &&
-              std::abs(near1.b - near0.b) <= 6,
-              "surface before fogStart stays material-coloured: %d %d %d vs %d %d %d",
-              near1.r, near1.g, near1.b, near0.r, near0.g, near0.b);
 
-    // Toggle off: the same shaders render unfogged again (the enable flag rides
-    // the pass buffer — no shader variant switch to go stale).
-    s->setFog(false, kMagenta, 5.0f, 7.0f);
+    fog.density = 0.24f;                       // exactly double
+    s->setFog(fog);
     render(fx.e); REQUIRE(v->readPixels(img));
     const Px far2 = px(img, img.width / 2, 6);
-    CHECK_MSG(std::abs(far2.r - far0.r) <= 6 && std::abs(far2.g - far0.g) <= 6 &&
-              std::abs(far2.b - far0.b) <= 6,
-              "fog off restores the baseline: %d %d %d vs %d %d %d",
-              far2.r, far2.g, far2.b, far0.r, far0.g, far0.b);
+
+    // Green: the fog colour's green is 0, so the measured value IS the surviving
+    // fraction of the surface's own green.
+    const double t1 = transmittanceOf(far1.g, far0.g, 0.0);
+    const double t2 = transmittanceOf(far2.g, far0.g, 0.0);
+    const double tNear = transmittanceOf(near1.g, near0.g, 0.0);
+    std::printf("    far %d %d %d -> %d %d %d -> %d %d %d | T(d)=%.3f T(2d)=%.3f T(d)^2=%.3f"
+                " | near T(d)=%.3f\n",
+                far0.r, far0.g, far0.b, far1.r, far1.g, far1.b, far2.r, far2.g, far2.b,
+                t1, t2, t1 * t1, tNear);
+
+    CHECK_MSG(t1 > 0.15 && t1 < 0.85, "the far surface is measurably but not totally fogged: %.3f", t1);
+    // THE law: doubling the density squares what survives.
+    CHECK_MSG(std::abs(t2 - t1 * t1) <= 0.03,
+              "doubling density squares transmittance: %.3f vs %.3f", t2, t1 * t1);
+    // ... and nearer surfaces keep more of themselves. (Unlike the retired linear
+    // fog, there is no unfogged near zone: this cube at ~3 units IS fogged.)
+    CHECK_MSG(tNear > t1 + 0.05, "the near surface is less fogged than the far one: %.3f vs %.3f",
+              tNear, t1);
+
+    // Off is EXACT, not approximately exact: disabling drops the scene's
+    // atmosphere, which drops the hlms_fog property, which removes the fog code
+    // from the shader entirely. Every offscreen pixel suite rests on this.
+    fog.enabled = false;
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px far3 = px(img, img.width / 2, 6);
+    CHECK_MSG(far3.r == far0.r && far3.g == far0.g && far3.b == far0.b,
+              "fog off restores the baseline exactly: %d %d %d vs %d %d %d",
+              far3.r, far3.g, far3.b, far0.r, far0.g, far0.b);
+}
+
+void fog_height_layer() {
+    Fixture fx;
+    View *v = fx.view("fog-h-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("fog-h-scene");             REQUIRE(s);
+    buildFogRig(v, s);
+
+    Image img;
+    FogDesc fog;
+    fog.enabled = true;
+    fog.colour = kMagenta;
+    fog.breakFalloff = 0.0f;
+
+    // (1) Distance fog alone.
+    fog.density = 0.15f;
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px distanceOnly = px(img, img.width / 2, 6);
+
+    // (2) The height layer with ZERO falloff is a uniform medium — which is the
+    // distance fog. Same density, same pixel: this is what proves our optical
+    // depth integral agrees with the built-in exponential it rides beside.
+    fog.density = 0.0f;
+    fog.heightDensity = 0.15f;
+    fog.heightFalloff = 0.0f;
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px heightOnly = px(img, img.width / 2, 6);
+    CHECK_MSG(std::abs(heightOnly.r - distanceOnly.r) <= 2 &&
+              std::abs(heightOnly.g - distanceOnly.g) <= 2 &&
+              std::abs(heightOnly.b - distanceOnly.b) <= 2,
+              "a height layer with no falloff equals plain distance fog: %d %d %d vs %d %d %d",
+              heightOnly.r, heightOnly.g, heightOnly.b,
+              distanceOnly.r, distanceOnly.g, distanceOnly.b);
+
+    // (3) With a real falloff the layer is thicker the lower its level sits
+    // relative to the camera: raising the level raises the fog around the scene.
+    fog.heightFalloff = 0.5f;
+    fog.heightLevel = -2.0f;
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px levelLow = px(img, img.width / 2, 6);
+    fog.heightLevel = 2.0f;
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px levelHigh = px(img, img.width / 2, 6);
+    std::printf("    height level -2 -> %d %d %d, +2 -> %d %d %d\n",
+                levelLow.r, levelLow.g, levelLow.b, levelHigh.r, levelHigh.g, levelHigh.b);
+    // Green is the surface's own colour here (the fog colour has none), so less
+    // green = more fog.
+    CHECK_MSG(levelHigh.g < levelLow.g - 1,
+              "raising the fog level thickens the fog: green %d vs %d", levelHigh.g, levelLow.g);
+
+    // (4) heightDensity 0 is an exact no-op, not a multiply by one: the shader
+    // skips the branch, so distance fog alone must come back bit for bit.
+    fog.density = 0.15f;
+    fog.heightDensity = 0.0f;
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px noHeight = px(img, img.width / 2, 6);
+    CHECK_MSG(noHeight.r == distanceOnly.r && noHeight.g == distanceOnly.g &&
+              noHeight.b == distanceOnly.b,
+              "no height layer is exactly plain distance fog: %d %d %d vs %d %d %d",
+              noHeight.r, noHeight.g, noHeight.b, distanceOnly.r, distanceOnly.g, distanceOnly.b);
+}
+
+void fog_breakthrough_spares_bright_surfaces() {
+    Fixture fx;
+    View *v = fx.view("fog-b-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("fog-b-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    // A big EMISSIVE backdrop: emissive is part of the colour the fog sees, so
+    // this surface is bright enough to break through.
+    const NodeId farNode = s->createNode();
+    REQUIRE(farNode != 0);
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams p;
+    p.albedo = Colour(0.05f, 0.05f, 0.05f);
+    p.emissive = Colour(0.0f, 3.0f, 0.0f);      // green, well past breakMinBrightness
+    const MaterialId mat = s->createPbrMaterial(p);
+    REQUIRE(mesh != 0); REQUIRE(mat != 0);
+    REQUIRE(s->attachMesh(farNode, mesh, mat));
+    enginetest::setNodePosition(s, farNode, Vec3(-28.6f, -23.4f, -33.8f));
+    enginetest::setNodeScale(s, farNode, Vec3(60.0f, 60.0f, 60.0f));
+
+    Image img;
+    FogDesc fog;
+    fog.enabled = true;
+    fog.colour = kMagenta;
+    fog.density = 0.25f;
+    fog.breakFalloff = 0.0f;                    // plain exponential
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px plain = px(img, img.width / 2, 6);
+
+    fog.breakMinBrightness = 0.25f;
+    fog.breakFalloff = 2.0f;                    // bright pixels resist
+    s->setFog(fog);
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px broken = px(img, img.width / 2, 6);
+    std::printf("    emissive backdrop: plain %d %d %d, breakthrough %d %d %d\n",
+                plain.r, plain.g, plain.b, broken.r, broken.g, broken.b);
+    CHECK_MSG(broken.g > plain.g + 2,
+              "a bright surface keeps more of itself with breakthrough on: %d vs %d",
+              broken.g, plain.g);
 }
 
 
@@ -1912,7 +2062,9 @@ int main(int argc, char **argv) {
         { "pbr_additive_adds_modulate_multiplies",  pbr_additive_adds_modulate_multiplies },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
         { "pbr_texture_scale_tiles_uvs",            pbr_texture_scale_tiles_uvs },
-        { "fog_fades_distant_surfaces_to_fog_colour", fog_fades_distant_surfaces_to_fog_colour },
+        { "fog_transmittance_is_exponential",        fog_transmittance_is_exponential },
+        { "fog_height_layer",                        fog_height_layer },
+        { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
         { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },

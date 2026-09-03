@@ -312,6 +312,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogStart = sceneObj["fogStart"].toDouble(100);
     scene->fogEnd = sceneObj["fogEnd"].toDouble(120);
     scene->fogEnabled = sceneObj["fogEnabled"].toBool(true);
+    // Fog became EXPONENTIAL. No migration pass exists and none is needed: a scene
+    // written before the change has no fogDensity key, and its old linear pair is
+    // exactly what the default derives from.
+    scene->fogDensity = sceneObj["fogDensity"].toDouble(
+        double(iris::Scene::fogDensityFromLinear(scene->fogStart, scene->fogEnd)));
+    scene->fogHeightDensity = sceneObj["fogHeightDensity"].toDouble(0.0);
+    scene->fogHeightFalloff = sceneObj["fogHeightFalloff"].toDouble(0.1);
+    scene->fogHeightLevel = sceneObj["fogHeightLevel"].toDouble(0.0);
+    scene->fogBreakMinBrightness = sceneObj["fogBreakMinBrightness"].toDouble(0.25);
+    scene->fogBreakFalloff = sceneObj["fogBreakFalloff"].toDouble(0.1);
 
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {

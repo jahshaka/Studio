@@ -262,7 +262,7 @@ void EngineAssetScene::setBackdrop(unsigned int id)
         break;
     case 3:
         mDocument->setSkyColor(QColor(25, 25, 25));
-        mDocument->fogEnabled = true;          // fog is not on the engine yet
+        mDocument->fogEnabled = true;          // exponential, at the document default density
         mDocument->fogColor = QColor(25, 25, 25);
         mDocument->shadowEnabled = true;
         if (mFloor) mFloor->show();

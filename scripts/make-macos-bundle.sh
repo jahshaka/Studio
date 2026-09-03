@@ -152,8 +152,10 @@ check "CFBundleIdentifier = com.jahshaka.studio"
 
 # --- 5. macdeployqt ----------------------------------------------------------
 # It follows link-time dependencies only: Qt frameworks + plugins, the FFmpeg
-# dylibs, and all of OUR @rpath dylibs (IrisGL, assimp, Bullet, zip, the three
-# OgreNext libs) via the build-tree rpaths still baked into the copied binary,
+# dylibs, and all of OUR @rpath dylibs (IrisGL, assimp, Bullet, zip, the four
+# OgreNext libs — Main, HlmsPbs, HlmsUnlit and Atmosphere, which fog links since
+# it adopted the component's exponential fog) via the build-tree rpaths still
+# baked into the copied binary,
 # which it then collapses to @executable_path/../Frameworks. -no-codesign
 # because we sign inside-out ourselves at step 10.
 step "5. macdeployqt"

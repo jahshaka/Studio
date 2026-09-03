@@ -120,9 +120,17 @@
     function buildFromUserData(root, sceneUserData) {
         var jah = sceneUserData && sceneUserData.jah ? sceneUserData.jah : {};
         applySky(jah);
-        if (jah.fog)
-            scene.fog = new THREE.Fog(new THREE.Color(jah.fog.color || "#ffffff"),
-                                      jah.fog.start || 1, jah.fog.end || 100);
+        if (jah.fog) {
+            // Exponential fog, like the editor. exp2Density is the exporter's
+            // conversion of the editor's 2^(-density*d) into three's
+            // exp(-(rho*d)^2) (matched at half transmittance); older exports carry
+            // only the linear start/end pair, which still maps through the same
+            // rule the editor uses for old scenes.
+            var rho = jah.fog.exp2Density;
+            if (rho === undefined)
+                rho = 0.83255461 * (2.0 / Math.max((jah.fog.start || 0) + (jah.fog.end || 100), 0.001));
+            scene.fog = new THREE.FogExp2(new THREE.Color(jah.fog.color || "#ffffff"), rho);
+        }
 
         var filters = [];
         var ltcInstalled = false;

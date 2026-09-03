@@ -20,6 +20,15 @@ world.shadows({ enabled: true });
 var w = world.get();
 assert(w.ambient === "#404040", "ambient round-trips");
 assert(w.fog.enabled === true && near(w.fog.start, 50) && near(w.fog.end, 150), "fog round-trips");
+// Fog is exponential: `end` is kept as the linear pair's convenience and SETS the
+// density (4.32/end = the distance where the old linear fog was total).
+assert(near(w.fog.density, 2 / (50 + 150)), "the linear start/end pair derives the density");
+world.fog({ density: 0.05, heightDensity: 0.02, heightFalloff: 0.4, heightLevel: -1,
+            breakMinBrightness: 0.3, breakFalloff: 0.2 });
+var wf = world.get().fog;
+assert(near(wf.density, 0.05) && near(wf.heightDensity, 0.02) && near(wf.heightFalloff, 0.4) &&
+       near(wf.heightLevel, -1) && near(wf.breakMinBrightness, 0.3) && near(wf.breakFalloff, 0.2),
+       "exponential + height fog round-trip");
 assert(near(w.gravity, 12), "gravity round-trips");
 assert(w.gi.mode === "instant_radiosity" && w.gi.quality === "high" && w.gi.bounces === 2, "gi round-trips");
 world.gi({ mode: "vct_pcc_hybrid", pccGrid: { x: 2, y: 1, z: 2 },

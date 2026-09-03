@@ -1191,8 +1191,22 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     QJsonObject jahScene;
     jahScene["sky"] = buildSkyExtras(scene, c);
     if (scene->fogEnabled) {
+        // The viewer gets THREE.FogExp2, whose curve is exp(-(rho*d)^2) against our
+        // 2^(-density*d). The shapes differ, so the export matches the two where it
+        // shows: the half-transmittance distance. 2^(-D*d) = 1/2 at d = 1/D;
+        // exp(-(rho*d)^2) = 1/2 at d = sqrt(ln2)/rho; equal distances give
+        // rho = sqrt(ln2)*D = 0.8326*D. A visual match, never a copy — and the
+        // height layer and breakthrough have no three.js equivalent at all, so
+        // they are exported for information only.
         QJsonObject fog;
         fog["color"] = scene->fogColor.name();
+        fog["density"] = double(scene->fogDensity);
+        fog["exp2Density"] = 0.83255461 * double(scene->fogDensity);
+        if (scene->fogHeightDensity > 0.0f) {
+            fog["heightDensity"] = double(scene->fogHeightDensity);
+            fog["heightFalloff"] = double(scene->fogHeightFalloff);
+            fog["heightLevel"] = double(scene->fogHeightLevel);
+        }
         fog["start"] = double(scene->fogStart);
         fog["end"] = double(scene->fogEnd);
         jahScene["fog"] = fog;

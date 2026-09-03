@@ -27,7 +27,12 @@ namespace iris {
 }
 
 /**
- * This widget displays the properties of the scene.
+ * The World panel's Fog blade. Fog is EXPONENTIAL (see iris::Scene and
+ * jahshaka::engine::FogDesc): a density per world unit, optionally a second
+ * height-varying layer, plus the brightness "breakthrough" that keeps bright
+ * pixels from dissolving. The old linear Fog Start row survives as a disabled
+ * row — the value is still stored and round-tripped, it simply has no meaning
+ * for exponential fog, and a silently vanished control reads as a bug.
  */
 class FogPropertyWidget: public AccordianBladeWidget
 {
@@ -39,8 +44,12 @@ public:
 
 protected slots:
     void onFogColorChanged(QColor color);
-    void onFogStartChanged(float val);
-    void onFogEndChanged(float val);
+    void onFogDensityChanged(float val);
+    void onFogHeightDensityChanged(float val);
+    void onFogHeightFalloffChanged(float val);
+    void onFogHeightLevelChanged(float val);
+    void onFogBreakBrightnessChanged(float val);
+    void onFogBreakFalloffChanged(float val);
     void onFogEnabledChanged(bool val);
     void onShadowEnabledChanged(bool val);
 
@@ -49,8 +58,13 @@ private:
 
     CheckBoxWidget* fogEnabled;
     CheckBoxWidget* shadowEnabled;
-    HFloatSliderWidget* fogStart;
-    HFloatSliderWidget* fogEnd;
+    HFloatSliderWidget* fogDensity;
+    HFloatSliderWidget* fogStart;            // disabled: linear-fog leftover
+    HFloatSliderWidget* fogHeightDensity;
+    HFloatSliderWidget* fogHeightFalloff;
+    HFloatSliderWidget* fogHeightLevel;
+    HFloatSliderWidget* fogBreakBrightness;
+    HFloatSliderWidget* fogBreakFalloff;
     ColorValueWidget* fogColor;
 };
 

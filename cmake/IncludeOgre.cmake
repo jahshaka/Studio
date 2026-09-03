@@ -48,10 +48,12 @@ target_include_directories(OgreNext INTERFACE
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Common
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Pbs
-    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Unlit)
+    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Unlit
+    # Atmosphere component: its headers include each other by bare name.
+    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Atmosphere)
 # Absolute paths, not -l names: link directories do not propagate through a
 # static library's PRIVATE link, so -lOgreNextMain would not resolve in Jahshaka.
-foreach(_lib OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit)
+foreach(_lib OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit OgreNextAtmosphere)
     # Never trust a cached hit: a changed OGRE_NEXT_PREFIX must re-resolve.
     unset(OGRE_NEXT_${_lib}_LIB CACHE)
     find_library(OGRE_NEXT_${_lib}_LIB NAMES ${_lib}
