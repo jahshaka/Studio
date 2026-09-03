@@ -196,7 +196,16 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 	this->openInPlayMode = playMode;
 
     assetGuids.clear();
+	// The tile-open path had NO feedback at all — a multi-second silent gap
+	// between click and editor (owner, 2026-09-03). Same dialog contract as
+	// the import path: visible through the load, closed when the scene is up.
+	progressDialog->resetCancel();
+	progressDialog->setCancelVisible(false);
+	progressDialog->setValueAndText(40, "Opening scene....");
+	progressDialog->show();
 	loadProjectAssets();
+	progressDialog->setValue(100);
+	progressDialog->close();
 }
 
 QString projectBlobGuid;
@@ -250,16 +259,13 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
     QDir().mkpath(pDir);
 
-    // The dialog's story ends HERE, before any scene open. loadProjectAssets()
-    // fires fileToOpen on a DIRECT connection — the whole editor page switch and
-    // scene load run inside that emit, hiding this page (the dialog's parent)
-    // amid native-window churn; a close() issued after that lands in the
-    // page-switch mapping desync and leaves a ghost X window on the desktop
-    // (ENGINEERING_DEBT_SPEC addendum 2, seen live twice on 2026-09-03).
-    progressDialog->setValue(100);
-    progressDialog->close();
-
     if (shouldOpen) {
+        // The dialog stays up THROUGH the scene load (owner: it must close when
+        // the scene has loaded, not before the 3-second open runs "naked").
+        // Safe again because ProgressDialog::dropNativeWindow() destroys the
+        // native window unconditionally on close — the page-switch desync that
+        // used to strand a ghost X window can no longer keep it mapped.
+        progressDialog->setValueAndText(85, "Opening scene....");
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         loadProjectAssets();
@@ -267,6 +273,9 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     else {
         addImportedTileToDesktop(result.projectGuid);
     }
+
+    progressDialog->setValue(100);
+    progressDialog->close();
 }
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {
@@ -654,6 +663,7 @@ void ProjectManager::openSampleBrowser()
     samples.insert("preview/skeletal.png",  "Skeletal Animation");
     samples.insert("preview/world.png",     "World Background");
     samples.insert("preview/physics.png",   "Physics");
+    samples.insert("preview/showroom.png",  "Showroom");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
 

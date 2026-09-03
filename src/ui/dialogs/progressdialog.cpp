@@ -111,11 +111,26 @@ void ProgressDialog::setValueAndText(int value, QString text)
 void ProgressDialog::hideEvent(QHideEvent *event)
 {
     QDialog::hideEvent(event);
+    dropNativeWindow();
+}
+
+void ProgressDialog::closeEvent(QCloseEvent *event)
+{
+    QDialog::closeEvent(event);
+    // close() on a dialog Qt ALREADY believes hidden delivers no hideEvent, so
+    // the hide-path guard can be skipped entirely — the owner still saw ghosts
+    // after it landed. Route both paths through the same teardown.
+    dropNativeWindow();
+}
+
+void ProgressDialog::dropNativeWindow()
+{
     // The page-switch native-window desync (AA_DontCreateNativeWidgetSiblings
-    // family): when this dialog's parent page hides mid scene-open, Qt's hide
-    // of this dialog can leave the X window mapped — a ghost the user must
-    // dismiss with xdotool. Forcing the QWindow down closes that gap; a later
-    // show() maps it fresh. (ENGINEERING_DEBT_SPEC addendum 2, 2026-09-03.)
-    if (windowHandle() && windowHandle()->isVisible())
-        windowHandle()->setVisible(false);
+    // family): Qt's visibility bookkeeping and the mapped X window disagree
+    // after a mid-flow page switch, leaving a ghost dialog on the desktop that
+    // only xdotool could dismiss. setVisible(false) trusts the bookkeeping —
+    // destroy() does not: it unmaps and destroys the native window whatever
+    // state Qt thinks it is in. show() recreates it cleanly next time.
+    // (ENGINEERING_DEBT_SPEC addendum 2; second sighting 2026-09-03 night.)
+    if (windowHandle()) windowHandle()->destroy();
 }

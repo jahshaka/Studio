@@ -66,6 +66,11 @@ protected:
     /// believe this dialog hidden while its X window stays mapped (the ghost
     /// dialog on the desktop). Force the native window down on every hide.
     void hideEvent(QHideEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
+private:
+    /// Unconditionally tear down the native window (see .cpp).
+    void dropNativeWindow();
+public:
 
 private:
     Ui::ProgressDialog *ui;

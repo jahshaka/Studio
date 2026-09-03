@@ -873,7 +873,10 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 	effect_menu->setStyleSheet(activeSpace == WindowSpaces::EFFECT ? selectedMenu : unselectedMenu);
 	effect_menu->setCursor(Qt::PointingHandCursor);
 
-	publish_menu->setStyleSheet(activeSpace == WindowSpaces::PUBLISH ? selectedMenu : unselectedMenu);
+	// publish_menu is an ICON in the right cluster — the text-menu sheets set a
+	// 14px font that halves the glyph. It keeps the help-button styling always;
+	// active-space feedback comes from the page itself.
+	publish_menu->setStyleSheet(StyleSheet::HelpButton());
 	publish_menu->setCursor(Qt::PointingHandCursor);
 
 	avatar_menu->setStyleSheet(activeSpace == WindowSpaces::AVATAR ? selectedMenu : unselectedMenu);
@@ -893,7 +896,8 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 			QStringLiteral("QPushButton { color: #3498db; }");
 		const QList<QPair<QPushButton *, WindowSpaces>> spaceButtons = {
 			{ worlds_menu, WindowSpaces::DESKTOP }, { assets_menu, WindowSpaces::ASSETS },
-			{ effect_menu, WindowSpaces::EFFECT }, { publish_menu, WindowSpaces::PUBLISH },
+			{ effect_menu, WindowSpaces::EFFECT },
+			// publish_menu is NOT here: it is an icon with its own sheet above.
 			{ avatar_menu, WindowSpaces::AVATAR },
 			{ editor_menu, WindowSpaces::EDITOR }, { player_menu, WindowSpaces::PLAYER }
 		};
@@ -912,9 +916,18 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 		editor_menu->setCursor(Qt::ArrowCursor);
 		player_menu->setEnabled(false);
 		player_menu->setCursor(Qt::ArrowCursor);
-		editor_menu->setStyleSheet(disabledMenu);
-		player_menu->setStyleSheet(disabledMenu);
-
+		if (ThemeManager::classicActive()) {
+			editor_menu->setStyleSheet(disabledMenu);
+			player_menu->setStyleSheet(disabledMenu);
+		} else {
+			// TopMenuDisabled() is neutralized under Qlementine and its
+			// disabled rendering on the near-black header still reads white —
+			// grey the labels explicitly (owner, 2026-09-03).
+			static const QString qlemDisabled =
+				QStringLiteral("QPushButton { color: #63676d; }");
+			editor_menu->setStyleSheet(qlemDisabled);
+			player_menu->setStyleSheet(qlemDisabled);
+		}
 	}
 }
 
@@ -1604,8 +1617,14 @@ void MainWindow::setupViewPort()
 	assets_menu = new QPushButton("Assets");
 	assets_menu->setObjectName("assets_menu");
 	assets_menu->setCursor(Qt::PointingHandCursor);
-	publish_menu = new QPushButton("Publish");
+	// Publish is an icon (circle + up arrow) in the right-hand cluster, owner
+	// direction 2026-09-03 — the end of the pipeline lives beside Help/Prefs,
+	// not among the space tabs. Same glyph mechanism as the help button.
+	publish_menu = new QPushButton;
 	publish_menu->setObjectName("publish_menu");
+	publish_menu->setText(QChar(static_cast<ushort>(fa::arrowcircleup)));
+	publish_menu->setToolTip("Publish");
+	publish_menu->setStyleSheet(StyleSheet::HelpButton());
 	publish_menu->setCursor(Qt::PointingHandCursor);
 	avatar_menu = new QPushButton("Avatar");
 	avatar_menu->setObjectName("avatar_menu");
@@ -1625,7 +1644,6 @@ void MainWindow::setupViewPort()
 	// last in the menu. This is BUTTON ORDER only — the stacked-widget indices
 	// switchSpace hard-codes are unchanged (AVATAR is still appended last).
 	hl->addWidget(avatar_menu);
-	hl->addWidget(publish_menu);
 
 	assets_panel->setLayout(hl);
 
@@ -1660,7 +1678,7 @@ void MainWindow::setupViewPort()
 	help->setStyleSheet(StyleSheet::HelpButton());
 
     connect(help, &QPushButton::pressed, []() {
-        QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn"));
+        QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn/resources/"));
 	});
 
 	prefs = new QPushButton;
@@ -1680,6 +1698,8 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
+	publish_menu->setFont(fontIcons->font(28));
+	bl->addWidget(publish_menu);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
 
