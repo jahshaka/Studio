@@ -955,6 +955,11 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
 void EngineSceneViewport::begin()
 {
     mActive = true;
+    // Coming back from the player space, which drives its own engine scene
+    // through its own mirror: re-push the world settings whose backend state is
+    // process-wide (the HlmsPbs GI binding) instead of trusting a debounce that
+    // was last true while a different scene owned the screen.
+    if (mMirror) mMirror->invalidateEnvironment();
     if (view()) view()->setEnabled(true);
 }
 

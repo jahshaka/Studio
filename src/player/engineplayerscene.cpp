@@ -42,7 +42,11 @@ bool EnginePlayerScene::attach(View *view)
     }
     mView = view;
     mView->setScene(mScene);
-    mView->setShadows(true);
+    // Shadows, ambient, fog, MSAA, GI and the post chain all come from the
+    // document, through applyEnvironment in step() — exactly as they do for the
+    // editor viewport. Hardcoding any of them here is what made the player and
+    // the editor render the same scene differently.
+    if (mMirror) mMirror->invalidateEnvironment();
     return true;
 }
 
@@ -78,6 +82,10 @@ iris::CameraNodePtr EnginePlayerScene::camera() const
 
 void EnginePlayerScene::begin()
 {
+    // Taking the screen back from the editor: some of what applyEnvironment
+    // pushes is process-wide in the backend (the HlmsPbs GI binding), so the
+    // debounce has to be reset or the editor's binding survives into the player.
+    if (mMirror) mMirror->invalidateEnvironment();
     auto cam = camera();
     if (!cam) return;
     mSavedCameraMatrix = cam->getLocalTransform();
@@ -110,7 +118,18 @@ void EnginePlayerScene::step(float dt, int width, int height)
     cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror) {
         mMirror->sync();
+        // THE SAME THREE CALLS THE EDITOR VIEWPORT MAKES, IN THE SAME ORDER
+        // (EngineSceneViewport::syncFrame). applyEnvironment is what pushes the
+        // World panel — ambient (including the sky's own integral, which
+        // applySky has just recorded, so the order is load-bearing), shadows,
+        // MSAA, fog, GI, planar reflections and the post-processing chain
+        // (HDR + filmic tonemap, bloom, SSAO). Leaving it out gave the player a
+        // bare passthrough workspace: the scene's HDR values reached an LDR
+        // window untonemapped and clipped to white, while the editor showed the
+        // same scene filmic — the owner's "dark in the editor, blown out in the
+        // player".
         mMirror->applySky(mView);
+        mMirror->applyEnvironment(mView, mEngine.lock().get());
         mMirror->applyCamera(cam, mView);
     }
 }

@@ -25,3 +25,29 @@ target_link_libraries(test_engine_player PRIVATE IrisGL JahshakaEngine Qt6::Gui 
 add_dependencies(test_engine_player JahshakaEngineMedia)
 add_test(NAME player.engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_engine_player WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(player.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+
+# EDITOR/PLAYER PARITY: the same document through EnginePlayerScene and through
+# the editor viewport's own mirror calls, into two identical offscreen views —
+# the pixels must match. Same sources, same stubs; only the driver differs.
+add_executable(test_editor_player_parity test_editor_player_parity.cpp test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/player/engineplayerscene.cpp
+    ${CMAKE_SOURCE_DIR}/src/player/playback.cpp
+    ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_editor_player_parity PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_editor_player_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+   ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_editor_player_parity PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_editor_player_parity PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+add_dependencies(test_editor_player_parity JahshakaEngineMedia)
+add_test(NAME player.editor_parity COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
