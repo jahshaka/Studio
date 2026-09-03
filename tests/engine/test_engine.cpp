@@ -691,6 +691,50 @@ void shadow_resolution_rebuilds_the_atlas() {
     render(fx.e, 2);
 }
 
+// The ambient SH basis is documented in WORLD axes (Scene::setAmbientSh), but
+// HlmsPbs evaluates it in the left-handed cubemap frame with X flipped
+// (AmbientLighting_piece_ps.any). OgreScene::setAmbientSh corrects for that.
+// This is the test that proves the correction: a matte white cube, no lights, no
+// sky, lit ONLY by ambient — each directional band must brighten the face whose
+// normal it names and darken the opposite one.
+void ambient_sh_lights_world_axes() {
+    Fixture fx;
+    View *v = fx.view("sh-view", 48, 48, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("sh-scene");             REQUIRE(s);
+    v->setScene(s);
+    NodeId cube = enginetest::addTestCube(s, Colour(1, 1, 1), 0.0f, 1.0f);
+    enginetest::setNodeScale(s, cube, Vec3(1.4f, 1.4f, 1.4f));
+    // band index -> (the world axis it names, its name)
+    struct Band { int index; Vec3 axis; const char *name; } bands[] = {
+        { 1, Vec3(0, 1, 0), "y" },
+        { 2, Vec3(0, 0, 1), "z" },
+        { 3, Vec3(1, 0, 0), "x" },
+    };
+    for (const Band &b : bands) {
+        // Look down the axis so the face whose normal IS that axis fills the
+        // centre of the frame. The small perpendicular nudge keeps the look
+        // vector off +Y, which testCameraLookAt uses as its up vector.
+        const Vec3 nudge = b.index == 1 ? Vec3(0.35f, 0, 0.35f) : Vec3(0, 0.35f, 0);
+        enginetest::testCameraLookAt(v, Vec3(b.axis.x * 4.0f + nudge.x, b.axis.y * 4.0f + nudge.y,
+                                             b.axis.z * 4.0f + nudge.z),
+                                     Vec3(0, 0, 0));
+        int lit[3] = { 0, 0, 0 };
+        for (int sign = 0; sign < 2; ++sign) {
+            float sh[27] = { 0.0f };
+            for (int c = 0; c < 3; ++c) sh[c] = 0.5f;                       // constant band
+            for (int c = 0; c < 3; ++c) sh[b.index * 3 + c] = sign ? -0.4f : 0.4f;
+            s->setAmbientSh(sh);
+            render(fx.e, 3);
+            Image img; REQUIRE(v->readPixels(img));
+            lit[sign] = centre(img).g;
+        }
+        std::printf("    band %s: facing the axis %d, facing away %d\n", b.name, lit[0], lit[1]);
+        CHECK_MSG(lit[0] > lit[1] + 20,
+                  "SH band '%s' must brighten the +%s face (%d) over the -%s one (%d)",
+                  b.name, b.name, lit[0], b.name, lit[1]);
+    }
+}
+
 void equirect_sky_fills_the_background() {
     Fixture fx;
     View *v = fx.view("sky-view", 48, 48, kBlue); REQUIRE(v);
@@ -710,10 +754,70 @@ void equirect_sky_fills_the_background() {
     const Px k = corner(img);
     std::printf("    equirect sky corner: %d %d %d\n", k.r, k.g, k.b);
     CHECK_MSG(k.r > 150 && k.b > 150 && k.g < 80, "sky texture should fill the background: %d %d %d", k.r, k.g, k.b);
+    // ogre-patch 0009 in one assertion. Ogre's equirect sky needs a texture whose
+    // internal type is Type2DArray, which for file-loaded textures means an
+    // automatic-batching POOL SLICE, and it tells the shader which slice through
+    // the `sliceIdx` uniform. Upstream's Vulkan GLSL declared that uniform and
+    // then sampled slice 0 anyway, so glslang stripped it and setSky threw. A
+    // second sky of the same size lands in the same pool at slice 1: if sliceIdx
+    // were still ignored this would render the FIRST image.
+    const std::string path2 = "sky_test_cyan.ppm";
+    { FILE *f = std::fopen(path2.c_str(), "wb"); std::fprintf(f, "P6 64 32 255\n");
+      for (int i = 0; i < 64 * 32; ++i) { std::fputc(0, f); std::fputc(255, f); std::fputc(255, f); } std::fclose(f); }
+    TextureId skyTex2 = s->loadTexture(path2, true);
+    CHECK_MSG(skyTex2 != 0, "%s", fx.e->lastError().c_str());
+    if (skyTex2) {
+        CHECK(s->setSky(SkyMode::Equirectangular, skyTex2));
+        render(fx.e, 3); REQUIRE(v->readPixels(img));
+        const Px k2 = corner(img);
+        std::printf("    second equirect sky corner: %d %d %d\n", k2.r, k2.g, k2.b);
+        CHECK_MSG(k2.g > 150 && k2.b > 150 && k2.r < 80,
+                  "the SECOND sky in the pool must show, not the first: %d %d %d", k2.r, k2.g, k2.b);
+    }
     CHECK(s->setSky(SkyMode::NoSky, 0));
     render(fx.e, 2); REQUIRE(v->readPixels(img));
     CHECK(near(corner(img), kBlue));
     std::remove(path.c_str());
+    std::remove(path2.c_str());
+}
+
+// Item 4 of the Ogre adoption wave, in pixels. The sky cube is lit on ONE face
+// (+X) and black everywhere else; a rough metal cube is seen from straight
+// above, so the only thing its top face can reflect is the +Y direction. A box
+// mip chain (_autogenerateMipmaps, what this engine used before) averages
+// WITHIN a face, so the +Y face is black at every mip and the cube renders
+// black. The ibl_specular pass convolves the whole hemisphere per output texel,
+// so the +X face's light reaches +Y. There are no lights and no ambient: every
+// lit pixel here came from the prefilter.
+void rough_metal_reflects_across_cube_faces() {
+    Fixture fx;
+    View *v = fx.view("ggx-view", 64, 64, Colour(0, 0, 0)); REQUIRE(v);
+    Scene *s = fx.scene("ggx-scene");                       REQUIRE(s);
+    v->setScene(s);
+    float noAmbient[27] = { 0.0f };
+    s->setAmbientSh(noAmbient);
+    NodeId cube = enginetest::addTestCube(s, Colour(1, 1, 1), 1.0f, 0.9f);
+    enginetest::setNodeScale(s, cube, Vec3(1.4f, 1.4f, 1.4f));
+    // +X white, the other five faces black.
+    TextureId faces[6];
+    for (int i = 0; i < 6; ++i) {
+        std::vector<unsigned char> px(16 * 16 * 4);
+        const unsigned char lum = i == 0 ? 255 : 0;
+        for (int p = 0; p < 256; ++p) { px[p*4] = lum; px[p*4+1] = lum; px[p*4+2] = lum; px[p*4+3] = 255; }
+        faces[i] = s->createTexture(16, 16, px.data(), true);
+        CHECK_MSG(faces[i] != 0, "%s", fx.e->lastError().c_str());
+    }
+    CHECK_MSG(s->setSkyCubemap(faces), "%s", fx.e->lastError().c_str());
+    // Straight down at the top face (nudged off +Y so the look-at basis is sane).
+    enginetest::testCameraLookAt(v, Vec3(0.3f, 4.0f, 0.3f), Vec3(0, 0, 0));
+    render(fx.e, 4);
+    Image img; REQUIRE(v->readPixels(img));
+    const Px k = centre(img);
+    std::printf("    rough metal top face under a +X-only sky: %d %d %d\n", k.r, k.g, k.b);
+    CHECK_MSG(k.r > 12,
+              "a GGX-prefiltered cube must carry the +X face's light into +Y (box mips cannot): %d %d %d",
+              k.r, k.g, k.b);
+    CHECK(s->setSky(SkyMode::NoSky, 0));
 }
 
 void cubemap_sky_faces_match_directions() {
@@ -1344,8 +1448,10 @@ int main(int argc, char **argv) {
         { "shadows_darken_the_ground",              shadows_darken_the_ground },
         { "shadow_filter_quality_is_settable",      shadow_filter_quality_is_settable },
         { "shadow_resolution_rebuilds_the_atlas",   shadow_resolution_rebuilds_the_atlas },
+        { "ambient_sh_lights_world_axes",           ambient_sh_lights_world_axes },
         { "equirect_sky_fills_the_background",      equirect_sky_fills_the_background },
         { "cubemap_sky_faces_match_directions",     cubemap_sky_faces_match_directions },
+        { "rough_metal_reflects_across_cube_faces", rough_metal_reflects_across_cube_faces },
         { "mesh_from_buffers_renders",              mesh_from_buffers_renders },
         { "hierarchy_transform_propagates",         hierarchy_transform_propagates },
         { "material_and_mesh_lifetime",             material_and_mesh_lifetime },
