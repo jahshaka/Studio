@@ -87,6 +87,16 @@ QString resolvePinned(QSqlDatabase conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
                       QString *nameOut = nullptr);
 
+/// The INVERSE of resolvePinned/resolveSource: the asset guid whose stored
+/// bytes live at `path`, or empty when the path is not a store object. Since
+/// the CAS an object's file NAME is its sha256, so a writer that recovers a
+/// guid from a resolved path must go through the oid — matching by display
+/// name finds nothing and silently loses the reference (the particle/material
+/// texture-erasing save, 2026-09-03). `projectGuid` breaks ties when one
+/// object backs several assets: the asset this project pins wins.
+QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &path,
+                         const QString &projectGuid);
+
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.
 bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,

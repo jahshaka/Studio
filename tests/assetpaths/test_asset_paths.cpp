@@ -11,6 +11,9 @@
 //     an asset with two outgoing dependencies exports BOTH, and a reverse
 //     (incoming) edge is NOT exported.
 //  3. The phase-0 dependencies indices exist after createAllTables.
+//  4. AssetCas::guidForStorePath — the CAS REVERSE lookup (path -> guid) the
+//     scene writer persists texture references through. Added with the
+//     2026-09-03 texture-erasing-save fix; see the comment above the case.
 //
 // Headless (offscreen platform); never touches the user's live JahLibrary.db.
 // Framework-free; non-zero exit on failure.
@@ -26,6 +29,7 @@
 
 #include "data/database/database.h"
 #include "services/assetstore.h"
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 
 static int failures = 0;
@@ -156,6 +160,69 @@ static void testDependencyExport(Database &db)
     QFile::remove(exportPath);
 }
 
+// AssetCas::guidForStorePath — the INVERSE resolver, and the regression it
+// exists for: since the CAS an object's file name is its sha256, so recovering
+// an asset guid from a resolved texture path by matching the DISPLAY NAME finds
+// nothing. SceneWriter did exactly that, so one save wrote "" for every particle
+// emitter texture and every material texture property, and the next open
+// rendered the Particles sample as white additive squares over untextured grey
+// meshes (2026-09-03).
+static void testGuidForStorePath()
+{
+    printf("--- AssetCas::guidForStorePath (the CAS reverse lookup) ---\n");
+
+    const QString root = QDir::current().filePath("assetpaths_store");
+    QSqlDatabase conn = QSqlDatabase::database();
+    AssetCas::ensureCasSchema(conn);
+
+    // Two assets, ONE object: content dedup is the store's whole point, so the
+    // reverse lookup has to break the tie — the asset THIS project pins wins.
+    const QString oid(64, QLatin1Char('a'));
+    const QString otherOid = QString(63, QLatin1Char('b')) + QLatin1Char('c');
+    {
+        QSqlQuery q(conn);
+        q.prepare("INSERT OR REPLACE INTO files (oid, size, ext, refcount) VALUES (?, 1, 'png', 2)");
+        q.addBindValue(oid);
+        q.exec();
+        for (const auto &pair : QVector<QPair<QString, QString>>{
+                 { QStringLiteral("guid-pinned"), QStringLiteral("Fire2.png") },
+                 { QStringLiteral("guid-other"),  QStringLiteral("SomeoneElses.png") } }) {
+            QSqlQuery link(conn);
+            link.prepare("INSERT OR IGNORE INTO asset_files (asset_guid, role, oid, name) "
+                         "VALUES (?, 'source', ?, ?)");
+            link.addBindValue(pair.first);
+            link.addBindValue(oid);
+            link.addBindValue(pair.second);
+            link.exec();
+        }
+        AssetCas::writePin(conn, "proj-1", "guid-pinned", oid);
+    }
+
+    const QString objectPath = AssetStorePaths::objectPathIn(root, oid, "png");
+    CHECK(AssetCas::guidForStorePath(conn, root, objectPath, "proj-1") == "guid-pinned",
+          "a store object resolves back to the asset the project pins");
+    // No pin in this project: any asset that carries the object is a truthful
+    // answer, but it must not be empty — empty is what erased the references.
+    const QString unpinned = AssetCas::guidForStorePath(conn, root, objectPath, "proj-2");
+    CHECK(unpinned == "guid-pinned" || unpinned == "guid-other",
+          "without a pin it still names an asset that holds the object");
+
+    // Content the catalog has never seen, and paths that are not store objects
+    // at all, resolve to empty rather than to somebody else's guid.
+    CHECK(AssetCas::guidForStorePath(conn, root,
+                                     AssetStorePaths::objectPathIn(root, otherOid, "png"),
+                                     "proj-1").isEmpty(),
+          "an unknown oid resolves to empty");
+    CHECK(AssetCas::guidForStorePath(conn, root, QDir(root).filePath("Fire2.png"),
+                                     "proj-1").isEmpty(),
+          "a path outside objects/ is not a store object");
+    CHECK(AssetCas::guidForStorePath(conn, root, "/home/someone/Pictures/Fire2.png",
+                                     "proj-1").isEmpty(),
+          "a path outside the store entirely is not a store object");
+    CHECK(AssetCas::guidForStorePath(conn, root, QString(), "proj-1").isEmpty(),
+          "an empty path resolves to empty");
+}
+
 static void testIndices()
 {
     printf("--- phase-0 dependencies indices ---\n");
@@ -203,6 +270,7 @@ int main(int argc, char **argv)
     db.createAllTables();
 
     testIndices();
+    testGuidForStorePath();
     testDependencyExport(db);
 
     db.closeDatabase();

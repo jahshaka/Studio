@@ -220,7 +220,12 @@ public:
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependeesByType(const QString &guid, const ModelTypes&);
     QStringList fetchAssetAndDependencies(const QString &guid);
-    QString fetchAssetGUIDByName(const QString &name, const QString &projectGuid);
+    /// STATIC because it always was one in fact — it runs a query on the
+    /// default connection and touches no member. It is also called through a
+    /// NULL Database* today (SceneWriter's `handle` static is unset in the
+    /// preset-apply path), which was undefined behaviour that happened to work;
+    /// as a static member that call is merely pointless, not undefined.
+    static QString fetchAssetGUIDByName(const QString &name, const QString &projectGuid);
     QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
     QString fetchMeshObject(const QString &guid, const int ertype, const int eetype);
 

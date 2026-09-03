@@ -72,6 +72,15 @@ public:
 	static QJsonObject jsonVector3(QVector3D vec);
 	static QJsonObject jsonVector4(QVector4D vec);
 
+    /// The asset guid behind a RESOLVED texture path, for the writers that
+    /// persist textures as guids (particle emitters, material texture
+    /// properties). Goes through the CAS oid first — since the store landed an
+    /// object's file name is its sha256, so the old match-by-display-name found
+    /// nothing and the reference was written as "" — then falls back to the
+    /// legacy by-name lookup for files that still live in a project folder.
+    /// Empty means "not a catalogued asset"; callers decide what to write then.
+    static QString assetGuidForTexturePath(const QString &path);
+
     static QString getSceneNodeTypeName(iris::SceneNodeType nodeType);
 	static QString getLightNodeTypeName(iris::LightType lightType);
 	static QString getKeyTangentTypeName(iris::TangentType tangentType);
