@@ -30,6 +30,9 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/lightbindings.h"
+#include "services/loadtimeline.h"
+
+#include <functional>
 #include <QSqlDatabase>
 
 #include "viewport/editordata.h"
@@ -194,6 +197,31 @@ QString SceneReader::resolveAssetPath(const QString &guid)
         }
     }
     return path;
+}
+
+QStringList SceneReader::collectMeshSources(const QJsonObject &projectObj)
+{
+    // The prewarm PLAN. Walks the blob's node tree for "mesh" nodes and
+    // resolves each source guid exactly as createMesh() will, so the worker
+    // parses the same files the reader is about to ask for — no more, no
+    // fewer. Pure JSON + the CAS resolution (which is DB work, hence UI
+    // thread); no parsing happens here.
+    QStringList out;
+    std::function<void(const QJsonObject &)> walk = [&](const QJsonObject &nodeObj) {
+        if (nodeObj["type"].toString() == QLatin1String("mesh")) {
+            const QString source = nodeObj["mesh"].toString();
+            if (!source.isEmpty() && !source.startsWith(':')) {
+                const QString path = resolveAssetPath(source);
+                if (!path.isEmpty() && !out.contains(path)) out.append(path);
+            }
+        }
+        const QJsonArray children = nodeObj["children"].toArray();
+        for (const auto &child : children) walk(child.toObject());
+    };
+    const QJsonObject sceneObj = projectObj["scene"].toObject();
+    const QJsonArray roots = sceneObj["rootNode"].toObject()["children"].toArray();
+    for (const auto &child : roots) walk(child.toObject());
+    return out;
 }
 
 iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
@@ -1051,6 +1079,26 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
         
+        // The threaded open parses these on a worker BEFORE the reader runs
+        // (irisgl/import/meshprewarm.h): consume that and this whole stage is
+        // a copy out of an aiScene instead of an assimp parse.
+        if (prewarm) {
+            if (const aiScene *ready = prewarm->scene(filePath)) {
+                LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sceneReaderHit"));
+                meshList = iris::GraphicsHelper::loadAllMeshesFromAssimpScene(ready);
+                animationss = iris::Mesh::extractAnimations(ready, filePath);
+                meshes.insert(filePath, meshList);
+                assimpScenes.insert(filePath);
+                animations.insert(filePath, animationss);
+                return;
+            }
+        }
+
+        // ONE assimp parse per distinct file per open — and it IS a parse:
+        // the pipeline removed the up-front preloader, and nothing caches a
+        // baked form, so every open re-parses every model from the store
+        // (the recorded import-time-bake debt; measured by this counter).
+        LoadTimeline::Accumulate parse(QStringLiteral("assimp:sceneReader"));
         if (useAlternativeLocation) {
 		    iris::GraphicsHelper::loadAllMeshesAndAnimationsFromFile(filePath, meshList, animationss);
         }

@@ -16,7 +16,10 @@ For more information see the LICENSE file
 #include <QFutureWatcher>
 #include <QListWidgetItem>
 #include <QPointer>
+#include <QStringList>
 #include <QWidget>
+
+#include "irisgl/import/meshprewarm.h"
 
 // No assimp here: the project manager stopped parsing models when the import
 // pipeline landed (ASSET_PIPELINE_SPEC §3.2.3 — see projectmanager.cpp's
@@ -84,7 +87,28 @@ public:
     void loadProjectAssetsSync();
 
     /// Session AssetManager registrations shared by both load paths.
-    void registerProjectSessionAssets();
+    /// `prewarm` (optional) carries model files a worker already parsed, so
+    /// pinned Objects hydrate without running assimp on this thread.
+    void registerProjectSessionAssets(
+        const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
+
+    /// The two halves of registerProjectSessionAssets, so the threaded open
+    /// can spread the hydration over several event-loop turns: the membership
+    /// sweep (DB) and the per-guid registration of an arbitrary SUBSET.
+    QStringList sessionAssetGuids();
+    void registerSessionAssetGuids(const QStringList &guids,
+                                   const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
+
+    /// The prewarm PLAN for the session registrations: the CAS paths of every
+    /// Object this project's membership will hydrate. DB work — UI thread.
+    QStringList plannedSessionModelPaths();
+
+    /// Progress feedback for the THREADED open, driven by SceneOpenRunner's
+    /// signals. Pumping is switched OFF for the duration: a pump from inside
+    /// a slice re-enters the event loop and can destroy objects the slice is
+    /// still using (ProgressDialog::setPumpsEventLoop documents the scar).
+    void showOpenProgress(int percent, const QString &text);
+    void hideOpenProgress();
 
 public slots:
     // public for the scripting API (app.desktop(n))

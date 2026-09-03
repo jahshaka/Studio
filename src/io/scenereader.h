@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/animation/keyframeanimation.h"
+#include "irisgl/import/meshprewarm.h"
 
 class EditorData;
 class aiScene;
@@ -50,12 +51,24 @@ class SceneReader : public AssetIOBase
 	// Globals::project static, which assetDirectory's member initialiser also
 	// read). Never left indeterminate for the same reason as `handle`.
 	Project *project = nullptr;
+
+	iris::MeshPrewarmPtr prewarm;
     // We can choose to load assets from a flat file or from those already cached
     // TODO - also cache assets in the viewer
 public:
 	void setDatabaseHandle(Database *db) {
 		this->handle = db;
 	}
+
+	/// Model files already parsed on another thread (irisgl/import/meshprewarm.h).
+	/// When a mesh source is in here the reader consumes the prewarmed aiScene
+	/// instead of calling assimp — the whole point of the threaded open. Null
+	/// (the default) keeps the synchronous behaviour exactly.
+	void setPrewarm(const iris::MeshPrewarmPtr &prewarm) { this->prewarm = prewarm; }
+
+	/// Every model path this blob's mesh nodes reference, resolved the way
+	/// createMesh() will resolve them. The plan the prewarm worker is given.
+	QStringList collectMeshSources(const QJsonObject &projectObj);
 
 	/// Injecting the project also seeds assetDirectory, which used to be
 	/// initialised from Globals::project in its member initialiser. The

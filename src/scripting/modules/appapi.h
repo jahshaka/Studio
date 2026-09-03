@@ -15,6 +15,9 @@ For more information see the LICENSE file
 // app.* — window-level navigation (SCRIPTING_SPEC §1.1): spaces and desktops.
 // Wraps, doesn't extract — these are inherently window verbs.
 
+#include <QVariantList>
+#include <QVariantMap>
+
 #include "scripting/apimodule.h"
 
 class AppApi : public ApiModule
@@ -29,6 +32,9 @@ public:
     Q_INVOKABLE int desktop(int n = 0);
     Q_INVOKABLE bool space(const QString &name);
     Q_INVOKABLE bool quit();
+    Q_INVOKABLE QVariantList openTimings();
+    Q_INVOKABLE bool heartbeat(int intervalMs = 250);
+    Q_INVOKABLE QVariantMap heartbeatStats();
 };
 
 #endif // SCRIPTING_APPAPI_H

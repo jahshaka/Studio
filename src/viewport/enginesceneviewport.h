@@ -142,7 +142,8 @@ public:
     qulonglong framesPresented() const override;
     void beginSceneLoad(const QString &title = QString()) override;
     void coverIfNotPresenting() override;
-    void primeSceneSync() override;
+    void primeSceneGeometry() override;
+    void primeSceneEnvironment() override;
     /// Recomputes the cover's state from the view's present count. Called once
     /// a frame (before the engine's frame, so it sees the presents already
     /// made) and at every event that can change the answer.

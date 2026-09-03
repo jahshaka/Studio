@@ -169,6 +169,8 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
+#include "services/loadtimeline.h"
+#include "services/sceneopenrunner.h"
 #include "services/projectarchiver.h"
 #include "services/sceneeditservice.h"
 #include "services/thumbnailservice.h"
@@ -471,6 +473,22 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+	// An open IN FLIGHT is finished first (services/sceneopenrunner.h). Its
+	// slices are short and waitForDone pumps the loop that runs them, so this
+	// costs at most the rest of one open — and it is what makes the decision
+	// below coherent: closing halfway through an install found sceneOpen still
+	// false and a dirty undo stack, and asked the user to save a document that
+	// was not built yet (a modal QMessageBox that then swallowed the quit and
+	// left the process alive — the import.shutdown zombie, wearing a different
+	// hat). Re-entrancy is guarded: the pump can deliver another close.
+	static bool sSettlingOpen = false;
+	if (!sSettlingOpen && isOpeningProject()) {
+		sSettlingOpen = true;
+		openRunner->waitForDone(5000);
+		if (openRunner->isRunning()) openRunner->requestAbort();
+		sSettlingOpen = false;
+	}
+
     bool closing = false;
 	bool autoSave = settings->getValue("auto_save", true).toBool();
 
@@ -547,6 +565,11 @@ void MainWindow::shutdownBackgroundWork()
     // Import pipeline: abort batches, join workers (bounded), close the
     // progress dialogs, drop viewer-tail queues.
     bool workersStopped = true;
+    // The open runner: abandon whatever is left and join its parse worker.
+    if (openRunner) {
+        openRunner->requestAbort();
+        workersStopped &= openRunner->waitForDone(3000);
+    }
     if (assetWidget) workersStopped &= assetWidget->shutdownImports(3000);
     if (_assetView) workersStopped &= _assetView->shutdownImports(3000);
 
@@ -960,75 +983,218 @@ void MainWindow::saveScene()
 	projectService->saveOpenScene();
 }
 
-void MainWindow::openProject(bool playMode)
+// ---- the open, in stages ---------------------------------------------------
+//
+// ORDER MATTERS HERE (the viewport desktop-bleed defect, 2026-09-03).
+// Everything that can be done before the page switch IS done before it: the
+// document read, the session registrations (the project panel did those
+// already) and the viewport's scene binding all happen while the desktop page
+// — with its progress dialog — is still what the user sees. The page switch is
+// the LAST step, and even then the engine has not put a frame of this world on
+// screen yet, so the viewport wears its loading cover until it has
+// (viewportcover.h). Without the cover, the viewport's native window shows
+// whatever pixels were on that part of the screen before it was mapped: a copy
+// of the desktop page.
+//
+// The stages are separate functions because the THREADED open
+// (openProjectAsync / services/sceneopenrunner.h) runs each of them on its own
+// event-loop turn. The synchronous open below calls exactly the same four, in
+// exactly the same order, back to back — that is what keeps `project.open()`
+// and every headless script behaving as they always did.
+
+void MainWindow::openStageBegin()
 {
-	// ORDER MATTERS HERE (the viewport desktop-bleed defect, 2026-09-03).
-	// Everything that can be done before the page switch IS done before it:
-	// the document read, the session registrations (the project panel did
-	// those already) and the viewport's scene binding all happen while the
-	// desktop page — with its progress dialog — is still what the user sees.
-	// The page switch is the LAST step, and even then the engine has not put a
-	// frame of this world on screen yet, so the viewport wears its loading
-	// cover until it has (viewportcover.h). Without the cover, the viewport's
-	// native window shows whatever pixels were on that part of the screen
-	// before it was mapped: a copy of the desktop page.
-	//
 	// The cover goes up FIRST, before any teardown: opening a world from
 	// inside the editor (load in place) must not leave the previous world on
 	// screen while this one loads.
+	LoadTimeline::mark(QStringLiteral("cover+teardown"));
 	sceneView->beginSceneLoad(project ? project->getProjectName() : QString());
 
-	if(!!scene)
-        removeScene();
+	if (!!scene)
+		removeScene();
 
-    EditorData* editorData = Q_NULLPTR;
-    updateWindowTitle();
+	updateWindowTitle();
+}
 
+void MainWindow::openStageRead(const iris::MeshPrewarmPtr &prewarm)
+{
+	LoadTimeline::mark(QStringLiteral("readProjectScene"));
 	iris::PostProcessManagerPtr postMan;
-    auto scene = projectService->readProjectScene(&editorData, postMan);
+	openPendingEditorData = Q_NULLPTR;
+	openPendingScene = projectService->readProjectScene(&openPendingEditorData, postMan, prewarm);
+}
 
-    playbackService->setPlayerMode(playMode);
-    projectService->setSceneOpen(true);
-    ui->actionClose->setDisabled(false);
-    setScene(scene);
+void MainWindow::openStageBind(bool playMode)
+{
+	LoadTimeline::mark(QStringLiteral("setScene"));
+	auto scene = openPendingScene;
+	EditorData *editorData = openPendingEditorData;
+	openPendingScene.clear();
+	openPendingEditorData = Q_NULLPTR;
 
+	playbackService->setPlayerMode(playMode);
+	projectService->setSceneOpen(true);
+	ui->actionClose->setDisabled(false);
+	setScene(scene);
 
-    if (editorData != Q_NULLPTR) {
-        sceneView->setEditorData(editorData);
+	if (editorData != Q_NULLPTR) {
+		sceneView->setEditorData(editorData);
 		// needs to be done so controllers can have the correct
 		// camera
 		playerView->setScene(scene);
-        wireCheckAction->setChecked(editorData->showLightWires);
-        gridCheckAction->setChecked(editorData->showGrid);
+		wireCheckAction->setChecked(editorData->showLightWires);
+		gridCheckAction->setChecked(editorData->showGrid);
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
-    }
+	}
+}
 
-    assetWidget->trigger();
+void MainWindow::openStageReadDocument(bool playMode, const iris::MeshPrewarmPtr &prewarm)
+{
+	openStageRead(prewarm);
+	openStageBind(playMode);
+}
 
+void MainWindow::openStagePanels()
+{
+	LoadTimeline::mark(QStringLiteral("assetWidget.trigger"));
+	assetWidget->trigger();
 	undoService->resetSavedCount();
+}
+
+void MainWindow::openStageReveal(bool playMode)
+{
+	LoadTimeline::mark(QStringLiteral("switchSpace"));
+	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
+
+	LoadTimeline::mark(QStringLiteral("selectRoot"));
+	// highlight root node
+	if (!!scene) {
+		sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
+		sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
+	}
+
+	// autoplay scenes immediately
+	if (playMode) {
+		playBtn->setToolTip("Pause the scene");
+		playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
+		playbackService->playScene();
+		playerView->onPlayScene();
+	}
+
+	// force a refresh
+	this->update();
+	LoadTimeline::end();
+}
+
+void MainWindow::openProject(bool playMode)
+{
+	// The ledger (services/loadtimeline.h). Both open paths mark the same
+	// stage names, so the synchronous open and the threaded one are directly
+	// comparable in the log and in app.openTimings().
+	if (!LoadTimeline::isRunning())
+		LoadTimeline::begin(QStringLiteral("open(sync) %1")
+		                        .arg(project ? project->getProjectName() : QString()));
+	openStageBegin();
+	openStageReadDocument(playMode, iris::MeshPrewarmPtr());
+	openStagePanels();
 	// The LAST thing before the page switch: push the whole document into the
 	// renderer (meshes, materials, textures) while the desktop page is still
 	// the page on screen. Whatever this costs is spent under the progress
 	// dialog instead of under a viewport that has nothing to show. Skipped
 	// silently on the very first open, when no render view exists yet.
+	LoadTimeline::mark(QStringLiteral("primeSceneSync"));
 	sceneView->primeSceneSync();
-	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
-	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
+	openStageReveal(playMode);
+}
 
-	// highlight root node
-	sceneHierarchyWidget->selectNode(scene->getRootNode()->getGUID());
-	sceneNodePropertiesWidget->setSceneNode(scene->getRootNode());
+bool MainWindow::isOpeningProject() const
+{
+	return openRunner && openRunner->isRunning();
+}
 
-    // autoplay scenes immediately
-    if (playMode) {
-        playBtn->setToolTip("Pause the scene");
-        playBtn->setIcon(QIcon(":/icons/g_pause.svg"));
-        playbackService->playScene();
-        playerView->onPlayScene();
-    }
+void MainWindow::openProjectAsync(bool playMode)
+{
+	// One open at a time. A second request while one is in flight falls back
+	// to the synchronous path rather than interleaving two worlds through the
+	// same slices (which would tear the document apart mid-install).
+	if (isOpeningProject() || !projectService || !pmContainer) {
+		openProject(playMode);
+		return;
+	}
 
-	// force a refresh
-	this->update();
+	if (!LoadTimeline::isRunning())
+		LoadTimeline::begin(QStringLiteral("open(async) %1")
+		                        .arg(project ? project->getProjectName() : QString()));
+
+	// The cover goes up NOW, not in the first slice: the parse phase runs on
+	// a worker for up to a second, and opening a world from inside the editor
+	// must not leave the previous one on screen while it does. openStageBegin
+	// raises it again (idempotent — it only rebases the present counter, and
+	// nothing has presented in between).
+	sceneView->beginSceneLoad(project ? project->getProjectName() : QString());
+
+	// ---- plan: the DB half, here, on the thread that owns the connection ----
+	LoadTimeline::mark(QStringLiteral("plan"));
+	QStringList modelPaths = pmContainer->plannedSessionModelPaths();
+	for (const QString &path : projectService->plannedModelPaths())
+		if (!modelPaths.contains(path)) modelPaths.append(path);
+
+	if (!openRunner) {
+		openRunner = new SceneOpenRunner(db, project, this);
+		connect(openRunner, &SceneOpenRunner::progress, this,
+		        [this](int percent, const QString &text) {
+			        if (pmContainer) pmContainer->showOpenProgress(percent, text);
+		        });
+		connect(openRunner, &SceneOpenRunner::finished, this, [this](bool) {
+			if (pmContainer) pmContainer->hideOpenProgress();
+		});
+	}
+
+	// ---- install: UI-thread slices, one per event-loop turn ----------------
+	//
+	// The session hydration is spread over SEVERAL turns: it is the one
+	// install step whose cost grows with the project (49 assets in the
+	// Showroom sample), and a single 200 ms slice plus an engine frame is
+	// most of the responsiveness budget on its own.
+	const QStringList sessionGuids = pmContainer->sessionAssetGuids();
+	const int kAssetsPerSlice = 8;
+
+	QVector<SceneOpenRunner::Slice> slices;
+	slices.append({ QStringLiteral("Preparing assets…"), 45, [this]() {
+		openStageBegin();
+		LoadTimeline::mark(QStringLiteral("sessionRegistrations"));
+		AssetManager::clearAssetList();
+	} });
+	for (int at = 0; at < sessionGuids.size(); at += kAssetsPerSlice) {
+		const QStringList batch = sessionGuids.mid(at, kAssetsPerSlice);
+		const int pct = 45 + (10 * (at + batch.size())) / qMax(1, sessionGuids.size());
+		slices.append({ QStringLiteral("Preparing assets (%1 of %2)…")
+		                    .arg(at + batch.size()).arg(sessionGuids.size()),
+		                pct, [this, batch]() {
+			pmContainer->registerSessionAssetGuids(batch, openRunner->prewarm());
+		} });
+	}
+	slices.append({ QStringLiteral("Reading the scene…"), 60,
+	                [this]() { openStageRead(openRunner->prewarm()); } });
+	slices.append({ QStringLiteral("Binding the scene…"), 65,
+	                [this, playMode]() { openStageBind(playMode); } });
+	slices.append({ QStringLiteral("Building the asset panel…"), 70,
+	                [this]() { openStagePanels(); } });
+	slices.append({ QStringLiteral("Uploading geometry…"), 80, [this]() {
+		LoadTimeline::mark(QStringLiteral("primeSceneSync"));
+		sceneView->primeSceneGeometry();
+	} });
+	slices.append({ QStringLiteral("Lighting the world…"), 90, [this]() {
+		LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
+		sceneView->primeSceneEnvironment();
+	} });
+	slices.append({ QStringLiteral("Opening…"), 100,
+	                [this, playMode]() { openStageReveal(playMode); } });
+
+	openRunner->setPlan(modelPaths, slices,
+	                    project ? project->getProjectName() : QStringLiteral("scene"));
+	openRunner->start();
 }
 
 void MainWindow::closeProject()
@@ -1141,13 +1307,13 @@ void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
 {
     this->scene = scene;
     //this->sceneView->context()->setShareContext(loadingContext);
-    this->sceneView->setScene(scene);
-	this->playerView->setScene(scene);
-    this->sceneHierarchyWidget->setScene(scene);
-    this->sceneNodePropertiesWidget->setScene(scene);
+    { LoadTimeline::Accumulate a(QStringLiteral("setScene:viewport")); this->sceneView->setScene(scene); }
+    { LoadTimeline::Accumulate a(QStringLiteral("setScene:player"));   this->playerView->setScene(scene); }
+    { LoadTimeline::Accumulate a(QStringLiteral("setScene:hierarchy")); this->sceneHierarchyWidget->setScene(scene); }
+    { LoadTimeline::Accumulate a(QStringLiteral("setScene:properties")); this->sceneNodePropertiesWidget->setScene(scene); }
 
     // interim...
-    updateSceneSettings();
+    { LoadTimeline::Accumulate a(QStringLiteral("setScene:updateSettings")); updateSceneSettings(); }
 }
 
 void MainWindow::removeScene()

@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "shell/mainwindow.h"
 #include "services/projectservice.h"
+#include "services/loadtimeline.h"
 #include "services/services.h"
 #include "ui/pages/projectmanager.h"
 #include "services/projectarchiver.h"
@@ -41,6 +42,17 @@ QVector<VerbInfo> ProjectApi::verbs() const
         { "open", "project.open(guidOrName) -> bool",
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, switches to the editor.",
           Needs::Document },
+        { "openAsync", "project.openAsync(guidOrName) -> bool",
+          "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
+          "install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop "
+          "tile and the archive-import open now do. Returns as soon as the open is under way — poll "
+          "project.openState() for completion. Needs a window; headless sessions get project.open's "
+          "synchronous behaviour.",
+          Needs::Window },
+        { "openState", "project.openState() -> 'idle' | 'opening'",
+          "Whether an asynchronous open (project.openAsync, a desktop tile, an archive import) is still in "
+          "flight.",
+          Needs::Window },
         { "save", "project.save() -> bool",
           "Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one).",
           Needs::Document },
@@ -141,10 +153,49 @@ bool ProjectApi::open(const QString &guidOrName)
     }
     if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
 
+    // The ledger starts HERE, not in MainWindow::openProject: the session
+    // registrations prepareOpen runs are part of what an open costs.
+    LoadTimeline::begin(QStringLiteral("open(script) %1").arg(name.isEmpty() ? guid : name));
     // Point the current project + synchronous preload, then the reader half.
     host.services->project->prepareOpen(guid, name);
     host.mainWindow->openProject(false);
     return true;
+}
+
+bool ProjectApi::openAsync(const QString &guidOrName)
+{
+    if (!host.mainWindow || !host.services || !host.services->project)
+        return fail("project: not available in this session");
+
+    QString name;
+    const QString guid = resolveGuid(guidOrName, &name);
+    if (guid.isEmpty()) {
+        if (QJSEngine *js = qjsEngine(this); !js || !js->hasError())
+            fail(QStringLiteral("project.openAsync: no project named or guid '%1'").arg(guidOrName));
+        return false;
+    }
+    if (host.mainWindow->isOpeningProject())
+        return fail("project.openAsync: an open is already in flight");
+
+    if (host.project->getProjectGuid() == guid && host.services->project->isSceneOpen()) {
+        host.mainWindow->switchSpace(WindowSpaces::EDITOR);
+        return true;
+    }
+    if (host.services->project->isSceneOpen()) host.mainWindow->closeProject();
+
+    LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
+    // NOT prepareOpen: the runner's first slice does the session registrations
+    // itself, with the worker's parsed models in hand.
+    host.services->project->pointAtProject(guid, name);
+    host.mainWindow->openProjectAsync(false);
+    return true;
+}
+
+QString ProjectApi::openState()
+{
+    if (!host.mainWindow) { fail("project: not available in this session"); return QStringLiteral("idle"); }
+    return host.mainWindow->isOpeningProject() ? QStringLiteral("opening")
+                                               : QStringLiteral("idle");
 }
 
 bool ProjectApi::save()

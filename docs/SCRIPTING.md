@@ -18,6 +18,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 |---|---|---|
 | `project.create(name) -> guid` | document | Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and opens it in the editor. |
 | `project.open(guidOrName) -> bool` | document | Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, switches to the editor. |
+| `project.openAsync(guidOrName) -> bool` | window | Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop tile and the archive-import open now do. Returns as soon as the open is under way — poll project.openState() for completion. Needs a window; headless sessions get project.open's synchronous behaviour. |
+| `project.openState() -> 'idle' \| 'opening'` | window | Whether an asynchronous open (project.openAsync, a desktop tile, an archive import) is still in flight. |
 | `project.save() -> bool` | document | Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one). |
 | `project.close() -> bool` | document | Closes the open project (physics restored, autosave per settings, undo stack reset) and returns to the desktop. |
 | `project.rename(guid, newName) -> bool` | document | Renames a project in the database. |
@@ -108,6 +110,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 |---|---|---|
 | `app.desktop(n=0) -> current` | window | Switches to desktop 1-4; app.desktop() just returns the current one. |
 | `app.space(name) -> bool` | window | Switches the main window space: desktop, player, editor, materials, assets, publish, avatar. player and editor need an open project. |
+| `app.openTimings() -> [{stage, ms, items?, label?}]` | document | The millisecond ledger of the most recent scene open (services/loadtimeline.h): one entry per stage, the first entry being {stage:'total', ms, label}, plus 'counter:*' entries for the work that accumulates inside the stages (assimp parses, database sweeps, the engine push). Empty before the first open of the session. |
+| `app.heartbeat(intervalMs=250) -> bool` | window | Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and records the WORST gap between ticks. The measurable definition of 'the window stayed responsive' — a blocked UI thread cannot tick. Restarting resets the statistics. |
+| `app.heartbeatStats() -> {running, intervalMs, ticks, maxGapMs, sinceLastTickMs}` | window | The heartbeat probe's readings (see app.heartbeat). maxGapMs is the longest the UI thread went without servicing its event loop since the probe started. |
 | `app.quit() -> bool` | window | Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes. |
 
 ## desktop

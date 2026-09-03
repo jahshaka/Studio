@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "ui/pages/projectmanager.h"
 #include "services/undoservice.h"
+#include "services/loadtimeline.h"
 
 
 ProjectService::ProjectService(Database *db,
@@ -89,11 +90,16 @@ QString ProjectService::createProjectShell(const QString &name)
     return guid;
 }
 
-void ProjectService::prepareOpen(const QString &guid, const QString &name)
+void ProjectService::pointAtProject(const QString &guid, const QString &name)
 {
     project->setProjectPath(
         QDir(QDir(projectsRoot()).filePath("Projects")).filePath(guid), name);
     project->setProjectGuid(guid);
+}
+
+void ProjectService::prepareOpen(const QString &guid, const QString &name)
+{
+    pointAtProject(guid, name);
 
     // Synchronous preload (no modal dialog, no QtConcurrent).
     projectManager->loadProjectAssetsSync();
@@ -113,17 +119,36 @@ bool ProjectService::removeProject(const QString &guid)
 }
 
 iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
-                                                iris::PostProcessManagerPtr &postMan)
+                                                iris::PostProcessManagerPtr &postMan,
+                                                const iris::MeshPrewarmPtr &prewarm)
 {
     std::unique_ptr<SceneReader> reader(new SceneReader);
     reader->setDatabaseHandle(db);
     reader->setProject(project);
+    reader->setPrewarm(prewarm);
 
     postMan = iris::PostProcessManagerPtr();
-    return reader->readScene(project->getProjectFolder(),
-                             db->getSceneBlobGlobal(project->getProjectGuid()),
-                             postMan,
-                             editorData);
+    QByteArray blob;
+    {
+        LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
+        blob = db->getSceneBlobGlobal(project->getProjectGuid());
+    }
+    return reader->readScene(project->getProjectFolder(), blob, postMan, editorData);
+}
+
+QStringList ProjectService::plannedModelPaths() const
+{
+    if (!db || !project || project->getProjectGuid().isEmpty()) return QStringList();
+    SceneReader reader;
+    reader.setDatabaseHandle(db);
+    reader.setProject(project);
+    QJsonObject projectObj;
+    {
+        LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
+        projectObj = QJsonDocument::fromJson(
+                         db->getSceneBlobGlobal(project->getProjectGuid())).object();
+    }
+    return reader.collectMeshSources(projectObj);
 }
 
 bool ProjectService::saveProjectBlob()

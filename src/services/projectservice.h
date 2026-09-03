@@ -27,8 +27,10 @@ For more information see the LICENSE file
 #include <functional>
 
 #include <QString>
+#include <QStringList>
 
 #include "irisgl/irisglfwd.h"
+#include "irisgl/import/meshprewarm.h"
 
 class Database;
 class Project;
@@ -72,6 +74,11 @@ public:
     /// assets synchronously (the scripted open's data half).
     void prepareOpen(const QString &guid, const QString &name);
 
+    /// The pointer half of prepareOpen with NO preload — for the threaded
+    /// open, whose first slice does the session registrations itself (with a
+    /// worker's parsed models in hand).
+    void pointAtProject(const QString &guid, const QString &name);
+
     /// Deletes a project: folder tree first (like the widget), then the DB
     /// rows through the guid-parameterised deletes — the current project is
     /// NOT mutated (SCRIPTING_SPEC §1.6.1). Refreshes the desktop.
@@ -80,8 +87,17 @@ public:
     /// The reader half of openProject: reads the scene blob into a document
     /// scene. editorData/postMan are output parameters exactly as SceneReader
     /// hands them over.
+    /// `prewarm` (optional) carries the model files a worker thread already
+    /// parsed (irisgl/import/meshprewarm.h) — the reader then builds meshes
+    /// out of ready aiScenes instead of running assimp on this thread.
     iris::ScenePtr readProjectScene(EditorData **editorData,
-                                    iris::PostProcessManagerPtr &postMan);
+                                    iris::PostProcessManagerPtr &postMan,
+                                    const iris::MeshPrewarmPtr &prewarm = iris::MeshPrewarmPtr());
+
+    /// The open PLAN for the threaded path: every model file the project's
+    /// scene blob references, CAS-resolved. DB work, so it runs on the thread
+    /// that owns the default connection — the caller's.
+    QStringList plannedModelPaths() const;
 
     /// Blob-only save (SCRIPTING_SPEC §1.6.2): never silently no-ops; the
     /// thumbnail refreshes only when a viewport can render one.
