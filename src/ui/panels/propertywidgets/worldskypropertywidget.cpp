@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/worldmodes.h"
 #include <QSqlDatabase>
 #include <QTimer>
 
@@ -322,7 +323,10 @@ void WorldSkyPropertyWidget::addAmbientFromSkyRow()
 
 void WorldSkyPropertyWidget::onAmbientFromSkyChanged(bool on)
 {
-	if (!!scene) scene->ambientFromSky = on;
+	if (!scene) return;
+	scene->ambientFromSky = on;
+	// A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC §9.1).
+	worldmodes::pinRowValue(scene, QStringLiteral("ambientFromSky"), on ? 1 : 0);
 }
 
 void WorldSkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)
@@ -591,6 +595,7 @@ void WorldSkyPropertyWidget::onSkyDetailChanged(int row)
 	// Not a sky *parameter* (it never enters skyData): a scene render setting,
 	// serialized beside antiAliasing. SceneMirror re-bakes when it changes.
 	scene->skyBakeResolution = row >= 2 ? 1024 : row >= 1 ? 512 : 256;
+	worldmodes::pinRowValue(scene, QStringLiteral("skyBakeResolution"), scene->skyBakeResolution);
 }
 
 void WorldSkyPropertyWidget::onSunAzimuthChanged(float)   { writeSunAngles(); }

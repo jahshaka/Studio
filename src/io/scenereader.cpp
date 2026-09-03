@@ -344,6 +344,26 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int sr = sceneObj["shadowResolution"].toInt(0);
         scene->shadowResolution = sr <= 0 ? 0 : qBound(256, sr, 8192);
     }
+    // Shadow FILTER quality: absent means Auto (-1); otherwise 0/1/2.
+    {
+        const int sf = sceneObj["shadowFilterTier"].toInt(-1);
+        scene->shadowFilterTier = (sf >= 0 && sf <= 2) ? sf : -1;
+    }
+    // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
+    // above ARE the truth for a document written before modes existed, and for
+    // one the user never put on a tier. (§12 decision 8 proposed reading absent
+    // as Epic; that would silently switch VCT GI, 4x MSAA and a 4096 shadow
+    // atlas on for every existing scene — left to the owner.)
+    {
+        // Spelled out rather than routed through the worldmodes registry — see
+        // the matching note in SceneWriter::writeScene.
+        static const char *worldModeNames[] = { "low", "medium", "high", "epic" };
+        const QString m = sceneObj["worldMode"].toString().trimmed().toLower();
+        scene->worldMode = -1;   // "custom", and what an absent key means
+        for (int i = 0; i < 4; ++i)
+            if (m == QLatin1String(worldModeNames[i])) { scene->worldMode = i; break; }
+        scene->worldOverrides = sceneObj["worldOverrides"].toObject();
+    }
     // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.
     {
         const int sb = sceneObj["skyBakeResolution"].toInt(256);

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
+#include "services/worldmodes.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 
 #include "ui/controls/checkboxwidget.h"
@@ -141,12 +142,16 @@ void WorldGiPropertyWidget::modeChanged(int row)
 {
     if (!scene || row < 0 || row >= kGiRowCount) return;
     scene->giMode = kGiRows[row];
+    // A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC §9.1).
+    worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
     rebuild();
 }
 
 void WorldGiPropertyWidget::onQualityChanged(int row)
 {
-    if (!!scene) scene->giQuality = static_cast<iris::GiQuality>(qBound(0, row, 2));
+    if (!scene) return;
+    scene->giQuality = static_cast<iris::GiQuality>(qBound(0, row, 2));
+    worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
 }
 
 void WorldGiPropertyWidget::onLightChanged(int row)

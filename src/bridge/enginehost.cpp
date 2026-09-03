@@ -1,5 +1,6 @@
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
+#include "data/settingsmanager.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -141,6 +142,15 @@ EngineConfig EngineHost::resolveConfig()
     else
         cfg.logFile = "jahshaka-ogre.log";
 #endif
+    // Shadow-caster geometry optimization (POST_CHAIN_SPEC.md §11): an
+    // application preference, not a scene setting — the flag is process-wide and
+    // consumed when a mesh is BUILT, so a mesh built while it was on keeps its
+    // optimized shadow buffers whatever any scene later says.
+    // Preferences -> Viewport writes it; WorldSettingsWidget pushes runtime
+    // changes straight to the live Engine.
+    cfg.optimizeShadowMeshes =
+        SettingsManager::getDefaultManager()->getValue("shadow_mesh_optimization", true).toBool();
+
     return cfg;
 }
 

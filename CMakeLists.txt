@@ -172,6 +172,7 @@ set(SRCS
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
+    src/services/worldmodes.cpp
     src/services/playbackservice.cpp
     src/ui/panels/presets/assetfavorites.cpp 
     src/ui/panels/presets/assetmodelpanel.cpp 
@@ -196,6 +197,7 @@ set(SRCS
     src/ui/panels/propertywidgets/worldskypropertywidget.cpp
     src/ui/panels/propertywidgets/worldgipropertywidget.cpp
     src/ui/panels/propertywidgets/worldaapropertywidget.cpp
+    src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
     src/ui/panels/propertywidgets/worldpropertywidget.cpp 
     src/ui/panels/propertywidgets/physicspropertywidget.cpp 
@@ -381,6 +383,7 @@ set(HEADERS
     src/services/undoservice.h
     src/services/selectionservice.h
     src/services/shortcutregistry.h
+    src/services/worldmodes.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetfavorites.h 
     src/ui/panels/presets/assetpanel.h 
@@ -399,6 +402,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/worldskypropertywidget.h
     src/ui/panels/propertywidgets/worldgipropertywidget.h 
     src/ui/panels/propertywidgets/worldaapropertywidget.h
+    src/ui/panels/propertywidgets/worldmodespropertywidget.h
     src/ui/panels/propertywidgets/worldshadowpropertywidget.h
     src/ui/panels/propertywidgets/skypropertywidget.h 
     src/ui/panels/scenenodepropertieswidget.h 

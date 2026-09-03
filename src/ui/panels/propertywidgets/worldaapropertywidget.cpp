@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "viewport/ieditorviewport.h"
+#include "services/worldmodes.h"
 
 namespace {
 // Combo rows in display order -> MSAA sample counts.
@@ -78,6 +79,8 @@ void WorldAaPropertyWidget::onSamplesChanged(int row)
     // The document field is the API (same path as world.setAntiAliasing):
     // SceneMirror pushes it to the engine view at the next sync.
     scene->antiAliasing = kAaSamples[row];
+    // A direct edit of a backing field is a World Mode PIN (POST_CHAIN_SPEC §9.1).
+    worldmodes::pinRowValue(scene, QStringLiteral("msaa"), scene->antiAliasing);
     if (sceneView && sceneView->isInitialized())
         sceneView->renderFrames(2);   // apply now so the achieved count is readable
     rebuild();                        // refresh (or clear) the achieved row
