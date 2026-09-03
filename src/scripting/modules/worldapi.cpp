@@ -17,6 +17,9 @@ For more information see the LICENSE file
 
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "data/project.h"
 #include "io/scenewriter.h"
 #include "shell/mainwindow.h"
@@ -422,8 +425,19 @@ bool WorldApi::resolveTexture(const QVariant &ref, QString &guidOut, QString &pa
     else guid = host.db->fetchAssetGUIDByName(QFileInfo(value).fileName(), host.project->getProjectGuid());
     if (guid.isEmpty()) return false;
 
-    const QString path = QDir(host.project->getProjectFolder())
-                             .filePath(host.db->fetchAsset(guid).name);
+    // Pin-first through the CAS (the flat projectFolder copy died with the
+    // asset pipeline — joining it resolved NOTHING for pinned textures, which
+    // silently broke world.sky's equirect/cubemap for every imported image;
+    // found building the Showroom sample, 2026-09-03). Same ladder as
+    // materialpropertywidget.cpp.
+    QSqlDatabase conn = QSqlDatabase::database();
+    QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                           host.project->getProjectGuid(), guid);
+    if (path.isEmpty())
+        path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
+    if (path.isEmpty())
+        path = QDir(host.project->getProjectFolder())
+                   .filePath(host.db->fetchAsset(guid).name);
     if (!QFileInfo::exists(path)) return false;
     guidOut = guid;
     pathOut = path;
