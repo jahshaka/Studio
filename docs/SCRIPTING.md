@@ -83,7 +83,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `editor.play() -> bool` | document | Enters play mode (PlayBack drives physics, animations and controllers in place). |
 | `editor.stop() -> bool` | document | Leaves play mode back to editing. |
 | `editor.simulate(enabled=true) -> bool` | document | Starts/stops the in-place physics simulation without entering play mode. |
-| `editor.frame(n=1) -> bool` | engine | Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. |
+| `editor.frame(n=1, dt=-1) -> bool` | engine | Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 the document's clock advances by exactly that many seconds per frame instead of by the wall clock, which is what makes stepping deterministic IN PLAY MODE (without it, each stepped frame charged the document for however long the previous statement took). |
 | `editor.screenshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}` | engine | Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. |
 | `editor.beginBatch() -> bool` | document | Opens a nested undo macro inside the script's run (finer-grained grouping). |
 | `editor.endBatch() -> bool` | document | Closes the macro opened by editor.beginBatch(). |
