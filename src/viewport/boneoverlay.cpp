@@ -126,10 +126,13 @@ bool BoneOverlay::ensureAssets()
     if (!mBoneMesh) mBoneMesh = mTarget->createMesh(octahedron(0.0f, kRingAt, 1.0f, 0.5f));
     if (!mMarkerMesh) mMarkerMesh = mTarget->createMesh(octahedron(-0.5f, 0.0f, 0.5f, 0.5f));
     if (!mMaterial) {
-        // Depth-tested: solid bones have to occlude each other, and the
-        // skeleton belongs inside the character when the mesh is on (header).
+        // X-RAY (depth test off): the skeleton's job is to be seen THROUGH
+        // the mesh — with depth on, mesh+skeleton mode shows 82 stray pixels
+        // of fingertips (lead call at merge, 2026-09-03). The cost is that
+        // overlapping bones merge into one silhouette; a real X-ray/occluded
+        // two-tone mode stays future work.
         mMaterial = mTarget->createUnlitMaterial(
-            Colour(float(mColour.redF()), float(mColour.greenF()), float(mColour.blueF()), 1.0f), true);
+            Colour(float(mColour.redF()), float(mColour.greenF()), float(mColour.blueF()), 1.0f), false);
     }
     return mBoneMesh && mMaterial;
 }
