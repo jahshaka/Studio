@@ -360,6 +360,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     {
         const int sf = sceneObj["shadowFilterTier"].toInt(-1);
         scene->shadowFilterTier = (sf >= 0 && sf <= 2) ? sf : -1;
+        // Absent in every scene written before the ParticleFX2 adoption: 1 = real time.
+        scene->particleTimeScale = std::max(0.0, sceneObj["particleTimeScale"].toDouble(1.0));
     }
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Absent = off, which is what
     // every document written before the chain existed means.
@@ -787,6 +789,63 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     particleNode->setLife((float) nodeObj["lifeLength"].toDouble(1.0f));
     particleNode->setName(nodeObj["name"].toString());
     particleNode->setSpeed((float) nodeObj["speed"].toDouble(1.0f));
+
+    // ---- ParticleFX2 keys (PARTICLES_FX2_SPEC §5) --------------------------
+    // ALL OPTIONAL, all defaulted to the legacy behaviour: a scene written
+    // before the adoption reads back with exactly the emitter it had. There is
+    // no migration and none is needed — this ships as a new app, and the ten
+    // legacy keys above map 1:1 onto the engine's emitter and affectors.
+    //
+    // The three "random" spreads (speedError/lifeError/scaleError) were edited
+    // by the panel and never written for ten years (audit defect #7). They are
+    // written now, absolute rather than fractional, and absent means 0.
+    particleNode->speedError = (float) nodeObj["speedError"].toDouble(0.0);
+    particleNode->lifeError  = (float) nodeObj["lifeError"].toDouble(0.0);
+    particleNode->scaleError = (float) nodeObj["scaleError"].toDouble(0.0);
+    particleNode->maxParticles = nodeObj["maxParticles"].toInt(0);
+
+    particleNode->shape = iris::ParticleSystemNode::shapeFromName(
+        nodeObj["shape"].toString("point"));
+    particleNode->orientation = iris::ParticleSystemNode::orientationFromName(
+        nodeObj["orientation"].toString("billboard"));
+    particleNode->preset = iris::ParticleSystemNode::presetFromName(
+        nodeObj["preset"].toString("custom"));
+    particleNode->coneAngle        = (float) nodeObj["coneAngle"].toDouble(0.0);
+    particleNode->turbulence       = (float) nodeObj["turbulence"].toDouble(0.0);
+    particleNode->rotationSpeedMin = (float) nodeObj["rotationSpeedMin"].toDouble(0.0);
+    particleNode->rotationSpeedMax = (float) nodeObj["rotationSpeedMax"].toDouble(0.0);
+    particleNode->burstDuration    = (float) nodeObj["burstDuration"].toDouble(0.0);
+    particleNode->burstRepeatDelay = (float) nodeObj["burstRepeatDelay"].toDouble(0.0);
+    particleNode->startDelay       = (float) nodeObj["startDelay"].toDouble(0.0);
+    particleNode->alphaHash        = nodeObj["alphaHash"].toBool(true);
+    if (nodeObj.contains("extents"))
+        particleNode->extents = readVector3(nodeObj["extents"].toObject());
+    if (nodeObj.contains("innerExtents"))
+        particleNode->innerExtents = readVector3(nodeObj["innerExtents"].toObject());
+    if (nodeObj.contains("wind"))
+        particleNode->wind = readVector3(nodeObj["wind"].toObject());
+    if (nodeObj.contains("emitColourStart"))
+        particleNode->emitColourStart = readColor(nodeObj["emitColourStart"].toObject());
+    if (nodeObj.contains("emitColourEnd"))
+        particleNode->emitColourEnd = readColor(nodeObj["emitColourEnd"].toObject());
+
+    particleNode->colourKeys.clear();
+    for (const QJsonValue &v : nodeObj["colourKeys"].toArray()) {
+        const QJsonObject o = v.toObject();
+        iris::ParticleColourKey k;
+        k.time = (float) o["time"].toDouble(0.0);
+        k.r = (float) o["r"].toDouble(1.0); k.g = (float) o["g"].toDouble(1.0);
+        k.b = (float) o["b"].toDouble(1.0); k.a = (float) o["a"].toDouble(1.0);
+        particleNode->colourKeys.append(k);
+    }
+    particleNode->scaleKeys.clear();
+    for (const QJsonValue &v : nodeObj["scaleKeys"].toArray()) {
+        const QJsonObject o = v.toObject();
+        iris::ParticleScaleKey k;
+        k.time  = (float) o["time"].toDouble(0.0);
+        k.scale = (float) o["scale"].toDouble(1.0);
+        particleNode->scaleKeys.append(k);
+    }
 
     if (handle) {
         const QString texturePath = resolveAssetPath(nodeObj["texture"].toString());

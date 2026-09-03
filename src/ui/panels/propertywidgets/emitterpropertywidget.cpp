@@ -116,10 +116,15 @@ void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNo
         particleLife->setValue(ps->lifeLength);
         gravityFactor->setValue(ps->gravityComplement);
         velocityFactor->setValue(ps->speed);
-        speedFactor->setValue(ps->speedFactor);
-        lifeFactor->setValue(ps->lifeFactor);
+        // The sliders are FRACTIONS of the mean; the node holds the absolute
+        // spread. Those three duplicate fields (lifeFactor/scaleFactor/
+        // speedFactor) are gone: they were written by the panel, never read by
+        // anything, and never serialized (audit defect #7). The full panel
+        // rebuild for the new authoring surface is phase 2.
+        speedFactor->setValue(ps->speedErrorFraction());
+        lifeFactor->setValue(ps->lifeErrorFraction());
         particleScale->setValue(ps->particleScale);
-        scaleFactor->setValue(ps->scaleFactor);
+        scaleFactor->setValue(ps->scaleErrorFraction());
         randomRotation->setValue(ps->randomRotation);
         useAdditive->setValue(ps->useAdditive);
         dissipate->setValue(ps->dissipate);
