@@ -1127,6 +1127,13 @@ void MainWindow::openProjectAsync(bool playMode)
 		LoadTimeline::begin(QStringLiteral("open(async) %1")
 		                        .arg(project ? project->getProjectName() : QString()));
 
+	// The cover goes up NOW, not in the first slice: the parse phase runs on
+	// a worker for up to a second, and opening a world from inside the editor
+	// must not leave the previous one on screen while it does. openStageBegin
+	// raises it again (idempotent — it only rebases the present counter, and
+	// nothing has presented in between).
+	sceneView->beginSceneLoad(project ? project->getProjectName() : QString());
+
 	// ---- plan: the DB half, here, on the thread that owns the connection ----
 	LoadTimeline::mark(QStringLiteral("plan"));
 	QStringList modelPaths = pmContainer->plannedSessionModelPaths();
