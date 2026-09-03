@@ -29,6 +29,7 @@ For more information see the LICENSE file
 
 // needs to be included near the top before
 // anything includes inttypes before it
+#include "app/crashhandler.h"
 #ifdef USE_BREAKPAD
 #include "app/breakpad.h"
 #endif
@@ -107,6 +108,9 @@ int main(int argc, char *argv[])
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
 
+	installCrashHandler();   // STABILITY_AUDIT.md §5.1 — backtraces for every fatal
+	                         // signal, ALWAYS on (breakpad or not; it re-raises, so
+	                         // breakpad chains behind it when enabled).
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif

@@ -94,6 +94,7 @@ set(downloaderProject downloader)
 
 set(SRCS
     src/app/main.cpp
+    src/app/crashhandler.cpp
     src/app/cli/clioptions.cpp
     src/app/cli/scriptrunner.cpp
     src/app/cli/selftestrunner.cpp
