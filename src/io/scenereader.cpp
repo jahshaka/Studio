@@ -51,6 +51,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "services/worldmodes.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -349,20 +350,44 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int sf = sceneObj["shadowFilterTier"].toInt(-1);
         scene->shadowFilterTier = (sf >= 0 && sf <= 2) ? sf : -1;
     }
+    // Post-processing chain (POST_CHAIN_SPEC §§3-7). Absent = off, which is what
+    // every document written before the chain existed means.
+    scene->hdrEnabled = sceneObj["hdrEnabled"].toBool(false);
+    scene->exposure = float(sceneObj["exposure"].toDouble(0.0));
+    scene->bloomEnabled = sceneObj["bloomEnabled"].toBool(false);
+    scene->bloomThreshold = float(sceneObj["bloomThreshold"].toDouble(5.0));
+    scene->ssaoEnabled = sceneObj["ssaoEnabled"].toBool(false);
+    scene->ssaoScale = float(qBound(0.25, sceneObj["ssaoScale"].toDouble(1.0), 1.0));
+    scene->ssaoPower = float(qBound(0.1, sceneObj["ssaoPower"].toDouble(1.5), 8.0));
+    scene->ssaoRadius = float(qBound(0.05, sceneObj["ssaoRadius"].toDouble(2.0), 64.0));
+    scene->smaaPreset = qBound(-1, sceneObj["smaaPreset"].toInt(-1), 3);
+    scene->ssrMode = qBound(0, sceneObj["ssrMode"].toInt(0), 2);
+    scene->refractionsMode = qBound(0, sceneObj["refractionsMode"].toInt(0), 2);
+
     // World Mode (POST_CHAIN_SPEC §9). Absent reads as "custom": the fields
     // above ARE the truth for a document written before modes existed, and for
     // one the user never put on a tier. (§12 decision 8 proposed reading absent
     // as Epic; that would silently switch VCT GI, 4x MSAA and a 4096 shadow
     // atlas on for every existing scene — left to the owner.)
     {
-        // Spelled out rather than routed through the worldmodes registry — see
-        // the matching note in SceneWriter::writeScene.
-        static const char *worldModeNames[] = { "low", "medium", "high", "epic" };
         const QString m = sceneObj["worldMode"].toString().trimmed().toLower();
-        scene->worldMode = -1;   // "custom", and what an absent key means
-        for (int i = 0; i < 4; ++i)
-            if (m == QLatin1String(worldModeNames[i])) { scene->worldMode = i; break; }
         scene->worldOverrides = sceneObj["worldOverrides"].toObject();
+        if (m.isEmpty()) {
+            // A document written before World Modes existed — the shipped sample
+            // scenes, and nothing else. §12 decision 8: it reads as EPIC, and the
+            // tier is applied so the write-through invariant holds (a backing
+            // field is always the resolved value). Its own settings are NOT
+            // preserved as overrides: that would pin every row of every old
+            // document for ever and make the mode meaningless.
+            worldmodes::setMode(scene, worldmodes::Mode::Epic);
+        } else {
+            bool ok = false;
+            const auto mode = worldmodes::modeFromName(m, &ok);
+            scene->worldMode = ok ? int(mode) : int(worldmodes::Mode::Custom);
+            // The fields above were just read from the document and ARE the
+            // resolved values; no tier is re-applied, so a pinned row and a
+            // hand-edited field both survive a round trip untouched.
+        }
     }
     // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.
     {

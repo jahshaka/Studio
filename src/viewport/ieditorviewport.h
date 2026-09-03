@@ -159,6 +159,15 @@ public:
     virtual void setShowPerspeciveLabel(bool value) = 0;
     virtual QImage takeScreenshot(int width = 1920, int height = 1080) = 0;
     virtual QImage takeScreenshot(QSize dimension) = 0;
+    /// A screenshot that looks like the VIEWPORT rather than like a thumbnail
+    /// (POST_CHAIN_SPEC.md §7.3). Screenshots render through a throwaway
+    /// OFFSCREEN view, and offscreen views deliberately skip the post chain — so
+    /// by default a screenshot of an HDR scene comes back ungraded and does not
+    /// match what the user is looking at. `postFx` true opts that one view in.
+    /// Default implementation ignores it (headless viewports have no chain).
+    virtual QImage takeScreenshot(int width, int height, bool postFx) {
+        (void)postFx; return takeScreenshot(width, height);
+    }
 
     /// The ACHIEVED anti-aliasing (MSAA) sample count of the viewport's render
     /// target — the driver may clamp what scene->antiAliasing requested. Only

@@ -36,6 +36,25 @@ set(MACOSX_BUNDLE_LONG_VERSION_STRING "${JAHSHAKA_VERSION}")
 set(MACOSX_BUNDLE_INFO_STRING "Jahshaka Studio")
 set(MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2016-2026 EXEDOS LLC")
 
+# RPATH, not RUNPATH, on Linux.
+#
+# Modern binutils emits DT_RUNPATH, which the loader applies ONLY to a binary's
+# OWN DT_NEEDED entries — it is not inherited by their dependencies. Every rpath
+# we set points at the Ogre install prefix, and Ogre's own libraries carry no
+# rpath at all, so the moment one Ogre component depends on another that is not
+# in the default search path the load fails with a misleading "cannot open
+# shared object file" naming the INNER library.
+#
+# That is not hypothetical: enabling the PlanarReflections component made
+# libOgreNextHlmsPbs depend on libOgreNextPlanarReflections, and every binary in
+# the tree stopped loading. DT_RPATH is inherited, so one flag fixes the whole
+# family and every future Ogre component. (The real fix belongs upstream of us —
+# build-ogre.sh should install Ogre with CMAKE_INSTALL_RPATH=$ORIGIN, the way its
+# macOS branch already bakes @loader_path — but this makes us robust either way.)
+if(UNIX AND NOT APPLE)
+    add_link_options(-Wl,--disable-new-dtags)
+endif()
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 find_package(OpenGL REQUIRED) # is this needed?

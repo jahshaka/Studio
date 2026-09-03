@@ -138,6 +138,20 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["shadowResolution"] = scene->shadowResolution;
     // Shadow FILTER quality; -1 = Auto (softest requesting light wins).
     sceneObj["shadowFilterTier"] = scene->shadowFilterTier;
+    // Post-processing chain (POST_CHAIN_SPEC §§3-7). Engine-viewport settings,
+    // so they live beside antiAliasing rather than anywhere near the materials.
+    sceneObj["hdrEnabled"] = scene->hdrEnabled;
+    sceneObj["exposure"] = scene->exposure;
+    sceneObj["bloomEnabled"] = scene->bloomEnabled;
+    sceneObj["bloomThreshold"] = scene->bloomThreshold;
+    sceneObj["ssaoEnabled"] = scene->ssaoEnabled;
+    sceneObj["ssaoScale"] = scene->ssaoScale;
+    sceneObj["ssaoPower"] = scene->ssaoPower;
+    sceneObj["ssaoRadius"] = scene->ssaoRadius;
+    sceneObj["smaaPreset"] = scene->smaaPreset;
+    sceneObj["ssrMode"] = scene->ssrMode;
+    sceneObj["refractionsMode"] = scene->refractionsMode;
+
     // World Mode (POST_CHAIN_SPEC §9): the tier, as a stable string, plus the
     // rows the user pinned. "custom" means no tier — the fields above are the
     // truth. Written as strings so the enum ints stay free to be reordered.

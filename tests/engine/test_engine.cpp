@@ -10,8 +10,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <functional>
 #include <memory>
+#include <thread>
 #include <string>
 #include <vector>
 
@@ -115,6 +117,17 @@ void aim(View *v) {
     enginetest::testCameraLookAt(v, Vec3(2.2f, 1.8f, 2.6f), Vec3(0.0f, 0.0f, 0.0f));
 }
 void render(Engine *e, int frames = 3) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+/// Renders for REAL time. HDR auto-exposure adapts at a fixed rate per SECOND
+/// (DownScale03_SumLumEnd_ps.glsl: mix(new, old, pow(0.25, timeSinceLast))), so
+/// a burst of back-to-back frames barely moves it however many there are — only
+/// wall-clock does. Anything asserting an exposure CHANGE has to spend it.
+void renderFor(Engine *e, double seconds) {
+    const auto start = std::chrono::steady_clock::now();
+    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < seconds) {
+        e->renderOneFrame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+    }
+}
 
 // ---------------------------------------------------------------------------
 void create_twice_returns_null_with_error() {
@@ -1878,6 +1891,382 @@ void dynamic_mesh_shadow_follows_its_pose() {
               shadowed, unshadowed);
 }
 
+
+// ---------------------------------------------------------------------------
+// The post chain (POST_CHAIN_SPEC.md phases 3-7).
+//
+// The chain is an ON-SCREEN feature: offscreen views keep the simple workspace
+// so that thumbnails, previews and every pixel suite stay exact. PostFxDesc has
+// one explicit door through that — allowOffscreen — and these tests are the
+// reason it exists (the other caller is screenshot({postFx:true})).
+
+/// The offscreen guarantee itself: pushing a full post-fx description at an
+/// offscreen view changes NOTHING unless it opts in.
+void postfx_is_ignored_offscreen_unless_asked() {
+    Fixture fx;
+    View *v = fx.view("fx-guard-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("fx-guard-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    render(fx.e); Image before; REQUIRE(v->readPixels(before));
+    const unsigned genBefore = v->workspaceGeneration();
+
+    PostFxDesc fxDesc;
+    fxDesc.hdr = true; fxDesc.bloom = true; fxDesc.ssao = true; fxDesc.smaaPreset = 1;
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() == genBefore,
+              "an offscreen view must not even rebuild for post fx: %u -> %u",
+              genBefore, v->workspaceGeneration());
+    render(fx.e); Image after; REQUIRE(v->readPixels(after));
+    const Px b = centre(before), a = centre(after);
+    CHECK_MSG(b.r == a.r && b.g == a.g && b.b == a.b,
+              "offscreen pixels must be untouched by post fx: %d %d %d vs %d %d %d",
+              b.r, b.g, b.b, a.r, a.g, a.b);
+    // postFx() still reports what the host asked for — the view remembers, it
+    // just does not act.
+    CHECK(v->postFx().hdr);
+}
+
+/// HDR + filmic tonemap + auto exposure, on an offscreen view that opted in.
+/// The assertion is behavioural, not a magic colour: a tonemapped frame is
+/// still recognisably the scene, and RAISING THE EXPOSURE MAKES IT BRIGHTER.
+void hdr_tonemap_and_exposure() {
+    Fixture fx;
+    View *v = fx.view("hdr-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("hdr-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    render(fx.e); Image plain; REQUIRE(v->readPixels(plain));
+    const Px plainCube = centre(plain);
+
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    fxDesc.hdr = true;
+    fxDesc.exposure = 0.0f;
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() >= 2u, "enabling HDR rebuilds the chain: %u",
+              v->workspaceGeneration());
+    renderFor(fx.e, 1.2);   // auto-exposure adapts per SECOND, not per frame
+    if (!fx.e->lastError().empty())
+        std::printf("    lastError after HDR enable: %s\n", fx.e->lastError().c_str());
+    Image hdr; REQUIRE(v->readPixels(hdr));
+    const Px hdrCube = centre(hdr);
+    std::printf("    cube: plain %d %d %d -> hdr %d %d %d\n",
+                plainCube.r, plainCube.g, plainCube.b, hdrCube.r, hdrCube.g, hdrCube.b);
+    // Something rendered (not a black frame, which is what a failed shader
+    // compile inside JAH_TRY looks like), and it is still the orange cube:
+    // red dominates, blue is the least.
+    CHECK_MSG(hdrCube.r > 20, "the HDR frame is not black: %d %d %d",
+              hdrCube.r, hdrCube.g, hdrCube.b);
+    CHECK_MSG(hdrCube.r > hdrCube.b, "the cube is still orange after tonemapping: %d %d %d",
+              hdrCube.r, hdrCube.g, hdrCube.b);
+
+    // Exposure is a UNIFORM: changing it must not rebuild anything.
+    const unsigned gen = v->workspaceGeneration();
+    fxDesc.exposure = 2.0f;
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() == gen,
+              "exposure is a uniform, not a graph change: %u -> %u", gen,
+              v->workspaceGeneration());
+    renderFor(fx.e, 1.5);
+    Image bright; REQUIRE(v->readPixels(bright));
+    const Px brightCube = centre(bright);
+    const int lumHdr = (hdrCube.r + hdrCube.g + hdrCube.b) / 3;
+    const int lumBright = (brightCube.r + brightCube.g + brightCube.b) / 3;
+    std::printf("    exposure 0 -> %d, exposure +2 -> %d\n", lumHdr, lumBright);
+    CHECK_MSG(lumBright > lumHdr, "raising the exposure brightens the image: %d -> %d",
+              lumHdr, lumBright);
+
+    // And off again: the chain collapses back to the passthrough graph and the
+    // pixels return to exactly what they were.
+    v->setPostFx(PostFxDesc());
+    render(fx.e, 2); Image off; REQUIRE(v->readPixels(off));
+    const Px offCube = centre(off);
+    CHECK_MSG(offCube.r == plainCube.r && offCube.g == plainCube.g && offCube.b == plainCube.b,
+              "turning the chain off restores the exact original: %d %d %d vs %d %d %d",
+              offCube.r, offCube.g, offCube.b, plainCube.r, plainCube.g, plainCube.b);
+}
+
+/// Bloom: a bright emissive surface bleeds light into the dark background
+/// around it. The assertion is that bleed, not a colour.
+void bloom_bleeds_bright_areas() {
+    Fixture fx;
+    View *v = fx.view("bloom-view", 96, 96, Colour(0, 0, 0)); REQUIRE(v);
+    Scene *s = fx.scene("bloom-scene");                       REQUIRE(s);
+    v->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    MeshId cube = s->createMesh(unitCubeData());
+    PbrParams glow;
+    glow.albedo = Colour(0, 0, 0);
+    glow.emissive = Colour(12.0f, 12.0f, 12.0f);   // well above 1.0: this is what HDR is for
+    MaterialId mat = s->createPbrMaterial(glow);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, cube, mat));
+    s->setNodeTransform(n, Vec3(0, 0, 0), Quat(), Vec3(0.6f, 0.6f, 0.6f));
+    enginetest::testCameraLookAt(v, Vec3(0, 0, 3.0f), Vec3(0, 0, 0));
+
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    fxDesc.hdr = true;
+    fxDesc.bloom = false;
+    v->setPostFx(fxDesc);
+    renderFor(fx.e, 0.8); Image noBloom; REQUIRE(v->readPixels(noBloom));
+
+    fxDesc.bloom = true;
+    fxDesc.bloomThreshold = 1.0f;
+    v->setPostFx(fxDesc);
+    renderFor(fx.e, 0.8); Image withBloom; REQUIRE(v->readPixels(withBloom));
+
+    // A ring of background pixels well outside the cube's silhouette.
+    auto haze = [](const Image &i) {
+        int sum = 0, n = 0;
+        for (unsigned x = 2; x < 94; x += 4) {
+            for (unsigned y : { 4u, 91u }) { const Px q = px(i, x, y); sum += (q.r+q.g+q.b)/3; ++n; }
+        }
+        for (unsigned y = 2; y < 94; y += 4) {
+            for (unsigned x : { 4u, 91u }) { const Px q = px(i, x, y); sum += (q.r+q.g+q.b)/3; ++n; }
+        }
+        return n ? sum / n : 0;
+    };
+    const int off = haze(noBloom), on = haze(withBloom);
+    std::printf("    background haze: bloom off %d, bloom on %d\n", off, on);
+    CHECK_MSG(on > off, "bloom bleeds a bright surface into the background: %d -> %d", off, on);
+}
+
+/// SSAO darkens a crease. Two boxes meeting at a right angle: the corner where
+/// they meet must get darker when ambient occlusion is on, while a flat region
+/// far from any geometry must not.
+void ssao_darkens_creases() {
+    Fixture fx;
+    View *v = fx.view("ssao-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("ssao-scene");               REQUIRE(s);
+    v->setScene(s);
+    // Ambient only: SSAO modulates ambient-lit surfaces, and a bright direct
+    // light would swamp the effect.
+    s->setAmbient(Colour(0.8f, 0.8f, 0.8f), Colour(0.8f, 0.8f, 0.8f));
+    MeshId cube = s->createMesh(unitCubeData());
+    PbrParams white; white.albedo = Colour(0.9f, 0.9f, 0.9f); white.roughness = 1.0f;
+    MaterialId mat = s->createPbrMaterial(white);
+    NodeId floor = s->createNode();
+    CHECK(s->attachMesh(floor, cube, mat));
+    s->setNodeTransform(floor, Vec3(0, -0.5f, 0), Quat(), Vec3(6, 0.2f, 6));
+    NodeId wall = s->createNode();
+    CHECK(s->attachMesh(wall, cube, mat));
+    s->setNodeTransform(wall, Vec3(0, 0.6f, -1.0f), Quat(), Vec3(6, 1.4f, 0.2f));
+    enginetest::testCameraLookAt(v, Vec3(0, 1.2f, 2.6f), Vec3(0, 0.1f, -0.4f));
+
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    v->setPostFx(fxDesc);
+    render(fx.e, 3); Image plain; REQUIRE(v->readPixels(plain));
+
+    fxDesc.ssao = true;
+    fxDesc.ssaoScale = 1.0f;
+    fxDesc.ssaoPower = 2.0f;
+    fxDesc.ssaoRadius = 1.0f;
+    v->setPostFx(fxDesc);
+    render(fx.e, 4);
+    if (!fx.e->lastError().empty())
+        std::printf("    lastError after SSAO enable: %s\n", fx.e->lastError().c_str());
+    Image ao; REQUIRE(v->readPixels(ao));
+
+    // Sample a horizontal band across the floor/wall crease, and a band on the
+    // open floor near the camera.
+    auto band = [](const Image &i, unsigned y) {
+        int sum = 0, n = 0;
+        for (unsigned x = 40; x < 88; x += 2) { const Px q = px(i, x, y); sum += (q.r+q.g+q.b)/3; ++n; }
+        return n ? sum / n : 0;
+    };
+    int creaseY = 0, bestDrop = 0, flatY = 110;
+    for (unsigned y = 40; y < 100; ++y) {
+        const int drop = band(plain, y) - band(ao, y);
+        if (drop > bestDrop) { bestDrop = drop; creaseY = int(y); }
+    }
+    const int flatPlain = band(plain, unsigned(flatY)), flatAo = band(ao, unsigned(flatY));
+    std::printf("    strongest AO row y=%d: %d -> %d (drop %d); open floor y=%d: %d -> %d\n",
+                creaseY, band(plain, unsigned(creaseY)), band(ao, unsigned(creaseY)), bestDrop,
+                flatY, flatPlain, flatAo);
+    CHECK_MSG(bestDrop > 8, "ambient occlusion darkens the crease (best drop %d)", bestDrop);
+    CHECK_MSG(bestDrop > (flatPlain - flatAo),
+              "the crease darkens MORE than open floor: %d vs %d", bestDrop, flatPlain - flatAo);
+
+    v->setPostFx(PostFxDesc());
+    render(fx.e, 2); Image off; REQUIRE(v->readPixels(off));
+    CHECK_MSG(px(off, 64, unsigned(creaseY)).r == px(plain, 64, unsigned(creaseY)).r,
+              "turning SSAO off restores the exact original");
+}
+
+/// SMAA smooths a high-contrast silhouette edge: the number of pixels that are
+/// neither foreground nor background (i.e. blended) goes UP.
+void smaa_smooths_edges() {
+    Fixture fx;
+    View *v = fx.view("smaa-view", 128, 128, Colour(0, 0, 0)); REQUIRE(v);
+    Scene *s = fx.scene("smaa-scene");                         REQUIRE(s);
+    v->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    MeshId cube = s->createMesh(unitCubeData());
+    PbrParams glow; glow.albedo = Colour(0, 0, 0); glow.emissive = Colour(1.0f, 1.0f, 1.0f);
+    MaterialId mat = s->createPbrMaterial(glow);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, cube, mat));
+    // Rotated so the silhouette is a diagonal — the case SMAA exists for.
+    s->setNodeTransform(n, Vec3(0, 0, 0), Quat(0, 0, 0.2588190f, 0.9659258f), Vec3(0.9f, 0.9f, 0.9f));
+    enginetest::testCameraLookAt(v, Vec3(0, 0, 3.0f), Vec3(0, 0, 0));
+
+    auto blended = [](const Image &i) {
+        int n = 0;
+        for (unsigned y = 0; y < i.height; ++y)
+            for (unsigned x = 0; x < i.width; ++x) {
+                const Px q = px(i, x, y);
+                const int l = (q.r + q.g + q.b) / 3;
+                if (l > 24 && l < 231) ++n;   // neither black background nor white cube
+            }
+        return n;
+    };
+
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    v->setPostFx(fxDesc);
+    render(fx.e, 3); Image aliased; REQUIRE(v->readPixels(aliased));
+
+    fxDesc.smaaPreset = 3;   // Ultra: the strongest, and the least ambiguous test
+    v->setPostFx(fxDesc);
+    render(fx.e, 4);
+    if (!fx.e->lastError().empty())
+        std::printf("    lastError after SMAA enable: %s\n", fx.e->lastError().c_str());
+    Image smoothed; REQUIRE(v->readPixels(smoothed));
+    const int before = blended(aliased), after = blended(smoothed);
+    std::printf("    partially-blended pixels: aliased %d, SMAA %d\n", before, after);
+    CHECK_MSG(after > before, "SMAA blends silhouette edges: %d -> %d", before, after);
+}
+
+/// Refraction: a refractive pane in front of a patterned wall must BEND what is
+/// behind it — i.e. differ from the same pane rendered as ordinary glass.
+void refraction_bends_the_background() {
+    Fixture fx;
+    View *v = fx.view("refract-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("refract-scene");               REQUIRE(s);
+    v->setScene(s);
+    s->setAmbient(Colour(0.9f, 0.9f, 0.9f), Colour(0.9f, 0.9f, 0.9f));
+    MeshId cube = s->createMesh(unitCubeData());
+    // A back wall with strong colour contrast, made of two blocks.
+    PbrParams red; red.albedo = Colour(0.9f, 0.05f, 0.05f); red.roughness = 1.0f;
+    PbrParams green; green.albedo = Colour(0.05f, 0.9f, 0.05f); green.roughness = 1.0f;
+    MaterialId redMat = s->createPbrMaterial(red), greenMat = s->createPbrMaterial(green);
+    NodeId left = s->createNode();  CHECK(s->attachMesh(left, cube, redMat));
+    s->setNodeTransform(left, Vec3(-1.0f, 0, -2.0f), Quat(), Vec3(2, 4, 0.2f));
+    NodeId right = s->createNode(); CHECK(s->attachMesh(right, cube, greenMat));
+    s->setNodeTransform(right, Vec3(1.0f, 0, -2.0f), Quat(), Vec3(2, 4, 0.2f));
+
+    PbrParams glass;
+    glass.albedo = Colour(0.9f, 0.9f, 0.9f);
+    glass.roughness = 0.05f;
+    glass.alpha = 0.25f;
+    glass.alphaMode = PbrAlphaMode::Refractive;
+    glass.refractionStrength = 0.0f;   // refractive, but a flat window to begin with
+    MaterialId glassMat = s->createPbrMaterial(glass);
+    NodeId pane = s->createNode(); CHECK(s->attachMesh(pane, cube, glassMat));
+    // Tilted, so a refractive offset moves the sampled background sideways.
+    s->setNodeTransform(pane, Vec3(0, 0, 0.3f), Quat(0, 0.2588190f, 0, 0.9659258f), Vec3(2.4f, 2.4f, 0.1f));
+    enginetest::testCameraLookAt(v, Vec3(0, 0, 3.2f), Vec3(0, 0, 0));
+
+    // Without the chain a refractive material must still RENDER — HlmsPbs falls
+    // back to ordinary glass when the pass offers it no refraction texture.
+    // (It used to vanish: the opaque pass stopped short of its render queue.)
+    render(fx.e, 3); Image noChain; REQUIRE(v->readPixels(noChain));
+    std::printf("    no chain, refractive material: centre %d %d %d\n",
+                centre(noChain).r, centre(noChain).g, centre(noChain).b);
+    // Green wall behind, seen through a 25%-alpha pane: green must dominate.
+    // A frame LOST to a shader-compile failure would be the clear colour (blue)
+    // instead — which is exactly what happened before the interlock existed.
+    CHECK_MSG(centre(noChain).g > centre(noChain).b,
+              "a refractive material renders as glass when no pass offers it "
+              "refractions, instead of losing the frame: %d %d %d",
+              centre(noChain).r, centre(noChain).g, centre(noChain).b);
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    fxDesc.refractions = true;
+    v->setPostFx(fxDesc);
+    render(fx.e, 4);
+    if (!fx.e->lastError().empty())
+        std::printf("    lastError with the refraction chain: %s\n", fx.e->lastError().c_str());
+    Image asGlass; REQUIRE(v->readPixels(asGlass));
+    std::printf("    chain on, strength 0:          centre %d %d %d\n",
+                centre(asGlass).r, centre(asGlass).g, centre(asGlass).b);
+
+    glass.refractionStrength = 0.9f;
+    CHECK(s->setPbrMaterial(glassMat, glass));
+    render(fx.e, 4);
+    Image asRefractive; REQUIRE(v->readPixels(asRefractive));
+    std::printf("    chain on, strength 0.9:        centre %d %d %d\n",
+                centre(asRefractive).r, centre(asRefractive).g, centre(asRefractive).b);
+
+    // Count how many pixels moved across the whole pane.
+    int moved = 0, worst = 0;
+    for (unsigned y = 30; y < 98; ++y)
+        for (unsigned x = 30; x < 98; ++x) {
+            const Px a = px(asGlass, x, y), b = px(asRefractive, x, y);
+            const int d = std::abs(a.r - b.r) + std::abs(a.g - b.g) + std::abs(a.b - b.b);
+            if (d > 12) ++moved;
+            worst = std::max(worst, d);
+        }
+    std::printf("    pane pixels changed by refraction: %d (largest delta %d)\n", moved, worst);
+    CHECK_MSG(moved > 100, "a refractive pane bends the background (%d pixels moved)", moved);
+}
+
+
+/// The Epic shape, all at once, on a view whose target IS multisampled.
+///
+/// This is the crash test. HDR + hardware MSAA segfaults the NVIDIA SPIR-V
+/// compiler on this pin, and SSAO + hardware MSAA renders black — so the chain
+/// forces itself to 1x whenever any effect is on (OgreChain.cpp says why at
+/// length). Asking for 4x here and getting a correct picture anyway is the
+/// assertion: no combination of settings may crash or black-frame.
+void postfx_epic_shape_with_msaa() {
+    Fixture fx;
+    View *v = fx.view("epic-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("epic-scene");               REQUIRE(s);
+    v->setScene(s);
+    v->setShadows(true);
+    populate(s, kOrange);
+    aim(v);
+    v->setSampleCount(4);
+    render(fx.e, 2);
+    std::printf("    achieved samples: %u\n", v->sampleCount());
+
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    fxDesc.hdr = true;
+    fxDesc.bloom = true;
+    fxDesc.ssao = true;
+    fxDesc.ssaoScale = 1.0f;
+    v->setPostFx(fxDesc);
+    // lastError is STICKY across the whole process (nothing clears it), so the
+    // question is whether THIS sequence added one, not whether it is empty.
+    const std::string errBefore = fx.e->lastError();
+    renderFor(fx.e, 1.0);
+    Image img; REQUIRE(v->readPixels(img));
+    const Px c = centre(img);
+    std::printf("    epic + 4x MSAA centre: %d %d %d\n", c.r, c.g, c.b);
+    CHECK_MSG(c.r > 10 || c.g > 10 || c.b > 10,
+              "the full stack renders something: %d %d %d", c.r, c.g, c.b);
+    CHECK_MSG(fx.e->lastError() == errBefore,
+              "the full stack raises no NEW engine error: %s", fx.e->lastError().c_str());
+
+    // And SMAA on top of all of it (Medium's shape stacked on Epic's) — the
+    // preset recompile is the part that has to survive being combined.
+    fxDesc.smaaPreset = 1;
+    v->setPostFx(fxDesc);
+    renderFor(fx.e, 0.6);
+    REQUIRE(v->readPixels(img));
+    const Px c2 = centre(img);
+    std::printf("    + SMAA centre: %d %d %d\n", c2.r, c2.g, c2.b);
+    CHECK_MSG(c2.r > 10 || c2.g > 10 || c2.b > 10,
+              "the full stack plus SMAA renders something: %d %d %d", c2.r, c2.g, c2.b);
+}
+
 int main(int argc, char **argv) {
     const std::vector<Test> tests = {
         { "create_twice_returns_null_with_error",  create_twice_returns_null_with_error },
@@ -1919,6 +2308,13 @@ int main(int argc, char **argv) {
         { "workspace_seam_counts_every_rebuild",    workspace_seam_counts_every_rebuild },
         { "shadow_mesh_optimization_keeps_static_shadows", shadow_mesh_optimization_keeps_static_shadows },
         { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
+        { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
+        { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
+        { "bloom_bleeds_bright_areas",              bloom_bleeds_bright_areas },
+        { "ssao_darkens_creases",                   ssao_darkens_creases },
+        { "smaa_smooths_edges",                     smaa_smooths_edges },
+        { "refraction_bends_the_background",        refraction_bends_the_background },
+        { "postfx_epic_shape_with_msaa",            postfx_epic_shape_with_msaa },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

@@ -1176,6 +1176,18 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         jahScene["fog"] = fog;
     }
     jahScene["shadowEnabled"] = scene->shadowEnabled;
+    // Post chain (POST_CHAIN_SPEC.md §10). The web viewer cannot reproduce the
+    // engine's SSAO/SMAA/refraction, but it CAN match the grade — which is the
+    // part a viewer notices — so the tonemapper and its exposure travel.
+    // "hable" is Uncharted2 with the sample's own constants plus its grade tail;
+    // the viewer ports that curve rather than approximating it with a stock one.
+    {
+        QJsonObject post;
+        post["tonemap"] = scene->hdrEnabled ? QStringLiteral("hable") : QStringLiteral("neutral");
+        post["exposure"] = double(scene->exposure);
+        post["bloom"] = scene->hdrEnabled && scene->bloomEnabled;
+        jahScene["post"] = post;
+    }
     jahScene["ambientColor"] = scene->ambientColor.name();
     jahScene["antiAliasing"] = scene->antiAliasing;
     if (scene->giMode != iris::GiMode::OFF)

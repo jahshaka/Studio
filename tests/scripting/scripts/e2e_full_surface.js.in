@@ -62,6 +62,9 @@ assert(world.get().ambientFromSky === false, "ambientFromSky can be turned off")
 world.ambientFromSky(true);
 
 // ---- world anti-aliasing (WORLD_AA_SPEC.md phase 1) ----
+// A new scene starts on the Epic World Mode (POST_CHAIN_SPEC §12 decision 8),
+// whose hardware-MSAA row is 1x — the post chain does the anti-aliasing with
+// SMAA instead. So this still starts at 1, for a new reason.
 assert(world.antiAliasing() === 1, "anti-aliasing starts off (1 sample)");
 var aa = world.setAntiAliasing(4);   // 4x is the one MSAA level Vulkan guarantees
 assert(aa === 4, "setAntiAliasing(4) achieved 4x (got " + aa + ")");
@@ -72,7 +75,11 @@ assert(thrown, "invalid sample count refused");
 assert(world.get().antiAliasing === 4, "refused AA call left the setting alone");
 
 // ---- world shadow resolution (VISUAL_PARITY_SPEC item 2, option A) ----
-assert(world.get().shadowResolution === 0, "shadow quality starts on Auto (0)");
+// RE-BASELINED for the Epic default: a new scene is on Epic, whose shadow row
+// is 4096, so "Auto" is no longer where a fresh scene starts. The verb contract
+// below (set / clamp / read back) is what this section is actually about.
+assert(world.get().shadowResolution === 4096,
+       "a new (Epic) scene starts at a 4096 shadow atlas, got " + world.get().shadowResolution);
 var sr = world.setShadowResolution(1024);
 assert(sr === 1024, "setShadowResolution(1024) applied (got " + sr + ")");
 assert(world.get().shadowResolution === 1024, "document stores the shadow-resolution override");

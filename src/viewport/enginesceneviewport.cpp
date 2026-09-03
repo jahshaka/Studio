@@ -899,6 +899,11 @@ void EngineSceneViewport::renderFrames(int n, float dt)
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
+    return takeScreenshot(width, height, false);
+}
+
+QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
+{
     // Offscreen render of the same engine scene at the requested size, then readback.
     if (!mEngine || !mEngineScene || width <= 0 || height <= 0) return QImage();
     View *shot = mEngine->createOffscreenView("screenshot-" + std::to_string(++mViewSerial),
@@ -914,6 +919,16 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height)
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);
         if (mEditorCam) mMirror->applyCamera(mEditorCam, shot);
+        // applyEnvironment pushed the scene's post-fx description, which an
+        // offscreen view ignores unless it is told otherwise. `postFx` is that
+        // opt-in and the only place in the app that sets it: it makes the shot
+        // match the viewport (tonemapped, bloomed, AA'd) at the cost of no
+        // longer being a neutral, exactly-reproducible readback.
+        if (postFx) {
+            jahshaka::engine::PostFxDesc fx = shot->postFx();
+            fx.allowOffscreen = true;
+            shot->setPostFx(fx);
+        }
     }
     for (int i = 0; i < 2; ++i) mEngine->renderOneFrame();
     Image img;

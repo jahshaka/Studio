@@ -95,8 +95,8 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "frame", "editor.frame(n=1, dt=-1) -> bool",
           "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 the document's clock advances by exactly that many seconds per frame instead of by the wall clock, which is what makes stepping deterministic IN PLAY MODE (without it, each stepped frame charged the document for however long the previous statement took).",
           Needs::Engine },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
-          "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe.",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], postFx=false) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+          "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. `postFx` true renders it through the scene's post-processing chain (HDR/tonemap, bloom, ambient occlusion, SMAA) so the shot matches what the viewport shows; false (the default) is the neutral, exactly-reproducible readback that pixel assertions want.",
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -315,13 +315,14 @@ bool EditorApi::frame(int n, double dt)
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
-                                  const QVariantList &probes)
+                                  const QVariantList &probes, bool postFx)
 {
     QVariantMap out;
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("editor.screenshot: a file path is required"); return out; }
 
-    const QImage img = host.viewport->takeScreenshot(qBound(16, width, 4096), qBound(16, height, 4096));
+    const QImage img = host.viewport->takeScreenshot(qBound(16, width, 4096),
+                                                     qBound(16, height, 4096), postFx);
     if (img.isNull()) { fail("editor.screenshot: the viewport returned no image"); return out; }
 
     QFileInfo info(path);

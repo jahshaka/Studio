@@ -191,6 +191,41 @@
                 obj.add(area);   // shim node already points -Z where the doc's -Y was
             }
         });
+        // Tone mapping (POST_CHAIN_SPEC.md §10). three.js ships Linear,
+        // Reinhard, Cineon, ACESFilmic, AgX and Neutral — none of them is Hable,
+        // which is what the engine's HDR chain uses. Rather than pick the
+        // nearest stock curve and quietly look different, the exact curve is
+        // ported below (it is twenty lines of arithmetic, and it is OUR shader
+        // in OUR viewer, not a fork of anything).
+        var post = jah.post || {};
+        if (post.tonemap === "hable") {
+            renderer.toneMapping = THREE.CustomToneMapping;
+            renderer.toneMappingExposure = Math.pow(2, post.exposure || 0);
+            if (THREE.ShaderChunk) {
+                // FinalToneMapping_ps.glsl, verbatim: Uncharted2 with the
+                // sample's constants, then its hand grade tail. Both halves or
+                // neither — half of the grade is worse than none of it.
+                THREE.ShaderChunk.tonemapping_pars_fragment =
+                    THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+                        "vec3 CustomToneMapping( vec3 color ) { return color; }",
+                        [ "const float JAH_A = 0.22, JAH_B = 0.30, JAH_C = 0.10;",
+                          "const float JAH_D = 0.20, JAH_E = 0.01, JAH_F = 0.30, JAH_W = 11.2;",
+                          "vec3 JahFilmic( vec3 x ) {",
+                          "  return ((x*(JAH_A*x+JAH_C*JAH_B)+JAH_D*JAH_E) /",
+                          "          (x*(JAH_A*x+JAH_B)+JAH_D*JAH_F)) - JAH_E/JAH_F;",
+                          "}",
+                          "float JahFilmic( float x ) {",
+                          "  return ((x*(JAH_A*x+JAH_C*JAH_B)+JAH_D*JAH_E) /",
+                          "          (x*(JAH_A*x+JAH_B)+JAH_D*JAH_F)) - JAH_E/JAH_F;",
+                          "}",
+                          "vec3 CustomToneMapping( vec3 color ) {",
+                          "  color *= toneMappingExposure;",
+                          "  color = JahFilmic( color ) / JahFilmic( JAH_W );",
+                          "  return ( color - 0.5 ) * 1.25 + 0.5 + 0.11;",
+                          "}" ].join("\n"));
+            }
+        }
+
         if (filters.length) {
             renderer.shadowMap.enabled = jah.shadowEnabled !== false;
             renderer.shadowMap.type = strongestFilter(filters);

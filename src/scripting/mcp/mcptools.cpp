@@ -92,7 +92,10 @@ QJsonArray McpTools::listTools() const
         { "name", "screenshot" },
         { "description",
           "Render the engine viewport and return the image (PNG) — see your work. "
-          "Requires the engine viewport (open or create a project first)." },
+          "Requires the engine viewport (open or create a project first). By "
+          "default the scene's post-processing chain (HDR/tonemap, bloom, ambient "
+          "occlusion, SMAA) is applied so the image matches what the user sees; "
+          "pass postFx:false for a neutral render." },
         { "inputSchema", QJsonObject{
             { "type", "object" },
             { "properties", QJsonObject{
@@ -101,7 +104,11 @@ QJsonArray McpTools::listTools() const
                     { "enum", QJsonArray{ "editor" } },
                     { "description", "Which view to capture (phase 1: editor only)." } } },
                 { "width", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 800)." } } },
-                { "height", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 600)." } } } } } } } });
+                { "height", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 600)." } } },
+                { "postFx", QJsonObject{ { "type", "boolean" },
+                    { "description", "Apply the scene's post-processing chain so the image "
+                                     "matches the viewport (default true); false renders "
+                                     "neutrally." } } } } } } } });
 
     tools.append(QJsonObject{
         { "name", "undo_redo" },
@@ -210,8 +217,13 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
 
     // Deterministic frame: document -> engine sync + render before reading pixels
     // (the editor.frame(n) pattern of the headless suites).
+    // postFx: with the scene's post chain on, the shot looks like the viewport
+    // (tonemapped, bloomed, anti-aliased) instead of like a neutral thumbnail.
+    // Default TRUE here, unlike editor.screenshot: this tool exists so a human
+    // or an assistant can SEE the work, not to assert exact pixels.
+    const bool postFx = args.value(QLatin1String("postFx")).toBool(true);
     host.viewport->renderFrames(2);
-    const QImage img = host.viewport->takeScreenshot(width, height);
+    const QImage img = host.viewport->takeScreenshot(width, height, postFx);
     if (img.isNull())
         return textResult(QStringLiteral("screenshot: the viewport returned no image"), true);
 

@@ -161,6 +161,7 @@ For more information see the LICENSE file
 
 #include "services/services.h"
 #include "services/shortcutregistry.h"
+#include "services/worldmodes.h"
 #include "viewport/snapsettings.h"
 #include "services/subscriber.h"
 #include "services/undoservice.h"
@@ -296,6 +297,10 @@ iris::ScenePtr MainWindow::getScene()
 iris::ScenePtr MainWindow::createDefaultScene()
 {
     auto scene = iris::Scene::create();
+    // New scenes start on EPIC (POST_CHAIN_SPEC.md §12 decision 8, owner call).
+    // Applied through the registry rather than by hardcoding the values here, so
+    // the tier table stays the single place any of them is written.
+    worldmodes::setMode(scene, worldmodes::Mode::Epic);
 
     // second node
     auto node = iris::MeshNode::create();

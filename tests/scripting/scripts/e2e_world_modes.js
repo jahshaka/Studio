@@ -22,7 +22,7 @@ assert(guid.length > 10, "project.create -> " + guid);
 var table = world.modeTable();
 assert(table.modes.length === 4, "four tiers: " + table.modes.join(", "));
 assert(table.modes[0] === "low" && table.modes[3] === "epic", "tiers are ordered low..epic");
-assert(table.rows.length >= 7, "registry has rows: " + table.rows.length);
+assert(table.rows.length >= 12, "registry has rows: " + table.rows.length);
 
 var byId = {};
 for (var i = 0; i < table.rows.length; ++i) byId[table.rows[i].id] = table.rows[i];
@@ -30,6 +30,11 @@ assert(!!byId["msaa"], "row msaa is declared");
 assert(!!byId["shadowResolution"], "row shadowResolution is declared");
 assert(!!byId["shadowFilter"], "row shadowFilter is declared");
 assert(!!byId["giMode"], "row giMode is declared");
+assert(!!byId["hdr"], "row hdr is declared");
+assert(!!byId["bloom"], "row bloom is declared");
+assert(!!byId["ssao"], "row ssao is declared");
+assert(!!byId["smaa"], "row smaa is declared");
+assert(!!byId["refractions"], "row refractions is declared");
 assert(!!byId["planarBudget"], "row planarBudget is declared as a contract");
 assert(byId["planarBudget"].available === false,
        "planarBudget renders disabled until the planar lane lands");
@@ -39,13 +44,27 @@ for (var k = 0; k < table.rows.length; ++k) {
     assert(!!r.tiers.low && !!r.tiers.epic, "row " + r.id + " declares all four tier values");
 }
 
-// ---- a fresh scene is Custom: no tier has been applied -----------------------
-assert(world.mode() === "custom", "a new scene starts on no tier: " + world.mode());
+// ---- a fresh scene starts on EPIC ------------------------------------------
+// POST_CHAIN_SPEC §12 decision 8 (owner call): new scenes are Epic, and a
+// document written before World Modes existed reads as Epic too.
+assert(world.mode() === "epic", "a new scene starts on Epic: " + world.mode());
+var fresh = world.settings();
+assert(fresh.hdr.value === 1, "Epic turns HDR on");
+// Hardware MSAA is 1x in EVERY tier: with the post chain on it either crashes
+// the driver (HDR) or renders black (ambient occlusion), both reproduced in
+// tests/engine. SMAA does the anti-aliasing instead.
+assert(fresh.msaa.value === 1, "Epic leaves hardware MSAA off: " + fresh.msaa.valueId);
+assert(fresh.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra: " + fresh.smaa.valueId);
+assert(fresh.giMode.valueId === "vct", "Epic turns VCT GI on");
+assert(fresh.refractions.valueId === "auto", "Epic sets refractions to Auto");
 
 // ---- applying a tier writes THROUGH to the backing fields -------------------
 assert(world.mode({ mode: "low" }) === "low", "world.mode({mode:'low'})");
 var s = world.settings();
 assert(s.msaa.value === 1, "Low sets MSAA off: " + s.msaa.valueId);
+assert(s.hdr.value === 0, "Low turns HDR off");
+assert(s.ssao.valueId === "off", "Low turns ambient occlusion off");
+assert(s.refractions.valueId === "off", "Low turns refractions off");
 assert(s.shadowResolution.value === 512, "Low sets a 512 shadow atlas: " + s.shadowResolution.value);
 assert(s.giMode.valueId === "off", "Low turns GI off: " + s.giMode.valueId);
 assert(s.msaa.source === "mode", "an untouched row reports source 'mode'");
@@ -56,17 +75,20 @@ assert(world.get().shadowResolution === 512, "world.get().shadowResolution follo
 
 assert(world.mode({ mode: "epic" }) === "epic", "world.mode({mode:'epic'})");
 s = world.settings();
-assert(s.msaa.value === 4, "Epic sets 4x MSAA: " + s.msaa.valueId);
+assert(s.msaa.value === 1, "Epic leaves hardware MSAA off: " + s.msaa.valueId);
 assert(s.shadowResolution.value === 4096, "Epic sets a 4096 shadow atlas: " + s.shadowResolution.value);
 assert(s.giMode.valueId === "vct", "Epic turns VCT GI on: " + s.giMode.valueId);
 assert(s.shadowFilter.valueId === "verysoft", "Epic uses the softest shadow filter");
+assert(s.hdr.value === 1 && s.bloom.value === 1, "Epic turns HDR and bloom on");
+assert(s.ssao.valueId === "full", "Epic runs ambient occlusion at full resolution");
+assert(s.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra");
 assert(world.get().antiAliasing === 4, "the backing field followed Epic too");
 
 // ---- a pin survives a mode switch -------------------------------------------
 var pinned = world.override({ id: "msaa", value: "2x" });
 assert(pinned.value === 2 && pinned.source === "override", "world.override pins MSAA to 2x");
 assert(world.get().antiAliasing === 2, "the pin wrote through to the backing field");
-assert(pinned.tierValue === 4, "the row still reports what Epic would give it");
+assert(pinned.tierValue === 1, "the row still reports what Epic would give it");
 
 world.mode({ mode: "low" });
 s = world.settings();

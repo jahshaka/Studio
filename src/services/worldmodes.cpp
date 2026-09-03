@@ -39,12 +39,119 @@ QVector<Row> buildRows()
                       { QStringLiteral("2x"),  QStringLiteral("2x"),  2 },
                       { QStringLiteral("4x"),  QStringLiteral("4x"),  4 },
                       { QStringLiteral("8x"),  QStringLiteral("8x"),  8 } };
-        r.tier[0] = 1; r.tier[1] = 1; r.tier[2] = 2; r.tier[3] = 4;
+        // 1x in every tier, and that is a FORCED choice, not a taste one: with
+        // the post chain on, hardware MSAA either crashes the driver (HDR) or
+        // renders black (ambient occlusion) — both reproduced in tests/engine.
+        // The chain renders at 1x regardless of what is asked here, so a tier
+        // that asked for 4x would be paying for a multisampled window that does
+        // nothing. Anti-aliasing comes from SMAA instead; MSAA stays available
+        // as a row for scenes that run with the chain off.
+        r.tier[0] = 1; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
         r.cost = QStringLiteral("Hardware edge smoothing. Costs render-target memory and "
-                                "bandwidth in proportion to the sample count; the driver may "
-                                "clamp the request.");
+                                "bandwidth in proportion to the sample count, and the driver may "
+                                "clamp the request. IGNORED while HDR or ambient occlusion is on "
+                                "— those use SMAA instead.");
         r.get = [](const iris::ScenePtr &s) { return s->antiAliasing; };
         r.set = [](const iris::ScenePtr &s, int v) { s->antiAliasing = v; };
+        out.append(r);
+    }
+
+    // ---- Post-processing chain (POST_CHAIN_SPEC.md phases 3-7) --------------
+    // These rows appear only once the renderer can actually serve them: a row
+    // that silently does nothing is worse than no row at all.
+    {
+        Row r;
+        r.id = QStringLiteral("hdr");
+        r.label = QStringLiteral("HDR + Filmic Tonemap");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Bool;
+        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
+        r.cost = QStringLiteral("Renders into a floating-point buffer and grades it with a film "
+                                "curve and automatic exposure. The luminance and bloom work is at "
+                                "a fixed size, so only the final pass scales with the window. Off "
+                                "at Low purely to save the buffer.");
+        r.get = [](const iris::ScenePtr &s) { return s->hdrEnabled ? 1 : 0; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->hdrEnabled = v != 0; };
+        out.append(r);
+    }
+    {
+        Row r;
+        r.id = QStringLiteral("bloom");
+        r.label = QStringLiteral("Bloom");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Bool;
+        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
+        r.cost = QStringLiteral("Highlight glow. Rides the HDR chain's fixed 256x256 blur, so it "
+                                "costs almost nothing and does not scale with resolution — but it "
+                                "needs HDR, and does nothing without it.");
+        r.get = [](const iris::ScenePtr &s) { return s->bloomEnabled ? 1 : 0; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->bloomEnabled = v != 0; };
+        out.append(r);
+    }
+    {
+        Row r;
+        r.id = QStringLiteral("ssao");
+        r.label = QStringLiteral("Ambient Occlusion");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),        0 },
+                      { QStringLiteral("half"), QStringLiteral("Half Res"),   1 },
+                      { QStringLiteral("full"), QStringLiteral("Full Res"),   2 } };
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
+        r.cost = QStringLiteral("Contact shadowing in creases and corners. 64 samples per pixel, "
+                                "fixed by the shader — the only lever is the buffer resolution. "
+                                "Also adds a second colour attachment to the MAIN pass, which is "
+                                "why it is off below High.");
+        // One row, two backing fields: the enable flag and the buffer scale.
+        r.get = [](const iris::ScenePtr &s) {
+            if (!s->ssaoEnabled) return 0;
+            return s->ssaoScale >= 0.99f ? 2 : 1;
+        };
+        r.set = [](const iris::ScenePtr &s, int v) {
+            s->ssaoEnabled = v != 0;
+            if (v) s->ssaoScale = v >= 2 ? 1.0f : 0.5f;
+        };
+        out.append(r);
+    }
+    {
+        Row r;
+        r.id = QStringLiteral("smaa");
+        r.label = QStringLiteral("SMAA (post AA)");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),    QStringLiteral("Off"),    -1 },
+                      { QStringLiteral("low"),    QStringLiteral("Low"),     0 },
+                      { QStringLiteral("medium"), QStringLiteral("Medium"),  1 },
+                      { QStringLiteral("high"),   QStringLiteral("High"),    2 },
+                      { QStringLiteral("ultra"),  QStringLiteral("Ultra"),   3 } };
+        // SMAA is the chain's anti-aliasing at every tier that has a chain.
+        // POST_CHAIN_SPEC §9.3 proposed MSAA at High/Epic and SMAA only at
+        // Medium; that split is not available (see the MSAA row above), so the
+        // preset simply climbs with the tier instead. Low has no chain and no AA.
+        r.tier[0] = -1; r.tier[1] = 1; r.tier[2] = 2; r.tier[3] = 3;
+        r.cost = QStringLiteral("Edge anti-aliasing after tonemapping, at a fixed cost per pixel "
+                                "instead of MSAA's per-sample memory. Changing the preset "
+                                "recompiles three shaders — a brief hitch, not a per-frame cost.");
+        r.get = [](const iris::ScenePtr &s) { return s->smaaPreset; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->smaaPreset = v; };
+        out.append(r);
+    }
+    {
+        Row r;
+        r.id = QStringLiteral("refractions");
+        r.label = QStringLiteral("Refractive Glass");
+        r.group = QStringLiteral("Rendering");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),  0 },
+                      { QStringLiteral("auto"), QStringLiteral("Auto"), 1 },
+                      { QStringLiteral("on"),   QStringLiteral("On"),   2 } };
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 1;
+        r.cost = QStringLiteral("Glass that BENDS what is behind it. Auto is the honest setting: "
+                                "the extra scene pass and full-screen copy only enter the frame "
+                                "while the scene actually contains a refractive material, so it "
+                                "costs nothing until you make one.");
+        r.get = [](const iris::ScenePtr &s) { return s->refractionsMode; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->refractionsMode = v; };
         out.append(r);
     }
 
