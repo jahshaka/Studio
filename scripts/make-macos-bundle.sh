@@ -61,6 +61,11 @@ MACDEPLOYQT="$QT_DIR/bin/macdeployqt"
 [ -d "$OGRE_PREFIX/lib" ] || die "Ogre-Next install not found at $OGRE_PREFIX (set OGRE_PREFIX)."
 [ -f "$OGRE_PREFIX/lib/RenderSystem_Vulkan.4.0.dylib" ] || die \
     "RenderSystem_Vulkan.4.0.dylib not in $OGRE_PREFIX/lib."
+# Two dlopen'd plugins now, not one (PARTICLES_FX2_SPEC §4.1). Ogre installs
+# render systems flat in lib/ and the rest under lib/OGRE-Next/.
+[ -f "$OGRE_PREFIX/lib/OGRE-Next/Plugin_ParticleFX2.4.0.dylib" ] || \
+[ -f "$OGRE_PREFIX/lib/Plugin_ParticleFX2.4.0.dylib" ] || die \
+    "Plugin_ParticleFX2.4.0.dylib not in $OGRE_PREFIX/lib — re-run irisgl/scripts/build-ogre.sh."
 : "${VULKAN_SDK:?VULKAN_SDK not set — source the LunarG setup-env.sh first}"
 [ -f "$VULKAN_SDK/lib/libMoltenVK.dylib" ] || die "libMoltenVK.dylib not in $VULKAN_SDK/lib."
 [ -f "$VULKAN_SDK/lib/libvulkan.1.dylib" ] || die "libvulkan.1.dylib not in $VULKAN_SDK/lib."
@@ -184,10 +189,20 @@ done
 check "sqldrivers holds $(ls "$CONTENTS/PlugIns/sqldrivers" | tr '\n' ' ')"
 
 # --- 6. Engine payload macdeployqt cannot see (it is dlopen'd) ---------------
-step "6. Vulkan render system + loader + MoltenVK"
+step "6. Vulkan render system + ParticleFX2 + loader + MoltenVK"
 cp "$OGRE_PREFIX/lib/RenderSystem_Vulkan.4.0.dylib" "$CONTENTS/Frameworks/"
 # Ogre loads the plugin as pluginDir + "/RenderSystem_Vulkan" and appends ".dylib".
 ln -sfn RenderSystem_Vulkan.4.0.dylib "$CONTENTS/Frameworks/RenderSystem_Vulkan.dylib"
+# ParticleFX2, dlopen'd the same way since the particle adoption
+# (PARTICLES_FX2_SPEC §4.1). The DEFINITIONS live in libOgreNextMain — which is
+# why billboard sets always worked with no plugin — but every emitter and
+# affector FACTORY is registered by this plugin's install(). Without it every
+# particle system in every scene fails to build and the app renders no fire.
+cp "$OGRE_PREFIX/lib/OGRE-Next/Plugin_ParticleFX2.4.0.dylib" "$CONTENTS/Frameworks/" 2>/dev/null \
+    || cp "$OGRE_PREFIX/lib/Plugin_ParticleFX2.4.0.dylib" "$CONTENTS/Frameworks/" \
+    || die "step 6: Plugin_ParticleFX2 not found under $OGRE_PREFIX/lib"
+ln -sfn Plugin_ParticleFX2.4.0.dylib "$CONTENTS/Frameworks/Plugin_ParticleFX2.dylib"
+chmod u+w "$CONTENTS/Frameworks/Plugin_ParticleFX2.4.0.dylib"
 cp -L "$VULKAN_SDK/lib/libvulkan.1.dylib" "$CONTENTS/Frameworks/libvulkan.1.dylib"
 cp    "$VULKAN_SDK/lib/libMoltenVK.dylib" "$CONTENTS/Frameworks/libMoltenVK.dylib"
 chmod u+w "$CONTENTS/Frameworks/RenderSystem_Vulkan.4.0.dylib" \

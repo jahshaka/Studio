@@ -62,3 +62,30 @@ if(JAHSHAKA_ASAN)
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;ASAN_OPTIONS=detect_leaks=0"
         TIMEOUT 1200 LABELS "particles")
 endif()
+
+# THE FIRE GATE (PARTICLES_FX2_SPEC §11 phase 3). Builds the SHIPPING fire preset
+# through the document and the mirror, then asserts the SHAPE of what the engine
+# drew: banded luminance, taper, warmth, motion and a clean freeze. Statistical
+# by construction — emission is seeded from a process-wide LCG and the affectors
+# run on worker threads, so there is no pixel-exact answer to compare against.
+# Links IrisGL + JahshakaEngine like the mirror suite (it needs the document).
+add_executable(test_particles_fire test_particles_fire.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_particles_fire PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_particles_fire PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_particles_fire PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_particles_fire PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_particles_fire JahshakaEngineMedia)
+add_test(NAME particles.fire_shape COMMAND test_particles_fire
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(particles.fire_shape PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "particles")

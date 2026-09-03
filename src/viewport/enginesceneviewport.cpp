@@ -870,6 +870,20 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     if (mMirror) mMirror->applySky(view());
     if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
     if (mMirror && mEditorCam) mMirror->applyCamera(mEditorCam, view());
+    // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
+    // particles too. They are simulated inside the engine now, from the
+    // backend's own frame-time source, so a dt this viewport applies to the
+    // document would otherwise leave the flame running on the wall clock — and
+    // an offscreen frame takes about a millisecond, so 15 scripted frames would
+    // buy 15 ms of fire and photograph an empty scene. Pushed AFTER
+    // applyEnvironment, which owns the scene's normal time scale (the two
+    // settings cancel each other inside the backend, so exactly one of them may
+    // be live at a time).
+    if (mEngine) {
+        if (dtOverride >= 0.0f) mEngine->setFixedFrameDelta(dtOverride);
+        else if (mEngine->fixedFrameDelta() > 0.0f)
+            mEngine->setParticleTimeScale(mScene ? mScene->particleTimeScale : 1.0f);
+    }
 }
 
 QImage EngineSceneViewport::takeScreenshot(QSize dimension)

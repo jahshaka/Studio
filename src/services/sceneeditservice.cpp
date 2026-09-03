@@ -251,28 +251,39 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
         QByteArray()
     );
 
-    // if we reached this far, the project dir has already been created
-    // we can copy some default assets to each project here
-    QFile::copy(IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
-        QDir(project->getProjectFolder()).filePath("Glowing Particle.jpg"));
+    // The default particle image. ONE per project, not one per emitter: this
+    // used to copy the file and mint a fresh Texture row on every single add, so
+    // a scene with five emitters shipped five byte-identical "Glowing
+    // Particle.jpg" assets (the Particles sample grew four of them the first
+    // time it was re-authored from a script, which is how this was noticed).
+    // Reuse the row if the project already has one.
+    const QString defaultImagePath = QDir(project->getProjectFolder()).filePath("Glowing Particle.jpg");
+    QString assetGuid = Database::fetchAssetGUIDByName("Glowing Particle.jpg",
+                                                       project->getProjectGuid());
+    if (assetGuid.isEmpty()) {
+        // if we reached this far, the project dir has already been created
+        // we can copy some default assets to each project here
+        QFile::copy(IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
+                    defaultImagePath);
 
-    auto thumb = ThumbnailManager::createThumbnail(
-        IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"), 72, 72);
+        auto thumb = ThumbnailManager::createThumbnail(
+            IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"), 72, 72);
 
-    QByteArray thumbnailBytes;
-    QBuffer buffer(&thumbnailBytes);
-    buffer.open(QIODevice::WriteOnly);
-    QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
+        QByteArray thumbnailBytes;
+        QBuffer buffer(&thumbnailBytes);
+        buffer.open(QIODevice::WriteOnly);
+        QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
 
-    const QString tileGuid = GUIDManager::generateGUID();
-    const QString assetGuid = db->createAssetEntry(tileGuid,
-        "Glowing Particle.jpg",
-        static_cast<int>(ModelTypes::Texture),
-        project->getProjectGuid(),
-        project->getProjectGuid(),
-        QString(),
-        QString(),
-        thumbnailBytes);
+        const QString tileGuid = GUIDManager::generateGUID();
+        assetGuid = db->createAssetEntry(tileGuid,
+            "Glowing Particle.jpg",
+            static_cast<int>(ModelTypes::Texture),
+            project->getProjectGuid(),
+            project->getProjectGuid(),
+            QString(),
+            QString(),
+            thumbnailBytes);
+    }
 
     db->createDependency(
         static_cast<int>(ModelTypes::ParticleSystem),
@@ -281,15 +292,12 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
         project->getProjectGuid()
     );
 
-    {
-        QString texPath = QDir(project->getProjectFolder()).filePath("Glowing Particle.jpg");
-        node->setTexture(iris::Texture2D::load(texPath));
-    }
+    node->setTexture(iris::Texture2D::load(defaultImagePath));
 
     auto assetTexture = new AssetTexture;
     assetTexture->fileName = "Glowing Particle.jpg";
     assetTexture->assetGuid = assetGuid;
-    assetTexture->path = QDir(project->getProjectFolder()).filePath("Glowing Particle.jpg");
+    assetTexture->path = defaultImagePath;
     AssetManager::addAsset(assetTexture);
 
     addNodeToScene(node);
@@ -534,6 +542,30 @@ bool SceneEditService::setDecalTexture(const iris::DecalNodePtr &decal, const QS
         QSqlDatabase::database(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     return true;
+}
+
+bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emitter,
+                                          const QString &textureGuid)
+{
+    if (!emitter) return false;
+    if (textureGuid.isEmpty()) { emitter->texture.clear(); return true; }
+    if (!db || !project || project->getProjectGuid().isEmpty()) return false;
+
+    // BINDING membership, never a direct add: an emitter REFERS to an existing
+    // image, so no companion PBR material is minted for it — the same rule the
+    // decal and light-profile bindings follow.
+    ProjectAssets::addToProject(textureGuid, db, project, ProjectAssets::AddKind::Binding);
+    db->removeDependenciesByType(emitter->getGUID(), ModelTypes::Texture);
+    db->createDependency(static_cast<int>(ModelTypes::ParticleSystem),
+                         static_cast<int>(ModelTypes::Texture),
+                         emitter->getGUID(), textureGuid, project->getProjectGuid());
+
+    const QString path = AssetCas::resolvePinned(
+        QSqlDatabase::database(), AssetStorePaths::root(),
+        project->getProjectGuid(), textureGuid);
+    if (path.isEmpty()) return false;
+    emitter->setTexture(iris::Texture2D::load(path));
+    return !!emitter->texture;
 }
 
 void SceneEditService::addAssetParticleSystem(bool ignore, QVector3D position, QString guid,

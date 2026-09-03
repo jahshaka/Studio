@@ -144,6 +144,14 @@ public:
     /// land here): pins the guid as a dependency, rewrites the dependency row
     /// and re-resolves the path. False when the node is not a decal.
     bool setDecalTexture(const iris::DecalNodePtr &decal, const QString &textureGuid);
+    /// Binds (or, with an empty guid, clears) an emitter's particle image, the
+    /// same way setDecalTexture binds a decal's: a BINDING membership and a
+    /// dependency row, never a copy and never a companion material. Until this
+    /// existed the only way to change an emitter's image was the property
+    /// panel's picker — nothing scripted could do it, which is why the sample
+    /// scene could not be re-authored from a script.
+    bool setParticleTexture(const iris::ParticleSystemNodePtr &emitter,
+                            const QString &textureGuid);
 
     /// Imports a mesh file straight into the scene. The path must be a real
     /// file — the file dialog stays in the shell.

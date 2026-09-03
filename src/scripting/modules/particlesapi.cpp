@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "data/database/database.h"
 
 using namespace scriptmod;
 

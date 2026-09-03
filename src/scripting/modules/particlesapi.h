@@ -28,6 +28,11 @@ For more information see the LICENSE file
 //   * describe — the resolved emitter, for tests, MCP and "what am I looking at";
 //   * timeScale — a SCENE value, not a node one (the renderer has one
 //     frame-time source for the whole process; §10.3).
+//
+// The emitter's particle IMAGE is not here either, and that is deliberate: it
+// is node.setParticleTexture, beside node.setDecalTexture and
+// node.setLightTexture. "Bind an asset texture to a node of type X" was already
+// a node.* shape before particles had a namespace at all.
 
 #include <QVariantList>
 #include <QVariantMap>
