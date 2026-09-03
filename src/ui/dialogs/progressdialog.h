@@ -62,6 +62,10 @@ signals:
 protected:
     /// Esc lands here on a QDialog — treat it as Cancel, never a silent close.
     void reject() override;
+    /// Belt-and-braces against the page-switch native-window desync: Qt can
+    /// believe this dialog hidden while its X window stays mapped (the ghost
+    /// dialog on the desktop). Force the native window down on every hide.
+    void hideEvent(QHideEvent *event) override;
 
 private:
     Ui::ProgressDialog *ui;

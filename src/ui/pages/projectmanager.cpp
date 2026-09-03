@@ -250,6 +250,15 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
     QDir().mkpath(pDir);
 
+    // The dialog's story ends HERE, before any scene open. loadProjectAssets()
+    // fires fileToOpen on a DIRECT connection — the whole editor page switch and
+    // scene load run inside that emit, hiding this page (the dialog's parent)
+    // amid native-window churn; a close() issued after that lands in the
+    // page-switch mapping desync and leaves a ghost X window on the desktop
+    // (ENGINEERING_DEBT_SPEC addendum 2, seen live twice on 2026-09-03).
+    progressDialog->setValue(100);
+    progressDialog->close();
+
     if (shouldOpen) {
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
@@ -258,9 +267,6 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     else {
         addImportedTileToDesktop(result.projectGuid);
     }
-
-    progressDialog->setValue(100);
-    progressDialog->close();
 }
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {

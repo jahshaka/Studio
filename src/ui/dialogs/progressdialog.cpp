@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "ui_progressdialog.h"
 
 #include <QApplication>
+#include <QWindow>
 
 ProgressDialog::ProgressDialog(QWidget *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
@@ -106,3 +107,15 @@ void ProgressDialog::setValueAndText(int value, QString text)
 	setLabelText(text);
 }
 
+
+void ProgressDialog::hideEvent(QHideEvent *event)
+{
+    QDialog::hideEvent(event);
+    // The page-switch native-window desync (AA_DontCreateNativeWidgetSiblings
+    // family): when this dialog's parent page hides mid scene-open, Qt's hide
+    // of this dialog can leave the X window mapped — a ghost the user must
+    // dismiss with xdotool. Forcing the QWindow down closes that gap; a later
+    // show() maps it fresh. (ENGINEERING_DEBT_SPEC addendum 2, 2026-09-03.)
+    if (windowHandle() && windowHandle()->isVisible())
+        windowHandle()->setVisible(false);
+}
