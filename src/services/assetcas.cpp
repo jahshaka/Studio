@@ -328,6 +328,41 @@ QString resolvePinned(QSqlDatabase conn, const QString &root,
     return resolveSource(conn, root, guid, nameOut);
 }
 
+QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &path,
+                         const QString &projectGuid)
+{
+    // THE INVERSE of resolvePinned/resolveSource, and the reason it has to
+    // exist: the document holds RESOLVED PATHS (the renderer opens files), the
+    // scene blob holds GUIDS, and since the CAS an object's file name is its
+    // sha256 — not its display name. Any writer that recovers the guid by
+    // matching the file NAME (SceneWriter did, for particle textures and for
+    // every material texture property) looks up "df4501e5….png", finds nothing,
+    // and writes an empty guid: one save silently erased the fire's texture and
+    // every mesh's maps from the Particles sample (2026-09-03).
+    if (path.isEmpty()) return QString();
+    const QFileInfo info(path);
+    const QString objectsDir = QDir::cleanPath(
+        QDir(root).absoluteFilePath(QStringLiteral("objects")));
+    const QString dir = QDir::cleanPath(info.absolutePath());
+    // <root>/objects/<xx>/<oid>.<ext> — anything else is not a store object.
+    if (!dir.startsWith(objectsDir + QLatin1Char('/'))) return QString();
+    const QString oid = info.completeBaseName().toLower();
+    if (oid.length() != 64) return QString();
+
+    // One object can back SEVERAL assets (content dedup is the whole point of
+    // the store), so prefer the one THIS project pins; the plain row otherwise.
+    QSqlQuery query(conn);
+    query.prepare("SELECT AF.asset_guid FROM asset_files AF "
+                  "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid "
+                  "                           AND PA.project_guid = ? "
+                  "WHERE AF.oid = ? "
+                  "ORDER BY (PA.asset_guid IS NOT NULL) DESC");
+    query.addBindValue(projectGuid);
+    query.addBindValue(oid);
+    if (query.exec() && query.next()) return query.value(0).toString();
+    return QString();
+}
+
 bool writeStoreInfo(const QString &root, QString *errorOut)
 {
     const QString path = AssetStorePaths::storeInfoPathIn(root);

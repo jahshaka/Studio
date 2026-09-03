@@ -12,6 +12,9 @@
 //   - the materials the conversion owns (the dragons are the drawer's
 //     Gold/Silver/Glass PBR presets — scenes/tools/convert_legacy_materials.py),
 //   - texture properties resolve to store paths, never raw guids,
+//   - the SAVE ROUND TRIP for Particles (2026-09-03): import, save, reopen —
+//     references have to survive a save, and the texture-erasing writer bug
+//     proved that "opens with content" says nothing about that,
 //   - PIXELS: an engine screenshot with color probes (editor.screenshot's
 //     5x5-averaged probe points) — the gold dragon must BE gold, the blue
 //     character blue, the red pipe red. This suite runs engine-up (no
@@ -34,6 +37,43 @@ var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function assertTexturePath(matName, key, v) {
     assert(typeof v === "string" && v.length > 0 && !GUID_RE.test(v) && v.indexOf("/") >= 0,
            matName + "." + key + " resolves to a file path (" + v + ")");
+}
+
+// ---- the fire-billboard probe (2026-09-03) ---------------------------------
+// The "sphere renders yellow" probe below convicted nothing about the FIRE: it
+// samples the emissive Sphere MESH, which keeps its colour whatever happens to
+// the emitters. When the particle texture stopped reaching BillboardSet2 the
+// sample rendered as large white additive squares over that same yellow sphere
+// and the suite stayed green all day.
+//
+// So probe the PLUME itself, as a population rather than a pixel: particle
+// simulation is stochastic, but its COLOUR is not. A textured fire is warm
+// (red well above blue); an untextured additive quad is flat white, because
+// the datablock falls back to its white vertex colour and the alpha cutout
+// that shapes a flame is exactly what is missing.
+//
+// Measured over the plume box on lavapipe and a 4080 (15 frames, 960x540):
+//   healthy   warm 15-18 of 30, white 0
+//   texture lost   warm 4 (the sphere showing through), white 21
+function firePlumeProbePoints() {
+    var pts = [];
+    for (var yi = 0; yi < 6; yi++)
+        for (var xi = 0; xi < 5; xi++)
+            pts.push({ x: 0.40 + xi * 0.030, y: 0.58 + yi * 0.045 });
+    return pts;
+}
+function assertFireIsFire(probes, when) {
+    var warm = 0, white = 0;
+    for (var i = 0; i < probes.length; i++) {
+        var p = probes[i];
+        var mx = Math.max(p.r, p.g, p.b), mn = Math.min(p.r, p.g, p.b);
+        if (p.r > p.b + 25 && p.r > 60) warm++;
+        if (mn > 140 && (mx - mn) <= 30) white++;
+    }
+    assert(warm >= 8, "Particles" + when + ": the plume is FIRE-coloured (" + warm +
+                      "/" + probes.length + " warm probes)");
+    assert(white <= 2, "Particles" + when + ": no untextured white billboards (" + white +
+                       "/" + probes.length + " flat-white probes)");
 }
 
 function meshesByName(name) {
@@ -64,6 +104,7 @@ function importAndOpen(file, minNodes) {
     assert(project.open(imported.guid), file + ": project.open");
     var nodes = scene.nodes();
     assert(nodes.length >= minNodes, file + ": scene has content (" + nodes.length + " nodes)");
+    return imported.guid;
 }
 
 // ---- Matcaps: ONE dragon, Gold PBR (was the builtin Matcap shader) ----------
@@ -82,8 +123,8 @@ assert(isNeutral(p[2], 25) && bright(p[2]) > 15 && bright(p[2]) < 160,
        "Matcaps: checker ground is neutral grey " + fmt(p[2]));
 assert(project.close(), "Matcaps.zip: project.close");
 
-// ---- Particles: textures intact, fire sphere yellow -------------------------
-importAndOpen("Particles.zip", 2);
+// ---- Particles: textures intact, fire sphere yellow, THE FIRE IS FIRE -------
+var particlesGuid = importAndOpen("Particles.zip", 2);
 var sphereMat = material.get(meshesByName("Sphere")[0].id);
 assert(sphereMat.color === "#ffcd37", "Particles: sphere keeps its edge-material colour (" + sphereMat.color + ")");
 assertTexturePath("Particles ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
@@ -96,7 +137,29 @@ p = shoot("particles", [ { x: 0.49, y: 0.645 }, { x: 0.2, y: 0.9 } ]);
 assert(p[0].r > 120 && p[0].g > 90 && p[0].r > p[0].b + 60,
        "Particles: sphere renders yellow " + fmt(p[0]));
 assert(isNeutral(p[1], 25), "Particles: ground is neutral grey " + fmt(p[1]));
+assertFireIsFire(shoot("particles_plume", firePlumeProbePoints()), "");
+
+// THE SAVE ROUND TRIP. A scene is not only imported, it is EDITED and SAVED,
+// and every reference in the blob has to survive that. It did not: the writer
+// recovered a texture's asset guid by matching its FILE NAME, and since the CAS
+// an object's file name is its sha256 — so one save wrote "" for every emitter
+// texture and a bare relative path for every material texture, and the next
+// open rendered the fire as large white squares over untextured grey meshes
+// (2026-09-03; SceneWriter::assetGuidForTexturePath is the fix). Nothing in the
+// suite saved, so nothing caught it. This does.
+assert(project.save(), "Particles.zip: project.save");
 assert(project.close(), "Particles.zip: project.close");
+assert(project.open(particlesGuid), "Particles.zip: reopen after save");
+// PIXELS FIRST: the emitters are what the owner sees, and the document-level
+// assertions below only say where the writer went wrong.
+assertFireIsFire(shoot("particles_plume_resaved", firePlumeProbePoints()), " after save+reopen");
+assertTexturePath("Particles ground (reopened)", "diffuseTexture",
+                  material.get(meshesByName("Ground")[0].id).diffuseTexture);
+assertTexturePath("Particles fire pit (reopened)", "diffuseTexture",
+                  material.get(meshesByName("Fire Pit")[0].id).diffuseTexture);
+assertTexturePath("Particles fire pit (reopened)", "normalTexture",
+                  material.get(meshesByName("Fire Pit")[0].id).normalTexture);
+assert(project.close(), "Particles.zip: project.close after the round trip");
 
 // ---- Skeletal Animation: the blue character ---------------------------------
 importAndOpen("Skeletal Animation.zip", 2);

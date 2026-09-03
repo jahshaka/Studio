@@ -53,6 +53,9 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "data/project.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "viewport/editordata.h"
 
 Database *SceneWriter::handle = 0;
@@ -482,8 +485,35 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     // An emitter can have no texture (cleared in the property panel): write an
     // empty guid instead of dereferencing null (audit defect #6).
     sceneNodeObject["texture"]              = node->texture
-        ? handle->fetchAssetGUIDByName(QFileInfo(node->texture->getSource()).fileName(), projectHandle->getProjectGuid())
+        ? assetGuidForTexturePath(node->texture->getSource())
         : QString();
+}
+
+QString SceneWriter::assetGuidForTexturePath(const QString &path)
+{
+    if (path.isEmpty()) return QString();
+    // CAS first: a resolved path is <store>/objects/<xx>/<sha256>.<ext>, whose
+    // file name carries no trace of the display name the catalog knows it by.
+    // Matching on that name (what this code did until 2026-09-03) returned
+    // nothing, so every save wrote an empty guid and the next open rendered the
+    // Particles sample's fire as untextured white billboards and its meshes
+    // untextured grey. The oid is the join key that actually exists.
+    if (projectHandle && !projectHandle->getProjectGuid().isEmpty()) {
+        const QString guid = AssetCas::guidForStorePath(
+            QSqlDatabase::database(), AssetStorePaths::root(), path,
+            projectHandle->getProjectGuid());
+        if (!guid.isEmpty()) return guid;
+    }
+    // Legacy fallback: files that still sit in a project folder under their own
+    // name (a pre-store project, a material preset's texture registered under
+    // its own file name, the default particle image copied at add time).
+    // Called on the CLASS, not on `handle`: that static is null in the
+    // preset-apply path (nothing constructs a SceneWriter there), and the old
+    // code got away with `handle->` only because the query touches no member.
+    if (projectHandle)
+        return Database::fetchAssetGUIDByName(QFileInfo(path).fileName(),
+                                              projectHandle->getProjectGuid());
+    return QString();
 }
 
 
@@ -535,7 +565,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
         if (prop->type == iris::PropertyType::Texture) {
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
 			auto id = relative
-				? handle->fetchAssetGUIDByName(QFileInfo(prop->getValue().toString()).fileName(), projectHandle->getProjectGuid())
+				? assetGuidForTexturePath(prop->getValue().toString())
 				: getRelativePath(prop->getValue().toString());
 			// A texture that is not a database asset (no GUID) would otherwise be
 			// written as an empty string and lost; fall back to a relative path,
