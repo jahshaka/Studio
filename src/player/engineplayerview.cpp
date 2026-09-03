@@ -57,9 +57,13 @@ void EnginePlayerView::setScene(iris::ScenePtr scene)
 void EnginePlayerView::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
+    // The clear colour is the EDITOR VIEWPORT's, to the digit
+    // (EngineSceneViewport::showEvent): it is what a scene with no sky shows and
+    // what planar reflections clear to, so a different grey here is a visible
+    // editor/player mismatch.
     if (!view() && mEngine)
         createView(mEngine, "player-view-" + QString::number(reinterpret_cast<uintptr_t>(this)),
-                   Colour(0.1f, 0.1f, 0.1f));
+                   Colour(0.10f, 0.11f, 0.14f));
     if (view()) mScene->attach(view());
 }
 
