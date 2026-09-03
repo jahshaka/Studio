@@ -86,6 +86,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 
     lightPropView = new LightPropertyWidget();
     lightPropView->setPanelTitle("Light");
+    lightPropView->setDatabase(db);
     lightPropView->expand();
 
     emitterPropView = new EmitterPropertyWidget();
@@ -259,6 +260,13 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
 void SceneNodePropertiesWidget::setDatabase(Database *db)
 {
     this->db = db;
+    // Forward, do not just store: the child panels are built in the CONSTRUCTOR,
+    // which runs before this setter, so the ctor's `setDatabase(db)` calls hand
+    // them a null. (The other panels' ctor-time injection has the same shape;
+    // only the light panel is re-pushed here because it is the only one this
+    // lane made depend on the library at paint time — flagged, not fixed
+    // wholesale, so the change stays inside this lane.)
+    if (lightPropView) lightPropView->setDatabase(db);
 }
 
 void SceneNodePropertiesWidget::setProject(Project *project)
@@ -272,6 +280,7 @@ void SceneNodePropertiesWidget::setProject(Project *project)
     if (worldSkyPropView) worldSkyPropView->setProject(project);
     if (emitterPropView)  emitterPropView->setProject(project);
     if (shaderPropView)   shaderPropView->setProject(project);
+    if (lightPropView)    lightPropView->setProject(project);
     // materialPropView is created on demand in setSceneNode() and gets the
     // pointer there (the member is not null-initialised).
 }

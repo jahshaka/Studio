@@ -73,6 +73,7 @@ int typeFromName(const QString &name)
     if (n == "shader") return static_cast<int>(ModelTypes::Shader);
     if (n == "file") return static_cast<int>(ModelTypes::File);
     if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
+    if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
     return -1;
 }
 
@@ -373,7 +374,7 @@ QString AssetsApi::addToProject(const QString &guid)
     // The project pins the asset (and its dependency closure) at its current
     // content - no file copies, no row clones. The returned guid IS the
     // library asset's guid.
-    const auto result = ProjectAssets::addToProject(guid, host.db, host.project);
+    const auto result = ProjectAssets::addToProject(guid, host.db, host.project, ProjectAssets::AddKind::Direct);
     if (!result.ok()) {
         fail(QStringLiteral("assets.addToProject: %1").arg(result.error));
         return QString();

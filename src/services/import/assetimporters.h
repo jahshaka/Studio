@@ -87,6 +87,25 @@ public:
                  QString *errorOut, const ImportProgressFn &progress) override;
 };
 
+/// .ies photometric profiles: a LightProfile row whose validation, metadata
+/// block and polar-lobe thumbnail all come from our own IesProfile parser
+/// (LIGHTS_COMPLETION_SPEC D1/D2). validate() rejects everything the renderer's
+/// loader would throw on — plus, deliberately, the partial horizontal sweeps
+/// that hit its cone-type mislabelling defect — so a bad file fails at import
+/// with a message instead of at first draw with an exception.
+class IesImporter : public AssetImporterBase
+{
+public:
+    QString name() const override { return QStringLiteral("lightprofile"); }
+    int version() const override { return 1; }
+    int modelType() const override;
+    bool sniff(const QString &path) const override;
+    bool validate(const QString &path, QString *errorOut) const override;
+    bool convert(const ImportRequest &request, const QString &stagingDir,
+                 Database *db, Project *project, StagedAsset &out,
+                 QString *errorOut, const ImportProgressFn &progress) override;
+};
+
 /// Whitelisted plain files (txt/frag/vert/…): one File row + session entry.
 class FileImporter : public AssetImporterBase
 {

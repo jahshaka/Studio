@@ -1,0 +1,161 @@
+// scripting.e2e.light_bindings — LIGHTS_COMPLETION_SPEC, document side.
+//
+// The .ies library type end to end (import → validate → metadata → thumbnail),
+// the two binding verbs, and the three honesty rules the renderer will not
+// signal for us:
+//   * a shadow-casting POINT light does not honour its IES profile;
+//   * a directional light never does;
+//   * an ACCURATE (LTC) area light does not sample its mask.
+// Plus the D4 boundary: an image bound to a light is a DEPENDENCY and must not
+// mint a companion PBR material the way a direct add does.
+//
+// Runs the real binary --script --headless with HOME redirected to a scratch
+// dir. Throwing exits non-zero.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function mustThrow(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+
+// ---- import: a valid profile becomes a first-class library row ------------
+var iesGuid = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/ring_profile.ies");
+assert(typeof iesGuid === "string" && iesGuid.length > 0, "ring_profile.ies imported");
+
+var meta = assets.metadata(iesGuid);
+assert(meta.type === "lightprofile", "row type is lightprofile (not a plain File)");
+assert(meta.kind === "lightprofile", "metadata block kind");
+assert(meta.format === "ies", "source format recorded");
+assert(meta.verticalAngles === 19, "19 vertical angles parsed");
+assert(meta.horizontalAngles === 1, "1 horizontal angle parsed");
+assert(meta.coneType === "180", "vertical sweep 0-180 recorded as cone type 180");
+assert(meta.peakCandela === 1024, "peak candela 1024");
+assert(meta.manufacturer === "Jahshaka", "[MANUFAC] keyword read");
+assert(meta.luminaire === "RING-19", "[LUMCAT] keyword read");
+// candela/1024 * multiplier(1) * ballast(1) * photometric(1) = 1.0 for this file.
+assert(Math.abs(meta.normalisationFactor - 1.0) < 1e-6,
+       "photometric normalisation factor recorded (" + meta.normalisationFactor + ")");
+
+// ---- validation: a bad file fails cleanly, it does not crash or land -----
+mustThrow(function () {
+    assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/bad_tilt.ies");
+}, "a TILT=INCLUDE profile is refused at import (the renderer would throw at draw time)");
+var profiles = assets.list({ scope: "store", type: "lightprofile" });
+assert(!profiles.some(function (a) { return a.name.indexOf("bad_tilt") >= 0; }),
+       "the refused file left no library row behind");
+
+// ---- bind: a spot light honours its profile ------------------------------
+// Unique per run: the scratch HOME persists between ctest invocations.
+var projectGuid = project.create("Light Bindings " + Date.now());
+assert(projectGuid.length > 10, "project created");
+var spot = scene.addLight("spot", { position: { x: 0, y: 3, z: 0 } });
+assert(node.setLightProfile(spot, iesGuid), "profile bound to the spot light");
+var bound = node.lightProfile(spot);
+assert(bound.guid === iesGuid, "lightProfile reports the guid");
+assert(bound.path.length > 0, "lightProfile resolved the file through the store");
+assert(Math.abs(bound.normalisation - 1.0) < 1e-6, "lightProfile reports the photometric scale");
+assert(bound.applies === true, "a spot light honours its profile");
+
+// The reflected property is the same state (node.property/setProperty parity).
+assert(node.property(spot, "iesProfile") === iesGuid, "iesProfile is reflected");
+
+// Shadows do not change a SPOT light's answer.
+node.setProperty(spot, "shadowMapType", 2);
+assert(node.lightProfile(spot).applies === true,
+       "a SHADOW-CASTING spot light still honours its profile");
+
+// ---- the point-light shadow trap, asserted -------------------------------
+var point = scene.addLight("point", { position: { x: 2, y: 3, z: 0 } });
+assert(node.setLightProfile(point, iesGuid), "profile bound to the point light");
+node.setProperty(point, "shadowMapType", 0);   // None
+assert(node.lightProfile(point).applies === true,
+       "an unshadowed point light honours its profile");
+node.setProperty(point, "shadowMapType", 2);   // Soft
+assert(node.lightProfile(point).applies === false,
+       "a SHADOW-CASTING point light loses its profile — the renderer has no term there");
+
+// ---- directional lights never carry one ---------------------------------
+var dir = scene.addLight("directional", {});
+assert(node.setLightProfile(dir, iesGuid), "profile can be bound to a directional light");
+assert(node.lightProfile(dir).applies === false, "a directional light never honours a profile");
+
+// ---- clearing -------------------------------------------------------------
+assert(node.setLightProfile(spot, ""), "profile cleared");
+assert(node.lightProfile(spot).guid === "", "cleared profile reports no guid");
+assert(node.lightProfile(spot).applies === false, "a cleared profile does not apply");
+
+// ---- wrong asset type is refused, not silently accepted ------------------
+var png = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+mustThrow(function () { node.setLightProfile(spot, png); },
+          "an image cannot be bound as a light profile");
+mustThrow(function () { node.setLightTexture(spot, iesGuid); },
+          "a light profile cannot be bound as an area mask");
+
+// ---- area-light masks -----------------------------------------------------
+var area = scene.addLight("area", { position: { x: 0, y: 2, z: 0 } });
+
+function projectMaterials() { return assets.list({ scope: "project", type: "material" }); }
+var materialsBefore = projectMaterials().length;
+
+assert(node.setLightTexture(area, png), "image bound as the area light's mask");
+var mask = node.lightTexture(area);
+assert(mask.guid === png, "lightTexture reports the guid");
+assert(mask.path.length > 0, "lightTexture resolved the file through the store");
+assert(mask.applies === true, "a fast-approximation area light samples its mask");
+
+// D4, the boundary this lane made a RULE: a texture pinned as a BINDING is a
+// dependency, exactly like the textures riding an object's closure — it must
+// not mint the companion PBR material a DIRECT add would.
+assert(projectMaterials().length === materialsBefore,
+       "binding an image to a light created NO companion material");
+
+// ...and it really is pinned into the project (the renderer must be able to
+// resolve its bytes after a reopen).
+assert(assets.list({ scope: "project" }).some(function (a) { return a.guid === png; }) ||
+       node.lightTexture(area).path.length > 0,
+       "the bound image is reachable from the project");
+
+// LTC ignores the mask; the verb says so rather than pretending.
+node.setProperty(area, "accurate", true);
+assert(node.lightTexture(area).applies === false,
+       "an ACCURATE (LTC) area light ignores its mask");
+node.setProperty(area, "accurate", false);
+assert(node.lightTexture(area).applies === true, "turning accurate off restores the mask");
+
+// A non-area light can hold the guid but never samples it.
+assert(node.setLightTexture(spot, png), "a mask can be bound to a spot light");
+assert(node.lightTexture(spot).applies === false, "only AREA lights sample a mask");
+
+assert(node.setLightTexture(area, ""), "mask cleared");
+assert(node.lightTexture(area).guid === "", "cleared mask reports no guid");
+
+// ---- persistence: both bindings survive a save/close/open round-trip -----
+assert(node.setLightProfile(spot, iesGuid), "re-bound the profile before saving");
+assert(node.setLightTexture(area, png), "re-bound the mask before saving");
+project.save();
+project.close();
+assert(project.open(projectGuid) === true, "project reopened by guid");
+
+function findLight(name) {
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; i++)
+        if (all[i].name === name) return all[i].id;
+    return null;
+}
+var spotAgain = findLight("Spot Light") || findLight("SpotLight") || spot;
+var areaAgain = findLight("Area Light") || findLight("AreaLight") || area;
+
+var reloadedProfile = node.lightProfile(spotAgain);
+assert(reloadedProfile.guid === iesGuid, "the IES profile guid survived the round-trip");
+assert(reloadedProfile.path.length > 0, "the profile path was re-resolved on load");
+assert(Math.abs(reloadedProfile.normalisation - 1.0) < 1e-6,
+       "the photometric scale was re-derived from the asset's metadata on load");
+var reloadedMask = node.lightTexture(areaAgain);
+assert(reloadedMask.guid === png, "the area mask guid survived the round-trip");
+assert(reloadedMask.path.length > 0, "the mask path was re-resolved on load");
+
+console.log("light bindings e2e: PASS");

@@ -39,6 +39,7 @@ AssetImportService::AssetImportService(Database *db, Project *project)
     mImporters.append(new MediaImporter(static_cast<int>(ModelTypes::Video)));
     mImporters.append(new ShaderImporter());
     mImporters.append(new MaterialImporter());
+    mImporters.append(new IesImporter());
     mImporters.append(new JafImporter());
     mImporters.append(new FileImporter());
 }
@@ -57,7 +58,8 @@ AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request
     }
     if (error)
         *error = QStringLiteral("'%1' is not an importable library file "
-                                "(models, images, audio, video, shaders, materials or .jaf)")
+                                "(models, images, audio, video, shaders, materials, "
+                                ".ies light profiles or .jaf)")
                      .arg(QFileInfo(request.sourcePath).fileName());
     return nullptr;
 }

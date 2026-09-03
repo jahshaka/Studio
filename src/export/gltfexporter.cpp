@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "export/walkers/scenewalker.h"
 #include "export/walkers/meshbufferreader.h"
 #include "export/walkers/materialtexturereader.h"
+#include "services/iesprofile.h"
 
 #include <QBuffer>
 #include <QFileInfo>
@@ -878,6 +879,16 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 area["intensity"] = double(light->intensity * kLightIntensityScale);
                 area["doubleSided"] = light->doubleSided;
                 area["accurate"] = light->accurate;
+                // three's RectAreaLight has no mask texture at all. Record the
+                // loss where a reader can see it rather than exporting a light
+                // that looks nothing like the viewport's.
+                if (!light->lightTextureGuid.isEmpty()) {
+                    area["maskDropped"] = true;
+                    c.warnings.append(
+                        QStringLiteral("area light '%1' has a mask texture; the web viewer's "
+                                       "RectAreaLight has no mask, so it exports untextured")
+                            .arg(node->getName()));
+                }
                 QJsonObject shim = orientationShimNode(node->getName() + ".orient");
                 QJsonObject shimJah; shimJah["areaLight"] = area;
                 QJsonObject shimExtras; shimExtras["jah"] = shimJah;
@@ -914,6 +925,38 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 shimExt["KHR_lights_punctual"] = ref;
                 shim["extensions"] = shimExt;
                 QJsonObject shimJah; shimJah["shadow"] = shadowExtras(light);
+                // IES profiles. three.js has IESSpotLight (in our pinned bundle)
+                // and its IESSpotLightNode samples acos(cosAngle)/pi and reads
+                // the red channel — the SAME scheme Ogre's LightProfiles piece
+                // uses. So we ship OUR resampled, peak-normalised lobe instead
+                // of the raw .ies plus a third-party JS loader: one curve, two
+                // renderers, no "approximately similar" caveat.
+                //
+                // Point lights are the honest loss: three has no IES point
+                // light, so the profile is recorded and dropped.
+                if (!light->iesProfilePath.isEmpty()) {
+                    const IesProfile profile = IesProfile::parse(light->iesProfilePath);
+                    if (!profile.ok) {
+                        c.warnings.append(QStringLiteral("light '%1': %2")
+                                              .arg(node->getName(), profile.error));
+                    } else if (light->lightType == iris::LightType::Spot) {
+                        QJsonArray lut;
+                        for (float v : profile.attenuationLut()) lut.append(double(v));
+                        QJsonObject ies;
+                        ies["name"] = QFileInfo(light->iesProfilePath).fileName();
+                        ies["lut"] = lut;
+                        shimJah["iesProfile"] = ies;
+                    } else {
+                        QJsonObject ies;
+                        ies["name"] = QFileInfo(light->iesProfilePath).fileName();
+                        ies["dropped"] = QStringLiteral("no IES point light in three.js");
+                        shimJah["iesProfile"] = ies;
+                        c.warnings.append(
+                            QStringLiteral("light '%1' has an IES profile; the web viewer can "
+                                           "only shape SPOT lights, so it exports unprofiled")
+                                .arg(node->getName()));
+                    }
+                }
                 QJsonObject shimExtras; shimExtras["jah"] = shimJah;
                 shim["extras"] = shimExtras;
                 c.nodes.append(shim);

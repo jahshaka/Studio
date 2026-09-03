@@ -10,6 +10,7 @@ add_executable(test_web_export test_web_export.cpp
     ${CMAKE_SOURCE_DIR}/src/export/walkers/scenewalker.cpp
     ${CMAKE_SOURCE_DIR}/src/export/walkers/meshbufferreader.cpp
     ${CMAKE_SOURCE_DIR}/src/export/walkers/materialtexturereader.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc)
 set_target_properties(test_web_export PROPERTIES AUTOMOC OFF AUTORCC ON)
 target_include_directories(test_web_export PRIVATE ${CMAKE_SOURCE_DIR}

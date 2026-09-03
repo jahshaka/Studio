@@ -19,6 +19,9 @@ For more information see the LICENSE file
 
 class ColorValueWidget;
 class ColorPickerWidget;
+class Database;
+class QLabel;
+class QPushButton;
 namespace iris
 {
     class SceneNode;
@@ -35,6 +38,10 @@ class LightPropertyWidget:public AccordianBladeWidget
 
 public:
     LightPropertyWidget(QWidget* parent=nullptr);
+
+    /// The library, for the two asset-binding rows (IES profile, area mask).
+    /// Injected by SceneNodePropertiesWidget like the other panels'.
+    void setDatabase(Database *database) { db = database; }
 
     /**
      * Sets the active sceneNode. If the sceneNode is a LightNode it is casted
@@ -76,6 +83,14 @@ protected slots:
     void lightDoubleSidedChanged(bool doubleSided);
     void lightAccurateChanged(bool accurate);
 
+    /// Binds/clears the IES photometric profile and the area-light mask. Both
+    /// go through LightBindings — the SAME implementation the
+    /// node.setLightProfile / node.setLightTexture verbs use.
+    void pickProfile();
+    void clearProfile();
+    void pickMask();
+    void clearMask();
+
     void shadowTypeChanged(QString name);
     void shadowSizeChanged(QString size);
 	void shadowBiasChanged(float bias);
@@ -84,6 +99,13 @@ protected slots:
 	void shadowAlphaChanged(float bias);
 
 private:
+    /// Repaints the two binding rows from the node, INCLUDING the honesty
+    /// annotations: a profile does nothing on a shadow-casting point light (the
+    /// renderer has no profile term there) and a mask does nothing on an
+    /// accurate/LTC area light. Both are silent in the renderer, so the panel
+    /// has to say them out loud.
+    void refreshBindingRows();
+
     QString evalShadowTypeName(iris::ShadowMapType shadowType);
     iris::ShadowMapType evalShadowMapType(QString shadowType);
 
@@ -108,6 +130,18 @@ private:
 	// False in engine mode: no per-light shadow tint exists there (controls hidden).
 	bool mShadowTintSupported = true;
 	bool mPointShadowsSupported = false;   // engine mode: point lights get Shadow Type/Size
+
+    Database *db = nullptr;
+    QWidget *profileRow = nullptr;
+    QLabel *profileLabel = nullptr;
+    QPushButton *profilePick = nullptr;
+    QPushButton *profileClear = nullptr;
+    QLabel *profileNote = nullptr;
+    QWidget *maskRow = nullptr;
+    QLabel *maskLabel = nullptr;
+    QPushButton *maskPick = nullptr;
+    QPushButton *maskClear = nullptr;
+    QLabel *maskNote = nullptr;
 
     ComboBoxWidget* shadowType;
     ComboBoxWidget* shadowSize;

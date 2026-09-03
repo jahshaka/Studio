@@ -119,11 +119,33 @@ int main(int argc, char **argv)
     spot->spotCutOffSoftness = 10.0f;
     scene->rootNode->addChild(spot);
 
+    // The spot carries an IES photometric profile. three.js has IESSpotLight in
+    // our pinned bundle and samples it with the SAME acos(angle)/pi red-channel
+    // scheme Ogre uses, so the exporter ships OUR resampled peak-normalised
+    // lobe rather than the .ies file plus a third-party JS parser.
+    const QString iesPath = tmp.filePath("ring.ies");
+    {
+        FILE *f = std::fopen(iesPath.toUtf8().constData(), "wb");
+        std::fprintf(f, "IESNA:LM-63-1995\n[TEST] ring\nTILT=NONE\n");
+        std::fprintf(f, "1 1000 1 19 1 1 2 0 0 0\n1 1 0\n");
+        for (int i = 0; i < 19; ++i) std::fprintf(f, "%d ", i * 10);
+        std::fprintf(f, "\n0\n0 100 400 800 1024 1024 800 400 100 0 0 0 0 0 0 0 0 0 0\n");
+        std::fclose(f);
+    }
+    spot->iesProfilePath = iesPath;
+
+    // A POINT light with a profile is the honest loss: three has no IES point
+    // light, so it must export unprofiled AND say so.
+    point->iesProfilePath = iesPath;
+
     auto area = iris::LightNode::create();
     area->setName("area");
     area->setLightType(iris::LightType::Area);
     area->rectWidth = 2.0f;
     area->rectHeight = 1.0f;
+    // ...and a mask texture, which three's RectAreaLight cannot carry at all.
+    area->lightTextureGuid = QStringLiteral("some-texture-guid");
+    area->lightTexturePath = tmp.filePath("mask.png");
     scene->rootNode->addChild(area);
 
     // camera
@@ -228,6 +250,35 @@ int main(int argc, char **argv)
         if (n.contains("rotation") && n["name"].toString().endsWith(".orient")) foundShim = true;
     }
     CHECK(foundArea, "area light in extras (width=2)");
+
+    // IES profiles: the spot gets a sampled lobe, the point gets a recorded
+    // loss, and the area light's mask is recorded as dropped.
+    {
+        bool spotLut = false, pointDropped = false, maskDropped = false;
+        for (const auto &nv : nodes) {
+            const QJsonObject jah = nv.toObject()["extras"].toObject()["jah"].toObject();
+            if (jah.contains("iesProfile")) {
+                const QJsonObject ies = jah["iesProfile"].toObject();
+                if (ies.contains("lut")) {
+                    const QJsonArray lut = ies["lut"].toArray();
+                    float peak = 0.0f, onAxis = -1.0f;
+                    for (const auto &v : lut) peak = std::max(peak, float(v.toDouble()));
+                    if (!lut.isEmpty()) onAxis = float(lut.first().toDouble());
+                    // 180 samples across [0;180] degrees, peak-normalised, and
+                    // the ring lobe's defining feature: dark on the axis.
+                    spotLut = lut.size() == 180 && std::fabs(peak - 1.0f) < 1e-4f &&
+                              onAxis < 0.01f && ies["name"].toString() == "ring.ies";
+                } else if (ies.contains("dropped")) {
+                    pointDropped = true;
+                }
+            }
+            if (jah.contains("areaLight") && jah["areaLight"].toObject()["maskDropped"].toBool())
+                maskDropped = true;
+        }
+        CHECK(spotLut, "spot light exports a 180-sample peak-normalised IES lobe");
+        CHECK(pointDropped, "a point light's IES profile is recorded as dropped (no three equivalent)");
+        CHECK(maskDropped, "an area light's mask is recorded as dropped (RectAreaLight has none)");
+    }
     CHECK(foundShadow, "per-light shadow settings in extras");
     CHECK(foundShim, "-Y to -Z orientation shim nodes present");
 

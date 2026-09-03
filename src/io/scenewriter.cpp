@@ -579,6 +579,10 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["rectHeight"] = lightNode->rectHeight;
     sceneNodeObject["doubleSided"] = lightNode->doubleSided;
     sceneNodeObject["accurate"] = lightNode->accurate;
+    // Asset BINDINGS travel as guids; the resolved path and the profile's
+    // photometric scale are runtime state the reader re-derives from the store.
+    sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;
+    sceneNodeObject["lightTexture"] = lightNode->lightTextureGuid;
 	sceneNodeObject["color"] = jsonColor(lightNode->color);
 
 	sceneNodeObject["shadowAlpha"] = lightNode->shadowAlpha;

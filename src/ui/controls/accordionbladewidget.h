@@ -63,6 +63,11 @@ public:
 
     PropertyWidget*         addPropertyWidget();
 
+    /// Drops a caller-built widget into the blade's content pane, exactly where
+    /// the add*() helpers put theirs. For rows the generic controls do not
+    /// cover (the light panel's two asset-binding rows).
+    void                    addWidgetToContent(QWidget *widget);
+
     /// The one live Project (Phase 4: was the Globals::project static). Set by
     /// whoever creates the panel; the add*() helpers above forward it to the
     /// controls they build, which read it in their drop handlers.

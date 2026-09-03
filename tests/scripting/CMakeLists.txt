@@ -115,6 +115,22 @@ set_tests_properties(scripting.e2e.export_raw PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# Light asset bindings (LIGHTS_COMPLETION_SPEC): the .ies library type
+# (import/validate/metadata), node.setLightProfile / node.setLightTexture, the
+# renderer limitations reported honestly by the `applies` flags, and the D4
+# boundary (a texture bound to a light is a DEPENDENCY — no companion
+# material). Every verb is a document verb, so --headless.
+configure_file(scripts/e2e_light_bindings.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-light_bindings)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.light_bindings
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_light_bindings.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.light_bindings PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-metadata)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.metadata

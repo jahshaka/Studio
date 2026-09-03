@@ -52,7 +52,7 @@ bool sessionHas(const QString &guid)
 } // namespace
 
 ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database *db,
-                                                  Project *project)
+                                                  Project *project, AddKind kind)
 {
     Result result;
     if (!db || !project || project->getProjectGuid().isEmpty()) {
@@ -88,15 +88,17 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     // bin, session-registered and droppable. BOUNDARY: only the DIRECTLY
     // added asset auto-creates — dependency textures riding an object's
     // closure never do (an object with 30 textures must not explode into 30
-    // materials), and re-adding the same image is a no-op (a Material
-    // depending on the texture already exists). The recursive addToProject
-    // cannot loop: the companion is a Material, and Materials never
-    // auto-create.
-    if (static_cast<ModelTypes>(record.type) == ModelTypes::Texture
+    // materials), a texture pinned as a BINDING (a light's mask or IES
+    // profile, and later a decal's maps — AddKind::Binding) never does
+    // either, and re-adding the same image is a no-op (a Material depending
+    // on the texture already exists). The recursive addToProject cannot loop:
+    // the companion is a Material, and Materials never auto-create.
+    if (kind == AddKind::Direct
+        && static_cast<ModelTypes>(record.type) == ModelTypes::Texture
         && !ImageMaterial::hasCompanionMaterial(guid)) {
         const QString materialGuid = ImageMaterial::createMaterialAsset(guid, db, project);
         if (!materialGuid.isEmpty()) {
-            const Result companion = addToProject(materialGuid, db, project);
+            const Result companion = addToProject(materialGuid, db, project, AddKind::Direct);
             result.pinnedGuids.append(companion.pinnedGuids);
             result.pinnedGuids.removeDuplicates();
         }

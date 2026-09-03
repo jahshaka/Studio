@@ -137,6 +137,48 @@
                     if (obj.children[i].isLight) applyShadow(obj.children[i], u);
                 if (obj.isLight) applyShadow(obj, u);
             }
+            // IES profile on a spot light. The GLTFLoader built a plain
+            // THREE.SpotLight for KHR_lights_punctual, and only IESSpotLight's
+            // node path samples iesMap — so swap the light, carrying its state
+            // across. The LUT is the exporter's own resampled, peak-normalised
+            // lobe (the desktop renderer samples the identical curve), and
+            // IESSpotLightNode reads it as acos(cosAngle)/PI on the red channel.
+            if (u.iesProfile && u.iesProfile.lut && THREE.IESSpotLight) {
+                var lut = u.iesProfile.lut;
+                var data = new Uint8Array(lut.length * 4);
+                for (var li = 0; li < lut.length; li++) {
+                    var v = Math.max(0, Math.min(1, lut[li])) * 255;
+                    data[li * 4] = v; data[li * 4 + 1] = v;
+                    data[li * 4 + 2] = v; data[li * 4 + 3] = 255;
+                }
+                var iesMap = new THREE.DataTexture(data, lut.length, 1,
+                                                   THREE.RGBAFormat, THREE.UnsignedByteType);
+                iesMap.minFilter = THREE.LinearFilter;
+                iesMap.magFilter = THREE.LinearFilter;
+                iesMap.wrapS = THREE.ClampToEdgeWrapping;
+                iesMap.needsUpdate = true;
+                for (var si = obj.children.length - 1; si >= 0; si--) {
+                    var old = obj.children[si];
+                    if (!old.isSpotLight) continue;
+                    var ies = new THREE.IESSpotLight(old.color, old.intensity,
+                                                     old.distance, old.angle,
+                                                     old.penumbra, old.decay);
+                    ies.iesMap = iesMap;
+                    ies.position.copy(old.position);
+                    ies.castShadow = old.castShadow;
+                    if (old.shadow && ies.shadow) {
+                        ies.shadow.bias = old.shadow.bias;
+                        ies.shadow.mapSize.copy(old.shadow.mapSize);
+                    }
+                    // SpotLights aim at their target, and GLTFLoader parents
+                    // that target to the light itself at (0,0,-1) — reproduce
+                    // exactly that, or the new light aims at the world origin.
+                    ies.target.position.copy(old.target.position);
+                    ies.add(ies.target);
+                    obj.remove(old);
+                    obj.add(ies);
+                }
+            }
             if (u.areaLight) {
                 if (!ltcInstalled && THREE.RectAreaLightNode && THREE.RectAreaLightTexturesLib) {
                     THREE.RectAreaLightNode.setLTC(THREE.RectAreaLightTexturesLib.init());

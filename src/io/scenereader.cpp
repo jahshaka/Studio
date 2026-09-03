@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/lightbindings.h"
 #include <QSqlDatabase>
 
 #include "viewport/editordata.h"
@@ -624,6 +625,16 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(1.0f);
     lightNode->doubleSided = nodeObj["doubleSided"].toBool(false);
     lightNode->accurate = nodeObj["accurate"].toBool(false);
+    // Asset bindings: the guid is what was written; the path and the profile's
+    // photometric scale are runtime state, re-derived from the store on every
+    // load exactly like the sky's texture (the renderer opens FILES, and the
+    // library owns where they live).
+    lightNode->iesProfileGuid = nodeObj["iesProfile"].toString();
+    lightNode->iesProfilePath = resolveAssetPath(lightNode->iesProfileGuid);
+    lightNode->iesNormalisation =
+        LightBindings::normalisationFor(lightNode->iesProfileGuid, handle);
+    lightNode->lightTextureGuid = nodeObj["lightTexture"].toString();
+    lightNode->lightTexturePath = resolveAssetPath(lightNode->lightTextureGuid);
     lightNode->color = readColor(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(true));
 

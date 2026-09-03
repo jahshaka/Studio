@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "services/assetcas.h"
+#include "services/iesprofile.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "data/project.h"
@@ -204,6 +205,17 @@ QJsonObject AssetMetadata::forGenericFile(const QString &filePath)
     return meta;
 }
 
+QJsonObject AssetMetadata::forLightProfileFile(const QString &filePath)
+{
+    const IesProfile profile = IesProfile::parse(filePath);
+    QJsonObject meta = profile.metadata(filePath);
+    meta["kind"] = "lightprofile";
+    // A row that fails to parse still gets a block (format/fileSize) so the
+    // lazy backfill does not re-parse it on every inspection; the missing
+    // photometric fields are the tell.
+    return meta;
+}
+
 QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFolder)
 {
     const QDir dir(storeFolder);
@@ -229,6 +241,11 @@ QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFo
     case ModelTypes::Video: {
         const QString video = findByExtension(storeFolder, Constants::VIDEO_EXTS);
         if (!video.isEmpty()) return forVideoFile(video);
+        break;
+    }
+    case ModelTypes::LightProfile: {
+        const QString ies = findByExtension(storeFolder, Constants::LIGHT_PROFILE_EXTS);
+        if (!ies.isEmpty()) return forLightProfileFile(ies);
         break;
     }
     default:
@@ -273,6 +290,7 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
             case ModelTypes::Texture: meta = forImageFile(source); break;
             case ModelTypes::Music: meta = forAudioFile(source); break;
             case ModelTypes::Video: meta = forVideoFile(source); break;
+            case ModelTypes::LightProfile: meta = forLightProfileFile(source); break;
             default: meta = forGenericFile(source); break;
             }
         }

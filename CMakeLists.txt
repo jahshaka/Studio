@@ -157,6 +157,8 @@ set(SRCS
     src/services/projectarchiver.cpp
     src/io/ziphelper.cpp
     src/services/assetmetadata.cpp
+    src/services/iesprofile.cpp
+    src/services/lightbindings.cpp
     src/services/assetcas.cpp
     src/services/assetmigration.cpp
     src/services/assetstore.cpp
@@ -223,7 +225,8 @@ set(SRCS
     src/ui/dialogs/newprojectdialog.cpp 
     src/ui/panels/assetwidget.cpp 
     src/io/assetmanager.cpp 
-    src/ui/controls/assetpickerwidget.cpp 
+    src/ui/controls/assetpickerwidget.cpp
+    src/ui/controls/libraryassetpicker.cpp 
     src/ui/panels/timeline/keyframelabel.cpp 
     src/ui/panels/timeline/keyframecurvewidget.cpp 
     src/ui/dialogs/getnamedialog.cpp 

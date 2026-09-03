@@ -20,6 +20,9 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/assets/skeleton.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/shadowmap.h"
+#include "services/lightbindings.h"
 
 using namespace scriptmod;
 
@@ -52,6 +55,18 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "skinningMode", "node.skinningMode(id) -> \"gpu\" | \"none\"",
           "How the node deforms: \"gpu\" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), \"none\" when it is static. Diagnostic.",
+          Needs::Document },
+        { "setLightProfile", "node.setLightProfile(id, lightProfileGuid) -> bool",
+          "Binds an IES photometric profile (a 'lightprofile' library asset) to a light, shaping its falloff; '' clears it. The asset is pinned into the project as a DEPENDENCY (no companion material is created). Intensity is re-calibrated by the profile's own peak candela scale, so binding one changes the SHAPE of the falloff and not the brightness. RENDERER LIMITS: spot lights always honour a profile; point lights honour it only while they cast NO shadows (a shadow-casting point light is shaded from a code path with no profile term); directional and area lights never do. Direct document write — not undoable yet.",
+          Needs::Document },
+        { "lightProfile", "node.lightProfile(id) -> {guid, path, normalisation, applies}",
+          "The light's bound IES profile: the library guid, the resolved file, the photometric scale intensity is divided by, and whether this light type/shadow combination actually honours it. Empty guid = none.",
+          Needs::Document },
+        { "setLightTexture", "node.setLightTexture(id, textureGuid) -> bool",
+          "Binds an image asset as an AREA light's mask/gobo; '' clears it. Pinned as a DEPENDENCY (no companion material). RENDERER LIMIT: only the fast approximation samples the mask — an 'accurate' (LTC) area light ignores it. All masks share one 512x512 sRGB pool (8 distinct images per process); whatever image is bound is resampled into it. Direct document write — not undoable yet.",
+          Needs::Document },
+        { "lightTexture", "node.lightTexture(id) -> {guid, path, applies}",
+          "The light's bound area mask: the library guid, the resolved file, and whether this light actually samples it (area + not accurate). Empty guid = none.",
           Needs::Document },
     };
 }
@@ -203,4 +218,68 @@ QString NodeApi::skinningMode(const QString &id)
     // pose, and the engine says so on its log — the document still has a rig, so
     // this reports what the document asked for.
     return skeletonOf(node).isNull() ? QStringLiteral("none") : QStringLiteral("gpu");
+}
+
+// --- Light asset bindings (LIGHTS_COMPLETION_SPEC phases 3 and 5) ----------
+// The verbs are the capability; the light property panel calls the SAME
+// LightBindings implementation. Resolution, the project dependency pin and the
+// photometric re-calibration all live there, never here.
+
+iris::LightNodePtr NodeApi::lightOrFail(const QString &id, const QString &verb)
+{
+    auto node = nodeOrFail(id, verb);
+    if (!node) return iris::LightNodePtr();
+    if (node->getSceneNodeType() != iris::SceneNodeType::Light) {
+        fail(QStringLiteral("%1: '%2' is not a light").arg(verb, node->getName()));
+        return iris::LightNodePtr();
+    }
+    return node.staticCast<iris::LightNode>();
+}
+
+bool NodeApi::setLightProfile(const QString &id, const QString &assetGuid)
+{
+    auto light = lightOrFail(id, QStringLiteral("node.setLightProfile"));
+    if (!light) return false;
+    QString error;
+    if (!LightBindings::bindProfile(light, assetGuid.trimmed(), host.db, host.project, &error))
+        return fail(QStringLiteral("node.setLightProfile: %1").arg(error));
+    return true;
+}
+
+QVariant NodeApi::lightProfile(const QString &id)
+{
+    auto light = lightOrFail(id, QStringLiteral("node.lightProfile"));
+    if (!light) return QVariant();
+    // The renderer's own rule, reported rather than hidden: shadow-casting
+    // point lights lose their profile, and only spot/point carry one at all.
+    const bool shadows = light->shadowMap &&
+                         light->shadowMap->shadowType != iris::ShadowMapType::None;
+    const bool applies = !light->iesProfileGuid.isEmpty() &&
+                         (light->lightType == iris::LightType::Spot ||
+                          (light->lightType == iris::LightType::Point && !shadows));
+    return QVariantMap{ { "guid", light->iesProfileGuid },
+                        { "path", light->iesProfilePath },
+                        { "normalisation", light->iesNormalisation },
+                        { "applies", applies } };
+}
+
+bool NodeApi::setLightTexture(const QString &id, const QString &assetGuid)
+{
+    auto light = lightOrFail(id, QStringLiteral("node.setLightTexture"));
+    if (!light) return false;
+    QString error;
+    if (!LightBindings::bindTexture(light, assetGuid.trimmed(), host.db, host.project, &error))
+        return fail(QStringLiteral("node.setLightTexture: %1").arg(error));
+    return true;
+}
+
+QVariant NodeApi::lightTexture(const QString &id)
+{
+    auto light = lightOrFail(id, QStringLiteral("node.lightTexture"));
+    if (!light) return QVariant();
+    const bool applies = !light->lightTextureGuid.isEmpty() &&
+                         light->lightType == iris::LightType::Area && !light->accurate;
+    return QVariantMap{ { "guid", light->lightTextureGuid },
+                        { "path", light->lightTexturePath },
+                        { "applies", applies } };
 }

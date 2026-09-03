@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetmetadata.h"
 #include "services/assetstorepaths.h"
+#include "services/iesprofile.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
 #include "irisgl/core/irisutils.h"
@@ -417,6 +418,57 @@ bool ShaderImporter::convert(const ImportRequest &request, const QString &stagin
         assetShader->setValue(QVariant::fromValue(definition));
         AssetManager::addAsset(assetShader);
     };
+    return true;
+}
+
+// ============================= IesImporter ================================
+
+int IesImporter::modelType() const { return static_cast<int>(ModelTypes::LightProfile); }
+
+bool IesImporter::sniff(const QString &path) const
+{
+    return Constants::LIGHT_PROFILE_EXTS.contains(QFileInfo(path).suffix().toLower());
+}
+
+bool IesImporter::validate(const QString &path, QString *errorOut) const
+{
+    const IesProfile profile = IesProfile::parse(path);
+    if (!profile.ok) {
+        if (errorOut) *errorOut = profile.error;
+        return false;
+    }
+    return true;
+}
+
+bool IesImporter::convert(const ImportRequest &request, const QString &stagingDir,
+                          Database *db, Project *project, StagedAsset &out,
+                          QString *errorOut, const ImportProgressFn &progress)
+{
+    Q_UNUSED(stagingDir); Q_UNUSED(db); Q_UNUSED(project); Q_UNUSED(progress);
+    const QFileInfo sourceInfo(request.sourcePath);
+
+    // validate() already ran in the spine, but convert() is also reachable from
+    // assets.checkConsistency — re-parse rather than assume.
+    const IesProfile profile = IesProfile::parse(request.sourcePath);
+    if (!profile.ok) {
+        if (errorOut) *errorOut = profile.error;
+        return false;
+    }
+
+    out.mainGuid = GUIDManager::generateGUID();
+    out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
+                       QStringLiteral("source"), sourceInfo.fileName() });
+    out.metadata = AssetMetadata::forLightProfileFile(request.sourcePath);
+
+    StagedRow row;
+    row.guid = out.mainGuid;
+    row.name = sourceInfo.fileName();
+    row.type = static_cast<int>(ModelTypes::LightProfile);
+    // A polar plot of the candela lobe: two profiles look identical as file
+    // names and completely different as light.
+    row.thumbnail = pngBlobFromImage(profile.polarThumbnail(256));
+    row.viewFilter = static_cast<int>(AssetViewFilter::AssetsView);
+    out.rows.append(row);
     return true;
 }
 

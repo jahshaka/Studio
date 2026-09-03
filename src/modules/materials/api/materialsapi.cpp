@@ -121,7 +121,7 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     // Project context: pin it in (bin membership + session registration) —
     // the same path a direct image add-to-project takes for its companion.
     if (host.project && !host.project->getProjectGuid().isEmpty())
-        ProjectAssets::addToProject(materialGuid, host.db, host.project);
+        ProjectAssets::addToProject(materialGuid, host.db, host.project, ProjectAssets::AddKind::Direct);
     return materialGuid;
 }
 

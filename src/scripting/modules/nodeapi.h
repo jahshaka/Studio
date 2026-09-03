@@ -42,9 +42,14 @@ public:
     Q_INVOKABLE QVariant info(const QString &id);
     Q_INVOKABLE QVariant boneNames(const QString &id);
     Q_INVOKABLE QString skinningMode(const QString &id);
+    Q_INVOKABLE bool setLightProfile(const QString &id, const QString &assetGuid);
+    Q_INVOKABLE QVariant lightProfile(const QString &id);
+    Q_INVOKABLE bool setLightTexture(const QString &id, const QString &assetGuid);
+    Q_INVOKABLE QVariant lightTexture(const QString &id);
 
 private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);
+    iris::LightNodePtr lightOrFail(const QString &id, const QString &verb);
 };
 
 #endif // SCRIPTING_NODEAPI_H

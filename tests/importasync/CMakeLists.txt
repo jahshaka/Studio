@@ -15,6 +15,7 @@ add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp

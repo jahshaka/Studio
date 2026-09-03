@@ -42,9 +42,25 @@ public:
         bool ok() const { return error.isEmpty() && !guid.isEmpty(); }
     };
 
+    /// WHY an asset is being pinned. This is a RULE, not a special case
+    /// (LIGHTS_COMPLETION_SPEC D4), and it is deliberately non-defaulted so
+    /// that the next feature to bind an asset cannot get it wrong by omission.
+    ///
+    ///   Direct   — the user added this asset to the project. A Texture added
+    ///              this way also gets its companion PBR material created and
+    ///              pinned, so it is droppable straight into the viewport.
+    ///   Binding  — the asset is pinned because something in the scene REFERS
+    ///              to it: a light's IES profile or area mask today, decal maps
+    ///              next. A binding is a dependency, exactly like the textures
+    ///              riding an object's closure, and never auto-creates a
+    ///              companion material. (Without this, binding an image to a
+    ///              light would silently spawn a stray material asset.)
+    enum class AddKind { Direct, Binding };
+
     /// Pin `guid` (and its dependency closure) into the project and register
     /// the session AssetManager entries from CAS-resolved bytes. Idempotent.
-    static Result addToProject(const QString &guid, Database *db, Project *project);
+    static Result addToProject(const QString &guid, Database *db, Project *project,
+                               AddKind kind);
 
     /// THE one session-hydration routine (IMAGE_PLANE_SPEC §6): registers the
     /// AssetManager entry for `guid`, bytes resolved pin-first through the CAS

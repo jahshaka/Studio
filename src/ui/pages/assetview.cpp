@@ -303,6 +303,7 @@ QString AssetView::getAssetType(int id)
 		case static_cast<int>(ModelTypes::Mesh):			return "Mesh";				break;
 		case static_cast<int>(ModelTypes::File):			return "File";				break;
 		case static_cast<int>(ModelTypes::ParticleSystem):	return "Particle System";	break;
+		case static_cast<int>(ModelTypes::LightProfile):	return "Light Profile";		break;
 		default: return "Undefined"; break;
 	}
 }
@@ -2333,7 +2334,7 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	// verb body (flat project-folder copies + Database::copyAsset clones)
 	// died here - ProjectAssets is the one implementation.
 	const QString guid = item->metadata["guid"].toString();
-	const auto result = ProjectAssets::addToProject(guid, db, project);
+	const auto result = ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Direct);
 	if (!result.ok()) {
 		QMessageBox::warning(this, tr("Add to project failed"),
 		                     result.error, QMessageBox::Ok);
@@ -2577,7 +2578,7 @@ void AssetView::createMaterialFromImageTile(AssetGridItem *item)
 	// With a project open the new material is pinned in too, so it shows up
 	// in the bin and drags onto meshes immediately.
 	if (project && !project->getProjectGuid().isEmpty()) {
-		ProjectAssets::addToProject(materialGuid, db, project);
+		ProjectAssets::addToProject(materialGuid, db, project, ProjectAssets::AddKind::Direct);
 		emit assetAddedToProject(materialGuid);
 	}
 

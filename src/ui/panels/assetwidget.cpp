@@ -1150,7 +1150,7 @@ void AssetWidget::createMaterialFromImage()
     // Project context: pin it in so it lands in the bin, session-registered
     // and immediately droppable onto meshes.
     if (project && !project->getProjectGuid().isEmpty())
-        ProjectAssets::addToProject(materialGuid, db, project);
+        ProjectAssets::addToProject(materialGuid, db, project, ProjectAssets::AddKind::Direct);
 
     updateAssetView(assetItem.selectedGuid);
 }
@@ -1916,7 +1916,7 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 				    QFileInfo(request.sourcePath).fileName(), result.error));
 			return;
 		}
-		const auto pinned = ProjectAssets::addToProject(result.assetGuid, db, project);
+		const auto pinned = ProjectAssets::addToProject(result.assetGuid, db, project, ProjectAssets::AddKind::Direct);
 		if (!pinned.ok()) importErrors.append(pinned.error);
 	});
 	connect(importRunner, &ImportBatchRunner::finished, this, [this](bool cancelled) {

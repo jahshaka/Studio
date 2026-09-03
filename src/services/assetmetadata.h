@@ -43,6 +43,9 @@ struct aiScene;
 //   video: duration (ms), width, height, frameRate, videoCodec (whatever
 //          the container reports; GUI thread only — see above)
 //   file:  format/fileSize only (shaders, materials, skies, particles, misc)
+//   lightprofile: verticalAngles, horizontalAngles, coneType, peakCandela,
+//          lumensPerLamp, inputWatts, normalisationFactor, manufacturer,
+//          luminaire (IesProfile::metadata)
 class AssetMetadata
 {
 public:
@@ -58,6 +61,10 @@ public:
     static QJsonObject forAudioFile(const QString &filePath);   // RIFF parse for wav
     static QJsonObject forVideoFile(const QString &filePath);   // QMediaPlayer probe (GUI thread)
     static QJsonObject forGenericFile(const QString &filePath);
+    /// IES photometric profile: angle counts, cone type, peak candela and the
+    /// `normalisationFactor` the mirror divides light intensity by so that
+    /// binding a profile changes the falloff's SHAPE and not its brightness.
+    static QJsonObject forLightProfileFile(const QString &filePath);
 
     // Dispatches on the asset row's ModelTypes over its store folder
     // (AssetStore/<guid>/). Returns an empty object when the folder holds

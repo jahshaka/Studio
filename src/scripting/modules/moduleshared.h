@@ -50,6 +50,7 @@ inline QString assetTypeName(int type)
     case ModelTypes::Variant: return QStringLiteral("variant");
     case ModelTypes::File: return QStringLiteral("file");
     case ModelTypes::ParticleSystem: return QStringLiteral("particles");
+    case ModelTypes::LightProfile: return QStringLiteral("lightprofile");
     default: return QStringLiteral("undefined");
     }
 }

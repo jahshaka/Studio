@@ -146,7 +146,14 @@ enum class ModelTypes
     Shader,			// Supported
     Variant,
     File,			// Supported
-    ParticleSystem	// Supported
+    ParticleSystem,	// Supported
+    // IES photometric profiles (.ies). A first-class library type rather than a
+    // whitelisted plain file: it needs its own validator (a bad .ies would
+    // otherwise become a renderer exception at first draw), its own metadata
+    // block (the photometric scale the mirror divides intensity by) and its own
+    // thumbnail (a polar lobe plot — the only way to tell two profiles apart).
+    // APPENDED, never inserted: the value is persisted in every assets row.
+    LightProfile	// Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113

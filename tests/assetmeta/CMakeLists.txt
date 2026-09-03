@@ -6,6 +6,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_asset_metadata test_asset_metadata.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp

@@ -43,6 +43,7 @@ add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp

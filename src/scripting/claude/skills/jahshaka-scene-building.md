@@ -53,7 +53,25 @@ node.remove(id);
 
 Light properties readable/writable via `node.property` / `node.setProperty`:
 `intensity`, `lightColor`, `distance`, `spotCutOff`, `spotCutOffSoftness`,
-`rectWidth`, `rectHeight` (area lights).
+`rectWidth`, `rectHeight`, `doubleSided`, `accurate` (area lights),
+`shadowMapType`, `shadowMapResolution`.
+
+Asset bindings on a light have their own verbs, because they resolve a library
+guid and pin it into the project:
+
+```js
+node.setLightProfile(id, iesGuid);   // an IES photometric profile ("" clears)
+node.lightProfile(id);               // {guid, path, normalisation, applies}
+node.setLightTexture(id, imageGuid); // an AREA light's mask/gobo ("" clears)
+node.lightTexture(id);               // {guid, path, applies}
+```
+
+The `applies` flag is the renderer's truth, not the document's wish — check it:
+an IES profile shapes spot lights always and point lights only while they cast
+NO shadows (directional and area lights never), and an area mask is sampled only
+by the fast approximation (an `accurate`/LTC area light ignores it). Binding a
+profile does not change a light's brightness: intensity is divided by the
+profile's own peak candela scale so only the falloff's SHAPE changes.
 
 ## World settings
 

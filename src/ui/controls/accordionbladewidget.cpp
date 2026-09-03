@@ -224,6 +224,13 @@ CheckBoxWidget* AccordianBladeWidget::addCheckBox(const QString& title, bool val
     return checkbox;
 }
 
+void AccordianBladeWidget::addWidgetToContent(QWidget *widget)
+{
+    if (!widget) return;
+    minimum_height += widget->sizeHint().height() + stretch;
+    ui->contentpane->layout()->addWidget(widget);
+}
+
 ComboBoxWidget* AccordianBladeWidget::addComboBox(const QString& title)
 {
     auto combobox = new ComboBoxWidget();

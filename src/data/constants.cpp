@@ -62,6 +62,9 @@ namespace Contants
     // stick figure in the asset library.
     QList<QString> ANIMATION_EXTS = MODEL_EXTS + QList<QString>{ "bvh" };
     QList<QString> WHITELIST    = { "txt", "frag", "vert", "vs", "fs", "mtl"};
+    // IES photometric profiles. NOT in WHITELIST: they get a real importer
+    // (IesImporter) with validation, metadata and a thumbnail, not a File row.
+    QList<QString> LIGHT_PROFILE_EXTS = { "ies" };
 	QString SHADER_EXT		    = "shader";
     QList<QString> MATERIAL_EXTS= { "material"};
 	QString ASSET_EXT			= "jaf";

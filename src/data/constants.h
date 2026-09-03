@@ -64,6 +64,7 @@ namespace Constants
     /// the assimp importer allowlist in irisgl/CMakeLists.txt.
     extern QList<QString> ANIMATION_EXTS;
     extern QList<QString> WHITELIST;
+    extern QList<QString> LIGHT_PROFILE_EXTS;
 	extern QString SHADER_EXT;
     extern QList<QString> MATERIAL_EXTS;
 	extern QString ASSET_EXT;
