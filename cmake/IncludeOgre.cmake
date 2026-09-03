@@ -17,6 +17,16 @@ else()
 endif()
 set(OGRE_NEXT_SOURCE "${_ogre_src_default}"
     CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)")
+# A stale cache from a pre-submodule configure staged UNPATCHED media silently
+# (found 2026-09-03: patch 0009 missing from bin/media while the build succeeded).
+# When the submodule exists, any cached value pointing elsewhere is force-corrected.
+if(EXISTS "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/CMakeLists.txt"
+   AND NOT OGRE_NEXT_SOURCE STREQUAL "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next")
+    message(WARNING "OGRE_NEXT_SOURCE pointed at '${OGRE_NEXT_SOURCE}' but the ogre-next "
+                    "submodule exists — forcing it to the submodule so patched media stages.")
+    set(OGRE_NEXT_SOURCE "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next"
+        CACHE PATH "Ogre-Next source tree (for the Hlms shader templates under Samples/Media)" FORCE)
+endif()
 
 if(NOT EXISTS "${OGRE_NEXT_PREFIX}/include/OGRE-Next/Ogre.h")
     message(FATAL_ERROR
