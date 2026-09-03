@@ -31,6 +31,9 @@ Definitions:  {
 	ObjectType: "Model" {
 		Count: 8
 	}
+	ObjectType: "Material" {
+		Count: 8
+	}
 	ObjectType: "NodeAttribute" {
 		Count: 8
 	}
@@ -95,6 +98,16 @@ Objects:  {
 	}
 	NodeAttribute: 100005, "NodeAttribute::jointTip", "LimbNode" {
 		TypeFlags: "Skeleton"
+	}
+	Material: 100006, "Material::armMat", "" {
+		Version: 102
+		ShadingModel: "lambert"
+		MultiLayer: 0
+		Properties70:  {
+			P: "DiffuseColor", "Color", "", "A",0.9,0.15,0.15
+			P: "Diffuse", "Vector3D", "Vector", "",0.9,0.15,0.15
+			P: "Emissive", "Vector3D", "Vector", "",0,0,0
+		}
 	}
 	Deformer: 100010, "Deformer::skin", "Skin" {
 		Version: 101
@@ -404,6 +417,7 @@ Connections:  {
 	C: "OO",100004,100002
 	C: "OO",100005,100003
 	C: "OO",100000,100001
+	C: "OO",100006,100001
 	C: "OO",100010,100000
 	C: "OO",100011,100010
 	C: "OO",100012,100010

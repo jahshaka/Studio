@@ -147,6 +147,7 @@ ID_MODEL_ROOT = 100002
 ID_MODEL_TIP = 100003
 ID_ATTR_ROOT = 100004
 ID_ATTR_TIP = 100005
+ID_MATERIAL = 100006
 ID_SKIN = 100010
 ID_CLUSTER_ROOT = 100011
 ID_CLUSTER_TIP = 100012
@@ -254,7 +255,7 @@ def build():
     w("\tVersion: 100\n")
     w("\tCount: 20\n")
     w("\tObjectType: \"GlobalSettings\" {\n\t\tCount: 1\n\t}\n")
-    for kind in ("Geometry", "Model", "NodeAttribute", "Deformer",
+    for kind in ("Geometry", "Model", "Material", "NodeAttribute", "Deformer",
                  "AnimationStack", "AnimationLayer", "AnimationCurveNode",
                  "AnimationCurve"):
         w("\tObjectType: \"%s\" {\n\t\tCount: 8\n\t}\n" % kind)
@@ -311,6 +312,21 @@ def build():
         w("\tNodeAttribute: %d, \"NodeAttribute::%s\", \"LimbNode\" {\n" % (attr_id, label))
         w("\t\tTypeFlags: \"Skeleton\"\n")
         w("\t}\n")
+
+    # A MATERIAL. Without one assimp substitutes its default and the character
+    # renders in a grey that is nearly the editor's background — which is how
+    # the first end-to-end pixel gate on this fixture came back "nothing moved"
+    # while the geometry was on screen the whole time. Red, like rig2.glb's.
+    w("\tMaterial: %d, \"Material::armMat\", \"\" {\n" % ID_MATERIAL)
+    w("\t\tVersion: 102\n")
+    w("\t\tShadingModel: \"lambert\"\n")
+    w("\t\tMultiLayer: 0\n")
+    w("\t\tProperties70:  {\n")
+    w("\t\t\tP: \"DiffuseColor\", \"Color\", \"\", \"A\",0.9,0.15,0.15\n")
+    w("\t\t\tP: \"Diffuse\", \"Vector3D\", \"Vector\", \"\",0.9,0.15,0.15\n")
+    w("\t\t\tP: \"Emissive\", \"Vector3D\", \"Vector\", \"\",0,0,0\n")
+    w("\t\t}\n")
+    w("\t}\n")
 
     # ---- skin ----
     w("\tDeformer: %d, \"Deformer::skin\", \"Skin\" {\n" % ID_SKIN)
@@ -378,6 +394,7 @@ def build():
     w("\tC: \"OO\",%d,%d\n" % (ID_ATTR_ROOT, ID_MODEL_ROOT))
     w("\tC: \"OO\",%d,%d\n" % (ID_ATTR_TIP, ID_MODEL_TIP))
     w("\tC: \"OO\",%d,%d\n" % (ID_GEOM, ID_MODEL_MESH))
+    w("\tC: \"OO\",%d,%d\n" % (ID_MATERIAL, ID_MODEL_MESH))
     w("\tC: \"OO\",%d,%d\n" % (ID_SKIN, ID_GEOM))
     w("\tC: \"OO\",%d,%d\n" % (ID_CLUSTER_ROOT, ID_SKIN))
     w("\tC: \"OO\",%d,%d\n" % (ID_CLUSTER_TIP, ID_SKIN))

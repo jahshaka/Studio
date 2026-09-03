@@ -92,8 +92,8 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "simulate", "editor.simulate(enabled=true) -> bool",
           "Starts/stops the in-place physics simulation without entering play mode.",
           Needs::Document },
-        { "frame", "editor.frame(n=1) -> bool",
-          "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use.",
+        { "frame", "editor.frame(n=1, dt=-1) -> bool",
+          "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 the document's clock advances by exactly that many seconds per frame instead of by the wall clock, which is what makes stepping deterministic IN PLAY MODE (without it, each stepped frame charged the document for however long the previous statement took).",
           Needs::Engine },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe.",
@@ -307,10 +307,10 @@ bool EditorApi::simulate(bool enabled)
     return true;
 }
 
-bool EditorApi::frame(int n)
+bool EditorApi::frame(int n, double dt)
 {
     if (!requireEngine()) return false;
-    host.viewport->renderFrames(qBound(1, n, 1000));
+    host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
     return true;
 }
 

@@ -118,6 +118,7 @@ public:
     int shadowResolution() const override
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     void renderFrames(int n) override;
+    void renderFrames(int n, float dt) override;
 
     void begin() override;
     void end() override;
@@ -127,7 +128,10 @@ public:
 
 
     /// Pushes document -> engine and the editor camera -> view. Called before every frame.
-    void syncFrame();
+    /// One document->engine sync. `dt` >= 0 overrides the wall clock: that is
+    /// what makes editor.frame(n, dt) deterministic in PLAY mode, where the
+    /// document's animation clock is advanced by dt.
+    void syncFrame(float dtOverride = -1.0f);
 
     /// Picks the document object under a viewport pixel (legacy selection rule).
     /// `hitPoint` receives the world-space hit when a node is returned.
