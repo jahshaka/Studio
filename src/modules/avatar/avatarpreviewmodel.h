@@ -28,10 +28,12 @@ For more information see the LICENSE file
 // extract dir would write embedded textures BESIDE the source file (into the
 // owner's Downloads folder); the scratch dir is not optional.
 //
-// Bone poses come from the SCENE-NODE hierarchy, never from Bone::transformMatrix
-// (§0.5.1: that field is written only by the dead Model::applyAnimation path)
-// and never from Bone::parentBone (§0.1: empty for pivot-preserving FBX rigs).
-// A bone's parent is the NEAREST ANCESTOR that is also a bone.
+// The rig's SHAPE comes from the SCENE-NODE hierarchy, never from
+// Bone::parentBone (§0.1: empty for pivot-preserving FBX rigs) — a bone's
+// parent is the NEAREST ANCESTOR that is also a bone. Its POSE comes from the
+// engine, through the pose source AvatarPreviewScene installs: clip evaluation
+// moved to Ogre (ANIMATION_ENGINE_MIGRATION_SPEC) and the document does not
+// compute one any more.
 
 #include <QHash>
 #include <QMap>

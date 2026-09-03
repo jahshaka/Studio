@@ -994,9 +994,11 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         iris::SkeletonPtr skel = ps.mesh->getSkeleton();
         if (!skel || skel->bones.isEmpty()) continue;
 
-        // One glTF node per bone. Bones keep their document-local TRS so the
-        // animation channels (also bone-local) drive them exactly as the
-        // document's Skeleton::applyAnimation does.
+        // One glTF node per bone, carrying its BIND local TRS (Bone::binding*,
+        // which Mesh::extractSkeleton fills). The animation channels below are
+        // bone-local and ABSOLUTE, which is glTF's own convention — deliberately
+        // not the bind-relative delta form an Ogre skeleton wants; the two live
+        // in different places and must not be confused.
         QHash<QString, int> boneNode;
         QJsonArray joints;
         std::vector<float> ibm;
