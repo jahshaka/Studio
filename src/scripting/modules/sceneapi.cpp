@@ -66,7 +66,7 @@ QVector<VerbInfo> SceneApi::verbs() const
           "extent (the image's V axis) and depth the projection thickness; the node's own scale "
           "multiplies all three. textureGuid may be empty — the decal then draws its wire box and "
           "projects nothing until an image is bound. The image is pinned into the project as a "
-          "DEPENDENCY (no companion PBR material is minted). There is deliberately no per-decal opacity "
+          "BINDING (a dependency row, no companion PBR material is minted). There is deliberately no per-decal opacity "
           "or colour tint: the renderer packs four floats per decal and neither fits. Undoable.",
           Needs::Document },
     };

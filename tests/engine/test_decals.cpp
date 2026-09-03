@@ -417,6 +417,54 @@ int main()
               "decal 2 is unaffected by the overflow refusal");
     }
 
+    // ---- phase 3: normal and emissive maps --------------------------------
+    // Separate atlases, separate formats (the normal atlas is RG8_SNORM — the
+    // shader ADDS decalsNormalsTex.xy to the tangent-space normal, so it must be
+    // signed). Both are bound to the SceneManager only while some decal in the
+    // scene actually carries that map.
+    {
+        // A flat-blue normal map (128,128,255 = +Z, i.e. no perturbation) and a
+        // solid green emissive.
+        writeSolidTga("decal_norm.tga", 128, 128, 255);
+        writeSolidTga("decal_emis.tga", 0, 255, 0);
+        const TextureId normTex = s->loadDecalTexture("decal_norm.tga", DecalMap::Normal);
+        const TextureId emisTex = s->loadDecalTexture("decal_emis.tga", DecalMap::Emissive);
+        CHECK(normTex != 0, "loadDecalTexture(Normal) fills the signed normal atlas");
+        if (!normTex) std::printf("   lastError: %s\n", engine->lastError().c_str());
+        CHECK(emisTex != 0, "loadDecalTexture(Emissive) fills the emissive atlas");
+        if (!emisTex) std::printf("   lastError: %s\n", engine->lastError().c_str());
+        CHECK(s->decalAtlasUsed(DecalMap::Normal) == 1 && s->decalAtlasUsed(DecalMap::Emissive) == 1,
+              "the three atlases are independent (one slice each, diffuse untouched)");
+        // Cross-kind ids must be refused: they are in the wrong pool.
+        DecalDesc wrongKind = dd;
+        wrongKind.diffuse = normTex;
+        CHECK(!s->setDecal(decal, wrongKind), "a Normal-atlas id is refused as the diffuse map");
+
+        DecalDesc full = dd;
+        full.diffuse = redTex;
+        full.normal = normTex;
+        full.emissive = emisTex;
+        CHECK(s->setDecal(decal, full), "setDecal accepts diffuse + normal + emissive");
+        render(engine.get(), 3);
+        const Colour lit = sampleAt(view, 0.0f, 0.0f);
+        show("decal with normal + emissive", lit);
+        // The emissive map adds green light inside the footprint that the plain
+        // red decal did not have.
+        CHECK(lit.g > 0.05f, "the emissive map glows inside the decal box");
+        CHECK(sampleAt(view, 2.0f, 2.0f).g < 0.4f, "and only inside it");
+
+        // Dropping back to diffuse-only unbinds the extra atlases; the picture
+        // must return to exactly what the diffuse-only decal produced.
+        CHECK(s->setDecal(decal, dd), "setDecal back to diffuse only");
+        render(engine.get(), 3);
+        const Colour again = sampleAt(view, 0.0f, 0.0f);
+        CHECK(again.g < 0.05f, "unbinding the emissive map removes the glow");
+        CHECK(s->destroyTexture(normTex) && s->destroyTexture(emisTex),
+              "the phase-3 slices are released");
+        CHECK(s->decalAtlasUsed(DecalMap::Normal) == 0 && s->decalAtlasUsed(DecalMap::Emissive) == 0,
+              "releasing the last user frees the atlas slice");
+    }
+
     // ---- removeDecal restores the ORIGINAL pixels exactly -----------------
     CHECK(s->removeDecal(decal), "removeDecal removes decal 1");
     CHECK(s->removeDecal(decal2), "removeDecal removes decal 2");

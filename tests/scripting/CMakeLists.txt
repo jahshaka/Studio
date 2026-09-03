@@ -226,6 +226,21 @@ set_tests_properties(scripting.e2e.image_plane PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# DECALS_SPEC: scene.addDecal — the projected-texture object, its box and
+# material values, the image bound as a project BINDING (dependency row, no
+# companion material), property round-trip, duplicate, undo and save/reopen.
+# Document verbs only -> --headless; fixture paths configured in.
+configure_file(scripts/e2e_decals.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-decals)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.decals
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_decals.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.decals PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # IMAGE_PLANE_SPEC option B1: the companion image material — automatic on a
 # DIRECT image add-to-project (owner call), never for dependency textures
 # riding an object's closure, plus the manual materials.createFromImage verb;
