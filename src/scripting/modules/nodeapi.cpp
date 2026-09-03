@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "scripting/modules/nodeapi.h"
 
 #include "scripting/modules/moduleshared.h"
+#include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/assets/texture2d.h"
 #include "viewport/ieditorviewport.h"
 #include "services/planarreflectors.h"
 #include "commands/reparentscenenodecommand.h"
@@ -74,6 +76,17 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "setDecalTexture", "node.setDecalTexture(id, textureGuid) -> bool",
           "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Direct document write — not undoable yet.",
+          Needs::Document },
+        { "setParticleTexture", "node.setParticleTexture(id, textureGuid) -> bool",
+          "Binds a Texture asset as a particle emitter's image, as a BINDING (a dependency row "
+          "and a project pin — no copy into the project folder, no companion material). An empty "
+          "guid clears it, leaving untextured white quads, which for an additive system means a "
+          "solid saturated slab rather than a plume. This is the one emitter field "
+          "node.setProperty cannot write: resolving a guid to bytes needs the asset manager, "
+          "which the document layer has no access to.",
+          Needs::Document },
+        { "particleTexture", "node.particleTexture(id) -> {path}",
+          "The emitter's resolved particle image path, or empty.",
           Needs::Document },
         { "decalTexture", "node.decalTexture(id) -> {guid, path}",
           "The decal's bound image: the library guid and the resolved file. Empty guid = none.",
@@ -342,6 +355,39 @@ QVariant NodeApi::decalTexture(const QString &id)
     if (!decal) return QVariant();
     return QVariantMap{ { "guid", decal->textureGuid },
                         { "path", decal->resolvedTexturePath } };
+}
+
+bool NodeApi::setParticleTexture(const QString &id, const QString &assetGuid)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setParticleTexture"));
+    if (!node) return false;
+    if (node->getSceneNodeType() != iris::SceneNodeType::ParticleSystem)
+        return fail(QStringLiteral("node.setParticleTexture: '%1' is not a particle system")
+                        .arg(node->getName()));
+    const QString guid = assetGuid.trimmed();
+    if (!guid.isEmpty() && host.db && host.db->fetchAsset(guid).guid.isEmpty())
+        return fail(QStringLiteral("node.setParticleTexture: no asset with guid '%1'").arg(guid));
+    // Same one binding path the decal and light textures use: a dependency row,
+    // an AddKind::Binding pin, and a CAS resolve. Never a copy into the project
+    // folder, never a companion material.
+    if (!host.services || !host.services->sceneEdit ||
+        !host.services->sceneEdit->setParticleTexture(
+            node.staticCast<iris::ParticleSystemNode>(), guid))
+        return fail(QStringLiteral("node.setParticleTexture: could not bind '%1'").arg(guid));
+    return true;
+}
+
+QVariant NodeApi::particleTexture(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.particleTexture"));
+    if (!node) return QVariant();
+    if (node->getSceneNodeType() != iris::SceneNodeType::ParticleSystem) {
+        fail(QStringLiteral("node.particleTexture: '%1' is not a particle system")
+                 .arg(node->getName()));
+        return QVariant();
+    }
+    auto ps = node.staticCast<iris::ParticleSystemNode>();
+    return QVariantMap{ { "path", ps->texture ? ps->texture->getSource() : QString() } };
 }
 
 QVariant NodeApi::lightTexture(const QString &id)

@@ -101,9 +101,17 @@ done < <(macho_files "$BUNDLE")
 [ "$missing" -eq 0 ] && pass "every @rpath dependency has a file in Contents/Frameworks"
 
 head2 "static: bundled Vulkan payload"
+# Two dlopen'd Ogre plugins since the particle adoption. Plugin_ParticleFX2
+# carries every emitter and affector FACTORY (the definitions themselves are in
+# libOgreNextMain, which is why billboard sets never needed it) — without it
+# setParticleSystem fails in every scene and the app draws no particles at all,
+# silently, in a bundle that otherwise looks complete. Hence an assertion, not a
+# comment (PARTICLES_FX2_SPEC §4.1).
 for f in Contents/Frameworks/libvulkan.1.dylib Contents/Frameworks/libMoltenVK.dylib \
          Contents/Frameworks/RenderSystem_Vulkan.4.0.dylib \
          Contents/Frameworks/RenderSystem_Vulkan.dylib \
+         Contents/Frameworks/Plugin_ParticleFX2.4.0.dylib \
+         Contents/Frameworks/Plugin_ParticleFX2.dylib \
          Contents/Resources/vulkan/icd.d/MoltenVK_icd.json; do
     [ -e "$BUNDLE/$f" ] && pass "$f" || fail "$f is missing"
 done

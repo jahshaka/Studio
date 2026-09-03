@@ -52,14 +52,22 @@ function assertTexturePath(matName, key, v) {
 // the datablock falls back to its white vertex colour and the alpha cutout
 // that shapes a flame is exactly what is missing.
 //
-// Measured over the plume box on lavapipe and a 4080 (15 frames, 960x540):
-//   healthy   warm 15-18 of 30, white 0
-//   texture lost   warm 4 (the sphere showing through), white 21
+// THE BOX MOVED (2026-09-03, ParticleFX2 adoption). The re-authored sample's
+// flame is a real 1.7 s plume rising out of the pit instead of the legacy
+// 24-second column, so it occupies a different part of the same frame. Mapped
+// with a 20x20 warm-probe grid over the re-authored scene, warmed the same way
+// shoot() warms it: the flame runs x 0.42-0.62, y 0.22-0.73, densest around
+// y 0.32-0.58.
+//
+// Measured over the new box (960x540, 4080): healthy is 30 of 30 warm, 0 white
+// — the box is inside the flame core, so the margin over the >= 8 threshold is
+// the whole point. A lost texture turns an additive system into a saturated
+// white slab rather than a plume, which the white counter catches.
 function firePlumeProbePoints() {
     var pts = [];
     for (var yi = 0; yi < 6; yi++)
         for (var xi = 0; xi < 5; xi++)
-            pts.push({ x: 0.40 + xi * 0.030, y: 0.58 + yi * 0.045 });
+            pts.push({ x: 0.472 + xi * 0.018, y: 0.36 + yi * 0.040 });
     return pts;
 }
 function assertFireIsFire(probes, when) {
@@ -85,7 +93,14 @@ function meshesByName(name) {
 }
 
 function shoot(name, probePoints) {
-    editor.frame(15);
+    // 15 wall-clock frames used to be enough for everything in these samples.
+    // It is not enough for a PARTICLE system: the engine simulates those now,
+    // charging each frame the time it actually took, and an offscreen frame
+    // takes about a millisecond — so 15 frames buy 15 ms of fire and photograph
+    // an empty pit. editor.frame(n, dt) pushes a FIXED step to the particle
+    // clock too, so 150 frames at 1/60 s is a deterministic 2.5 s of warm-up:
+    // past the flame's 1.7 s lifetime, so the plume is full and steady.
+    editor.frame(150, 1.0 / 60.0);
     var shot = editor.screenshot("samples_" + name + ".png", 960, 540, probePoints);
     assert(shot.probes && shot.probes.length === probePoints.length,
            name + ": screenshot with " + probePoints.length + " probes");

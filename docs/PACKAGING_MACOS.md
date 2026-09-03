@@ -43,8 +43,11 @@ The script (idempotent; each step prints a check):
    output, which accumulates logs and settings.
 2. Runs **macdeployqt**: Qt frameworks and plugins, IrisGL/assimp/Ogre-linked dylibs,
    install-path rewriting to bundle-relative `@rpath`s.
-3. Adds what macdeployqt cannot know about: the Ogre dylibs and the
-   **`RenderSystem_Vulkan` plugin** (dlopen'd, not linked), the **Vulkan loader +
+3. Adds what macdeployqt cannot know about: the Ogre dylibs, the two **dlopen'd Ogre
+   plugins** — `RenderSystem_Vulkan` and, since the particle adoption,
+   **`Plugin_ParticleFX2`** (the particle definitions live in `libOgreNextMain`, but
+   every emitter and affector *factory* is registered by that plugin's `install()`;
+   without it the app draws no particles at all, silently) — the **Vulkan loader +
    MoltenVK**, and an **ICD manifest** at `Contents/Resources/vulkan/icd.d/` whose
    `library_path` points at the bundled MoltenVK — the app's startup code looks there
    first, so no environment is needed.
@@ -70,9 +73,10 @@ locations.
 BUNDLE=dist/Jahshaka.app ./scripts/verify-macos-bundle.sh
 ```
 
-34 assertions in two stages. Static: every Mach-O in the bundle must reference only
+36 assertions in two stages. Static: every Mach-O in the bundle must reference only
 bundle-internal or `/usr/lib`//`/System/Library` paths; no stray rpaths; the ICD
-manifest is relative; `libOgreNextPlanarReflections` is present by name (an engine
+manifest is relative; both dlopen'd plugins are present by name; `libOgreNextPlanarReflections`
+is present by name (an engine
 install built before the component pin in `irisgl/scripts/build-ogre.sh` is the one
 way it goes missing); `codesign -v --deep --strict` passes. Runtime: the bundle is
 copied to a temp dir and made to render the engine selftest under a **fully emptied

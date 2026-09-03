@@ -151,6 +151,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["shadowResolution"] = scene->shadowResolution;
     // Shadow FILTER quality; -1 = Auto (softest requesting light wins).
     sceneObj["shadowFilterTier"] = scene->shadowFilterTier;
+    sceneObj["particleTimeScale"] = scene->particleTimeScale;
     // Post-processing chain (POST_CHAIN_SPEC §§3-7). Engine-viewport settings,
     // so they live beside antiAliasing rather than anywhere near the materials.
     sceneObj["hdrEnabled"] = scene->hdrEnabled;
@@ -487,6 +488,55 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["texture"]              = node->texture
         ? assetGuidForTexturePath(node->texture->getSource())
         : QString();
+
+    // ---- ParticleFX2 keys (PARTICLES_FX2_SPEC §5) --------------------------
+    // Purely ADDITIVE to the ten keys above, and the reader defaults every one
+    // of them to the legacy behaviour — so a scene written here still opens in
+    // a build without them, and a scene written before the adoption opens here
+    // as exactly the emitter it was.
+    //
+    // The three spreads are written for the first time: the panel has edited
+    // speedError/lifeError/scaleError since 2016 and nothing ever saved them
+    // (audit defect #7). Absolute, not fractional — the fraction is a panel
+    // convenience, the absolute value is the model.
+    sceneNodeObject["speedError"]       = node->speedError;
+    sceneNodeObject["lifeError"]        = node->lifeError;
+    sceneNodeObject["scaleError"]       = node->scaleError;
+    sceneNodeObject["maxParticles"]     = node->maxParticles;
+
+    sceneNodeObject["shape"]            = iris::ParticleSystemNode::shapeName(node->shape);
+    sceneNodeObject["orientation"]      = iris::ParticleSystemNode::orientationName(node->orientation);
+    sceneNodeObject["preset"]           = iris::ParticleSystemNode::presetName(node->preset);
+    sceneNodeObject["coneAngle"]        = node->coneAngle;
+    sceneNodeObject["turbulence"]       = node->turbulence;
+    sceneNodeObject["rotationSpeedMin"] = node->rotationSpeedMin;
+    sceneNodeObject["rotationSpeedMax"] = node->rotationSpeedMax;
+    sceneNodeObject["burstDuration"]    = node->burstDuration;
+    sceneNodeObject["burstRepeatDelay"] = node->burstRepeatDelay;
+    sceneNodeObject["startDelay"]       = node->startDelay;
+    sceneNodeObject["alphaHash"]        = node->alphaHash;
+    sceneNodeObject["extents"]          = jsonVector3(node->extents);
+    sceneNodeObject["innerExtents"]     = jsonVector3(node->innerExtents);
+    sceneNodeObject["wind"]             = jsonVector3(node->wind);
+    sceneNodeObject["emitColourStart"]  = jsonColor(node->emitColourStart);
+    sceneNodeObject["emitColourEnd"]    = jsonColor(node->emitColourEnd);
+
+    QJsonArray colourKeys;
+    for (const iris::ParticleColourKey &k : node->colourKeys) {
+        QJsonObject o;
+        o["time"] = k.time;
+        o["r"] = k.r; o["g"] = k.g; o["b"] = k.b; o["a"] = k.a;
+        colourKeys.append(o);
+    }
+    sceneNodeObject["colourKeys"] = colourKeys;
+
+    QJsonArray scaleKeys;
+    for (const iris::ParticleScaleKey &k : node->scaleKeys) {
+        QJsonObject o;
+        o["time"] = k.time; o["scale"] = k.scale;
+        scaleKeys.append(o);
+    }
+    sceneNodeObject["scaleKeys"] = scaleKeys;
 }
 
 QString SceneWriter::assetGuidForTexturePath(const QString &path)

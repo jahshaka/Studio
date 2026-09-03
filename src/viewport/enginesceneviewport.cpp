@@ -834,22 +834,14 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     } else if (mCamController) {
         mCamController->update(dt);
     }
-    // Emitters animate in the editor exactly as in the legacy viewport (which
-    // ticks the WHOLE scene each frame, sceneviewwidget.cpp). Here only the
-    // particle nodes tick: a full scene update would also run physics while not
-    // playing. Play mode already ticks them via PlayBack::update -> scene->update.
-    // Exception: "Simulate physics" (startPhysicsSimulation) — then the full
-    // scene update runs, stepping Bullet and writing body transforms back onto
-    // the document nodes; it also ticks the emitters, so skip the explicit
-    // particle loop that frame to avoid double-ticking them.
-    if (!mPlaying && mScene) {
-        if (mScene->getPhysicsEnvironment()->isSimulating()) {
-            mScene->update(dt);
-        } else {
-            for (const auto &ps : mScene->particleSystems)
-                if (ps) ps->update(dt);
-        }
-    }
+    // Emitters used to be ticked here, one document node at a time, because the
+    // document owned a CPU particle simulator. It does not any more
+    // (PARTICLES_FX2_SPEC): the engine simulates every particle inside
+    // renderOneFrame, in the editor and in play mode alike, and the document
+    // only says WHAT to emit and how fast the clock runs. The physics branch
+    // stays — that really is a document-side simulation.
+    if (!mPlaying && mScene && mScene->getPhysicsEnvironment()->isSimulating())
+        mScene->update(dt);
     if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
     // G (Game View) hides every in-viewport editor helper; play mode hides the
     // grid too (the Unreal look), while the other helpers keep their existing
@@ -878,6 +870,20 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     if (mMirror) mMirror->applySky(view());
     if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
     if (mMirror && mEditorCam) mMirror->applyCamera(mEditorCam, view());
+    // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
+    // particles too. They are simulated inside the engine now, from the
+    // backend's own frame-time source, so a dt this viewport applies to the
+    // document would otherwise leave the flame running on the wall clock — and
+    // an offscreen frame takes about a millisecond, so 15 scripted frames would
+    // buy 15 ms of fire and photograph an empty scene. Pushed AFTER
+    // applyEnvironment, which owns the scene's normal time scale (the two
+    // settings cancel each other inside the backend, so exactly one of them may
+    // be live at a time).
+    if (mEngine) {
+        if (dtOverride >= 0.0f) mEngine->setFixedFrameDelta(dtOverride);
+        else if (mEngine->fixedFrameDelta() > 0.0f)
+            mEngine->setParticleTimeScale(mScene ? mScene->particleTimeScale : 1.0f);
+    }
 }
 
 QImage EngineSceneViewport::takeScreenshot(QSize dimension)

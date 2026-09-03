@@ -105,7 +105,15 @@ public:
 
     void addEmpty();
     void addViewer();
-    void addParticleSystem();
+    /// Adds an emitter, optionally stamped from a preset recipe
+    /// (PARTICLES_FX2_SPEC §6). Returns the node so callers — the scripting
+    /// verb, chiefly — can address what they just made; null when there is no
+    /// scene. Undoable through addNodeToScene like every other add.
+    /// No default argument: iris::ParticlePreset is only forward-declared here
+    /// (naming an enumerator would pull particlesystemnode.h into every
+    /// translation unit that touches this service). Callers pass
+    /// iris::ParticlePreset::Custom for a plain emitter.
+    iris::ParticleSystemNodePtr addParticleSystem(iris::ParticlePreset preset);
 
     /// IMAGE_PLANE_SPEC Option A: spawns an image plane for a Texture asset
     /// at `position` — a plane.obj mesh scaled to the image's aspect (max
@@ -136,6 +144,14 @@ public:
     /// land here): pins the guid as a dependency, rewrites the dependency row
     /// and re-resolves the path. False when the node is not a decal.
     bool setDecalTexture(const iris::DecalNodePtr &decal, const QString &textureGuid);
+    /// Binds (or, with an empty guid, clears) an emitter's particle image, the
+    /// same way setDecalTexture binds a decal's: a BINDING membership and a
+    /// dependency row, never a copy and never a companion material. Until this
+    /// existed the only way to change an emitter's image was the property
+    /// panel's picker — nothing scripted could do it, which is why the sample
+    /// scene could not be re-authored from a script.
+    bool setParticleTexture(const iris::ParticleSystemNodePtr &emitter,
+                            const QString &textureGuid);
 
     /// Imports a mesh file straight into the scene. The path must be a real
     /// file — the file dialog stays in the shell.

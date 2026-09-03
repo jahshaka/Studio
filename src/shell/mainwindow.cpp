@@ -1309,7 +1309,7 @@ void MainWindow::addViewer()
 
 void MainWindow::addParticleSystem()
 {
-    sceneEditService->addParticleSystem();
+    sceneEditService->addParticleSystem(iris::ParticlePreset::Custom);
 }
 
 void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
