@@ -87,7 +87,8 @@ assert(s.shadowFilter.valueId === "verysoft", "Epic uses the softest shadow filt
 assert(s.hdr.value === 1 && s.bloom.value === 1, "Epic turns HDR and bloom on");
 assert(s.ssao.valueId === "full", "Epic runs ambient occlusion at full resolution");
 assert(s.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra");
-assert(world.get().antiAliasing === 4, "the backing field followed Epic too");
+assert(world.get().antiAliasing === 1, "the backing field followed Epic too (MSAA stays 1x)");
+assert(world.get().shadowResolution === 4096, "and Epic's shadow atlas landed in the field");
 
 // ---- a pin survives a mode switch -------------------------------------------
 var pinned = world.override({ id: "msaa", value: "2x" });
@@ -130,6 +131,22 @@ world.mode({ mode: "high" });
 assert(world.get().antiAliasing === 8,
        "so switching to High leaves it alone: " + world.get().antiAliasing);
 assert(world.get().shadowResolution === 2048, "while High moves the unpinned rows");
+
+// ---- the continuous tuning is a verb, not a tier ----------------------------
+var fxTuning = world.postFx();
+assert(Math.abs(fxTuning.exposure - 0.6) < 0.001,
+       "a new scene's default exposure is the derived +0.6: " + fxTuning.exposure);
+fxTuning = world.postFx({ exposure: 1.25, bloomThreshold: 3.0, ssaoPower: 2.5, ssaoRadius: 4 });
+assert(Math.abs(fxTuning.exposure - 1.25) < 0.001, "world.postFx sets the exposure");
+assert(Math.abs(fxTuning.bloomThreshold - 3.0) < 0.001, "world.postFx sets the bloom threshold");
+assert(Math.abs(fxTuning.ssaoPower - 2.5) < 0.001, "world.postFx sets the AO power");
+assert(world.postFx({ exposure: 999 }).exposure === 8, "out-of-range exposure clamps");
+world.postFx({ exposure: 1.25 });
+// A mode switch must NOT regrade the scene: tuning is not a tier.
+world.mode({ mode: "medium" });
+assert(Math.abs(world.postFx().exposure - 1.25) < 0.001,
+       "a mode switch leaves the tuning alone: " + world.postFx().exposure);
+world.mode({ mode: "high" });
 
 // ---- serialization round-trip ----------------------------------------------
 assert(world.get().mode === "high", "world.get() reports the mode too");

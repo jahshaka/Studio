@@ -144,7 +144,13 @@ p = shoot("physics", [ { x: 0.327, y: 0.322 },  // red pipe cap
 assert(p[0].r > 45 && p[0].r > p[0].g * 2 && p[0].r > p[0].b * 2,
        "Physics: red pipe cap is red " + fmt(p[0]));
 assert(p[1].b > 90 && p[1].b > p[1].g + 25, "Physics: purple pipe is purple " + fmt(p[1]));
-assert(bright(p[2]) > 120 && isNeutral(p[2], 35), "Physics: teapot is bright white " + fmt(p[2]));
+// RE-BASELINED for the Epic World Mode default (POST_CHAIN_SPEC §12 decision 8):
+// a document with no worldMode — which is every shipped sample — now reads as
+// Epic, which turns VCT global illumination on and softens/enlarges the shadow
+// atlas. The teapot is the same white teapot, a few percent dimmer for the
+// indirect bounce; 110 keeps this a real "bright and neutral" assertion while
+// no longer being tuned to a GI-off world.
+assert(bright(p[2]) > 110 && isNeutral(p[2], 35), "Physics: teapot is bright white " + fmt(p[2]));
 assert(project.close(), "Physics.zip: project.close");
 
 console.log("e2e_samples: ALL OK");

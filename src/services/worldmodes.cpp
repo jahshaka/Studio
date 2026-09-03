@@ -40,10 +40,11 @@ int planarBudgetOf(const iris::ScenePtr &s)
 }
 
 /// The four tier columns, in order: Low, Medium, High, Epic.
-/// Values and reasons come from POST_CHAIN_SPEC.md §9.3 — the effect rows it
-/// also lists (HDR, bloom, SSAO, SMAA, SSR, refraction) are NOT here: they have
-/// no engine behind them yet and a row that silently does nothing is worse than
-/// no row. They land with their phases, in this table, and nothing else changes.
+/// Values and reasons come from POST_CHAIN_SPEC.md §9.3, with two documented
+/// departures: hardware MSAA is 1x in every tier (it cannot be combined with the
+/// post chain — see that row), and screen-space reflections are DECLARED but not
+/// yet served, the same contract shape planar reflections used before its lane
+/// landed. A row that silently does nothing is worse than a row that says so.
 QVector<Row> buildRows()
 {
     QVector<Row> out;
@@ -154,6 +155,32 @@ QVector<Row> buildRows()
                                 "recompiles three shaders — a brief hitch, not a per-frame cost.");
         r.get = [](const iris::ScenePtr &s) { return s->smaaPreset; };
         r.set = [](const iris::ScenePtr &s, int v) { s->smaaPreset = v; };
+        out.append(r);
+    }
+    {
+        // SSR is DECLARED, not served — the same contract shape planarBudget
+        // used before its lane landed. The recipe is understood and the plumbing
+        // (PostFxDesc::ssr, ChainDesc::ssr, the fog piece's prepass guard) is in
+        // place; what is missing is the prepass restructure of the main scene
+        // pass, the compute + mipmap colour history and the per-view
+        // reprojection matrix. Declaring it keeps the tier table honest about
+        // what Epic will mean without shipping a switch that does nothing.
+        Row r;
+        r.id = QStringLiteral("ssr");
+        r.label = QStringLiteral("Screen-Space Reflections");
+        r.group = QStringLiteral("Reflections");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),           0 },
+                      { QStringLiteral("half"), QStringLiteral("Half-Res Rays"), 1 },
+                      { QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2 } };
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
+        r.cost = QStringLiteral("Reflections of things that MOVE — the one gap a baked probe "
+                                "structurally cannot fill. Costs a second full traversal of the "
+                                "scene (a depth/normal prepass) on top of the ray march, so it "
+                                "never appears below High.");
+        r.available = false;
+        r.get = [](const iris::ScenePtr &s) { return s->ssrMode; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->ssrMode = v; };
         out.append(r);
     }
     {

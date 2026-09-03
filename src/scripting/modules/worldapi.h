@@ -60,6 +60,7 @@ public:
     Q_INVOKABLE QVariantMap clearOverride(const QVariantMap &params);
     Q_INVOKABLE QVariantMap clearOverrides();
     Q_INVOKABLE QVariantMap modeTable();
+    Q_INVOKABLE QVariantMap postFx(const QVariantMap &params = QVariantMap());
 
 private:
     iris::ScenePtr sceneOrFail(const QString &verb);
