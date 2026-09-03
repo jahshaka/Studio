@@ -35,6 +35,7 @@ namespace Ui {
 }
 
 class AssetView;
+class ViewportCover;
 namespace materials { class EffectsPage; }
 class StudioModule;
 class MaterialsModule;
@@ -558,6 +559,10 @@ private:
 
     QMainWindow *viewPort;
     QWidget *sceneContainer;
+    /// The viewport's "nothing is presenting" state (viewportcover.h): a
+    /// sibling of the viewport in the SAME grid cell, raised over it while a
+    /// world loads and hidden the moment the engine presents.
+    ViewportCover *viewportCover = nullptr;
 
     QWidget *controlBar;
     QWidget *playerControls;

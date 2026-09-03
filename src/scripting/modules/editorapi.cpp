@@ -95,6 +95,9 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "frame", "editor.frame(n=1, dt=-1) -> bool",
           "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 the document's clock advances by exactly that many seconds per frame instead of by the wall clock, which is what makes stepping deterministic IN PLAY MODE (without it, each stepped frame charged the document for however long the previous statement took).",
           Needs::Engine },
+        { "viewportState", "editor.viewportState() -> {state, framesPresented}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping.",
+          Needs::Document },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], postFx=false) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. `postFx` true renders it through the scene's post-processing chain (HDR/tonemap, bloom, ambient occlusion, SMAA) so the shot matches what the viewport shows; false (the default) is the neutral, exactly-reproducible readback that pixel assertions want.",
           Needs::Engine },
@@ -312,6 +315,19 @@ bool EditorApi::frame(int n, double dt)
     if (!requireEngine()) return false;
     host.viewport->renderFrames(qBound(1, n, 1000), float(dt));
     return true;
+}
+
+QVariantMap EditorApi::viewportState()
+{
+    QVariantMap out;
+    if (!host.viewport) {
+        out.insert("state", QStringLiteral("offscreen"));
+        out.insert("framesPresented", 0);
+        return out;
+    }
+    out.insert("state", host.viewport->presentationState());
+    out.insert("framesPresented", QVariant::fromValue(host.viewport->framesPresented()));
+    return out;
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,

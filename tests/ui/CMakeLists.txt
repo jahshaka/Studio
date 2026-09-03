@@ -82,3 +82,23 @@ add_test(NAME ui.property_anim COMMAND test_property_anim
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.property_anim PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+
+# ui.viewport_cover — the viewport's "nothing is presenting" cover
+# (src/viewport/viewportcover.h): hidden while the engine presents, and opaque
+# over every pixel of its rect when it is up. The widget half of the
+# desktop-bleed fix (2026-09-03); the state machine that drives it is gated by
+# scripting.e2e.viewport_cover. Pure widget: no engine, no display.
+add_executable(test_viewport_cover test_viewport_cover.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/viewportcover.cpp)
+set_target_properties(test_viewport_cover PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_viewport_cover PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_viewport_cover PRIVATE Qt6::Widgets Qt6::Test)
+add_test(NAME ui.viewport_cover COMMAND test_viewport_cover
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.viewport_cover PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
