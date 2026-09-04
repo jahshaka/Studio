@@ -145,6 +145,16 @@ Database::Database()
 
 Database::~Database()
 {
+    // Release whatever registration this instance still holds. The dtor used to
+    // be empty, so a stack Database (Upgrader's schema check, every DB suite)
+    // left `qt_sql_default_connection` registered on an early return or an
+    // exception path, and the next initializeDatabase() printed Qt's
+    // "duplicate connection name" warning (STABILITY_PROGRAM_SPEC §1.7a).
+    //
+    // Safe to run unconditionally: an instance that never called
+    // initializeDatabase() holds a default-constructed QSqlDatabase whose
+    // connectionName() is empty, and closeDatabase() no-ops on that.
+    closeDatabase();
 }
 
 bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
@@ -198,9 +208,24 @@ bool Database::initializeDatabase(const QString &pathToBlob)
 
 void Database::closeDatabase()
 {
+    // ORDER IS LOAD-BEARING. This used to read the name AFTER invalidating the
+    // handle:
+    //     db = QSqlDatabase();
+    //     QSqlDatabase::removeDatabase(db.connectionName());   // reads ""
+    // `db = QSqlDatabase()` resets connectionName() to the empty string, and
+    // removeDatabase("") is a silent no-op — so the connection was never
+    // actually unregistered and the next addDatabase() printed
+    //     qt.sql.qsqldatabase: QSqlDatabasePrivate::addDatabase: duplicate
+    //     connection name 'qt_sql_default_connection', old connection removed
+    // on every boot (STABILITY_PROGRAM_SPEC §1.7a: Upgrader opens the default
+    // connection at main.cpp:139, MainWindow::setupProjectDB opens it again).
+    // Capture the name first; every QSqlDatabase copy must be gone before
+    // removeDatabase or Qt warns that the connection is still in use, which is
+    // why `db` is invalidated in between.
+    const QString name = db.connectionName();
     if (db.isOpen()) db.close();
     db = QSqlDatabase(); // important that we make an invalid object
-    QSqlDatabase::removeDatabase(db.connectionName());
+    if (!name.isEmpty()) QSqlDatabase::removeDatabase(name);
 }
 
 int Database::getTableCount()
