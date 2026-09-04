@@ -1377,6 +1377,125 @@ int main(int argc, char **argv)
         CHECK(projected, "decals still project after more world switches than the atlas has slices");
     }
 
+    // ---- an IDLE VCT scene never re-solves its GI (the debounce contract) ----
+    //
+    // WHY THIS IS A GATE. applyEnvironment asks the engine to re-solve global
+    // illumination whenever the lights have moved, and for VCT "re-solve" means
+    // tearing the voxelizer down and rebuilding it from every item in the scene
+    // — hundreds of milliseconds on a real world. It is also INVISIBLE: a
+    // scene that re-voxelizes on every frame renders exactly the same picture
+    // as one that does not, so nothing but a counter can tell them apart, and
+    // the only symptom is a frame rate. Showroom (the one shipped VCT sample)
+    // was suspected of exactly this on 2026-09-04; it was not doing it, and
+    // this is the guard that keeps the answer true.
+    //
+    // The debounce rests on a document invariant: an idle node's CACHED
+    // globalTransform is bit-stable. That is asserted here too, and with light
+    // wires ON, because the helper icons read a light's world position through
+    // getGlobalTransform() — which recomputes the whole parent chain and
+    // overwrites the cache — while update() writes the same field from the
+    // dirty flags. Two writers, one field: if they ever disagreed by an ulp the
+    // signature would flip every frame and this test would say so.
+    {
+        auto gdoc = iris::Scene::create();
+        gdoc->giMode = iris::GiMode::VCT;
+        gdoc->giQuality = iris::GiQuality::LOW;     // 32^3 voxels: this is a counter test
+        gdoc->giAutoRefresh = true;
+        auto gfloor = iris::MeshNode::create();
+        gfloor->setName("floor");
+        gfloor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+        gfloor->setLocalScale(iris::Vec3(4, 4, 4));
+        auto gmat = iris::PbrMaterial::create();
+        gmat->setBaseColor(QColor(220, 220, 220));
+        gfloor->setMaterial(gmat);
+        gdoc->getRootNode()->addChild(gfloor);
+        // Two lights, because the mirror's VCT signature covers EVERY light, and
+        // one of them is scaled and rotated so the compose is not a translation.
+        auto gsun = iris::LightNode::create();
+        gsun->setName("gi sun");
+        gsun->lightType = iris::LightType::Directional;
+        gsun->intensity = 2.0f;
+        gsun->setLocalRot(iris::Quat::fromEulerAngles(-55.0f, 25.0f, 0.0f));
+        gsun->setLocalPos(iris::Vec3(0.0f, 6.0f, 0.0f));
+        gdoc->getRootNode()->addChild(gsun);
+        auto gpanel = iris::LightNode::create();
+        gpanel->setName("gi panel");
+        gpanel->lightType = iris::LightType::Area;   // Showroom's shape: a scaled area panel
+        gpanel->intensity = 3.0f;
+        gpanel->rectWidth = 2.0f;
+        gpanel->rectHeight = 2.0f;
+        gpanel->setLocalPos(iris::Vec3(-1.5f, 2.6f, 0.0f));
+        gpanel->setLocalScale(iris::Vec3(4.0f, 1.0f, 4.0f));
+        gdoc->getRootNode()->addChild(gpanel);
+
+        mirror.setSource(gdoc);
+        mirror.setLightWires(true);        // the getGlobalTransform() path, on purpose
+        auto gcam = iris::CameraNode::create();
+        gcam->setLocalPos(iris::Vec3(0, 3, 5));
+        gcam->update(0.0f);
+        mirror.applyCamera(gcam, view);
+
+        const quint64 push0 = mirror.giPushCount(), refresh0 = mirror.giRefreshCount();
+        mirror.sync();
+        mirror.applyEnvironment(view, engine.get());
+        engine->renderOneFrame();
+        const quint64 pushAfterFirst = mirror.giPushCount();
+        CHECK(pushAfterFirst == push0 + 1, "GI idle: the first applyEnvironment pushes VCT exactly once");
+        CHECK(mirror.giRefreshCount() == refresh0, "GI idle: the first push is not also a refresh");
+
+        // The world transforms the signature is built from, captured once.
+        const iris::Mat4 sun0 = gsun->globalTransform, panel0 = gpanel->globalTransform;
+
+        bool stable = true;
+        for (int f = 0; f < 60; ++f) {
+            mirror.sync();
+            mirror.applyEnvironment(view, engine.get());
+            engine->renderOneFrame();
+            if (!(gsun->globalTransform == sun0) || !(gpanel->globalTransform == panel0)) stable = false;
+        }
+        CHECK(stable, "GI idle: every light's cached globalTransform is bit-identical after 60 frames");
+        // ...and the cache agrees with a fresh recompute, so the two writers of
+        // that field can never hand the signature two different answers.
+        CHECK(gsun->getGlobalTransform() == sun0 && gpanel->getGlobalTransform() == panel0,
+              "GI idle: getGlobalTransform() recomputes to the same bits the cache holds");
+        CHECK(mirror.giPushCount() == pushAfterFirst,
+              "GI idle: 60 idle frames pushed no new GI configuration");
+        CHECK(mirror.giRefreshCount() == refresh0,
+              "GI idle: 60 idle frames asked for ZERO GI re-solves");
+
+        // A light that really moves must still re-solve — exactly once.
+        gpanel->setLocalPos(iris::Vec3(1.5f, 2.6f, 0.0f));
+        mirror.sync();
+        mirror.applyEnvironment(view, engine.get());
+        engine->renderOneFrame();
+        CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a light re-solves once");
+        for (int f = 0; f < 20; ++f) {
+            mirror.sync();
+            mirror.applyEnvironment(view, engine.get());
+            engine->renderOneFrame();
+        }
+        CHECK(mirror.giRefreshCount() == refresh0 + 1,
+              "GI: the frames after the move are idle again (no second re-solve)");
+
+        // Moving GEOMETRY is deliberately NOT a re-solve (GI_SPEC: the mirror
+        // pushes every item's transform every frame; flagging that would
+        // re-voxelize forever).
+        for (int f = 0; f < 10; ++f) {
+            gfloor->setLocalPos(iris::Vec3(0.0f, -0.01f * f, 0.0f));
+            mirror.sync();
+            mirror.applyEnvironment(view, engine.get());
+            engine->renderOneFrame();
+        }
+        CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a MESH does not re-solve");
+
+        // Leave the process-wide HlmsPbs VCT binding as we found it.
+        gdoc->giMode = iris::GiMode::OFF;
+        mirror.sync();
+        mirror.applyEnvironment(view, engine.get());
+        engine->renderOneFrame();
+        mirror.setLightWires(false);
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);
