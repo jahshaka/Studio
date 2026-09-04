@@ -176,6 +176,7 @@ set(SRCS
     src/services/import/assetimporters.cpp
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
+    src/services/engineerrorpump.cpp
     src/services/loadtimeline.cpp
     src/services/mainthreadheartbeat.cpp
     src/services/sceneopenrunner.cpp

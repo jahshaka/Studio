@@ -17,3 +17,25 @@ target_link_libraries(test_services PRIVATE Qt6::Gui Qt6::Widgets)
 add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+
+# engine.error_pump — STABILITY_PROGRAM_SPEC Lane 1. The only suite in the tree
+# that links BOTH the engine and a Studio service, because that is exactly the
+# seam it tests: Engine::takeLastError() on one side, EngineErrorPump on the
+# other. Needs a reachable DISPLAY like every engine suite (Ogre's XCB support
+# object connects at plugin load) even though the view is offscreen.
+add_executable(test_engine_error_pump test_engine_error_pump.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/engineerrorpump.cpp)
+set_target_properties(test_engine_error_pump PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_engine_error_pump PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+target_compile_definitions(test_engine_error_pump PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_error_pump PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(test_engine_error_pump JahshakaEngineMedia)
+add_test(NAME engine.error_pump COMMAND test_engine_error_pump
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 600 LABELS "services")
