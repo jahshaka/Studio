@@ -21,6 +21,11 @@ var PIVOT_FBX = "@SOURCE_DIR@/tests/skeletal/fixtures/pivot_rig.fbx";
 
 // ---- the space exists and the window switches to it ----
 assert(app.space("avatar"), "app.space('avatar')");
+// This suite asserts ANIMATION pixels (centre-pixel deltas on snapshots).
+// Pin the space to Grid: the Modern room (the default) puts a WHITE WALL
+// behind the tiny synthetic rig, and the centre pixel reads wall at every
+// timestamp — delta 0, false red (2026-09-05).
+assert(avatar.spaceMode("grid") === "grid", "pin the space to Grid for pixel probes");
 
 // ---- load, with no project open at all ----
 assert(!avatar.preview(), "nothing is loaded to begin with");
