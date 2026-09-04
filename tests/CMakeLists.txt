@@ -104,6 +104,7 @@ endfunction()
 
 add_subdirectory(engine)
 add_subdirectory(document)
+add_subdirectory(math)
 add_subdirectory(mirror)
 add_subdirectory(particles)
 add_subdirectory(picking)
