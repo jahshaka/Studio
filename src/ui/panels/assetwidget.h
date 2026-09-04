@@ -328,7 +328,7 @@ protected slots:
     void importAssetB();
     void importAsset(const QStringList &path);
 
-    void onThumbnailResult(ThumbnailResult* result);
+    void onThumbnailResult(const ThumbnailResult &result);
 
 private:
     Ui::AssetWidget *ui;

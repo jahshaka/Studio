@@ -49,10 +49,21 @@ struct ThumbnailRequest
     bool preview;
 };
 
+/// The rendered thumbnail, delivered BY VALUE.
+///
+/// It used to be a heap `ThumbnailResult*` the receiver was expected to
+/// delete — with TWO receivers connected to the one signal (AssetWidget and
+/// the materials module's EffectsPage). AssetWidget deleted it at the end of
+/// its slot, EffectsPage then dereferenced the freed object: a use-after-free
+/// decided by connection order, and the likely root of "shader thumbnails
+/// sometimes don't save" (deep audit 2026-09, area 3). AssetWidget also
+/// leaked it outright on the save-dialog cancel path. A value type removes
+/// the ownership question: QImage/QString are implicitly shared, so the copy
+/// per receiver costs an atomic increment.
 struct ThumbnailResult
 {
-    ThumbnailRequestType type;
-    bool preview;
+    ThumbnailRequestType type = ThumbnailRequestType::Material;
+    bool preview = false;
     QString path;
     QString id;
     QImage thumbnail;
@@ -93,7 +104,9 @@ public:
     int pendingCount() const { return pending.size(); }
 
 signals:
-    void thumbnailComplete(ThumbnailResult* result);
+    /// One rendered thumbnail, BY VALUE (see ThumbnailResult above). Several
+    /// receivers are connected at once and none of them owns the payload.
+    void thumbnailComplete(const ThumbnailResult &result);
 
 private:
 	static ThumbnailGenerator* instance;

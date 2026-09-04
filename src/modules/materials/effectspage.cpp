@@ -262,29 +262,33 @@ void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
 	generator->requestThumbnail(ThumbnailRequestType::Shader, QString(), shaderGuid);
 }
 
-void EffectsPage::onShaderThumbnail(ThumbnailResult *result)
+void EffectsPage::onShaderThumbnail(const ThumbnailResult &result)
 {
 	// The queue is shared: only our own Shader renders are ours to store.
-	if (!result || result->type != ThumbnailRequestType::Shader) return;
-	if (result->preview || result->thumbnail.isNull() || result->id.isEmpty()) return;
+	// (The payload used to arrive as a ThumbnailResult* that AssetWidget's
+	// slot had already deleted by the time this one ran — a read-after-free
+	// decided by connection order, and the likely root of shader thumbnails
+	// that "sometimes" failed to save. It is a value now.)
+	if (result.type != ThumbnailRequestType::Shader) return;
+	if (result.preview || result.thumbnail.isNull() || result.id.isEmpty()) return;
 
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
 	buffer.open(QIODevice::WriteOnly);
-	QPixmap::fromImage(result->thumbnail).save(&buffer, "PNG");
+	QPixmap::fromImage(result.thumbnail).save(&buffer, "PNG");
 	if (bytes.isEmpty()) return;
 
-	dataBase->updateAssetThumbnail(result->id, bytes);
-	if (auto item = selectCorrectItemFromDrop(result->id))
+	dataBase->updateAssetThumbnail(result.id, bytes);
+	if (auto item = selectCorrectItemFromDrop(result.id))
 		ListWidget::updateThumbnailImage(bytes, item);
 
 	// The derived material asset carries the same picture (it already did —
 	// it just used to copy emptiness). The graph's own "materialGuid" names it;
 	// read it straight out of the stored definition, no graph rebuild.
-	const auto definition = QJsonDocument::fromJson(dataBase->fetchAssetData(result->id)).object();
+	const auto definition = QJsonDocument::fromJson(dataBase->fetchAssetData(result.id)).object();
 	const QString materialGuid =
 		definition["shadergraph"].toObject()["materialGuid"].toString();
-	if (!materialGuid.isEmpty()) updateMaterialThumbnail(result->id, materialGuid);
+	if (!materialGuid.isEmpty()) updateMaterialThumbnail(result.id, materialGuid);
 }
 
 void EffectsPage::saveDefaultShader()

@@ -151,8 +151,10 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	// viewport, from the main thread. Either way the generator needs the database
 	// for asset/material lookups (the legacy viewport also sets it, later).
 	ThumbnailGenerator::getSingleton()->setDatabase(db);
-	connect(ThumbnailGenerator::getSingleton(),   SIGNAL(thumbnailComplete(ThumbnailResult*)),
-		    this,                                 SLOT(onThumbnailResult(ThumbnailResult*)));
+	// Function-pointer connect: the payload is a value type now (the old
+	// ThumbnailResult* had two receivers and the first one deleted it).
+	connect(ThumbnailGenerator::getSingleton(), &ThumbnailGenerator::thumbnailComplete,
+	        this, &AssetWidget::onThumbnailResult);
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setSpacing(0);
@@ -1947,43 +1949,43 @@ void AssetWidget::importAsset(const QStringList &fileNames)
 	importRunner->start();
 }
 
-void AssetWidget::onThumbnailResult(ThumbnailResult *result)
+void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
 {
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
 	buffer.open(QIODevice::WriteOnly);
 
-    if (!result->preview) {
+    if (!result.preview) {
         // Store the render at full size (requests are 512x512): scaling it to
         // the icon height here permanently degraded every stored thumbnail to
         // 72px (ASSETS_AUDIT.md finding 5). Views scale at display time.
-        auto thumbnail = QPixmap::fromImage(result->thumbnail);
+        auto thumbnail = QPixmap::fromImage(result.thumbnail);
         thumbnail.save(&buffer, "PNG");
 
-        db->updateAssetThumbnail(result->id, bytes);
+        db->updateAssetThumbnail(result.id, bytes);
 
         // Refresh the view if we're still there
         for (int i = 0; i < ui->assetView->count(); i++) {
             QListWidgetItem* item = ui->assetView->item(i);
-            if (item->data(MODEL_GUID_ROLE).toString() == result->id) {
+            if (item->data(MODEL_GUID_ROLE).toString() == result.id) {
                 updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
             }
         }
     }
     else {
-        auto thumbnail = QPixmap::fromImage(result->thumbnail).scaledToHeight(512, Qt::SmoothTransformation);
+        auto thumbnail = QPixmap::fromImage(result.thumbnail).scaledToHeight(512, Qt::SmoothTransformation);
         thumbnail.save(&buffer, "PNG");
 
         auto filePath = QFileDialog::getSaveFileName(
             this,
             "Choose image path",
-            QString("%1_preview.png").arg(QFileInfo(result->path).baseName()),
+            QString("%1_preview.png").arg(QFileInfo(result.path).baseName()),
             "Supported Image Formats (*.jpg, *.png)"
         );
 
         if (filePath.isEmpty() || filePath.isNull()) return;
         thumbnail.save(filePath);
     }
-
-	delete result;
+    // No delete: the payload is a value and the OTHER receiver
+    // (EffectsPage::onShaderThumbnail) reads it after this slot returns.
 }

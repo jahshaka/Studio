@@ -110,7 +110,7 @@ private:
 	/// onShaderThumbnail — the tile, the asset row and the derived material
 	/// all update from there (VISUAL_PARITY_SPEC item 5).
 	void requestShaderThumbnail(const QString &shaderGuid);
-	void onShaderThumbnail(ThumbnailResult *result);
+	void onShaderThumbnail(const ThumbnailResult &result);
 	bool mThumbnailConnected = false;
     void loadShadersFromDisk();
 

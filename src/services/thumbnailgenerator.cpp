@@ -96,15 +96,16 @@ void ThumbnailGenerator::processOneEngineRequest()
     if (!engineRenderer) engineRenderer.reset(new EngineThumbnailRenderer(engine));
     // One request per tick: never block the UI for a batch.
     const EngineRequest job = pending.takeFirst();
-    QImage img = renderEngineRequest(job.request, job.size);
-    auto result = new ThumbnailResult;
-    result->id          = job.request.id;
-    result->type        = job.request.type;
-    result->path        = job.request.path;
-    result->preview     = job.request.preview;
-    result->thumbnail   = img;
+    ThumbnailResult result;
+    result.id          = job.request.id;
+    result.type        = job.request.type;
+    result.path        = job.request.path;
+    result.preview     = job.request.preview;
+    result.thumbnail   = renderEngineRequest(job.request, job.size);
     // Deliver from the event loop, not from inside this tick: receivers may block
-    // (a save dialog) and must never re-enter the renderer.
+    // (a save dialog) and must never re-enter the renderer. The payload travels
+    // BY VALUE — there are two receivers and neither may own it (see
+    // ThumbnailResult in the header for the use-after-free this replaced).
     QMetaObject::invokeMethod(this, [this, result] { emit thumbnailComplete(result); },
                               Qt::QueuedConnection);
 }
