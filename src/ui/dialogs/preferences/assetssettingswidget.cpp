@@ -23,7 +23,10 @@ For more information see the LICENSE file
 #include <QStorageInfo>
 #include <QVBoxLayout>
 
+#include <QSqlDatabase>
+
 #include "data/settingsmanager.h"
+#include "services/assetgc.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
 #include "ui/style/stylesheet.h"
@@ -60,10 +63,12 @@ AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *
     auto *useButton = new QPushButton("Use Existing Store…", this);
     auto *resetButton = new QPushButton("Reset to Default", this);
     auto *reconnectButton = new QPushButton("Reconnect", this);
+    auto *cleanButton = new QPushButton("Clean up Storage…", this);
     buttons->addWidget(moveButton);
     buttons->addWidget(useButton);
     buttons->addWidget(resetButton);
     buttons->addWidget(reconnectButton);
+    buttons->addWidget(cleanButton);
     buttons->addStretch(1);
     layout->addLayout(buttons);
 
@@ -82,6 +87,7 @@ AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *
     connect(useButton, &QPushButton::clicked, this, &AssetsSettingsWidget::useExistingStore);
     connect(resetButton, &QPushButton::clicked, this, &AssetsSettingsWidget::resetToDefault);
     connect(reconnectButton, &QPushButton::clicked, this, &AssetsSettingsWidget::refresh);
+    connect(cleanButton, &QPushButton::clicked, this, &AssetsSettingsWidget::cleanUpStorage);
 
     refresh();
 }
@@ -156,4 +162,67 @@ void AssetsSettingsWidget::useExistingStore()
 void AssetsSettingsWidget::resetToDefault()
 {
     applyRoot(QString(), /*move*/ false);
+}
+
+void AssetsSettingsWidget::cleanUpStorage()
+{
+    // DRY RUN FIRST, ALWAYS — the same contract the assets.gc verb has. The
+    // summary below is what a real run would delete; nothing is unlinked
+    // until the owner says yes to these exact numbers.
+    const QString root = AssetStorePaths::root();
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto preview = AssetGc::sweep(QSqlDatabase::database(), root, /*dryRun*/ true);
+    QApplication::restoreOverrideCursor();
+
+    if (!preview.ok) {
+        QMessageBox::warning(this, "Clean up Storage", preview.error);
+        return;
+    }
+    if (preview.totalCount() == 0) {
+        QMessageBox::information(this, "Clean up Storage",
+            QStringLiteral("Nothing to clean up — %1 holds no orphaned files.")
+                .arg(QDir::toNativeSeparators(root)));
+        return;
+    }
+
+    const auto line = [](const char *label, const AssetGc::ClassReport &cls) {
+        return cls.items.isEmpty()
+            ? QString()
+            : QStringLiteral("\n  %1: %2 (%3)").arg(QLatin1String(label))
+                  .arg(cls.items.size()).arg(QLocale().formattedDataSize(cls.bytes));
+    };
+
+    const QString detail =
+        QStringLiteral("%1 orphaned item(s), %2 in total:")
+            .arg(preview.totalCount()).arg(QLocale().formattedDataSize(preview.totalBytes()))
+        + line("unreferenced objects", preview.unreferencedObjects)
+        + line("files the catalog never recorded", preview.strayObjects)
+        + line("sidecars with no asset", preview.straySidecars)
+        + line("old per-asset folders", preview.legacyFolders)
+        + line("duplicate copies of stored files", preview.redundantLegacyFiles)
+        + QStringLiteral("\n\nDelete them? Assets in the library, project pins and "
+                        "copy-on-write edits are never touched.");
+
+    if (QMessageBox::question(this, "Clean up Storage", detail,
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+        != QMessageBox::Yes) {
+        return;
+    }
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto done = AssetGc::sweep(QSqlDatabase::database(), root, /*dryRun*/ false);
+    QApplication::restoreOverrideCursor();
+
+    if (!done.failures.isEmpty()) {
+        QMessageBox::warning(this, "Clean up Storage",
+            QStringLiteral("Removed %1 of %2 item(s); %3 could not be removed:\n%4")
+                .arg(done.removedCount()).arg(done.totalCount())
+                .arg(done.failures.size()).arg(done.failures.join(QLatin1Char('\n'))));
+    } else {
+        QMessageBox::information(this, "Clean up Storage",
+            QStringLiteral("Removed %1 item(s), freeing %2.")
+                .arg(done.removedCount()).arg(QLocale().formattedDataSize(done.removedBytes())));
+    }
+    refresh();
 }

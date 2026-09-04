@@ -319,7 +319,11 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         auto *assetObject = new AssetNodeObject;
         assetObject->fileName = fileName;
         assetObject->assetGuid = mainGuid;
-        assetObject->path = AssetStorePaths::legacyFilePath(mainGuid, fileName);
+        // The session registration points at the asset's STORED bytes (the
+        // CAS object), not at the retired <root>/<guid>/<name> view — this
+        // path is what the drag-drop and re-open paths open (deep audit
+        // 2026-09, area 6).
+        assetObject->path = AssetCas::resolveSource(conn, root, mainGuid);
         assetObject->setValue(QVariant::fromValue(node));
         AssetManager::addAsset(assetObject);
     };

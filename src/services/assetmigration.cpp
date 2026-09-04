@@ -51,6 +51,7 @@ QVariantMap RebuildReport::toMap() const
     map["assets"] = assets;
     map["files"] = files;
     map["links"] = links;
+    map["skipped"] = skipped;
     map["elapsedMs"] = elapsedMs;
     return map;
 }
@@ -154,6 +155,32 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot)
         const QJsonObject sidecar = QJsonDocument::fromJson(file.readAll()).object();
         const QString guid = sidecar.value("guid").toString();
         if (guid.isEmpty()) continue;
+
+        // TOMBSTONE GUARD (deep audit 2026-09, area 6): a sidecar whose
+        // recorded objects are ALL gone from the store describes an asset the
+        // library no longer has — deleteAsset removes the sidecar now, but a
+        // store written by an older build still carries them (41 of the
+        // owner's 86), and a rebuild that honoured them would resurrect every
+        // deleted asset as a row pointing at nothing.
+        //
+        // "All gone" is deliberately not "none recorded": a file-less row (a
+        // DB-only asset) records an EMPTY manifest and is perfectly
+        // recoverable, so only a sidecar that claims files AND has none of
+        // them is treated as a tombstone.
+        {
+            const QJsonArray recorded = sidecar.value("files").toArray();
+            bool anyPresent = recorded.isEmpty();
+            for (const auto &value : recorded) {
+                const QJsonObject fileObj = value.toObject();
+                if (QFileInfo::exists(AssetStorePaths::objectPathIn(
+                        storeRoot, fileObj.value("oid").toString(),
+                        fileObj.value("ext").toString()))) {
+                    anyPresent = true;
+                    break;
+                }
+            }
+            if (!anyPresent) { ++report.skipped; continue; }
+        }
 
         QSqlQuery insertAsset(conn);
         insertAsset.prepare("INSERT OR IGNORE INTO assets (guid, name, type, view_filter, collection, author, license, properties, tags) "

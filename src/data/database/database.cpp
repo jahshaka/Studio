@@ -17,9 +17,13 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
 #include "io/scenewriter.h"
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -769,7 +773,9 @@ bool Database::updateAssetViewFilter(const QString& guid, const int& filter)
 	query.prepare("UPDATE assets SET view_filter = ? WHERE guid = ?");
 	query.addBindValue(filter);
 	query.addBindValue(guid);
-	return executeAndCheckQuery(query, "UpdateAssetViewFilter");
+	const bool ok = executeAndCheckQuery(query, "UpdateAssetViewFilter");
+	if (ok) refreshSidecar(guid);   // view_filter is a sidecar field (I2)
+	return ok;
 }
 
 bool Database::updateProjectDesktop(const QString &guid, int desktop)
@@ -1078,6 +1084,57 @@ void Database::wipeDatabase()
 	tx.commit();
 }
 
+bool Database::sidecarBelongsHere(const QString &guid)
+{
+    // THE OWNERSHIP TEST, and why it is not optional.
+    //
+    // AssetStorePaths::root() is process-global and defaults to the user's
+    // real AppData store. A Database instance, however, is opened on an
+    // EXPLICIT path all over the place — every unit test builds one in its
+    // working directory, none of them redirects the store root — so a sidecar
+    // write keyed on the guid alone would have every test's renames and
+    // property updates land in the developer's live library. The store and
+    // the catalog have to be shown to belong together first.
+    //
+    // Two proofs are accepted: this store already HAS a sidecar for the guid
+    // (it was written here), or this catalog records content for the guid
+    // whose objects are present under this root (it was ingested here).
+    if (guid.isEmpty() || !db.isOpen()) return false;
+    const QString root = AssetStorePaths::root();
+    // An OFFLINE store must not be resurrected as an empty local directory by
+    // a rename either: writeSidecar mkpaths its way to the file.
+    if (root.isEmpty() || !QDir(root).exists()) return false;
+
+    if (QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, guid))) return true;
+
+    QSqlQuery query(db);
+    query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
+                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
+    query.addBindValue(guid);
+    if (!query.exec()) return false;
+    while (query.next()) {
+        if (QFileInfo::exists(AssetStorePaths::objectPathIn(
+                root, query.value(0).toString(), query.value(1).toString())))
+            return true;
+    }
+    return false;
+}
+
+void Database::refreshSidecar(const QString &guid)
+{
+    if (!sidecarBelongsHere(guid)) return;
+    QString error;
+    AssetCas::writeSidecar(db, AssetStorePaths::root(), guid, &error);   // no row = quiet no-op
+}
+
+void Database::dropSidecar(const QString &guid)
+{
+    if (guid.isEmpty()) return;
+    const QString root = AssetStorePaths::root();
+    if (root.isEmpty() || !QDir(root).exists()) return;
+    QFile::remove(AssetStorePaths::sidecarPathIn(root, guid));
+}
+
 bool Database::deleteAsset(const QString &guid)
 {
     // A delete that cannot run must NOT report success and must NOT scrub the
@@ -1097,6 +1154,10 @@ bool Database::deleteAsset(const QString &guid)
     // row whose refcount never drops, i.e. store bytes nothing can ever reap.
     // Nested inside deleteAssetAndDependencies / deleteFolderAndDependencies
     // the guard degrades to a no-op and the OUTER transaction is the atom.
+    // Decided BEFORE the rows go: after the delete there is nothing left to
+    // prove this store and this catalog belong together (sidecarBelongsHere).
+    const bool ownsSidecar = sidecarBelongsHere(guid);
+
     DbTransaction tx(db);
 
     QSqlQuery query;
@@ -1127,10 +1188,26 @@ bool Database::deleteAsset(const QString &guid)
     if (ok) {
         // Backwards: removing at i and then advancing skips the next element
         // (the same index-skipping shape the dependency filters had).
+        //
+        // And the registry OWNS its Assets (io/assetmanager.h, since the
+        // memory lane): dropping the pointer without deleting it leaks the
+        // Asset AND, for the payload-carrying subclasses, pins a whole
+        // SceneNodePtr mesh subtree for the life of the process. The virtual
+        // destructor that makes this delete correct arrived with the same
+        // lane; before it, this was the leak the audit measured at ~80 per
+        // Showroom open.
         auto &assets = AssetManager::getAssets();
         for (int i = assets.count() - 1; i >= 0; --i) {
-            if (assets[i]->assetGuid == guid) assets.remove(i);
+            if (assets[i]->assetGuid != guid) continue;
+            delete assets[i];
+            assets.remove(i);
         }
+
+        // Invariant I2: the sidecar is the rebuild record, so it must not
+        // outlive its asset — 41 of the owner's 86 sidecars named deleted
+        // assets, and rebuildCatalog would have resurrected every one of them
+        // (deep audit 2026-09, area 6).
+        if (ownsSidecar) dropSidecar(guid);
     }
     else {
         iris::Logger::getSingleton()->warn(
@@ -1245,7 +1322,9 @@ bool Database::renameAsset(const QString &guid, const QString &newName)
     query.prepare("UPDATE assets SET name = ? WHERE guid = ?");
     query.addBindValue(newName);
     query.addBindValue(guid);
-    return executeAndCheckQuery(query, "RenameAsset");
+    const bool ok = executeAndCheckQuery(query, "RenameAsset");
+    if (ok) refreshSidecar(guid);   // name is a sidecar field (I2)
+    return ok;
 }
 
 bool Database::updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid)
@@ -1305,7 +1384,9 @@ bool Database::updateAssetMetadata(const QString &guid, const QString &name, con
     query.addBindValue(name);
     query.addBindValue(tags);
     query.addBindValue(guid);
-    return executeAndCheckQuery(query, "updateAssetMetadata");
+    const bool ok = executeAndCheckQuery(query, "updateAssetMetadata");
+    if (ok) refreshSidecar(guid);   // name + tags are sidecar fields (I2)
+    return ok;
 }
 
 bool Database::updateAssetProperties(const QString &guid, const QByteArray &asset)
@@ -1314,7 +1395,11 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
     query.prepare("UPDATE assets SET properties = ? WHERE guid = ?");
     query.addBindValue(asset);
     query.addBindValue(guid);
-    return executeAndCheckQuery(query, "UpdateAssetProperties");
+    const bool ok = executeAndCheckQuery(query, "UpdateAssetProperties");
+    // The lazy metadata backfill lands here too — it is a catalog mutation
+    // like any other, and the sidecar records `properties` verbatim.
+    if (ok) refreshSidecar(guid);
+    return ok;
 }
 
 AssetRecord Database::fetchAsset(const QString &guid)
@@ -1799,7 +1884,9 @@ bool Database::switchAssetCollection(const int id, const QString &guid)
     query.addBindValue(id);
     query.addBindValue(guid);
 
-    return executeAndCheckQuery(query, "switchAssetCollection");
+    const bool ok = executeAndCheckQuery(query, "switchAssetCollection");
+    if (ok) refreshSidecar(guid);   // collection is a sidecar field (I2)
+    return ok;
 }
 
 void Database::insertThumbnailGlobal(const QString &world_guid,

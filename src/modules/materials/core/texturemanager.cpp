@@ -11,6 +11,9 @@ For more information see the LICENSE file
 #include "texturemanager.h"
 #include "../effectspage.h"
 #include "data/project.h"
+#include <QSqlDatabase>
+
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 
 TextureManager* TextureManager::instance = 0;
@@ -106,23 +109,19 @@ GraphTexture * TextureManager::loadTextureFromGuid(QString guid)
 	return tex;
 }
 
+// Both of these resolve the same way now — through the CAS, by guid. The
+// retired <root>/<guid>/<name> view is gone (deep audit 2026-09, area 6);
+// AssetCas::resolveSource still falls back to that folder for the textures
+// importTexture() below drops there directly, which is why routing here was
+// safe before the sweep reclaims them.
 QString TextureManager::loadTextureFromDisk(QString guid)
 {
-	auto asset = database->fetchAsset(guid);
-	
-
-	auto imagePath = AssetStorePaths::legacyFilePath(guid, asset.name);
-
-	return imagePath;
+	return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
 QString TextureManager::loadTextureFromDatabase(QString guid)
 {
-	auto asset = database->fetchAsset(guid);
-
-	auto imagePath = AssetStorePaths::legacyFilePath(guid, asset.name);
-
-	return imagePath;
+	return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
 GraphTexture* TextureManager::importTexture(QString path)

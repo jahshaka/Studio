@@ -188,47 +188,6 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
     return true;
 }
 
-bool materializeLegacyView(QSqlDatabase conn, const QString &root,
-                           const QString &guid, QString *errorOut)
-{
-    QSqlQuery query(conn);
-    query.prepare("SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
-    query.addBindValue(guid);
-    if (!query.exec()) {
-        if (errorOut) *errorOut = QStringLiteral("asset_files query failed for %1").arg(guid);
-        return false;
-    }
-
-    const QString folder = AssetStorePaths::legacyFolderIn(root, guid);
-    bool any = false;
-    while (query.next()) {
-        const QString name = query.value(0).toString();
-        const QString objPath = AssetStorePaths::objectPathIn(
-            root, query.value(1).toString(), query.value(2).toString());
-        if (!QFileInfo::exists(objPath)) continue;
-        if (!any) {
-            if (!QDir().mkpath(folder)) {
-                if (errorOut) *errorOut = QStringLiteral("cannot create %1").arg(folder);
-                return false;
-            }
-            any = true;
-        }
-        const QString dstPath = QDir(folder).filePath(name);
-        if (QFileInfo::exists(dstPath)) continue;
-#ifdef Q_OS_UNIX
-        if (::link(QFile::encodeName(objPath).constData(),
-                   QFile::encodeName(dstPath).constData()) == 0)
-            continue;
-#endif
-        if (!QFile::copy(objPath, dstPath)) {
-            if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(objPath, dstPath);
-            return false;
-        }
-    }
-    return true;
-}
-
 QString resolveSource(QSqlDatabase conn, const QString &root,
                       const QString &guid, QString *nameOut)
 {
@@ -249,6 +208,27 @@ QString resolveSource(QSqlDatabase conn, const QString &root,
                                    .filePath(query.value(0).toString());
         if (QFileInfo::exists(legacy)) {
             if (nameOut) *nameOut = query.value(0).toString();
+            return legacy;
+        }
+        return QString();
+    }
+
+    // NO asset_files row at all. That is not only "a DB-only asset": writers
+    // outside the ONE import pipeline still drop a file straight into
+    // <root>/<guid>/ and create the row (the materials module's texture
+    // import does exactly this), and until the retired legacy view is swept
+    // those bytes are the asset's only copy. The resolver is now the single
+    // place that knows about them — which is what let every call site stop
+    // building <root>/<guid>/<name> for itself.
+    QSqlQuery byName(conn);
+    byName.prepare("SELECT name FROM assets WHERE guid = ?");
+    byName.addBindValue(guid);
+    if (byName.exec() && byName.next()) {
+        const QString name = byName.value(0).toString();
+        if (name.isEmpty()) return QString();
+        const QString legacy = QDir(AssetStorePaths::legacyFolderIn(root, guid)).filePath(name);
+        if (QFileInfo::exists(legacy)) {
+            if (nameOut) *nameOut = name;
             return legacy;
         }
     }
@@ -427,7 +407,7 @@ bool writeStoreInfo(const QString &root, QString *errorOut)
 
     QJsonObject info;
     info["storeId"] = storeId;
-    info["formatVersion"] = 1;
+    info["formatVersion"] = kStoreFormatVersion;
 
     if (!QDir().mkpath(root)) {
         if (errorOut) *errorOut = QStringLiteral("cannot create %1").arg(root);
@@ -438,6 +418,17 @@ bool writeStoreInfo(const QString &root, QString *errorOut)
     // populated store into an unrecognized one.
     return FileWrite::writeFileAtomic(
         path, QJsonDocument(info).toJson(QJsonDocument::Indented), errorOut);
+}
+
+bool readStoreInfo(const QString &root, QString *storeIdOut, int *formatVersionOut)
+{
+    QFile file(AssetStorePaths::storeInfoPathIn(root));
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
+    if (obj.isEmpty()) return false;
+    if (storeIdOut) *storeIdOut = obj.value("storeId").toString();
+    if (formatVersionOut) *formatVersionOut = obj.value("formatVersion").toInt(0);
+    return true;
 }
 
 } // namespace AssetCas

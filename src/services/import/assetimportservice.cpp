@@ -388,13 +388,16 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         return false;
     }
 
-    // Post-commit, non-fatal: rebuild sidecars and the legacy hardlink view
-    // (the compatibility surface for read sites not yet on the resolver).
+    // Post-commit, non-fatal: the sidecars (invariant I2). The legacy
+    // hardlink view USED to be materialized here too — it is retired (deep
+    // audit 2026-09, area 6): every reader resolves through the CAS now, and
+    // on a filesystem without hardlinks the view was a second full copy of
+    // every imported file (Windows: 152MB store → 438MB, a second full write
+    // per import).
     touchedGuids.removeDuplicates();
     for (const QString &guid : touchedGuids) {
         QString casError;
         AssetCas::writeSidecar(conn, root, guid, &casError);
-        AssetCas::materializeLegacyView(conn, root, guid, &casError);
         if (!casError.isEmpty()) irisLog("import post-commit: " + casError);
     }
 

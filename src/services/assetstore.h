@@ -34,6 +34,7 @@ class AssetStoreService
 {
 public:
     static const char *kSettingKey;   // "assets/storeRoot"
+    static const char *kStoreIdKey;   // "assets/storeId" — the adopted store's identity
 
     /// Startup bootstrap: read the setting and point AssetStorePaths at it.
     /// Called from main() BEFORE anything derives a store path. Never creates
@@ -44,10 +45,13 @@ public:
     /// Is the active root reachable right now?
     static bool online();
 
-    /// {root, online, missing} — missing = library rows (view_filter 2 AND 3,
-    /// preflight §1.6) whose per-guid folder is absent from the active root.
-    /// Rows without store folders exist legitimately (node-JSON-only assets),
-    /// so offline reporting keys on `online`, not on missing alone.
+    /// {root, online, missing, storeId?, formatVersion?} — missing = library
+    /// rows (view_filter 2 AND 3, preflight §1.6) that RECORD stored bytes
+    /// (asset_files) and have none of those objects under the active root.
+    /// Rows with no stored bytes exist legitimately (node-JSON-only assets)
+    /// and are not missing; offline reporting keys on `online`, not on
+    /// missing alone. storeId/formatVersion come from the root's store.json
+    /// when it has one.
     static QVariantMap status(Database *db);
 
     /// Change the store root. Empty path = back to the default AppData root.
@@ -67,6 +71,8 @@ private:
     static int missingCount(Database *db);
     static bool copyStoreContents(const QString &fromRoot, const QString &toRoot,
                                   QString *errorOut);
+    /// Write (or keep) store.json at the ACTIVE root and remember its id.
+    static void adoptStoreIdentity(SettingsManager *settings);
 };
 
 /// One QLockFile beside JahLibrary.db (preflight §6.2 / amendment 4): the app

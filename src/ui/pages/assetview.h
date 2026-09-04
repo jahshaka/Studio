@@ -120,7 +120,6 @@ public:
 	~AssetView();
 	void focusInEvent(QFocusEvent *event);
 	bool eventFilter(QObject *watched, QEvent *event);
-    void copyTextures(const QString &folderGuid);
     void checkForEmptyState();
     void toggleFilterPane(bool);
 	void addToJahLibrary(const QString fileName, const QString guid, bool jfx = false);

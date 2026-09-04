@@ -337,6 +337,27 @@ public:
 private:
     bool checkIfVersionSupported(const QString& pathToDb, const QString& table_name);
 
+    /// SIDECAR LIFECYCLE (invariant I2 — deep audit 2026-09, area 6).
+    ///
+    /// <store>/sidecar/<guid>.json is the record rebuildCatalog reconstructs
+    /// the library from, so it has to track the catalog, not just its birth:
+    /// sidecars used to be written at IMPORT ONLY, which left 41 of the
+    /// owner's 86 naming deleted assets and every rename/retag/refile invisible
+    /// to recovery. Every catalog mutation that changes a field the sidecar
+    /// records now refreshes it, and deleteAsset removes it.
+    ///
+    /// Both are best-effort and deliberately quiet: an offline store or an
+    /// asset with no sidecar must never turn a successful database write into
+    /// a failure (the row is the truth; the sidecar is its backup).
+    /// Does the ACTIVE store root belong with THIS catalog for this guid?
+    /// (A sidecar already there, or objects this catalog records present
+    /// under it.) Guards both calls below — see the definition for why a
+    /// guid-only key would have every unit test write into the developer's
+    /// live library.
+    bool sidecarBelongsHere(const QString &guid);
+    void refreshSidecar(const QString &guid);
+    void dropSidecar(const QString &guid);
+
     QString projectsTableSchema;
     QString thumbnailsTableSchema;
     QString collectionsTableSchema;

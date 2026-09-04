@@ -86,6 +86,14 @@ public:
         useAlternativeLocation = true;
     };
 
+    /// Resolve guids against the LIBRARY source rather than the open
+    /// project's pins, with no directory fallback — what a store-asset
+    /// preview wants. The callers that used to say
+    /// setBaseDirectory(<storeRoot>/<guid>/) say this instead: the retired
+    /// legacy view is gone (deep audit 2026-09, area 6) and that directory
+    /// was only ever a pre-CAS fallback keyed on the WRONG asset's guid.
+    void setLibrarySource() { useAlternativeLocation = true; }
+
     /// Pin-world byte resolution (ASSET_PIPELINE_SPEC §3.1.5, phase 4):
     /// project loads resolve guid → project pin → CAS object; preview loads
     /// (useAlternativeLocation) resolve guid → library source, then the

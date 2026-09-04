@@ -58,15 +58,16 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
                 QString *oidOut, QString *errorOut,
                 const QString &knownOid = QString());
 
-/// Materialize the legacy per-guid folder <root>/<guid>/ as a HARDLINK VIEW
-/// of the asset's objects (copy on filesystems without links): one entry per
-/// asset_files row, named by its recorded display name. ~0 bytes. This keeps
-/// the not-yet-rerouted legacy readers (library preview, materials-module
-/// texture manager, thumbnails) working while the CAS rows are authoritative;
-/// it disappears with the last legacy read site. Existing files are left
-/// alone. Idempotent.
-bool materializeLegacyView(QSqlDatabase conn, const QString &root,
-                           const QString &guid, QString *errorOut);
+// THE LEGACY VIEW IS RETIRED (deep audit 2026-09, area 6).
+//
+// materializeLegacyView used to hardlink every asset's objects into
+// <root>/<guid>/ so the readers that had not moved to the resolver kept
+// working. All of them have moved (resolveFile / resolveSource /
+// resolvePinned), so the view is gone: it was a SECOND full copy of the store
+// on any filesystem without hardlinks — Windows, where 152MB became 438MB and
+// every import paid a second full write. Existing stores keep their folders
+// until `assets.gc` reclaims them, and resolveFile still READS them (below),
+// so nothing breaks on the way through.
 
 /// Resolve an asset's PRIMARY ('source'-role) file to an absolute path;
 /// `nameOut` (optional) receives its display name. Falls back to the single
@@ -118,7 +119,20 @@ QString resolveFile(QSqlDatabase conn, const QString &root,
 
 /// Write/refresh <root>/store.json (store id + format version — the sanity
 /// anchor for Use Existing Store). Keeps an existing store id stable.
+/// Called from store bootstrap and from every successful AssetStoreService
+/// root change, so every root Jahshaka owns identifies itself.
 bool writeStoreInfo(const QString &root, QString *errorOut);
+
+/// The store format this build writes and can read. A root whose store.json
+/// claims a HIGHER version was written by a newer Jahshaka; adopting it would
+/// mean reading a layout we do not know (deep audit 2026-09, area 6: the
+/// sanity anchor writeStoreInfo documented but no caller ever consulted).
+inline constexpr int kStoreFormatVersion = 1;
+
+/// Read <root>/store.json. Returns false when the file is absent or
+/// unparseable (a pre-store.json store — legitimate, the caller falls back to
+/// its content check). `formatVersionOut` is 0 when the field is missing.
+bool readStoreInfo(const QString &root, QString *storeIdOut, int *formatVersionOut);
 } // namespace AssetCas
 
 #endif // ASSETCAS_H

@@ -17,11 +17,14 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QImage>
 #include <QPixmap>
+#include <QSqlDatabase>
 #include <QStandardPaths>
 
 #include "scripting/modules/moduleshared.h"
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
+#include "services/assetcas.h"
+#include "services/assetgc.h"
 #include "services/assetservice.h"
 #include "services/assetmigration.h"
 #include "services/assetstore.h"
@@ -77,9 +80,12 @@ int typeFromName(const QString &name)
     return -1;
 }
 
-QString storeFolderFor(const QString &guid)
+// The asset's stored bytes, by guid — the CAS resolver, never the retired
+// <root>/<guid>/ view (deep audit 2026-09, area 6). Falls back to the legacy
+// folder itself for stores that still have one (AssetCas::resolveSource).
+QString storeFileFor(const QString &guid)
 {
-    return AssetStorePaths::legacyFolder(guid);
+    return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
 } // namespace
@@ -127,7 +133,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "The reserved built-ins: primitives, materials and shaders with their reserved guids. Guids collide across kinds — always pair guid with kind.",
           Needs::Document },
         { "remove", "assets.remove(guid, {keepShared: true}) -> bool",
-          "Deletes a store asset: its rows, its store folder, and (keepShared false) its dependency assets too. PERMANENT — no undo.",
+          "Deletes a store asset: its catalog rows, its sidecar, whatever the retired per-guid folder left behind, and (keepShared false) its dependency assets too. The asset's CONTENT is not unlinked here — objects can be shared or pinned by a project, so reclaiming them is assets.gc's job. PERMANENT — no undo.",
           Needs::Document },
         { "refreshThumbnail", "assets.refreshThumbnail(guid) -> bool",
           "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, materials and shader graphs render on the engine (engine required; a shader renders the material its graph evaluates to, on the preview sphere); images re-thumbnail from the source file, videos re-grab a first-second frame, and audio/file rows reset to their type icon (document-only).",
@@ -162,7 +168,18 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Re-hashes every catalogued object against its oid: reports corrupt (bit-rot) and missing objects with counts and bytes. Defaults to the live library.",
           Needs::Document },
         { "rebuildCatalog", "assets.rebuildCatalog(dbPath, {root}) -> report",
-          "Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered.",
+          "Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered. Sidecars whose recorded objects are ALL absent are skipped as tombstones (reported as `skipped`) — an old store's leftover sidecars must not resurrect deleted assets.",
+          Needs::Document },
+        { "gc", "assets.gc({dryRun: true, root, force}) -> report",
+          "Store garbage collection. Finds — and, with {dryRun: false}, removes — five classes of leaked artifact: "
+          "unreferencedObjects (a files row no asset_files row and no project pin names, with its object), "
+          "strayObjects (files under objects/ the catalog never recorded, plus staging temps abandoned for over an hour), "
+          "straySidecars (sidecar/<guid>.json naming no asset), "
+          "legacyFolders (a <root>/<guid>/ folder from the retired per-guid view naming no asset) and "
+          "redundantLegacyFiles (entries in a LIVE asset's legacy folder whose bytes are byte-for-byte present in objects/). "
+          "DRY RUN BY DEFAULT: the report lists exactly what a real run would delete, per class, with paths and byte totals. "
+          "Live content is never collected — reachability is read from the asset_files rows and the project_assets pins, not from the refcount cache (a copy-on-write edit's object is referenced ONLY by its project's pin), and the sweep refuses a store this catalog does not recognize unless {force: true}. "
+          "{root} sweeps an explicit store root instead of the active one.",
           Needs::Document },
     };
 }
@@ -446,7 +463,10 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
         return fail(QStringLiteral("assets.remove: the database refused the delete of '%1' — "
                                    "the asset is still in the library").arg(guid));
 
-    QDir storeDir(storeFolderFor(guid));
+    // Whatever the retired legacy view left behind for this guid goes with
+    // the row; the CONTENT is reclaimed by assets.gc, which is the only thing
+    // that can tell a shared object from an exclusive one.
+    QDir storeDir(AssetStorePaths::legacyFolder(guid));
     if (storeDir.exists()) storeDir.removeRecursively();
     return true;
 }
@@ -462,8 +482,7 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
     // Document-only types first — no engine needed (headless-safe), mirroring
     // the tile's "Rebuild Thumbnail" action.
     if (record.type == static_cast<int>(ModelTypes::Texture)) {
-        auto thumb = ThumbnailManager::createThumbnail(
-            IrisUtils::join(storeFolderFor(guid), record.name), 256, 256);
+        auto thumb = ThumbnailManager::createThumbnail(storeFileFor(guid), 256, 256);
         if (!thumb || thumb->thumb.isNull())
             return fail("assets.refreshThumbnail: could not read the image");
         return host.db->updateAssetThumbnail(
@@ -477,8 +496,7 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
     if (record.type == static_cast<int>(ModelTypes::Video)) {
         // First-second frame re-grab; VideoUtils falls back to the film icon
         // when decode fails, so this always writes something sensible.
-        const QPixmap thumb =
-            VideoUtils::thumbnailFor(IrisUtils::join(storeFolderFor(guid), record.name));
+        const QPixmap thumb = VideoUtils::thumbnailFor(storeFileFor(guid));
         return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(thumb));
     }
     if (record.type == static_cast<int>(ModelTypes::File)) {
@@ -502,9 +520,8 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         SceneReader reader;
         reader.setDatabaseHandle(host.db);
         reader.setProject(host.project);
-        const QString storeDir = storeFolderFor(guid);
-        if (QDir(storeDir).exists()) reader.setBaseDirectory(storeDir);
-        else if (host.project) reader.setBaseDirectory(host.project->getProjectFolder());
+        // LIBRARY resolution: the store asset's own bytes, by guid.
+        reader.setLibrarySource();
         auto blob = QJsonDocument::fromJson(host.db->fetchAssetData(guid)).object();
         iris::SceneNodePtr node = reader.readSceneNode(blob);
         if (!node) return fail("assets.refreshThumbnail: could not rebuild the object");
@@ -672,6 +689,20 @@ QVariantMap AssetsApi::rebuildCatalog(const QString &dbPath, const QVariantMap &
     const QString root = options.value("root", AssetStorePaths::root()).toString();
     const auto report = AssetMigration::rebuildCatalog(dbPath, root);
     if (!report.ok) fail(QStringLiteral("assets.rebuildCatalog: %1").arg(report.error));
+    return report.toMap();
+}
+
+QVariantMap AssetsApi::gc(const QVariantMap &options)
+{
+    // DRY RUN IS THE DEFAULT, and it is the default HERE as well as in the
+    // dialog: a caller that forgets the option gets a report, never a delete.
+    const bool dryRun = options.value("dryRun", true).toBool();
+    const bool force  = options.value("force", false).toBool();
+    const QString root = options.value("root", AssetStorePaths::root()).toString();
+
+    const auto report = AssetGc::sweep(QSqlDatabase::database(), root, dryRun, force);
+    if (!report.ok && !report.error.isEmpty())
+        fail(QStringLiteral("assets.gc: %1").arg(report.error));
     return report.toMap();
 }
 

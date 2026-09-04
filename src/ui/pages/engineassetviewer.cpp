@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMouseEvent>
+#include <QSqlDatabase>
 #include <QShowEvent>
 #include <QStandardPaths>
 #include <QWheelEvent>
@@ -16,6 +17,7 @@
 #include "bridge/enginethumbnailrenderer.h"
 #include "bridge/enginehost.h"
 #include "data/constants.h"
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "data/project.h"
 #include "data/database/database.h"
@@ -34,10 +36,6 @@
 
 using namespace jahshaka::engine;
 
-static QString assetFolder(const QString &guid)
-{
-    return AssetStorePaths::legacyFolder(guid);
-}
 
 EngineAssetViewer::EngineAssetViewer(const std::shared_ptr<Engine> &engine,
                                      EngineRenderDriver *driver, QWidget *parent)
@@ -243,7 +241,12 @@ iris::SceneNodePtr EngineAssetViewer::readJafModel(const QString &path, const QS
     SceneReader reader;
     reader.setDatabaseHandle(mDb);   // resolves mesh and texture GUIDs to store files
     reader.setProject(mProject);
-    reader.setBaseDirectory(assetFolder(guid));
+    // LIBRARY resolution, not the open project's pins: a preview shows the
+    // store asset itself. This used to be setBaseDirectory(<root>/<guid>/) —
+    // the retired legacy view (deep audit 2026-09, area 6); the flag was the
+    // load-bearing half, the directory was a pre-CAS fallback that resolved
+    // one asset's textures against ANOTHER asset's folder.
+    reader.setLibrarySource();
     iris::SceneNodePtr node = reader.readSceneNode(objectHierarchy);
     if (!node) return node;
 
@@ -261,7 +264,7 @@ iris::MaterialPtr EngineAssetViewer::readJafMaterial(const QString &guid)
 {
     if (!mDb) return iris::MaterialPtr();
     QJsonObject matObject = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
-    MaterialReader reader(TextureSource::GlobalAssets, assetFolder(guid));
+    MaterialReader reader(TextureSource::GlobalAssets);
     reader.setProject(mProject);
     // Typed: a saved PBR material previews as a PbrMaterial, not a broken
     // shader-less CustomMaterial.
@@ -277,7 +280,7 @@ iris::MaterialPtr EngineAssetViewer::readJafShader(const QString &guid)
     // GLSL CustomMaterial through material->generate(definition); that pipeline
     // was deleted in MATERIALS_EVALUATOR phase 5, so it produced a grey
     // approximation of the graph at best.
-    MaterialReader reader(TextureSource::GlobalAssets, assetFolder(guid));
+    MaterialReader reader(TextureSource::GlobalAssets);
     reader.setProject(mProject);
     if (auto material = reader.parseShaderAsPbr(guid, mDb)) return material;
 
@@ -294,16 +297,20 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
     QJsonObject skyProperties = QJsonDocument::fromJson(mDb->fetchAsset(guid).properties).object().value("sky").toObject();
     QJsonObject skyData = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
     scene->skyType = static_cast<iris::SkyType>(skyProperties.value("type").toInt());
-    const QString assetPath = assetFolder(guid);
-
     if (scene->skyType == iris::SkyType::SINGLE_COLOR) {
         scene->skyColor = SceneReader::readColor(skyData.value("skyColor").toObject());
     }
     else if (scene->skyType == iris::SkyType::EQUIRECTANGULAR) {
         QStringList dependency = mDb->fetchAssetDependeesByType(guid, ModelTypes::Texture);
         if (!dependency.isEmpty()) {
-            auto image = IrisUtils::join(assetPath, mDb->fetchAsset(dependency.first()).name);
-            if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image, false));
+            // The TEXTURE's own bytes, by ITS guid. The old join built
+            // <root>/<skyGuid>/<textureName> — the sky asset's folder with
+            // the texture asset's file name, which only ever resolved because
+            // the pre-CAS .jaf import dropped both in one directory.
+            const QString image = AssetCas::resolveSource(
+                QSqlDatabase::database(), AssetStorePaths::root(), dependency.first());
+            if (!image.isEmpty() && QFileInfo(image).isFile())
+                scene->setSkyTexture(iris::Texture2D::load(image, false));
         }
     }
     else if (scene->skyType == iris::SkyType::GRADIENT) {
