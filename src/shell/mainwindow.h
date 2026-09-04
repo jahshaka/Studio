@@ -38,7 +38,6 @@ namespace Ui {
 }
 
 class AssetView;
-class ViewportCover;
 /// Only ever held as a weak_ptr here (mEngineWatch) — the shell includes the
 /// engine header in the .cpp, never in this one.
 namespace jahshaka { namespace engine { class Engine; } }
@@ -167,6 +166,14 @@ public:
     bool beginEngineSelftest(QString &why);
     void endEngineSelftest();
     void goToDesktop();
+    /// If the on-screen View could not be created, say so and land the user on
+    /// a page that works. Returns true when it bounced — callers must then stop
+    /// whatever they were doing (STATS_OVERLAY_SPEC.md §6.4).
+    bool bounceIfViewportIsDead();
+    /// The ONE place the frame-stats readout is switched: F3, the View Options
+    /// row, the Preferences checkbox and editor.setOverlays({stats}) all land
+    /// here, and it persists `show_fps` (STATS_OVERLAY_SPEC.md §5.3).
+    void setShowFrameStats(bool on);
     void setupProjectDB();
     void setupUndoRedo();
 
@@ -631,10 +638,6 @@ private:
 
     QMainWindow *viewPort;
     QWidget *sceneContainer;
-    /// The viewport's "nothing is presenting" state (viewportcover.h): a
-    /// sibling of the viewport in the SAME grid cell, raised over it while a
-    /// world loads and hidden the moment the engine presents.
-    ViewportCover *viewportCover = nullptr;
 
     QWidget *controlBar;
     QWidget *playerControls;
@@ -656,7 +659,11 @@ private:
     QAction *wireCheckAction;
     QAction *physicsCheckAction;
     QAction *gridCheckAction = nullptr;
+    QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
+    /// "The 3D view could not be created" — the respecced Failed state
+    /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
+    class Toast *viewErrorToast = nullptr;
     void stepSnapSize(int direction);
     // F11 immersive fullscreen restore state (EDITOR_SHORTCUTS_SPEC §3)
     bool immersiveFullscreen = false;

@@ -150,7 +150,6 @@ For more information see the LICENSE file
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
 #include "viewport/headlesseditorviewport.h"
-#include "viewport/viewportcover.h"
 
 #include "scripting/scripthost.h"
 #include "scripting/scriptengine.h"
@@ -306,6 +305,50 @@ void MainWindow::goToDesktop()
 {
     show();
     switchSpace(WindowSpaces::DESKTOP, true);
+}
+
+void MainWindow::setShowFrameStats(bool on)
+{
+    // ONE code path for the F3 key, the View Options row, the Preferences
+    // checkbox and editor.setOverlays({stats}) — and one stored value, so the
+    // readout is still there after a restart (STATS_OVERLAY_SPEC §5.3).
+    if (sceneView) sceneView->setShowFps(on);
+    SettingsManager::getDefaultManager()->setValue("show_fps", on);
+    if (statsCheckAction && statsCheckAction->isChecked() != on) {
+        QSignalBlocker block(statsCheckAction);   // no toggled() round trip
+        statsCheckAction->setChecked(on);
+    }
+}
+
+bool MainWindow::bounceIfViewportIsDead()
+{
+    // THE FAILED STATE, respecced (STATS_OVERLAY_SPEC.md §6.4).
+    //
+    // EngineViewWidget::createView can fail — a bad handle, a Vulkan surface
+    // the driver refuses, an Hlms media directory that never resolved — and it
+    // then falls back to an OFFSCREEN view so the editor, the selftest and
+    // scripting all keep working. What the user sees is a blank region that
+    // will never draw, and viewCreationError() is the only thing anywhere that
+    // knows why.
+    //
+    // Until D2 that reason reached them through ViewportCover's Failed state.
+    // An engine-drawn cover cannot carry it, by definition: nothing will ever
+    // present into that widget. So it becomes a toast plus a return to a page
+    // that works. WHAT IS LOST, plainly: there is no longer a permanent
+    // explanation sitting in the viewport region. The mitigation is that the
+    // user cannot get BACK to a blank editor — every switchSpace(EDITOR)
+    // bounces them, so the message reappears instead of a dead page.
+    if (!sceneView || sceneView->viewCreationError().isEmpty()) return false;
+    if (!viewErrorToast) viewErrorToast = new Toast(this);
+    viewErrorToast->showToast(tr("3D view unavailable"),
+                              tr("The 3D view could not be created: %1")
+                                  .arg(sceneView->viewCreationError()),
+                              0, QPoint(), QRect());
+    viewErrorToast->adjustSize();
+    viewErrorToast->move(rect().center() - QPoint(viewErrorToast->width() / 2, 0) +
+                         mapToGlobal(QPoint(0, 0)) - QPoint(0, height() / 4));
+    goToDesktop();
+    return true;
 }
 
 iris::ScenePtr MainWindow::getScene()
@@ -868,11 +911,22 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			isSceneOpen = true;
 
 			sceneView->begin();
+			// The on-screen View could not be created at all: nothing will
+			// ever present into this page, so say why and go back to one that
+			// works, rather than leaving the user on a permanent blank
+			// (STATS_OVERLAY_SPEC.md §6.4 — this is where ViewportCover's
+			// Failed state went). `return`, not `break`: goToDesktop has
+			// already run a whole switchSpace(DESKTOP) inside that call, so
+			// falling through to this one's trailing
+			// updateTopMenuStates(EDITOR) would dress the menus for a page
+			// nobody is looking at.
+			if (bounceIfViewportIsDead()) return;
 			// The viewport's native window has just been mapped. Until the
 			// engine presents into it the X server shows whatever was on that
-			// part of the screen before — the page we just left. Paint the
-			// cover NOW (synchronously; a posted paint would arrive after the
-			// rest of this open) unless the engine already owns those pixels.
+			// part of the screen before — the page we just left. Present the
+			// cover NOW (synchronously; a queued driver tick would arrive
+			// after the rest of this open) unless the engine already owns
+			// those pixels.
 			sceneView->coverIfNotPresenting();
             break;
         }
@@ -1053,10 +1107,11 @@ void MainWindow::saveScene()
 // already) and the viewport's scene binding all happen while the desktop page
 // — with its progress dialog — is still what the user sees. The page switch is
 // the LAST step, and even then the engine has not put a frame of this world on
-// screen yet, so the viewport wears its loading cover until it has
-// (viewportcover.h). Without the cover, the viewport's native window shows
-// whatever pixels were on that part of the screen before it was mapped: a copy
-// of the desktop page.
+// screen yet, so the viewport wears its loading cover until it has — an
+// overlay the ENGINE draws into the frame it was going to present anyway
+// (irisgl/engine/src/OgreOverlayHud.cpp; owner decision D2). Without a cover,
+// the viewport's native window shows whatever pixels were on that part of the
+// screen before it was mapped: a copy of the desktop page.
 //
 // The stages are separate functions because the THREADED open
 // (openProjectAsync / services/sceneopenrunner.h) runs each of them on its own
@@ -1135,6 +1190,13 @@ void MainWindow::openStageReveal(bool playMode)
 {
 	LoadTimeline::mark(QStringLiteral("switchSpace"));
 	playMode ? switchSpace(WindowSpaces::PLAYER) : switchSpace(WindowSpaces::EDITOR);
+	// A SCENE OPEN into a broken view must bounce too, not just a manual space
+	// switch (STATS_OVERLAY_SPEC.md §6.4). switchSpace(EDITOR) has already run
+	// the same check and taken us to the Desktop; this stops the rest of the
+	// reveal from re-selecting nodes and re-enabling toolbars for a page nobody
+	// is on. Harmless in the PLAYER case: the check reads the editor viewport,
+	// which is equally dead either way.
+	if (!sceneView->viewCreationError().isEmpty()) return;
 	updateTopMenuStates(playbackService->isPlayerMode() ? WindowSpaces::PLAYER : WindowSpaces::EDITOR);
 
 	LoadTimeline::mark(QStringLiteral("selectRoot"));
@@ -2133,6 +2195,18 @@ void MainWindow::setupViewPort()
     });
     wireFramesMenu->addAction(selectionWireAction);
 
+    // The engine-drawn frame-stats readout (F3). It is in this menu because
+    // this is where a user looks for viewport toggles — but it is NOT one of
+    // the helpers Game View hides, and it is the only row here that persists
+    // (as the `show_fps` preference, shared with the Preferences checkbox).
+    statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)");
+    statsCheckAction->setCheckable(true);
+    statsCheckAction->setChecked(
+        SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool());
+    connect(statsCheckAction, &QAction::toggled, this,
+            [this](bool on) { setShowFrameStats(on); });
+    wireFramesMenu->addAction(statsCheckAction);
+
     // --- Engine preview (Ogre-Next) -------------------------------------
     // Scaffolding for the engine migration: opens a window driven entirely
     // through the engine abstraction. Removed once the editor viewport moves over.
@@ -2393,18 +2467,21 @@ void MainWindow::setupViewPort()
     wireCheckAction->setChecked(sceneView->getShowLightWires());
     gridCheckAction->setChecked(sceneView->getShowGrid());
 	physicsCheckAction->setChecked(sceneView->getShowDebugDrawFlags());
+    // The persisted readout state reaches the viewport HERE, not when the menu
+    // action was built: the View Options menu is constructed before sceneView
+    // exists, so its initial setChecked found nothing to switch on.
+    setShowFrameStats(SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView->asWidget(), 0, 0);
-    // The viewport's "nothing is presenting" state (viewportcover.h). It goes
-    // in the SAME grid cell as the viewport, which gives it the viewport's
-    // geometry for free — and as a SIBLING, never a child: the viewport lives
-    // under setUpdatesEnabled(false), and a child of it could never repaint.
-    viewportCover = new ViewportCover(sceneContainer);
-    layout->addWidget(viewportCover, 0, 0);
+    // NO COVER WIDGET (owner decision D2). This grid cell used to hold a
+    // second widget stacked over the viewport — ViewportCover — which, to be
+    // visible over a native render window on X11, had to own a native window of
+    // its own and raise() itself above the viewport's. The cover is now drawn
+    // by the engine, inside the frame it was already presenting, so there is
+    // nothing to add here and no stacking order to get wrong.
     layout->setContentsMargins(0, 0, 0, 0);
     sceneContainer->setLayout(layout);
-    sceneView->setCover(viewportCover);
 
     auto events = sceneView->events();
     connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString path, bool v, iris::Vec3 pos, QString guid, QString name) {
@@ -2729,6 +2806,14 @@ void MainWindow::setupShortcuts()
             });
     reg.add("view.grid", "Toggle Ground Grid", "View", QKeySequence(), this,
             [this]() { if (gridCheckAction) gridCheckAction->toggle(); });
+    // F3 — the games convention (Minecraft, idTech-adjacent), and the only free
+    // F-key in this registry besides F11 (STATS_OVERLAY_SPEC D3). Category
+    // "View" so it lands beside gameView/grid/fullscreen in the generated
+    // Preferences page. Goes through the same verb path as the checkbox and
+    // never a separate one — and persists, because a diagnostic you have to
+    // switch on again after every restart is a diagnostic nobody uses.
+    reg.add("view.stats", "Show Frame Stats", "View", QKeySequence(Qt::Key_F3), this,
+            [this]() { setShowFrameStats(!sceneView->getShowFps()); });
     reg.add("window.fullscreen", "Immersive Fullscreen", "View", QKeySequence(Qt::Key_F11), this,
             [this]() { toggleImmersiveFullscreen(); });
 

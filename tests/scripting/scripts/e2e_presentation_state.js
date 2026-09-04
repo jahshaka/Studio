@@ -1,6 +1,12 @@
-// scripting.e2e.viewport_cover — the viewport's presentation state machine,
+// scripting.e2e.presentation_state — the viewport's presentation state machine,
 // the thing that decides whether the editor viewport shows the engine's frames
-// or its loading cover (src/viewport/viewportcover.h).
+// or its loading cover.
+//
+// RENAMED from e2e_viewport_cover.js, ASSERTIONS UNCHANGED, when the Qt cover
+// widget was deleted (owner decision D2, SPECS/STATS_OVERLAY_SPEC.md §6). That
+// nothing here had to change is the point: this suite always drove
+// editor.viewportState(), never the widget, so it is the regression gate that
+// says the state machine survived the port into the engine intact.
 //
 // THE DEFECT (2026-09-03, owner-sighted twice): opening a world switched to the
 // editor page before the engine had presented anything into the viewport's
