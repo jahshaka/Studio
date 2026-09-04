@@ -40,6 +40,7 @@
 
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/filewriteatomic.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -72,6 +73,27 @@ static QStringList stagingLeftovers(const QString &root)
     for (const QString &p : objectTree(root))
         if (QFileInfo(p).fileName().contains(QStringLiteral(".tmp-"))) out << p;
     return out;
+}
+
+/// Staging temps anywhere under a directory (not just objects/) — the sidecar
+/// and store.json writers stage beside their own targets.
+static QStringList tempsUnder(const QString &dir)
+{
+    QStringList out;
+    QDirIterator it(dir, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString p = it.next();
+        if (QFileInfo(p).fileName().contains(QStringLiteral(".tmp-"))) out << p;
+    }
+    out.sort();
+    return out;
+}
+
+static QByteArray readAll(const QString &path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return QByteArray();
+    return f.readAll();
 }
 
 int main(int argc, char **argv)
@@ -254,6 +276,87 @@ int main(int argc, char **argv)
             QFile check(repDst);
             check.open(QIODevice::ReadOnly);
             CHECK(check.readAll() == good, "and it is byte-for-byte the old content");
+        }
+
+        // ---- 6. the SAME property for every other store artifact -------------
+        // Deep audit 2026-09 (area 6): sidecars, store.json and the baked maps
+        // all wrote truncate-in-place — the exact pattern storeObject exists to
+        // prevent. The tail of storeObject is now FileWrite::writeFileAtomic
+        // (src/services/filewriteatomic.h) and they go through it. Same
+        // deterministic kill, same assertion: the previous file is either
+        // completely replaced or completely untouched, never truncated.
+        {
+            const QString metaDir = QDir(root).filePath(QStringLiteral("meta"));
+            const QString target = QDir(metaDir).filePath(QStringLiteral("sidecar.json"));
+            const QByteArray v1("{\"formatVersion\":1,\"files\":[\"a\",\"b\"]}\n");
+            const QByteArray v2("{\"formatVersion\":1,\"files\":[\"a\",\"b\",\"c\",\"d\"]}\n");
+
+            QString werr;
+            CHECK(FileWrite::writeFileAtomic(target, v1, &werr),
+                  "writeFileAtomic creates the file (and its directory)");
+            CHECK(readAll(target) == v1, "with exactly the bytes asked for");
+            CHECK(tempsUnder(metaDir).isEmpty(), "and leaves no staging temp");
+
+            CHECK(FileWrite::writeFileAtomic(target, v2, &werr),
+                  "writeFileAtomic REPLACES an existing file");
+            CHECK(readAll(target) == v2, "with the new bytes");
+            CHECK(tempsUnder(metaDir).isEmpty(), "still no staging temp");
+
+            werr.clear();
+            CHECK(!FileWrite::writeFileAtomic(target, [](QFile &) { return false; }, &werr),
+                  "a writer that fails reports failure");
+            CHECK(readAll(target) == v2,
+                  "and the EXISTING file is untouched (never truncated first)");
+            CHECK(tempsUnder(metaDir).isEmpty(), "and its temp is cleaned up");
+
+            // Kill the process inside the write, exactly as sections 4/5 do.
+            int ready3[2];
+            (void)!::pipe(ready3);
+            const pid_t child3 = ::fork();
+            if (child3 == 0) {
+                ::close(ready3[0]);
+                const char go3 = 'g';
+                (void)!::write(ready3[1], &go3, 1);
+                QString cerr;
+                // Streams from the FIFO into the staged temp — blocks forever
+                // once the parent stops writing, so the kill is provably inside
+                // the write and not a race.
+                FileWrite::writeFileAtomic(target, [&](QFile &out) {
+                    const int fd = ::open(QFile::encodeName(fifo).constData(), O_RDONLY);
+                    if (fd < 0) return false;
+                    QByteArray buf(64 * 1024, Qt::Uninitialized);
+                    for (;;) {
+                        const ssize_t n = ::read(fd, buf.data(), size_t(buf.size()));
+                        if (n <= 0) break;
+                        out.write(buf.constData(), n);
+                    }
+                    ::close(fd);
+                    return true;
+                }, &cerr);
+                ::_exit(0);
+            }
+            ::close(ready3[1]);
+            char go3 = 0;
+            (void)!::read(ready3[0], &go3, 1);
+            ::close(ready3[0]);
+
+            int w3 = ::open(QFile::encodeName(fifo).constData(), O_WRONLY);
+            CHECK(w3 >= 0, "opened the FIFO, which unblocks the child's atomic write");
+            long total3 = 0;
+            for (int i = 0; i < 16 && w3 >= 0; ++i) {
+                const ssize_t n = ::write(w3, chunk.constData(), size_t(chunk.size()));
+                if (n <= 0) break;
+                total3 += n;
+            }
+            CHECK(total3 > 256 * 1024, "the atomic write is in flight");
+            CHECK(::kill(child3, SIGKILL) == 0, "SIGKILL, mid-write");
+            int status3 = 0;
+            ::waitpid(child3, &status3, 0);
+            if (w3 >= 0) ::close(w3);
+
+            CHECK(readAll(target) == v2,
+                  "the sidecar the crash interrupted still holds its COMPLETE previous "
+                  "content — the truncate-in-place writers could only have left a stub");
         }
 
         ::unlink(QFile::encodeName(fifo).constData());

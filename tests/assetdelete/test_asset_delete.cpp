@@ -15,6 +15,18 @@
 //   4. updateGlobalDependencyDependee/Depender actually update a row (they
 //      bound named placeholders against positional SQL and had never run).
 //
+// Plus the 2026-09 deep-audit (area 6) DB quick fixes:
+//   5. deleteAsset is ONE transaction — a failure part-way leaves the asset
+//      row, its content mapping and its pins all intact, never half of them.
+//   6. deleteProject drops the project's project_assets pins (32 of 129 pins
+//      on the measured live store were already orphaned this way), and the
+//      dependency-name filters no longer skip an element after a removeAt.
+//   7. wipeDatabase drops the CAS + favourites tables too, so the rebuilt
+//      library does not open onto a content catalog for assets that are gone.
+//   8. addFavorite is idempotent (INSERT OR REPLACE over a PRIMARY KEY).
+//   9. The .jaf version gate parses integer components instead of running the
+//      first three characters through toFloat()*10.
+//
 // Framework-free; non-zero exit on failure. Runs under QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
 #include <QDir>
@@ -237,6 +249,156 @@ int main(int argc, char **argv)
           "the refused delete left the asset row in place");
 
     AssetManager::clearAssetList();
+
+    // --- 5. deleteAsset is ATOMIC -------------------------------------------
+    // Force the middle statement to fail (the pins table is gone) and prove
+    // nothing moved: before the transaction landed, the asset_files DELETE had
+    // already run and the assets DELETE ran after it, so a "failed" delete
+    // still destroyed the row and its content mapping — an asset that vanished
+    // from the library while the function reported failure.
+    {
+        conn = QSqlDatabase::database();
+        const QString atomicGuid = db.createAssetEntry(
+            "guid-atomic", "atomic.png", static_cast<int>(ModelTypes::Texture),
+            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString atomicOid;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, ownSrc, atomicGuid, "source", "own.png",
+                                   &atomicOid, &err), "atomicity fixture ingests content");
+        CHECK(AssetCas::writePin(conn, projectGuid, atomicGuid, atomicOid),
+              "atomicity fixture pinned");
+        CHECK(refcountOf(atomicOid) == 1, "atomicity fixture refcount 1");
+
+        QSqlQuery drop;
+        CHECK(drop.exec("DROP TABLE project_assets"),
+              "pins table dropped to force a mid-delete failure");
+
+        CHECK(!db.deleteAsset(atomicGuid), "deleteAsset reports FALSE when a statement fails");
+        CHECK(countWhere("assets", "guid", atomicGuid) == 1,
+              "atomic: the asset row survived the failed delete");
+        CHECK(countWhere("asset_files", "asset_guid", atomicGuid) == 1,
+              "atomic: the content mapping survived the failed delete");
+        CHECK(refcountOf(atomicOid) == 1,
+              "atomic: the refcount the delete trigger touched was rolled back too");
+
+        db.createCasTables();   // put the pins table back for the sections below
+        CHECK(db.checkIfTableExists("project_assets"), "pins table restored");
+        CHECK(db.deleteAsset(atomicGuid), "the same delete succeeds once the table is back");
+        CHECK(countWhere("assets", "guid", atomicGuid) == 0, "atomic: asset finally deleted");
+    }
+
+    // --- 6. deleteProject takes its pins with it ----------------------------
+    {
+        conn = QSqlDatabase::database();
+        const QString doomedProject = "proj-doomed";
+        CHECK(db.createProject(doomedProject, "Doomed"), "doomed project created");
+
+        const QString pinnedGuid = db.createAssetEntry(
+            "guid-pinned", "pinned.png", static_cast<int>(ModelTypes::Texture),
+            QString(), doomedProject, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        QString pinnedOid;
+        CHECK(AssetCas::ingestFile(conn, storeRoot, sharedSrc, pinnedGuid, "source", "shared.png",
+                                   &pinnedOid, &err), "project asset ingested");
+        CHECK(AssetCas::writePin(conn, doomedProject, pinnedGuid, pinnedOid),
+              "asset pinned into the doomed project");
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Texture),
+                                  static_cast<int>(ModelTypes::Texture),
+                                  pinnedGuid, keeperGuid, doomedProject),
+              "project-scoped dependency created");
+        CHECK(countWhere("project_assets", "project_guid", doomedProject) == 1,
+              "the pin exists before the project is deleted");
+
+        CHECK(db.deleteProject(doomedProject), "deleteProject reports success");
+        CHECK(countWhere("projects", "guid", doomedProject) == 0, "project row deleted");
+        CHECK(countWhere("dependencies", "project_guid", doomedProject) == 0,
+              "project dependencies deleted");
+        CHECK(countWhere("project_assets", "project_guid", doomedProject) == 0,
+              "project PINS deleted with the project (the orphaned-pin leak)");
+    }
+
+    // --- 6b. the dependency name filter does not skip after a removeAt ------
+    // fetchAssetAndDependencies drops dependency NAMES that carry no file
+    // extension (they are not files to unlink). The forward loop removed the
+    // first bare name, the tail shifted down, and ++i then stepped over the
+    // name that had moved into the vacated index — so with two adjacent bare
+    // names the SECOND one survived into the caller's delete list. Asserted on
+    // the fetcher directly: the delete paths run the same filter a second time,
+    // which masks the defect for non-adjacent survivors.
+    {
+        const QString ownerGuid = db.createAssetEntry(
+            "guid-filter-owner", "owner.obj", static_cast<int>(ModelTypes::Object),
+            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        // Dependees whose NAMES have no suffix — exactly what the filter drops.
+        const QString bare1 = db.createAssetEntry(
+            "guid-bare-one", "bareone", static_cast<int>(ModelTypes::Texture),
+            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        const QString bare2 = db.createAssetEntry(
+            "guid-bare-two", "baretwo", static_cast<int>(ModelTypes::Texture),
+            QString(), projectGuid, QString(), QString(), QByteArray(), QByteArray(),
+            QByteArray(), QByteArray(), AssetViewFilter::AssetsView);
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Object),
+                                  static_cast<int>(ModelTypes::Texture),
+                                  ownerGuid, bare1, projectGuid), "bare dependency 1");
+        CHECK(db.createDependency(static_cast<int>(ModelTypes::Object),
+                                  static_cast<int>(ModelTypes::Texture),
+                                  ownerGuid, bare2, projectGuid), "bare dependency 2");
+
+        const QStringList names = db.fetchAssetAndDependencies(ownerGuid);
+        CHECK(names.contains("owner.obj"), "the owner's own file name is kept");
+        CHECK(!names.contains("bareone") && !names.contains("baretwo"),
+              "BOTH extension-less names filtered out (no index-skipping survivor)");
+
+        bool filterOk = false;
+        const QStringList files = db.deleteAssetAndDependencies(ownerGuid, &filterOk);
+        CHECK(filterOk, "deleteAssetAndDependencies over the bare-named set succeeded");
+        CHECK(!files.contains("bareone") && !files.contains("baretwo"),
+              "and the delete path's list is clean too");
+    }
+
+    // --- 8. addFavorite is idempotent ---------------------------------------
+    {
+        CHECK(db.addFavorite(keeperGuid), "asset favourited");
+        CHECK(db.addFavorite(keeperGuid),
+              "favouriting an already-favourite asset succeeds (INSERT OR REPLACE)");
+        CHECK(countWhere("favorites", "asset_guid", keeperGuid) == 1,
+              "exactly one favourites row for the asset");
+        CHECK(db.removeFavorite(keeperGuid), "favourite removed");
+        CHECK(countWhere("favorites", "asset_guid", keeperGuid) == 0, "favourites row gone");
+    }
+
+    // --- 9. the .jaf version gate (MIN_JAF_VERSION = 9, i.e. "0.9") ---------
+    // The old gate took version.mid(0,3).toFloat() * 10 and truncated to int:
+    // correct for "0.9" only because 0.9f*10 rounds up to exactly 9.0f, and
+    // flatly wrong for any 0.10.x archive ("0.1" -> 1 -> rejected).
+    {
+        CHECK(Constants::MIN_JAF_VERSION == 9, "the gate under test is still 0.9");
+        CHECK(Database::jafVersionAccepted("0.9.1b"),  "0.9.1b accepted (the shipped version)");
+        CHECK(!Database::jafVersionAccepted("0.8.0"),  "0.8.0 rejected");
+        CHECK(Database::jafVersionAccepted("1.0.0"),   "1.0.0 accepted");
+        CHECK(Database::jafVersionAccepted("1.10"),    "1.10 accepted");
+        CHECK(Database::jafVersionAccepted("0.9"),     "0.9 accepted (exactly the minimum)");
+        CHECK(Database::jafVersionAccepted("0.10.0"),  "0.10.0 accepted (0.10 > 0.9, not 0.1)");
+        CHECK(!Database::jafVersionAccepted("0.0.1"),  "0.0.1 rejected");
+        CHECK(!Database::jafVersionAccepted(""),       "an empty version is rejected");
+        CHECK(!Database::jafVersionAccepted("beta"),   "a non-numeric version is rejected");
+    }
+
+    // --- 7. wipeDatabase clears the CAS catalog too (DESTRUCTIVE — last) ----
+    {
+        CHECK(db.checkIfTableExists("files") && db.checkIfTableExists("asset_files")
+                  && db.checkIfTableExists("project_assets") && db.checkIfTableExists("favorites"),
+              "CAS + favourites tables present before the wipe");
+        db.wipeDatabase();
+        CHECK(!db.checkIfTableExists("assets"), "wipe: assets dropped");
+        CHECK(!db.checkIfTableExists("files"), "wipe: files dropped");
+        CHECK(!db.checkIfTableExists("asset_files"), "wipe: asset_files dropped");
+        CHECK(!db.checkIfTableExists("project_assets"), "wipe: project_assets dropped");
+        CHECK(!db.checkIfTableExists("favorites"), "wipe: favorites dropped");
+    }
+
     db.closeDatabase();
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("all asset-delete checks passed\n");

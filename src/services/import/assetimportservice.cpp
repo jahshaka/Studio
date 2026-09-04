@@ -179,9 +179,38 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
     QStringList createdOids;      // objects written by THIS import — rollback set
     QStringList touchedGuids;     // sidecar + legacy-view targets
 
-    auto cleanupObjects = [&]() {
-        // Remove objects this import wrote whose files row did not survive
-        // the rollback (refcount 0 orphans of a failed import).
+    DbTransaction tx(conn);
+    bool committed = false;   // distinguishes "commit() already unwound" from nesting
+
+    // THE ROLLBACK, and why it has to end the transaction first.
+    //
+    // The store stage is HALF transactional: the files/asset_files rows are
+    // SQL and unwind with the transaction, but the object bytes are files on
+    // disk and do not. So a failed import must delete exactly the objects
+    // whose rows did not survive — and the way to know that is to ask the
+    // database AFTER the rollback.
+    //
+    // Asking before it (which is what this did until the 2026-09 deep audit)
+    // reads the caller's OWN uncommitted inserts: `SELECT 1 FROM files` found
+    // every oid this import had just written, `continue` skipped every one,
+    // and the cleanup removed NOTHING — ever. Every cancelled or failed import
+    // left its objects in the store at refcount 0 with no row naming them, and
+    // no GC exists to reap them. (The guard test passed because it cancelled
+    // before the first file was stored, so there was nothing to clean either
+    // way; tests/importasync now cancels after a real ingest.)
+    //
+    // Objects that ALREADY existed before this import keep their committed
+    // files row through the rollback, so the same query is what protects
+    // content shared with another asset from being deleted underneath it.
+    auto rollbackAndCleanupObjects = [&]() {
+        // No caller nests a transaction around commit() today (verified across
+        // the verb, facade and batch-runner paths). If one ever does, the guard
+        // degrades to a no-op, the rows below stay uncommitted and this cleanup
+        // silently returns to being the no-op the audit found — say so instead.
+        if (!tx.isActive() && !committed)
+            irisLog("import rollback: no transaction of our own to roll back — "
+                    "object cleanup may be reading uncommitted rows");
+        tx.rollback();   // idempotent; a no-op if commit() already unwound
         for (const QString &oid : createdOids) {
             QSqlQuery still(conn);
             still.prepare("SELECT 1 FROM files WHERE oid = ?");
@@ -192,8 +221,6 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                 QFile::remove(candidate.absoluteFilePath());
         }
     };
-
-    DbTransaction tx(conn);
 
     // -------- .jaf archives: rows come from the archive's own asset.db ------
     if (!staged.jaf.kind.isEmpty()) {
@@ -217,7 +244,7 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                     QString oid;
                     if (!AssetCas::ingestFile(conn, root, info.absoluteFilePath(), it.value(),
                                               role, info.fileName(), &oid, &result.error)) {
-                        cleanupObjects();
+                        rollbackAndCleanupObjects();
                         return false;
                     }
                     createdOids.append(oid);
@@ -249,7 +276,7 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
                 QString oid;
                 if (!AssetCas::ingestFile(conn, root, info.absoluteFilePath(), guid,
                                           role, info.fileName(), &oid, &result.error)) {
-                    cleanupObjects();
+                    rollbackAndCleanupObjects();
                     return false;
                 }
                 createdOids.append(oid);
@@ -260,7 +287,7 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
 
         if (staged.mainGuid.isEmpty()) {
             result.error = QStringLiteral("the archive's catalog could not be imported");
-            cleanupObjects();
+            rollbackAndCleanupObjects();
             return false;
         }
     }
@@ -290,14 +317,14 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         for (const StagedFile &file : staged.files) {
             if (progress && !progress(QStringLiteral("store"), done, staged.files.size())) {
                 result.error = QStringLiteral("cancelled");
-                cleanupObjects();
+                rollbackAndCleanupObjects();
                 return false;
             }
             QString oid;
             if (!AssetCas::ingestFile(conn, root, file.path, file.forGuid,
                                       file.role, file.name, &oid, &result.error,
                                       staged.fileOids.value(file.path))) {
-                cleanupObjects();
+                rollbackAndCleanupObjects();
                 return false;
             }
             createdOids.append(oid);
@@ -306,9 +333,10 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         }
     }
 
+    committed = true;   // commit() rolls back itself on failure; see database.h
     if (!tx.commit()) {
         result.error = QStringLiteral("could not commit the import transaction");
-        cleanupObjects();
+        rollbackAndCleanupObjects();
         return false;
     }
 
