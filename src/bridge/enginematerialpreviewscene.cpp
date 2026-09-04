@@ -154,12 +154,22 @@ iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
 
 void EngineMaterialPreviewScene::rebuildSubject()
 {
-    // Replace, never mutate: SceneMirror only re-attaches mesh+material when
-    // the node is new or its material pointer changed, so a fresh node is the
-    // reliable way to make either change reach the engine.
-    if (mSubject) { mSubject->removeFromParent(); mSubject.reset(); }
     auto mesh = meshFor(mMesh);
     if (!mesh) return;
+    // Mutate in place. This used to REPLACE the whole node on every Model-menu
+    // pick, with the comment "SceneMirror only re-attaches mesh+material when
+    // the node is new or its material pointer changed" — a true statement about
+    // a mirror bug (Entry::meshPtr was written and never read), worked around
+    // here instead of fixed. The mirror re-attaches on a mesh change now, so
+    // the preview keeps one node for its whole life.
+    if (mSubject && mSubject->sceneNodeType == iris::SceneNodeType::Mesh) {
+        auto node = mSubject.staticCast<iris::MeshNode>();
+        node->setMesh(mesh);
+        if (mMaterial) node->setMaterial(mMaterial);
+        node->update(0);
+        return;
+    }
+    if (mSubject) { mSubject->removeFromParent(); mSubject.reset(); }
     auto node = iris::MeshNode::create();
     node->setMesh(mesh);
     node->setName(kSubjectName);

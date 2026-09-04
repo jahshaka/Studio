@@ -35,10 +35,16 @@ public:
     /// triangles in local space; lights, viewers and decals as 0.5-unit spheres
     /// (a decal has no geometry to hit — its projector box is a helper, and
     /// clicking anywhere near the origin marker selects it).
+    ///
+    /// `refreshTransforms` runs the document's global-transform update first.
+    /// Callers that already ran it this frame — anything inside a live drag,
+    /// where the mirror's sync() updates the tree every frame — pass false:
+    /// the update is a full recursive walk of the scene, and V-hold vertex
+    /// snapping calls this on every mouse move.
     static QList<ScenePick> pickAll(iris::ScenePtr scene, const QVector3D &segStart, const QVector3D &segEnd,
                                     const QVector3D &cameraPos, bool forcePickable = false,
                                     bool includeLights = true, bool includeViewers = true,
-                                    bool includeDecals = true);
+                                    bool includeDecals = true, bool refreshTransforms = true);
 
     /// The nearest hit, or a null node.
     static ScenePick nearest(const QList<ScenePick> &hits);
@@ -52,7 +58,7 @@ public:
                                                    bool selectRootObject);
 
 private:
-    static void pickMeshes(iris::SceneNodePtr node, const QVector3D &a, const QVector3D &b,
+    static void pickMeshes(const iris::SceneNodePtr &node, const QVector3D &a, const QVector3D &b,
                            const QVector3D &cameraPos, bool forcePickable, QList<ScenePick> &out);
 };
 

@@ -41,7 +41,10 @@ protected slots:
 
 private:
     QSharedPointer<iris::MeshNode> meshNode;
-    FilePickerWidget* meshPicker;
+    /// The Mesh Path row, never constructed — see the ctor for why the row is
+    /// still off after the mirror learned to swap meshes. Initialised because
+    /// an uninitialised member pointer is a crash waiting for the first reader.
+    FilePickerWidget* meshPicker = nullptr;
 	ComboBoxWidget* faceCullMode;
     CheckBoxWidget* planarReflector = nullptr;
     IEditorViewport* sceneView = nullptr;

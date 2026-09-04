@@ -1220,6 +1220,162 @@ int main(int argc, char **argv)
         CHECK(gridPixels(0.08f) < 5, "hiding the grid removes every line pixel");
     }
 
+    // ---- deep audit 2026-09 (area 5): mesh swaps, detach, decal-atlas reuse ----
+    //
+    // Everything below runs on its own document, so the accumulated nodes of the
+    // tests above cannot colour the pixel counts.
+    {
+        auto doc2 = iris::Scene::create();
+        auto sun2 = iris::LightNode::create();
+        sun2->intensity = 1.5f;
+        sun2->setLocalRot(QQuaternion::fromEulerAngles(-40.0f, 20.0f, 0.0f));
+        sun2->setLocalPos(QVector3D(0.0f, 8.0f, 0.0f));
+        doc2->getRootNode()->addChild(sun2);
+
+        auto subject = iris::MeshNode::create();
+        subject->setName("subject");
+        auto red = iris::PbrMaterial::create();
+        red->setBaseColor(QColor(230, 60, 20));
+        red->setMetallicFactor(0.0f);
+        red->setRoughnessFactor(0.6f);
+        subject->setMaterial(red);
+        doc2->getRootNode()->addChild(subject);
+
+        // The two shapes are chosen so that COVERAGE alone tells them apart from
+        // this camera: a solid cube fills a large square, while the flat XZ
+        // plane is seen edge-on and covers almost nothing. No radius
+        // normalisation — the node's scale never changes, only its mesh.
+        const QString kCube  = QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj");
+        const QString kPlane = QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj");
+        // SILHOUETTE area, not lit area: anything that is not the blue clear
+        // colour. Shading varies with the mesh's normals, coverage does not —
+        // and coverage is what a mesh swap changes.
+        auto litPixels = [&](const Image &i) {
+            int n2 = 0;
+            for (unsigned y = 0; y < i.height; ++y)
+                for (unsigned x = 0; x < i.width; ++x)
+                    if (i.at(x, y).b < 0.5f) ++n2;
+            return n2;
+        };
+
+        mirror.setSource(doc2);
+        mirror.setLightWires(false);
+        // Far enough back that BOTH shapes fit inside the frame with room to
+        // spare — the whole assertion is a silhouette-area comparison.
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 5.5f), Vec3(0, 0, 0));
+
+        subject->setMesh(kCube);
+        CHECK(!!subject->getMesh(), "mesh swap: cube loaded");
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("subject = cube", img);
+        const int cubePx = litPixels(img);
+        std::printf("    cube covers:  %d px\n", cubePx);
+        CHECK(cubePx > 1000, "mesh swap: the cube renders");
+
+        // THE REGRESSION: swap the MESH on a live node, keeping the material.
+        // Entry::meshPtr was written and never read, so this changed nothing in
+        // the engine — which is why the mesh picker is commented out in the
+        // properties panel and the material preview replaced whole nodes.
+        subject->setMesh(kPlane);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("subject = plane", img);
+        const int planePx = litPixels(img);
+        std::printf("    plane covers: %d px\n", planePx);
+        CHECK(planePx < cubePx / 4,
+              "mesh swap reaches the engine (the edge-on plane covers far less than the cube)");
+
+        // ...and back, so the swap is not a one-way accident.
+        subject->setMesh(kCube);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(std::abs(litPixels(img) - cubePx) < cubePx / 40,
+              "mesh swap: swapping back restores the cube");
+
+        // Clearing the mesh detaches: the node stays, the geometry goes.
+        subject->setMesh(iris::MeshPtr());
+        CHECK(!subject->getMesh(), "mesh detach: the document node has no mesh");
+        const int stillMirrored = mirror.sync();
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("subject = no mesh", img);
+        CHECK(stillMirrored == 2, "mesh detach: the node is still mirrored (light + subject)");
+        CHECK(mirror.engineNode(subject.data()) != 0, "mesh detach: its engine node survives");
+        CHECK(litPixels(img) == 0, "mesh detach: nothing renders once the mesh is cleared");
+
+        // Re-attaching after a detach must work (the entry is reused).
+        subject->setMesh(kCube);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img);
+        CHECK(litPixels(img) > 1000, "mesh detach: giving the node a mesh again re-attaches it");
+    }
+
+    // ---- decal atlas slices survive world switches (area 5) ----
+    //
+    // The atlas is a fixed 32-slice, process-wide budget, and mDecalTextures
+    // used to survive setSource: opening world after world exhausted it and
+    // every decal in the session then projected nothing, silently. Open more
+    // worlds than the atlas has slices and assert the last one still projects.
+    {
+        const unsigned capacity = target->decalAtlasCapacity(DecalMap::Diffuse);
+        std::printf("    decal atlas capacity: %u\n", capacity);
+        const QString decalImg = QDir::current().filePath("mirror_atlas_decal.png");
+        { QImage px(4, 4, QImage::Format_RGBA8888); px.fill(QColor(255, 30, 30)); px.save(decalImg); }
+
+        bool projected = false;
+        Colour bare2{}, withDecal{};
+        const unsigned rounds = capacity + 4u;
+        for (unsigned round = 0; round < rounds; ++round) {
+            auto wdoc = iris::Scene::create();
+            auto wlight = iris::LightNode::create();
+            wlight->intensity = 1.5f;
+            wlight->setLocalRot(QQuaternion::fromEulerAngles(-90.0f, 0.0f, 0.0f));
+            wlight->setLocalPos(QVector3D(0.0f, 8.0f, 0.0f));
+            wdoc->getRootNode()->addChild(wlight);
+            auto floor2 = iris::MeshNode::create();
+            floor2->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+            floor2->setLocalScale(QVector3D(4, 4, 4));
+            auto white = iris::PbrMaterial::create();
+            white->setBaseColor(QColor(240, 240, 240));
+            white->setRoughnessFactor(0.9f);
+            floor2->setMaterial(white);
+            wdoc->getRootNode()->addChild(floor2);
+
+            mirror.setSource(wdoc);
+            mirror.setLightWires(false);
+            auto topCam = iris::CameraNode::create();
+            topCam->setLocalPos(QVector3D(0, 6, 0));
+            topCam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), -90.0f));
+            topCam->update(0.0f);
+            mirror.applyCamera(topCam, view);
+            mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            view->readPixels(img);
+            bare2 = centre(img);
+
+            // A DIFFERENT image path per world: same-path decals would share one
+            // atlas slice and the budget would never be reached.
+            const QString perWorld = QDir::current().filePath(
+                QStringLiteral("mirror_atlas_decal_%1.png").arg(round));
+            { QImage px(4, 4, QImage::Format_RGBA8888); px.fill(QColor(255, 30, 30)); px.save(perWorld); }
+            auto d2 = iris::DecalNode::create();
+            d2->width = 3.0f; d2->height = 3.0f; d2->depth = 2.0f;
+            d2->textureGuid = QStringLiteral("guid-%1").arg(round);
+            d2->resolvedTexturePath = perWorld;
+            wdoc->getRootNode()->addChild(d2);
+            mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+            view->readPixels(img);
+            withDecal = centre(img);
+            projected = withDecal.r > bare2.r + 0.05f || withDecal.g < bare2.g - 0.05f;
+            if (!projected) {
+                std::printf("    world %u: decal did NOT project (bare %.2f %.2f %.2f, "
+                            "with %.2f %.2f %.2f)\n", round,
+                            bare2.r, bare2.g, bare2.b, withDecal.r, withDecal.g, withDecal.b);
+                break;
+            }
+        }
+        std::printf("    after %u world switches: decal still projects = %s\n",
+                    rounds, projected ? "yes" : "no");
+        CHECK(projected, "decals still project after more world switches than the atlas has slices");
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);

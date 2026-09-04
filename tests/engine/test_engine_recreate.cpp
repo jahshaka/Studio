@@ -54,6 +54,52 @@ static bool runOnce(int iteration) {
     std::snprintf(msg, sizeof msg, "iteration %d: centre is the lit cube", iteration);
     CHECK(c.r > 0.4f && c.b < 0.5f, msg);
 
+    // ---- AREA lights must work on EVERY Engine, not just the first ----
+    //
+    // HlmsPbs::loadLtcMatrix has to run once per Root before any area light is
+    // drawn, and the "once" flag used to be a function-local static inside
+    // OgreScene::setLight: it survived Engine destruction, so from the second
+    // Engine onward the flag said "loaded" while the new Root's HlmsPbs had no
+    // LTC matrix (deep audit 2026-09, area 5). The flag now lives in
+    // lightextras and is reset by its shutdown(). This assertion only means
+    // anything from iteration 2 on — which is exactly the point.
+    {
+        LightDesc off;                       // dark the directional and the ambient:
+        off.type = LightType::Directional;   // whatever lights the cube now IS the area light
+        off.intensity = 0.0f;
+        s->setLight(1u, off);                // the directional is the first node created
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        for (int i = 0; i < 2; ++i) e->renderOneFrame();
+        Image dark;
+        v->readPixels(dark);
+        const Colour d = dark.at(48, 48);
+        std::snprintf(msg, sizeof msg, "iteration %d: cube is dark with no lights", iteration);
+        CHECK(d.r < 0.05f && d.g < 0.05f && d.b < 0.05f, msg);
+
+        // A rect light facing the cube from +Z. addDirectionalLight only builds
+        // the node with -Y rotated onto the direction; setLight then makes it
+        // an LTC area light and setNodePosition puts it in front.
+        const NodeId area = enginetest::addDirectionalLight(s, Vec3(0.0f, 0.0f, -1.0f), 1.0f);
+        enginetest::setNodePosition(s, area, Vec3(0.0f, 0.0f, 2.0f));
+        LightDesc a;
+        a.type = LightType::Area;
+        a.accurate = true;                   // LT_AREA_LTC: the kind that needs the matrix
+        a.colour = Colour(1.0f, 1.0f, 1.0f);
+        a.intensity = 40.0f;
+        a.range = 20.0f;
+        a.rectWidth = 3.0f;
+        a.rectHeight = 3.0f;
+        std::snprintf(msg, sizeof msg, "iteration %d: area light accepted", iteration);
+        CHECK(s->setLight(area, a), msg);
+        for (int i = 0; i < 3; ++i) e->renderOneFrame();
+        Image lit;
+        v->readPixels(lit);
+        const Colour L = lit.at(48, 48);
+        std::printf("    area-lit centre %.0f %.0f %.0f\n", L.r * 255, L.g * 255, L.b * 255);
+        std::snprintf(msg, sizeof msg, "iteration %d: the AREA light lights the cube", iteration);
+        CHECK(L.r > 0.05f, msg);
+    }
+
     e->destroyView(v);
     e->destroyScene(s);
     e.reset();

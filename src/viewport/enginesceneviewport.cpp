@@ -574,8 +574,11 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
     if (!mSelectedNode || !mScene || !mEditorCam || !mHaveMouse) return false;
     QVector3D a, b;
     ScenePicker::screenSegment(mEditorCam, width(), height(), mMousePos, a, b);
+    // refreshTransforms = false: this runs on every mouse move inside a live
+    // translate drag, and the mirror's sync() already updated the document's
+    // global transforms this frame. The update is a full recursive walk.
     const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(),
-                                           true, false, false);
+                                           true, false, false, true, false);
     ScenePick best;
     for (const auto &h : hits) {
         if (!h.node || h.triangleIndex < 0) continue;

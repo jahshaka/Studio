@@ -143,6 +143,78 @@ int main(int argc, char **argv) {
     CHECK(r5 == front, "re-click on the selected part keeps it");
     CHECK(ScenePicker::resolveRootSelection(front, nullptr, false) == front, "rule disabled: the child");
 
+    // ---- TWO-SIDED triangle intersection (deep audit 2026-09, area 2).
+    // getSegmentIntersections culled on `d <= 0`, so a triangle reached from
+    // BEHIND its winding was invisible to picking AND to the player's raycast,
+    // which routes through the same function. A plane is the case that made it
+    // obvious: it is pickable from one side and not the other.
+    {
+        iris::TriMesh tm;
+        // CCW seen from +Y, so the winding normal points +Y.
+        tm.addTriangle(QVector3D(-1, 0, -1), QVector3D(-1, 0, 1), QVector3D(1, 0, -1));
+
+        QList<iris::TriangleIntersectionResult> r;
+        const int fromAbove = tm.getSegmentIntersections(QVector3D(-0.5f, 1, -0.5f),
+                                                         QVector3D(-0.5f, -1, -0.5f), r);
+        CHECK(fromAbove == 1, "trimesh: front-facing segment reports ONE hit (not two)");
+        CHECK(r.size() == 1, "trimesh: front-facing segment appends one result");
+        CHECK(r.size() == 1 && std::abs(r[0].hitPoint.y()) < 1e-4f,
+              "trimesh: the hit lands on the triangle's plane");
+        CHECK(r.size() == 1 && std::abs(r[0].t - 0.5f) < 1e-4f,
+              "trimesh: t is the fraction along the segment");
+
+        r.clear();
+        const int fromBelow = tm.getSegmentIntersections(QVector3D(-0.5f, -1, -0.5f),
+                                                         QVector3D(-0.5f, 1, -0.5f), r);
+        CHECK(fromBelow == 1, "trimesh: BACK-facing segment hits too (two-sided picking)");
+        CHECK(r.size() == 1 && std::abs(r[0].hitPoint.y()) < 1e-4f,
+              "trimesh: the back-side hit lands on the plane");
+        CHECK(r.size() == 1 && std::abs(r[0].t - 0.5f) < 1e-4f,
+              "trimesh: back-side t is the fraction along the segment");
+
+        r.clear();
+        CHECK(tm.getSegmentIntersections(QVector3D(-0.5f, 1, -0.5f),
+                                         QVector3D(0.5f, 1, 0.5f), r) == 0,
+              "trimesh: a segment parallel to the plane misses");
+        r.clear();
+        CHECK(tm.getSegmentIntersections(QVector3D(5, 1, 5), QVector3D(5, -1, 5), r) == 0,
+              "trimesh: a segment outside the triangle misses");
+
+        // isHitBySegment carries the same fold.
+        QVector3D hp;
+        CHECK(tm.isHitBySegment(QVector3D(-0.5f, -1, -0.5f), QVector3D(-0.5f, 1, -0.5f), hp),
+              "trimesh: isHitBySegment is two-sided as well");
+    }
+
+    // ...and end to end, through the picker: a plane picked from underneath.
+    {
+        auto pdoc = iris::Scene::create();
+        auto pnode = iris::MeshNode::create();
+        pnode->setName("floor");
+        // From the source tree: only cube.obj and sky.obj live in the qrc, and
+        // a CLOSED mesh cannot show the defect — its far side is front-facing
+        // from behind. An open surface is the whole point.
+        pnode->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
+        pdoc->getRootNode()->addChild(pnode);
+        pdoc->getRootNode()->update(0.0f);
+
+        const QVector3D above(0.05f, 5, 0.05f), below(0.05f, -5, 0.05f);
+        auto downHits = ScenePicker::pickAll(pdoc, above, below, above);
+        auto upHits   = ScenePicker::pickAll(pdoc, below, above, below);
+        CHECK(!downHits.isEmpty(), "picker: the plane is hit from above");
+        CHECK(!upHits.isEmpty(), "picker: the plane is hit from BELOW too");
+        CHECK(!upHits.isEmpty() && ScenePicker::nearest(upHits).node == pnode,
+              "picker: the hit from below names the plane");
+        CHECK(!upHits.isEmpty() && ScenePicker::nearest(upHits).triangleIndex >= 0,
+              "picker: the hit from below carries a triangle index (V-snap works both sides)");
+
+        // The bounding-sphere broad phase must not change WHAT is picked: a ray
+        // well clear of the plane still misses, one through it still hits.
+        CHECK(ScenePicker::pickAll(pdoc, QVector3D(500, 5, 500), QVector3D(500, -5, 500),
+                                   QVector3D(500, 5, 500)).isEmpty(),
+              "picker: broad phase rejects a ray far from the mesh");
+    }
+
     // ---- orthographic picking (Views dropdown, 2026-08-31): rays must be
     // PARALLEL (view forward), origin offset across the ortho extent — not
     // fanned out from the eye like perspective. The engine renders the same
