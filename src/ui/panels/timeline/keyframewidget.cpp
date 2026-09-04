@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/propertyanim.h"
 #include "ui/panels/timeline/keyframewidget.h"
-#include "ui/panels/timeline/keyframelabelwidget.h"
 #include "ui/panels/timeline/keyframelabeltreewidget.h"
 #include "ui/panels/timeline/keyframelabel.h"
 #include "ui/panels/timeline/animationwidgetdata.h"
@@ -40,7 +39,9 @@ void KeyFrameWidget::setAnimWidgetData(AnimationWidgetData *value)
 
 void KeyFrameWidget::deleteContextKey()
 {
-    auto anim = obj->getAnimation();
+    auto anim = obj ? obj->getAnimation() : iris::AnimationPtr();
+    if (!anim)
+        return;
 
     auto propAnim = anim->getPropertyAnim(contextKey.propertyName);
     if (propAnim != nullptr) {

@@ -87,7 +87,13 @@ void KeyFrameLabelTreeWidget::highlightDefaultProperty()
 
 void KeyFrameLabelTreeWidget::addProperty(QString propName)
 {
-    auto prop = node->getAnimation()->properties[propName];
+    // value(), not operator[]: the subscript on a non-const QMap INSERTS a null
+    // track for a name that is not there, and addPropertyToTree dereferences
+    // whatever it is handed.
+    auto anim = node ? node->getAnimation() : iris::AnimationPtr();
+    auto prop = anim ? anim->properties.value(propName, nullptr) : nullptr;
+    if (!prop)
+        return;
     addPropertyToTree(prop);
 }
 
@@ -250,7 +256,10 @@ void KeyFrameLabelTreeWidget::calculateSummaryKeys(iris::PropertyAnim *prop, Key
 
 void KeyFrameLabelTreeWidget::recalcPropertySummaryKeys(QString name)
 {
-    auto prop = node->getAnimation()->getPropertyAnim(name);
+    auto anim = node ? node->getAnimation() : iris::AnimationPtr();
+    auto prop = anim ? anim->getPropertyAnim(name) : nullptr;
+    if (!prop)
+        return;
     auto frameData = getPropertyKeyFrameData(name);
 
     calculateSummaryKeys(prop, frameData);

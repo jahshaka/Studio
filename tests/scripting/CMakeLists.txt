@@ -64,6 +64,21 @@ add_script_e2e(planar e2e_planar.js)
 # for keys that are all optional in the reader — and pixels, because a perfect
 # document proves nothing about what the engine draws.
 add_script_e2e(particles e2e_particles.js)
+# DEEP_AUDIT_2026_09 List B #7: the anim.* verbs — the keyframe/timeline domain,
+# which had no verbs and therefore no test at all. Animations on a node, the
+# active one, tracks per property, keys (write/overwrite/read/remove), the
+# document evaluation (seek poses the node between the keys), looping, and the
+# save/close/open round trip. Every verb is a document verb -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-anim)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.anim
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_anim.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.anim PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # The viewport's presentation state machine (editor.viewportState) — what
 # decides whether the editor viewport shows engine frames or its loading cover
 # (src/viewport/viewportcover.h). Gates the desktop-bleed fix, 2026-09-03.

@@ -14,7 +14,8 @@ For more information see the LICENSE file
 
 // The one place Studio's API modules are assembled onto a ScriptEngine.
 // Phase 1: project, scene, node, editor, app. Phase 2 adds assets, materials,
-// graph, world here — nowhere else.
+// graph, world here — nowhere else. Later domains (particles, anim) land here
+// too, one line each.
 
 class ScriptEngine;
 

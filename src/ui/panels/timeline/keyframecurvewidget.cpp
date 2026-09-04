@@ -24,7 +24,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/animation.h"
 #include "ui/panels/timeline/keyframewidget.h"
-#include "ui/panels/timeline/keyframelabelwidget.h"
 #include "ui/panels/timeline/keyframelabeltreewidget.h"
 #include "ui/panels/timeline/keyframelabel.h"
 #include "ui/panels/timeline/animationwidgetdata.h"

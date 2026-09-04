@@ -159,6 +159,7 @@ set(SRCS
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
     src/scripting/modules/particlesapi.cpp
+    src/scripting/modules/animapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
@@ -224,6 +225,7 @@ set(SRCS
     src/services/shortcutregistry.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
+    src/services/animationedits.cpp
     src/services/playbackservice.cpp
     src/ui/panels/presets/assetfavorites.cpp 
     src/ui/panels/presets/assetmodelpanel.cpp 
@@ -386,6 +388,7 @@ set(HEADERS
     src/scripting/modules/desktopapi.h
     src/scripting/modules/worldapi.h
     src/scripting/modules/particlesapi.h
+    src/scripting/modules/animapi.h
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
@@ -441,6 +444,7 @@ set(HEADERS
     src/services/shortcutregistry.h
     src/services/worldmodes.h
     src/services/planarreflectors.h
+    src/services/animationedits.h
     src/services/playbackservice.h
     src/ui/panels/presets/assetfavorites.h 
     src/ui/panels/presets/assetpanel.h 
