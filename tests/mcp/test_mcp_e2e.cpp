@@ -7,7 +7,7 @@
 //   - requests without (or with a wrong) bearer token get 401
 //   - initialize handshake: protocol version + tools capability + serverInfo
 //   - notifications are accepted with 202 and no body
-//   - tools/list exposes EXACTLY the five phase-1 tools
+//   - tools/list exposes EXACTLY the six tools
 //   - run_script creates a project + primitive, verified via describe_scene
 //   - run_script errors surface as isError tool results with console intact
 //   - screenshot returns a decodable PNG at the requested size
@@ -17,11 +17,20 @@
 //   - F6: run_script timeoutMs interrupts a runaway loop, the app survives,
 //     and the NEXT request is served (the setInterrupted reset)
 //   - F16: run_script's module list is generated from the live registry
+//   - lane C #2: api_docs({verb}) returns one row, api_docs({search}) a
+//     bounded set, both orders of magnitude under the full dump
+//   - lane C #5: run_script echoes the engineErrors recorded during THAT run,
+//     without stealing them from app.engineErrors()
+//   - lane C #6: browse_assets returns rows + decodable thumbnail images
+//     inside its documented budget
+//   - every tool name is reachable through the chat dock's server-anchored
+//     allow-list glob (mcp__jahshaka__*)
 //
 // HOME points at a scratch dir (set by ctest) so the run can never touch the
 // user's live library. Framework-free; non-zero exit on failure.
 
 #include <QCoreApplication>
+#include <QRegularExpression>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -198,7 +207,11 @@ int main(int argc, char **argv)
     {
         const HttpResult r = post(net, url, rpc("tools/list", ++id), token);
         const QJsonArray tools = r.json().value("result").toObject().value("tools").toArray();
-        CHECK(tools.size() == 5, "tools/list has exactly 5 tools");
+        // Deliberate, not incidental: the tool set is the AI surface's entire
+        // shape, so adding one is a decision that has to be made HERE too.
+        // browse_assets is the sixth (AI_SURFACE_PROGRAM_SPEC lane C #6): the
+        // byte-carrying view of assets.list, which is where its capability is.
+        CHECK(tools.size() == 6, "tools/list has exactly 6 tools");
         QStringList names;
         for (const QJsonValue &t : tools) {
             const QJsonObject tool = t.toObject();
@@ -209,9 +222,36 @@ int main(int argc, char **argv)
             }
         }
         names.sort();
-        CHECK(names == QStringList({ "api_docs", "describe_scene", "run_script",
-                                     "screenshot", "undo_redo" }),
-              "the five tools are run_script/api_docs/describe_scene/screenshot/undo_redo");
+        CHECK(names == QStringList({ "api_docs", "browse_assets", "describe_scene",
+                                     "run_script", "screenshot", "undo_redo" }),
+              "the six tools are run_script/api_docs/describe_scene/screenshot/"
+              "browse_assets/undo_redo");
+
+        // The chat dock allows the whole server with a GLOB
+        // (ClaudeLaunchConfig::jahshakaMcpToolPattern, asserted in the argv by
+        // tests/claudechat), so a new tool reaches the dock with no code
+        // change — as long as its NAME is a plain identifier the pattern can
+        // match. A tool called "browse assets" would silently never be allowed.
+        const QRegularExpression glob(
+            QRegularExpression::wildcardToRegularExpression("mcp__jahshaka__*"));
+        bool allMatched = true;
+        for (const QString &n : names) {
+            if (!QRegularExpression("^[a-z][a-z0-9_]*$").match(n).hasMatch()
+                || !glob.match("mcp__jahshaka__" + n).hasMatch()) {
+                printf("FAIL: tool name '%s' is not reachable through mcp__jahshaka__*\n",
+                       qPrintable(n));
+                allMatched = false;
+            }
+        }
+        CHECK(allMatched, "every tool name is reachable through the dock's "
+                          "mcp__jahshaka__* allow-list glob");
+
+        QString browseDoc;
+        for (const QJsonValue &t : tools)
+            if (t.toObject().value("name").toString() == QLatin1String("browse_assets"))
+                browseDoc = t.toObject().value("description").toString();
+        CHECK(browseDoc.contains("assets.list"),
+              "browse_assets names the verb its capability lives on");
 
         // F16: run_script's module list is GENERATED from the registry, so it
         // cannot go stale again. It used to be a hand-typed ten of thirteen —
@@ -241,6 +281,44 @@ int main(int argc, char **argv)
         const QJsonObject unknown = callTool(net, url, token, ++id, "api_docs",
                                              QJsonObject{ { "module", "nope" } });
         CHECK(unknown.value("isError").toBool(), "api_docs(unknown module) is a tool error");
+
+        // ---- lane C #2: verb + search ------------------------------------
+        // The whole reference is tens of kilobytes and grows with every
+        // feature; a reader that knows a verb's name must not have to pay for
+        // all of it. These two assertions are about SIZE as much as content.
+        const QString one2 = toolText(callTool(net, url, token, ++id, "api_docs",
+                                               QJsonObject{ { "verb", "scene.addPrimitive" } }));
+        CHECK(one2.contains("scene.addPrimitive") && one2.contains("primitive"),
+              "api_docs(verb) returns that verb's signature and doc");
+        CHECK(one2.size() < 2000 && one2.size() * 20 < whole.size(),
+              "api_docs(verb) is orders of magnitude smaller than the full dump");
+        printf("      (full dump %lld bytes; one verb %lld bytes)\n",
+               (long long)whole.size(), (long long)one2.size());
+        CHECK(!one2.contains("scene.addLight"),
+              "api_docs(verb) returns ONE verb, not the module");
+
+        const QString bare = toolText(callTool(net, url, token, ++id, "api_docs",
+                                               QJsonObject{ { "verb", "addPrimitive" } }));
+        CHECK(bare.contains("scene.addPrimitive"),
+              "api_docs(verb) accepts a bare verb name too");
+
+        const QJsonObject noSuchVerb = callTool(net, url, token, ++id, "api_docs",
+                                                QJsonObject{ { "verb", "scene.nope" } });
+        CHECK(noSuchVerb.value("isError").toBool(),
+              "api_docs(unknown verb) is a tool error, not an empty success");
+
+        const QString found = toolText(callTool(net, url, token, ++id, "api_docs",
+                                                QJsonObject{ { "search", "light" } }));
+        CHECK(found.contains("scene.addLight"), "api_docs(search) matches verb names");
+        CHECK(found.contains("match"), "api_docs(search) reports how many matched");
+        CHECK(found.size() < whole.size() / 2,
+              "api_docs(search) is a bounded slice of the reference");
+        printf("      (search \"light\" %lld bytes)\n", (long long)found.size());
+
+        const QString nothing = toolText(callTool(net, url, token, ++id, "api_docs",
+            QJsonObject{ { "search", "zzzznosuchthing" } }));
+        CHECK(nothing.contains("no verb matches"),
+              "api_docs(search) with no matches says so instead of returning nothing");
     }
 
     // ---- run_script builds; describe_scene verifies ----------------------
@@ -397,6 +475,189 @@ int main(int argc, char **argv)
         // The app is still alive and still serving other tools.
         const QJsonObject alive = toolJson(callTool(net, url, token, ++id, "describe_scene"));
         CHECK(alive.value("projectOpen").toBool(), "the editor survived the runaway script");
+    }
+
+    // ---- lane C #6: browse_assets ----------------------------------------
+    // The library the model can SEE. A script result is JSON, so the pixels
+    // need a tool; everything else (the filters, the ordering, the scope) is
+    // the assets.list VERB, and this case asserts both halves agree.
+    {
+        // Three store assets with real, differently sized thumbnails: two at
+        // import size (72 px) and one re-rendered at 256 — the one that proves
+        // the downscale, because an over-budget thumbnail is the case the
+        // budget exists for.
+        const QJsonObject imported = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral(
+                "var d = assets.createDrawer('BrowseLane');"
+                "var wide = assets.importFile('%1/implane_wide.png');"
+                "var tall = assets.importFile('%1/implane_tall.png');"
+                "var alpha = assets.importFile('%1/implane_alpha.png', d);"
+                "assets.refreshThumbnail(tall);"
+                "JSON.stringify({drawer:d, wide:wide, tall:tall, alpha:alpha})")
+                .arg(QStringLiteral(JAHSHAKA_FIXTURES)) },
+                         { "label", "browse fixtures" } }));
+        CHECK(imported.value("ok").toBool(), "fixtures imported for browse_assets");
+        const QJsonObject ids =
+            QJsonDocument::fromJson(imported.value("result").toString().toUtf8()).object();
+        const int drawerId = ids.value("drawer").toInt();
+
+        const QJsonObject browsed = callTool(net, url, token, ++id, "browse_assets");
+        const QJsonArray content = browsed.value("content").toArray();
+        CHECK(!content.isEmpty() && content.first().toObject().value("type").toString() == "text",
+              "browse_assets leads with a text summary");
+        const QJsonObject summary = QJsonDocument::fromJson(
+            content.first().toObject().value("text").toString().toUtf8()).object();
+        const QJsonArray rows = summary.value("assets").toArray();
+        CHECK(rows.size() >= 3, "browse_assets lists the imported assets");
+        CHECK(summary.value("limit").toInt() == 12, "the default row limit is 12");
+
+        // The image blocks: each decodes to a real QImage, each is preceded by
+        // a caption naming its guid, and every long edge is inside the cap.
+        int imageBlocks = 0, totalBase64 = 0, maxEdge = 0;
+        bool captionsLineUp = true;
+        for (int i = 1; i < content.size(); ++i) {
+            const QJsonObject item = content.at(i).toObject();
+            if (item.value("type").toString() != QLatin1String("image")) continue;
+            ++imageBlocks;
+            const QString data = item.value("data").toString();
+            totalBase64 += data.size();
+            QImage img;
+            if (!img.loadFromData(QByteArray::fromBase64(data.toLatin1()), "PNG")) {
+                printf("FAIL: image content block %d does not decode as PNG\n", imageBlocks);
+                ++failures;
+                continue;
+            }
+            maxEdge = qMax(maxEdge, qMax(img.width(), img.height()));
+            CHECK(item.value("mimeType").toString() == "image/png",
+                  "the image block declares image/png");
+            const QJsonObject caption = content.at(i - 1).toObject();
+            if (caption.value("type").toString() != QLatin1String("text")
+                || !caption.value("text").toString().contains(QLatin1Char('-')))
+                captionsLineUp = false;
+        }
+        CHECK(imageBlocks >= 3, "browse_assets returns a thumbnail image per asset");
+        CHECK(captionsLineUp, "every image block is captioned with its asset");
+        CHECK(maxEdge <= 128 && maxEdge > 0,
+              "every thumbnail is downscaled to the 128 px long edge");
+        printf("      (%d image blocks, %d base64 chars, longest edge %d px)\n",
+               imageBlocks, totalBase64, maxEdge);
+        CHECK(summary.value("images").toInt() == imageBlocks,
+              "the summary's image count matches the blocks actually sent");
+        CHECK(summary.value("imageBytes").toInt() <= summary.value("imageBudgetBytes").toInt()
+                  && summary.value("imageBudgetBytes").toInt() > 0,
+              "browse_assets stays inside its declared image budget");
+
+        // The re-rendered 256 px thumbnail is the one that HAD to be scaled:
+        // without the downscale it would arrive at 128x256.
+        bool sawScaled = false;
+        for (const QJsonValue &r : rows) {
+            const QJsonObject row = r.toObject();
+            if (row.value("name").toString().contains("implane_tall")
+                && row.value("image").toBool()
+                && qMax(row.value("imageWidth").toInt(), row.value("imageHeight").toInt()) == 128)
+                sawScaled = true;
+        }
+        CHECK(sawScaled, "a 256 px stored thumbnail arrives downscaled to 128 px");
+
+        // The filters are the verb's, and the tool must not reinterpret them.
+        const QJsonObject q = QJsonDocument::fromJson(
+            callTool(net, url, token, ++id, "browse_assets",
+                     QJsonObject{ { "query", "implane_wide" } })
+                .value("content").toArray().first().toObject().value("text").toString().toUtf8()).object();
+        // >= 1, not == 1: the scratch HOME persists between ctest runs, so an
+        // earlier invocation's import of the same fixture is still in the store.
+        bool queryFiltered = !q.value("assets").toArray().isEmpty();
+        for (const QJsonValue &r : q.value("assets").toArray())
+            if (!r.toObject().value("name").toString().contains("implane_wide"))
+                queryFiltered = false;
+        CHECK(queryFiltered, "browse_assets({query}) filters by name");
+
+        const QJsonObject inDrawer = QJsonDocument::fromJson(
+            callTool(net, url, token, ++id, "browse_assets",
+                     QJsonObject{ { "drawer", drawerId } })
+                .value("content").toArray().first().toObject().value("text").toString().toUtf8()).object();
+        CHECK(inDrawer.value("assets").toArray().size() == 1
+                  && inDrawer.value("assets").toArray().first().toObject()
+                         .value("name").toString().contains("implane_alpha"),
+              "browse_assets({drawer}) filters by drawer");
+
+        const QJsonObject limited = QJsonDocument::fromJson(
+            callTool(net, url, token, ++id, "browse_assets", QJsonObject{ { "limit", 1 } })
+                .value("content").toArray().first().toObject().value("text").toString().toUtf8()).object();
+        CHECK(limited.value("assets").toArray().size() == 1, "browse_assets({limit}) caps the rows");
+        CHECK(limited.value("more").toBool(),
+              "and says there are more rather than looking complete");
+
+        const QJsonObject clamped = QJsonDocument::fromJson(
+            callTool(net, url, token, ++id, "browse_assets", QJsonObject{ { "limit", 9999 } })
+                .value("content").toArray().first().toObject().value("text").toString().toUtf8()).object();
+        CHECK(clamped.value("limit").toInt() == 24,
+              "an absurd limit is clamped to the documented maximum (24)");
+
+        // A bad type name is the VERB's refusal, surfaced, not swallowed.
+        const QJsonObject badType = callTool(net, url, token, ++id, "browse_assets",
+                                             QJsonObject{ { "type", "sandwich" } });
+        CHECK(badType.value("isError").toBool()
+                  && toolText(badType).contains("unknown type"),
+              "browse_assets surfaces assets.list's refusal of an unknown type");
+
+        // The same filters through the verb: what a script asks for and what
+        // the tool shows must be the same listing.
+        const QJsonObject viaVerb = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "assets.list({scope:'store', query:'implane', limit:2}).length" } }));
+        CHECK(viaVerb.value("result").toInt() == 2,
+              "assets.list({query, limit}) is a verb a script can call for itself");
+    }
+
+    // ---- lane C #5: run_script echoes the engine errors of THAT run --------
+    // The renderer refuses rather than throws, so a texture that will not
+    // decode produces a wrong picture and a perfectly successful script. The
+    // fixture is a TRUNCATED png (header, no pixels): the document's header
+    // probe accepts it, the engine's decoder does not. See tests/mcp/CMakeLists
+    // for why it has to be that and not simply a text file.
+    {
+        const QJsonObject before = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "JSON.stringify(app.engineErrors())" } }));
+        const int recordedBefore = QJsonDocument::fromJson(
+            before.value("result").toString().toUtf8()).object().value("recorded").toInt();
+        CHECK(!before.contains("engineErrors"),
+              "a clean run carries no engineErrors field at all");
+
+        const QJsonObject broke = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral(
+                "var c = scene.addPrimitive('cube');"
+                "material.set(c, {baseColorMap: '%1'});"
+                "editor.frame(3);"
+                "'done'").arg(QStringLiteral(JAHSHAKA_BAD_TEXTURE)) },
+                         { "label", "break a texture" } }));
+        CHECK(broke.value("ok").toBool(),
+              "the script SUCCEEDS — the engine refuses, it does not throw");
+        const QJsonArray errors = broke.value("engineErrors").toArray();
+        CHECK(!errors.isEmpty(),
+              "run_script reports the engine refusal recorded during that run");
+        for (const QJsonValue &e : errors)
+            printf("      engineError: %s (x%d)\n",
+                   qPrintable(e.toObject().value("message").toString()),
+                   e.toObject().value("count").toInt());
+
+        // DRAIN-NEUTRAL: the echo is a diff of two const reports, so the pump's
+        // own record still has everything. A reset here would make the failure
+        // vanish for every other reader.
+        const QJsonObject after = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "JSON.stringify(app.engineErrors())" } }));
+        const QJsonObject pump = QJsonDocument::fromJson(
+            after.value("result").toString().toUtf8()).object();
+        CHECK(pump.value("recorded").toInt() > recordedBefore,
+              "the pump's cumulative record grew (the echo did not steal it)");
+        bool stillThere = false;
+        for (const QJsonValue &e : pump.value("entries").toArray())
+            for (const QJsonValue &mine : errors)
+                if (e.toObject().value("message").toString()
+                    == mine.toObject().value("message").toString())
+                    stillThere = true;
+        CHECK(stillThere, "app.engineErrors() still lists what run_script echoed");
+        CHECK(!after.contains("engineErrors"),
+              "and the NEXT run reports nothing — the echo is per-run, not cumulative");
     }
 
     // ---- unknown method --------------------------------------------------

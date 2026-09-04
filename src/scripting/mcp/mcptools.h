@@ -18,9 +18,13 @@ For more information see the LICENSE file
 // against the registry verbs, and these tools are only the bridge:
 //
 //   run_script     execute JS in the ScriptHost; one undo macro per call
-//   api_docs       the registry-generated verb reference (whole or one module)
+//   api_docs       the registry-generated verb reference (whole, one module,
+//                  one verb, or a search over names + doc text)
 //   describe_scene scene graph + selection as JSON (existing verbs bundled)
 //   screenshot     engine viewport render as PNG (MCP image content)
+//   browse_assets  the asset library as rows + thumbnail images (MCP image
+//                  content) — the byte-carrying VIEW of assets.list, which is
+//                  where the capability lives
 //   undo_redo      escape hatch onto the editor undo stack
 //
 // Per-verb MCP tools are explicitly rejected (spec): one tool per verb would
@@ -54,6 +58,7 @@ private:
     QJsonObject apiDocs(const QJsonObject &args);
     QJsonObject describeScene();
     QJsonObject screenshot(const QJsonObject &args);
+    QJsonObject browseAssets(const QJsonObject &args);
     QJsonObject undoRedo(const QJsonObject &args);
 
     ScriptEngine *mEngine;
