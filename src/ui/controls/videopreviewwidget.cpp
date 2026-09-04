@@ -64,17 +64,8 @@ void VideoPreviewWidget::VideoCanvas::paintEvent(QPaintEvent *)
 
 VideoPreviewWidget::VideoPreviewWidget(QWidget *parent) : QWidget(parent)
 {
-    player = new QMediaPlayer(this);
-    audioOutput = new QAudioOutput(this);
-    player->setAudioOutput(audioOutput);
-
-    // Raster sink path — no QVideoWidget, no native child window (see .h).
-    videoSink = new QVideoSink(this);
-    player->setVideoSink(videoSink);
+    // player / audioOutput / videoSink are deferred to ensurePlayer(); see .h.
     canvas = new VideoCanvas;
-    connect(videoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
-        if (frame.isValid()) canvas->setFrame(frame.toImage());
-    });
 
     nameLabel = new QLabel;
     nameLabel->setAlignment(Qt::AlignCenter);
@@ -118,10 +109,45 @@ VideoPreviewWidget::VideoPreviewWidget(QWidget *parent) : QWidget(parent)
     layout->addLayout(controls);
     setLayout(layout);
 
+    // Widget-only wiring. Everything that dereferences `player` either goes
+    // through ensurePlayer() first or nullptr-guards: the controls are visible
+    // before any video has been selected, and clicking them then must not
+    // spin up a decoder for nothing.
     connect(playButton, &QPushButton::clicked, this, [this]() {
+        if (!player) return;   // nothing loaded yet
         if (player->playbackState() == QMediaPlayer::PlayingState) player->pause();
         else player->play();
     });
+    connect(seekSlider, &QSlider::sliderMoved, this, [this](int position) {
+        if (player) player->setPosition(position);
+    });
+    connect(loopButton, &QPushButton::toggled, this, [this](bool looping) {
+        if (player) player->setLoops(looping ? QMediaPlayer::Infinite : 1);
+    });
+    connect(volumeSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (!audioOutput) return;
+        audioOutput->setMuted(value == 0);
+        audioOutput->setVolume(value / 100.0f);
+    });
+}
+
+// See the note on the members: the decoder and the audio device are created on
+// the first video the user actually asks for, never at construction.
+void VideoPreviewWidget::ensurePlayer()
+{
+    if (player) return;
+
+    player = new QMediaPlayer(this);
+    audioOutput = new QAudioOutput(this);
+    player->setAudioOutput(audioOutput);
+
+    // Raster sink path — no QVideoWidget, no native child window (see .h).
+    videoSink = new QVideoSink(this);
+    player->setVideoSink(videoSink);
+    connect(videoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+        if (frame.isValid()) canvas->setFrame(frame.toImage());
+    });
+
     connect(player, &QMediaPlayer::playbackStateChanged, this,
             [this](QMediaPlayer::PlaybackState state) {
         playButton->setText(state == QMediaPlayer::PlayingState ? tr("Pause") : tr("Play"));
@@ -134,24 +160,16 @@ VideoPreviewWidget::VideoPreviewWidget(QWidget *parent) : QWidget(parent)
             seekSlider->setValue(static_cast<int>(position));
         timeLabel->setText(formatTime(position) + " / " + formatTime(player->duration()));
     });
-    connect(seekSlider, &QSlider::sliderMoved, this, [this](int position) {
-        player->setPosition(position);
-    });
-    connect(loopButton, &QPushButton::toggled, this, [this](bool looping) {
-        player->setLoops(looping ? QMediaPlayer::Infinite : 1);
-    });
-    connect(volumeSlider, &QSlider::valueChanged, this, [this](int value) {
-        audioOutput->setMuted(value == 0);
-        audioOutput->setVolume(value / 100.0f);
-    });
 }
 
 void VideoPreviewWidget::showVideo(const QString &filePath, const QString &displayName)
 {
+    ensurePlayer();
     nameLabel->setText(displayName);
     seekSlider->setValue(0);
     canvas->clear();
     audioOutput->setMuted(volumeSlider->value() == 0);
+    audioOutput->setVolume(volumeSlider->value() / 100.0f);
     player->setLoops(loopButton->isChecked() ? QMediaPlayer::Infinite : 1);
     player->setSource(QUrl::fromLocalFile(filePath));
     player->play();   // autoplay muted on select (ASSET_MEDIA_SPEC §2)
@@ -159,6 +177,7 @@ void VideoPreviewWidget::showVideo(const QString &filePath, const QString &displ
 
 void VideoPreviewWidget::stop()
 {
+    if (!player) return;         // never played anything: nothing to release
     player->stop();
     player->setSource(QUrl());   // release the file handle/decoder
     canvas->clear();
