@@ -151,6 +151,32 @@ QStringList ProjectService::plannedModelPaths() const
     return reader.collectMeshSources(projectObj);
 }
 
+// THE SCENE SAVE IS ALREADY CRASH-ATOMIC — DO NOT "FIX" IT INTO SOMETHING THAT
+// IS NOT. (STABILITY_PROGRAM_SPEC.md §1.4, Lane 2.)
+//
+// The blob does not go to a file; it goes to SQLite, as ONE statement —
+// Database::updateProject / updateProjectBlob are a single
+// `UPDATE projects SET scene=?, … WHERE guid=?` in autocommit, and there is no
+// `PRAGMA journal_mode` anywhere in the tree, so SQLite runs its default
+// rollback journal. A `kill -9` mid-UPDATE therefore leaves the PREVIOUS blob
+// intact by construction: there is no window in which the project row holds
+// half a scene.
+//
+// This is worth writing down because the property is invisible, unguarded and
+// easy to destroy. Splitting the save into several statements (blob here,
+// thumbnail there, a pin sweep after) reintroduces exactly the "the project
+// opens empty after a crash" data loss the audit remembers — unless the whole
+// sequence is wrapped in a DbTransaction (database.h). Anything that makes this
+// multi-statement MUST do that.
+//
+// There is deliberately no test asserting this, because there is nothing
+// honest for one to assert: a kill -9 gate here would be re-proving SQLite's
+// atomicity, and it would still pass on a save that had been split into three
+// unwrapped statements — the failure is a statement COUNT, which no runtime
+// assertion can see. The guard is this comment and the review it asks for.
+//
+// The write in the save/store path that could NOT tear is the CAS object copy;
+// that one is fixed at src/services/assetcas.cpp storeObject.
 bool ProjectService::saveProjectBlob()
 {
     // The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveOpenScene() this

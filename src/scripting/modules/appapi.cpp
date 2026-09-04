@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "ui/pages/projectmanager.h"
+#include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
 #include "services/mainthreadwatchdog.h"
@@ -91,6 +92,17 @@ QVector<VerbInfo> AppApi::verbs() const
           "quit and applies at startup on its own; these are for tests and for recording a set "
           "deliberately from a scene built for the purpose.",
           Needs::Engine },
+        { "engineErrors", "app.engineErrors(reset?) -> {drains, recorded, suppressed, entries:[{message, count, suppressed, firstMs, lastMs}]}",
+          "What the renderer refused to do, and did not otherwise tell anyone. The engine swallows "
+          "failures by design (every backend call is wrapped and returns a refusal value instead of "
+          "throwing), and almost nothing checks those return values — so a texture that will not "
+          "decode, a mesh with no tangents or a full decal atlas draw the wrong picture in silence. "
+          "EngineErrorPump drains the engine's error sink once per rendered frame and this is its "
+          "record: the distinct messages, newest first, with how often each occurred and how many "
+          "repeats the 5-second rate limiter swallowed. drains counts the pump calls themselves, so "
+          "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
+          "true to clear the record after reading it.",
+          Needs::Document },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
           Needs::Window },
@@ -240,4 +252,14 @@ bool AppApi::space(const QString &name)
     if (host.mainWindow->getWindowSpace() != space)
         return fail(QStringLiteral("app.space: the window refused to switch to '%1'").arg(s));
     return true;
+}
+
+QVariantMap AppApi::engineErrors(bool reset)
+{
+    // No engine guard: the pump's record outlives any particular engine and the
+    // most useful moment to read it is exactly when the renderer has fallen
+    // over. Needs::Document for the same reason.
+    const QVariantMap out = EngineErrorPump::instance().report();
+    if (reset) EngineErrorPump::instance().reset();
+    return out;
 }

@@ -31,6 +31,14 @@ QString hashFile(const QString &path);
 /// Put one file's bytes into <root>/objects/ under its oid (hardlink, then
 /// copy on failure/EXDEV). Idempotent: an existing object of the right size
 /// is left alone. The SOURCE file is never touched (legacy tree retained).
+///
+/// ATOMIC (STABILITY_PROGRAM_SPEC.md Lane 2). The content-addressed name is a
+/// claim about the bytes under it, so a half-written object is worse than a
+/// missing one: readers do not re-hash, they just read a short file and draw
+/// white. The bytes are therefore always staged into a sibling temp in the
+/// SAME directory and moved into place with a single rename — the object at
+/// its final path either does not exist or is complete, at every instant, in
+/// every process, including one that is SIGKILLed mid-store.
 bool storeObject(const QString &srcPath, const QString &root,
                  const QString &oid, const QString &ext, QString *errorOut);
 

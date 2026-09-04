@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "services/assetcas.h"
 
+#include <QAtomicInt>
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -21,10 +23,14 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QUuid>
 
+#include <filesystem>
+#include <system_error>
+
 #ifdef Q_OS_UNIX
-#include <unistd.h>   // link(2) — hardlink migration, preflight §3.3
+#include <unistd.h>   // link(2) — hardlink migration, preflight §3.3; fsync(2)
 #endif
 
+#include "irisgl/core/logger.h"
 #include "data/database/casschema.h"
 #include "services/assetstorepaths.h"
 
@@ -44,27 +50,104 @@ bool storeObject(const QString &srcPath, const QString &root,
                  const QString &oid, const QString &ext, QString *errorOut)
 {
     const QString dstPath = AssetStorePaths::objectPathIn(root, oid, ext);
-    if (QFileInfo::exists(dstPath)) {
-        if (QFileInfo(dstPath).size() == QFileInfo(srcPath).size()) return true;
-        // Same oid, wrong size = a torn write from an interrupted run —
-        // replace it (content addressing makes this safe).
-        QFile::remove(dstPath);
-    }
+    const bool    existed = QFileInfo::exists(dstPath);
+    if (existed && QFileInfo(dstPath).size() == QFileInfo(srcPath).size())
+        return true;   // the dedup: this content is already stored
+
     if (!QDir().mkpath(QFileInfo(dstPath).absolutePath())) {
         if (errorOut) *errorOut = QStringLiteral("cannot create %1").arg(QFileInfo(dstPath).absolutePath());
         return false;
     }
+    if (existed) {
+        // Same oid, wrong size = a torn object left by an older build (this
+        // function cannot produce one any more — see below). It used to be
+        // repaired in silence, which is how a store could carry corrupt
+        // objects for weeks; say so.
+        iris::Logger::getSingleton()->warn(
+            QStringLiteral("asset store: replacing a %1-byte object that claims %2 bytes of "
+                           "content (%3) — a torn write from an interrupted run")
+                .arg(QFileInfo(dstPath).size()).arg(QFileInfo(srcPath).size()).arg(dstPath));
+    }
 
+    // THE STAGING TEMP, and why the object is never written at its own name.
+    //
+    // The file name IS the sha256 of the bytes, so a partially written object
+    // is a file that lies about its content — and nothing re-hashes on read
+    // (resolveSource/resolveFile only check existence). Kill the process
+    // halfway through and every later run believes the truncated file. The old
+    // code had two windows for that: QFile::copy straight to dstPath, and, for
+    // the replace case, a QFile::remove BEFORE the replacement existed, which
+    // could also destroy a good object outright.
+    //
+    // Both close the same way: stage into a sibling temp, then one rename.
+    // rename(2) is atomic within a filesystem and REPLACES an existing target,
+    // so the remove disappears too. The temp must be in the destination's own
+    // directory for that ("same filesystem"), which mkpath above guarantees
+    // exists.
+    //
+    // (Found while building this: Qt 6.10 on Linux already gets QFile::copy
+    // atomic by accident — it opens the destination with O_TMPFILE and linkat()s
+    // it into place, so the tear could not be reproduced on this box. That is a
+    // fast path, not a contract: it needs a filesystem that supports O_TMPFILE,
+    // and QFile::copy on macOS and Windows has no such property. The guarantee
+    // is ours now, on every platform.)
+    static QAtomicInt sSerial(0);
+    const QString tmpPath = QStringLiteral("%1.tmp-%2-%3")
+                                .arg(dstPath)
+                                .arg(QCoreApplication::applicationPid())
+                                .arg(sSerial.fetchAndAddOrdered(1));
+    QFile::remove(tmpPath);   // a leftover from a dead run that had our pid
+
+    bool staged = false;
 #ifdef Q_OS_UNIX
     // Hardlink first: same filesystem = ~0 extra bytes and instant; falls
     // back to a copy across devices (EXDEV) or on filesystems without links.
-    if (::link(QFile::encodeName(srcPath).constData(),
-               QFile::encodeName(dstPath).constData()) == 0) {
-        return true;
-    }
+    // Linking to the TEMP rather than the final name also means no EEXIST
+    // special case when replacing.
+    staged = ::link(QFile::encodeName(srcPath).constData(),
+                    QFile::encodeName(tmpPath).constData()) == 0;
 #endif
-    if (!QFile::copy(srcPath, dstPath)) {
-        if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(srcPath, dstPath);
+    if (!staged) {
+        if (!QFile::copy(srcPath, tmpPath)) {
+            QFile::remove(tmpPath);
+            if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(srcPath, dstPath);
+            return false;
+        }
+#ifdef Q_OS_UNIX
+        // Flush the COPY (never the link: those bytes are already the source's
+        // and already durable). This is the difference between a power cut
+        // leaving no object and leaving a correctly-named EMPTY one, which is
+        // the exact failure the rename exists to prevent. The directory entry
+        // is deliberately NOT fsynced: losing the rename loses the object, and
+        // a missing object is a re-ingest, not a corruption.
+        QFile flushed(tmpPath);
+        if (flushed.open(QIODevice::ReadWrite)) {
+            ::fsync(flushed.handle());
+            flushed.close();
+        }
+#endif
+    }
+
+    // std::filesystem::rename, not QFile::rename: Qt's refuses when the target
+    // exists (documented), which is precisely the case that must work.
+    // The path conversion is per-platform on purpose — a narrow std::string
+    // reaches std::filesystem::path in the platform's NARROW encoding, which on
+    // Windows is not UTF-8, so a store under a non-ASCII path would silently
+    // rename the wrong thing.
+    std::error_code ec;
+#ifdef Q_OS_WIN
+    const std::filesystem::path tmpFs(tmpPath.toStdWString());
+    const std::filesystem::path dstFs(dstPath.toStdWString());
+#else
+    const std::filesystem::path tmpFs(QFile::encodeName(tmpPath).toStdString());
+    const std::filesystem::path dstFs(QFile::encodeName(dstPath).toStdString());
+#endif
+    std::filesystem::rename(tmpFs, dstFs, ec);
+    if (ec) {
+        QFile::remove(tmpPath);
+        if (errorOut)
+            *errorOut = QStringLiteral("could not place %1: %2")
+                            .arg(dstPath, QString::fromStdString(ec.message()));
         return false;
     }
     return true;

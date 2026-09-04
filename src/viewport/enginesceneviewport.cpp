@@ -44,6 +44,7 @@
 #include "viewport/enginerenderdriver.h"
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
+#include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 #include "services/services.h"
 #include "services/undoservice.h"
@@ -924,6 +925,11 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     for (int i = 0; i < n; ++i) {
         syncFrame(dt);
         mEngine->renderOneFrame();
+        // The deterministic path bypasses EngineRenderDriver entirely, so it
+        // has to drain the engine's error sink itself or a scripted/headless
+        // run would be the one place failures stay silent — which is exactly
+        // where the gates live (services/engineerrorpump.h).
+        EngineErrorPump::instance().drain(mEngine.get());
     }
     // Scripted stepping is the deterministic path: editor.frame(2) must be
     // enough to take the cover down, exactly as two driver frames would.

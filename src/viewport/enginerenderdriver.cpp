@@ -4,6 +4,7 @@
 #include <QElapsedTimer>
 #include <QTimer>
 
+#include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 
 /// A frame this long is a visible hitch, not a frame.
@@ -25,6 +26,12 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         frame.start();
         emit beforeFrame();
         if (mEngine) mEngine->renderOneFrame();
+        // Whatever the frame (or anything else since the last one — the sink is
+        // process-wide) refused to do, said so in the engine's error string and
+        // nowhere else. Drain it here, where the one render loop lives, so a
+        // silent failure becomes a [warn] instead of a wrong picture
+        // (services/engineerrorpump.h).
+        EngineErrorPump::instance().drain(mEngine);
         const double ms = double(frame.nsecsElapsed()) / 1.0e6;
         if (ms >= kSlowFrameMs) {
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);

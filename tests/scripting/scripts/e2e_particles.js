@@ -194,6 +194,31 @@ assert(near(particles.timeScale(), 1.0), "the scene clock survived");
 // The document could be perfect and the engine draw nothing. Point a camera at
 // an emitter with no texture (untextured additive quads are the brightest thing
 // available) over the default background and look for it.
+//
+// IN A FRESH PROJECT, and neither half of that is tidiness — until 2026-09-04
+// this phase measured nothing at all.
+//
+//  * The untextured smoke emitter built in phase D asked for a shader
+//    HlmsUnlit cannot generate (alpha hashing reads inPs.uv0, and only a bound
+//    texture makes Unlit forward a uv interpolant). The PSO failure threw
+//    inside the render pass on EVERY frame, so the screenshot read back an
+//    incomplete target: pastel scanlines with no gizmo, no fire and no plume in
+//    them, which the warm-probe test below then passed on by accident.
+//    (STABILITY_PROGRAM_SPEC Lane 6e; the engine fix is in OgreParticles.cpp
+//    ensureParticleDatablock.)
+//  * With the frame real, phase F's world is unusable for pixels twice over:
+//    the 2048-quota HDR fire sits at the origin the camera frames onto, and —
+//    DEFECT, reported 2026-09-04, not this suite's to fix — a save/close/open
+//    round trip of even an empty default project comes back massively
+//    over-exposed (a floor that read 65,65,65 before the save reads 255,255,255
+//    after it). Nothing can be measured against a white frame.
+//
+// So the pixels are taken in a brand new world. Everything above has already
+// asserted the document; this phase is about ONE emitter and what the renderer
+// does with it.
+assert(project.create("Particles Pixels " + Date.now()).length > 10,
+       "a fresh world for the pixel phase");
+
 var lamp = scene.addLight("point", { position: { x: 0, y: 3, z: 3 } });
 assert(lamp.length > 10, "a light, so the frame is not pitch black by accident");
 
@@ -221,21 +246,69 @@ editor.focusSelection();  // frames the selection, so the plume is in shot
 // simulation, every time, on every machine.
 // (editor.frame's dt argument has always existed for precisely this;
 //  the assertion simply never used it.)
-editor.frame(120, 1 / 60);   // the ENGINE simulates these; nothing here ticks anything
 
+// A DIFFERENTIAL MEASUREMENT, against the same camera with the emitter off.
+// The old test looked for "warm" absolute pixels in a fixed 5x5 window and had
+// two problems the moment the frame became real: the window straddles the
+// selection gizmo (whose green arrow and yellow hub read as warm all by
+// themselves — they were most of the probes that ever passed), and a dense
+// ADDITIVE plume seen from the distance focusSelection picks saturates to pure
+// white, where r == b and nothing is "warm" at all. Comparing the same probes
+// with and without the plume has neither problem: it survives any framing, it
+// cannot be satisfied by a gizmo or a background, and a blank readback fails it
+// instead of passing it.
+// The window is the COLUMN focusSelection puts in shot: it rises from the
+// origin at the centre of the frame and is about a fifth of the width.
 var probes = [];
 for (var yi = 0; yi < 5; yi++)
     for (var xi = 0; xi < 5; xi++)
-        probes.push({ x: 0.38 + xi * 0.06, y: 0.30 + yi * 0.08 });
+        probes.push({ x: 0.40 + xi * 0.05, y: 0.06 + yi * 0.09 });
+
+// The reference: emitter off, then longer than lifeLength so every particle
+// already in flight has expired. Same camera, same everything else.
+assert(node.setProperty(plume, "particlesPerSecond", 0), "emitter off for the reference frame");
+editor.frame(180, 1 / 60);   // 3 s > lifeLength 2 s
+var empty = editor.screenshot("particles_none.png", 640, 480, probes);
+assert(empty.probes && empty.probes.length === probes.length, "reference screenshot with probes");
+
+assert(node.setProperty(plume, "particlesPerSecond", 400), "emitter back on");
+editor.frame(120, 1 / 60);   // the ENGINE simulates these; nothing here ticks anything
+
 var shot = editor.screenshot("particles_verbs.png", 640, 480, probes);
 assert(shot.probes && shot.probes.length === probes.length, "screenshot with probes");
 
-var warm = 0;
+var lit = 0, warm = 0;
 for (var p = 0; p < shot.probes.length; p++) {
-    var q = shot.probes[p];
-    if (q.r > q.b + 25 && q.r > 60) warm++;
+    var q = shot.probes[p], z = empty.probes[p];
+    var dr = q.r - z.r, dg = q.g - z.g, db = q.b - z.b;
+    if (dr > 20 && dg > 20 && db > 20) {
+        lit++;
+        // The ramp is (3.0, 0.6, 0.1) fading to (1.5, 0.2, 0.02): red must
+        // gain at least as much as blue anywhere the plume is not clipped.
+        if (dr >= db) warm++;
+    }
 }
-console.log("plume warm probes: " + warm + "/" + probes.length);
-assert(warm >= 4, "the engine is drawing a warm plume nobody ticked (" + warm + " warm probes)");
+console.log("plume probes brighter than the empty frame: " + lit + "/" + probes.length +
+            " (warm-biased: " + warm + ")");
+// 14 of 25 is what a correct frame gives, deterministically, on this rig (the
+// column narrows with height, so the outer probes in the top rows fall off it);
+// a blank or torn readback gives 0. 10 is the discriminating line with room to
+// spare — if this ever drops to single digits the renderer stopped drawing
+// particles, which is exactly the sentence this suite exists to be able to say.
+assert(lit >= 10, "the engine is drawing a plume nobody ticked (" + lit + " of " + probes.length + " probes lit up)");
+assert(warm === lit, "and it is the warm ramp doing it (" + warm + " of " + lit + ")");
+
+// ---- phase H: the renderer had nothing to complain about ------------------
+// STABILITY_PROGRAM_SPEC Lane 1 + Lane 6e, asserted through the registry
+// instead of by grepping a log. The engine swallows failures by design and
+// SceneMirror ignores nearly every return value, so "no visible problem" has
+// never meant "no problem" — until 2026-09-04 this very suite produced 248
+// shader-compile errors and 124 Ogre exceptions per run and passed anyway.
+var pumped = app.engineErrors();
+assert(pumped.drains > 100,
+       "the engine error pump ran once per rendered frame (" + pumped.drains + " drains)");
+assert(pumped.entries.length === 0,
+       "and the renderer refused NOTHING in this whole run: " +
+       JSON.stringify(pumped.entries));
 
 console.log("e2e_particles: PASS");
