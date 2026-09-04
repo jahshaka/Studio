@@ -464,10 +464,10 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
     if (record.type == static_cast<int>(ModelTypes::Texture)) {
         auto thumb = ThumbnailManager::createThumbnail(
             IrisUtils::join(storeFolderFor(guid), record.name), 256, 256);
-        if (!thumb || !thumb->thumb || thumb->thumb->isNull())
+        if (!thumb || thumb->thumb.isNull())
             return fail("assets.refreshThumbnail: could not read the image");
         return host.db->updateAssetThumbnail(
-            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(*thumb->thumb)));
+            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(thumb->thumb)));
     }
     if (record.type == static_cast<int>(ModelTypes::Music)) {
         return host.db->updateAssetThumbnail(
