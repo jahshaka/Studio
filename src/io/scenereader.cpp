@@ -112,7 +112,16 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     camera->nearClip = (float)camObj["nearClip"].toDouble(1.f);
     camera->farClip = (float)camObj["farClip"].toDouble(100.f);
     camera->setLocalPos(readVector3(camObj["pos"].toObject()));
-    camera->setLocalRot(QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject())));
+    // rotQuat first (the lossless spelling), euler for anything written before
+    // it existed — see readSceneNodeTransform.
+    const QJsonObject camRotQuat = camObj["rotQuat"].toObject();
+    if (!camRotQuat.isEmpty())
+        camera->setLocalRot(QQuaternion(float(camRotQuat["scalar"].toDouble(1.0)),
+                                        float(camRotQuat["x"].toDouble(0.0)),
+                                        float(camRotQuat["y"].toDouble(0.0)),
+                                        float(camRotQuat["z"].toDouble(0.0))).normalized());
+    else
+        camera->setLocalRot(QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject())));
 	camera->setOrthagonalZoom((float)camObj["orthogonalSize"].toDouble(3.0f));
 	iris::CameraProjection val = camObj["projectionMode"].toString().compare("orthogonal") == 0 ? iris::CameraProjection::Orthogonal : iris::CameraProjection::Perspective;
 	camera->setProjection(val);
@@ -450,6 +459,24 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	scene->setWorldGravity(sceneObj["gravity"].toDouble(Constants::GRAVITY));
 
     auto rootNode = sceneObj["rootNode"].toObject();
+
+    // The World node's OWN identity. The writer has always serialized the root
+    // like any other node (guid, name, animations, transform); the reader read
+    // only its children and kept the brand-new root iris::Scene::create() had
+    // just made — so every open MINTED A NEW GUID for World and dropped its
+    // animation list, and every save therefore wrote a different blob for an
+    // untouched scene (found by the reopen-fidelity blob diff, 2026-09-04).
+    // Only the identity half is adopted here: the root's transform stays the
+    // identity the Scene ctor gives it, which is what every scene in existence
+    // has and what the whole scene graph is expressed relative to.
+    {
+        const QString rootGuid = rootNode["guid"].toString();
+        if (!rootGuid.isEmpty()) scene->getRootNode()->setGUID(rootGuid);
+        const QString rootName = rootNode["name"].toString();
+        if (!rootName.isEmpty()) scene->getRootNode()->setName(rootName);
+        readAnimationData(rootNode, scene->getRootNode());
+    }
+
     QJsonArray children = rootNode["children"].toArray();
 
     for (const auto childObj : children) {
@@ -497,6 +524,10 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
     // Absent = false: the writer only emits the key when the flag is on.
     sceneNode->setPlanarReflector(nodeObj["planarReflector"].toBool(false));
+    // Shadow Caster: absent = TRUE (the document default) — the writer only
+    // emits the key when the user turned casting off, so every scene written
+    // before the key existed loads exactly as it did.
+    sceneNode->setShadowCastingEnabled(nodeObj["castShadow"].toBool(true));
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
 
@@ -608,8 +639,14 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
         //if (animation->getName() == activeAnim)
         //    sceneNode->setAnimation(animation);
     }
-    if (activeAnimIndex != -1) {
-        sceneNode->setAnimation(sceneNode->getAnimations()[activeAnimIndex]);
+    // BOUNDS-CHECKED. This was a bare operator[] on the index the file happens
+    // to carry: a blob whose activeAnimation points past its (possibly empty)
+    // animation list indexed a QList out of range — undefined behaviour driven
+    // straight from a document field. Out of range now means "no active
+    // animation", the same thing -1 means.
+    const auto &anims = sceneNode->getAnimations();
+    if (activeAnimIndex >= 0 && activeAnimIndex < anims.size()) {
+        sceneNode->setAnimation(anims[activeAnimIndex]);
     }
 }
 
@@ -624,10 +661,25 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     auto pos = nodeObj["pos"].toObject();
     if (!pos.isEmpty()) sceneNode->setLocalPos(readVector3(pos));
 
-    auto rot = nodeObj["rot"].toObject();
-    if (!rot.isEmpty()) {
-        //the rotation is stored as euler angles
-        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)).normalized());
+    // Rotation. "rotQuat" is the node's stored quaternion, written since
+    // 2026-09-04 alongside the historical euler triple, and it is preferred
+    // because it is the only one that ROUND-TRIPS: quaternion -> euler ->
+    // quaternion is not a fixed point in float, so reading the euler back moved
+    // every rotated node a little on every single open (see the note beside the
+    // writer). Absent = a scene written before the key, or by an older build:
+    // read the euler exactly as before.
+    const QJsonObject rotQuat = nodeObj["rotQuat"].toObject();
+    if (!rotQuat.isEmpty()) {
+        sceneNode->setLocalRot(QQuaternion(float(rotQuat["scalar"].toDouble(1.0)),
+                                           float(rotQuat["x"].toDouble(0.0)),
+                                           float(rotQuat["y"].toDouble(0.0)),
+                                           float(rotQuat["z"].toDouble(0.0))).normalized());
+    } else {
+        auto rot = nodeObj["rot"].toObject();
+        if (!rot.isEmpty()) {
+            //the rotation is stored as euler angles
+            sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)).normalized());
+        }
     }
 
     auto scale = nodeObj["scale"].toObject();

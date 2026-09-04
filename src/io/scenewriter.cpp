@@ -245,7 +245,13 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorDat
     cameraObj["nearClip"] = cam->nearClip;
     cameraObj["farClip"] = cam->farClip;
     cameraObj["pos"] = jsonVector3(editorData->editorCamera->getLocalPos());
-    cameraObj["rot"] = jsonVector3(editorData->editorCamera->getLocalRot().toEulerAngles());
+    // Same euler/quaternion pair as a scene node's transform, for the same
+    // reason: the euler is what a human reads, the quaternion is what actually
+    // round-trips (the editor camera drifted a ten-thousandth of a degree per
+    // save/reopen before this).
+    const QQuaternion camRot = editorData->editorCamera->getLocalRot().normalized();
+    cameraObj["rot"] = jsonVector3(camRot.toEulerAngles());
+    cameraObj["rotQuat"] = jsonQuaternion(camRot);
 	cameraObj["orthogonalSize"] = cam->orthoSize;
 	cameraObj["projectionMode"] = cam->projMode == iris::CameraProjection::Perspective ? "perspective" : "orthogonal";
 
@@ -261,14 +267,35 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
     sceneNodeObj["pickable"] = sceneNode->isPickable();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
-    auto rot = sceneNode->getLocalRot().normalized().toEulerAngles();
-    sceneNodeObj["rot"] = jsonVector3(rot);
+    // Rotation, TWICE. "rot" is the historical euler triple and stays exactly
+    // as it was, so an older build still opens a scene this one wrote and every
+    // eye that reads the JSON still sees degrees. "rotQuat" is the same
+    // rotation without the lossy detour: quaternion -> euler -> quaternion is
+    // NOT a fixed point in float, so every save/reopen cycle moved a rotated
+    // node a little further (measured on the default scene's Directional Light:
+    // 15.0000019 -> 15.0000038 -> 15.0000057 degrees, one cycle each, linear
+    // and unbounded — found by the reopen-fidelity double round trip,
+    // 2026-09-04). The reader prefers rotQuat when it is there; a blob written
+    // before this key, or by an older build, falls back to "rot" unchanged.
+    const QQuaternion localRot = sceneNode->getLocalRot().normalized();
+    sceneNodeObj["rot"] = jsonVector3(localRot.toEulerAngles());
+    sceneNodeObj["rotQuat"] = jsonQuaternion(localRot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
     // Written only when TRUE, like the exporter's jah["visible"]: the flag is
     // off on every node in every scene but a handful, and a key on every node
     // in the file for a feature almost nothing uses is noise.
     if (sceneNode->getPlanarReflector()) sceneNodeObj["planarReflector"] = true;
+    // Shadow Caster (the Properties-panel checkbox, nodepropertywidget.cpp).
+    // Written only when the user turned it OFF — the document default is on, so
+    // an absent key reads as true and every scene written before this line
+    // loads exactly as it did. Until now the flag was never serialized at all:
+    // the default scene's Ground is created with casting DISABLED and reopened
+    // with it ENABLED, and any node the user unchecked silently rechecked
+    // itself on the next open (found by the reopen-fidelity round-trip diff,
+    // 2026-09-04). NOTE: SceneMirror does not consume this flag yet, so today
+    // the repair is document fidelity, not pixels.
+    if (!sceneNode->getShadowCastingEnabled()) sceneNodeObj["castShadow"] = false;
 
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
@@ -666,6 +693,20 @@ QJsonObject SceneWriter::jsonVector3(QVector3D vec)
 	obj["x"] = vec.x();
 	obj["y"] = vec.y();
 	obj["z"] = vec.z();
+
+	return obj;
+}
+
+/// The rotation as it is actually STORED on the node — no euler detour. Keys
+/// are x/y/z/scalar (QQuaternion's own spelling) so nothing can confuse this
+/// with a vector4 whose w means something else.
+QJsonObject SceneWriter::jsonQuaternion(QQuaternion q)
+{
+	QJsonObject obj;
+	obj["x"] = q.x();
+	obj["y"] = q.y();
+	obj["z"] = q.z();
+	obj["scalar"] = q.scalar();
 
 	return obj;
 }

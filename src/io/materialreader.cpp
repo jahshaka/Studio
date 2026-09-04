@@ -124,6 +124,33 @@ QString MaterialReader::resolveTextureGuid(const QString &guid, Database *db)
 			if (QFileInfo::exists(candidate)) path = candidate;
 		}
 	}
+
+	// The PROJECT-FOLDER half of the same legacy fallback the WRITER still has.
+	// SceneWriter::assetGuidForTexturePath resolves a texture path to a guid two
+	// ways: through the CAS, and — when the file is not a store object — by
+	// looking the catalog up by FILE NAME within the project
+	// (Database::fetchAssetGUIDByName). That second branch is still live, and
+	// still fires: MainWindow::createDefaultScene copies Tile.png straight into
+	// the project folder and registers a bare catalog row, so the default
+	// ground's texture is exactly such an asset — a guid the store knows nothing
+	// about. The reader's matching branch was deleted when the pin world landed
+	// ("the flat join(projectFolder, name) resolution is GONE", materialreader.h)
+	// on the premise that project folders no longer hold asset files. They still
+	// do, for that one asset, and the asymmetry silently ERASED the texture on
+	// every save/reopen: the writer stored a guid, the reader resolved it to an
+	// empty path, and the default floor reopened as bare white diffuse
+	// (65,65,65 -> 255,255,255 — the "reopen lighting blowout", which was never
+	// a lighting bug at all). Writer and reader have to agree; this is the
+	// reader's half, and it is last-resort and existence-checked, so nothing in
+	// the pin world changes shape because of it.
+	if (path.isEmpty() && textureSource == TextureSource::Project && db &&
+	    project && !project->getProjectFolder().isEmpty()) {
+		const QString assetName = db->fetchAsset(guid).name;
+		if (!assetName.isEmpty()) {
+			const QString candidate = QDir(project->getProjectFolder()).filePath(assetName);
+			if (QFileInfo::exists(candidate)) path = candidate;
+		}
+	}
 	return path;
 }
 

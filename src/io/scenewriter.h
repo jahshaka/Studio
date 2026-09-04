@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QQuaternion>
 //#include "../irisgl/src/core/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -89,6 +90,7 @@ public:
 	static QJsonObject jsonVector2(QVector2D vec);
 	static QJsonObject jsonVector3(QVector3D vec);
 	static QJsonObject jsonVector4(QVector4D vec);
+	static QJsonObject jsonQuaternion(QQuaternion q);
 
     /// The asset guid behind a RESOLVED texture path, for the writers that
     /// persist textures as guids (particle emitters, material texture
