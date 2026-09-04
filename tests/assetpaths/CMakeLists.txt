@@ -34,3 +34,24 @@ target_link_libraries(test_asset_paths PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6:
 add_test(NAME assets.paths COMMAND test_asset_paths
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(assets.paths PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
+
+# assets.torn_write — STABILITY_PROGRAM_SPEC Lane 2. The CAS store's atomicity:
+# a content-addressed name is a claim about bytes, so an object must exist whole
+# or not at all, including through a kill -9 in the middle of the copy. Unix
+# only: the deterministic mid-copy kill needs fork + a FIFO on a second
+# filesystem (/dev/shm).
+if(UNIX AND NOT APPLE)
+    add_executable(test_asset_torn_write test_asset_torn_write.cpp
+        ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+        ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+        ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+    set_target_properties(test_asset_torn_write PROPERTIES AUTOMOC ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    target_include_directories(test_asset_torn_write PRIVATE
+        ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
+    target_link_libraries(test_asset_torn_write PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+    add_test(NAME assets.torn_write COMMAND test_asset_torn_write
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(assets.torn_write PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "assets")
+endif()
