@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
+#include <QSize>
 #include <QUndoStack>
 #include <QElapsedTimer>
 
@@ -105,8 +106,8 @@ QVector<VerbInfo> EditorApi::verbs() const
           "many this call compiled; on a warm shader cache it is 0 and the call is nearly free. "
           "Synchronous by design: the caller holds its cover up until it returns.",
           Needs::Engine },
-        { "viewportState", "editor.viewportState() -> {state, framesPresented}",
-          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping.",
+        { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
+          "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
           Needs::Document },
         { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], postFx=false) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. `postFx` true renders it through the scene's post-processing chain (HDR/tonemap, bloom, ambient occlusion, SMAA) so the shot matches what the viewport shows; false (the default) is the neutral, exactly-reproducible readback that pixel assertions want.",
@@ -350,10 +351,19 @@ QVariantMap EditorApi::viewportState()
     if (!host.viewport) {
         out.insert("state", QStringLiteral("offscreen"));
         out.insert("framesPresented", 0);
+        out.insert("width", 0);
+        out.insert("height", 0);
+        out.insert("offscreen", true);
         return out;
     }
     out.insert("state", host.viewport->presentationState());
     out.insert("framesPresented", QVariant::fromValue(host.viewport->framesPresented()));
+    // The ACTUAL render target, straight from the engine — the one number that
+    // can prove a resize reached the swapchain (deep audit area 7 F3).
+    const QSize target = host.viewport->renderTargetSize();
+    out.insert("width", target.width());
+    out.insert("height", target.height());
+    out.insert("offscreen", host.viewport->isOffscreen());
     return out;
 }
 

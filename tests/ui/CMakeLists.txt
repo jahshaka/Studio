@@ -131,3 +131,33 @@ add_test(NAME ui.media_lazy COMMAND test_media_lazy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.media_lazy PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+
+# ui.engine_view_winid — the View is rebuilt when Qt hands the widget a NEW
+# native window (deep audit area 7). The ONE suite that drives EngineViewWidget
+# itself, and the only Studio-side suite that needs a real X display and the
+# xcb plugin: the whole subject is native window handles.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(test_engine_view_winid test_engine_view_winid.cpp
+        ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.cpp)
+    set_target_properties(test_engine_view_winid PROPERTIES
+        AUTOMOC ON
+        CXX_STANDARD 17
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_engine_view_winid PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_include_directories(test_engine_view_winid PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+    target_link_libraries(test_engine_view_winid
+        PRIVATE JahshakaEngine Qt6::Widgets Qt6::Test)
+    add_dependencies(test_engine_view_winid JahshakaEngineMedia)
+    add_test(NAME ui.engine_view_winid COMMAND test_engine_view_winid
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(ui.engine_view_winid PROPERTIES
+        ENVIRONMENT "DISPLAY=${JAH_TEST_DISPLAY};QT_QPA_PLATFORM=xcb"
+        TIMEOUT 180 LABELS "ui")
+endif()

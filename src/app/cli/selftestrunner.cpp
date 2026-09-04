@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QSize>
 #include <QThread>
+#include <QWidget>
 
 #include "bridge/enginehost.h"
 #include "shell/mainwindow.h"
@@ -41,11 +42,14 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // Resize twice on the way (the layout does this to the viewport in real use):
     // the engine must survive a swapchain rebuild without a stale depth buffer.
     QSize afterFirstResize, afterSecondResize;
+    QSize widgetAfterFirst, widgetAfterSecond;
     for (int frame = 0; frame < 40; ++frame) {
         if (frame == 10) window.resize(1100, 760);
         if (frame == 25) window.resize(700, 520);
-        if (frame == 20) afterFirstResize = window.viewport()->renderTargetSize();
-        if (frame == 35) afterSecondResize = window.viewport()->renderTargetSize();
+        if (frame == 20) { afterFirstResize  = window.viewport()->renderTargetSize();
+                           widgetAfterFirst  = window.viewport()->asWidget()->size(); }
+        if (frame == 35) { afterSecondResize = window.viewport()->renderTargetSize();
+                           widgetAfterSecond = window.viewport()->asWidget()->size(); }
         app.processEvents(QEventLoop::AllEvents, 50);
         QThread::msleep(16);
     }
@@ -56,7 +60,13 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // view, so without this the selftest would pass just as happily with a blank
     // widget. Platforms where the on-screen path is a swapchain window must prove
     // the view is not offscreen and that it survived both resizes with a real size.
-#ifdef Q_OS_MACOS
+//
+// LINUX TOO since the swapchain lane (deep audit area 7 F3). renderTargetSize()
+// used to report the values the widget had pushed down, so this block could only
+// ever have compared them with themselves; it now reads the live render target,
+// which is what makes the size comparison below an assertion rather than a
+// tautology. Windows joins when it grows a window backend.
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
     if (window.viewport()->isOffscreen()) {
         std::fprintf(stderr, "engine-selftest: the editor viewport is OFFSCREEN — the on-screen "
                              "window backend did not take\n");
@@ -69,9 +79,29 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      afterSecondResize.width(), afterSecondResize.height());
         return 1;
     }
-    std::fprintf(stderr, "engine-selftest: on-screen view survived resizes: %dx%d then %dx%d\n",
+    // THE assertion: the render target tracks the widget. Not "the two resizes
+    // produced different numbers" — a window manager is entitled to refuse a
+    // resize, and then the widget did not change either and there is nothing to
+    // report. What must never happen is the swapchain being a different size
+    // from the window it presents into: that is the stale-swapchain state the
+    // viewport gets stuck in when nothing but Ogre's OUT_OF_DATE self-heal is
+    // driving the rebuild.
+    if (afterFirstResize != widgetAfterFirst || afterSecondResize != widgetAfterSecond) {
+        std::fprintf(stderr,
+                     "engine-selftest: the render target did not follow the viewport across a "
+                     "resize — target %dx%d vs widget %dx%d, then target %dx%d vs widget %dx%d\n",
+                     afterFirstResize.width(), afterFirstResize.height(),
+                     widgetAfterFirst.width(), widgetAfterFirst.height(),
+                     afterSecondResize.width(), afterSecondResize.height(),
+                     widgetAfterSecond.width(), widgetAfterSecond.height());
+        return 1;
+    }
+    std::fprintf(stderr, "engine-selftest: on-screen view survived resizes: %dx%d then %dx%d "
+                         "(widget %dx%d then %dx%d)\n",
                  afterFirstResize.width(), afterFirstResize.height(),
-                 afterSecondResize.width(), afterSecondResize.height());
+                 afterSecondResize.width(), afterSecondResize.height(),
+                 widgetAfterFirst.width(), widgetAfterFirst.height(),
+                 widgetAfterSecond.width(), widgetAfterSecond.height());
 #endif
 
     QImage img = window.viewport()->takeScreenshot(256, 256);

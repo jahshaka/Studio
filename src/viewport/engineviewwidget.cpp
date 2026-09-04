@@ -1,4 +1,5 @@
 #include "viewport/engineviewwidget.h"
+#include <QEvent>
 #include <QGuiApplication>
 #include <QResizeEvent>
 
@@ -29,6 +30,9 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
 {
     if (!engine || mView) return false;
     mEngine = engine;
+    mViewName = name;
+    mBackground = background;
+    mCreateError.clear();
     bool handleIsNative = true;
 #ifdef Q_OS_MACOS
     // winId() is only an NSView* under the cocoa plugin. The offscreen/minimal
@@ -37,29 +41,39 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
     // but cocoa go straight to the offscreen fallback below.
     handleIsNative = QGuiApplication::platformName() == QLatin1String("cocoa");
 #endif
-    if (handleIsNative)
+    if (handleIsNative) {
         mView = engine->createView(name.toStdString(),
                                    static_cast<jahshaka::engine::NativeWindowHandle>(winId()),
                                    static_cast<unsigned>(width()),
                                    static_cast<unsigned>(height()), background);
-#ifndef Q_OS_LINUX
+        if (!mView) mCreateError = QString::fromStdString(engine->lastError());
+    }
     // Fallback, not the normal path: if the platform has no on-screen backend, or
     // the handle is not one it can present to (an offscreen QPA plugin hands out no
     // NSView), render the view offscreen so the editor, selftest and scripting all
     // still run — the widget area then stays blank.
+    //
+    // LINUX TAKES IT TOO (deep audit area 7). It used to be #ifndef Q_OS_LINUX, on
+    // the reasoning that X11 always has a window backend. But createView can still
+    // fail there — a bad handle, a Vulkan surface the driver refuses, an Hlms media
+    // directory that never resolved — and the result was the worst possible one: no
+    // view, so no rendering, no screenshots, no scripting and no message, forever
+    // and silently. Falling back keeps everything except the on-screen pixels
+    // working, and mCreateError (shown on the viewport's cover) says why.
     if (!mView)
         mView = engine->createOffscreenView(name.toStdString(),
                                             static_cast<unsigned>(width()),
                                             static_cast<unsigned>(height()), background);
-#endif
     if (mView) {
 #ifdef Q_OS_LINUX
         // From here the engine owns this region entirely; Qt updates would fight it.
         // Only on X11: on cocoa the engine's CAMetalLayer is a sublayer composited
         // ABOVE the QNSView's own content, so Qt repaints underneath are invisible
         // rather than a fight — and disabling updates would also freeze any Qt-drawn
-        // child of this widget.
-        setUpdatesEnabled(false);
+        // child of this widget. And only when the view really presents HERE: an
+        // offscreen fallback owns no pixels of this widget, so muting Qt over it
+        // would only guarantee stale ones.
+        if (!mView->isOffscreen()) setUpdatesEnabled(false);
 #endif
         mView->setEnabled(isVisible());
     }
@@ -73,6 +87,40 @@ void EngineViewWidget::destroyView()
     if (auto engine = mEngine.lock()) engine->destroyView(mView);
     mView = nullptr;
     mEngine.reset();
+}
+
+bool EngineViewWidget::event(QEvent *e)
+{
+    // Qt has given this widget a DIFFERENT native window than the one the View
+    // was built on (a reparent, a floatable dock being torn off or re-docked,
+    // or any platform that recreates handles). The old one is not ours any more
+    // and a Vulkan surface cannot be moved, so rebuild.
+    if (e->type() == QEvent::WinIdChange) recreateViewForNewWindow();
+    return QWidget::event(e);
+}
+
+void EngineViewWidget::recreateViewForNewWindow()
+{
+    // Nothing bound yet (this fires once for the FIRST native window too, long
+    // before createView runs), or the Engine is already gone: nothing to do.
+    if (!mView) return;
+    auto engine = mEngine.lock();
+    if (!engine) return;
+    // An offscreen fallback view has no native window and does not care.
+    if (mView->isOffscreen()) return;
+    // WinIdChange is ALSO how Qt announces the window going away (destroy() sets
+    // the id to 0 and posts it). internalWinId(), unlike winId(), never creates
+    // one — so this is the difference between "moved to a new window" and "is
+    // being torn down", and rebuilding on a null handle would replace a working
+    // view with an offscreen fallback on the way out.
+    if (!internalWinId()) return;
+
+    const QString name = mViewName;
+    const jahshaka::engine::Colour background = mBackground;
+    destroyView();
+    createView(engine, name, background);
+    if (mView) mView->setEnabled(isVisible());
+    viewRecreated();
 }
 
 void EngineViewWidget::resizeEvent(QResizeEvent *event)

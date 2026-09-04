@@ -42,7 +42,11 @@ public:
     enum class State {
         Presenting,   ///< the engine owns these pixels — the cover is hidden
         Loading,      ///< a world is being loaded/pushed; no frame presented yet
-        NoScene       ///< no world is open in this viewport
+        NoScene,      ///< no world is open in this viewport
+        /// The on-screen View could not be created at all, so nothing will ever
+        /// present here. The subtitle carries the engine's own reason; without
+        /// this state that failure is invisible (the widget just stays blank).
+        Failed
     };
 
     explicit ViewportCover(QWidget *parent = nullptr);
@@ -53,7 +57,8 @@ public:
     /// is safe to call every frame.
     void setState(State state);
 
-    /// The world's name, shown under the title while loading. Empty is fine.
+    /// The world's name (Loading) or the failure reason (Failed), shown under
+    /// the title. Empty is fine.
     void setSubtitle(const QString &subtitle);
 
     /// Shows the cover in `state` AND paints it before returning. The editor's
