@@ -64,6 +64,17 @@ static int countObjects(const QString &root)
     return count;
 }
 
+// Is ANY object file named by this oid present in the store? (The extension
+// is recorded per content, so match the oid stem — exactly what the import
+// rollback's own cleanup globs for.)
+static bool objectExists(const QString &root, const QString &oid)
+{
+    if (oid.isEmpty()) return false;
+    const QDir fanout(QFileInfo(AssetStorePaths::objectPathIn(root, oid, QStringLiteral("x")))
+                          .absolutePath());
+    return !fanout.entryInfoList({ oid + ".*", oid }, QDir::Files).isEmpty();
+}
+
 // A unique-content PNG (random pixels): dedup never collapses it into an
 // earlier object, so store/rollback assertions see real deltas.
 static QString writeUniquePng(const QString &path)
@@ -198,6 +209,12 @@ int main(int argc, char **argv)
     }
 
     // ---- 3. cancel mid-import rolls back ----------------------------------
+    // NOTE (deep audit 2026-09, area 6): the cancel is deliberately taken at
+    // the FIRST store tick, i.e. before any object has been written — this
+    // section proves the transaction unwinds the rows. Section 3b below is the
+    // one that proves the ORPHAN OBJECT cleanup runs, which this section could
+    // never see: with nothing stored there is nothing to clean, which is why
+    // the whole cleanup being a no-op went unnoticed.
     {
         const int assetsBefore = countRows(conn, "SELECT COUNT(*) FROM assets");
         const int filesBefore = countRows(conn, "SELECT COUNT(*) FROM files");
@@ -242,6 +259,98 @@ int main(int argc, char **argv)
               "cancel: no asset_files rows survive the rollback");
         CHECK(countObjects(root) == objectsBefore,
               "cancel: no orphan CAS objects left in the store");
+    }
+
+    // ---- 3b. cancel AFTER real ingest: the orphan cleanup actually runs ----
+    //
+    // THE DEFECT (deep audit 2026-09, area 6): commitStagedAsset's cleanup
+    // asked "does a files row still name this oid?" from INSIDE its own open
+    // transaction, so it saw its own uncommitted INSERTs, skipped every oid and
+    // deleted nothing. Every cancelled or failed import left its objects in the
+    // store forever, at refcount 0, with no row naming them and no GC to reap
+    // them. The fix rolls the transaction back FIRST.
+    //
+    // Driven through commit() directly with a hand-built plan so the cancel
+    // lands at a known point: three content files, cancel at done == 2 — the
+    // first two are really stored, the third never is. File 1 is content that
+    // was ALREADY committed by an earlier import: its files row survives the
+    // rollback, so the same query that removes the orphan must protect it.
+    {
+        AssetImportService service(&db, nullptr);
+
+        // The pre-existing object (committed, refcount > 0).
+        const QString sharedPng = writeUniquePng(cwd + "/tex_shared_pre.png");
+        ImportRequest sharedReq;
+        sharedReq.sourcePath = sharedPng;
+        sharedReq.typeHint = static_cast<int>(ModelTypes::Texture);
+        const ImportResult sharedResult = service.import(sharedReq);
+        CHECK(sharedResult.ok(), "the shared object was committed by a normal import");
+        const QString sharedOid = AssetCas::hashFile(sharedPng);
+
+        const QString orphanPng = writeUniquePng(cwd + "/tex_orphan.png");
+        const QString neverPng  = writeUniquePng(cwd + "/tex_never.png");
+        const QString orphanOid = AssetCas::hashFile(orphanPng);
+        const QString neverOid  = AssetCas::hashFile(neverPng);
+
+        const int assetsBefore  = countRows(conn, "SELECT COUNT(*) FROM assets");
+        const int filesBefore   = countRows(conn, "SELECT COUNT(*) FROM files");
+        const int linksBefore   = countRows(conn, "SELECT COUNT(*) FROM asset_files");
+        const int objectsBefore = countObjects(root);
+        CHECK(objectExists(root, sharedOid), "the shared object is in the store to begin with");
+        CHECK(!objectExists(root, orphanOid), "the orphan's content is NOT in the store yet");
+
+        // A hand-built plan: one catalog row, three content files.
+        PreparedImport prepared;
+        prepared.request.sourcePath = orphanPng;
+        prepared.request.typeHint = static_cast<int>(ModelTypes::Texture);
+
+        StagedRow row;
+        row.guid = QStringLiteral("guid-cancel-after-ingest");
+        row.name = QStringLiteral("cancel_after_ingest.png");
+        row.type = static_cast<int>(ModelTypes::Texture);
+        row.viewFilter = 2;   // AssetsView
+        prepared.staged.mainGuid = row.guid;
+        prepared.staged.rows.append(row);
+
+        const QStringList sources{ sharedPng, orphanPng, neverPng };
+        for (const QString &path : sources) {
+            StagedFile file;
+            file.path = path;
+            file.forGuid = row.guid;
+            file.role = (path == sharedPng) ? QStringLiteral("source") : QStringLiteral("file");
+            file.name = QFileInfo(path).fileName();
+            prepared.staged.files.append(file);
+        }
+
+        int lastStoreDone = -1;
+        const ImportResult cancelled = service.commit(prepared,
+            [&](const QString &stage, int done, int) {
+                if (stage != QStringLiteral("store")) return true;
+                lastStoreDone = done;
+                return done < 2;   // two files really stored, then Cancel
+            });
+
+        CHECK(lastStoreDone == 2, "the cancel landed AFTER two files were really stored");
+        CHECK(cancelled.error == QStringLiteral("cancelled"), "the import reports 'cancelled'");
+
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM assets") == assetsBefore,
+              "cancel-after-ingest: the catalog row rolled back");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM files") == filesBefore,
+              "cancel-after-ingest: the files rows rolled back");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM asset_files") == linksBefore,
+              "cancel-after-ingest: the asset_files rows rolled back");
+
+        // THE assertion the old guard could never make.
+        CHECK(!objectExists(root, orphanOid),
+              "cancel-after-ingest: the STORED object was removed from the store");
+        CHECK(!objectExists(root, neverOid),
+              "cancel-after-ingest: the file that was never reached stored nothing");
+        CHECK(objectExists(root, sharedOid),
+              "cancel-after-ingest: content shared with a committed asset SURVIVED");
+        CHECK(countObjects(root) == objectsBefore,
+              "cancel-after-ingest: the store is byte-for-byte back where it started");
+        CHECK(!AssetCas::resolveSource(conn, root, sharedResult.assetGuid).isEmpty(),
+              "cancel-after-ingest: the earlier asset still resolves its source");
     }
 
     // ---- 4. the synchronous facade (verb path) is unchanged ---------------

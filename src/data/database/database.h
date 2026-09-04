@@ -43,12 +43,34 @@ public:
         if (active) db.rollback();
     }
 
+    // On a FAILED commit the guard rolls back itself, so the connection is
+    // never left mid-transaction and a caller's post-failure cleanup reads
+    // COMMITTED state (the import rollback depended on that and never got
+    // it — deep audit 2026-09, area 6).
     bool commit()
     {
         if (!active) return true;
         active = false;
-        return db.commit();
+        if (db.commit()) return true;
+        db.rollback();
+        return false;
     }
+
+    // Explicit early rollback: ends the transaction NOW instead of at
+    // destruction. The one caller that needs it is failure cleanup that has to
+    // query the database — inside an open transaction such a query sees the
+    // caller's own uncommitted rows, which is exactly how the failed-import
+    // object cleanup became a no-op. Idempotent; a no-op on a degraded guard.
+    void rollback()
+    {
+        if (!active) return;
+        active = false;
+        db.rollback();
+    }
+
+    /// True while this guard owns a live transaction (false when it degraded
+    /// to a no-op because the connection was already in one, or closed).
+    bool isActive() const { return active; }
 
     DbTransaction(const DbTransaction &) = delete;
     DbTransaction &operator=(const DbTransaction &) = delete;
@@ -299,6 +321,17 @@ public:
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     bool checkIfProjectVersionSupported(const QString& pathToDb);
     bool checkIfJafModelVersionSupported(const QString& pathToDb);
+
+    /// Is a `.jaf`/project archive's recorded CONTENT_VERSION string ("0.9.1b",
+    /// "1.0.0", …) new enough to open? Encodes MIN_JAF_VERSION's historic
+    /// major*10 + minor packing as an ordered (major, minor) compare, parsed
+    /// with integers — the old code ran the first three characters through
+    /// toFloat() and multiplied by 10, which happened to land on the right
+    /// integer only because 0.9f*10 rounds up to exactly 9.0f, and rejected
+    /// every 0.10.x archive outright ("0.1" → 1). Static + public so the gate
+    /// is unit-testable without a database file (deep audit 2026-09, area 6).
+    static bool jafVersionAccepted(const QString &version);
+
     QSqlDatabase getDb() { return db; }
 
 private:

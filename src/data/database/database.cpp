@@ -28,6 +28,48 @@ For more information see the LICENSE file
 #include <QMessageBox>
 #include <QUuid>
 
+namespace
+{
+// RAII for a NAMED side connection — the export/import bundle writers each
+// registered one and then unregistered it only on their success path, so
+// every failed export left a live QSqlDatabase entry behind (deep audit
+// 2026-09, area 6: four such leaks; the next call with the same hard-coded
+// name got Qt's "duplicate connection name" warning and, worse, REUSED the
+// stale connection still pointing at the previous temp file). Same shape as
+// assetmigration.cpp's ScopedConnection; the name is unique per instance so
+// two of these can never collide across threads either.
+//
+// Order matters in the destructor: close, then drop OUR handle (a live copy
+// is what makes removeDatabase print "connection is still in use"), then
+// unregister.
+class ScopedConnection
+{
+public:
+    ScopedConnection(const QString &driver, const QString &prefix, const QString &dbPath)
+        : name(QStringLiteral("%1-%2").arg(prefix,
+              QUuid::createUuid().toString(QUuid::WithoutBraces)))
+    {
+        db = QSqlDatabase::addDatabase(driver, name);
+        db.setDatabaseName(dbPath);
+    }
+
+    ~ScopedConnection()
+    {
+        if (db.isOpen()) db.close();
+        db = QSqlDatabase();
+        QSqlDatabase::removeDatabase(name);
+    }
+
+    ScopedConnection(const ScopedConnection &) = delete;
+    ScopedConnection &operator=(const ScopedConnection &) = delete;
+
+    QSqlDatabase db;
+
+private:
+    QString name;
+};
+} // namespace
+
 Database::Database()
 {
     projectsTableSchema =
@@ -805,9 +847,14 @@ bool Database::addFavorite(const QString &guid)
 {
     const auto asset = fetchAsset(guid);
 
+    // OR REPLACE: asset_guid is the PRIMARY KEY, so favouriting an asset that
+    // is already a favourite used to fail on the UNIQUE constraint and report
+    // false from a button whose only sane semantics are idempotent (deep audit
+    // 2026-09, area 6). Replacing also refreshes the cached name/thumbnail
+    // after a rename or a re-import.
     QSqlQuery query;
     query.prepare(
-        "INSERT INTO favorites (asset_guid, name, date_created, version, thumbnail) "
+        "INSERT OR REPLACE INTO favorites (asset_guid, name, date_created, version, thumbnail) "
         "VALUES (:asset_guid, :name, datetime(), :version, :thumbnail)"
     );
     query.bindValue(":asset_guid", guid);
@@ -986,7 +1033,17 @@ bool Database::deleteProject(const QString &guid)
     dquery.addBindValue(guid);
     bool d = executeAndCheckQuery(dquery, "DeleteDependencies");
 
-    if (!(d && q)) return false;   // tx rolls back — no half-deleted project
+    // The project's CAS pins die with it (deep audit 2026-09, area 6: 32 of
+    // 129 live pins on the measured store already named projects that no
+    // longer exist). A pin outliving its project is not merely a dead row —
+    // it is a reference that keeps its object alive against any future
+    // refcount GC, i.e. store bytes that can never be reclaimed.
+    QSqlQuery pquery;
+    pquery.prepare("DELETE FROM project_assets WHERE project_guid = ?");
+    pquery.addBindValue(guid);
+    bool p = executeAndCheckQuery(pquery, "DeleteProjectPins");
+
+    if (!(d && q && p)) return false;   // tx rolls back — no half-deleted project
     return tx.commit();
 }
 
@@ -1008,6 +1065,16 @@ void Database::wipeDatabase()
 	destroyTable("author");
 	destroyTable("folders");
 	destroyTable("metadata");
+	// The tables the CAS and the favourites view added (deep audit 2026-09,
+	// area 6: "wipe" left the entire content catalog behind, so the rebuilt
+	// database opened onto files/asset_files/project_assets rows naming assets
+	// that no longer existed — pins and refcounts for a library that was gone).
+	// asset_files BEFORE files: its refcount triggers live on that table and
+	// must go with it.
+	destroyTable("favorites");
+	destroyTable("asset_files");
+	destroyTable("files");
+	destroyTable("project_assets");
 	tx.commit();
 }
 
@@ -1023,6 +1090,14 @@ bool Database::deleteAsset(const QString &guid)
                     "remain).").arg(guid));
         return false;
     }
+
+    // ONE transaction over the three DELETEs (deep audit 2026-09, area 6:
+    // this was the only delete path without one). Half a delete — the asset
+    // row gone but its asset_files mapping surviving — is an orphaned catalog
+    // row whose refcount never drops, i.e. store bytes nothing can ever reap.
+    // Nested inside deleteAssetAndDependencies / deleteFolderAndDependencies
+    // the guard degrades to a no-op and the OUTER transaction is the atom.
+    DbTransaction tx(db);
 
     QSqlQuery query;
     query.prepare("DELETE FROM assets WHERE guid = ?");
@@ -1043,11 +1118,18 @@ bool Database::deleteAsset(const QString &guid)
 
     ok = executeAndCheckQuery(query, "DeleteAsset") && ok;
 
+    // The commit is part of "did the rows go": a failed commit rolls back, so
+    // the in-memory scrub below must not run on one.
+    if (ok) ok = tx.commit();
+
     // Only once the rows are actually gone: the cache and the catalog must not
     // disagree (a scrubbed cache over a surviving row is the silent failure).
     if (ok) {
-        for (int i = 0; i < AssetManager::getAssets().count(); i++) {
-            if (AssetManager::getAssets()[i]->assetGuid == guid) AssetManager::getAssets().remove(i);
+        // Backwards: removing at i and then advancing skips the next element
+        // (the same index-skipping shape the dependency filters had).
+        auto &assets = AssetManager::getAssets();
+        for (int i = assets.count() - 1; i >= 0; --i) {
+            if (assets[i]->assetGuid == guid) assets.remove(i);
         }
     }
     else {
@@ -1507,18 +1589,16 @@ QVector<AssetRecord> Database::fetchAssetsByViewFilter(const AssetViewFilter& fi
 
 void Database::createExportBundle(const QStringList & objectGuids, const QString & outTempFilePath)
 {
-    QSqlDatabase exportConnection = QSqlDatabase();
-    exportConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeExportConnection");
-    exportConnection.setDatabaseName(outTempFilePath);
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("NodeExport"), outTempFilePath);
+    QSqlDatabase &exportConnection = scoped.db;
 
-    if (exportConnection.isValid()) {
-        if (!exportConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
-            return;
-        }
-    }
-    else {
+    if (!exportConnection.isValid()) {
         irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
+        return;
+    }
+    if (!exportConnection.open()) {
+        irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
+        return;
     }
 
     // Export DB writes in one transaction (phase 0): atomic bundle file,
@@ -1673,9 +1753,7 @@ void Database::createExportBundle(const QStringList & objectGuids, const QString
     }
 
     exportConnection.commit();
-    exportConnection.close();
-    exportConnection = QSqlDatabase();
-    QSqlDatabase::removeDatabase("NodeExportConnection");
+    // close + unregister: ~ScopedConnection
 }
 
 int Database::createCollection(const QString &collectionName, const int parent)
@@ -1994,18 +2072,17 @@ QByteArray Database::fetchCachedThumbnail(const QString &name) const
 
 bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString &writePath)
 {
-    QSqlDatabase exportConnection = QSqlDatabase();
-    exportConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeExportConnection");
-    exportConnection.setDatabaseName(writePath);
+    // ScopedConnection: the four early returns below all used to leave the
+    // named connection registered (deep audit 2026-09, area 6).
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("NodeExport"), writePath);
+    QSqlDatabase &exportConnection = scoped.db;
 
-    if (exportConnection.isValid()) {
-        if (!exportConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
-            return false;
-        }
-    }
-    else {
+    if (!exportConnection.isValid()) {
         irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
+        return false;
+    }
+    if (!exportConnection.open()) {
+        irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
         return false;
     }
 
@@ -2162,27 +2239,22 @@ bool Database::createBlobFromNode(const iris::SceneNodePtr &node, const QString 
     }
 
     exportConnection.commit();
-    exportConnection.close();
-    exportConnection = QSqlDatabase();
-    QSqlDatabase::removeDatabase("NodeExportConnection");
-
+    // close + unregister: ~ScopedConnection
     return true;
 }
 
 bool Database::createBlobFromAsset(const QString &guid, const QString &writePath)
 {
-    QSqlDatabase exportConnection = QSqlDatabase();
-    exportConnection = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "NodeExportConnection");
-    exportConnection.setDatabaseName(writePath);
+    // ScopedConnection — same leak as createBlobFromNode, same fix.
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("NodeExport"), writePath);
+    QSqlDatabase &exportConnection = scoped.db;
 
-    if (exportConnection.isValid()) {
-        if (!exportConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
-            return false;
-        }
-    }
-    else {
+    if (!exportConnection.isValid()) {
         irisLog(QString("The database connection is invalid! %1").arg(exportConnection.lastError().text()));
+        return false;
+    }
+    if (!exportConnection.open()) {
+        irisLog(QString("Couldn't open a database connection! %1").arg(exportConnection.lastError().text()));
         return false;
     }
 
@@ -2326,10 +2398,7 @@ bool Database::createBlobFromAsset(const QString &guid, const QString &writePath
     }
 
     exportConnection.commit();
-    exportConnection.close();
-    exportConnection = QSqlDatabase();
-    QSqlDatabase::removeDatabase("NodeExportConnection");
-
+    // close + unregister: ~ScopedConnection
     return true;
 }
 
@@ -2355,9 +2424,22 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
     auto sceneLastA = query.value(5).toDateTime();
     auto sceneGuid  = query.value(6).toString();
 
-    QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, "myUniqueSQLITEConnection");
-    dbe.setDatabaseName(QDir(outTempFilePath).filePath(projectGuid + ".db"));
-    dbe.open();
+    // ScopedConnection: "myUniqueSQLITEConnection" was registered here and
+    // NEVER removed — the one leak of the four that leaked on the SUCCESS path
+    // too, so every project export in a session re-registered the same name
+    // (deep audit 2026-09, area 6). The name was also a lie: it was a fixed
+    // string, hence not unique at all across concurrent exports.
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("SceneExport"),
+                            QDir(outTempFilePath).filePath(projectGuid + ".db"));
+    QSqlDatabase &dbe = scoped.db;
+    if (!dbe.open()) {
+        irisLog(QString("Couldn't open the export database! %1").arg(dbe.lastError().text()));
+        return;
+    }
+
+    // One transaction for the whole bundle, like its three siblings: an atomic
+    // export file and one fsync instead of one per row.
+    dbe.transaction();
 
     QString schema = "CREATE TABLE IF NOT EXISTS projects ("
                      "    name              VARCHAR(64),"
@@ -2602,7 +2684,8 @@ void Database::createExportScene(const QString &outTempFilePath, const QString &
         executeAndCheckQuery(exportFolder, "exportFolder");
     }
 
-    dbe.close();
+    dbe.commit();
+    // close + unregister: ~ScopedConnection
 }
 
 bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString &table, bool perProject, const QString &projectGuid)
@@ -2765,7 +2848,10 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 		dependencies.append(record.value(0).toString());
 	}
 
-	for (int i = 0; i < dependencies.size(); ++i) {
+	// Backwards — the forward loop skipped the element that shifted into the
+	// vacated index (deep audit 2026-09, area 6; same shape in the two
+	// delete-and-dependencies filters).
+	for (int i = dependencies.size() - 1; i >= 0; --i) {
 		if (QFileInfo(dependencies[i]).suffix().isEmpty()) {
 			dependencies.removeAt(i);
 		}
@@ -2850,6 +2936,12 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	QStringList files;
 	bool allOk = true;
 
+	// One transaction over the whole subtree (deep audit 2026-09, area 6) —
+	// matching deleteAssetAndDependencies. Without it a failure partway through
+	// left some folders deleted, some assets deleted and the rest of the
+	// subtree pointing at parents that no longer exist.
+	DbTransaction tx(db);
+
 	// Get all child folders
 	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
 		// For every folder, fetch assets inside
@@ -2869,13 +2961,18 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 		allOk = deleteFolder(folder) && allOk;
 	}
 
+	allOk = tx.commit() && allOk;
+
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
 			QString("deleteFolderAndDependencies('%1') did NOT fully complete — some rows "
 			        "survive in the library.").arg(guid));
 	if (ok) *ok = allOk;
 
-	for (int i = 0; i < files.size(); ++i) {
+	// Backwards: removeAt(i) shifts the tail down and the ++i then SKIPS the
+	// element that moved into i, so two adjacent extension-less names left the
+	// second one in the caller's delete list (deep audit 2026-09, area 6).
+	for (int i = files.size() - 1; i >= 0; --i) {
 		if (QFileInfo(files[i]).suffix().isEmpty()) {
 			files.removeAt(i);
 		}
@@ -2913,7 +3010,9 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok)
 			        "and/or its dependency rows survive in the library.").arg(guid));
 	if (ok) *ok = allOk;
 
-    for (int i = 0; i < files.size(); ++i) {
+    // Backwards — see deleteFolderAndDependencies: the forward loop skipped
+    // the element that shifted into the vacated index.
+    for (int i = files.size() - 1; i >= 0; --i) {
 	    if (QFileInfo(files[i]).suffix().isEmpty()) {
 		    files.removeAt(i);
 	    }
@@ -3024,9 +3123,17 @@ bool Database::hasDependencies(const QString &guid)
 
 bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids)
 {
-    QSqlDatabase dbe = QSqlDatabase::addDatabase(Constants::DB_DRIVER, GUIDManager::generateGUID());
-    dbe.setDatabaseName(inFilePath + ".db");
-    dbe.open();
+    // ScopedConnection: the connection name was already unique per call (a
+    // fresh guid), which meant every project import leaked a DISTINCT
+    // registration for the process's life — the connection list grew without
+    // bound and each entry held its temp .db open (deep audit 2026-09, area 6).
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("ProjectImport"),
+                            inFilePath + ".db");
+    QSqlDatabase &dbe = scoped.db;
+    if (!dbe.open()) {
+        irisLog(QString("Couldn't open the import database! %1").arg(dbe.lastError().text()));
+        return false;
+    }
 
     // One transaction around the whole multi-row import (phase 0): a failed
     // import leaves nothing behind, and per-row autocommit fsyncs are gone.
@@ -3263,8 +3370,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         executeAndCheckQuery(importFolder, "importFolder");
     }
 
-    dbe.close();
-
+    // close + unregister: ~ScopedConnection
     return tx.commit();
 }
 
@@ -3646,6 +3752,40 @@ QString Database::importAssetBundle(const QString & pathToDb, const QMap<QString
     return guidToReturn;
 }
 
+bool Database::jafVersionAccepted(const QString &version)
+{
+    // MIN_JAF_VERSION is the historic major*10 + minor packing (9 = "0.9"), so
+    // unpack it and compare the two components in order. That keeps the gate's
+    // meaning EXACTLY as shipped for every version string it ever saw
+    // ("0.9.1b" in, "0.8.0" out, "1.0.0" and "1.10" in) while dropping the
+    // float round-trip, and it stops treating "0.10.0" as older than "0.9".
+    const int minMajor = Constants::MIN_JAF_VERSION / 10;
+    const int minMinor = Constants::MIN_JAF_VERSION % 10;
+
+    // Components are leading integers: "1b" is minor 1 with a build suffix.
+    auto leadingInt = [](const QString &text, bool *ok) -> int {
+        int end = 0;
+        while (end < text.size() && text.at(end).isDigit()) ++end;
+        if (end == 0) { *ok = false; return 0; }
+        return text.left(end).toInt(ok);
+    };
+
+    const QStringList parts = version.trimmed().split(QLatin1Char('.'));
+    if (parts.isEmpty()) return false;
+
+    bool ok = false;
+    const int major = leadingInt(parts.at(0), &ok);
+    if (!ok) return false;
+    int minor = 0;
+    if (parts.size() > 1) {
+        minor = leadingInt(parts.at(1), &ok);
+        if (!ok) return false;
+    }
+
+    if (major != minMajor) return major > minMajor;
+    return minor >= minMinor;
+}
+
 bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &table_name)
 {
     bool result = false;
@@ -3663,34 +3803,26 @@ bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &t
             QSqlDatabase::addDatabase(Constants::DB_DRIVER, connectionName);
         importConnection.setDatabaseName(pathToDb);
 
-        if (importConnection.isValid()) {
-            if (!importConnection.open()) {
-                irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
-                QSqlDatabase::removeDatabase(connectionName);
-                return result;
-            }
-        }  else {
+        // The early exits fall THROUGH to the removeDatabase below rather than
+        // calling it here: removing a connection while a live QSqlDatabase copy
+        // still names it is what makes Qt print "connection is still in use".
+        bool usable = true;
+        if (!importConnection.isValid()) {
             irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
-            QSqlDatabase::removeDatabase(connectionName);
-            return result;
+            usable = false;
+        } else if (!importConnection.open()) {
+            irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
+            usable = false;
         }
 
-        QSqlQuery selectAssetQuery(importConnection);
-        selectAssetQuery.prepare(QString("SELECT  version FROM %1 LIMIT 1").arg(table_name));
-        if (selectAssetQuery.exec() && selectAssetQuery.first()) {
-            QString version = selectAssetQuery.value(0).toString();
-            bool version_ok(false);
-            QString import_version = version.mid(0, 3);
-            int version_int = import_version.toFloat(&version_ok) * 10;
+        if (usable) {
+            QSqlQuery selectAssetQuery(importConnection);
+            selectAssetQuery.prepare(QString("SELECT  version FROM %1 LIMIT 1").arg(table_name));
+            if (selectAssetQuery.exec() && selectAssetQuery.first())
+                result = jafVersionAccepted(selectAssetQuery.value(0).toString());
 
-            if (version_ok) {
-                if (version_int >= Constants::MIN_JAF_VERSION) {
-                    result = true;
-                }
-            }
+            importConnection.close();
         }
-
-        importConnection.close();
     }
     QSqlDatabase::removeDatabase(connectionName);
     return result;

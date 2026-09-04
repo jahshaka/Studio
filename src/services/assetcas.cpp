@@ -10,8 +10,6 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "services/assetcas.h"
 
-#include <QAtomicInt>
-#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -23,16 +21,14 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QUuid>
 
-#include <filesystem>
-#include <system_error>
-
 #ifdef Q_OS_UNIX
-#include <unistd.h>   // link(2) — hardlink migration, preflight §3.3; fsync(2)
+#include <unistd.h>   // link(2) — hardlink migration, preflight §3.3
 #endif
 
 #include "irisgl/core/logger.h"
 #include "data/database/casschema.h"
 #include "services/assetstorepaths.h"
+#include "services/filewriteatomic.h"
 
 namespace AssetCas
 {
@@ -79,11 +75,17 @@ bool storeObject(const QString &srcPath, const QString &root,
     // the replace case, a QFile::remove BEFORE the replacement existed, which
     // could also destroy a good object outright.
     //
-    // Both close the same way: stage into a sibling temp, then one rename.
+    // Both close the same way: stage into a sibling temp, then one rename
+    // (FileWrite::stagingTempPath + FileWrite::atomicRename — the same tail
+    // sidecars, store.json and the baked maps now share; deep audit area 6).
     // rename(2) is atomic within a filesystem and REPLACES an existing target,
     // so the remove disappears too. The temp must be in the destination's own
     // directory for that ("same filesystem"), which mkpath above guarantees
     // exists.
+    //
+    // The staging step itself is NOT a byte write (hardlink first, copy only
+    // as the fallback), which is why storeObject drives the pieces rather than
+    // calling writeFileAtomic.
     //
     // (Found while building this: Qt 6.10 on Linux already gets QFile::copy
     // atomic by accident — it opens the destination with O_TMPFILE and linkat()s
@@ -91,11 +93,7 @@ bool storeObject(const QString &srcPath, const QString &root,
     // fast path, not a contract: it needs a filesystem that supports O_TMPFILE,
     // and QFile::copy on macOS and Windows has no such property. The guarantee
     // is ours now, on every platform.)
-    static QAtomicInt sSerial(0);
-    const QString tmpPath = QStringLiteral("%1.tmp-%2-%3")
-                                .arg(dstPath)
-                                .arg(QCoreApplication::applicationPid())
-                                .arg(sSerial.fetchAndAddOrdered(1));
+    const QString tmpPath = FileWrite::stagingTempPath(dstPath);
     QFile::remove(tmpPath);   // a leftover from a dead run that had our pid
 
     bool staged = false;
@@ -113,44 +111,16 @@ bool storeObject(const QString &srcPath, const QString &root,
             if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(srcPath, dstPath);
             return false;
         }
-#ifdef Q_OS_UNIX
         // Flush the COPY (never the link: those bytes are already the source's
         // and already durable). This is the difference between a power cut
         // leaving no object and leaving a correctly-named EMPTY one, which is
         // the exact failure the rename exists to prevent. The directory entry
         // is deliberately NOT fsynced: losing the rename loses the object, and
         // a missing object is a re-ingest, not a corruption.
-        QFile flushed(tmpPath);
-        if (flushed.open(QIODevice::ReadWrite)) {
-            ::fsync(flushed.handle());
-            flushed.close();
-        }
-#endif
+        FileWrite::fsyncPath(tmpPath);
     }
 
-    // std::filesystem::rename, not QFile::rename: Qt's refuses when the target
-    // exists (documented), which is precisely the case that must work.
-    // The path conversion is per-platform on purpose — a narrow std::string
-    // reaches std::filesystem::path in the platform's NARROW encoding, which on
-    // Windows is not UTF-8, so a store under a non-ASCII path would silently
-    // rename the wrong thing.
-    std::error_code ec;
-#ifdef Q_OS_WIN
-    const std::filesystem::path tmpFs(tmpPath.toStdWString());
-    const std::filesystem::path dstFs(dstPath.toStdWString());
-#else
-    const std::filesystem::path tmpFs(QFile::encodeName(tmpPath).toStdString());
-    const std::filesystem::path dstFs(QFile::encodeName(dstPath).toStdString());
-#endif
-    std::filesystem::rename(tmpFs, dstFs, ec);
-    if (ec) {
-        QFile::remove(tmpPath);
-        if (errorOut)
-            *errorOut = QStringLiteral("could not place %1: %2")
-                            .arg(dstPath, QString::fromStdString(ec.message()));
-        return false;
-    }
-    return true;
+    return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
 }
 
 void ensureCasSchema(QSqlDatabase conn)
@@ -329,18 +299,13 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     }
     sidecar["files"] = files;
 
+    // Atomic, like every other artifact the store owns: this used to truncate
+    // the live sidecar and then write, so an interrupted import left a
+    // zero/half-length JSON that rebuildCatalog would read as an asset with no
+    // files at all (deep audit 2026-09, area 6).
     const QString path = AssetStorePaths::sidecarPathIn(root, guid);
-    if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
-        if (errorOut) *errorOut = QStringLiteral("cannot create sidecar dir for %1").arg(guid);
-        return false;
-    }
-    QFile out(path);
-    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        if (errorOut) *errorOut = QStringLiteral("cannot write %1").arg(path);
-        return false;
-    }
-    out.write(QJsonDocument(sidecar).toJson(QJsonDocument::Indented));
-    return true;
+    return FileWrite::writeFileAtomic(
+        path, QJsonDocument(sidecar).toJson(QJsonDocument::Indented), errorOut);
 }
 
 QString resolveFile(QSqlDatabase conn, const QString &root,
@@ -468,13 +433,11 @@ bool writeStoreInfo(const QString &root, QString *errorOut)
         if (errorOut) *errorOut = QStringLiteral("cannot create %1").arg(root);
         return false;
     }
-    QFile out(path);
-    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        if (errorOut) *errorOut = QStringLiteral("cannot write %1").arg(path);
-        return false;
-    }
-    out.write(QJsonDocument(info).toJson(QJsonDocument::Indented));
-    return true;
+    // Atomic: store.json carries the storeId every relocated root is
+    // identified by — truncating it in place is how a crash mid-write turns a
+    // populated store into an unrecognized one.
+    return FileWrite::writeFileAtomic(
+        path, QJsonDocument(info).toJson(QJsonDocument::Indented), errorOut);
 }
 
 } // namespace AssetCas
