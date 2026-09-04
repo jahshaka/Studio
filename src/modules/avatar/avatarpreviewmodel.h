@@ -252,6 +252,7 @@ private:
 
     iris::ScenePtr      mDocument;
     iris::SceneNodePtr  mSpaceRoot;   // the Modern room group, null in Grid mode
+    iris::LightNodePtr  mPanelLight;  // the ceiling area panel — the whole rig
     avatar::SpaceMode   mSpaceMode = avatar::SpaceMode::Grid;
     iris::CameraNodePtr mCamera;
     iris::SceneNodePtr  mFragment;

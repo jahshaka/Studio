@@ -101,25 +101,24 @@ void AvatarPreviewModel::buildDocument()
     mDocument = iris::Scene::create();
     mDocument->shadowEnabled = false;
 
-    auto key = iris::LightNode::create();
-    key->setLightType(iris::LightType::Directional);
-    key->setName("avatar-key");
-    key->name = "avatar-key";
-    key->color = QColor(255, 255, 240);
-    key->setLocalRot(QQuaternion::fromEulerAngles(45, 35, 0));
-    key->intensity = 1.0f;
-    key->isBuiltIn = true;
-    mDocument->rootNode->addChild(key);
-
-    auto fill = iris::LightNode::create();
-    fill->setLightType(iris::LightType::Directional);
-    fill->setName("avatar-fill");
-    fill->name = "avatar-fill";
-    fill->color = QColor(200, 215, 255);
-    fill->setLocalRot(QQuaternion::fromEulerAngles(20, -140, 0));
-    fill->intensity = 0.45f;
-    fill->isBuiltIn = true;
-    mDocument->rootNode->addChild(fill);
+    // ONE ceiling AREA panel instead of the old key/fill directionals (owner,
+    // 2026-09-05): directionals lit whichever wall they faced and starved the
+    // opposite one; a broad rectangle under the ceiling lights the room evenly
+    // from all sides, exactly like the light-panel roof the Modern room draws.
+    // Area lights emit down -Y unrotated, cast no shadows (this scene has
+    // none), and the ambient below carries what the panel cannot reach.
+    mPanelLight = iris::LightNode::create();
+    mPanelLight->setLightType(iris::LightType::Area);
+    mPanelLight->setName("avatar-panel");
+    mPanelLight->name = "avatar-panel";
+    mPanelLight->color = QColor(255, 250, 244);
+    mPanelLight->intensity = 1.25f;
+    mPanelLight->rectWidth = 7.5f;
+    mPanelLight->rectHeight = 7.5f;
+    mPanelLight->distance = 30.0f;             // falloff range: generous for a 4m room
+    mPanelLight->setLocalPos(QVector3D(0, 3.8f, 0));
+    mPanelLight->isBuiltIn = true;
+    mDocument->rootNode->addChild(mPanelLight);
 
     mCamera = iris::CameraNode::create();
     // Framed for the ROOM as much as the (not yet loaded) subject: high enough
@@ -180,6 +179,19 @@ void AvatarPreviewModel::rescaleSpace()
     const float height = top - bottom;
     const float s = height > 0.05f ? qBound(0.02f, height / 1.7f, 400.0f) : 1.0f;
     mSpaceRoot->setLocalScale(QVector3D(s, s, s));
+    // The ceiling panel light is NOT in the group (its rectangle is a light
+    // property, not a transform, so a group scale cannot size it): follow the
+    // room explicitly. Intensity is scale-free — a bigger panel at the same
+    // radiance lights the bigger room the same way.
+    if (mPanelLight) {
+        mPanelLight->setLocalPos(QVector3D(0, 3.8f * s, 0));
+        mPanelLight->rectWidth = 7.5f * s;
+        mPanelLight->rectHeight = 7.5f * s;
+        // Range must scale too — at a Mixamo rig's ~94x the character stands
+        // hundreds of units from the panel; an unscaled range lights nothing
+        // (the silhouette capture, 2026-09-05).
+        mPanelLight->distance = 30.0f * s;
+    }
 }
 
 QString AvatarPreviewModel::extractDir() const
