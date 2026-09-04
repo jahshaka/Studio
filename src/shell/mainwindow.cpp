@@ -157,6 +157,7 @@ For more information see the LICENSE file
 #include "scripting/mcp/mcpserver.h"
 #include "scripting/claude/claudechathost.h"
 #include "scripting/claude/claudecliprobe.h"
+#include "scripting/claude/claudelaunchconfig.h"
 #include "ui/windows/claudechatwindow.h"
 #include "ui/panels/scriptconsole.h"
 #include "scripting/modules/studiomodules.h"
@@ -1104,6 +1105,7 @@ void MainWindow::openStageBind(bool playMode)
 	projectService->setSceneOpen(true);
 	ui->actionClose->setDisabled(false);
 	setScene(scene);
+	refreshClaudeChatContext();   // D1: rebind an open chat to the new project
 
 	if (editorData != Q_NULLPTR) {
 		sceneView->setEditorData(editorData);
@@ -1347,6 +1349,7 @@ void MainWindow::closeProject()
     projectService->setSceneOpen(false);
     playbackService->setPlaying(false);
     ui->actionClose->setDisabled(false);
+    refreshClaudeChatContext();   // D1: an open chat loses its project
 
     undoService->clear();
     AssetManager::clearAssetList();
@@ -2675,8 +2678,10 @@ void MainWindow::setupShortcuts()
             [this]() { if (currentSpace == WindowSpaces::EDITOR) rotateGizmo(); });
     reg.add("tool.scale", "Scale Tool", "Tools", QKeySequence(Qt::Key_R), this,
             [this]() { if (currentSpace == WindowSpaces::EDITOR) scaleGizmo(); });
-    reg.add("tool.cycle", "Cycle Gizmo Mode", "Tools", QKeySequence(Qt::Key_Space), this,
-            [this]() { if (currentSpace == WindowSpaces::EDITOR) cycleGizmoMode(); });
+    // Space is page-scoped, exactly like Ctrl+Z: ONE registry claimant, routed
+    // by the active space (see spaceKeyActiveSpace).
+    reg.add("tool.cycle", "Cycle Gizmo Mode / Node Search", "Tools", QKeySequence(Qt::Key_Space), this,
+            [this]() { spaceKeyActiveSpace(); });
 
     // ---- camera ----
     reg.add("camera.focus", "Focus Selection", "Camera", QKeySequence(Qt::Key_F), this,
@@ -3020,6 +3025,23 @@ void MainWindow::redoActiveSpace()
     updateWindowTitle();
 }
 
+// ---- Space routing (owner decision 2026-09-05) -----------------------------
+//
+// Same shape as undoActiveSpace, and for the same reason: the chord keeps ONE
+// registry claimant (so it stays listed and remappable in Preferences, and Qt
+// never sees an ambiguous WindowShortcut), and the active space decides what it
+// means. On the Materials space Space opens the node-SEARCH palette — the graph
+// is the thing being edited there and there is no gizmo to cycle; everywhere
+// else it is the tool cycle it has always been.
+void MainWindow::spaceKeyActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT) {
+        if (shaderGraph) shaderGraph->openNodeSearch();
+        return;
+    }
+    if (currentSpace == WindowSpaces::EDITOR) cycleGizmoMode();
+}
+
 void MainWindow::takeScreenshot()
 {
     auto img = sceneView->takeScreenshot();
@@ -3167,6 +3189,12 @@ void MainWindow::toggleClaudeChat()
         return;
     }
     if (!claudeChatHost) claudeChatHost = new ClaudeChatHost(this);
+    // The model seam (AI_SURFACE_PROGRAM_SPEC owner decision): the dock pins a
+    // model instead of silently inheriting the user's terminal default. The
+    // setting is what a header picker will write; absent, the shipped default
+    // applies, and an explicit empty string restores "inherit".
+    claudeChatHost->setModel(settings->getValue("claude_model",
+                                                ClaudeLaunchConfig::defaultModel()).toString());
     if (!claudeChatWindow) {
         claudeChatWindow = new ClaudeChatWindow(settings->settings, claudeChatHost, this);
         connect(claudeChatWindow, &ClaudeChatWindow::enableMcpRequested, this, [this]() {
@@ -3190,6 +3218,12 @@ void MainWindow::toggleClaudeChat()
     claudeChatWindow->activateWindow();
 }
 
+// Called on every project OPEN and CLOSE as well as on toggle/enable-MCP
+// (CLAUDE_EDITOR_SPEC D1): ClaudeChatHost::configure is written to rebind on a
+// folder change, but nothing used to call it when the project changed, so a
+// chat left open across a switch kept the previous project's cwd, MCP config
+// file and session. Cheap when the chat was never opened — it returns at the
+// first line.
 void MainWindow::refreshClaudeChatContext()
 {
     if (!claudeChatWindow || !claudeChatHost) return;
@@ -3225,6 +3259,7 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
     undoService->clear();
     updateWindowTitle();
 	updateTopMenuStates(WindowSpaces::EDITOR);
+    refreshClaudeChatContext();   // D1: rebind an open chat to the new project
 }
 
 // ===========================================================================

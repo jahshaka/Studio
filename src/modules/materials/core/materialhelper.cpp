@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "../models/libraryv1.h"
+#include "../nodes/test.h"
 
 /*
 EFFECT SHADER FORMAT (v2, post MATERIALS_EVALUATOR phase 5)
@@ -62,6 +63,26 @@ QString MaterialHelper::assetPath(QString relPath)
 #else
 	return QDir::cleanPath(QDir::currentPath() + QDir::separator() + "assets" + QDir::separator() + relPath);
 #endif
+}
+
+int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph)
+{
+	if (!graph) return 0;
+	int resolved = 0;
+	for (auto node : graph->nodes.values()) {
+		if (node->typeName != "texture") continue;
+		auto texNode = static_cast<TextureNode*>(node);
+		if (!texNode->getTexturePath().isEmpty()) continue;   // already resolved
+		const auto rel = texNode->getTextureGuid();
+		if (rel.isEmpty()) continue;
+		const auto abs = assetPath(rel);
+		if (!QFileInfo::exists(abs)) continue;
+		GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
+		if (!graphTexture) continue;
+		texNode->setTextureGuid(graphTexture->guid);
+		resolved++;
+	}
+	return resolved;
 }
 
 QJsonObject MaterialHelper::serialize(NodeGraph* graph)

@@ -1018,19 +1018,10 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset)
 	// NEW-format templates (re-saved through the migration) have no
 	// properties: their texture nodes carry app-relative image names
 	// ("wood.jpg", "materials_to_graph/brick diff.jpg") that resolve
-	// against the shadergraph asset folder and import on first use.
-	for (auto node : graph->nodes.values()) {
-		if (node->typeName != "texture") continue;
-		auto texNode = static_cast<TextureNode*>(node);
-		if (!texNode->getTexturePath().isEmpty()) continue; // already resolved
-		auto rel = texNode->getTextureGuid();
-		if (rel.isEmpty()) continue;
-		auto abs = MaterialHelper::assetPath(rel);
-		if (QFileInfo::exists(abs)) {
-			GraphTexture* graphTexture = TextureManager::getSingleton()->importTexture(abs);
-			texNode->setTextureGuid(graphTexture->guid);
-		}
-	}
+	// against the shadergraph asset folder and import on first use. Shared
+	// with materials.loadGraph since 2026-09-04 — the scripted route used to
+	// see those textures unconnected.
+	MaterialHelper::resolveAppRelativeTextures(graph);
 
 	graph->settings.name = preset.name;
 	setNodeGraph(graph);
@@ -1389,6 +1380,14 @@ bool EffectsPage::graphRedo()
 	stack->redo();
 	if (scene) scene->update();
 	return true;
+}
+
+// The node-search palette, reachable from the keyboard for the first time:
+// the dialog existed and only Tab-over-the-view opened it.
+bool EffectsPage::openNodeSearch()
+{
+	if (!graphicsView) return false;
+	return graphicsView->openNodeSearch();
 }
 
 int EffectsPage::graphUndoCount() const { return stack ? stack->index() : 0; }
@@ -1795,7 +1794,21 @@ void EffectsPage::configureConnections()
 
 	
 
-	QShortcut *shortcut = new QShortcut(QKeySequence("space"), this);
+	// (No page-level Space here either, since 2026-09-04. There WAS one — a
+	// Qt::WindowShortcut on this page opening SearchDialog — and it was the
+	// SECOND claimant for the chord: MainWindow's ShortcutRegistry "tool.cycle"
+	// owns Space too, both Qt::WindowShortcut, so with this page visible Qt
+	// dispatched it AMBIGUOUSLY and QShortcut answers an ambiguous event by
+	// doing nothing. Measured on Xvfb with qt.gui.shortcutmap.debug: two
+	// ExactMatch entries for QKeySequence("Space") and no dialog. That is why
+	// the node-search palette had never once opened from the keyboard.
+	//
+	// The registry entry stays the single claimant and MainWindow routes by
+	// space (spaceKeyActiveSpace -> EffectsPage::openNodeSearch), exactly the
+	// pattern undoActiveSpace established for Ctrl+Z. Tab over the graph view
+	// still opens it too. This one also used `this->graph` and a fixed {0,0}
+	// position, where the live graph is scene->getNodeGraph().
+	//
 	// (No page-level Ctrl+Z / Ctrl+Shift+Z here. There WERE two, spelled
 	// "crtl+z" and "crtl+shift+z" — QKeySequence parses the typo'd modifier
 	// as nothing, so neither had ever fired since the day they were written
@@ -1818,10 +1831,6 @@ void EffectsPage::configureConnections()
 	// they were exact duplicates of GraphicsView's pair anyway. Making the
 	// chord work on this page is a decision about WHICH undo owns it —
 	// reported to the lead, not made here.)
-	connect(shortcut, &QShortcut::activated, [=]() {
-		auto dialog = new SearchDialog(this->graph, scene, { 0,0 });
-		dialog->exec();
-	});
 
     //connections for MyFx sections
 

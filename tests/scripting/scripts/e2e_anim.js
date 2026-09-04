@@ -31,11 +31,12 @@ function throws(fn, what) {
 var proj = project.create("Anim Verbs " + Date.now());
 assert(proj.length > 10, "project.create -> " + proj);
 
-// The Timeline panel auto-creates an empty animation on whatever node is
-// SELECTED (AnimationWidget::setSceneNode) — including in a headless run,
+// The Timeline panel USED TO auto-create an empty "Animation" on whatever node
+// was SELECTED (AnimationWidget::setSceneNode) — including in a headless run,
 // where the panel is constructed but never shown, and scene.addPrimitive
-// selects what it adds. So a script that wants a known animation surface
-// starts by clearing it; that this works at all is the first thing tested.
+// selects what it adds. Since 2026-09-04 the clip is created on the first
+// KEYFRAME instead, so a freshly added node has none; this helper stays as a
+// belt-and-braces guard and its no-op-ness is asserted below.
 function clearAnims(id) {
     var guard = 0;
     while (anim.list(id).length > 0) {
@@ -53,6 +54,13 @@ var cube = scene.addPrimitive("cube", { position: { x: 0, y: 0, z: 0 } });
 assert(cube.length > 10, "scene.addPrimitive -> " + cube);
 
 // ---- a node with no animations ----------------------------------------------
+// THE anti-regression for the auto-create defect: adding (and thereby
+// SELECTING) a node must not mint an animation on it. Empty clips minted on
+// every click serialize — a scene the user only clicked through grew one per
+// node.
+assert(anim.list(cube).length === 0,
+       "a freshly added/selected node has NO animation (none is auto-created): "
+       + JSON.stringify(anim.list(cube)));
 clearAnims(cube);
 assert(anim.list(cube).length === 0, "anim.remove cleared the node's animations");
 
@@ -257,9 +265,50 @@ assert(near(node.property(lamp, "intensity"), 10), "and again at the last key");
 var posed = node.property(lamp, "lightColor");
 assert(posed === "#ffffff", "the colour track posed too: " + posed);
 
+// ---- curve shape (tangents) -------------------------------------------------
+// Every key defaults to a free tangent with zero slopes.
+var shapeBefore = anim.keyframes(cube, "scale").tracks[0].keys[0];
+assert(shapeBefore.leftTangent === "free" && shapeBefore.rightTangent === "free",
+       "a new key defaults to free tangents");
+assert(shapeBefore.handleMode === "joined", "and a joined handle");
+assert(near(shapeBefore.leftSlope, 0) && near(shapeBefore.rightSlope, 0), "and zero slopes");
+
+// Author a non-default shape on the scale track's X channel at t=0.
+assert(anim.setKeyTangents(cube, "scale", 0,
+                           { left: "constant", right: "linear",
+                             leftSlope: 0.25, rightSlope: -1.5,
+                             handleMode: "broken", channel: "X" }) === true,
+       "anim.setKeyTangents on one channel");
+var shaped = anim.keyframes(cube, "scale").tracks[0].keys[0];
+assert(shaped.leftTangent === "constant" && shaped.rightTangent === "linear",
+       "the tangent types took: " + shaped.leftTangent + "/" + shaped.rightTangent);
+assert(shaped.handleMode === "broken", "the handle mode took");
+assert(near(shaped.leftSlope, 0.25) && near(shaped.rightSlope, -1.5), "the slopes took");
+// The sibling channel was NOT touched (the `channel` filter).
+assert(anim.keyframes(cube, "scale").tracks[1].keys[0].leftTangent === "free",
+       "the Y channel kept its default (channel filter honoured)");
+throws(function () { anim.setKeyTangents(cube, "scale", 0, { left: "smooth" }); },
+       "an unknown tangent name is refused, not silently ignored");
+throws(function () { anim.setKeyTangents(cube, "scale", 7.5, { left: "linear" }); },
+       "no key at that time is refused");
+
+// A node that is only ever SELECTED, never keyed. The brief's gate for the
+// auto-create removal: select -> save -> the blob carries no animation for it.
+var untouched = scene.addPrimitive("sphere", { position: { x: 5, y: 0, z: 0 } });
+editor.select(untouched);
+assert(anim.list(untouched).length === 0, "a selected-but-never-keyed node has no animation");
+
 // ---- the round trip ---------------------------------------------------------
+// CLOSE, then open: project.open on an already-open project does not re-read
+// the blob, so a round trip without the close proves nothing about the
+// serializer (it was asserting against the live in-memory scene).
 assert(project.save() === true, "project.save");
-assert(project.open(proj) === true, "project.open (reopen)");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (REOPEN — the blob is re-read)");
+
+assert(anim.list(untouched).length === 0,
+       "and it still has none after save/close/open — nothing was serialized: "
+       + JSON.stringify(anim.list(untouched)));
 
 // Node guids survive the round trip, so the same ids still resolve.
 var reopened = anim.list(cube);
@@ -272,6 +321,21 @@ var skf = anim.keyframes(cube, "scale");
 assert(skf.tracks.length === 3 && skf.tracks[0].keys.length === 2,
        "both keys survived on every channel");
 assert(near(skf.tracks[0].keys[1].value, 3), "with their values");
+
+// THE serializer-mismatch anti-regression (anim-lane finding, 2026-09-04):
+// SceneWriter writes "leftTangentType"/"rightTangentType" and SceneReader read
+// "leftTangent"/"rightTangent", so BOTH tangent types were silently reset to
+// free on EVERY reload — a curve authored Constant/Linear came back straight.
+var reShaped = skf.tracks[0].keys[0];
+assert(reShaped.leftTangent === "constant",
+       "leftTangent survived the round trip: " + reShaped.leftTangent);
+assert(reShaped.rightTangent === "linear",
+       "rightTangent survived the round trip: " + reShaped.rightTangent);
+assert(reShaped.handleMode === "broken", "handleMode survived the round trip");
+assert(near(reShaped.leftSlope, 0.25) && near(reShaped.rightSlope, -1.5),
+       "the slopes survived the round trip");
+assert(skf.tracks[1].keys[0].leftTangent === "free",
+       "and the untouched channel is still free (not smeared by the reader)");
 assert(near(anim.length(cube), 1), "and the derived length: " + anim.length(cube));
 anim.seek(0.5);
 assert(near(node.property(cube, "scale").x, 2), "the reopened animation still poses");

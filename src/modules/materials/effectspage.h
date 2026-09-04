@@ -105,6 +105,13 @@ public:
 	// a caller can tell "did nothing" from "not available".
 	bool graphUndo();
 	bool graphRedo();
+
+	/// Opens the graph's node-SEARCH palette. The page-scoped entry point for
+	/// the shell's Space key (owner decision 2026-09-05: on the Materials space
+	/// Space searches nodes, everywhere else it cycles the gizmo) — the same
+	/// single-claimant routing pattern graphUndo established for Ctrl+Z. Tab
+	/// over the view still opens it too. False = no graph to search.
+	bool openNodeSearch();
 	/// Depth of the two halves of that stack — what the verbs report and what a
 	/// test asserts against.
 	int graphUndoCount() const;

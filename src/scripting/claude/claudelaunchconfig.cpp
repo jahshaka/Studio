@@ -60,13 +60,16 @@ bool writeFileAtomic(const QString &path, const QByteArray &content, QString *er
 
 } // namespace
 
-QStringList ClaudeLaunchConfig::jahshakaMcpTools()
+QString ClaudeLaunchConfig::jahshakaMcpToolPattern()
 {
-    return {QStringLiteral("mcp__jahshaka__run_script"),
-            QStringLiteral("mcp__jahshaka__api_docs"),
-            QStringLiteral("mcp__jahshaka__describe_scene"),
-            QStringLiteral("mcp__jahshaka__screenshot"),
-            QStringLiteral("mcp__jahshaka__undo_redo")};
+    // Server-anchored on purpose: `mcp__*` alone is ignored with a startup
+    // warning (Claude Code permission docs, re-verified at CLI 2.1.258).
+    return QStringLiteral("mcp__jahshaka__*");
+}
+
+QString ClaudeLaunchConfig::defaultModel()
+{
+    return QStringLiteral("fable");
 }
 
 QStringList ClaudeLaunchConfig::skillNames()
@@ -149,7 +152,8 @@ bool ClaudeLaunchConfig::installSkills(const QString &claudeDir, QString *errorO
 }
 
 QStringList ClaudeLaunchConfig::arguments(const QString &projectFolder, bool mcpEnabled,
-                                          const QString &resumeSessionId)
+                                          const QString &resumeSessionId,
+                                          const QString &model)
 {
     QStringList args{
         QStringLiteral("-p"),
@@ -167,10 +171,12 @@ QStringList ClaudeLaunchConfig::arguments(const QString &projectFolder, bool mcp
     QStringList allowed{QStringLiteral("Skill")};
     if (mcpEnabled) {
         args << QStringLiteral("--mcp-config") << mcpConfigPath(projectFolder);
-        allowed << jahshakaMcpTools();
+        allowed << jahshakaMcpToolPattern();
     }
     args << QStringLiteral("--allowedTools") << allowed.join(QLatin1Char(','));
 
+    if (!model.isEmpty())
+        args << QStringLiteral("--model") << model;
     if (!resumeSessionId.isEmpty())
         args << QStringLiteral("--resume") << resumeSessionId;
     return args;

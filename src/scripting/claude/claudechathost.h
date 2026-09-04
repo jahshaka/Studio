@@ -23,6 +23,14 @@ For more information see the LICENSE file
 // protocol); if the turn hasn't ended shortly after, the process is killed —
 // the NEXT send restarts it with --resume, so nothing is lost but the
 // interrupted turn.
+//
+// Stale resume (CLAUDE_EDITOR_SPEC D3): `--resume <unknown-id>` makes the CLI
+// exit 1 with "No conversation found with session ID: …". The id used to
+// survive that, so every later send rebuilt the same doomed argv and the chat
+// was bricked until the user found the Clear button — which any ~/.claude
+// prune, machine move or copied project folder could trigger. handleFinished
+// now recognises that failure, DROPS the id, and restarts once with the user's
+// message re-queued.
 
 #include <QObject>
 #include <QProcess>
@@ -44,6 +52,13 @@ public:
     bool configure(const QString &projectFolder, bool mcpEnabled,
                    quint16 mcpPort, const QString &mcpToken,
                    QString *errorOut = nullptr);
+
+    /// The model dock sessions run on. Defaults to
+    /// ClaudeLaunchConfig::defaultModel(); an empty string means "inherit the
+    /// user's own default" (the pre-2026-09-04 behaviour). This is the seam a
+    /// chat-header picker drives — the launch argv reads it on every start.
+    void setModel(const QString &model);
+    QString model() const { return mModel; }
 
     QString projectFolder() const { return mProjectFolder; }
     bool mcpEnabled() const { return mMcpEnabled; }
@@ -70,12 +85,20 @@ signals:
     void processFailed(const QString &detail);
     /// The stop fallback killed the process (turn aborted).
     void turnAborted();
+    /// The persisted session could not be resumed; it has been dropped and a
+    /// fresh conversation started (D3). The window shows this as an info row.
+    void sessionResumeFailed();
+    /// The configured project folder changed while a conversation was live:
+    /// that session is gone and the next turn starts a new one in the new
+    /// project's folder (D1).
+    void projectChanged(const QString &projectFolder);
 
 private:
     void startProcess();
     void writeUserMessage(const QString &text);
     void setBusy(bool busy);
     void handleFinished(int exitCode, QProcess::ExitStatus status);
+    bool isStaleResumeFailure(const QString &stderrText) const;
 
     QString mProjectFolder;
     bool mMcpEnabled = false;
@@ -85,11 +108,14 @@ private:
     QProcess *mProcess = nullptr;
     ClaudeStreamParser mParser;
     QString mSessionId;
+    QString mModel;
     QString mPendingMessage;   // queued until the process is up
+    QString mLastUserMessage;  // re-queued across ONE stale-resume restart
     QByteArray mStderr;
     QTimer mKillTimer;
     bool mBusy = false;
     bool mStopping = false;    // deliberate shutdown — don't report failure
+    bool mResumeRecovered = false;  // D3: one recovery attempt per session id
     int mRequestCounter = 0;
 };
 

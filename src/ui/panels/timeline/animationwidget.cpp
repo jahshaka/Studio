@@ -150,13 +150,13 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
         scene = node->getScene();
         ui->sceneNodeName->setText(node->name);
 
-        if(node->getAnimations().count() == 0) {
-            //showCreateAnimWidget();
-            //updateCreationWidgetMessage(node);
-            auto newAnim = iris::Animation::create("Animation");
-            node->addAnimation(newAnim);
-            node->setAnimation(newAnim);
-        }
+        // NO auto-create here (anim-lane finding, 2026-09-04). Selecting a node
+        // used to mint an empty "Animation" on it, and SceneWriter serializes
+        // every animation a node carries — so merely CLICKING through a scene
+        // grew the blob an empty clip per node, each of which then showed up in
+        // the animation list forever. The clip is created on the first keyframe
+        // instead (ensureAnimation, called from addPropertyKey); the "Add"
+        // button still creates one explicitly whenever the user asks.
 
         buildPropertiesMenu();
 
@@ -395,9 +395,28 @@ void AnimationWidget::deleteAnimation()
     this->setSceneNode(node);
 }
 
+// The lazy half of the auto-create removal: the first key on a node that has no
+// animation makes one. Named "Animation" exactly as the old auto-create did, so
+// nothing downstream sees a different clip name.
+iris::AnimationPtr AnimationWidget::ensureAnimation()
+{
+    if (!!animation) return animation;
+    if (!node) return iris::AnimationPtr();
+
+    animation = iris::Animation::create("Animation");
+    node->addAnimation(animation);
+    node->setAnimation(animation);
+
+    refreshAnimationList();
+    ui->keylabelView->setActiveAnimation(animation);
+    ui->loopCheckBox->setChecked(animation->getLooping());
+    hideCreateAnimWidget();
+    return animation;
+}
+
 void AnimationWidget::addPropertyKey(QAction *action)
 {
-    if (!animation)
+    if (!ensureAnimation())
         return;
 
     auto index = action->data().toInt();

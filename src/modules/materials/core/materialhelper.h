@@ -14,6 +14,19 @@ public:
 
 	static QString assetPath(QString relPath);
 
+	// Resolves a just-deserialized graph's APP-RELATIVE texture references
+	// ("wood.jpg", "materials_to_graph/brick diff.jpg") into TextureManager
+	// guids, importing the image on first use. New-format templates (the
+	// shipped .effect presets, re-saved through the evaluator migration) carry
+	// their images that way and are unusable until this runs.
+	//
+	// It used to live inline in EffectsPage::loadGraphFromTemplate, so only the
+	// UI's "instantiate a template" path got it: materials.loadGraph on the
+	// same file left every preset texture unconnected (samples audit,
+	// 2026-09-04). Idempotent — a node whose path already resolved is skipped.
+	// Returns the number of textures resolved.
+	static int resolveAppRelativeTextures(NodeGraph* graph);
+
 	// Converts a NodeGraph to the Material json format.
 	// Since Option B phase 1 the result also carries "pbrMaterial", the
 	// CPU-evaluated iris::PbrMaterial inputs of the graph (values + the list

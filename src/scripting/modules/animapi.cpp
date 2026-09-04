@@ -43,6 +43,41 @@ QString trackTypeName(iris::PropertyType type)
     }
 }
 
+/// The SERIALIZER's spelling for the curve-shape enums, so a script, the .jah
+/// file and SceneWriter::getKeyTangentTypeName all say the same three words.
+QString tangentTypeName(iris::TangentType type)
+{
+    switch (type) {
+    case iris::TangentType::Linear:   return QStringLiteral("linear");
+    case iris::TangentType::Constant: return QStringLiteral("constant");
+    case iris::TangentType::Free:     break;
+    }
+    return QStringLiteral("free");
+}
+
+bool tangentTypeFromName(const QString &name, iris::TangentType *out)
+{
+    const QString n = name.trimmed().toLower();
+    if (n == QLatin1String("free"))     { *out = iris::TangentType::Free;     return true; }
+    if (n == QLatin1String("linear"))   { *out = iris::TangentType::Linear;   return true; }
+    if (n == QLatin1String("constant")) { *out = iris::TangentType::Constant; return true; }
+    return false;
+}
+
+QString handleModeName(iris::HandleMode mode)
+{
+    return mode == iris::HandleMode::Broken ? QStringLiteral("broken")
+                                            : QStringLiteral("joined");
+}
+
+bool handleModeFromName(const QString &name, iris::HandleMode *out)
+{
+    const QString n = name.trimmed().toLower();
+    if (n == QLatin1String("joined")) { *out = iris::HandleMode::Joined; return true; }
+    if (n == QLatin1String("broken")) { *out = iris::HandleMode::Broken; return true; }
+    return false;
+}
+
 QString trackTypeName(int channels)
 {
     switch (channels) {
@@ -121,11 +156,21 @@ QVector<VerbInfo> AnimApi::verbs() const
           "Removes the key at `time` from every channel of the property's track on the active "
           "animation. False when there was no key there. Not undoable.",
           Needs::Document },
-        { "keyframes", "anim.keyframes(id, property) -> {property, type, length, tracks: [{name, keys: [{time, value}]}]}",
+        { "keyframes", "anim.keyframes(id, property) -> {property, type, length, tracks: [{name, keys: [{time, value, leftTangent, rightTangent, leftSlope, rightSlope, handleMode}]}]}",
           "Reads a property's keys back, CHANNEL BY CHANNEL — a vec3 track reports three tracks "
           "named X/Y/Z, a colour four named R/G/B/A, because that is how the document stores "
           "them: the channels are independent curves and need not share key times. Empty tracks "
-          "list = no track for that property.",
+          "list = no track for that property. Each key also carries its curve shape: the two "
+          "tangent types (free | linear | constant), their slopes, and the handle mode "
+          "(joined | broken) — what the curve editor's per-key context menu sets.",
+          Needs::Document },
+        { "setKeyTangents", "anim.setKeyTangents(id, property, time, {left, right, leftSlope, rightSlope, handleMode, channel}) -> bool",
+          "Sets the curve shape of the key at `time` — the curve editor's Left/Right Tangent and "
+          "handle-mode menu, which had no scripted reach at all. left/right are "
+          "free | linear | constant; handleMode is joined | broken; the slopes are floats. "
+          "`channel` names ONE channel of a multi-channel track (\"X\", \"R\", ...); without it "
+          "every channel with a key at that time is set. Omitted keys keep their value. False "
+          "when no channel has a key at that time. Not undoable (like every keyframe write).",
           Needs::Document },
         { "removeProperty", "anim.removeProperty(id, property) -> bool",
           "Deletes a property's whole track from the active animation. False when it had none.",
@@ -325,9 +370,16 @@ bool AnimApi::keyframe(const QString &id, const QString &property, double time, 
         case iris::PropertyType::Vec3:
             typed = iris::toQt(vecFromJs(raw, iris::fromQt(prop.value.value<QVector3D>())));
             break;
-        case iris::PropertyType::Color:
-            typed = colorFromJs(raw, prop.value.value<QColor>());
+        case iris::PropertyType::Color: {
+            // F8: an unreadable colour used to key the OLD value silently.
+            bool ok = false;
+            const QColor colour = colorFromJs(raw, prop.value.value<QColor>(), &ok);
+            if (!ok)
+                return fail(QStringLiteral("anim.keyframe: %1 (property '%2')")
+                                .arg(colorHelp(raw), property));
+            typed = colour;
             break;
+        }
         default:
             typed = raw.toFloat();
             break;
@@ -374,6 +426,15 @@ QVariantMap AnimApi::keyframes(const QString &id, const QString &property)
                         QVariantMap k;
                         k["time"] = key->time;
                         k["value"] = key->value;
+                        // The curve shape. It travels through the serializer,
+                        // and until 2026-09-04 it did not survive a reload
+                        // (SceneWriter wrote leftTangentType, SceneReader read
+                        // leftTangent) — unreadable is how that stayed hidden.
+                        k["leftTangent"] = tangentTypeName(key->leftTangent);
+                        k["rightTangent"] = tangentTypeName(key->rightTangent);
+                        k["leftSlope"] = key->leftSlope;
+                        k["rightSlope"] = key->rightSlope;
+                        k["handleMode"] = handleModeName(key->handleMode);
                         keys.append(k);
                     }
                 }
@@ -385,6 +446,51 @@ QVariantMap AnimApi::keyframes(const QString &id, const QString &property)
     if (!out.contains("type")) out["type"] = QStringLiteral("none");
     out["tracks"] = tracks;
     return out;
+}
+
+bool AnimApi::setKeyTangents(const QString &id, const QString &property, double time,
+                            const QVariantMap &shape)
+{
+    auto node = nodeOrFail(id, QStringLiteral("anim.setKeyTangents"));
+    if (!node) return false;
+    auto anim = activeOrFail(node, QStringLiteral("anim.setKeyTangents"));
+    if (!anim) return false;
+    if (!anim->hasPropertyAnim(property))
+        return fail(QStringLiteral("anim.setKeyTangents: no track for '%1'").arg(property));
+    auto *track = anim->getPropertyAnim(property);
+    if (!track) return fail(QStringLiteral("anim.setKeyTangents: no track for '%1'").arg(property));
+
+    iris::TangentType left = iris::TangentType::Free, right = iris::TangentType::Free;
+    iris::HandleMode mode = iris::HandleMode::Joined;
+    if (shape.contains("left") && !tangentTypeFromName(shape.value("left").toString(), &left))
+        return fail(QStringLiteral("anim.setKeyTangents: 'left' must be free, linear or constant"));
+    if (shape.contains("right") && !tangentTypeFromName(shape.value("right").toString(), &right))
+        return fail(QStringLiteral("anim.setKeyTangents: 'right' must be free, linear or constant"));
+    if (shape.contains("handleMode")
+        && !handleModeFromName(shape.value("handleMode").toString(), &mode))
+        return fail(QStringLiteral("anim.setKeyTangents: 'handleMode' must be joined or broken"));
+
+    const QString channel = shape.value("channel").toString();
+    int touched = 0;
+    for (const auto &info : track->getKeyFrames()) {
+        if (!info.keyFrame) continue;
+        if (!channel.isEmpty() && info.name.compare(channel, Qt::CaseInsensitive) != 0) continue;
+        for (auto *key : info.keyFrame->keys) {
+            if (qAbs(key->time - time) > 1e-4) continue;
+            if (shape.contains("left"))       key->leftTangent = left;
+            if (shape.contains("right"))      key->rightTangent = right;
+            if (shape.contains("leftSlope"))  key->leftSlope = shape.value("leftSlope").toFloat();
+            if (shape.contains("rightSlope")) key->rightSlope = shape.value("rightSlope").toFloat();
+            if (shape.contains("handleMode")) key->handleMode = mode;
+            touched++;
+        }
+    }
+    if (touched == 0)
+        return fail(QStringLiteral("anim.setKeyTangents: no key at %1s on '%2'%3")
+                        .arg(time).arg(property,
+                                       channel.isEmpty() ? QString()
+                                                         : QStringLiteral(" channel '%1'").arg(channel)));
+    return true;
 }
 
 bool AnimApi::removeProperty(const QString &id, const QString &property)

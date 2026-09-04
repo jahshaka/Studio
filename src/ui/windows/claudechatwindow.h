@@ -95,6 +95,9 @@ private:
     void sendCurrentInput();
     void updateBusyUi(bool busy);
     void clearConversation();
+    /// The transcript rows only — no session change (see the .cpp for why the
+    /// project-switch path must not clear the session).
+    void clearTranscript();
 
     QSettings *mSettings = nullptr;
     ClaudeChatHost *mHost = nullptr;

@@ -132,15 +132,16 @@ static void testLaunchConfig()
     const int mcpAt = args.indexOf("--mcp-config");
     CHECK(mcpAt >= 0 && args.value(mcpAt + 1) == ClaudeLaunchConfig::mcpConfigPath(project),
           "argv: only OUR mcp config");
+    // The allow list is the SERVER GLOB, never a hand-typed tool list: a tool
+    // added to McpTools::listTools must be usable in the dock the same day
+    // (CLAUDE_EDITOR_SPEC §C a-glob). A name-by-name list is the regression.
     const int allowAt = args.indexOf("--allowedTools");
     const QStringList allowed = args.value(allowAt + 1).split(',');
-    CHECK(allowAt >= 0 && allowed.size() == 6 && allowed.contains("Skill")
-              && allowed.contains("mcp__jahshaka__run_script")
-              && allowed.contains("mcp__jahshaka__api_docs")
-              && allowed.contains("mcp__jahshaka__describe_scene")
-              && allowed.contains("mcp__jahshaka__screenshot")
-              && allowed.contains("mcp__jahshaka__undo_redo"),
-          "argv: allow list is exactly Skill + the five jahshaka tools");
+    CHECK(allowAt >= 0 && allowed.size() == 2 && allowed.contains("Skill")
+              && allowed.contains("mcp__jahshaka__*"),
+          "argv: allow list is Skill + the jahshaka server glob");
+    CHECK(!args.value(allowAt + 1).contains("mcp__jahshaka__run_script"),
+          "argv: no per-tool names in the allow list");
     const int denyAt = args.indexOf("--disallowedTools");
     CHECK(denyAt >= 0 && args.value(denyAt + 1).contains("Bash")
               && args.value(denyAt + 1).contains("WebFetch")
@@ -160,6 +161,16 @@ static void testLaunchConfig()
     const int resumeAt = resumeArgs.indexOf("--resume");
     CHECK(resumeAt >= 0 && resumeArgs.value(resumeAt + 1) == "sess-42",
           "argv: --resume carries the stored session id");
+
+    // ---- model (owner decision: the dock pins the BIG model) ----
+    CHECK(!args.contains("--model"), "argv: no --model when none is chosen");
+    CHECK(!ClaudeLaunchConfig::defaultModel().isEmpty(),
+          "config: a default model is defined (the dock no longer inherits silently)");
+    const QStringList modelArgs = ClaudeLaunchConfig::arguments(
+        project, true, QString(), ClaudeLaunchConfig::defaultModel());
+    const int modelAt = modelArgs.indexOf("--model");
+    CHECK(modelAt >= 0 && modelArgs.value(modelAt + 1) == ClaudeLaunchConfig::defaultModel(),
+          "argv: --model carries the chosen model");
 
     // ---- session persistence (owner decision 3) ----
     CHECK(ClaudeLaunchConfig::readSessionId(project).isEmpty(), "session: none initially");
@@ -347,11 +358,14 @@ static void testHost(const QString &scratch)
     CHECK(ClaudeLaunchConfig::readSessionId(project) == "fake-session-1",
           "host: session id persisted per project");
 
-    // The spawn boundary got the lockdown argv.
+    // The spawn boundary got the lockdown argv — with the SERVER GLOB, and the
+    // pinned model (the dock no longer inherits the user's terminal default).
     const QString argv = QString::fromUtf8(readFile(argvLog));
     CHECK(argv.contains("--tools Skill") && argv.contains("--strict-mcp-config")
-              && argv.contains("mcp__jahshaka__run_script"),
+              && argv.contains("mcp__jahshaka__*"),
           "host: fake CLI spawned with the lockdown argv");
+    CHECK(argv.contains("--model " + ClaudeLaunchConfig::defaultModel()),
+          "host: the spawn carries the pinned model");
     CHECK(!argv.contains("--resume"), "host: first run has no --resume");
 
     // Second process resumes the persisted session.
@@ -370,6 +384,83 @@ static void testHost(const QString &scratch)
     CHECK(!QString::fromUtf8(readFile(argvLog)).contains("--resume"),
           "host: post-Clear run starts without --resume");
     host.shutdown();
+
+    // ---- D1: a PROJECT SWITCH ends the conversation ----------------------
+    // configure() already stopped the process on a folder change; nothing told
+    // the window, so a chat left open across a switch showed the old project's
+    // transcript beside the new project's session.
+    {
+        host.sendMessage("hello project one");
+        CHECK(waitFor([&]() { return completions == 4; }), "host: a turn in project one");
+        QTemporaryDir otherDir;
+        int switches = 0;
+        QString switchedTo;
+        QObject::connect(&host, &ClaudeChatHost::projectChanged,
+                         [&](const QString &folder) { ++switches; switchedTo = folder; });
+        CHECK(host.configure(otherDir.path(), true, 8639, "tok"),
+              "host: configure to a second project");
+        CHECK(switches == 1 && switchedTo == otherDir.path(),
+              "D1: the project switch is announced once, with the new folder");
+        CHECK(!host.isProcessRunning(), "D1: the old conversation's process is gone");
+        CHECK(host.sessionId().isEmpty(),
+              "D1: and its session id does not follow into the new project");
+        // Switching BACK does not re-announce when there was no conversation.
+        host.configure(project, true, 8639, "tok");
+    }
+
+    // ---- D3: a STALE session id does not brick the chat -------------------
+    // `--resume <unknown-id>` is a hard exit 1. The id used to survive it, so
+    // every later send rebuilt the same doomed argv — any ~/.claude prune or
+    // copied project folder produced a chat that failed forever until Clear.
+    {
+        const QString picky = scratch + "/fake-claude-stale-resume";
+        const QString pickyScript = QString(
+            "#!/bin/bash\n"
+            "echo \"$@\" > '%1'\n"
+            "case \"$@\" in\n"
+            "  *--resume*)\n"
+            "    echo 'No conversation found with session ID: stale-session' >&2\n"
+            "    exit 1;;\n"
+            "esac\n"
+            "while IFS= read -r line; do\n"
+            "  case \"$line\" in *control_request*) continue;; esac\n"
+            "  printf '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"fresh-session\",\"tools\":[\"Skill\"],\"mcp_servers\":[]}\\n'\n"
+            "  printf '{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"recovered\"}]},\"session_id\":\"fresh-session\"}\\n'\n"
+            "  printf '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"recovered\",\"session_id\":\"fresh-session\"}\\n'\n"
+            "done\n").arg(argvLog);
+        writeFile(picky, pickyScript.toUtf8());
+        QFile::setPermissions(picky, QFile::permissions(picky) | QFile::ExeOwner);
+        qputenv("JAHSHAKA_CLAUDE_CLI", picky.toUtf8());
+
+        QTemporaryDir staleDir;
+        ClaudeLaunchConfig::writeSessionId(staleDir.path(), "stale-session");
+
+        ClaudeChatHost stale;
+        int recoveries = 0, staleCompletions = 0, hardFailures = 0;
+        QString finalText;
+        QObject::connect(&stale, &ClaudeChatHost::sessionResumeFailed,
+                         [&]() { ++recoveries; });
+        QObject::connect(&stale, &ClaudeChatHost::processFailed,
+                         [&](const QString &) { ++hardFailures; });
+        QObject::connect(stale.parser(), &ClaudeStreamParser::assistantText,
+                         [&](const QString &t) { finalText = t; });
+        QObject::connect(stale.parser(), &ClaudeStreamParser::turnCompleted,
+                         [&](bool, const QString &, const QString &, double) { ++staleCompletions; });
+
+        stale.configure(staleDir.path(), false, 0, QString());
+        CHECK(stale.sessionId() == "stale-session", "D3: the stale id is loaded from disk");
+        stale.sendMessage("are you there?");
+        CHECK(waitFor([&]() { return staleCompletions == 1; }, 15000),
+              "D3: the turn COMPLETES — the host restarted after the failed resume");
+        CHECK(recoveries == 1, "D3: the recovery is announced once");
+        CHECK(hardFailures == 0, "D3: and it is not reported as a hard failure");
+        CHECK(finalText == "recovered", "D3: the user's message was re-queued, not lost");
+        CHECK(stale.sessionId() == "fresh-session", "D3: a fresh session id took its place");
+        CHECK(ClaudeLaunchConfig::readSessionId(staleDir.path()) == "fresh-session",
+              "D3: and the stale id is gone from disk (it cannot come back next launch)");
+        stale.shutdown();
+        qputenv("JAHSHAKA_CLAUDE_CLI", fake.toUtf8());
+    }
 
     // Failure surfaces (missing CLI).
     qputenv("JAHSHAKA_CLAUDE_CLI", (scratch + "/really-not-there").toUtf8());

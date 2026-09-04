@@ -12,7 +12,8 @@ For more information see the LICENSE file
 #ifndef MCPTOOLS_H
 #define MCPTOOLS_H
 
-// The five MCP tools (CLAUDE_EDITOR_SPEC.md phase 1). Deliberately FEW: the
+// The MCP tools (CLAUDE_EDITOR_SPEC.md phase 1; the five-tool cap was lifted by
+// the owner 2026-09-05). Deliberately FEW: the
 // scripting engine is the whole capability surface — Claude writes JavaScript
 // against the registry verbs, and these tools are only the bridge:
 //
@@ -22,9 +23,11 @@ For more information see the LICENSE file
 //   screenshot     engine viewport render as PNG (MCP image content)
 //   undo_redo      escape hatch onto the editor undo stack
 //
-// Per-verb MCP tools are explicitly rejected (spec): 76 tools bloat every
-// model call; run_script + api_docs is stronger (loops, math, batching under
-// one undo macro).
+// Per-verb MCP tools are explicitly rejected (spec): one tool per verb would
+// mean one tool descriptor per registry verb in every model call — hundreds,
+// growing with every feature. run_script + api_docs is stronger anyway (loops,
+// math, batching under one undo macro). No count is written here on purpose:
+// the last one said 76 and was three years of features out of date.
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -36,7 +39,9 @@ class McpTools
 public:
     explicit McpTools(ScriptEngine *engine);
 
-    /// The tools/list payload: five tool descriptors with JSON input schemas.
+    /// The tools/list payload: one descriptor with a JSON input schema per
+    /// tool. run_script's description is GENERATED from the live registry (its
+    /// module list used to be hand-typed and went stale — audit F16).
     QJsonArray listTools() const;
 
     /// Executes one tools/call. Returns the MCP result object

@@ -17,6 +17,12 @@ public:
 	void fitSelection();
 	void resetZoom();
 
+	/// Opens the node-search palette. PUBLIC since the Space key landed
+	/// (EffectsPage::openNodeSearch routes it here): Tab still opens it under
+	/// the cursor, and the shortcut opens it from anywhere on the page.
+	/// Returns false when there is no graph to search.
+	bool openNodeSearch();
+
 private:
 	void increaseScale();
 	void decreaseScale();
@@ -28,7 +34,6 @@ private:
 	GraphNodeScene *scene;
 
 	void addShortcuts();
-	void openNodeSearch();
 
 protected:
 	bool event(QEvent *event) override;

@@ -306,11 +306,20 @@ bool GraphicsView::event(QEvent *event)
 	return QGraphicsView::event(event);
 }
 
-void GraphicsView::openNodeSearch()
+bool GraphicsView::openNodeSearch()
 {
-	if (scene->getNodeGraph() == nullptr)
-		return;
-	auto dialog = new SearchDialog(scene->getNodeGraph(), scene, QCursor::pos());
+	// scene was dereferenced unguarded here; the Tab path happened to test it
+	// first, and the Space shortcut can arrive before a graph is created.
+	if (scene == nullptr || scene->getNodeGraph() == nullptr)
+		return false;
+	// The dialog opens at the mouse (Tab's behaviour). Driven from the KEYBOARD
+	// the pointer may be anywhere on screen — off this page entirely — so fall
+	// back to the middle of the view.
+	QPoint at = QCursor::pos();
+	if (!underMouse())
+		at = viewport()->mapToGlobal(viewport()->rect().center());
+	auto dialog = new SearchDialog(scene->getNodeGraph(), scene, at);
 	dialog->exec();
 	dialog->deleteLater();
+	return true;
 }

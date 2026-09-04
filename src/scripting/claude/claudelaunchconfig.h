@@ -35,8 +35,16 @@ For more information see the LICENSE file
 // every built-in tool except Skill outright (verified against CLI 2.1.251:
 // the session's tool list is exactly ["Skill"] + the MCP tools);
 // `--strict-mcp-config` limits MCP to our config file; the allow list
-// auto-approves exactly the five jahshaka tools (+Skill) so no permission
-// prompt can ever appear; the deny list is belt-and-braces on top.
+// auto-approves our whole MCP server (+Skill) so no permission prompt can ever
+// appear; the deny list is belt-and-braces on top.
+//
+// The allow list is the server-scoped GLOB `mcp__jahshaka__*`, not a hand-typed
+// list of tool names (CLAUDE_EDITOR_SPEC §C "a-glob", verified live at CLI
+// 2.1.258). The hardcoded five names meant any tool added to McpTools::listTools
+// was visible to the session but NOT allow-listed, and under a growing toolset
+// came back `is_error: true` "permission ... denied" — a bug that appears in
+// the dock only, since external Claude Code users control their own allow list.
+// The glob must stay server-anchored: bare `mcp__*` is ignored with a warning.
 
 #include <QString>
 #include <QStringList>
@@ -44,9 +52,18 @@ For more information see the LICENSE file
 class ClaudeLaunchConfig
 {
 public:
-    /// The five MCP tools the jahshaka server exposes, as Claude Code
-    /// permission names (mcp__<server>__<tool>).
-    static QStringList jahshakaMcpTools();
+    /// The permission pattern that covers EVERY tool on the jahshaka MCP
+    /// server, present and future (`mcp__jahshaka__*`).
+    static QString jahshakaMcpToolPattern();
+
+    /// The default model for dock sessions. The shipped argv passed no
+    /// `--model` at all, so every turn silently inherited whatever the user's
+    /// terminal was tuned for. Owner decision 2026-09-05 (AI_SURFACE_PROGRAM_SPEC
+    /// §Owner decisions): pin the BIG model — capability over cost, chosen over
+    /// the spec's Sonnet recommendation at a measured ~$0.15 vs ~$0.04 per short
+    /// turn. That measurement was taken on `claude-fable-5-1`, so `fable` is the
+    /// alias that reproduces exactly the model the owner priced and approved.
+    static QString defaultModel();
 
     /// <project>/.claude/jahshaka-mcp.json (the path, whether or not written).
     static QString mcpConfigPath(const QString &projectFolder);
@@ -59,9 +76,12 @@ public:
 
     /// The full argv for `claude` (program not included). Stream-json in/out,
     /// partial messages, and the lockdown flags; --mcp-config only when
-    /// mcpEnabled; --resume only when resumeSessionId is non-empty.
+    /// mcpEnabled; --resume only when resumeSessionId is non-empty; --model
+    /// only when `model` is non-empty (the seam a header picker will drive —
+    /// pass an empty string to inherit the user's default again).
     static QStringList arguments(const QString &projectFolder, bool mcpEnabled,
-                                 const QString &resumeSessionId = QString());
+                                 const QString &resumeSessionId = QString(),
+                                 const QString &model = QString());
 
     /// Session persistence (jahshaka-chat.json).
     static QString readSessionId(const QString &projectFolder);

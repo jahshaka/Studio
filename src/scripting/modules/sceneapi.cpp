@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/sceneapi.h"
 
-#include <QFileInfo>
 
 #include "scripting/modules/moduleshared.h"
 #include "commands/reparentscenenodecommand.h"
@@ -56,8 +55,13 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "addEmpty", "scene.addEmpty({position, parent}) -> id",
           "Adds an empty group node. Undoable.",
           Needs::Document },
-        { "addMesh", "scene.addMesh(path, {position, ...}) -> id",
-          "Imports a mesh file (obj, fbx, dae, ...) straight into the scene — no dialog, the path is the argument. Undoable.",
+        { "addMesh", "scene.addMesh(path, {position, ...}) -> REFUSED",
+          "REMOVED — this verb always fails. It used to parse a mesh file straight into the "
+          "scene, which wrote the DISK PATH where the reader expects an asset guid: the node "
+          "came back empty on the next open and never exported (the archiver is asset-row "
+          "driven). Use the ONE import pipeline instead: "
+          "var g = assets.importFile(path); var p = assets.addToProject(g); "
+          "assets.addToScene(p, {position}). Only the last of those three is undoable.",
           Needs::Document },
         { "addImagePlane", "scene.addImagePlane(textureGuid, {position?, doubleSided?}) -> id",
           "Spawns an image plane for a Texture asset (IMAGE_PLANE_SPEC option A): a plane sized to the image's aspect (long side 1 m), facing the editor camera at creation, with a basic PBR material carrying the image as baseColorMap (roughness 1, metallic 0; images with an alpha channel blend). Bytes resolve pin-first through the CAS. doubleSided defaults true. Undoable.",
@@ -300,15 +304,33 @@ QString SceneApi::addParticles(const QString &preset, const QVariantMap &options
     return finishAdd(rest, QStringLiteral("scene.addParticles"));
 }
 
+// F1 (AI_SURFACE_AUDIT, CRITICAL): this verb was a DATA-LOSS verb and now
+// refuses instead of pretending.
+//
+// It parsed the file with iris::MeshNode::loadAsSceneFragment and dropped the
+// resulting node into the scene with no library asset behind it. SceneWriter
+// then wrote the node's disk path into "mesh" (scenewriter.cpp) where
+// SceneReader resolves that field AS A GUID (scenereader.cpp) — so the node
+// reloaded with no geometry, and it could never export because the archiver
+// walks asset rows. Nothing in the UI used this path either (the drag-drop and
+// menu import routes both go through the asset pipeline); the verb was its only
+// live caller, and the shipped assets skill taught it as a shortcut (F2).
+//
+// Failing loudly rather than silently re-routing: the import half of the correct
+// flow is NOT undoable (assets.importFile), so quietly turning a verb documented
+// "Undoable" into a half-undoable one would just trade this defect for the F5
+// class. ASSET_PIPELINE_SPEC's "one pipeline" rule says the composition belongs
+// in assets.importAndPlace (AI_SURFACE_PROGRAM_SPEC lane D #7), not here.
 QString SceneApi::addMesh(const QString &path, const QVariantMap &options)
 {
-    if (!requireProject()) return QString();
-    if (!sceneOrFail()) return QString();
-    if (path.isEmpty() || !QFileInfo::exists(path)) {
-        fail(QStringLiteral("scene.addMesh: no such file '%1'").arg(path));
-        return QString();
-    }
-    host.services->selection->select(iris::SceneNodePtr());
-    host.services->sceneEdit->addMesh(path, true, vecFromJs(options.value("position")));
-    return finishAdd(options, QStringLiteral("scene.addMesh"));
+    Q_UNUSED(options);
+    fail(QStringLiteral(
+             "scene.addMesh is removed: it wrote the disk path '%1' where the scene reader "
+             "expects an asset guid, so the node came back EMPTY on the next open and never "
+             "exported. Import it properly instead:\n"
+             "  var g = assets.importFile(\"%1\");   // library asset (not undoable)\n"
+             "  var p = assets.addToProject(g);      // pin it into this project (not undoable)\n"
+             "  assets.addToScene(p, {position: ...}); // places it (undoable)")
+             .arg(path));
+    return QString();
 }

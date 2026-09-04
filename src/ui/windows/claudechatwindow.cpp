@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "claudechatwindow.h"
 
 #include <QCloseEvent>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -325,6 +326,23 @@ void ClaudeChatWindow::connectHost()
     });
     connect(mHost, &ClaudeChatHost::turnAborted, this,
             [this]() { addInfoLine(tr("stopped")); });
+    // D3: the previous conversation could not be resumed. The host has already
+    // dropped the id and restarted with the user's message — say so, so the
+    // lost context is visible rather than mysterious.
+    connect(mHost, &ClaudeChatHost::sessionResumeFailed, this, [this]() {
+        mResumeNoticeShown = true;
+        addInfoLine(tr("the previous conversation could not be resumed — starting a new one"));
+    });
+    // D1: a project switch ends the conversation (new cwd, new MCP config, new
+    // session file). The transcript above belongs to the old project.
+    connect(mHost, &ClaudeChatHost::projectChanged, this, [this](const QString &folder) {
+        clearTranscript();
+        if (!folder.isEmpty())
+            addInfoLine(tr("switched to %1 — new conversation")
+                            .arg(QFileInfo(folder).fileName()));
+        else
+            addInfoLine(tr("the project was closed — new conversation next time"));
+    });
 }
 
 // ---- state pages ----
@@ -507,9 +525,12 @@ void ClaudeChatWindow::updateBusyUi(bool busy)
     if (!busy) mInput->setFocus();
 }
 
-void ClaudeChatWindow::clearConversation()
+// The rows only. Split out of clearConversation because a PROJECT SWITCH must
+// wipe the transcript WITHOUT calling clearSession() — by the time that signal
+// arrives the host already points at the new project, so clearing "the session"
+// would delete the NEW project's stored id.
+void ClaudeChatWindow::clearTranscript()
 {
-    if (mHost) mHost->clearSession();
     // Remove every row but the trailing stretch.
     while (mMessages->count() > 1) {
         QLayoutItem *item = mMessages->takeAt(0);
@@ -520,6 +541,12 @@ void ClaudeChatWindow::clearConversation()
     mStreamingText.clear();
     mMessageCount = 0;
     mResumeNoticeShown = true; // fresh session — no resume notice
+}
+
+void ClaudeChatWindow::clearConversation()
+{
+    if (mHost) mHost->clearSession();
+    clearTranscript();
     addInfoLine(tr("new session"));
 }
 

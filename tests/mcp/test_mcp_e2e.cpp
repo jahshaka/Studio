@@ -13,6 +13,10 @@
 //   - screenshot returns a decodable PNG at the requested size
 //   - undo_redo reverts the last run_script call (describe_scene confirms)
 //   - api_docs returns the registry reference (whole and per-module)
+//   - F5: a scripted node.setProperty is UNDOABLE through undo_redo
+//   - F6: run_script timeoutMs interrupts a runaway loop, the app survives,
+//     and the NEXT request is served (the setInterrupted reset)
+//   - F16: run_script's module list is generated from the live registry
 //
 // HOME points at a scratch dir (set by ctest) so the run can never touch the
 // user's live library. Framework-free; non-zero exit on failure.
@@ -208,6 +212,22 @@ int main(int argc, char **argv)
         CHECK(names == QStringList({ "api_docs", "describe_scene", "run_script",
                                      "screenshot", "undo_redo" }),
               "the five tools are run_script/api_docs/describe_scene/screenshot/undo_redo");
+
+        // F16: run_script's module list is GENERATED from the registry, so it
+        // cannot go stale again. It used to be a hand-typed ten of thirteen —
+        // three whole domains invisible to anything reading only the tool list.
+        QString runScriptDoc;
+        for (const QJsonValue &t : tools)
+            if (t.toObject().value("name").toString() == QLatin1String("run_script"))
+                runScriptDoc = t.toObject().value("description").toString();
+        CHECK(runScriptDoc.contains("anim") && runScriptDoc.contains("particles")
+                  && runScriptDoc.contains("avatar"),
+              "run_script's description lists the modules the audit found missing "
+              "(anim/particles/avatar) — it is generated, not typed");
+        CHECK(runScriptDoc.contains("timeoutMs"),
+              "run_script's description documents timeoutMs");
+        CHECK(runScriptDoc.contains("editor.frame") || runScriptDoc.contains("native verb"),
+              "and states the interrupt's bytecode-boundary limit");
     }
 
     // ---- api_docs --------------------------------------------------------
@@ -292,6 +312,91 @@ int main(int argc, char **argv)
                                                      QJsonObject{ { "action", "redo" } }));
         CHECK(redone.value("applied").toBool(), "undo_redo applies the redo");
         CHECK(countNodes() == before + 1, "redo restores the primitive");
+    }
+
+    // ---- F5: node.setProperty is UNDOABLE --------------------------------
+    // The audit's F5: node.setProperty was a direct document write documented
+    // "not undoable yet", while every skill and this very tool promise that one
+    // script run is one undo step — and it is the only path to light parameters
+    // and every particle scalar.
+    {
+        const QJsonObject lit = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script",
+                           "var l = scene.addLight('point', {position:{x:0,y:3,z:0}});"
+                           "node.setProperty(l, 'intensity', 7.5);"
+                           "JSON.stringify({id:l, v:node.property(l,'intensity')})" },
+                         { "label", "add a light" } }));
+        CHECK(lit.value("ok").toBool(), "run_script adds a light and sets its intensity");
+        const QJsonObject litInfo =
+            QJsonDocument::fromJson(lit.value("result").toString().toUtf8()).object();
+        const QString lightId = litInfo.value("id").toString();
+        CHECK(qAbs(litInfo.value("v").toDouble() - 7.5) < 0.001,
+              "the light property took (7.5)");
+
+        // Second run, so the first run's macro is closed: change it again.
+        const QJsonObject changed = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral(
+                               "node.setProperty('%1', 'intensity', 42);"
+                               "node.property('%1','intensity')").arg(lightId) },
+                         { "label", "brighten it" } }));
+        CHECK(changed.value("ok").toBool()
+                  && qAbs(changed.value("result").toDouble() - 42) < 0.001,
+              "a second run raises the intensity to 42");
+
+        const QJsonObject undone = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                     QJsonObject{ { "action", "undo" } }));
+        CHECK(undone.value("applied").toBool(), "undo_redo applies");
+        const QJsonObject read = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.property('%1','intensity')").arg(lightId) } }));
+        CHECK(qAbs(read.value("result").toDouble() - 7.5) < 0.001,
+              "F5: undo_redo REVERTED the scripted property write (7.5 again)");
+
+        // …and it comes back. NOTE the redo must be issued with NO run_script
+        // in between: every script run opens an undo macro, which clears the
+        // redo branch even when the script only reads (a pre-existing property
+        // of ScriptEngine::evaluate, reported with this wave — it is why the
+        // read above cannot sit between the undo and the redo).
+        const QJsonObject again = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.setProperty('%1','intensity', 99)").arg(lightId) },
+                         { "label", "brighten again" } }));
+        CHECK(again.value("ok").toBool(), "a third run sets 99");
+        callTool(net, url, token, ++id, "undo_redo", QJsonObject{ { "action", "undo" } });
+        const QJsonObject redone2 = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                      QJsonObject{ { "action", "redo" } }));
+        CHECK(redone2.value("applied").toBool(), "undo_redo applies the redo");
+        const QJsonObject reread = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("node.property('%1','intensity')").arg(lightId) } }));
+        CHECK(qAbs(reread.value("result").toDouble() - 99) < 0.001,
+              "F5: and redo restores the scripted property write");
+    }
+
+    // ---- F6: timeoutMs interrupts a runaway script ------------------------
+    // A runaway loop used to wedge the editor with no way out: the transport is
+    // POST-only and serves one request at a time, so a cancel TOOL can never be
+    // delivered mid-run. The budget has to travel WITH the script.
+    {
+        QElapsedTimer clock;
+        clock.start();
+        const QJsonObject spun = callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "var i = 0; while (true) { i++; }" },
+                         { "timeoutMs", 1500 } });
+        const qint64 elapsed = clock.elapsed();
+        CHECK(spun.value("isError").toBool(), "an infinite loop returns a tool ERROR");
+        const QJsonObject body = toolJson(spun);
+        CHECK(body.value("timedOut").toBool(), "and it is flagged as a timeout");
+        printf("      (the runaway script returned after %lld ms)\n", (long long)elapsed);
+        CHECK(elapsed < 20000, "the watchdog actually fired well inside the request timeout");
+
+        // THE assertion that proves setInterrupted was reset: the NEXT script
+        // must run normally. Without the reset every later script dies instantly.
+        const QJsonObject after = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "1 + 1" } }));
+        CHECK(after.value("ok").toBool() && after.value("result").toInt() == 2,
+              "the server serves the NEXT request normally (the interrupt flag was reset)");
+
+        // The app is still alive and still serving other tools.
+        const QJsonObject alive = toolJson(callTool(net, url, token, ++id, "describe_scene"));
+        CHECK(alive.value("projectOpen").toBool(), "the editor survived the runaway script");
     }
 
     // ---- unknown method --------------------------------------------------

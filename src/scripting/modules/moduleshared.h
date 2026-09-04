@@ -100,18 +100,47 @@ inline QString colorToJs(const QColor &c)
 }
 
 /// Accepts "#rrggbb"/named strings and {r,g,b[,a]} maps (0-255 channels).
-inline QColor colorFromJs(const QVariant &raw, const QColor &fallback = QColor())
+///
+/// `ok` (AI_SURFACE_AUDIT F8) reports whether the value was UNDERSTOOD. It used
+/// to be impossible to tell: an unparseable colour string silently returned the
+/// old value and every caller then reported success, so `world.ambient("hot
+/// pink")` or a typo'd hex answered `true` and changed nothing. Callers that
+/// pass `ok` must fail loudly; the default (nullptr) keeps the old
+/// keep-the-fallback behaviour for the read paths that have no error channel.
+inline QColor colorFromJs(const QVariant &raw, const QColor &fallback = QColor(),
+                          bool *ok = nullptr)
 {
+    if (ok) *ok = true;
     const QVariant value = normalizeJs(raw);
     if (value.typeId() == QMetaType::QVariantMap) {
         const auto m = value.toMap();
+        // A channel that is present but not a number is the map-shaped version
+        // of the same lie ({r: "ff"} used to read as 0).
+        for (const char *channel : { "r", "g", "b", "a" }) {
+            const QString key = QString::fromLatin1(channel);
+            if (!m.contains(key)) continue;
+            bool numeric = false;
+            m.value(key).toDouble(&numeric);
+            if (!numeric && ok) *ok = false;
+        }
         return QColor(m.value("r", fallback.red()).toInt(),
                       m.value("g", fallback.green()).toInt(),
                       m.value("b", fallback.blue()).toInt(),
                       m.value("a", fallback.alpha() ? fallback.alpha() : 255).toInt());
     }
     const QColor named(value.toString());
-    return named.isValid() ? named : fallback;
+    if (named.isValid()) return named;
+    if (ok) *ok = false;
+    return fallback;
+}
+
+/// The one error sentence every colour-refusal shares, so the model learns the
+/// accepted spellings once.
+inline QString colorHelp(const QVariant &raw)
+{
+    return QStringLiteral("'%1' is not a colour — use \"#rrggbb\"/\"#aarrggbb\", "
+                          "an SVG colour name (\"red\"), or {r,g,b[,a]} with 0-255 channels")
+        .arg(normalizeJs(raw).toString());
 }
 
 /// Depth-first search of the document by GUID.

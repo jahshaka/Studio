@@ -19,6 +19,8 @@ For more information see the LICENSE file
 // get/set ride the SceneNode reflection (getPropertyValue + the new
 // setPropertyValue, lights and transforms first).
 
+#include <functional>
+
 #include <QVariantMap>
 
 #include "scripting/apimodule.h"
@@ -57,6 +59,12 @@ private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);
     iris::LightNodePtr lightOrFail(const QString &id, const QString &verb);
     iris::DecalNodePtr decalOrFail(const QString &id, const QString &verb);
+
+    /// Records an ALREADY-APPLIED node edit on the undo stack (F5). No-op when
+    /// the session has no stack (--headless document runs, unit hosts).
+    /// See commands/nodeeditcommand.h for the idempotency contract.
+    void recordNodeEdit(const QString &text, std::function<void()> redoFn,
+                        std::function<void()> undoFn);
 };
 
 #endif // SCRIPTING_NODEAPI_H

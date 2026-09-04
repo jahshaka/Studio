@@ -68,6 +68,8 @@ public:
                               const QVariant &value = QVariant());
     Q_INVOKABLE bool removeKeyframe(const QString &id, const QString &property, double time);
     Q_INVOKABLE QVariantMap keyframes(const QString &id, const QString &property);
+    Q_INVOKABLE bool setKeyTangents(const QString &id, const QString &property, double time,
+                                    const QVariantMap &shape = QVariantMap());
     Q_INVOKABLE bool removeProperty(const QString &id, const QString &property);
     Q_INVOKABLE QVariant sample(const QString &id, const QString &property, double time);
     Q_INVOKABLE double seek(const QVariant &time = QVariant());

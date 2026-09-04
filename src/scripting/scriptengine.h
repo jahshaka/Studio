@@ -37,6 +37,7 @@ struct ScriptResult
     QString error;           // error message (empty when ok)
     int line = 0;            // 1-based line of the error, 0 if unknown
     QString stack;           // JS stack trace, newline-joined
+    bool timedOut = false;   // the run was cut short by evaluate()'s watchdog
 
     /// "file.js:12: TypeError: …" — the console/CLI display form.
     QString toString() const;
@@ -63,9 +64,19 @@ public:
     /// Runs a script. wrapUndoMacro=true (the default) makes the whole run one
     /// undo step when the host has an undo stack; pass false for REPL fragments
     /// that should not create empty undo entries (e.g. pure queries).
+    ///
+    /// `timeoutMs` > 0 arms a watchdog (AI_SURFACE_AUDIT F6): a worker thread
+    /// calls QJSEngine::setInterrupted(true) when the budget expires, the run
+    /// aborts, and ScriptResult::timedOut is set. The flag is always reset
+    /// before returning — leaving it set would kill every later script
+    /// instantly. LIMIT, and it is a hard one: QJSEngine checks the flag at
+    /// JAVASCRIPT bytecode boundaries only, so a run parked inside a native
+    /// verb (editor.frame, graph.bake, warmUpShaders, a synchronous import) is
+    /// not interruptible and the timeout fires only when control returns to JS.
     ScriptResult evaluate(const QString &source,
                           const QString &fileName = QStringLiteral("<console>"),
-                          bool wrapUndoMacro = true);
+                          bool wrapUndoMacro = true,
+                          int timeoutMs = 0);
 
 signals:
     /// console.log/info/warn/error output, one line per call.

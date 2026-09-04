@@ -11,12 +11,70 @@ For more information see the LICENSE file
 
 #include "scripting/scriptengine.h"
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <thread>
+
 #include <QFileInfo>
 #include <QJSValueIterator>
 #include <QJsonDocument>
 #include <QUndoStack>
 
 namespace {
+
+/// The F6 watchdog. A main-thread QTimer cannot serve here: mJs.evaluate()
+/// blocks the very event loop the console dock, the --script runner and the MCP
+/// drain all live on (mcpserver.cpp's drainQueue is synchronous), so the timer
+/// would only fire after the run it was meant to cut short had finished.
+/// QJSEngine::setInterrupted is documented thread-safe, which is what makes a
+/// plain worker thread the whole mechanism.
+///
+/// The condition variable is not decoration: without it the thread would sleep
+/// out its full budget even after a fast script returned, and a 30 s default
+/// would make every teardown wait 30 s.
+class InterruptWatchdog
+{
+public:
+    InterruptWatchdog(QJSEngine *js, int timeoutMs) : mJs(js)
+    {
+        mThread = std::thread([this, timeoutMs]() {
+            std::unique_lock<std::mutex> lock(mMutex);
+            if (mCv.wait_for(lock, std::chrono::milliseconds(timeoutMs),
+                             [this]() { return mDone; }))
+                return;                     // the script finished first
+            mFired = true;
+            mJs->setInterrupted(true);
+        });
+    }
+
+    ~InterruptWatchdog() { stop(); }
+
+    /// Joins the thread. Call it BEFORE reading fired(): the watchdog can
+    /// expire in the instant between evaluate() returning and this object being
+    /// destroyed, and a fired() read that races the join would miss it.
+    void stop()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mMutex);
+            mDone = true;
+        }
+        mCv.notify_all();
+        if (mThread.joinable()) mThread.join();
+    }
+
+    bool fired() const { return mFired; }
+
+private:
+    QJSEngine *mJs;
+    std::thread mThread;
+    std::mutex mMutex;
+    std::condition_variable mCv;
+    bool mDone = false;
+    std::atomic_bool mFired{false};
+};
 
 /// The host end of `console.log(...)`: the JS bootstrap below stringifies its
 /// arguments and calls emitLine(). A QObject so QJSEngine bridges it for free.
@@ -93,12 +151,17 @@ void ScriptEngine::installApi()
     )JS"), QStringLiteral("<bootstrap>"));
 }
 
-ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileName, bool wrapUndoMacro)
+ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileName,
+                                    bool wrapUndoMacro, int timeoutMs)
 {
     installApi();
 
     ScriptResult result;
     result.fileName = fileName;
+
+    // Always clear first: an interrupted PREVIOUS run leaves the flag set, and
+    // a still-set flag aborts the next script before its first statement.
+    mJs.setInterrupted(false);
 
     const bool useMacro = wrapUndoMacro && mHost.undoStack != nullptr;
     if (useMacro) {
@@ -107,7 +170,18 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     }
 
     QStringList stackTrace;
-    QJSValue value = mJs.evaluate(source, fileName, 1, &stackTrace);
+    QJSValue value;
+    bool interrupted = false;
+    {
+        std::unique_ptr<InterruptWatchdog> watchdog;
+        if (timeoutMs > 0) watchdog.reset(new InterruptWatchdog(&mJs, timeoutMs));
+        value = mJs.evaluate(source, fileName, 1, &stackTrace);
+        if (watchdog) {
+            watchdog->stop();
+            interrupted = watchdog->fired();
+        }
+    }
+    mJs.setInterrupted(false);
 
     if (useMacro) {
         if (mHost.macroOpenChanged) mHost.macroOpenChanged(false);
@@ -127,6 +201,14 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
         } else {
             result.error = QStringLiteral("uncaught exception");
         }
+        if (interrupted) {
+            result.timedOut = true;
+            result.error = QStringLiteral(
+                               "script interrupted after %1 ms (timeoutMs). Note that only "
+                               "JavaScript is interruptible — a run parked inside a verb "
+                               "(editor.frame, graph.bake, an import) runs to completion first.")
+                               .arg(timeoutMs);
+        }
         result.stack = stackTrace.join(QStringLiteral("\n"));
         if (result.line <= 0 && !stackTrace.isEmpty()) {
             // "func:file.js:12" — recover the line from the top stack frame.
@@ -134,6 +216,12 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
             const int colon = top.lastIndexOf(':');
             if (colon > 0) result.line = top.mid(colon + 1).toInt();
         }
+    } else if (interrupted) {
+        // Belt and braces: an interrupt at a boundary where the VM produced no
+        // error value must still be reported as a failure, never as a result.
+        result.ok = false;
+        result.timedOut = true;
+        result.error = QStringLiteral("script interrupted after %1 ms (timeoutMs)").arg(timeoutMs);
     } else {
         result.ok = true;
         result.value = value.toVariant();

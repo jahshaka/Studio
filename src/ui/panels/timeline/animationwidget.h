@@ -129,6 +129,11 @@ private slots:
 
     void OnAnimationChanged(QString name);
 
+    /// The node's active animation, creating an empty "Animation" the first
+    /// time a key is written. Selecting a node deliberately does NOT create one
+    /// (see the .cpp): an empty clip minted on every click serializes.
+    iris::AnimationPtr ensureAnimation();
+
 private:
     //float timeAtCursor;
     float timerSpeed;

@@ -1,0 +1,100 @@
+// scripting.e2e.mesh_roundtrip — AI_SURFACE_AUDIT F1, the test that was missing.
+//
+// The defect: `scene.addMesh(diskPath)` parsed a model file straight into the
+// scene with no library asset behind it. SceneWriter then wrote the node's DISK
+// PATH into "mesh", where SceneReader resolves that field AS A GUID — so the
+// node reloaded with no geometry and could never export (the archiver walks
+// asset rows). It had zero tests, which is exactly why it survived.
+//
+// Two halves, and both are the gate:
+//   1. scene.addMesh now FAILS LOUDLY and its message names the correct flow;
+//   2. the correct flow (importFile -> addToProject -> addToScene) SURVIVES a
+//      save/close/reopen with resolvable geometry, and the object reaches the
+//      export manifest.
+//
+// Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+function caught(fn) {
+    try { fn(); } catch (e) { return "" + e; }
+    return null;
+}
+
+var fixture = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+
+var proj = project.create("Mesh Round Trip " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---- 1. the removed verb refuses, with the fix in the message ---------------
+var beforeRefusal = scene.nodes().length;   // project.create seeds a default scene
+var err = caught(function () { scene.addMesh(fixture, { position: { x: 0, y: 0, z: 0 } }); });
+assert(err !== null, "scene.addMesh(diskPath) throws instead of losing the node's geometry");
+assert(err.indexOf("assets.importFile") >= 0, "the error names assets.importFile: " + err);
+assert(err.indexOf("assets.addToProject") >= 0, "and assets.addToProject");
+assert(err.indexOf("assets.addToScene") >= 0, "and assets.addToScene");
+// Nothing was added on the way out.
+var afterRefusal = scene.nodes().length;
+assert(afterRefusal === beforeRefusal,
+       "the refused call added no node: " + afterRefusal + " (was " + beforeRefusal + ")");
+
+// A nonexistent path fails the same way — the verb is gone, not path-checking.
+assert(caught(function () { scene.addMesh("/no/such/file.obj"); }) !== null,
+       "it refuses a nonexistent path too");
+
+// ---- 2. the correct flow ----------------------------------------------------
+var storeGuid = assets.importFile(fixture);
+assert(storeGuid.length > 10, "assets.importFile -> library object " + storeGuid);
+var pinned = assets.addToProject(storeGuid);
+assert(pinned === storeGuid, "assets.addToProject pins (reference-with-pin: same guid)");
+var nodeId = assets.addToScene(pinned, { position: { x: 1, y: 2, z: 3 } });
+assert(nodeId.length > 10, "assets.addToScene -> node " + nodeId);
+
+// The placed subtree carries real geometry: at least one mesh node with a
+// non-empty meshPath, and that path is NOT the disk path we imported from.
+function meshNodesUnder(id) {
+    var all = scene.nodes();
+    var kept = {};
+    kept[id] = true;
+    var out = [];
+    for (var i = 0; i < all.length; ++i) {
+        if (kept[all[i].parent] || all[i].id === id) kept[all[i].id] = true;
+        if (kept[all[i].id] && all[i].type === "mesh") out.push(all[i]);
+    }
+    return out;
+}
+
+var meshes = meshNodesUnder(nodeId);
+assert(meshes.length >= 1, "the placed asset has mesh nodes: " + meshes.length);
+var path = node.property(meshes[0].id, "meshPath");
+assert(path && path.length > 0, "the mesh node carries a meshPath: " + path);
+assert(path !== fixture, "and it is NOT the raw disk path (that was the F1 data loss)");
+
+// ---- 3. save / close / reopen — the round trip that never existed -----------
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (REOPEN)");
+
+var reopened = scene.nodes().filter(function (n) { return n.id === nodeId; });
+assert(reopened.length === 1, "the placed node SURVIVED the reopen");
+assert(Math.abs(reopened[0].position.x - 1) < 0.001
+       && Math.abs(reopened[0].position.y - 2) < 0.001
+       && Math.abs(reopened[0].position.z - 3) < 0.001,
+       "with its transform: " + JSON.stringify(reopened[0].position));
+
+var meshesAfter = meshNodesUnder(nodeId);
+assert(meshesAfter.length === meshes.length,
+       "with the same mesh nodes under it: " + meshesAfter.length + " vs " + meshes.length);
+var pathAfter = node.property(meshesAfter[0].id, "meshPath");
+assert(pathAfter && pathAfter.length > 0,
+       "AND THE GEOMETRY IDENTITY RESOLVED (the F1 assertion): meshPath = " + pathAfter);
+assert(pathAfter === path, "the same identity it was saved with");
+
+// ---- 4. it exports (the archiver is asset-row driven) ----------------------
+var manifest = project.exportManifest("manifest-out");
+assert(manifest.assets >= 1, "the project's assets reach the export manifest: " + manifest.assets);
+
+console.log("scripting.e2e.mesh_roundtrip PASSED");

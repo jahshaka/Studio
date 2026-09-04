@@ -170,6 +170,18 @@ var glass = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/glass.effect");
 assert(glass.nodes >= 3, "glass.effect loads (" + glass.nodes + " nodes)");
 assert(graph.evaluate().hasPbrMaster === true, "glass has a PBR master");
 
+// SAMPLES-AUDIT item: a shipped TEXTURED preset references its images by
+// APP-RELATIVE name ("materials_to_graph/brick diff.jpg"). The Effects page
+// resolved those when it instantiated a template; this verb did not, so the
+// scripted route saw every texture node unconnected and baked an untextured
+// material. Same resolution now runs on both routes.
+var brick = materials.loadGraph("@SOURCE_DIR@/app/shadergraph/materials_to_graph/Brick.effect");
+assert(brick.nodes >= 3, "Brick.effect loads (" + brick.nodes + " nodes)");
+assert(brick.texturesResolved >= 3,
+       "its app-relative textures resolved on load: " + brick.texturesResolved);
+var brickTextures = graph.nodes().filter(function (n) { return n.type === "texture"; });
+assert(brickTextures.length >= 3, "the graph carries its texture nodes");
+
 // ---- save + render sanity ----
 assert(project.save() === true, "project.save");
 editor.frame(3);

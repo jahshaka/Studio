@@ -22,6 +22,10 @@ For more information see the LICENSE file
 
 namespace {
 
+/// F6 default budget. Long enough for a real scene-building script, short
+/// enough that a runaway loop does not look like a hung editor.
+constexpr int kDefaultScriptTimeoutMs = 30000;
+
 QJsonObject textResult(const QString &text, bool isError = false)
 {
     QJsonObject item{ { "type", "text" }, { "text", text } };
@@ -47,14 +51,30 @@ QJsonArray McpTools::listTools() const
     // means a new registry verb, never a new tool.
     QJsonArray tools;
 
+    // F16: the module list is GENERATED from the registry. It was a hand-typed
+    // ten of the thirteen modules, so three whole domains were invisible to
+    // anything that read only the tool description.
+    QStringList moduleNames;
+    for (ApiModule *m : mEngine->registry().modules()) moduleNames << m->jsName();
+
     tools.append(QJsonObject{
         { "name", "run_script" },
         { "description",
-          "Execute JavaScript inside Jahshaka's scripting engine (the same API the "
-          "script console uses). The whole run is ONE undo step. Call api_docs first "
-          "to see the modules and verbs (project, scene, node, editor, world, assets, "
-          "materials, material, graph, app). Returns the completion value, console "
-          "output and any error as JSON." },
+          QStringLiteral(
+              "Execute JavaScript inside Jahshaka's scripting engine (the same API the "
+              "script console uses). The whole run is ONE undo step. Call api_docs first "
+              "to see the verbs; the modules are: %1. Returns the completion value, "
+              "console output and any error as JSON.\n"
+              "timeoutMs caps the run (default %2 ms) and aborts it with an error rather "
+              "than wedging the editor. It cannot be a verb — a verb would have to run "
+              "inside the script it must interrupt — and there is no cancel TOOL either: "
+              "this transport is POST-only and serves one request at a time, so a second "
+              "request cannot reach the editor while the first is running. The interrupt "
+              "lands at JavaScript statement boundaries ONLY: a run parked inside a native "
+              "verb (editor.frame, graph.bake, editor.warmUpShaders, an import) finishes "
+              "that call first.")
+              .arg(moduleNames.join(QStringLiteral(", ")))
+              .arg(kDefaultScriptTimeoutMs) },
         { "inputSchema", QJsonObject{
             { "type", "object" },
             { "properties", QJsonObject{
@@ -65,7 +85,13 @@ QJsonArray McpTools::listTools() const
                     { "type", "string" },
                     { "description",
                       "Short label for this run; names the undo macro shown in "
-                      "Edit > Undo (e.g. the current task)." } } } } },
+                      "Edit > Undo (e.g. the current task)." } } },
+                { "timeoutMs", QJsonObject{
+                    { "type", "integer" },
+                    { "description",
+                      QStringLiteral("Milliseconds before the run is interrupted "
+                                     "(default %1, minimum 50, maximum 600000).")
+                          .arg(kDefaultScriptTimeoutMs) } } } } },
             { "required", QJsonArray{ "script" } } } } });
 
     tools.append(QJsonObject{
@@ -146,12 +172,14 @@ QJsonObject McpTools::runScript(const QJsonObject &args)
     // ScriptEngine names the per-run undo macro "script: <fileName basename>",
     // so the label doubles as the macro name in Edit > Undo.
     const QString fileName = label.isEmpty() ? QStringLiteral("mcp") : label;
+    const int timeoutMs = qBound(50, args.value(QLatin1String("timeoutMs"))
+                                         .toInt(kDefaultScriptTimeoutMs), 600000);
 
     QStringList consoleLines;
     QMetaObject::Connection tap = QObject::connect(
         mEngine, &ScriptEngine::consoleOutput,
         [&consoleLines](const QString &line) { consoleLines.append(line); });
-    const ScriptResult result = mEngine->evaluate(source, fileName);
+    const ScriptResult result = mEngine->evaluate(source, fileName, true, timeoutMs);
     QObject::disconnect(tap);
 
     QJsonObject payload;
@@ -160,6 +188,7 @@ QJsonObject McpTools::runScript(const QJsonObject &args)
         payload["result"] = QJsonValue::fromVariant(result.value);
     } else {
         payload["error"] = result.error;
+        if (result.timedOut) payload["timedOut"] = true;
         if (result.line > 0) payload["line"] = result.line;
         if (!result.stack.isEmpty()) payload["stack"] = result.stack;
     }

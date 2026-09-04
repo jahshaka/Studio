@@ -138,6 +138,35 @@ set_tests_properties(scripting.e2e.asset_delete PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# AI_SURFACE_AUDIT F1: scene.addMesh was a DATA-LOSS verb (disk path written
+# where the reader expects a guid) with zero tests. It now refuses with the
+# correct flow in the message, and the correct flow's save/close/reopen round
+# trip — the test that never existed — is asserted here. Document verbs only.
+configure_file(scripts/e2e_mesh_roundtrip.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mesh_roundtrip)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.mesh_roundtrip
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_mesh_roundtrip.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.mesh_roundtrip PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# AI_SURFACE_AUDIT F7/F8/F9 — the three SILENT SUCCESSES. A verb that accepts a
+# value it does not understand, changes nothing and answers true is the worst
+# defect class on an agent surface. Document verbs only.
+configure_file(scripts/e2e_ai_surface.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ai_surface)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.ai_surface
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_ai_surface.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.ai_surface PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # Web export (WEB_EXPORT_AUDIT): project.exportWeb through the real binary.
 # Document-only, so --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_web)

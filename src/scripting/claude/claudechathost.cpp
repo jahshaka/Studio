@@ -18,7 +18,8 @@ For more information see the LICENSE file
 #include "claudecliprobe.h"
 #include "claudelaunchconfig.h"
 
-ClaudeChatHost::ClaudeChatHost(QObject *parent) : QObject(parent)
+ClaudeChatHost::ClaudeChatHost(QObject *parent)
+    : QObject(parent), mModel(ClaudeLaunchConfig::defaultModel())
 {
     mKillTimer.setSingleShot(true);
     mKillTimer.setInterval(3000);
@@ -33,6 +34,9 @@ ClaudeChatHost::ClaudeChatHost(QObject *parent) : QObject(parent)
     connect(&mParser, &ClaudeStreamParser::sessionStarted, this,
             [this](const QString &sessionId, const QStringList &, const QStringList &, bool) {
                 mSessionId = sessionId;
+                // A session that started is a session that can be resumed: the
+                // D3 recovery budget resets with it.
+                mResumeRecovered = false;
                 if (!mProjectFolder.isEmpty())
                     ClaudeLaunchConfig::writeSessionId(mProjectFolder, sessionId);
             });
@@ -49,15 +53,30 @@ ClaudeChatHost::~ClaudeChatHost()
     shutdown();
 }
 
+void ClaudeChatHost::setModel(const QString &model)
+{
+    if (mModel == model) return;
+    mModel = model;
+    // The argv is built at start; a live process keeps the model it launched
+    // with until the next (re)start, exactly like the MCP wiring.
+}
+
 bool ClaudeChatHost::configure(const QString &projectFolder, bool mcpEnabled,
                                quint16 mcpPort, const QString &mcpToken, QString *errorOut)
 {
     if (projectFolder != mProjectFolder) {
+        // D1: the caller now reaches here on project open/close too, so this is
+        // where a live conversation is told its world changed.
+        const bool hadConversation = !mProjectFolder.isEmpty()
+                                     && (isProcessRunning() || !mSessionId.isEmpty());
         shutdown();
         mProjectFolder = projectFolder;
+        mLastUserMessage.clear();
+        mResumeRecovered = false;
         mSessionId = projectFolder.isEmpty()
                          ? QString()
                          : ClaudeLaunchConfig::readSessionId(projectFolder);
+        if (hadConversation) emit projectChanged(projectFolder);
     } else if (mcpEnabled != mMcpEnabled || mcpPort != mMcpPort || mcpToken != mMcpToken) {
         // MCP wiring changed mid-chat: the running process keeps its old
         // connection; the next (re)start picks up the new file.
@@ -103,7 +122,7 @@ void ClaudeChatHost::startProcess()
     mProcess->setWorkingDirectory(mProjectFolder);
     mProcess->setProgram(ClaudeCliProbe::program());
     mProcess->setArguments(
-        ClaudeLaunchConfig::arguments(mProjectFolder, mMcpEnabled, mSessionId));
+        ClaudeLaunchConfig::arguments(mProjectFolder, mMcpEnabled, mSessionId, mModel));
 
     connect(mProcess, &QProcess::readyReadStandardOutput, this,
             [this]() { mParser.feed(mProcess->readAllStandardOutput()); });
@@ -133,6 +152,7 @@ void ClaudeChatHost::startProcess()
 
 void ClaudeChatHost::writeUserMessage(const QString &text)
 {
+    mLastUserMessage = text;   // D3: re-queued if a stale --resume kills the process
     const QJsonObject message{
         {"type", "user"},
         {"message",
@@ -156,6 +176,8 @@ void ClaudeChatHost::clearSession()
 {
     shutdown();
     mSessionId.clear();
+    mLastUserMessage.clear();
+    mResumeRecovered = false;
     if (!mProjectFolder.isEmpty()) ClaudeLaunchConfig::clearSessionId(mProjectFolder);
 }
 
@@ -179,12 +201,42 @@ void ClaudeChatHost::shutdown()
     setBusy(false);
 }
 
+// D3: `--resume <id>` against an id the CLI no longer knows is a hard exit 1.
+// Matched on the CLI's own sentence, with a looser fallback so a reworded
+// message still recovers rather than bricking the chat.
+bool ClaudeChatHost::isStaleResumeFailure(const QString &stderrText) const
+{
+    if (mSessionId.isEmpty()) return false;
+    const QString text = stderrText.toLower();
+    return text.contains(QLatin1String("no conversation found with session id"))
+           || (text.contains(QLatin1String("session id")) && text.contains(QLatin1String("not found")))
+           || text.contains(QLatin1String("resume failed"));
+}
+
 void ClaudeChatHost::handleFinished(int exitCode, QProcess::ExitStatus status)
 {
     mKillTimer.stop();
     const bool failed = !mStopping && (status != QProcess::NormalExit || exitCode != 0);
+    const QString detail = QString::fromUtf8(mStderr).trimmed();
+
+    if (failed && !mResumeRecovered && isStaleResumeFailure(detail)) {
+        // Drop the id (from memory AND from disk — otherwise the next app run
+        // reads it straight back) and restart once, carrying the user's turn.
+        mResumeRecovered = true;
+        mSessionId.clear();
+        if (!mProjectFolder.isEmpty()) ClaudeLaunchConfig::clearSessionId(mProjectFolder);
+        emit sessionResumeFailed();
+        mStopping = false;
+        if (!mLastUserMessage.isEmpty()) {
+            mPendingMessage = mLastUserMessage;
+            startProcess();          // stays busy: the turn is being retried
+            return;
+        }
+        if (mBusy) setBusy(false);
+        return;
+    }
+
     if (failed) {
-        const QString detail = QString::fromUtf8(mStderr).trimmed();
         emit processFailed(detail.isEmpty()
                                ? QStringLiteral("claude exited with code %1").arg(exitCode)
                                : detail);

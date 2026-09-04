@@ -471,6 +471,8 @@ public slots:
     /// — never undo()/redo() directly — so there is exactly one claimant for
     /// the chord and one place the routing rule lives.
     void undoActiveSpace();
+    /// Space: node search on the Materials space, gizmo cycle elsewhere.
+    void spaceKeyActiveSpace();
     void redoActiveSpace();
 
     void takeScreenshot();

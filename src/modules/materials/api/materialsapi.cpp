@@ -86,8 +86,11 @@ QVector<VerbInfo> MaterialsApi::verbs() const
         { "createGraph", "materials.createGraph(name) -> guid",
           "Creates a new effect-graph asset in the open project from the shader template and opens it as the current graph.",
           Needs::Document },
-        { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master}",
-          "Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for graph.* verbs.",
+        { "loadGraph", "materials.loadGraph(guidOrPath) -> {nodes, master, name, texturesResolved}",
+          "Opens an effect graph (a Shader asset guid, or a .effect/.shader file path) as the current graph for "
+          "graph.* verbs. Texture nodes carrying an APP-RELATIVE image name — which is how the shipped .effect "
+          "presets reference their images — are imported and connected here, exactly as the Effects page does when "
+          "it instantiates a template; texturesResolved reports how many.",
           Needs::Document },
         { "regenerate", "materials.regenerate(shaderGuid) -> bool",
           "Re-evaluates and re-bakes a stored shader asset's maps into BakedMaps/<guid>/ (the 'cache deleted / app "
@@ -339,6 +342,11 @@ QVariantMap MaterialsApi::loadGraph(const QString &guidOrPath)
     }
     // The real loader path (pixel-parity-tested): deserialize with LibraryV1.
     NodeGraph *graph = NodeGraph::deserialize(definition["shadergraph"].toObject(), new LibraryV1());
+    // The same app-relative texture resolution the Effects page does when it
+    // instantiates a template (samples audit, 2026-09-04): without it a shipped
+    // .effect preset opened through this verb had every texture node
+    // unconnected, so graph.bake produced an untextured material.
+    out["texturesResolved"] = MaterialHelper::resolveAppRelativeTextures(graph);
     mGraphApi->setCurrent(graph, assetGuid);
 
     out["nodes"] = graph->nodes.size();
@@ -435,16 +443,27 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
 
     static const QStringList colorKeys = { "baseColor", "emissiveColor",
                                            "ambientColor", "diffuseColor", "specularColor" };
-    static const QStringList mapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
-                                         "normalMap", "occlusionMap", "emissiveMap",
-                                         "diffuseTexture", "specularTexture", "normalTexture",
-                                         "reflectionTexture" };
+    // The four *Texture spellings are CustomMaterial's (Default.shader declares
+    // them as Properties). They are still resolved here so a CustomMaterial can
+    // be written, but on a PbrMaterial they name nothing — see F7 below.
+    static const QStringList pbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
+                                            "normalMap", "occlusionMap", "emissiveMap" };
+    static const QStringList legacyMapKeys = { "diffuseTexture", "specularTexture",
+                                               "normalTexture", "reflectionTexture" };
+    static const QStringList mapKeys = pbrMapKeys + legacyMapKeys;
 
     for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
         if (colorKeys.contains(key)) {
-            newValue = QVariant::fromValue(colorFromJs(newValue));
+            // F8: a colour string the parser cannot read used to keep the old
+            // value and still report success.
+            bool colourOk = false;
+            const QColor colour = colorFromJs(newValue, QColor(), &colourOk);
+            if (!colourOk)
+                return fail(QStringLiteral("material.set: %1 (property '%2')")
+                                .arg(colorHelp(newValue), key));
+            newValue = QVariant::fromValue(colour);
         } else if (mapKeys.contains(key)) {
             // texture: an absolute/existing path passes through, an asset guid
             // resolves through the CAS (pinned bytes in project context; the
@@ -484,6 +503,28 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
             const bool isCustom = !material.dynamicCast<iris::CustomMaterial>().isNull();
             if (isCustom || !mapKeys.contains(key))
                 return fail(QStringLiteral("material.set: unknown property '%1'").arg(key));
+            // F7 (AI_SURFACE_AUDIT): the four legacy CustomMaterial texture
+            // spellings reached this point on a PbrMaterial, were pushed as a
+            // command, and set nothing — material.set answered true and the
+            // material never changed. They now say which slot to use instead.
+            if (legacyMapKeys.contains(key)) {
+                static const QMap<QString, QString> replacement{
+                    { QStringLiteral("diffuseTexture"),    QStringLiteral("baseColorMap") },
+                    { QStringLiteral("normalTexture"),     QStringLiteral("normalMap") },
+                    { QStringLiteral("specularTexture"),   QString() },
+                    { QStringLiteral("reflectionTexture"), QString() },
+                };
+                const QString instead = replacement.value(key);
+                return fail(QStringLiteral(
+                                "material.set: '%1' is a legacy shader texture name and this "
+                                "node's PBR material has no such slot — %2 (the PBR maps are "
+                                "baseColorMap, metallicMap, roughnessMap, normalMap, "
+                                "occlusionMap, emissiveMap)")
+                                .arg(key,
+                                     instead.isEmpty()
+                                         ? QStringLiteral("there is no PBR equivalent")
+                                         : QStringLiteral("use '%1'").arg(instead)));
+            }
         }
 
         host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));

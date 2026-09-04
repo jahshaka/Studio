@@ -115,11 +115,20 @@ iris::ScenePtr WorldApi::sceneOrFail(const QString &verb)
     return scene;
 }
 
+// F8 (AI_SURFACE_AUDIT): every colour argument on this module used to keep the
+// scene's old value and answer `true` when it could not be parsed. They refuse
+// now — one shared sentence (scriptmod::colorHelp) says what IS accepted.
 bool WorldApi::ambient(const QVariant &color)
 {
     auto scene = sceneOrFail(QStringLiteral("world.ambient"));
     if (!scene) return false;
-    scene->setAmbientColor(colorFromJs(color, scene->ambientColor));
+    // An ABSENT argument keeps the current colour, as it always has — only a
+    // value that was GIVEN and not understood is refused.
+    if (!color.isValid() || color.isNull()) return true;
+    bool ok = false;
+    const QColor c = colorFromJs(color, scene->ambientColor, &ok);
+    if (!ok) return fail(QStringLiteral("world.ambient: %1").arg(colorHelp(color)));
+    scene->setAmbientColor(c);
     return true;
 }
 
@@ -136,7 +145,12 @@ bool WorldApi::fog(const QVariantMap &params)
     auto scene = sceneOrFail(QStringLiteral("world.fog"));
     if (!scene) return false;
     if (params.contains("enabled")) scene->fogEnabled = params.value("enabled").toBool();
-    if (params.contains("color"))   scene->fogColor = colorFromJs(params.value("color"), scene->fogColor);
+    if (params.contains("color")) {
+        bool ok = false;
+        const QColor c = colorFromJs(params.value("color"), scene->fogColor, &ok);
+        if (!ok) return fail(QStringLiteral("world.fog: %1").arg(colorHelp(params.value("color"))));
+        scene->fogColor = c;
+    }
     if (params.contains("start"))   scene->fogStart = params.value("start").toFloat();
     // `end` is the retired linear pair's far distance. It still sets the density
     // (that is the whole migration story), so a script written against the linear
@@ -457,16 +471,36 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
     // switchSkyTexture + queueSkyCapture for the legacy renderer. SceneMirror
     // polls the fields, so the engine picks everything up next frame.
     if (t == "color" || t == "singlecolor") {
-        const QColor c = colorFromJs(params.value("color"), scene->skyColor);
+        // As everywhere else: omitting the colour keeps the scene's, a colour
+        // that was given and cannot be read is refused.
+        QColor c = scene->skyColor;
+        if (params.contains("color")) {
+            bool ok = false;
+            c = colorFromJs(params.value("color"), scene->skyColor, &ok);
+            if (!ok) return fail(QStringLiteral("world.sky: %1").arg(colorHelp(params.value("color"))));
+        }
         scene->skyColor = c;
         QJsonObject def;
         def.insert("skyColor", SceneWriter::jsonColor(c));
         scene->skyData.insert("SingleColor", def);
         scene->skyType = iris::SkyType::SINGLE_COLOR;
     } else if (t == "gradient") {
-        scene->gradientTop = colorFromJs(params.value("top"), scene->gradientTop);
-        scene->gradientMid = colorFromJs(params.value("mid"), scene->gradientMid);
-        scene->gradientBot = colorFromJs(params.value("bottom"), scene->gradientBot);
+        struct { const char *key; QColor *field; } stops[] = {
+            { "top",    &scene->gradientTop },
+            { "mid",    &scene->gradientMid },
+            { "bottom", &scene->gradientBot },
+        };
+        for (const auto &stop : stops) {
+            const QString key = QString::fromLatin1(stop.key);
+            if (!params.contains(key)) continue;   // omitted = keep this stop
+            const QVariant given = params.value(key);
+            bool ok = false;
+            const QColor c = colorFromJs(given, *stop.field, &ok);
+            if (!ok)
+                return fail(QStringLiteral("world.sky: %1 (gradient stop '%2')")
+                                .arg(colorHelp(given), key));
+            *stop.field = c;
+        }
         if (params.contains("offset")) scene->gradientOffset = params.value("offset").toFloat();
         QJsonObject def;
         def.insert("gradientTop", SceneWriter::jsonColor(scene->gradientTop));
@@ -527,14 +561,22 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         if (!requireProject()) return false;
         static const char *faces[] = { "front", "back", "left", "right", "top", "bottom" };
         QMap<QString, QString> guids, paths;
+        // F9 (AI_SURFACE_AUDIT): a face that was GIVEN but could not be
+        // resolved used to be dropped without a word — the cubemap came back
+        // with a hole and world.sky still answered true. A face that is simply
+        // absent is still fine (a partial cubemap is legal).
         for (const char *face : faces) {
             QString guid, path;
-            if (params.contains(face) && resolveTexture(params.value(face), guid, path)) {
-                guids[face] = guid;
-                paths[face] = path;
-            } else {
-                guids[face] = QString();
-            }
+            if (!params.contains(face)) { guids[face] = QString(); continue; }
+            if (!resolveTexture(params.value(face), guid, path))
+                return fail(QStringLiteral(
+                                "world.sky: cubemap face '%1' — '%2' is not a texture asset "
+                                "guid or a file name in the project (assets.list({type:\"texture\"}) "
+                                "lists them)")
+                                .arg(QString::fromLatin1(face),
+                                     params.value(face).toString()));
+            guids[face] = guid;
+            paths[face] = path;
         }
         if (paths.isEmpty())
             return fail("world.sky: cubemap needs at least one face texture (front/back/left/right/top/bottom)");

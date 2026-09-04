@@ -1,0 +1,126 @@
+// scripting.e2e.ai_surface — the AI_SURFACE_AUDIT "silent success" defects.
+//
+// The class of bug this file exists to keep dead: a verb that ACCEPTS a value
+// it does not understand, changes nothing, and answers true. On a human surface
+// that is a shrug; on an agent surface it is a loop — the model believes the
+// edit landed, screenshots an unchanged scene, and tries something else.
+//
+//   F7  material.set took four legacy CustomMaterial texture keys on a PBR
+//       material and no-oped them.
+//   F8  an unreadable colour string kept the OLD value and reported success
+//       (moduleshared colorFromJs) — reached through world.ambient, world.fog,
+//       world.sky, node.setProperty and anim.keyframe.
+//   F9  world.sky cubemap silently DROPPED a face it could not resolve.
+//
+// Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+function caught(fn) {
+    try { fn(); } catch (e) { return "" + e; }
+    return null;
+}
+
+function refuses(fn, what) {
+    var e = caught(fn);
+    assert(e !== null, what);
+    return e;
+}
+
+var fixtures = "@SOURCE_DIR@/tests/scripting/fixtures";
+
+var proj = project.create("AI Surface " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---------------------------------------------------------------- F8 colours
+var lamp = scene.addLight("point", { position: { x: 0, y: 3, z: 0 } });
+assert(node.setProperty(lamp, "lightColor", "#20a0ff") === true, "a good colour is accepted");
+assert(node.property(lamp, "lightColor") === "#20a0ff", "and it took");
+
+var e = refuses(function () { node.setProperty(lamp, "lightColor", "sky-blue-ish"); },
+                "F8: node.setProperty refuses an unparseable colour");
+assert(e.indexOf("#rrggbb") >= 0, "the error says what IS accepted: " + e);
+assert(node.property(lamp, "lightColor") === "#20a0ff",
+       "and the old value is untouched (it used to be kept AND reported as success)");
+
+refuses(function () { world.ambient("not a colour"); }, "F8: world.ambient refuses one too");
+refuses(function () { world.fog({ color: "###" }); }, "F8: world.fog refuses one too");
+refuses(function () { world.sky("color", { color: "puce-ish" }); },
+        "F8: world.sky(color) refuses one too");
+refuses(function () { world.sky("gradient", { top: "#112233", mid: "nope" }); },
+        "F8: world.sky(gradient) names the bad stop");
+
+// A map-shaped colour with a non-numeric channel is the same lie.
+refuses(function () { node.setProperty(lamp, "lightColor", { r: "ff", g: 0, b: 0 }); },
+        "F8: a {r,g,b} map with a non-numeric channel is refused");
+// …but a good map still works.
+assert(node.setProperty(lamp, "lightColor", { r: 255, g: 0, b: 0 }) === true,
+       "a numeric {r,g,b} map is still accepted");
+assert(node.property(lamp, "lightColor") === "#ff0000", "and it took");
+
+// The colour path through the keyframe writer.
+anim.create(lamp, "Colours");
+refuses(function () { anim.keyframe(lamp, "lightColor", 0, "chartreuse-ish"); },
+        "F8: anim.keyframe refuses an unparseable colour");
+assert(anim.keyframe(lamp, "lightColor", 0, "#00ff00") === true, "a good one still keys");
+
+// ------------------------------------------------------- F7 legacy map keys
+// A primitive arrives with a PbrMaterial already on it — no preset apply needed
+// (and no engine, so this stays a document-only run).
+var cube = scene.addPrimitive("cube");
+assert(material.get(cube).baseColor === "#ffffff", "the new cube carries a PBR material");
+
+var legacy = ["diffuseTexture", "specularTexture", "normalTexture", "reflectionTexture"];
+for (var i = 0; i < legacy.length; ++i) {
+    var msg = refuses((function (key) {
+        return function () {
+            var edit = {};
+            edit[key] = fixtures + "/tiny.png";
+            material.set(cube, edit);
+        };
+    })(legacy[i]), "F7: material.set refuses the legacy key '" + legacy[i] + "'");
+    assert(msg.indexOf("baseColorMap") >= 0,
+           "and the error names the real PBR slots: " + msg);
+}
+// The named replacements are spelled out for the two that have one.
+assert(refuses(function () { material.set(cube, { diffuseTexture: fixtures + "/tiny.png" }); })
+           .indexOf("use 'baseColorMap'") >= 0,
+       "diffuseTexture is redirected to baseColorMap by name");
+assert(refuses(function () { material.set(cube, { normalTexture: fixtures + "/tiny.png" }); })
+           .indexOf("use 'normalMap'") >= 0,
+       "normalTexture is redirected to normalMap by name");
+
+// The real key still works — the refusal is about the SPELLING, not the slot.
+assert(material.set(cube, { baseColorMap: fixtures + "/tiny.png" }) === true,
+       "baseColorMap still takes the same file");
+assert(material.get(cube).baseColorMap.length > 0, "and the material carries it");
+
+// A bad colour on a material is refused too (same F8 sweep).
+refuses(function () { material.set(cube, { baseColor: "burnt-sienna-ish" }); },
+        "F8: material.set refuses an unparseable colour");
+
+// ------------------------------------------------------ F9 sky cubemap faces
+var tex = assets.addToProject(assets.importFile(fixtures + "/tiny.png"));
+assert(tex.length > 10, "a texture asset to build a sky from");
+
+assert(world.sky("cubemap", { front: tex, back: tex, left: tex,
+                              right: tex, top: tex, bottom: tex }) === true,
+       "a fully resolvable cubemap is accepted");
+
+var faceErr = refuses(function () {
+    world.sky("cubemap", { front: tex, back: tex, left: tex,
+                           right: tex, top: tex, bottom: "no-such-asset-guid" });
+}, "F9: an unresolvable face is refused, not silently dropped");
+assert(faceErr.indexOf("bottom") >= 0, "and the error NAMES the face: " + faceErr);
+
+// A face simply left out is still legal (a partial cubemap is a real thing).
+assert(world.sky("cubemap", { front: tex, back: tex }) === true,
+       "an OMITTED face is still fine — absent is not the same as unresolvable");
+
+// -------------------------------------------------------------- persistence
+assert(project.save() === true, "project.save");
+
+console.log("scripting.e2e.ai_surface PASSED");

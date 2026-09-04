@@ -1,7 +1,7 @@
 ---
 name: jahshaka-assets
 description: Import files into Jahshaka's asset store, organize drawers, and bring assets into projects and scenes via the assets verbs. Use when the user asks to import models/images/audio/video, organize the asset library, or place an asset in the scene.
-version: 1
+version: 2
 ---
 
 # Assets in Jahshaka
@@ -14,8 +14,19 @@ deletes cannot be Ctrl+Z'd. Confirm with the user before `assets.remove` or
 `assets.deleteDrawer`.
 
 There are two scopes: the global **store** (the shared library) and the open
-**project** (its private copies). The flow is: import → store, file in a
-drawer, `addToProject`, then `addToScene`.
+**project** (which *pins* store assets rather than copying them). There is
+exactly ONE way to get a file on disk into a scene, and it is three calls:
+
+```js
+var g = assets.importFile("/path/to/prop.obj");   // 1. into the store
+var p = assets.addToProject(g);                   // 2. pin it into this project
+var nodeId = assets.addToScene(p, { position: {x:0, y:0, z:0} });  // 3. place it
+```
+
+**Do not look for a one-call shortcut.** `scene.addMesh(path)` exists in older
+notes and always FAILS now: it used to write the disk path where the scene
+reader expects an asset guid, so the object came back empty on the next open
+and never exported. Steps 1 and 2 are not undoable; step 3 is.
 
 ## Importing
 
@@ -26,9 +37,6 @@ var guid = assets.import("/path/to/model.glb");
 // Anything the library supports — models, images, audio, video —
 // optionally filed straight into a drawer:
 var guid2 = assets.importFile("/path/to/texture.png", drawerId);
-
-// Import a mesh file DIRECTLY into the scene (no store round-trip):
-var nodeId = scene.addMesh("/path/to/prop.obj", { position: {x:0, y:0, z:0} });
 ```
 
 Only paths the user gives you are reachable — there is no file browser here;
@@ -67,8 +75,8 @@ assets.deleteDrawer(d);                 // PERMANENT; subtree's assets move to
 ## Into the project and the scene
 
 ```js
-// Copy a store asset (files + DB rows + dependencies, fresh guids) into the
-// open project; returns the PROJECT-side guid — use that from here on:
+// Pin a store asset (and its dependency closure) into the open project;
+// returns the guid to use from here on:
 var pguid = assets.addToProject(storeGuid);
 
 // Instantiate a project object asset into the scene (this one IS undoable,

@@ -19,7 +19,9 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/texture2d.h"
 #include "viewport/ieditorviewport.h"
 #include "services/planarreflectors.h"
+#include "commands/nodeeditcommand.h"
 #include "commands/reparentscenenodecommand.h"
+#include "commands/setnodepropertycommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
 #include "services/sceneeditservice.h"
@@ -54,7 +56,7 @@ QVector<VerbInfo> NodeApi::verbs() const
           "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight).",
           Needs::Document },
         { "setProperty", "node.setProperty(id, key, value) -> bool",
-          "Writes a reflected property (same keys as node.property). Direct document write — not undoable yet.",
+          "Writes a reflected property (same keys as node.property). Undoable — the write rides the run's undo macro.",
           Needs::Document },
         { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale}",
           "Everything scene.nodes() reports, for one node.",
@@ -66,19 +68,19 @@ QVector<VerbInfo> NodeApi::verbs() const
           "How the node deforms: \"gpu\" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), \"none\" when it is static. Diagnostic.",
           Needs::Document },
         { "setLightProfile", "node.setLightProfile(id, lightProfileGuid) -> bool",
-          "Binds an IES photometric profile (a 'lightprofile' library asset) to a light, shaping its falloff; '' clears it. The asset is pinned into the project as a DEPENDENCY (no companion material is created). Intensity is re-calibrated by the profile's own peak candela scale, so binding one changes the SHAPE of the falloff and not the brightness. RENDERER LIMITS: spot lights always honour a profile; point lights honour it only while they cast NO shadows (a shadow-casting point light is shaded from a code path with no profile term); directional and area lights never do. Direct document write — not undoable yet.",
+          "Binds an IES photometric profile (a 'lightprofile' library asset) to a light, shaping its falloff; '' clears it. The asset is pinned into the project as a DEPENDENCY (no companion material is created). Intensity is re-calibrated by the profile's own peak candela scale, so binding one changes the SHAPE of the falloff and not the brightness. RENDERER LIMITS: spot lights always honour a profile; point lights honour it only while they cast NO shadows (a shadow-casting point light is shaded from a code path with no profile term); directional and area lights never do. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
           Needs::Document },
         { "lightProfile", "node.lightProfile(id) -> {guid, path, normalisation, applies}",
           "The light's bound IES profile: the library guid, the resolved file, the photometric scale intensity is divided by, and whether this light type/shadow combination actually honours it. Empty guid = none.",
           Needs::Document },
         { "setLightTexture", "node.setLightTexture(id, textureGuid) -> bool",
-          "Binds an image asset as an AREA light's mask/gobo; '' clears it. Pinned as a DEPENDENCY (no companion material). RENDERER LIMIT: only the fast approximation samples the mask — an 'accurate' (LTC) area light ignores it. All masks share one 512x512 sRGB pool (8 distinct images per process); whatever image is bound is resampled into it. Direct document write — not undoable yet.",
+          "Binds an image asset as an AREA light's mask/gobo; '' clears it. Pinned as a DEPENDENCY (no companion material). RENDERER LIMIT: only the fast approximation samples the mask — an 'accurate' (LTC) area light ignores it. All masks share one 512x512 sRGB pool (8 distinct images per process); whatever image is bound is resampled into it. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
           Needs::Document },
         { "lightTexture", "node.lightTexture(id) -> {guid, path, applies}",
           "The light's bound area mask: the library guid, the resolved file, and whether this light actually samples it (area + not accurate). Empty guid = none.",
           Needs::Document },
         { "setDecalTexture", "node.setDecalTexture(id, textureGuid) -> bool",
-          "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Direct document write — not undoable yet.",
+          "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
           Needs::Document },
         { "setParticleTexture", "node.setParticleTexture(id, textureGuid) -> bool",
           "Binds a Texture asset as a particle emitter's image, as a BINDING (a dependency row "
@@ -86,7 +88,8 @@ QVector<VerbInfo> NodeApi::verbs() const
           "guid clears it, leaving untextured white quads, which for an additive system means a "
           "solid saturated slab rather than a plume. This is the one emitter field "
           "node.setProperty cannot write: resolving a guid to bytes needs the asset manager, "
-          "which the document layer has no access to.",
+          "which the document layer has no access to. Undoable (the project pin it creates is not "
+          "removed again — an unused pin is inert).",
           Needs::Document },
         { "particleTexture", "node.particleTexture(id) -> {path}",
           "The emitter's resolved particle image path, or empty.",
@@ -95,12 +98,22 @@ QVector<VerbInfo> NodeApi::verbs() const
           "The decal's bound image: the library guid and the resolved file. Empty guid = none.",
           Needs::Document },
         { "setPlanarReflector", "node.setPlanarReflector(id, enabled) -> bool",
-          "Makes this object a planar reflection plane — a mirror or a glossy floor. The plane, its size and its normal are derived from the object's own geometry, so the mesh must be FLAT: its thinnest extent no more than a tenth of the next, i.e. a plane or a thin box. A sphere or a cube is refused with a message. The reflecting face is the object's positive thin axis, so the top of a floor reflects and its underside does not. The object is excluded from its own reflection. Whether a plane actually RENDERS depends on world.setPlanarReflections' budget and on being on screen — each active plane is a whole extra scene render per frame. Direct document write — not undoable yet.",
+          "Makes this object a planar reflection plane — a mirror or a glossy floor. The plane, its size and its normal are derived from the object's own geometry, so the mesh must be FLAT: its thinnest extent no more than a tenth of the next, i.e. a plane or a thin box. A sphere or a cube is refused with a message. The reflecting face is the object's positive thin axis, so the top of a floor reflects and its underside does not. The object is excluded from its own reflection. Whether a plane actually RENDERS depends on world.setPlanarReflections' budget and on being on screen — each active plane is a whole extra scene render per frame. Undoable.",
           Needs::Document },
         { "planarReflector", "node.planarReflector(id) -> bool",
           "Whether this object is a planar reflection plane.",
           Needs::Document },
     };
+}
+
+// F5: the asset-binding verbs and setPlanarReflector used to be documented
+// "direct document write — not undoable yet" while every skill promised one
+// run = one undo step. They stay one service call each; this records that call.
+void NodeApi::recordNodeEdit(const QString &text, std::function<void()> redoFn,
+                             std::function<void()> undoFn)
+{
+    if (!host.services || !host.services->undo) return;
+    host.services->undo->push(new NodeEditCommand(text, std::move(redoFn), std::move(undoFn)));
 }
 
 iris::SceneNodePtr NodeApi::nodeOrFail(const QString &id, const QString &verb)
@@ -125,8 +138,12 @@ bool NodeApi::setPlanarReflector(const QString &id, bool enabled)
     // renderer refuses the geometry, which is the half a second copy forgets.
     QString error;
     IEditorViewport *vp = host.isEngineReady() ? host.viewport : nullptr;
+    const bool was = node->getPlanarReflector();
     if (!planarreflectors::set(node, enabled, vp, &error))
         return fail(QStringLiteral("node.setPlanarReflector: %1").arg(error));
+    recordNodeEdit(QStringLiteral("planar reflector"),
+                   [node, vp, enabled]() { planarreflectors::set(node, enabled, vp, nullptr); },
+                   [node, vp, was]() { planarreflectors::set(node, was, vp, nullptr); });
     return true;
 }
 
@@ -220,9 +237,16 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
     case QMetaType::QVector3D:
         converted = QVariant::fromValue(iris::toQt(vecFromJs(value, iris::fromQt(current.value<QVector3D>()))));
         break;
-    case QMetaType::QColor:
-        converted = QVariant::fromValue(colorFromJs(value, current.value<QColor>()));
+    case QMetaType::QColor: {
+        // F8: an unparseable colour used to keep the old value and return true.
+        bool ok = false;
+        const QColor colour = colorFromJs(value, current.value<QColor>(), &ok);
+        if (!ok)
+            return fail(QStringLiteral("node.setProperty: %1 (property '%2')")
+                            .arg(colorHelp(value), key));
+        converted = QVariant::fromValue(colour);
         break;
+    }
     case QMetaType::Float:
     case QMetaType::Double:
         converted = value.toFloat();
@@ -231,8 +255,16 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
         break;
     }
 
+    // The write happens FIRST so a refusal is still reported honestly and never
+    // leaves an undo entry behind; the command is then pushed to record it
+    // (F5). QUndoStack::push replays redo() immediately — every reflected
+    // setter is idempotent (they are plain field assignments), so applying the
+    // same value twice is a no-op, and this keeps one code path for "did the
+    // node accept it?".
     if (!node->setPropertyValue(key, converted))
         return fail(QStringLiteral("node.setProperty: '%1' rejected property '%2'").arg(node->getName(), key));
+    if (host.services && host.services->undo)
+        host.services->undo->push(new SetNodePropertyCommand(node, key, current, converted));
     return true;
 }
 
@@ -294,8 +326,15 @@ bool NodeApi::setLightProfile(const QString &id, const QString &assetGuid)
     auto light = lightOrFail(id, QStringLiteral("node.setLightProfile"));
     if (!light) return false;
     QString error;
+    const QString was = light->iesProfileGuid;
     if (!LightBindings::bindProfile(light, assetGuid.trimmed(), host.db, host.project, &error))
         return fail(QStringLiteral("node.setLightProfile: %1").arg(error));
+    Database *db = host.db;
+    Project *project = host.project;
+    const QString now = assetGuid.trimmed();
+    recordNodeEdit(QStringLiteral("light profile"),
+                   [light, now, db, project]() { LightBindings::bindProfile(light, now, db, project); },
+                   [light, was, db, project]() { LightBindings::bindProfile(light, was, db, project); });
     return true;
 }
 
@@ -321,8 +360,15 @@ bool NodeApi::setLightTexture(const QString &id, const QString &assetGuid)
     auto light = lightOrFail(id, QStringLiteral("node.setLightTexture"));
     if (!light) return false;
     QString error;
+    const QString was = light->lightTextureGuid;
     if (!LightBindings::bindTexture(light, assetGuid.trimmed(), host.db, host.project, &error))
         return fail(QStringLiteral("node.setLightTexture: %1").arg(error));
+    Database *db = host.db;
+    Project *project = host.project;
+    const QString now = assetGuid.trimmed();
+    recordNodeEdit(QStringLiteral("light mask"),
+                   [light, now, db, project]() { LightBindings::bindTexture(light, now, db, project); },
+                   [light, was, db, project]() { LightBindings::bindTexture(light, was, db, project); });
     return true;
 }
 
@@ -346,9 +392,14 @@ bool NodeApi::setDecalTexture(const QString &id, const QString &assetGuid)
         return fail(QStringLiteral("node.setDecalTexture: no asset with guid '%1'").arg(guid));
     // THE one binding path — the panel's picker and the asset-bin drop call the
     // same service method (dependency row + AddKind::Binding pin + CAS resolve).
+    const QString was = decal->textureGuid;
     if (!host.services || !host.services->sceneEdit ||
         !host.services->sceneEdit->setDecalTexture(decal, guid))
         return fail(QStringLiteral("node.setDecalTexture: could not bind '%1'").arg(guid));
+    SceneEditService *edit = host.services->sceneEdit;
+    recordNodeEdit(QStringLiteral("decal image"),
+                   [edit, decal, guid]() { edit->setDecalTexture(decal, guid); },
+                   [edit, decal, was]() { edit->setDecalTexture(decal, was); });
     return true;
 }
 
@@ -373,10 +424,20 @@ bool NodeApi::setParticleTexture(const QString &id, const QString &assetGuid)
     // Same one binding path the decal and light textures use: a dependency row,
     // an AddKind::Binding pin, and a CAS resolve. Never a copy into the project
     // folder, never a companion material.
+    auto emitter = node.staticCast<iris::ParticleSystemNode>();
+    // The emitter carries no guid field (only the loaded Texture2D), so the
+    // previous binding is read back from the dependency row the service writes.
+    const QString was = host.db ? host.db->getDependencyByType(
+                                      static_cast<int>(ModelTypes::ParticleSystem),
+                                      emitter->getGUID())
+                                : QString();
     if (!host.services || !host.services->sceneEdit ||
-        !host.services->sceneEdit->setParticleTexture(
-            node.staticCast<iris::ParticleSystemNode>(), guid))
+        !host.services->sceneEdit->setParticleTexture(emitter, guid))
         return fail(QStringLiteral("node.setParticleTexture: could not bind '%1'").arg(guid));
+    SceneEditService *edit = host.services->sceneEdit;
+    recordNodeEdit(QStringLiteral("particle image"),
+                   [edit, emitter, guid]() { edit->setParticleTexture(emitter, guid); },
+                   [edit, emitter, was]() { edit->setParticleTexture(emitter, was); });
     return true;
 }
 

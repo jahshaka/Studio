@@ -327,6 +327,8 @@ set(SRCS
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp
+    src/commands/setnodepropertycommand.cpp
+    src/commands/nodeeditcommand.cpp
     src/ui/dialogs/progressdialog.cpp 
     src/ui/dialogs/screenshotwidget.cpp 
     src/ui/pages/projectmanager.cpp 
@@ -549,6 +551,8 @@ set(HEADERS
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h
+    src/commands/setnodepropertycommand.h
+    src/commands/nodeeditcommand.h
     src/ui/dialogs/progressdialog.h 
     src/ui/dialogs/screenshotwidget.h 
     src/ui/pages/projectmanager.h 

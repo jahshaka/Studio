@@ -631,6 +631,11 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
 
                 auto keyList = keyFrameObj["keys"].toArray();
                 auto keyFrame = propAnim->getKeyFrame(index);
+                // BOUNDS-CHECKED: the index comes straight from the file (the
+                // length of its keyFrames array), and the channel accessors
+                // answer null past the end of a track — a blob with four
+                // entries on a vector3 property used to dereference it.
+                if (!keyFrame) { index++; continue; }
 
                 for (auto keyVal : keyList) {
                     auto keyObj = keyVal.toObject();
@@ -641,8 +646,23 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
                     key->leftSlope = keyObj["leftSlope"].toDouble();
                     key->rightSlope = keyObj["rightSlope"].toDouble();
 
-                    key->leftTangent = getTangentTypeFromName(keyObj["leftTangent"].toString());
-                    key->rightTangent = getTangentTypeFromName(keyObj["rightTangent"].toString());
+                    // SPELLING MISMATCH, fixed 2026-09-04: SceneWriter has
+                    // always written "leftTangentType"/"rightTangentType" and
+                    // this read "leftTangent"/"rightTangent", so BOTH tangent
+                    // types were silently reset to the default on every single
+                    // reload — a curve authored Linear or Constant came back
+                    // Free. The writer's spelling wins going forward; the short
+                    // one is still accepted because a file may carry it (the
+                    // reader is the only thing that ever named it).
+                    const auto tangentName = [&keyObj](const char *preferred, const char *legacy) {
+                        return keyObj.contains(QLatin1String(preferred))
+                                   ? keyObj[QLatin1String(preferred)].toString()
+                                   : keyObj[QLatin1String(legacy)].toString();
+                    };
+                    key->leftTangent = getTangentTypeFromName(
+                        tangentName("leftTangentType", "leftTangent"));
+                    key->rightTangent = getTangentTypeFromName(
+                        tangentName("rightTangentType", "rightTangent"));
 
                     key->handleMode = getHandleModeFromName(keyObj["handleMode"].toString());
                 }
