@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE QVariantMap warmUpSet(const QString &action = QString());
     Q_INVOKABLE QVariantMap engineErrors(bool reset = false);
     Q_INVOKABLE QVariantMap frameStats();
+    Q_INVOKABLE QVariantList apiProblems();
 };
 
 #endif // SCRIPTING_APPAPI_H
