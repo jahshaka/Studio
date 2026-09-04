@@ -45,7 +45,10 @@ public:
 	static void setProject(Project *p) {
 		projectHandle = p;
 	}
-    void writeScene(QString filePath,iris::ScenePtr scene, iris::PostProcessManagerPtr postMan, EditorData* ediorData = nullptr);
+    /// The scene as bytes. There is deliberately NO write-to-file overload:
+    /// a scene is stored as a blob in the projects table (one atomic UPDATE),
+    /// and the file-writing one that used to sit here was dead code doing an
+    /// unchecked truncate on the only copy of a world.
     QByteArray getSceneObject(QString projectPath,
                               iris::ScenePtr scene,
                               iris::PostProcessManagerPtr postMan,

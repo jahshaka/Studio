@@ -61,29 +61,15 @@ For more information see the LICENSE file
 Database *SceneWriter::handle = 0;
 Project *SceneWriter::projectHandle = nullptr;
 
-void SceneWriter::writeScene(QString filePath,
-                             iris::ScenePtr scene,
-                             iris::PostProcessManagerPtr postMan,
-                             EditorData* editorData)
-{
-    dir = AssetIOBase::getDirFromFileName(filePath);
-    QFile file(filePath);
-    file.open(QIODevice::WriteOnly | QIODevice::Truncate);
-
-    QJsonObject projectObj;
-    projectObj["version"] = Constants::CONTENT_VERSION;
-    writeScene(projectObj, scene);
-    if(editorData != nullptr)
-        writeEditorData(projectObj, editorData);
-
-    if (!!postMan) {
-        writePostProcessData(projectObj, postMan);
-    }
-
-    QJsonDocument saveDoc(projectObj);
-    file.write(saveDoc.toJson());
-    file.close();
-}
+// DELETED: writeScene(QString filePath, ...) — the only place a scene was ever
+// written to a FILE, and it had no callers (STABILITY_PROGRAM_SPEC.md Lane 2).
+// It opened the destination with QIODevice::Truncate WITHOUT CHECKING the
+// open, then wrote: destroy-then-write on the one copy of a world, with a
+// crash window in the middle and no error path at all. Scenes live in the
+// projects table (getSceneObject -> Database::updateProject, a single
+// crash-atomic UPDATE — see the note at ProjectService::saveProjectBlob), and
+// exports go through src/export/. A dead unchecked truncate on a scene file is
+// a loaded gun; deleting beats fixing.
 
 QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        iris::ScenePtr scene,
