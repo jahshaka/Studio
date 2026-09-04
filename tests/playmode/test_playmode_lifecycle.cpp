@@ -32,6 +32,8 @@
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/physics/charactercontroller.h"
 #include "irisgl/document/physics/physicsproperties.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/core/geometry/trimesh.h"
 #include "player/playback.h"
 
 static int failures = 0;
@@ -52,6 +54,99 @@ static iris::MeshNodePtr makeBody(const QVector3D &pos, float mass)
     node->physicsProperty.isStatic = false;
     node->physicsProperty.objectMass = mass;
     return node;
+}
+
+/// A mesh node carrying real triangle data, so the mesh-backed collision shapes
+/// (ConvexHull / TriangleMesh / Compound) can be built without loading an asset.
+static iris::MeshNodePtr makeMeshBody(iris::PhysicsCollisionShape shape, int triangles = 64)
+{
+    auto mesh = iris::Mesh::create();
+    mesh->triMesh = new iris::TriMesh();
+    for (int i = 0; i < triangles; ++i) {
+        const float t = float(i);
+        mesh->triMesh->addTriangle(QVector3D(t, 0, 0), QVector3D(0, t, 0), QVector3D(0, 0, t));
+    }
+
+    auto node = iris::MeshNode::create();
+    node->setName("meshbody");
+    node->setMesh(mesh);
+    node->setLocalPos(QVector3D(0, 5, 0));
+    node->isPhysicsBody = true;
+    node->physicsProperty.type = iris::PhysicsType::RigidBody;
+    node->physicsProperty.shape = shape;
+    node->physicsProperty.isStatic = false;
+    node->physicsProperty.objectMass = 1.0f;
+    return node;
+}
+
+// ------------------------------------------------- deep audit 2026-09, F3 --
+// Every collision shape, every compound child and every btTriangleMesh built
+// for a rigid body used to leak on each play/stop cycle: storeCollisionShape()
+// had ZERO call sites, so destroyPhysicsWorld's "delete collision shapes" loop
+// iterated an array nothing ever filled. The Environment owns them now, and
+// the counts are the proof: they rise with the bodies and fall to zero with
+// the world, cycle after cycle, without accumulating.
+static void testCollisionShapeOwnership()
+{
+    std::printf("\n-- collision shapes are owned by the world, and die with it --\n");
+    auto scene = iris::Scene::create();
+    auto root = scene->getRootNode();
+
+    root->addChild(makeBody(QVector3D(0, 10, 0), 1.0f));                     // sphere: 1 shape
+    root->addChild(makeMeshBody(iris::PhysicsCollisionShape::ConvexHull));   // 1 shape
+    root->addChild(makeMeshBody(iris::PhysicsCollisionShape::TriangleMesh)); // 1 shape + 1 interface
+
+    // A compound whose children are mesh nodes: 1 compound + 3 children, and
+    // one triangle-mesh interface behind every one of them.
+    auto compound = makeMeshBody(iris::PhysicsCollisionShape::Compound);
+    for (int i = 0; i < 2; ++i) {
+        auto part = makeMeshBody(iris::PhysicsCollisionShape::TriangleMesh);
+        // Parts of a compound are geometry, not bodies of their own — the
+        // recursion in initializePhysicsWorldFromScene would give each its own
+        // rigid body otherwise.
+        part->isPhysicsBody = false;
+        compound->addChild(part);
+    }
+    root->addChild(compound);
+
+    auto env = scene->getPhysicsEnvironment();
+    env->initializePhysicsWorldFromScene(root);
+
+    const int shapes = env->ownedShapeCount();
+    const int interfaces = env->ownedMeshInterfaceCount();
+    std::printf("    after build: %d shapes, %d mesh interfaces, %d bodies\n",
+                shapes, interfaces, env->hashBodies.size());
+    CHECK(env->hashBodies.size() == 4, "four rigid bodies were built");
+    CHECK(shapes >= 4, "the world owns at least one collision shape per body");
+    CHECK(shapes > 4, "...and the compound's child shapes on top of that");
+    CHECK(interfaces >= 3, "the triangle-mesh interfaces are owned too");
+
+    // ---- the cycle. Rebuilding must not accumulate. ----
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        env->restartPhysics();
+        CHECK(env->ownedShapeCount() == 0 && env->ownedMeshInterfaceCount() == 0,
+              cycle == 0 ? "restartPhysics released every shape and interface" : "...and again");
+        env->initializePhysicsWorldFromScene(root);
+        if (env->ownedShapeCount() != shapes || env->ownedMeshInterfaceCount() != interfaces) {
+            std::printf("FAIL: cycle %d rebuilt %d shapes / %d interfaces (expected %d / %d)\n",
+                        cycle, env->ownedShapeCount(), env->ownedMeshInterfaceCount(),
+                        shapes, interfaces);
+            ++failures;
+        }
+    }
+    CHECK(env->ownedShapeCount() == shapes && env->ownedMeshInterfaceCount() == interfaces,
+          "five play/stop cycles rebuild the SAME number of shapes — no unbounded growth");
+
+    // Stepping the rebuilt world proves the shapes the bodies point at are the
+    // live ones (a recycled address from a freed shape would fault here).
+    env->simulatePhysics();
+    for (int i = 0; i < 30; ++i) env->stepSimulation(1.0f / 60.0f);
+    CHECK(true, "the rebuilt world steps cleanly");
+
+    env->destroyPhysicsWorld();
+    CHECK(env->ownedShapeCount() == 0, "destroyPhysicsWorld leaves no shape behind");
+    CHECK(env->ownedMeshInterfaceCount() == 0, "...and no mesh interface either");
+    env->createPhysicsWorld();   // the Environment destructor expects a world
 }
 
 static bool sameTransform(const iris::SceneNodePtr &node, const QVector3D &pos,
@@ -284,6 +379,7 @@ int main(int argc, char **argv)
     testCharacterControllerLifecycle();
     testViewerRemoval();
     testPlayPauseResumeStop();
+    testCollisionShapeOwnership();
 
     std::printf("\n%s\n", failures == 0 ? "play-mode lifecycle: all checks passed"
                                         : "play-mode lifecycle: FAILURES");
