@@ -34,7 +34,7 @@ public:
     QString jsName() const override { return QStringLiteral("scene"); }
     QVector<VerbInfo> verbs() const override;
 
-    Q_INVOKABLE QVariantList nodes();
+    Q_INVOKABLE QVariantList nodes(const QVariant &options = QVariant());
     Q_INVOKABLE QVariant find(const QString &name);
     Q_INVOKABLE QString root();
     Q_INVOKABLE QString addPrimitive(const QString &name, const QVariantMap &options = QVariantMap());
