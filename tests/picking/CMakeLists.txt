@@ -7,6 +7,7 @@ target_include_directories(test_scene_picker PRIVATE ${CMAKE_SOURCE_DIR}
    ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_scene_picker PRIVATE JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_scene_picker PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
 add_test(NAME picking.document COMMAND test_scene_picker WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(picking.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")

@@ -20,6 +20,25 @@ For more information see the LICENSE file
 
 MeshPropertyWidget::MeshPropertyWidget()
 {
+    // MESH PATH ROW — deliberately still absent (deep audit 2026-09, area 5).
+    //
+    // The row was commented out because swapping a MeshNode's mesh never
+    // reached the engine: SceneMirror wrote Entry::meshPtr and never read it,
+    // so the picker changed the document and nothing on screen. That half is
+    // FIXED — the mirror re-attaches on a mesh change now (mirror.document_to_engine
+    // asserts it, and the material preview dock dropped its node-churn
+    // workaround) — but the row cannot come back as it was written: it called
+    // MeshNode::setMesh(<absolute path>) directly, which
+    //   * bypasses the ONE import pipeline (src/services/import/): no sniff, no
+    //     validation, no CAS object, no project pin — and it serialises a raw
+    //     absolute path into the scene;
+    //   * runs assimp on the UI thread;
+    //   * is not undoable;
+    //   * has no ApiRegistry verb, which SCRIPTING_SPEC §2.3 makes a
+    //     prerequisite, not a nicety.
+    // What it needs is a `node.setMesh(<asset guid>)` verb resolving through the
+    // asset store, an undo command, and a library picker rather than a file
+    // dialog. That is a feature, not this lane's fix.
     //meshPicker = this->addFilePicker("Mesh Path");
 	faceCullMode = this->addComboBox("Face Cull Mode");
 	faceCullMode->addItem("Front");
@@ -45,6 +64,8 @@ MeshPropertyWidget::~MeshPropertyWidget()
 
 void MeshPropertyWidget::onMeshPathChanged(const QString &path)
 {
+    // Nothing connects here; the row that would is off (see the ctor).
+    Q_UNUSED(path);
     //meshNode->setMesh(path);
 }
 

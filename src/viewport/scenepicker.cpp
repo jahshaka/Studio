@@ -13,6 +13,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/core/geometry/trimesh.h"
+#include "irisgl/core/geometry/boundingsphere.h"
 #include "irisgl/core/math/intersectionhelper.h"
 
 namespace {
@@ -38,7 +39,7 @@ void ScenePicker::screenSegment(iris::CameraNodePtr camera, int w, int h, const 
     segEnd   = unproject(camera, w, h, point,  1.0f);
 }
 
-void ScenePicker::pickMeshes(iris::SceneNodePtr node, const QVector3D &segStart, const QVector3D &segEnd,
+void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const QVector3D &segStart, const QVector3D &segEnd,
                              const QVector3D &cameraPos, bool forcePickable, QList<ScenePick> &out)
 {
     if (!node) return;
@@ -49,31 +50,42 @@ void ScenePicker::pickMeshes(iris::SceneNodePtr node, const QVector3D &segStart,
             // Segment into the mesh's local space, hits back to world space.
             const QMatrix4x4 inv = meshNode->globalTransform.inverted();
             const QVector3D a = inv * segStart, b = inv * segEnd;
-            QList<iris::TriangleIntersectionResult> results;
-            if (mesh->getTriMesh()->getSegmentIntersections(a, b, results)) {
-                for (const auto &r : results) {
-                    ScenePick p;
-                    p.node = node;
-                    p.hitPoint = meshNode->globalTransform * r.hitPoint;
-                    p.distanceFromCameraSqrd = (p.hitPoint - cameraPos).lengthSquared();
-                    p.triangleIndex = r.triangleIndex;
-                    out.append(p);
+            // BROAD PHASE first: the mesh's own bounding sphere, in the same
+            // local space. Without it every ray scanned every triangle of every
+            // mesh in the scene — which V-hold vertex snapping does on every
+            // mouse move (deep audit 2026-09, area 2: "no broad phase in
+            // picking"). iris::Scene::rayCast has always done this; the picker
+            // is the copy that did not.
+            const iris::BoundingSphere sphere = mesh->getBoundingSphere();
+            float t; QVector3D sphereHit;
+            if (iris::IntersectionHelper::raySphereIntersects(a, (b - a).normalized(),
+                                                              sphere.pos, sphere.radius, t, sphereHit)) {
+                QList<iris::TriangleIntersectionResult> results;
+                if (mesh->getTriMesh()->getSegmentIntersections(a, b, results)) {
+                    for (const auto &r : results) {
+                        ScenePick p;
+                        p.node = node;
+                        p.hitPoint = meshNode->globalTransform * r.hitPoint;
+                        p.distanceFromCameraSqrd = (p.hitPoint - cameraPos).lengthSquared();
+                        p.triangleIndex = r.triangleIndex;
+                        out.append(p);
+                    }
                 }
             }
         }
     }
-    for (auto &child : node->children)
+    for (const auto &child : node->children)
         pickMeshes(child, segStart, segEnd, cameraPos, forcePickable, out);
 }
 
 QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const QVector3D &segStart, const QVector3D &segEnd,
                                       const QVector3D &cameraPos, bool forcePickable,
                                       bool includeLights, bool includeViewers,
-                                      bool includeDecals)
+                                      bool includeDecals, bool refreshTransforms)
 {
     QList<ScenePick> hits;
     if (!scene || !scene->getRootNode()) return hits;
-    scene->getRootNode()->update(0.0f);   // fresh global transforms
+    if (refreshTransforms) scene->getRootNode()->update(0.0f);   // fresh global transforms
     pickMeshes(scene->getRootNode(), segStart, segEnd, cameraPos, forcePickable, hits);
 
     const float sphereRadius = 0.5f;
