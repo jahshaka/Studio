@@ -49,6 +49,45 @@ AssetImportService::~AssetImportService()
     qDeleteAll(mImporters);
 }
 
+namespace {
+
+// SIZE CAPS (deep audit 2026-09: "no size caps anywhere"). The pipeline hashes
+// every source file, and several importers read theirs entirely into memory
+// (the shader/material JSON readers, the IES tokenizer, image decoders). A cap
+// per type is the cheap half of the answer: it costs one stat() and it turns
+// "the app allocated until the machine died" into a named import error.
+//
+// The numbers are deliberately generous — a cap that rejects real user content
+// is a worse defect than the one it prevents. A 2 GB model or texture is
+// already past what the rest of the pipeline survives; a 64 MB shader is not a
+// shader.
+constexpr qint64 kMaxParsedBytes = 64ll * 1024 * 1024;         // text/JSON-ish types
+constexpr qint64 kMaxContentBytes = 2ll * 1024 * 1024 * 1024;  // meshes and media
+
+qint64 maxSourceBytes(int modelType)
+{
+    switch (static_cast<ModelTypes>(modelType)) {
+    case ModelTypes::Mesh:
+    case ModelTypes::Object:   // JafImporter — a .jaf archive carries content
+    case ModelTypes::Texture:
+    case ModelTypes::Music:
+    case ModelTypes::Video:
+        return kMaxContentBytes;
+    default:
+        // Shader, Material, LightProfile (.ies), File (the text whitelist).
+        return kMaxParsedBytes;
+    }
+}
+
+QString humanSize(qint64 bytes)
+{
+    if (bytes >= 1024ll * 1024 * 1024)
+        return QStringLiteral("%1 GB").arg(double(bytes) / (1024.0 * 1024 * 1024), 0, 'f', 1);
+    return QStringLiteral("%1 MB").arg(double(bytes) / (1024.0 * 1024), 0, 'f', 1);
+}
+
+}  // namespace
+
 AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request,
                                                     QString *error) const
 {
@@ -94,6 +133,15 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
     }
     AssetImporterBase *importer = pickImporter(request, &result.error);
     if (!importer) return prepared;
+
+    // ---- size ----
+    const qint64 maxBytes = maxSourceBytes(importer->modelType());
+    if (sourceInfo.size() > maxBytes) {
+        result.error = QStringLiteral("'%1' is %2; the limit for this asset type is %3")
+                           .arg(sourceInfo.fileName(), humanSize(sourceInfo.size()),
+                                humanSize(maxBytes));
+        return prepared;
+    }
 
     // ---- validate ----
     if (!importer->validate(request.sourcePath, &result.error)) return prepared;

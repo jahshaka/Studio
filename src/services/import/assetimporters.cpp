@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/materialhelper.h"
 
 namespace {
 
@@ -119,8 +120,15 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     QStringList textureNames, texturePaths;
     bool hasEmbedded = false;
     QJsonObject modelStats;
+    // Drop anything a previous parse on this thread left behind, so the
+    // warnings taken below belong to THIS model.
+    iris::MaterialHelper::takeContainmentWarnings();
     auto node = AssetHelper::extractTexturesAndMaterialFromMesh(
         request.sourcePath, textureNames, texturePaths, hasEmbedded, &modelStats, stagingDir);
+    // Texture references that named a file outside the model's own folder:
+    // contained by MaterialHelper (the path never resolves outside), reported
+    // here so the user learns their model lost a map (deep audit 2026-09 F2).
+    out.warnings += iris::MaterialHelper::takeContainmentWarnings();
     if (!node) {
         if (errorOut)
             *errorOut = QStringLiteral("\"%1\" could not be imported. The file may be "
@@ -147,10 +155,21 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     if (sourceInfo.suffix().toLower() == QStringLiteral("obj")) {
         QFile obj(request.sourcePath);
         if (obj.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QString objDir = sourceInfo.absolutePath();
             while (!obj.atEnd()) {
                 const QString line = QString::fromUtf8(obj.readLine()).trimmed();
                 if (!line.startsWith(QStringLiteral("mtllib "))) continue;
-                const QFileInfo mtl(sourceInfo.dir(), line.mid(7).trimmed());
+                // `mtllib` names a file, from inside the .obj — the same
+                // untrusted-path problem as the texture references, and the
+                // same containment (deep audit 2026-09 F2). `mtllib
+                // ../../../.ssh/id_rsa` used to be staged into the store as a
+                // sidecar and shipped in every export of the project.
+                const QString named = line.mid(7).trimmed();
+                const QString contained = iris::MaterialHelper::containedTexturePath(
+                    named, objDir, QStringLiteral("material library"));
+                out.warnings += iris::MaterialHelper::takeContainmentWarnings();
+                if (contained.isEmpty()) continue;
+                const QFileInfo mtl(contained);
                 if (mtl.exists() && mtl.isFile())
                     out.files.append({ mtl.absoluteFilePath(), out.mainGuid,
                                        QStringLiteral("sidecar"), mtl.fileName() });

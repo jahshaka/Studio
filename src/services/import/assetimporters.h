@@ -19,7 +19,9 @@ For more information see the LICENSE file
 
 #include "services/import/assetimportservice.h"
 
-/// obj/fbx/dae/blend/glb/gltf → Object row + Mesh member + texture members.
+/// obj/fbx/dae/glb/gltf/ply/stl → Object row + Mesh member + texture members
+/// (Constants::MODEL_EXTS is the list; every entry has its importer in
+/// irisgl/CMakeLists.txt's assimp allowlist).
 /// Consolidates AssetImporter::importMesh and AssetView::importModel's mesh
 /// branch: extraction from the SOURCE path (sibling .mtl/textures exist only
 /// there), embedded textures decoded into the staging dir (never beside the
