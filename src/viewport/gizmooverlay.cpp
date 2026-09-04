@@ -1,6 +1,5 @@
+#include "irisgl/core/math/vec.h"
 #include "viewport/gizmooverlay.h"
-#include <QMatrix3x3>
-#include <QQuaternion>
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/assets/mesh.h"
 
@@ -24,7 +23,7 @@ MeshId GizmoOverlay::meshFor(iris::Mesh *mesh)
     return id;
 }
 
-void GizmoOverlay::update(Gizmo *gizmo, const QVector3D &rayPos, const QVector3D &rayDir, const QVector3D &viewDir)
+void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Vec3 &rayDir, const iris::Vec3 &viewDir)
 {
     QVector<GizmoDrawItem> items;
     if (gizmo) items = gizmo->drawItems(rayPos, rayDir, viewDir);

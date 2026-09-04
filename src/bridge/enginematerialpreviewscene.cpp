@@ -1,9 +1,10 @@
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "bridge/enginematerialpreviewscene.h"
 
 #include <cstdint>
 #include <string>
 #include <QFileInfo>
-#include <QQuaternion>
 
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/core/irisutils.h"
@@ -63,7 +64,7 @@ void EngineMaterialPreviewScene::buildDocument()
     key->setLightType(iris::LightType::Directional);
     key->setName("matpreview-key");
     key->color = QColor(255, 255, 240);
-    key->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
+    key->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
     key->intensity = 0.86f;
     key->isBuiltIn = true;
     mDocument->rootNode->addChild(key);
@@ -71,7 +72,7 @@ void EngineMaterialPreviewScene::buildDocument()
     auto fill = iris::LightNode::create();
     fill->setLightType(iris::LightType::Point);
     fill->setName("matpreview-fill");
-    fill->setLocalPos(QVector3D(-3, 0, 3));
+    fill->setLocalPos(iris::Vec3(-3, 0, 3));
     fill->color = QColor(255, 255, 255);
     fill->intensity = 0.5f;
     fill->isBuiltIn = true;
@@ -80,8 +81,8 @@ void EngineMaterialPreviewScene::buildDocument()
     // The legacy camera sat at (2,0,3) looking at the origin; a touch of height
     // keeps the Plane primitive from being edge-on at first sight.
     mCamera = iris::CameraNode::create();
-    mCamera->setLocalPos(QVector3D(2, 1.2f, 3));
-    mCamera->lookAt(QVector3D(0, 0, 0));
+    mCamera->setLocalPos(iris::Vec3(2, 1.2f, 3));
+    mCamera->lookAt(iris::Vec3(0, 0, 0));
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(125, 125, 125));   // SceneWidget's initial clearColor
@@ -92,7 +93,7 @@ void EngineMaterialPreviewScene::buildDocument()
     mDocument->update(0);
 
     // Orbit around the origin from where the camera stands.
-    mPivot = QVector3D(0, 0, 0);
+    mPivot = iris::Vec3(0, 0, 0);
     mDistFromPivot = mCamera->getLocalPos().length();
     float roll;
     mCamera->getLocalRot().getEulerAngles(&mPitch, &mYaw, &roll);
@@ -173,7 +174,7 @@ void EngineMaterialPreviewScene::rebuildSubject()
     auto node = iris::MeshNode::create();
     node->setMesh(mesh);
     node->setName(kSubjectName);
-    node->setLocalPos(QVector3D(0, 0, 0));
+    node->setLocalPos(iris::Vec3(0, 0, 0));
     node->setPickable(false);
     node->isBuiltIn = true;
     node->setFaceCullingMode(iris::FaceCullingMode::None);   // Plane reads from both sides
@@ -208,8 +209,8 @@ void EngineMaterialPreviewScene::setBackground(const QColor &colour)
 
 void EngineMaterialPreviewScene::updateCameraRot()
 {
-    auto rot = QQuaternion::fromEulerAngles(mPitch, mYaw, 0);
-    auto localPos = rot.rotatedVector(QVector3D(0, 0, 1));
+    auto rot = iris::Quat::fromEulerAngles(mPitch, mYaw, 0);
+    auto localPos = rot.rotatedVector(iris::Vec3(0, 0, 1));
     mCamera->setLocalPos(mPivot + localPos * mDistFromPivot);
     mCamera->setLocalRot(rot);
     mCamera->update(0);
@@ -234,7 +235,7 @@ void EngineMaterialPreviewScene::mouseMove(int dx, int dy)
     if (mLeftDown || mRightDown) orbit(dx * mRotationSpeed, dy * mRotationSpeed);
     if (mMiddleDown) {
         const float dragSpeed = 0.01f;
-        auto dir = mCamera->getLocalRot().rotatedVector(QVector3D(dx * dragSpeed, -dy * dragSpeed, 0));
+        auto dir = mCamera->getLocalRot().rotatedVector(iris::Vec3(dx * dragSpeed, -dy * dragSpeed, 0));
         mPivot += dir;
     }
     updateCameraRot();

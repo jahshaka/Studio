@@ -9,6 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "modules/materials/api/materialsapi.h"
 
 #include <QDir>
@@ -503,7 +505,7 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     for (auto prop : props) {
         const QVariant value = prop->getValue();
         if (value.typeId() == QMetaType::QColor) out[prop->name] = colorToJs(value.value<QColor>());
-        else if (value.typeId() == QMetaType::QVector3D) out[prop->name] = vecToJs(value.value<QVector3D>());
+        else if (value.typeId() == QMetaType::QVector3D) out[prop->name] = vecToJs(iris::fromQt(value.value<QVector3D>()));
         else out[prop->name] = value;
     }
     return out;

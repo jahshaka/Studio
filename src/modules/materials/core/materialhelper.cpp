@@ -8,6 +8,8 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "materialhelper.h"
 #include "../graph/graphnodescene.h"
 #include "../graph/nodegraph.h"
@@ -21,9 +23,6 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "../models/libraryv1.h"
-#include <QVector2D>
-#include <QVector3D>
-#include <QVector4D>
 
 /*
 EFFECT SHADER FORMAT (v2, post MATERIALS_EVALUATOR phase 5)

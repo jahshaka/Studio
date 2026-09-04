@@ -1,5 +1,6 @@
 #pragma once
 
+#include "irisgl/core/math/vec.h"
 #include <QLineEdit>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -8,7 +9,6 @@
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QLabel>
-#include <QVector2D>
 
 #include "../graph/nodegraph.h"
 #include "../models/nodemodel.h"
@@ -48,8 +48,8 @@ private:
 	void pushSocketDefaults();
 
 	QDoubleSpinBox *tileXBox, *tileYBox, *offsetXBox, *offsetYBox;
-	QVector2D tiling = QVector2D(1.0f, 1.0f);
-	QVector2D offset = QVector2D(0.0f, 0.0f);
+	iris::Vec2 tiling = iris::Vec2(1.0f, 1.0f);
+	iris::Vec2 offset = iris::Vec2(0.0f, 0.0f);
 };
 
 /*

@@ -16,6 +16,9 @@
 // no longer exists — full retirement was the point of the program — so its
 // answers were recorded first, into fixtures/golden_document_poses.txt, and
 // that recording is what the extractor is checked against now.
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QFile>
 #include <QGuiApplication>
 #include <QTemporaryDir>
@@ -48,7 +51,7 @@ static const QString kGlbRig =
 static const QString kFbxRig =
     QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/pivot_rig.fbx");
 
-struct Trs { QVector3D pos; QQuaternion rot; QVector3D scale; };
+struct Trs { iris::Vec3 pos; iris::Quat rot; iris::Vec3 scale; };
 
 // THE FROZEN ORACLE.
 //
@@ -101,8 +104,8 @@ static void collectNames(const iris::SceneNodePtr &n, QStringList &out)
 /// rotation, and a component-wise compare would call them a failure.
 static float trsError(const Trs &a, const Trs &b)
 {
-    const QMatrix4x4 ma = iris::composeTRS(a.pos, a.rot, a.scale);
-    const QMatrix4x4 mb = iris::composeTRS(b.pos, b.rot, b.scale);
+    const iris::Mat4 ma = iris::composeTRS(a.pos, a.rot, a.scale);
+    const iris::Mat4 mb = iris::composeTRS(b.pos, b.rot, b.scale);
     float worst = 0.0f;
     for (int i = 0; i < 16; ++i)
         worst = std::max(worst, std::fabs(ma.constData()[i] - mb.constData()[i]));
@@ -134,9 +137,9 @@ static bool loadGolden()
         const QStringList parts = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
         if (parts.size() != 11) continue;
         Trs v;
-        v.pos = QVector3D(parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat());
-        v.rot = QQuaternion(parts[7].toFloat(), parts[4].toFloat(), parts[5].toFloat(), parts[6].toFloat());
-        v.scale = QVector3D(parts[8].toFloat(), parts[9].toFloat(), parts[10].toFloat());
+        v.pos = iris::Vec3(parts[1].toFloat(), parts[2].toFloat(), parts[3].toFloat());
+        v.rot = iris::Quat(parts[7].toFloat(), parts[4].toFloat(), parts[5].toFloat(), parts[6].toFloat());
+        v.scale = iris::Vec3(parts[8].toFloat(), parts[9].toFloat(), parts[10].toFloat());
         gGolden.insert(parts[0], v);
     }
     return !gGolden.isEmpty();
@@ -166,7 +169,7 @@ static Trs sampleTrack(const iris::ClipBoneTrack &track, float t)
         const float u = span > 0.0f ? (t - a.time) / span : 0.0f;
         out.pos = a.position + (b.position - a.position) * u;
         out.scale = a.scale + (b.scale - a.scale) * u;
-        out.rot = QQuaternion::nlerp(a.rotation, b.rotation, u);
+        out.rot = iris::Quat::nlerp(a.rotation, b.rotation, u);
         return out;
     }
     return out;
@@ -352,10 +355,10 @@ int main(int argc, char **argv)
         const auto &bones = f.mesh->getSkeleton()->bones;
         bool bindWritten = true;
         for (const auto &b : bones) {
-            const QMatrix4x4 expect = !b->parentBone.isNull()
+            const iris::Mat4 expect = !b->parentBone.isNull()
                 ? b->parentBone->inverseMeshSpacePoseMatrix * b->meshSpacePoseMatrix
                 : b->meshSpacePoseMatrix;
-            QVector3D p, s; QQuaternion r;
+            iris::Vec3 p, s; iris::Quat r;
             iris::decomposeTRS(expect, p, r, s);
             if ((p - b->bindingPos).length() > 1e-5f) bindWritten = false;
             if (std::fabs(s.x() * s.y() * s.z()) < 1e-6f) bindWritten = false;   // not the zero default
@@ -364,7 +367,7 @@ int main(int argc, char **argv)
                            "identity-bind defect)");
         // jointTip binds one unit up from jointRoot; identity binds would read (0,0,0).
         const auto tip = f.mesh->getSkeleton()->getBone(QStringLiteral("jointTip"));
-        CHECK(!tip.isNull() && (tip->bindingPos - QVector3D(0, 1, 0)).length() < 1e-5f,
+        CHECK(!tip.isNull() && (tip->bindingPos - iris::Vec3(0, 1, 0)).length() < 1e-5f,
               "jointTip's bind translation is (0,1,0), not the (0,0,0) the exporter used to write");
 
         for (const auto &anim : f.fragment->getAnimations()) {

@@ -1,3 +1,5 @@
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "bridge/engineassetscene.h"
 
 #include <cstdint>
@@ -5,7 +7,6 @@
 #include <string>
 #include <QColor>
 #include <QFileInfo>
-#include <QQuaternion>
 #include <QtMath>
 
 #include "irisgl/mirror/scenemirror.h"
@@ -61,7 +62,7 @@ void EngineAssetScene::buildDocument()
     dlight->setLightType(iris::LightType::Directional);
     dlight->setName("ae98cx7u");
     dlight->color = QColor(255, 255, 240);
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
+    dlight->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
     dlight->intensity = 0.76f;
     dlight->setShadowMapType(iris::ShadowMapType::Soft);
     dlight->isBuiltIn = true;
@@ -70,7 +71,7 @@ void EngineAssetScene::buildDocument()
     auto plight = iris::LightNode::create();
     plight->setLightType(iris::LightType::Point);
     plight->setName("ae98cx7u");
-    plight->setLocalPos(QVector3D(0, 0, -3));
+    plight->setLocalPos(iris::Vec3(0, 0, -3));
     plight->color = QColor(210, 210, 255);
     plight->intensity = 0.47f;
     plight->setShadowMapType(iris::ShadowMapType::Soft);
@@ -82,7 +83,7 @@ void EngineAssetScene::buildDocument()
     auto floor = iris::MeshNode::create();
     floor->setMesh(":/models/ground.obj");
     if (floor->getMesh()) {
-        floor->setLocalPos(QVector3D(0, -5, 0));   // legacy: below the default plane reset
+        floor->setLocalPos(iris::Vec3(0, -5, 0));   // legacy: below the default plane reset
         floor->setName(kFloorName);
         floor->setPickable(false);
         floor->isBuiltIn = true;
@@ -101,8 +102,8 @@ void EngineAssetScene::buildDocument()
     }
 
     mCamera = iris::CameraNode::create();
-    mCamera->setLocalPos(QVector3D(5, 6, 12));
-    mCamera->lookAt(QVector3D(0, 0.5f, 0));
+    mCamera->setLocalPos(iris::Vec3(5, 6, 12));
+    mCamera->lookAt(iris::Vec3(0, 0.5f, 0));
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(25, 25, 25));
@@ -118,7 +119,7 @@ void EngineAssetScene::buildDocument()
     // preview pivot/distance, rotation speed .5.
     mDistFromPivot = 15;
     orbitFromCamera();
-    mPivot = QVector3D(0, 0, 0);
+    mPivot = iris::Vec3(0, 0, 0);
     mDistFromPivot = 5;
     mRotationSpeed = 0.5f;
 }
@@ -189,10 +190,10 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
     // dropping the node onto the floor and then framed that stale centre; here
     // the box is measured where the node ends up, so the camera looks at it.
     if (isOnGround) {
-        node->setLocalPos(QVector3D(0, 0, 0));
+        node->setLocalPos(iris::Vec3(0, 0, 0));
         node->update(0);
         auto aabb = nodeBoundingBox(node);
-        node->setLocalPos(QVector3D(0, -aabb.getMin().y() - 5, 0));
+        node->setLocalPos(iris::Vec3(0, -aabb.getMin().y() - 5, 0));
     }
 
     if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
@@ -217,8 +218,8 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
 
     if (!viewed) {
         mLookAt = bound.pos;
-        mLocalPos = QVector3D(0, bound.pos.y(), 12);
-        mLocalRot = QVector3D(0, 0, 0);
+        mLocalPos = iris::Vec3(0, bound.pos.y(), 12);
+        mLocalRot = iris::Vec3(0, 0, 0);
     }
     mDistanceFromPivot = dist;
 }
@@ -228,7 +229,7 @@ iris::SceneNodePtr EngineAssetScene::setMaterialSubject(iris::MaterialPtr materi
     auto matball = iris::MeshNode::create();
     auto sphere = previewSphere();
     if (sphere) matball->setMesh(sphere);
-    matball->setLocalPos(QVector3D(0, 0, 0));
+    matball->setLocalPos(iris::Vec3(0, 0, 0));
     matball->setName(name);
     matball->setPickable(false);
     matball->setFaceCullingMode(iris::FaceCullingMode::None);
@@ -279,7 +280,7 @@ void EngineAssetScene::setBackdrop(unsigned int id)
 void EngineAssetScene::orbitFromCamera()
 {
     // OrbitalCameraController::setCamera: pivot ahead of the camera, yaw/pitch from it.
-    auto viewVec = mCamera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
+    auto viewVec = mCamera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
     mPivot = mCamera->getLocalPos() + viewVec * mDistFromPivot;
     float roll;
     mCamera->getLocalRot().getEulerAngles(&mPitch, &mYaw, &roll);
@@ -290,8 +291,8 @@ void EngineAssetScene::orbitFromCamera()
 
 void EngineAssetScene::updateCameraRot()
 {
-    auto rot = QQuaternion::fromEulerAngles(mPitch, mYaw, 0);
-    auto localPos = rot.rotatedVector(QVector3D(0, 0, 1));
+    auto rot = iris::Quat::fromEulerAngles(mPitch, mYaw, 0);
+    auto localPos = rot.rotatedVector(iris::Vec3(0, 0, 1));
     mCamera->setLocalPos(mPivot + localPos * mDistFromPivot);
     mCamera->setLocalRot(rot);
     mCamera->update(0);
@@ -311,7 +312,7 @@ void EngineAssetScene::resetCamera()
 {
     // AssetViewer::resetViewerCamera
     mCamera->setLocalPos(mLocalPos);
-    mCamera->setLocalRot(QQuaternion::fromEulerAngles(mLocalRot));
+    mCamera->setLocalRot(iris::Quat::fromEulerAngles(mLocalRot));
     mCamera->lookAt(mLookAt);
     mCamera->update(0);
 
@@ -327,7 +328,7 @@ void EngineAssetScene::resetCameraAfter()
 {
     // AssetViewer::resetViewerCameraAfter
     mCamera->setLocalPos(mLocalPos);
-    mCamera->setLocalRot(QQuaternion::fromEulerAngles(mLocalRot));
+    mCamera->setLocalRot(iris::Quat::fromEulerAngles(mLocalRot));
     mCamera->update(0);
 
     mDistFromPivot = mDistanceFromPivot;
@@ -336,7 +337,7 @@ void EngineAssetScene::resetCameraAfter()
     applyClipPlanes();
 }
 
-void EngineAssetScene::orientCamera(QVector3D pos, QVector3D localRot, float distanceFromPivot)
+void EngineAssetScene::orientCamera(iris::Vec3 pos, iris::Vec3 localRot, float distanceFromPivot)
 {
     mLocalPos = pos;
     mLocalRot = localRot;
@@ -346,7 +347,7 @@ void EngineAssetScene::orientCamera(QVector3D pos, QVector3D localRot, float dis
 
 QJsonObject EngineAssetScene::sceneProperties() const
 {
-    auto vec3 = [](const QVector3D &v) {
+    auto vec3 = [](const iris::Vec3 &v) {
         QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z(); return o;
     };
     QJsonObject cameraObj;
@@ -378,7 +379,7 @@ void EngineAssetScene::mouseMove(int dx, int dy)
     if (mLeftDown || mRightDown) orbit(dx * mRotationSpeed, dy * mRotationSpeed);
     if (mMiddleDown) {
         const float dragSpeed = 0.01f;
-        auto dir = mCamera->getLocalRot().rotatedVector(QVector3D(dx * dragSpeed, -dy * dragSpeed, 0));
+        auto dir = mCamera->getLocalRot().rotatedVector(iris::Vec3(dx * dragSpeed, -dy * dragSpeed, 0));
         mPivot += dir;
     }
     updateCameraRot();

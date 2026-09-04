@@ -9,9 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QPoint>
-#include <QVector3D>
 #include <QSharedPointer>
 #include <QtMath>
 
@@ -55,7 +55,7 @@ void OrbitalCameraController::setCamera(iris::CameraNodePtr  cam)
     this->camera = cam;
 
     //calculate the location of the pivot
-    auto viewVec = cam->getLocalRot().rotatedVector(QVector3D(0,0,-1));//default forward is -z
+    auto viewVec = cam->getLocalRot().rotatedVector(iris::Vec3(0,0,-1));//default forward is -z
     pivot = cam->getLocalPos() + (viewVec*distFromPivot);
 
     float roll;
@@ -112,14 +112,14 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		canLeftMouseDrag()) {
         //translate camera
         float dragSpeed = 0.01f;
-        auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
+        auto dir = camera->getLocalRot().rotatedVector(iris::Vec3(x*dragSpeed,-y*dragSpeed,0));
         pivot += dir;
     }
 
     updateCameraRot();
 }
 
-void OrbitalCameraController::setAltOrbit(bool active, const QVector3D &newPivot)
+void OrbitalCameraController::setAltOrbit(bool active, const iris::Vec3 &newPivot)
 {
 	CameraControllerBase::setAltOrbit(active, newPivot);
 	if (!active || !camera) return;
@@ -158,7 +158,6 @@ void OrbitalCameraController::onMouseWheel(int delta)
     //todo: remove magic numbers
     if(distFromPivot<0)
         distFromPivot = 0;
-
 
 
 	if (camera->projMode == iris::CameraProjection::Orthogonal) {
@@ -214,8 +213,8 @@ void OrbitalCameraController::focusOnNode(iris::SceneNodePtr sceneNode)
 
 void OrbitalCameraController::updateCameraRot()
 {
-    auto rot = QQuaternion::fromEulerAngles(pitch,yaw,0);
-    auto localPos = rot.rotatedVector(QVector3D(0,0,1));
+    auto rot = iris::Quat::fromEulerAngles(pitch,yaw,0);
+    auto localPos = rot.rotatedVector(iris::Vec3(0,0,1));
 
     camera->setLocalPos(pivot+(localPos*distFromPivot));
     camera->setLocalRot(rot);

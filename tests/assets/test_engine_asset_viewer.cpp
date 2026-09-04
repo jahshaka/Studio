@@ -5,9 +5,9 @@
 // background; orbiting 180 degrees must change the picture but keep the cube
 // at the centre; a second material colour must show; the RTT preview must
 // match the view; release() must detach cleanly.
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
-#include <QVector3D>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -119,8 +119,8 @@ int main(int argc, char **argv)
         marker->setName("marker");
         marker->setMesh(":assets/models/cube.obj");
         marker->setMaterial(red);
-        marker->setLocalScale(QVector3D(0.3f, 0.3f, 0.3f));
-        marker->setLocalPos(QVector3D(1.6f, -0.7f, 1.6f));
+        marker->setLocalScale(iris::Vec3(0.3f, 0.3f, 0.3f));
+        marker->setLocalPos(iris::Vec3(1.6f, -0.7f, 1.6f));
         cube->addChild(marker);
         assets.setSubject(cube, false, true);
         assets.resetCamera();
@@ -132,18 +132,18 @@ int main(int argc, char **argv)
         show("cube, framing camera", front, W / 2, H / 2);
         CHECK(isRed(at(front, W / 2, H / 2)), "centre pixel is dominated by the material colour");
         CHECK(isBackground(at(front, 2, 2)), "corner is the preview background (25,25,25)");
-        const QVector3D camPos = assets.camera()->getLocalPos();
+        const iris::Vec3 camPos = assets.camera()->getLocalPos();
         std::printf("    camera %.2f %.2f %.2f\n", double(camPos.x()), double(camPos.y()), double(camPos.z()));
         CHECK(std::fabs(camPos.y() - cube->getLocalPos().y()) < 1.0f, "camera framed at the subject's height");
 
         // ---- 2. orbit 180 degrees: a different picture, still the cube at the centre ----
         assets.orbit(180.0f, 0.0f);
         Image back = render(assets, *engine, view, 3);
-        const QVector3D camBack = assets.camera()->getLocalPos();
+        const iris::Vec3 camBack = assets.camera()->getLocalPos();
         std::printf("    camera %.2f %.2f %.2f\n", double(camBack.x()), double(camBack.y()), double(camBack.z()));
         // Opposite side of the pivot: the two positions straddle the model's
         // footprint and are a full diameter apart.
-        const QVector3D mid = (camPos + camBack) * 0.5f;
+        const iris::Vec3 mid = (camPos + camBack) * 0.5f;
         CHECK(std::fabs(mid.x()) < 2.0f && std::fabs(mid.z()) < 2.0f && (camBack - camPos).length() > 10.0f,
               "camera moved to the opposite side of the pivot");
         show("cube after 180 deg orbit", back, W / 2, H / 2);
@@ -195,7 +195,7 @@ int main(int argc, char **argv)
         auto blue = iris::DefaultMaterial::create();
         blue->setDiffuseColor(QColor(30, 60, 220));
         giant->setMaterial(blue);
-        giant->setLocalScale(QVector3D(200.0f, 200.0f, 200.0f));
+        giant->setLocalScale(iris::Vec3(200.0f, 200.0f, 200.0f));
         const iris::AABB gbox = preview::worldBoundingBox(giant);
         std::printf("    giant world box %.1f x %.1f x %.1f\n",
                     double(gbox.getSize().x()), double(gbox.getSize().y()), double(gbox.getSize().z()));
@@ -227,10 +227,10 @@ int main(int argc, char **argv)
         scaled->setName("scaled");
         scaled->setMesh(":assets/models/cube.obj");
         scaled->setMaterial(red);
-        scaled->setLocalScale(QVector3D(3.0f, 3.0f, 3.0f));
+        scaled->setLocalScale(iris::Vec3(3.0f, 3.0f, 3.0f));
         assets.setSubject(scaled, false, true);
         assets.resetCamera();
-        const QVector3D spivotCam = assets.camera()->getLocalPos();
+        const iris::Vec3 spivotCam = assets.camera()->getLocalPos();
         Image sm = render(assets, *engine, view, 3);
         show("cube (scale 3)", sm, W / 2, H / 2);
         CHECK(isRed(at(sm, W / 2, H / 2)), "a scaled model is framed from its world-space bounds");

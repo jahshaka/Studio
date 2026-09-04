@@ -9,6 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "scripting/modules/editorapi.h"
 
 #include <QDir>
@@ -223,8 +225,8 @@ QVariantMap EditorApi::camera()
     if (!requireEngine()) return out;
     auto cam = host.viewport->editorCamera();
     if (!cam) { fail("editor.camera: no editor camera"); return out; }
-    const QVector3D pos = cam->getLocalPos();
-    const QQuaternion rot = cam->getLocalRot();
+    const iris::Vec3 pos = cam->getLocalPos();
+    const iris::Quat rot = cam->getLocalRot();
     out["position"] = QVariantMap{ { "x", pos.x() }, { "y", pos.y() }, { "z", pos.z() } };
     out["rotation"] = QVariantMap{ { "x", rot.x() }, { "y", rot.y() }, { "z", rot.z() },
                                    { "scalar", rot.scalar() } };

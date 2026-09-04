@@ -9,12 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/vec.h"
 #include <Qt>
 
-#include <QQuaternion>
-#include <QVector2D>
-#include <QVector3D>
-#include <QVector4D>
 #include <QColor>
 #include <QDir>
 #include <QFile>
@@ -71,28 +68,28 @@ QColor AssetIOBase::readColor(const QJsonObject& colorObj)
     return col;
 }
 
-QVector2D AssetIOBase::readVector2(const QJsonObject& vecObj)
+iris::Vec2 AssetIOBase::readVector2(const QJsonObject& vecObj)
 {
     if(vecObj.isEmpty())
     {
-        return QVector2D();
+        return iris::Vec2();
     }
 
-    QVector2D vec;
+    iris::Vec2 vec;
     vec.setX(vecObj["x"].toDouble(0));
     vec.setY(vecObj["y"].toDouble(0));
 
     return vec;
 }
 
-QVector3D AssetIOBase::readVector3(const QJsonObject& vecObj)
+iris::Vec3 AssetIOBase::readVector3(const QJsonObject& vecObj)
 {
 	if (vecObj.isEmpty())
 	{
-		return QVector3D();
+		return iris::Vec3();
 	}
 
-	QVector3D vec;
+	iris::Vec3 vec;
 	vec.setX(vecObj["x"].toDouble(0));
 	vec.setY(vecObj["y"].toDouble(0));
 	vec.setZ(vecObj["z"].toDouble(0));
@@ -100,14 +97,14 @@ QVector3D AssetIOBase::readVector3(const QJsonObject& vecObj)
 	return vec;
 }
 
-QVector4D AssetIOBase::readVector4(const QJsonObject& vecObj)
+iris::Vec4 AssetIOBase::readVector4(const QJsonObject& vecObj)
 {
 	if (vecObj.isEmpty())
 	{
-		return QVector4D();
+		return iris::Vec4();
 	}
 
-	QVector4D vec;
+	iris::Vec4 vec;
 	vec.setX(vecObj["x"].toDouble(0));
 	vec.setY(vecObj["y"].toDouble(0));
 	vec.setZ(vecObj["z"].toDouble(0));

@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/vec.h"
 #include "vectorpropertywidget.h"
 #include <QLabel>
 #include <QDebug>
@@ -35,7 +36,7 @@ Vector2DPropertyWidget::Vector2DPropertyWidget() : BasePropertyWidget()
 void Vector2DPropertyWidget::setConnections()
 {
 
-	connect(wid, &Widget2D::valueChanged, [=](QVector2D val) {
+	connect(wid, &Widget2D::valueChanged, [=](iris::Vec2 val) {
 		x = val.x();
 		y = val.y();
 		setPropValues(val);
@@ -57,18 +58,14 @@ void Vector2DPropertyWidget::setProp(Vec2Property *prop)
 	emit nameChanged(displayName->text());
 }
 
-void Vector2DPropertyWidget::setPropValues(QVector2D values) {
+void Vector2DPropertyWidget::setPropValues(iris::Vec2 values) {
 	value = values;
 	prop->value.setX(x);
 	prop->value.setY(y);
 }
 
 
-
-
 /////////////////////////////
-
-
 
 
 Vector3DPropertyWidget::Vector3DPropertyWidget() : BasePropertyWidget()
@@ -99,7 +96,7 @@ void Vector3DPropertyWidget::setProp(Vec3Property *prop)
 
 void Vector3DPropertyWidget::setConnections()
 {
-	connect(wid, &Widget3D::valueChanged, [=](QVector3D val) {
+	connect(wid, &Widget3D::valueChanged, [=](iris::Vec3 val) {
 		x = val.x();
 		y = val.y();
 		z = val.z();
@@ -108,7 +105,7 @@ void Vector3DPropertyWidget::setConnections()
 	});
 }
 
-void Vector3DPropertyWidget::setPropValues(QVector3D values) {
+void Vector3DPropertyWidget::setPropValues(iris::Vec3 values) {
 	value = values;
 	prop->value.setX(x);
 	prop->value.setY(y);
@@ -117,8 +114,6 @@ void Vector3DPropertyWidget::setPropValues(QVector3D values) {
 
 
 /////////////////////////////
-
-
 
 
 Vector4DPropertyWidget::Vector4DPropertyWidget() : BasePropertyWidget()
@@ -152,7 +147,7 @@ void Vector4DPropertyWidget::setProp(Vec4Property *prop)
 
 void Vector4DPropertyWidget::setConnections()
 {
-	connect(wid, &Widget4D::valueChanged, [=](QVector4D val) {
+	connect(wid, &Widget4D::valueChanged, [=](iris::Vec4 val) {
 		x = val.x();
 		y = val.y();
 		z = val.z();
@@ -164,7 +159,7 @@ void Vector4DPropertyWidget::setConnections()
 }
 
 
-void Vector4DPropertyWidget::setPropValues(QVector4D values) 
+void Vector4DPropertyWidget::setPropValues(iris::Vec4 values) 
 {
 	value = values;
 	prop->value.setX(x);
@@ -172,8 +167,5 @@ void Vector4DPropertyWidget::setPropValues(QVector4D values)
 	prop->value.setZ(z);
 	prop->value.setW(w);
 }
-
-
-
 
 

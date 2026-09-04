@@ -2,6 +2,7 @@
 // DefaultMaterial colour renders to a QImage of the requested size whose centre is
 // the material, not the background; a second colour differs; a third request
 // identical to the first reproduces it (nothing leaks between requests).
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
 #include <QImage>
@@ -113,7 +114,7 @@ int main(int argc, char **argv)
             auto gm = iris::DefaultMaterial::create();
             gm->setDiffuseColor(QColor(220, 30, 30));
             giant->setMaterial(gm);
-            giant->setLocalScale(QVector3D(200.0f, 200.0f, 200.0f));
+            giant->setLocalScale(iris::Vec3(200.0f, 200.0f, 200.0f));
             QImage h = renderer.renderNode(giant, size); show("giant cube x200", h);
             const QColor ch = centre(h);
             CHECK(!isBackground(ch), "a huge model still renders (far plane follows the framing)");

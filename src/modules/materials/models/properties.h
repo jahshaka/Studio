@@ -1,11 +1,10 @@
 #ifndef PROPERTIES_H
 #define PROPERTIES_H
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include <QVariant>
 #include <QColor>
-#include <QVector2D>
-#include <QVector3D>
-#include <QVector4D>
 #include <QJsonObject>
 #include <QJsonValue>
 
@@ -286,18 +285,20 @@ struct TextureProperty : public Property
 
 struct Vec2Property : public Property
 {
-    QVector2D value;
+    iris::Vec2 value;
 
     Vec2Property() {
         type = PropertyType::Vec2;
     }
 
+    // The QVariant payload stays QVector2D: it is read by the property widgets,
+    // the scripting bridge and QSettings, none of which know an iris:: type.
     QVariant getValue() {
-        return value;
+        return iris::toQt(value);
     }
 
     void setValue(QVariant val) {
-        value = val.value<QVector2D>();
+        value = iris::fromQt(val.value<QVector2D>());
     }
 
     QString getUniformName() override
@@ -331,7 +332,7 @@ struct Vec2Property : public Property
 
 struct Vec3Property : public Property
 {
-    QVector3D value;
+    iris::Vec3 value;
 
     Vec3Property() {
         type = PropertyType::Vec3;
@@ -341,11 +342,11 @@ struct Vec3Property : public Property
     }
 
     QVariant getValue() {
-        return value;
+        return iris::toQt(value);
     }
 
     void setValue(QVariant val) {
-        value = val.value<QVector3D>();
+        value = iris::fromQt(val.value<QVector3D>());
     }
 
     QString getUniformName() override
@@ -381,18 +382,18 @@ struct Vec3Property : public Property
 
 struct Vec4Property : public Property
 {
-    QVector4D value;
+    iris::Vec4 value;
 
     Vec4Property() {
         type = PropertyType::Vec4;
     }
 
     QVariant getValue() {
-        return value;
+        return iris::toQt(value);
     }
 
     void setValue(QVariant val) {
-        value = val.value<QVector4D>();
+        value = iris::fromQt(val.value<QVector4D>());
     }
 
     QString getUniformName() override

@@ -1,8 +1,9 @@
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/boneoverlay.h"
 
 #include <QHash>
-#include <QMatrix4x4>
-#include <QQuaternion>
 #include <QSet>
 #include <algorithm>
 #include <cmath>
@@ -43,13 +44,13 @@ constexpr float kStubMaxFrac = 0.30f;   ///< ... clamped against the rig's limb 
 
 /// Appends one triangle with a flat normal taken from the winding — the same
 /// convention the rest of the tree uses (outward normal = cross(b-a, c-a)).
-void addTriangle(MeshData &m, const QVector3D &a, const QVector3D &b, const QVector3D &c)
+void addTriangle(MeshData &m, const iris::Vec3 &a, const iris::Vec3 &b, const iris::Vec3 &c)
 {
-    QVector3D n = QVector3D::crossProduct(b - a, c - a);
+    iris::Vec3 n = iris::Vec3::crossProduct(b - a, c - a);
     if (n.lengthSquared() > 1e-12f) n.normalize();
-    const QVector3D v[3] = { a, b, c };
+    const iris::Vec3 v[3] = { a, b, c };
     const unsigned base = unsigned(m.positions.size() / 3);
-    for (const QVector3D &p : v) {
+    for (const iris::Vec3 &p : v) {
         m.positions.insert(m.positions.end(), { p.x(), p.y(), p.z() });
         m.normals.insert(m.normals.end(), { n.x(), n.y(), n.z() });
         m.uvs.insert(m.uvs.end(), { 0.0f, 0.0f });
@@ -63,11 +64,11 @@ void addTriangle(MeshData &m, const QVector3D &a, const QVector3D &b, const QVec
 MeshData octahedron(float baseY, float ringY, float tipY, float radius)
 {
     MeshData m;
-    const QVector3D base(0, baseY, 0), tip(0, tipY, 0);
-    const QVector3D ring[4] = { QVector3D(radius, ringY, 0), QVector3D(0, ringY, radius),
-                                QVector3D(-radius, ringY, 0), QVector3D(0, ringY, -radius) };
+    const iris::Vec3 base(0, baseY, 0), tip(0, tipY, 0);
+    const iris::Vec3 ring[4] = { iris::Vec3(radius, ringY, 0), iris::Vec3(0, ringY, radius),
+                                iris::Vec3(-radius, ringY, 0), iris::Vec3(0, ringY, -radius) };
     for (int i = 0; i < 4; ++i) {
-        const QVector3D &r0 = ring[i], &r1 = ring[(i + 1) % 4];
+        const iris::Vec3 &r0 = ring[i], &r1 = ring[(i + 1) % 4];
         addTriangle(m, base, r0, r1);     // the wide end
         addTriangle(m, tip, r1, r0);      // the point
     }
@@ -93,11 +94,11 @@ float limbScale(const QVector<BoneOverlaySegment> &segments)
 }
 
 /// translate(from) * rotate(+Y -> dir) * scale(girth, length, girth).
-QMatrix4x4 boneTransform(const QVector3D &from, const QVector3D &dir, float length, float girth)
+iris::Mat4 boneTransform(const iris::Vec3 &from, const iris::Vec3 &dir, float length, float girth)
 {
-    QMatrix4x4 xf;
+    iris::Mat4 xf;
     xf.translate(from);
-    if (length > 1e-6f) xf.rotate(QQuaternion::rotationTo(QVector3D(0, 1, 0), dir));
+    if (length > 1e-6f) xf.rotate(iris::Quat::rotationTo(iris::Vec3(0, 1, 0), dir));
     xf.scale(girth, length > 1e-6f ? length : 1e-6f, girth);
     return xf;
 }
@@ -176,8 +177,8 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
     // is a thousandth of the rig's limb scale, far below anything a rig resolves.
     const float cell = std::max(scale * 1e-3f, 1e-6f);
     QSet<qint64> seenJoints;
-    QVector<QVector3D> joints;
-    auto addJoint = [&](const QVector3D &p) {
+    QVector<iris::Vec3> joints;
+    auto addJoint = [&](const iris::Vec3 &p) {
         const qint64 key = (qint64(std::llround(double(p.x() / cell))) * 73856093)
                          ^ (qint64(std::llround(double(p.y() / cell))) * 19349663)
                          ^ (qint64(std::llround(double(p.z() / cell))) * 83492791);
@@ -188,9 +189,9 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
 
     int bone = 0;
     for (const auto &seg : segments) {
-        const QVector3D delta = seg.to - seg.from;
+        const iris::Vec3 delta = seg.to - seg.from;
         const float len = delta.length();
-        const QVector3D dir = len > 1e-6f ? delta / len : QVector3D(0, 1, 0);
+        const iris::Vec3 dir = len > 1e-6f ? delta / len : iris::Vec3(0, 1, 0);
         const float girth = qBound(girthMin, len * kGirthRatio, girthMax);
 
         if (const NodeId node = slot(mBoneNodes, bone, mBoneMesh)) {
@@ -208,9 +209,9 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
     // so it is only the fallback).
     for (const auto &seg : segments) {
         if (!seg.tipIsLeaf) continue;
-        const QVector3D delta = seg.to - seg.from;
+        const iris::Vec3 delta = seg.to - seg.from;
         const float len = delta.length();
-        QVector3D dir = seg.tipAxis;
+        iris::Vec3 dir = seg.tipAxis;
         if (dir.lengthSquared() > 1e-12f) dir.normalize();
         else if (len > 1e-6f) dir = delta / len;
         else continue;
@@ -229,10 +230,10 @@ void BoneOverlay::update(const QVector<BoneOverlaySegment> &segments, bool visib
     const float marker = mMarkerScale > 0.0f && mMarkerMesh ? scale * mMarkerScale : 0.0f;
     int drawn = 0;
     if (marker > 0.0f) {
-        for (const QVector3D &joint : joints) {
+        for (const iris::Vec3 &joint : joints) {
             const NodeId node = slot(mJointNodes, drawn, mMarkerMesh);
             if (!node) continue;
-            QMatrix4x4 m;
+            iris::Mat4 m;
             m.translate(joint);
             m.scale(marker, marker, marker);
             SceneMirror::pushTransform(mTarget, node, m);

@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #ifndef SCENEWRITER_H
 #define SCENEWRITER_H
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QSharedPointer>
 #include "io/assetiobase.h"
 #include <QDir>
@@ -19,7 +21,6 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonDocument>
-#include <QQuaternion>
 //#include "../irisgl/src/core/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -87,10 +88,10 @@ public:
     static void writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr node);
 
 	static QJsonObject jsonColor(QColor color);
-	static QJsonObject jsonVector2(QVector2D vec);
-	static QJsonObject jsonVector3(QVector3D vec);
-	static QJsonObject jsonVector4(QVector4D vec);
-	static QJsonObject jsonQuaternion(QQuaternion q);
+	static QJsonObject jsonVector2(iris::Vec2 vec);
+	static QJsonObject jsonVector3(iris::Vec3 vec);
+	static QJsonObject jsonVector4(iris::Vec4 vec);
+	static QJsonObject jsonQuaternion(iris::Quat q);
 
     /// The asset guid behind a RESOLVED texture path, for the writers that
     /// persist textures as guids (particle emitters, material texture

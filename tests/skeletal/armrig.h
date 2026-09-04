@@ -12,10 +12,10 @@
 // pose (SceneNode::updateAnimation walks `children` by name — the bone
 // hierarchy IS the scene-node hierarchy for an imported model). buildArmRig
 // builds both, exactly as MeshNode::loadAsSceneFragment's _buildScene would.
-#include <QMatrix4x4>
-#include <QQuaternion>
-#include <QVector3D>
 
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -74,12 +74,12 @@ inline iris::AnimationPtr buildSwingClip(float degrees, float length = 1.0f)
 {
     auto skelAnim = iris::SkeletalAnimation::create();
     auto boneAnim = new iris::BoneAnimation();
-    boneAnim->posKeys->addKey(QVector3D(0, 1, 0), 0.0);
-    boneAnim->posKeys->addKey(QVector3D(0, 1, 0), length);
-    boneAnim->rotKeys->addKey(QQuaternion(), 0.0);
-    boneAnim->rotKeys->addKey(QQuaternion::fromAxisAndAngle(0, 0, 1, degrees), length);
-    boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), 0.0);
-    boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), length);
+    boneAnim->posKeys->addKey(iris::Vec3(0, 1, 0), 0.0);
+    boneAnim->posKeys->addKey(iris::Vec3(0, 1, 0), length);
+    boneAnim->rotKeys->addKey(iris::Quat(), 0.0);
+    boneAnim->rotKeys->addKey(iris::Quat::fromAxisAndAngle(0, 0, 1, degrees), length);
+    boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), 0.0);
+    boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), length);
     skelAnim->addBoneAnimation("jointTip", boneAnim);
     return iris::Animation::createFromSkeletalAnimation(skelAnim);
 }
@@ -101,7 +101,7 @@ inline iris::MeshNodePtr buildArmNode(const iris::MeshPtr &mesh, const QString &
     arm->addChild(jointRoot);
     auto jointTip = iris::SceneNode::create();
     jointTip->setName("jointTip");
-    jointTip->setLocalPos(QVector3D(0, 1, 0));
+    jointTip->setLocalPos(iris::Vec3(0, 1, 0));
     jointRoot->addChild(jointTip);
     return arm;
 }
@@ -117,15 +117,15 @@ inline iris::MeshNodePtr buildArmNode(const iris::MeshPtr &mesh, const QString &
 /// authored local, which is the identity). jointTip sits at (0,1,0) and turns
 /// `degrees * t/length` about Z — slerped, exactly as QuaternionKeyFrame does
 /// between its two keys.
-struct ArmPose { QVector3D pos; QQuaternion rot; QVector3D scale{1, 1, 1}; };
+struct ArmPose { iris::Vec3 pos; iris::Quat rot; iris::Vec3 scale{1, 1, 1}; };
 
 inline QVector<ArmPose> swingLocalPoses(float degrees, float t, float length = 1.0f)
 {
     const float u = length > 0.0f ? qBound(0.0f, t / length, 1.0f) : 0.0f;
     QVector<ArmPose> out(2);
-    out[1].pos = QVector3D(0, 1, 0);
-    out[1].rot = QQuaternion::slerp(QQuaternion(),
-                                    QQuaternion::fromAxisAndAngle(0, 0, 1, degrees), u);
+    out[1].pos = iris::Vec3(0, 1, 0);
+    out[1].rot = iris::Quat::slerp(iris::Quat(),
+                                    iris::Quat::fromAxisAndAngle(0, 0, 1, degrees), u);
     return out;
 }
 
@@ -133,18 +133,18 @@ inline QVector<ArmPose> swingLocalPoses(float degrees, float t, float length = 1
 /// vertex shader multiplies a vertex by:
 ///     derived_i = derived_parent * local_i ;  skin_i = derived_i * inverseBind_i
 /// with jointRoot binding at the mesh origin and jointTip one unit up.
-inline QVector<QMatrix4x4> swingSkinMatrices(float degrees, float t, float length = 1.0f)
+inline QVector<iris::Mat4> swingSkinMatrices(float degrees, float t, float length = 1.0f)
 {
     const QVector<ArmPose> local = swingLocalPoses(degrees, t, length);
-    QVector<QMatrix4x4> derived(2), skin(2);
+    QVector<iris::Mat4> derived(2), skin(2);
     for (int i = 0; i < 2; ++i) {
-        QMatrix4x4 m;
+        iris::Mat4 m;
         m.translate(local[i].pos);
         m.rotate(local[i].rot);
         m.scale(local[i].scale);
         derived[i] = i == 0 ? m : derived[0] * m;
     }
-    QMatrix4x4 invBindTip;
+    iris::Mat4 invBindTip;
     invBindTip.translate(0, -1, 0);
     skin[0] = derived[0];
     skin[1] = derived[1] * invBindTip;

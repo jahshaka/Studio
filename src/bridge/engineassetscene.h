@@ -12,11 +12,11 @@
 // material on the preview sphere. No GL, no Ogre, no QWidget, no database —
 // testable headless with an offscreen View (tests/assets). EngineAssetViewer
 // wraps it and does the database/JSON side.
+#include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QImage>
 #include <QJsonObject>
 #include <QString>
-#include <QVector3D>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
@@ -67,7 +67,7 @@ public:
     void resetCamera();
     /// Re-apply a saved orbit without re-framing.
     void resetCameraAfter();
-    void orientCamera(QVector3D pos, QVector3D localRot, float distanceFromPivot);
+    void orientCamera(iris::Vec3 pos, iris::Vec3 localRot, float distanceFromPivot);
     QJsonObject sceneProperties() const;
 
     /// Mouse, in the viewer's convention (AssetViewer forwards -dx, -dy).
@@ -113,12 +113,12 @@ private:
     // Orbit state (OrbitalCameraController, previewMode, rotationSpeed .5)
     float mYaw = 0, mPitch = 0, mTargetYaw = 0, mTargetPitch = 0;
     float mRotationSpeed = 0.5f;
-    QVector3D mPivot;
+    iris::Vec3 mPivot;
     float mDistFromPivot = 5.0f;
     bool mLeftDown = false, mRightDown = false, mMiddleDown = false;
 
     // Framing (AssetViewer::localPos / localRot / lookAt / distanceFromPivot)
-    QVector3D mLocalPos, mLocalRot, mLookAt;
+    iris::Vec3 mLocalPos, mLocalRot, mLookAt;
     float mDistanceFromPivot = 5.0f;
     float mSubjectRadius = 1.0f;   // world-space radius of the framed subject
 };

@@ -8,6 +8,8 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "nodegraph.h"
 #include "../models/connectionmodel.h"
 #include "../nodes/test.h"
@@ -270,21 +272,21 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 					break;
 				case PropertyType::Vec2: {
 					nodeModel = graph->library->createNode("vector2");
-					auto v = prop->getValue().value<QVector2D>();
+					auto v = iris::fromQt(prop->getValue().value<QVector2D>());
 					QJsonObject o; o["x"] = v.x(); o["y"] = v.y();
 					if (nodeModel) nodeModel->deserializeWidgetValue(o);
 					break;
 				}
 				case PropertyType::Vec3: {
 					nodeModel = graph->library->createNode("vector3");
-					auto v = prop->getValue().value<QVector3D>();
+					auto v = iris::fromQt(prop->getValue().value<QVector3D>());
 					QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z();
 					if (nodeModel) nodeModel->deserializeWidgetValue(o);
 					break;
 				}
 				case PropertyType::Vec4: {
 					nodeModel = graph->library->createNode("vector4");
-					auto v = prop->getValue().value<QVector4D>();
+					auto v = iris::fromQt(prop->getValue().value<QVector4D>());
 					QJsonObject o; o["x"] = v.x(); o["y"] = v.y(); o["z"] = v.z(); o["w"] = v.w();
 					if (nodeModel) nodeModel->deserializeWidgetValue(o);
 					break;

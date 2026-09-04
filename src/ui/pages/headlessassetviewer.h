@@ -6,6 +6,7 @@
 // Before step 14 this role was played by an unrealized legacy AssetViewer;
 // this class keeps only the document surface AssetView exercises headless:
 // the assimp SceneSource and the node cache. Nothing renders.
+#include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include "ui/pages/iassetviewer.h"
 #include "irisgl/document/scenegraph/meshnode.h"   // iris::SceneSource
@@ -40,7 +41,7 @@ public:
         if (mLastNode && !guid.isEmpty()) mCache.insert(guid, mLastNode);
     }
 
-    void orientCamera(QVector3D, QVector3D, int) override {}
+    void orientCamera(iris::Vec3, iris::Vec3, int) override {}
     QJsonObject getSceneProperties() override { return QJsonObject(); }
 
     void loadJafModel(QString, QString, bool, bool, bool) override {}

@@ -16,13 +16,13 @@ For more information see the LICENSE file
 // (SCRIPTING_SPEC — ids are GUID strings, vectors are {x,y,z}, colors are
 // "#rrggbb" strings or {r,g,b} maps with 0-255 channels).
 
+#include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QJSValue>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVariant>
 #include <QVariantMap>
-#include <QVector3D>
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -55,7 +55,7 @@ inline QString assetTypeName(int type)
     }
 }
 
-inline QVariantMap vecToJs(const QVector3D &v)
+inline QVariantMap vecToJs(const iris::Vec3 &v)
 {
     return { { "x", v.x() }, { "y", v.y() }, { "z", v.z() } };
 }
@@ -76,18 +76,18 @@ inline QVariant normalizeJs(const QVariant &value)
 
 /// Accepts {x,y,z} maps and [x,y,z] arrays; missing components fall back to
 /// the given default (so {y: 2} nudges one axis).
-inline QVector3D vecFromJs(const QVariant &raw, const QVector3D &fallback = QVector3D())
+inline iris::Vec3 vecFromJs(const QVariant &raw, const iris::Vec3 &fallback = iris::Vec3())
 {
     const QVariant value = normalizeJs(raw);
     if (value.typeId() == QMetaType::QVariantMap) {
         const auto m = value.toMap();
-        return QVector3D(m.value("x", fallback.x()).toFloat(),
+        return iris::Vec3(m.value("x", fallback.x()).toFloat(),
                          m.value("y", fallback.y()).toFloat(),
                          m.value("z", fallback.z()).toFloat());
     }
     if (value.typeId() == QMetaType::QVariantList) {
         const auto l = value.toList();
-        return QVector3D(l.value(0, fallback.x()).toFloat(),
+        return iris::Vec3(l.value(0, fallback.x()).toFloat(),
                          l.value(1, fallback.y()).toFloat(),
                          l.value(2, fallback.z()).toFloat());
     }

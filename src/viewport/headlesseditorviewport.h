@@ -8,6 +8,7 @@
 // with the legacy GL viewport deleted, this class carries exactly the document
 // surface those runs exercise: a scene, an editor camera, editor data. Every
 // rendering-flavoured call is a no-op. Never shown, never renders.
+#include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include "viewport/ieditorviewport.h"
 #include "viewport/editordata.h"
@@ -46,8 +47,8 @@ public:
     void resetEditorCam() override
     {
         mEditorCam = iris::CameraNode::create();
-        mEditorCam->setLocalPos(QVector3D(0, 5, 14));
-        mEditorCam->lookAt(QVector3D(0, 0, 0));
+        mEditorCam->setLocalPos(iris::Vec3(0, 5, 14));
+        mEditorCam->lookAt(iris::Vec3(0, 0, 0));
         mEditorCam->angle = 45.0f;
         mEditorCam->nearClip = 0.1f;
         mEditorCam->farClip = 1000.0f;

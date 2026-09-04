@@ -9,6 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "scripting/modules/sceneapi.h"
 
 #include <QFileInfo>
@@ -135,11 +137,11 @@ bool SceneApi::applyOptions(const iris::SceneNodePtr &node, const QVariantMap &o
         host.services->undo->push(new ReparentSceneNodeCommand(node, parent));
     }
     if (options.contains("position") || options.contains("rotation") || options.contains("scale")) {
-        const QVector3D pos = vecFromJs(options.value("position"), node->getLocalPos());
-        const QVector3D rotEuler = vecFromJs(options.value("rotation"), node->getLocalRot().toEulerAngles());
-        const QVector3D scale = vecFromJs(options.value("scale"), node->getLocalScale());
+        const iris::Vec3 pos = vecFromJs(options.value("position"), node->getLocalPos());
+        const iris::Vec3 rotEuler = vecFromJs(options.value("rotation"), node->getLocalRot().toEulerAngles());
+        const iris::Vec3 scale = vecFromJs(options.value("scale"), node->getLocalScale());
         host.services->undo->push(new TransformSceneNodeCommand(
-            node, pos, QQuaternion::fromEulerAngles(rotEuler), scale));
+            node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
     }
     return true;
 }

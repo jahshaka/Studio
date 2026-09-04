@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
 #include "ui/pages/headlessassetviewer.h"
@@ -1101,16 +1102,16 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
                         viewer->addNodeToScene(viewer->cachedAsset(guid), guid, true, false);
                     else
                         viewer->loadJafModel(path, guid, false, true, !cached);
-                    viewer->orientCamera(pos, rot, distObj);
+                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
                 }
                 else if (type == ModelTypes::Material) {
                     viewer->loadJafMaterial(guid);
-                    viewer->orientCamera(pos, rot, distObj);
+                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
                 }
                 else if (type == ModelTypes::Shader) {
                     QMap<QString, QString> map;
                     viewer->loadJafShader(guid, map);
-                    viewer->orientCamera(pos, rot, distObj);
+                    viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
                 }
                 else if (type == ModelTypes::Sky) {
                     viewer->loadJafSky(guid);

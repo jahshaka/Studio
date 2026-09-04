@@ -1,6 +1,6 @@
 // Gizmo overlay through the engine: the translation gizmo draws on top, no GL, no window.
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
-#include <QVector3D>
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -47,33 +47,33 @@ int main(int argc, char **argv)
     auto node = iris::SceneNode::create();          // an EMPTY node: nothing but the gizmo can draw
     doc->getRootNode()->addChild(node);
     auto cam = iris::CameraNode::create();
-    cam->setLocalPos(QVector3D(0, 0, 6)); cam->lookAt(QVector3D(0, 0, 0));
+    cam->setLocalPos(iris::Vec3(0, 0, 6)); cam->lookAt(iris::Vec3(0, 0, 0));
     cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 100.0f;
     cam->setAspectRatio(1.0f);
     doc->getRootNode()->addChild(cam);
     SceneMirror mirror(target); mirror.setSource(doc); mirror.sync(); mirror.applyCamera(cam, view);
 
     TranslationGizmo gizmo;                          // loads app/models/axis_*.obj (no GL needed)
-    CHECK(gizmo.drawItems(QVector3D(), QVector3D(0,0,-1), QVector3D(0,0,-1)).isEmpty(), "nothing selected -> no items");
+    CHECK(gizmo.drawItems(iris::Vec3(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).isEmpty(), "nothing selected -> no items");
     GizmoOverlay overlay(target);
-    overlay.update(&gizmo, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     Image img; view->readPixels(img);
     CHECK(countNonBg(img) == 0, "unselected gizmo draws nothing");
 
     gizmo.setSelectedNode(node);
     gizmo.updateSize(cam);
-    auto items = gizmo.drawItems(cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    auto items = gizmo.drawItems(cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     std::printf("    translation gizmo: %d draw items, scale %.2f\n", items.size(), gizmo.getGizmoScale());
     CHECK(items.size() == 4, "translation gizmo describes 4 handles");
     for (int i = 0; i < items.size(); ++i) {
         MeshData md; const bool ok = SceneMirror::toMeshData(items[i].mesh.data(), md);
-        const QVector3D p = items[i].transform.column(3).toVector3D(), sx = items[i].transform.column(0).toVector3D();
+        const iris::Vec3 p = items[i].transform.column(3).toVector3D(), sx = items[i].transform.column(0).toVector3D();
         std::printf("    item %d: mesh=%p ok=%d verts=%zu tris=%zu pos=(%.2f %.2f %.2f) colScaleX=%.2f colour=%d,%d,%d\n", i,
                     (void*)items[i].mesh.data(), ok, md.vertexCount(), md.triangleCount(), p.x(), p.y(), p.z(), sx.length(),
                     items[i].colour.red(), items[i].colour.green(), items[i].colour.blue());
     }
-    overlay.update(&gizmo, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     CHECK(overlay.visibleItems() == 4, "overlay shows 4 items");
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
@@ -86,18 +86,18 @@ int main(int argc, char **argv)
     // Highlight: aim the ray at the X handle's colour spot -> it turns yellow.
     // (Hit-testing is the gizmo's own; here we only prove colour changes flow through.)
     gizmo.clearSelectedNode();
-    overlay.update(&gizmo, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     CHECK(countNonBg(img) == 0, "cleared selection hides the gizmo");
 
     // Rotation and scale gizmos describe their handles too.
     RotationGizmo rot; rot.setSelectedNode(node); rot.updateSize(cam);
-    CHECK(rot.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 4, "rotation gizmo: 3 axis rings + screen-facing outer ring");
+    CHECK(rot.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).size() == 4, "rotation gizmo: 3 axis rings + screen-facing outer ring");
     ScaleGizmo scl; scl.setSelectedNode(node); scl.updateSize(cam);
-    CHECK(scl.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1)).size() == 4, "scale gizmo: 4 handles");
+    CHECK(scl.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1)).size() == 4, "scale gizmo: 4 handles");
     {
-        auto ri = rot.drawItems(cam->getGlobalPosition(), QVector3D(0,0,-1), QVector3D(0,0,-1));
+        auto ri = rot.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1));
         for (int i = 0; i < ri.size(); ++i) {
             MeshData md; const bool ok = SceneMirror::toMeshData(ri[i].mesh.data(), md);
             float mx = 0; for (size_t v = 0; v < md.vertexCount(); ++v) mx = std::max(mx, std::abs(md.positions[v*3]));
@@ -105,13 +105,13 @@ int main(int argc, char **argv)
                         ri[i].transform.column(0).toVector3D().length(), mx, ri[i].colour.red(), ri[i].colour.green(), ri[i].colour.blue());
         }
     }
-    overlay.update(&rot, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    overlay.update(&rot, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     std::printf("    rotation pixels drawn (reused overlay): %d\n", countNonBg(img));
     overlay.clear();
     GizmoOverlay overlay2(target);
-    overlay2.update(&rot, cam->getGlobalPosition(), QVector3D(0, 0, -1), QVector3D(0, 0, -1));
+    overlay2.update(&rot, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     std::printf("    rotation pixels drawn (fresh overlay):  %d\n", countNonBg(img));

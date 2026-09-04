@@ -25,9 +25,9 @@ For more information see the LICENSE file
 // the scripting Scene/Node/Material/Assets modules call the same methods —
 // one implementation per verb (SCRIPTING_SPEC §2.3's seam, extracted).
 
+#include "irisgl/core/math/vec.h"
 #include <QObject>
 #include <QString>
-#include <QVector3D>
 
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"   // ModelTypes
@@ -61,7 +61,7 @@ struct DecalOptions
     bool  ignoreAlphaDiffuse = false;
     /// Skip the spawn offset (a drop point decided the position already).
     bool  positionGiven = false;
-    QVector3D position;
+    iris::Vec3 position;
 };
 
 class SceneEditService : public QObject
@@ -125,7 +125,7 @@ public:
     /// the CAS. Lands as one undoable AddSceneNodeCommand plus an
     /// Object→Texture dependency row for the export walkers.
     /// Returns null when the guid is not a resolvable image.
-    iris::MeshNodePtr addImagePlane(const QString &textureGuid, QVector3D position,
+    iris::MeshNodePtr addImagePlane(const QString &textureGuid, iris::Vec3 position,
                                     const ImagePlaneOptions &opts = ImagePlaneOptions());
 
     /// DECALS_SPEC: spawns a projected-texture decal bound to a Texture asset.
@@ -155,11 +155,11 @@ public:
 
     /// Imports a mesh file straight into the scene. The path must be a real
     /// file — the file dialog stays in the shell.
-    void addMesh(const QString &path, bool ignore = false, QVector3D position = QVector3D());
+    void addMesh(const QString &path, bool ignore = false, iris::Vec3 position = iris::Vec3());
     /// Instantiates a stored object asset (drag-drop / assets.addToScene).
-    void addMaterialMesh(const QString &path, bool ignore, QVector3D position,
+    void addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                          const QString &guid, const QString &assetName);
-    void addAssetParticleSystem(bool ignore, QVector3D position, QString guid,
+    void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid,
                                 QString assetName);
 
     /// Parents to the selection (or the root) and refreshes the hierarchy.

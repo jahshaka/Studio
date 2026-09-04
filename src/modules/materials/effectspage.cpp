@@ -8,6 +8,8 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "io/ziphelper.h"
 #include "modules/materials/effectspage.h"
 #include "services/assetcas.h"
@@ -1051,7 +1053,6 @@ QByteArray EffectsPage::fetchAsset(QString string)
 #endif
 
 
-
 	return QByteArray();
 }
 
@@ -1741,15 +1742,15 @@ QJsonObject EffectsPage::writeMaterialValuesFromShader(QString guid)
 		}
 
 		if (prop->type == PropertyType::Vec2) {
-			valuesObj[prop->name] = SceneWriter::jsonVector2(prop->getValue().value<QVector2D>());
+			valuesObj[prop->name] = SceneWriter::jsonVector2(iris::fromQt(prop->getValue().value<QVector2D>()));
 		}
 
 		if (prop->type == PropertyType::Vec3) {
-			valuesObj[prop->name] = SceneWriter::jsonVector3(prop->getValue().value<QVector3D>());
+			valuesObj[prop->name] = SceneWriter::jsonVector3(iris::fromQt(prop->getValue().value<QVector3D>()));
 		}
 
 		if (prop->type == PropertyType::Vec4) {
-			valuesObj[prop->name] = SceneWriter::jsonVector4(prop->getValue().value<QVector4D>());
+			valuesObj[prop->name] = SceneWriter::jsonVector4(iris::fromQt(prop->getValue().value<QVector4D>()));
 		}
 	}
 
@@ -1850,7 +1851,6 @@ void EffectsPage::configureConnections()
 		loadGraph(guid);
 		generateMaterialInProjectFromShader(guid);
 	});
-
 
 
     // change: any settings changed

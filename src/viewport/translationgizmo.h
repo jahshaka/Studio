@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef TRANSLATIONGIZMO_H
 #define TRANSLATIONGIZMO_H
 
+#include "irisgl/core/math/vec.h"
 #include "viewport/gizmo.h"
 #include "irisgl/irisglfwd.h"
 
@@ -24,8 +25,8 @@ class TranslationHandle : public GizmoHandle
     Gizmo* gizmo;
 
 	GizmoAxis axis;
-    QVector3D handleExtent;// local extent of the gizmo
-	QVector<QVector3D> planes;// for hit detection
+    iris::Vec3 handleExtent;// local extent of the gizmo
+	QVector<iris::Vec3> planes;// for hit detection
 	float handleScale = 0.05f;
 	float handleRadius = 0.05f;
 	float handleLength = 1.7f;
@@ -33,10 +34,10 @@ class TranslationHandle : public GizmoHandle
 	TranslationHandle(Gizmo* gizmo, GizmoAxis axis);
 
 	// check if an actual hit is made
-    bool isHit(QVector3D rayPos, QVector3D rayDir);
+    bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
 
 	// assumes hit was already confirmed
-    QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
+    iris::Vec3 getHitPos(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir);
 };
 
 class TranslationGizmo : public Gizmo
@@ -50,8 +51,8 @@ class TranslationGizmo : public Gizmo
     QVector<TranslationHandle*> handles;
 
     // initial hit position
-    QVector3D hitPos;
-    QVector3D nodeStartPos;
+    iris::Vec3 hitPos;
+    iris::Vec3 nodeStartPos;
     TranslationHandle* draggedHandle;
     int draggedHandleIndex;
 
@@ -63,16 +64,16 @@ public:
 	void loadAssets();
 
 	bool isDragging();
-	void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
+	void startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir);
 	void endDragging();
-	void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
+	void drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir);
 
-	bool isHit(QVector3D rayPos, QVector3D rayDir);
+	bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
 
 	// hitPos is the hit position of the hit handle
-	TranslationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos);
+	TranslationHandle* getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPos);
 public:
-	QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) override;
+	QVector<GizmoDrawItem> drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 };
 
 

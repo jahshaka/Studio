@@ -9,6 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/gizmo.h"
 
 #include "irisgl/irisgl.h"
@@ -81,9 +83,9 @@ void Gizmo::createUndoAction()
 		services->undo->push(new TransformSceneNodeCommand(selectedNode, newPos, newRot, newScale));
 }
 
-QVector3D Gizmo::snap(QVector3D pos, float gridSize)
+iris::Vec3 Gizmo::snap(iris::Vec3 pos, float gridSize)
 {
-	return QVector3D(Gizmo::snap(pos.x(), gridSize),
+	return iris::Vec3(Gizmo::snap(pos.x(), gridSize),
 					 Gizmo::snap(pos.y(), gridSize),
 					 Gizmo::snap(pos.z(), gridSize));
 }
@@ -95,23 +97,23 @@ float Gizmo::snap(float value, float gridSize)
 
 // returns transform of the gizmo, not the scene node
 // the transform is calculated based on the transform's space (local or global)
-QMatrix4x4 Gizmo::getTransform()
+iris::Mat4 Gizmo::getTransform()
 {
 	if (!selectedNode) {
-		QMatrix4x4 mat;
+		iris::Mat4 mat;
 		mat.setToIdentity();
 		return mat;
 	}
 
 	if (transformSpace == GizmoTransformSpace::Global) {
-		QMatrix4x4 trans;
+		iris::Mat4 trans;
 		trans.setToIdentity();
 		trans.translate(selectedNode->getGlobalPosition());
 		return trans;
 	}
 	else {
 		//todo: remove scale
-		QMatrix4x4 trans;
+		iris::Mat4 trans;
 		trans.setToIdentity();
 		trans.translate(selectedNode->getGlobalPosition());
 		trans.rotate(selectedNode->getGlobalRotation().normalized());
@@ -119,7 +121,7 @@ QMatrix4x4 Gizmo::getTransform()
 	}
 }
 
-bool Gizmo::isHit(QVector3D rayPos, QVector3D rayDir)
+bool Gizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
 	return false;
 }

@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
 #include "io/materialreader.h"
 #include "irisgl/irisgl.h"
 #include "irisgl/document/assets/mesh.h"
@@ -283,15 +284,15 @@ iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Dat
 		}
 		else if (prop->type == iris::PropertyType::Vec2) {
 			auto vec = readVector2(valuesObj[prop->name].toObject());
-			material->setValue(prop->name, vec);
+			material->setValue(prop->name, iris::toQt(vec));
 		}
 		else if (prop->type == iris::PropertyType::Vec3) {
 			auto vec = readVector3(valuesObj[prop->name].toObject());
-			material->setValue(prop->name, vec);
+			material->setValue(prop->name, iris::toQt(vec));
 		}
 		else if (prop->type == iris::PropertyType::Vec4) {
 			auto vec = readVector4(valuesObj[prop->name].toObject());
-			material->setValue(prop->name, vec);
+			material->setValue(prop->name, iris::toQt(vec));
 		}
 		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
 			auto texGuid = valuesObj.value(prop->name).toString();

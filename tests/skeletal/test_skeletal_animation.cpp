@@ -13,10 +13,10 @@
 //      advancing the document's clock bends the arm on screen — a limb pixel
 //      flips both ways.
 // No window; DISPLAY must be reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
-#include <QMatrix4x4>
-#include <QQuaternion>
-#include <QVector3D>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -179,18 +179,18 @@ int main(int argc, char **argv)
     arm->addChild(jointRoot);
     auto jointTip = iris::SceneNode::create();
     jointTip->setName("jointTip"); jointTip->name = "jointTip";
-    jointTip->setLocalPos(QVector3D(0, 1, 0));
+    jointTip->setLocalPos(iris::Vec3(0, 1, 0));
     jointRoot->addChild(jointTip);
 
     // The animation: jointTip swings -90 degrees about Z over 1 second.
     auto skelAnim = iris::SkeletalAnimation::create();
     auto boneAnim = new iris::BoneAnimation();
-    boneAnim->posKeys->addKey(QVector3D(0, 1, 0), 0.0);
-    boneAnim->posKeys->addKey(QVector3D(0, 1, 0), 1.0);
-    boneAnim->rotKeys->addKey(QQuaternion(), 0.0);
-    boneAnim->rotKeys->addKey(QQuaternion::fromAxisAndAngle(0, 0, 1, -90.0f), 1.0);
-    boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), 0.0);
-    boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), 1.0);
+    boneAnim->posKeys->addKey(iris::Vec3(0, 1, 0), 0.0);
+    boneAnim->posKeys->addKey(iris::Vec3(0, 1, 0), 1.0);
+    boneAnim->rotKeys->addKey(iris::Quat(), 0.0);
+    boneAnim->rotKeys->addKey(iris::Quat::fromAxisAndAngle(0, 0, 1, -90.0f), 1.0);
+    boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), 0.0);
+    boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), 1.0);
     skelAnim->addBoneAnimation("jointTip", boneAnim);
     auto anim = iris::Animation::createFromSkeletalAnimation(skelAnim);
     arm->addAnimation(anim);
@@ -227,7 +227,7 @@ int main(int argc, char **argv)
     // that MOVES. The NODE's skeleton, not the mesh asset's
     // (GPU_SKINNING_SPEC §7) — the asset's is the shared rig template.
     auto skel = arm->getSkeleton();
-    QVector<QMatrix4x4> skin(2);
+    QVector<iris::Mat4> skin(2);
     {
         iris::ExtractedClip clip;
         QString err;
@@ -237,19 +237,19 @@ int main(int argc, char **argv)
         CHECK(clip.tracks.size() == 1 && clip.tracks[0].bone == 1,
               "exactly the tip bone is driven (the root has no channel)");
         // derived_i = derived_parent * local_i ; skin_i = derived_i * inverseBind_i
-        QMatrix4x4 local;
+        iris::Mat4 local;
         {
             const auto &track = clip.tracks[0];
             // t = 0.5 sits between the two keys; slerp, as the keyframe does.
             const auto &a = track.keys.first();
             const auto &b = track.keys.last();
             local.translate((a.position + b.position) * 0.5f);
-            local.rotate(QQuaternion::slerp(a.rotation, b.rotation, 0.5f));
-            local.scale(QVector3D(1, 1, 1));
+            local.rotate(iris::Quat::slerp(a.rotation, b.rotation, 0.5f));
+            local.scale(iris::Vec3(1, 1, 1));
         }
-        QMatrix4x4 invBindTip;
+        iris::Mat4 invBindTip;
         invBindTip.translate(0, -1, 0);
-        skin[0] = QMatrix4x4();
+        skin[0] = iris::Mat4();
         skin[1] = local * invBindTip;
         CHECK(!skin[1].isIdentity(), "the translated track really poses the tip bone");
     }

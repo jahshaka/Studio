@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/vec.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -165,20 +166,20 @@ void WorldGiPropertyWidget::onBouncesChanged(float value)
     if (!!scene) scene->giNumBounces = qBound(1, qRound(value), 4);
 }
 
-void WorldGiPropertyWidget::onBoundsMinChanged(QVector3D value)
+void WorldGiPropertyWidget::onBoundsMinChanged(iris::Vec3 value)
 {
     if (!!scene) scene->giBoundsMin = value;
 }
 
-void WorldGiPropertyWidget::onBoundsMaxChanged(QVector3D value)
+void WorldGiPropertyWidget::onBoundsMaxChanged(iris::Vec3 value)
 {
     if (!!scene) scene->giBoundsMax = value;
 }
 
-void WorldGiPropertyWidget::onPccGridChanged(QVector3D value)
+void WorldGiPropertyWidget::onPccGridChanged(iris::Vec3 value)
 {
     if (!!scene)
-        scene->giPccGrid = QVector3D(qBound(1, qRound(value.x()), 8),
+        scene->giPccGrid = iris::Vec3(qBound(1, qRound(value.x()), 8),
                                      qBound(1, qRound(value.y()), 8),
                                      qBound(1, qRound(value.z()), 8));
 }

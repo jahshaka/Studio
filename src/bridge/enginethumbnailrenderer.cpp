@@ -1,8 +1,8 @@
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "bridge/enginethumbnailrenderer.h"
 
 #include <QColor>
-#include <QQuaternion>
-#include <QVector3D>
 #include <QtMath>
 #include <cstring>
 
@@ -93,7 +93,7 @@ iris::ScenePtr EngineThumbnailRenderer::buildPreviewScene(iris::CameraNodePtr &c
     dlight->intensity = 0.76f;
     dlight->setLightType(iris::LightType::Directional);
     dlight->setName("Key Light");
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(45, 45, 0));
+    dlight->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
     dlight->setShadowMapType(iris::ShadowMapType::None);
     scene->rootNode->addChild(dlight);
 
@@ -102,13 +102,13 @@ iris::ScenePtr EngineThumbnailRenderer::buildPreviewScene(iris::CameraNodePtr &c
     plight->intensity = 0.47f;
     plight->setLightType(iris::LightType::Point);
     plight->setName("Rim Light");
-    plight->setLocalPos(QVector3D(0, 0, -3));
+    plight->setLocalPos(iris::Vec3(0, 0, -3));
     plight->setShadowMapType(iris::ShadowMapType::None);
     scene->rootNode->addChild(plight);
 
     cameraOut = iris::CameraNode::create();
-    cameraOut->setLocalPos(QVector3D(1, 1, 5));
-    cameraOut->lookAt(QVector3D(0, 0.5f, 0));
+    cameraOut->setLocalPos(iris::Vec3(1, 1, 5));
+    cameraOut->lookAt(iris::Vec3(0, 0.5f, 0));
     cameraOut->update(0);
     return scene;
 }
@@ -130,12 +130,12 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
     collectBoundingSpheres(subject, spheres);
     iris::BoundingSphere bound;
     if (spheres.count() == 0) {
-        bound.pos = QVector3D(0, 0, 0);
+        bound.pos = iris::Vec3(0, 0, 0);
         bound.radius = 1;
     } else if (spheres.count() == 1) {
         bound = spheres[0];
     } else {
-        bound.pos = QVector3D(0, 0, 0);
+        bound.pos = iris::Vec3(0, 0, 0);
         bound.radius = 1;
         for (auto &sphere : spheres) bound = iris::BoundingSphere::merge(bound, sphere);
     }
@@ -144,7 +144,7 @@ static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
     // glb) framed at ~2.9 * radius sat beyond the default farClip of 500 and
     // rendered a blank thumbnail (ASSETS_AUDIT.md finding 3).
     preview::clipPlanesForFraming(dist, bound.radius, cam->nearClip, cam->farClip);
-    cam->setLocalPos(QVector3D(0, bound.pos.y(), dist));
+    cam->setLocalPos(iris::Vec3(0, bound.pos.y(), dist));
     cam->lookAt(bound.pos);
     cam->update(0);
 }
@@ -243,8 +243,8 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
     auto document = buildPreviewScene(cam);
     document->rootNode->addChild(node);
     const float dist = 1.2f / qTan(qDegreesToRadians(cam->angle / 2.0f));
-    cam->setLocalPos(QVector3D(0, 0, dist));
-    cam->lookAt(QVector3D(0, 0, 0));
+    cam->setLocalPos(iris::Vec3(0, 0, dist));
+    cam->lookAt(iris::Vec3(0, 0, 0));
     cam->update(0);
     return render(document, cam, size);
 }

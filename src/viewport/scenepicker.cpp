@@ -1,7 +1,7 @@
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/scenepicker.h"
 
-#include <QMatrix4x4>
-#include <QVector4D>
 #include <algorithm>
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -17,21 +17,21 @@
 #include "irisgl/core/math/intersectionhelper.h"
 
 namespace {
-QVector3D unproject(const iris::CameraNodePtr &cam, int w, int h, const QPointF &pos, float depth)
+iris::Vec3 unproject(const iris::CameraNodePtr &cam, int w, int h, const QPointF &pos, float depth)
 {
     const float mousex = (2.0f * float(pos.x())) / float(w) - 1.0f;
     const float mousey = (2.0f * float(pos.y())) / float(h) - 1.0f;
-    const QVector4D hcc(mousex, -mousey, depth, 1.0f);
-    const QVector4D eye = cam->projMatrix.inverted() * hcc;
-    const QVector4D world = cam->viewMatrix.inverted() * eye;
+    const iris::Vec4 hcc(mousex, -mousey, depth, 1.0f);
+    const iris::Vec4 eye = cam->projMatrix.inverted() * hcc;
+    const iris::Vec4 world = cam->viewMatrix.inverted() * eye;
     return world.toVector3D() / world.w();
 }
 }
 
 void ScenePicker::screenSegment(iris::CameraNodePtr camera, int w, int h, const QPointF &point,
-                                QVector3D &segStart, QVector3D &segEnd)
+                                iris::Vec3 &segStart, iris::Vec3 &segEnd)
 {
-    if (!camera || w <= 0 || h <= 0) { segStart = segEnd = QVector3D(); return; }
+    if (!camera || w <= 0 || h <= 0) { segStart = segEnd = iris::Vec3(); return; }
     camera->setAspectRatio(float(w) / float(h));
     camera->update(0.0f);
     camera->updateCameraMatrices();
@@ -39,8 +39,8 @@ void ScenePicker::screenSegment(iris::CameraNodePtr camera, int w, int h, const 
     segEnd   = unproject(camera, w, h, point,  1.0f);
 }
 
-void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const QVector3D &segStart, const QVector3D &segEnd,
-                             const QVector3D &cameraPos, bool forcePickable, QList<ScenePick> &out)
+void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
+                             const iris::Vec3 &cameraPos, bool forcePickable, QList<ScenePick> &out)
 {
     if (!node) return;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh && (node->isPickable() || forcePickable)) {
@@ -48,8 +48,8 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const QVector3D &se
         auto mesh = meshNode->getMesh();
         if (mesh && mesh->getTriMesh()) {
             // Segment into the mesh's local space, hits back to world space.
-            const QMatrix4x4 inv = meshNode->globalTransform.inverted();
-            const QVector3D a = inv * segStart, b = inv * segEnd;
+            const iris::Mat4 inv = meshNode->globalTransform.inverted();
+            const iris::Vec3 a = inv * segStart, b = inv * segEnd;
             // BROAD PHASE first: the mesh's own bounding sphere, in the same
             // local space. Without it every ray scanned every triangle of every
             // mesh in the scene — which V-hold vertex snapping does on every
@@ -57,7 +57,7 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const QVector3D &se
             // picking"). iris::Scene::rayCast has always done this; the picker
             // is the copy that did not.
             const iris::BoundingSphere sphere = mesh->getBoundingSphere();
-            float t; QVector3D sphereHit;
+            float t; iris::Vec3 sphereHit;
             if (iris::IntersectionHelper::raySphereIntersects(a, (b - a).normalized(),
                                                               sphere.pos, sphere.radius, t, sphereHit)) {
                 QList<iris::TriangleIntersectionResult> results;
@@ -78,8 +78,8 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const QVector3D &se
         pickMeshes(child, segStart, segEnd, cameraPos, forcePickable, out);
 }
 
-QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const QVector3D &segStart, const QVector3D &segEnd,
-                                      const QVector3D &cameraPos, bool forcePickable,
+QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
+                                      const iris::Vec3 &cameraPos, bool forcePickable,
                                       bool includeLights, bool includeViewers,
                                       bool includeDecals, bool refreshTransforms)
 {
@@ -89,8 +89,8 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const QVector3D &seg
     pickMeshes(scene->getRootNode(), segStart, segEnd, cameraPos, forcePickable, hits);
 
     const float sphereRadius = 0.5f;
-    QVector3D rayDir = (segEnd - segStart).normalized();
-    QVector3D hitPoint; float t;
+    iris::Vec3 rayDir = (segEnd - segStart).normalized();
+    iris::Vec3 hitPoint; float t;
     if (includeLights) {
         for (auto &light : scene->lights) {
             if (light->isPickable() &&

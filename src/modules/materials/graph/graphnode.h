@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QQuaternion>
 #include <QGraphicsPathItem>
 #include <QGraphicsProxyWidget>
 #include <QIcon>

@@ -9,6 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/mat3.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
 
 #include "services/assetcas.h"
@@ -24,9 +27,7 @@ For more information see the LICENSE file
 #include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMatrix3x3>
 #include <QPixmap>
-#include <QQuaternion>
 #include <QTemporaryDir>
 #include <QSqlDatabase>
 #include <QTextStream>
@@ -304,7 +305,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     return node;
 }
 
-void SceneEditService::addMesh(const QString &path, bool ignore, QVector3D position)
+void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 position)
 {
     if (path.isEmpty()) return;
 
@@ -350,7 +351,7 @@ void SceneEditService::addMesh(const QString &path, bool ignore, QVector3D posit
     addNodeToScene(node, ignore);
 }
 
-void SceneEditService::addMaterialMesh(const QString &path, bool ignore, QVector3D position,
+void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position,
                                        const QString &guid, const QString &assetName)
 {
     Q_UNUSED(path);
@@ -378,7 +379,7 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, QVector
 }
 
 iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
-                                                  QVector3D position,
+                                                  iris::Vec3 position,
                                                   const ImagePlaneOptions &opts)
 {
     // Material first — ImageMaterial::fromTexture is the shared builder
@@ -415,7 +416,7 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     // plane.obj is a 2x2 XZ quad — 0.5 * the aspect-normalized extents caps
     // the long side at exactly 1 m.
     const float wf = static_cast<float>(w), hf = static_cast<float>(h);
-    node->setLocalScale(0.5f * QVector3D(w >= h ? 1.0f : wf / hf,
+    node->setLocalScale(0.5f * iris::Vec3(w >= h ? 1.0f : wf / hf,
                                          1.0f,
                                          h > w ? 1.0f : hf / wf));
 
@@ -424,21 +425,21 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
     // Afterwards the node is completely ordinary.
     if (viewport && viewport->editorCamera()) {
         auto cam = viewport->editorCamera();
-        const QVector3D toCam = (cam->getGlobalPosition() - position).normalized();
+        const iris::Vec3 toCam = (cam->getGlobalPosition() - position).normalized();
         if (!toCam.isNull()) {
-            QVector3D upHint = cam->getGlobalRotation().rotatedVector(QVector3D(0, 1, 0));
-            QVector3D right = QVector3D::crossProduct(upHint, toCam);
+            iris::Vec3 upHint = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 1, 0));
+            iris::Vec3 right = iris::Vec3::crossProduct(upHint, toCam);
             if (right.lengthSquared() < 1e-6f)  // camera straight above/below
-                right = QVector3D::crossProduct(QVector3D(0, 0, -1), toCam);
+                right = iris::Vec3::crossProduct(iris::Vec3(0, 0, -1), toCam);
             right.normalize();
             // Local +X → right, +Y (the normal) → toCam, +Z → right × toCam
             // (the plane's V axis runs along +Z, so the image top faces the
             // camera's up).
-            const QVector3D zAxis = QVector3D::crossProduct(right, toCam);
+            const iris::Vec3 zAxis = iris::Vec3::crossProduct(right, toCam);
             const float m[9] = { right.x(), toCam.x(), zAxis.x(),
                                  right.y(), toCam.y(), zAxis.y(),
                                  right.z(), toCam.z(), zAxis.z() };
-            node->setLocalRot(QQuaternion::fromRotationMatrix(QMatrix3x3(m)));
+            node->setLocalRot(iris::Quat::fromRotationMatrix(iris::Mat3(m)));
         }
     }
 
@@ -568,7 +569,7 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
     return !!emitter->texture;
 }
 
-void SceneEditService::addAssetParticleSystem(bool ignore, QVector3D position, QString guid,
+void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid,
                                               QString assetName)
 {
 
@@ -654,7 +655,7 @@ void SceneEditService::addNodeToScene(iris::SceneNodePtr sceneNode, bool ignore)
     // @TODO: add this to a constants file
     if (!ignore) {
         const float spawnDist = 10.0f;
-        auto offset = viewport->editorCamera()->getLocalRot().rotatedVector(QVector3D(0, -1.0f, -spawnDist));
+        auto offset = viewport->editorCamera()->getLocalRot().rotatedVector(iris::Vec3(0, -1.0f, -spawnDist));
         offset += viewport->editorCamera()->getLocalPos();
         sceneNode->setLocalPos(offset);
     }

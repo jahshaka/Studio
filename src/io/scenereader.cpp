@@ -9,7 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QSharedPointer>
 #include "io/assetiobase.h"
 #include <QDir>
@@ -117,12 +118,12 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     // it existed — see readSceneNodeTransform.
     const QJsonObject camRotQuat = camObj["rotQuat"].toObject();
     if (!camRotQuat.isEmpty())
-        camera->setLocalRot(QQuaternion(float(camRotQuat["scalar"].toDouble(1.0)),
+        camera->setLocalRot(iris::Quat(float(camRotQuat["scalar"].toDouble(1.0)),
                                         float(camRotQuat["x"].toDouble(0.0)),
                                         float(camRotQuat["y"].toDouble(0.0)),
                                         float(camRotQuat["z"].toDouble(0.0))).normalized());
     else
-        camera->setLocalRot(QQuaternion::fromEulerAngles(readVector3(camObj["rot"].toObject())));
+        camera->setLocalRot(iris::Quat::fromEulerAngles(readVector3(camObj["rot"].toObject())));
 	camera->setOrthagonalZoom((float)camObj["orthogonalSize"].toDouble(3.0f));
 	iris::CameraProjection val = camObj["projectionMode"].toString().compare("orthogonal") == 0 ? iris::CameraProjection::Orthogonal : iris::CameraProjection::Perspective;
 	camera->setProjection(val);
@@ -671,7 +672,7 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     // read the euler exactly as before.
     const QJsonObject rotQuat = nodeObj["rotQuat"].toObject();
     if (!rotQuat.isEmpty()) {
-        sceneNode->setLocalRot(QQuaternion(float(rotQuat["scalar"].toDouble(1.0)),
+        sceneNode->setLocalRot(iris::Quat(float(rotQuat["scalar"].toDouble(1.0)),
                                            float(rotQuat["x"].toDouble(0.0)),
                                            float(rotQuat["y"].toDouble(0.0)),
                                            float(rotQuat["z"].toDouble(0.0))).normalized());
@@ -679,7 +680,7 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
         auto rot = nodeObj["rot"].toObject();
         if (!rot.isEmpty()) {
             //the rotation is stored as euler angles
-            sceneNode->setLocalRot(QQuaternion::fromEulerAngles(readVector3(rot)).normalized());
+            sceneNode->setLocalRot(iris::Quat::fromEulerAngles(readVector3(rot)).normalized());
         }
     }
 
@@ -687,7 +688,7 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     if (!scale.isEmpty()) {
         sceneNode->setLocalScale(readVector3(scale));
     } else {
-        sceneNode->setLocalScale(QVector3D(1, 1, 1));
+        sceneNode->setLocalScale(iris::Vec3(1, 1, 1));
     }
 }
 

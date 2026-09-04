@@ -44,18 +44,18 @@
 // can share the joint markers.
 //
 // Studio code: iris + the engine abstraction, never Ogre.
+#include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QVector>
-#include <QVector3D>
 #include "jahshaka/engine/Engine.h"
 
 /// One bone: parent joint -> child joint, plus what the overlay needs to draw
 /// the child end when the child has no children of its own.
 struct BoneOverlaySegment
 {
-    QVector3D from;                 ///< the parent joint (the octahedron's wide end)
-    QVector3D to;                   ///< the child joint (the octahedron's point)
-    QVector3D tipAxis;              ///< world-space bone axis of the CHILD bone (its own
+    iris::Vec3 from;                 ///< the parent joint (the octahedron's wide end)
+    iris::Vec3 to;                   ///< the child joint (the octahedron's point)
+    iris::Vec3 tipAxis;              ///< world-space bone axis of the CHILD bone (its own
                                     ///< local +Y). Null falls back to the bone's direction.
     bool      tipIsLeaf = false;    ///< the child bone has no bone children: draw a stub
 };

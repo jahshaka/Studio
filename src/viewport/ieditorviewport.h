@@ -13,11 +13,11 @@
 // is not a wish list. Legacy-only operations (GL context juggling around resource
 // loads, the IrisGL renderer) are kept as explicit, nullable calls so the callers
 // can be found and retired.
+#include "irisgl/core/math/vec.h"
 #include <QObject>
 #include <QImage>
 #include <QSize>
 #include <QString>
-#include <QVector3D>
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -40,11 +40,11 @@ public:
     using QObject::QObject;
 signals:
     void addPrimitive(QString guid);
-    void addDroppedMesh(QString path, bool ignore, QVector3D position, QString guid, QString assetName);
-    void addDroppedParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
+    void addDroppedMesh(QString path, bool ignore, iris::Vec3 position, QString guid, QString assetName);
+    void addDroppedParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     /// A Texture asset dropped on empty space — the shell spawns an image
     /// plane at the drop point (IMAGE_PLANE_SPEC option A).
-    void addDroppedImagePlane(QVector3D position, QString guid);
+    void addDroppedImagePlane(iris::Vec3 position, QString guid);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
     void updateToolbarButton();
     void changeSkyFromAssetWidget(int index);

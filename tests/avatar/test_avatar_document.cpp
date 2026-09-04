@@ -11,12 +11,11 @@
 //
 // Everything here is what the `avatar` verbs call, which is why the verb
 // surface is testable with no engine at all.
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QFileInfo>
-#include <QMatrix4x4>
 #include <QSet>
 #include <QTemporaryDir>
-#include <QVector3D>
 #include <cmath>
 #include <cstdio>
 
@@ -194,7 +193,7 @@ int main(int argc, char **argv)
     // `avatar.bones` is documented as returning under --headless.
     CHECK(model.setClip("Idle"), "S2: 'Idle' selected");
     model.setTime(0.0f);
-    const QVector3D tip0 = model.bones()[1].position;
+    const iris::Vec3 tip0 = model.bones()[1].position;
     model.setTime(0.5f);
     CHECK(std::fabs(model.time() - 0.5f) < 1e-5f, "S2: setTime moves the clock");
     CHECK(!model.hasPoseSource(),
@@ -237,11 +236,11 @@ int main(int argc, char **argv)
         bool ok = segs.size() == 1;
         if (ok) {
             const auto &s = segs.first();
-            const QVector3D along = (s.to - s.from).normalized();
+            const iris::Vec3 along = (s.to - s.from).normalized();
             CHECK(s.toIsLeaf, "S3c: the tip bone is reported as a LEAF (nothing hangs off it)");
             CHECK(qAbs(s.toAxis.length() - 1.0f) < 1e-3f,
                   "S3c: the leaf's bone axis comes back normalized");
-            CHECK(QVector3D::dotProduct(s.toAxis, along) > 0.99f,
+            CHECK(iris::Vec3::dotProduct(s.toAxis, along) > 0.99f,
                   "S3c: at rest the leaf's own +Y axis IS the bone direction (the rig's bone axis)");
             std::printf("    leaf axis (%.3f %.3f %.3f)  bone direction (%.3f %.3f %.3f)\n",
                         s.toAxis.x(), s.toAxis.y(), s.toAxis.z(), along.x(), along.y(), along.z());
@@ -516,11 +515,11 @@ int main(int argc, char **argv)
         // on them: the pose at t=0.5 has to be identical either way.
         rm.setClip("Idle");
         rm.setTime(0.5f);
-        const QVector3D inPlace = rm.bones()[1].position;
+        const iris::Vec3 inPlace = rm.bones()[1].position;
         rm.setRootMotion(true);
         CHECK(rm.rootMotion(), "X7: root motion toggles on");
         rm.setTime(0.5f);
-        const QVector3D authored = rm.bones()[1].position;
+        const iris::Vec3 authored = rm.bones()[1].position;
         CHECK((authored - inPlace).length() < 1e-4f,
               "X7: a rotation-only clip is unaffected by the root-motion policy");
         rm.setRootMotion(false);

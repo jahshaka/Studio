@@ -8,6 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "irisgl/core/math/vec.h"
 #include "texture.h"
 
 /*    COMBINE NORMAL    */
@@ -22,7 +23,6 @@ CombineNormalsNode::CombineNormalsNode()
 	addInputSocket(new Vector3SocketModel("NormalB", "vec3(0.0, 0.0, 1.0)"));
 	addOutputSocket(new Vector3SocketModel("Result"));
 }
-
 
 
 TexelSizeNode::TexelSizeNode()
@@ -126,8 +126,8 @@ UVTransformNode::UVTransformNode()
 	);
 
 	auto onEdit = [this](double) {
-		tiling = QVector2D(float(tileXBox->value()), float(tileYBox->value()));
-		offset = QVector2D(float(offsetXBox->value()), float(offsetYBox->value()));
+		tiling = iris::Vec2(float(tileXBox->value()), float(tileYBox->value()));
+		offset = iris::Vec2(float(offsetXBox->value()), float(offsetYBox->value()));
 		pushSocketDefaults();
 		emit valueChanged(this, 0);
 	};
@@ -162,8 +162,8 @@ void UVTransformNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 {
 	Q_UNUSED(widgetIndex);
 	const auto obj = val.toObject();
-	tiling = QVector2D(float(obj["tileX"].toDouble(1.0)), float(obj["tileY"].toDouble(1.0)));
-	offset = QVector2D(float(obj["offsetX"].toDouble(0.0)), float(obj["offsetY"].toDouble(0.0)));
+	tiling = iris::Vec2(float(obj["tileX"].toDouble(1.0)), float(obj["tileY"].toDouble(1.0)));
+	offset = iris::Vec2(float(obj["offsetX"].toDouble(0.0)), float(obj["offsetY"].toDouble(0.0)));
 	// setValue triggers the connected onEdit, which re-derives members and
 	// pushes the socket defaults; block signals to set all four atomically.
 	for (auto box : { tileXBox, tileYBox, offsetXBox, offsetYBox }) box->blockSignals(true);

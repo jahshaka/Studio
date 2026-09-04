@@ -11,15 +11,15 @@ For more information see the LICENSE file
 #ifndef COLLISIONHELPER_H
 #define COLLISIONHELPER_H
 
-#include <QVector3D>
+#include "irisgl/core/math/vec.h"
 
 
 struct Plane
 {
-    QVector3D normal;
+    iris::Vec3 normal;
     float d;
 
-    Plane(QVector3D normal,float d)
+    Plane(iris::Vec3 normal,float d)
     {
         this->normal = normal;
         this->d = d;
@@ -29,15 +29,15 @@ struct Plane
     {
     }
 
-    QVector3D rayIntersect(const QVector3D &rayOrigin, const QVector3D &ray,float &t)
+    iris::Vec3 rayIntersect(const iris::Vec3 &rayOrigin, const iris::Vec3 &ray,float &t)
     {
-        float divisor = QVector3D::dotProduct(ray, normal);
+        float divisor = iris::Vec3::dotProduct(ray, normal);
         if (qFuzzyCompare(1.0f, 1.0f + divisor)) {
             t = -1.0f;
             return rayOrigin;
         }
 
-        t = -(QVector3D::dotProduct(rayOrigin, normal) - d) / divisor;
+        t = -(iris::Vec3::dotProduct(rayOrigin, normal) - d) / divisor;
 
         return rayOrigin + ray * t;
 
@@ -48,14 +48,14 @@ struct Plane
 class CollisionHelper
 {
 public:
-    static bool CollisionClosestPointOnSegment(QVector3D point, QVector3D vertPos1, QVector3D vertPos2,QVector3D& res )
+    static bool CollisionClosestPointOnSegment(iris::Vec3 point, iris::Vec3 vertPos1, iris::Vec3 vertPos2,iris::Vec3& res )
     {
 
         auto c = point - vertPos1;
-        QVector3D V = (vertPos2 - vertPos1).normalized();
+        iris::Vec3 V = (vertPos2 - vertPos1).normalized();
 
         float d = (vertPos2 - vertPos1).length();
-        float t = QVector3D::dotProduct(V,c);
+        float t = iris::Vec3::dotProduct(V,c);
 
         if (t < 0)
         {

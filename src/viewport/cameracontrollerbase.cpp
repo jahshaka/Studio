@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/vec.h"
 #include "viewport/cameracontrollerbase.h"
 #include "data/settingsmanager.h"
 
@@ -116,7 +117,7 @@ void CameraControllerBase::resetMouseStates()
     altOrbit = false;
 }
 
-void CameraControllerBase::setAltOrbit(bool active, const QVector3D &pivot)
+void CameraControllerBase::setAltOrbit(bool active, const iris::Vec3 &pivot)
 {
     altOrbit = active;
     if (active) altOrbitPivot = pivot;

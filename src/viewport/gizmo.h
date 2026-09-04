@@ -12,12 +12,12 @@ For more information see the LICENSE file
 #ifndef GIZMOHANDLE_H
 #define GIZMOHANDLE_H
 
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QtMath>
-#include <QVector3D>
 #include <QColor>
 #include <QVector>
-#include <QQuaternion>
-#include <QMatrix4x4>
 #include "irisgl/irisglfwd.h"
 
 
@@ -75,9 +75,9 @@ private:
 
     QColor      handleColor;
     QString     handleName;
-    QVector3D   handlePosition;
-    QVector3D   handleScale;
-    QQuaternion handleRotation;
+    iris::Vec3   handlePosition;
+    iris::Vec3   handleScale;
+    iris::Quat handleRotation;
 
 public:
 
@@ -94,11 +94,11 @@ public:
         return this->handleColor;
     }
 
-    void setHandleScale(const QVector3D& scale) {
+    void setHandleScale(const iris::Vec3& scale) {
         this->handleScale = scale;
     }
 
-    QVector3D getHandleScale() const {
+    iris::Vec3 getHandleScale() const {
         return this->handleScale;
     }
 
@@ -117,7 +117,7 @@ public:
 struct GizmoDrawItem
 {
     iris::MeshPtr mesh;
-    QMatrix4x4 transform;
+    iris::Mat4 transform;
     QColor colour;
 };
 
@@ -134,8 +134,8 @@ protected:
 	GizmoTransformSpace transformSpace;
 	float gizmoScale;
 
-	QVector3D oldPos, oldScale;
-	QQuaternion oldRot;
+	iris::Vec3 oldPos, oldScale;
+	iris::Quat oldRot;
 
 public:
 	Gizmo();
@@ -151,21 +151,21 @@ public:
 	void setInitialTransform();
 	void createUndoAction();
 
-	static QVector3D snap(QVector3D pos, float gridSize);
+	static iris::Vec3 snap(iris::Vec3 pos, float gridSize);
 	static float snap(float value, float gridSize);
 
 	// returns transform of the gizmo, not the scene node
 	// the transform is calculated based on the transform's space (local or global)
-	virtual QMatrix4x4 getTransform();
-	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
+	virtual iris::Mat4 getTransform();
+	virtual bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
 
 	virtual bool isDragging() = 0;
-	virtual void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
+	virtual void startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) = 0;
 	virtual void endDragging() = 0;
-	virtual void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
+	virtual void drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) = 0;
 
 	/// Renderer-independent description of render(). Empty when nothing is selected.
-	virtual QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) = 0;
+	virtual QVector<GizmoDrawItem> drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) = 0;
 };
 
 #endif // GIZMOHANDLE_H

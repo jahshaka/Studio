@@ -9,13 +9,14 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "io/scenewriter.h"
 
 #include <Qt>
 #include <QVector>
 
-#include <QQuaternion>
-#include <QVector3D>
 #include <QDir>
 #include <QFile>
 
@@ -249,7 +250,7 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorDat
     // reason: the euler is what a human reads, the quaternion is what actually
     // round-trips (the editor camera drifted a ten-thousandth of a degree per
     // save/reopen before this).
-    const QQuaternion camRot = editorData->editorCamera->getLocalRot().normalized();
+    const iris::Quat camRot = editorData->editorCamera->getLocalRot().normalized();
     cameraObj["rot"] = jsonVector3(camRot.toEulerAngles());
     cameraObj["rotQuat"] = jsonQuaternion(camRot);
 	cameraObj["orthogonalSize"] = cam->orthoSize;
@@ -277,7 +278,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     // and unbounded — found by the reopen-fidelity double round trip,
     // 2026-09-04). The reader prefers rotQuat when it is there; a blob written
     // before this key, or by an older build, falls back to "rot" unchanged.
-    const QQuaternion localRot = sceneNode->getLocalRot().normalized();
+    const iris::Quat localRot = sceneNode->getLocalRot().normalized();
     sceneNodeObj["rot"] = jsonVector3(localRot.toEulerAngles());
     sceneNodeObj["rotQuat"] = jsonQuaternion(localRot);
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
@@ -650,15 +651,15 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
         }
 
 		if (prop->type == iris::PropertyType::Vec2) {
-			valuesObj[prop->name] = jsonVector2(prop->getValue().value<QVector2D>());
+			valuesObj[prop->name] = jsonVector2(iris::fromQt(prop->getValue().value<QVector2D>()));
 		}
 
 		if (prop->type == iris::PropertyType::Vec3) {
-			valuesObj[prop->name] = jsonVector3(prop->getValue().value<QVector3D>());
+			valuesObj[prop->name] = jsonVector3(iris::fromQt(prop->getValue().value<QVector3D>()));
 		}
 
 		if (prop->type == iris::PropertyType::Vec4) {
-			valuesObj[prop->name] = jsonVector4(prop->getValue().value<QVector4D>());
+			valuesObj[prop->name] = jsonVector4(iris::fromQt(prop->getValue().value<QVector4D>()));
 		}
 
 		// add vector properties
@@ -678,7 +679,7 @@ QJsonObject SceneWriter::jsonColor(QColor color)
     return colObj;
 }
 
-QJsonObject SceneWriter::jsonVector2(QVector2D vec)
+QJsonObject SceneWriter::jsonVector2(iris::Vec2 vec)
 {
     QJsonObject obj;
     obj["x"] = vec.x();
@@ -687,7 +688,7 @@ QJsonObject SceneWriter::jsonVector2(QVector2D vec)
     return obj;
 }
 
-QJsonObject SceneWriter::jsonVector3(QVector3D vec)
+QJsonObject SceneWriter::jsonVector3(iris::Vec3 vec)
 {
 	QJsonObject obj;
 	obj["x"] = vec.x();
@@ -698,9 +699,9 @@ QJsonObject SceneWriter::jsonVector3(QVector3D vec)
 }
 
 /// The rotation as it is actually STORED on the node — no euler detour. Keys
-/// are x/y/z/scalar (QQuaternion's own spelling) so nothing can confuse this
+/// are x/y/z/scalar (iris::Quat's own spelling) so nothing can confuse this
 /// with a vector4 whose w means something else.
-QJsonObject SceneWriter::jsonQuaternion(QQuaternion q)
+QJsonObject SceneWriter::jsonQuaternion(iris::Quat q)
 {
 	QJsonObject obj;
 	obj["x"] = q.x();
@@ -711,7 +712,7 @@ QJsonObject SceneWriter::jsonQuaternion(QQuaternion q)
 	return obj;
 }
 
-QJsonObject SceneWriter::jsonVector4(QVector4D vec)
+QJsonObject SceneWriter::jsonVector4(iris::Vec4 vec)
 {
 	QJsonObject obj;
 	obj["x"] = vec.x();

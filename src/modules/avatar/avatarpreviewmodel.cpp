@@ -9,12 +9,13 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/vec.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
-#include <QQuaternion>
 #include <QSet>
 #include <cmath>
 #include <functional>
@@ -116,7 +117,7 @@ void AvatarPreviewModel::buildDocument()
     mPanelLight->rectWidth = 7.5f;
     mPanelLight->rectHeight = 7.5f;
     mPanelLight->distance = 30.0f;             // falloff range: generous for a 4m room
-    mPanelLight->setLocalPos(QVector3D(0, 3.8f, 0));
+    mPanelLight->setLocalPos(iris::Vec3(0, 3.8f, 0));
     mPanelLight->isBuiltIn = true;
     mDocument->rootNode->addChild(mPanelLight);
 
@@ -124,8 +125,8 @@ void AvatarPreviewModel::buildDocument()
     // Framed for the ROOM as much as the (not yet loaded) subject: high enough
     // to read the floor grid, far enough to see the far wall's rhythm. Loading
     // a character reframes anyway (AvatarPreview::framePreview).
-    mCamera->setLocalPos(QVector3D(0, 2.1f, 6.4f));
-    mCamera->lookAt(QVector3D(0, 1.1f, 0));
+    mCamera->setLocalPos(iris::Vec3(0, 2.1f, 6.4f));
+    mCamera->lookAt(iris::Vec3(0, 1.1f, 0));
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(28, 30, 36));
@@ -178,13 +179,13 @@ void AvatarPreviewModel::rescaleSpace()
     }
     const float height = top - bottom;
     const float s = height > 0.05f ? qBound(0.02f, height / 1.7f, 400.0f) : 1.0f;
-    mSpaceRoot->setLocalScale(QVector3D(s, s, s));
+    mSpaceRoot->setLocalScale(iris::Vec3(s, s, s));
     // The ceiling panel light is NOT in the group (its rectangle is a light
     // property, not a transform, so a group scale cannot size it): follow the
     // room explicitly. Intensity is scale-free — a bigger panel at the same
     // radiance lights the bigger room the same way.
     if (mPanelLight) {
-        mPanelLight->setLocalPos(QVector3D(0, 3.8f * s, 0));
+        mPanelLight->setLocalPos(iris::Vec3(0, 3.8f * s, 0));
         mPanelLight->rectWidth = 7.5f * s;
         mPanelLight->rectHeight = 7.5f * s;
         // Range must scale too — at a Mixamo rig's ~94x the character stands
@@ -412,11 +413,11 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
     auto stripped = new iris::BoneAnimation();
     for (const auto *key : source->rotKeys->keys) stripped->rotKeys->addKey(key->value, key->time);
     for (const auto *key : source->scaleKeys->keys) stripped->scaleKeys->addKey(key->value, key->time);
-    const QVector3D anchor = source->posKeys->keys.isEmpty()
-                                 ? QVector3D()
+    const iris::Vec3 anchor = source->posKeys->keys.isEmpty()
+                                 ? iris::Vec3()
                                  : source->posKeys->keys.first()->value;
     for (const auto *key : source->posKeys->keys)
-        stripped->posKeys->addKey(QVector3D(anchor.x(), key->value.y(), anchor.z()), key->time);
+        stripped->posKeys->addKey(iris::Vec3(anchor.x(), key->value.y(), anchor.z()), key->time);
 
     auto inPlace = iris::SkeletalAnimation::create();
     inPlace->name = skel->name;
@@ -692,14 +693,14 @@ void AvatarPreviewModel::evaluate()
     mDirty = false;
 }
 
-QHash<QString, QMatrix4x4> AvatarPreviewModel::boneWorldMatrices() const
+QHash<QString, iris::Mat4> AvatarPreviewModel::boneWorldMatrices() const
 {
     // The engine is where a pose lives now. The bone scene nodes still describe
     // the rig's SHAPE (names, parents, and the rest transform the file
     // authored), but nothing writes a clip's pose into them any more, so a
     // source that reads the engine back is the only thing that makes these
     // positions move.
-    QHash<QString, QMatrix4x4> world;
+    QHash<QString, iris::Mat4> world;
     if (mPoseSource && mPoseSource(world) && !world.isEmpty()) return world;
     world.clear();
     for (const auto &bone : mBoneNodes)
@@ -709,7 +710,7 @@ QHash<QString, QMatrix4x4> AvatarPreviewModel::boneWorldMatrices() const
 
 QVector<BoneInfo> AvatarPreviewModel::bones() const
 {
-    const QHash<QString, QMatrix4x4> world = boneWorldMatrices();
+    const QHash<QString, iris::Mat4> world = boneWorldMatrices();
     QVector<BoneInfo> out;
     out.reserve(mBoneNodes.size());
     for (const auto &bone : mBoneNodes) {
@@ -727,17 +728,17 @@ QVector<BoneInfo> AvatarPreviewModel::bones() const
 
 QVector<BoneSegment> AvatarPreviewModel::boneSegments() const
 {
-    const QHash<QString, QMatrix4x4> world = boneWorldMatrices();
-    QHash<QString, QVector3D> positions;
-    QHash<QString, QVector3D> axes;          // each bone's own local +Y, in world space
+    const QHash<QString, iris::Mat4> world = boneWorldMatrices();
+    QHash<QString, iris::Vec3> positions;
+    QHash<QString, iris::Vec3> axes;          // each bone's own local +Y, in world space
     QSet<QString> hasChild;
     for (const auto &bone : mBoneNodes) {
         if (!bone.node) continue;
         const auto it = world.constFind(bone.name);
         if (it == world.constEnd()) continue;
-        const QMatrix4x4 global = *it;
+        const iris::Mat4 global = *it;
         positions.insert(bone.name, global.column(3).toVector3D());
-        QVector3D axis = global.column(1).toVector3D();      // scale is carried here too
+        iris::Vec3 axis = global.column(1).toVector3D();      // scale is carried here too
         if (axis.lengthSquared() > 1e-12f) axis.normalize();
         axes.insert(bone.name, axis);
         if (!bone.parent.isEmpty()) hasChild.insert(bone.parent);

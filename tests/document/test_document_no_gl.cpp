@@ -8,6 +8,9 @@
 // called qFatal without a current context.
 //
 // Runs under QT_QPA_PLATFORM=offscreen. Framework-free; non-zero exit on failure.
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QOpenGLContext>
 #include <QImage>
@@ -120,7 +123,7 @@ int main(int argc, char **argv)
         auto physScene = iris::Scene::create();
         auto body = iris::MeshNode::create();
         body->setGUID("simulate-test-sphere");
-        body->setLocalPos(QVector3D(0, 10, 0));
+        body->setLocalPos(iris::Vec3(0, 10, 0));
         body->isPhysicsBody = true;
         body->physicsProperty.objectMass = 1.0f;
         body->physicsProperty.shape = iris::PhysicsCollisionShape::Sphere;
@@ -272,7 +275,7 @@ int main(int argc, char **argv)
     // only thing that honours the flags; getGlobalTransform() recomputes
     // unconditionally and would hide every one of these).
     {
-        auto approx = [](const QVector3D &a, const QVector3D &b) {
+        auto approx = [](const iris::Vec3 &a, const iris::Vec3 &b) {
             return (a - b).length() < 1e-4f;
         };
         auto worldPos = [](const iris::SceneNodePtr &n) {
@@ -286,90 +289,90 @@ int main(int argc, char **argv)
         tRoot->addChild(mid);
         mid->addChild(leaf);
 
-        mid->setLocalPos(QVector3D(10, 0, 0));
-        leaf->setLocalPos(QVector3D(0, 5, 0));
+        mid->setLocalPos(iris::Vec3(10, 0, 0));
+        leaf->setLocalPos(iris::Vec3(0, 5, 0));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(10, 5, 0)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(10, 5, 0)),
               "invalidation: a fresh hierarchy composes on the first update");
 
         // The case the flags cannot get from setTransformDirty alone: a node
         // moves and its DESCENDANTS' world transforms must follow. The dirty
         // flag propagates upward; only update() can push it down.
-        mid->setLocalPos(QVector3D(-4, 0, 0));
+        mid->setLocalPos(iris::Vec3(-4, 0, 0));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "invalidation: moving a parent refreshes the whole subtree below it");
 
         // Nothing moved: the cache must hold the same answer (and, being a
         // cache, must not have been recomputed — asserted by the fact that a
         // deliberately corrupted cache below is NOT repaired by an idle update).
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "invalidation: an idle update leaves the composed transforms alone");
-        leaf->globalTransform.translate(QVector3D(100, 100, 100));
+        leaf->globalTransform.translate(iris::Vec3(100, 100, 100));
         tScene->update(0.0f);
-        CHECK(!approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+        CHECK(!approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "invalidation: an idle update really does skip the recompute (it IS a cache)");
         leaf->setTransformDirty();
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "invalidation: ...and marking it dirty repairs it");
 
         // Every remaining mutator, each asserted through the cache.
-        leaf->setLocalRot(QQuaternion::fromEulerAngles(0, 90, 0));
-        leaf->setLocalPos(QVector3D(0, 0, 3));
+        leaf->setLocalRot(iris::Quat::fromEulerAngles(0, 90, 0));
+        leaf->setLocalPos(iris::Vec3(0, 0, 3));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-4, 0, 3)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-4, 0, 3)),
               "invalidation: setLocalPos/setLocalRot");
 
-        leaf->rotate(QQuaternion::fromEulerAngles(0, 90, 0));
-        mid->setLocalScale(QVector3D(2, 2, 2));
+        leaf->rotate(iris::Quat::fromEulerAngles(0, 90, 0));
+        mid->setLocalScale(iris::Vec3(2, 2, 2));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-4, 0, 6)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-4, 0, 6)),
               "invalidation: rotate() and setLocalScale()");
 
-        QMatrix4x4 lt; lt.setToIdentity(); lt.translate(QVector3D(1, 1, 1));
+        iris::Mat4 lt; lt.setToIdentity(); lt.translate(iris::Vec3(1, 1, 1));
         leaf->setLocalTransform(lt);
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-2, 2, 2)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-2, 2, 2)),
               "invalidation: setLocalTransform()");
 
         // setGlobalPos/setGlobalRot on a node WITH a parent, and on one
         // without (the root) — the parentless early-returns wrote the field
         // and set no flag at all.
-        leaf->setGlobalPos(QVector3D(7, 7, 7));
+        leaf->setGlobalPos(iris::Vec3(7, 7, 7));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(7, 7, 7)), "invalidation: setGlobalPos() under a parent");
+        CHECK(approx(worldPos(leaf), iris::Vec3(7, 7, 7)), "invalidation: setGlobalPos() under a parent");
 
-        tRoot->setGlobalPos(QVector3D(0, 1, 0));
+        tRoot->setGlobalPos(iris::Vec3(0, 1, 0));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(tRoot), QVector3D(0, 1, 0)),
+        CHECK(approx(worldPos(tRoot), iris::Vec3(0, 1, 0)),
               "invalidation: setGlobalPos() on a parentless node (the early-return path)");
-        CHECK(approx(worldPos(leaf), QVector3D(7, 8, 7)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(7, 8, 7)),
               "...and it carried the subtree with it");
 
-        tRoot->setGlobalRot(QQuaternion::fromEulerAngles(0, 180, 0));
+        tRoot->setGlobalRot(iris::Quat::fromEulerAngles(0, 180, 0));
         tScene->update(0.0f);
-        CHECK(approx(worldPos(leaf), QVector3D(-7, 8, -7)),
+        CHECK(approx(worldPos(leaf), iris::Vec3(-7, 8, -7)),
               "invalidation: setGlobalRot() on a parentless node");
-        tRoot->setLocalRot(QQuaternion());
-        tRoot->setLocalPos(QVector3D());
+        tRoot->setLocalRot(iris::Quat());
+        tRoot->setLocalPos(iris::Vec3());
 
         // Reparenting: the world transform changes even when the local one does
         // not, and insertChild's keepTransform branch writes pos/rot/scale
         // directly.
         auto other = iris::SceneNode::create();
-        other->setLocalPos(QVector3D(0, 0, 20));
+        other->setLocalPos(iris::Vec3(0, 0, 20));
         tRoot->addChild(other);
         tScene->update(0.0f);
-        const QVector3D before = worldPos(leaf);
+        const iris::Vec3 before = worldPos(leaf);
         other->addChild(leaf, true);                     // keepTransform
         tScene->update(0.0f);
         CHECK(approx(worldPos(leaf), before),
               "invalidation: a keepTransform reparent leaves the node where it was");
         other->addChild(mid, false);                     // no keepTransform
         tScene->update(0.0f);
-        CHECK(approx(worldPos(mid), QVector3D(0, 0, 20) + mid->getLocalPos()),
+        CHECK(approx(worldPos(mid), iris::Vec3(0, 0, 20) + mid->getLocalPos()),
               "invalidation: a plain reparent recomposes against the new parent");
 
         // Losing a parent: the local transform becomes the global one.
@@ -395,7 +398,7 @@ int main(int argc, char **argv)
             tScene->update(0.0f);
             tScene->updateSceneAnimation(1.0f);
             tScene->update(0.0f);
-            CHECK(approx(worldPos(animated), QVector3D(9, 0, 0)),
+            CHECK(approx(worldPos(animated), iris::Vec3(9, 0, 0)),
                   "invalidation: the property-animation path marks the node dirty");
         }
 
@@ -411,11 +414,11 @@ int main(int argc, char **argv)
                   "invalidation: ViewerNode::setViewScale()");
 
             auto cam = iris::CameraNode::create();
-            cam->setLocalPos(QVector3D(0, 0, 5));
+            cam->setLocalPos(iris::Vec3(0, 0, 5));
             cam->update(0.0f);
-            cam->lookAt(QVector3D(0, 0, 0));
+            cam->lookAt(iris::Vec3(0, 0, 0));
             cam->update(0.0f);
-            const QVector3D fwd = (cam->globalTransform * QVector4D(0, 0, -1, 0)).toVector3D();
+            const iris::Vec3 fwd = (cam->globalTransform * iris::Vec4(0, 0, -1, 0)).toVector3D();
             CHECK(fwd.z() < -0.9f, "invalidation: CameraNode::lookAt()");
         }
 

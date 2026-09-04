@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "irisgl/core/math/vec.h"
 #include <QMainWindow>
 #include <QActionGroup>
 #include <QModelIndex>
@@ -21,7 +22,6 @@ For more information see the LICENSE file
 #include <QDrag>
 #include <QToolBar>
 #include <QSharedPointer>
-#include <QVector3D>
 #include <QLabel>
 #include <QCheckBox>
 #include <QMenu>
@@ -394,10 +394,10 @@ public slots:
     void addGear();
     void addEmpty();
     void addViewer();
-    void addMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D());
+    void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
     void addPrimitiveObject(const QString &guid);
-	void addMaterialMesh(const QString &path = "", bool ignore = false, QVector3D position = QVector3D(), const QString &guid = QString(), const QString &name = QString());
-    void addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName);
+	void addMaterialMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3(), const QString &guid = QString(), const QString &name = QString());
+    void addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName);
     void addDragPlaceholder();
 
     //context menu functions
@@ -560,7 +560,7 @@ private:
     QPoint mouseReleasePos;
     QPoint mousePos;
     bool dragging;
-    QVector3D dragScenePos;
+    iris::Vec3 dragScenePos;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

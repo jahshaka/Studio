@@ -1,5 +1,6 @@
 #pragma once
 
+#include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include <QGridLayout>
 #include <QSpinBox>
@@ -30,7 +31,7 @@ private:
 	Vec2Property *prop;
 	double x;
 	double y;
-	QVector2D value;
+	iris::Vec2 value;
 	Widget2D *wid;
 
 	void setConnections();
@@ -38,9 +39,9 @@ private:
 protected:
 
 public slots:
-	void setPropValues(QVector2D values);
+	void setPropValues(iris::Vec2 values);
 signals:
-	void valueChanged(QVector2D val);
+	void valueChanged(iris::Vec2 val);
 	void nameChanged(QString name);
 
 
@@ -55,13 +56,12 @@ public:
 	void setProp(Vec3Property *prop);
 
 
-
 private:
 	Vec3Property *prop;
 	double x;
 	double y;
 	double z;
-	QVector3D value;
+	iris::Vec3 value;
 	Widget3D *wid;
 
 	void setConnections();
@@ -69,12 +69,11 @@ private:
 protected:
 
 public slots:
-	void setPropValues(QVector3D values);
+	void setPropValues(iris::Vec3 values);
 signals:
-	void valueChanged(QVector3D val);
+	void valueChanged(iris::Vec3 val);
 	void nameChanged(QString name);
 };
-
 
 
 class Vector4DPropertyWidget : public BasePropertyWidget
@@ -91,16 +90,16 @@ private:
 	double y;
 	double z;
 	double w;
-	QVector4D value;
+	iris::Vec4 value;
 	Widget4D *wid;
 
 	void setConnections();
 protected:
 
 public slots:
-	void setPropValues(QVector4D values);
+	void setPropValues(iris::Vec4 values);
 signals:
-	void valueChanged(QVector4D val);	void nameChanged(QString name);
+	void valueChanged(iris::Vec4 val);	void nameChanged(QString name);
 
 };
 
