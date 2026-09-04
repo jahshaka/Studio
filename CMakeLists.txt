@@ -196,6 +196,7 @@ set(SRCS
     src/modules/avatar/avatarmodule.cpp
     src/modules/avatar/avatarpage.cpp
     src/modules/avatar/avatarpreviewmodel.cpp
+    src/modules/avatar/avatarspace.cpp
     src/modules/avatar/api/avatarapi.cpp
     src/bridge/avatarpreviewscene.cpp
     src/bridge/avatarpreview.cpp

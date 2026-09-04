@@ -122,8 +122,11 @@ void AvatarPreviewModel::buildDocument()
     mDocument->rootNode->addChild(fill);
 
     mCamera = iris::CameraNode::create();
-    mCamera->setLocalPos(QVector3D(0, 1, 4));
-    mCamera->lookAt(QVector3D(0, 1, 0));
+    // Framed for the ROOM as much as the (not yet loaded) subject: high enough
+    // to read the floor grid, far enough to see the far wall's rhythm. Loading
+    // a character reframes anyway (AvatarPreview::framePreview).
+    mCamera->setLocalPos(QVector3D(0, 2.1f, 6.4f));
+    mCamera->lookAt(QVector3D(0, 1.1f, 0));
     mDocument->setCamera(mCamera);
 
     mDocument->setSkyColor(QColor(28, 30, 36));
@@ -132,6 +135,51 @@ void AvatarPreviewModel::buildDocument()
 
     mCamera->update(0);
     mDocument->update(0);
+}
+
+bool AvatarPreviewModel::setSpaceMode(avatar::SpaceMode mode)
+{
+    // Idempotent — but a Modern request with no room built yet (a prior
+    // failure, or first call) always tries the build.
+    if (mode == mSpaceMode && (mode == avatar::SpaceMode::Grid || mSpaceRoot))
+        return true;
+
+    if (mSpaceRoot) {
+        mDocument->rootNode->removeChild(mSpaceRoot);
+        mSpaceRoot.reset();
+    }
+    mSpaceMode = mode;
+    if (mode == avatar::SpaceMode::Modern) {
+        mSpaceRoot = space::buildModernRoom(mDocument);
+        if (!mSpaceRoot) {                     // headless: no qrc plane mesh
+            mSpaceMode = avatar::SpaceMode::Grid;
+            return false;
+        }
+        rescaleSpace();                        // a subject may already be loaded
+    }
+    mDocument->update(0);
+    return true;
+}
+
+void AvatarPreviewModel::rescaleSpace()
+{
+    if (!mSpaceRoot) return;
+    // The room is designed around a HUMAN-scale subject: 1m tiles, 4m walls,
+    // a 1.8m character. Rigs import at wildly different scales (a Mixamo
+    // character is ~170 UNITS tall) — without this, the room is a knee-high
+    // box at the character's feet, invisible at framing distance. Same idea
+    // as AvatarPreviewScene::applyGrid, from the model's own rig data: the
+    // subject's rest-pose bone height sets the room's scale.
+    float top = 0.0f, bottom = 0.0f;
+    for (const auto &b : mBoneNodes) {
+        if (!b.node) continue;
+        const float y = b.node->getGlobalTransform().column(3).y();
+        top = qMax(top, y);
+        bottom = qMin(bottom, y);
+    }
+    const float height = top - bottom;
+    const float s = height > 0.05f ? qBound(0.02f, height / 1.7f, 400.0f) : 1.0f;
+    mSpaceRoot->setLocalScale(QVector3D(s, s, s));
 }
 
 QString AvatarPreviewModel::extractDir() const
@@ -177,6 +225,7 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
 
     collectRig();
     captureRestPose();
+    rescaleSpace();
 
     // Clip list, in the order the fragment carries them, with display names
     // uniquified the way Mesh::extractAnimations uniquifies raw ones.
@@ -232,6 +281,7 @@ void AvatarPreviewModel::clear()
     mPlaying = false;
     mDirty = true;
     mScratch.reset();       // QTemporaryDir removes the extracted textures
+    rescaleSpace();
 }
 
 void AvatarPreviewModel::collectRig()

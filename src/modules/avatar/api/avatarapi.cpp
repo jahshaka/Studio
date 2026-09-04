@@ -55,6 +55,9 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "setRootMotion", "avatar.setRootMotion(on) -> bool",
           "Root motion for the preview. Off (the default) plays locomotion clips IN PLACE — the horizontal translation of the clip's root-most animated bone is pinned to its first key, so a walk cycle walks on the spot instead of leaving the frame. On plays the clip exactly as authored. Vertical motion is never stripped, so a jump still leaves the ground.",
           Needs::Document },
+        { "spaceMode", "avatar.spaceMode(mode?) -> 'grid' | 'modern'",
+          "The avatar page's 3D environment (AVATAR_SPACE_SPEC). With no argument, returns the current mode. With one, switches it: 'grid' is the founding minimal look; 'modern' is the Tron room — a 10x10 grid of mirror-black floor tiles over dead-black seams, white walls whose seams glow, and a softly emissive ceiling. The choice persists across sessions. Throws on an unknown mode name.",
+          Needs::Document },
         { "setClip", "avatar.setClip(name) -> bool",
           "Makes `name` (display or raw) the active clip and rewinds to 0 — including a clip loaded from a separate file by avatar.loadAnimation. What the ANIMATIONS list double-click calls. The transport state carries over: switching while playing keeps playing, from the start of the new clip. Every bone is put back on its rest pose first, so a clip that does not mention a bone cannot inherit the previous clip's pose for it.",
           Needs::Document },
@@ -183,6 +186,28 @@ bool AvatarApi::setRootMotion(bool on)
     mModel->setRootMotion(on);
     notifyChanged();
     return true;
+}
+
+QVariant AvatarApi::spaceMode(const QVariant &mode)
+{
+    if (!mModel) { fail("avatar: not available in this session"); return QVariant(); }
+    if (!mode.isValid() || mode.toString().isEmpty())
+        return QString::fromLatin1(avatar::space::modeName(mModel->spaceMode()));
+
+    avatar::SpaceMode m;
+    if (!avatar::space::parseMode(mode.toString(), &m)) {
+        fail(QString("avatar.spaceMode: unknown mode '%1' — the modes are "
+                     "'grid' and 'modern'").arg(mode.toString()));
+        return QVariant();
+    }
+    if (!mModel->setSpaceMode(m)) {
+        fail("avatar.spaceMode: the room's geometry resources are not "
+             "available in this session");
+        return QVariant();
+    }
+    if (mPersistMode) mPersistMode(avatar::space::modeName(m));
+    notifyChanged();
+    return QString::fromLatin1(avatar::space::modeName(mModel->spaceMode()));
 }
 
 bool AvatarApi::clearPreview()

@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QCheckBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -147,6 +148,17 @@ QWidget *AvatarPage::buildCentreColumn()
     toggleLayout->addWidget(mMeshToggle);
     toggleLayout->addWidget(mSkeletonToggle);
     toggleLayout->addStretch(1);
+
+    // The space switcher (AVATAR_SPACE_SPEC): the dropdown is a view over
+    // avatar.spaceMode, like every other control here.
+    mSpaceCombo = new QComboBox(toggles);
+    mSpaceCombo->addItem(tr("Grid"), QStringLiteral("grid"));
+    mSpaceCombo->addItem(tr("Modern"), QStringLiteral("modern"));
+    connect(mSpaceCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (mUpdating || !mApi || index < 0) return;
+        mApi->spaceMode(mSpaceCombo->itemData(index).toString());
+    });
+    toggleLayout->addWidget(mSpaceCombo);
     layout->addWidget(toggles);
 
     mPreviewSlot = new QWidget(column);
@@ -341,6 +353,9 @@ void AvatarPage::refreshFromModel()
     mMeshToggle->setChecked(mModel->meshVisible());
     mSkeletonToggle->setChecked(mModel->skeletonVisible());
     mLoopToggle->setChecked(mModel->looping());
+    if (mSpaceCombo)
+        mSpaceCombo->setCurrentIndex(
+            mModel->spaceMode() == avatar::SpaceMode::Modern ? 1 : 0);
     mRootMotionToggle->setChecked(mModel->rootMotion());
     const QWidget *const transport[] = { mPlayButton, mPauseButton, mStopButton,
                                          mLoopToggle, mRootMotionToggle, mScrub };

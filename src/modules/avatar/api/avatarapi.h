@@ -51,6 +51,8 @@ public:
     /// where `bones()` reports the rig's shape at its REST pose (documented in
     /// the verb, and why `bones` is Needs::Engine).
     void setPoseResolver(std::function<void()> fn) { mResolvePose = std::move(fn); }
+    /// The module persists the space-mode choice; the verb reports through this.
+    void setPersistModeDelegate(std::function<void(const char *)> fn) { mPersistMode = std::move(fn); }
     /// Called after any verb that changes what the page shows, so the widgets
     /// follow scripted state (the materials module's selection-delegate shape).
     void setChangedDelegate(std::function<void()> fn) { mChanged = std::move(fn); }
@@ -64,6 +66,7 @@ public:
     Q_INVOKABLE QVariantList history();
     Q_INVOKABLE bool forget(const QString &path);
     Q_INVOKABLE bool setRootMotion(bool on);
+    Q_INVOKABLE QVariant spaceMode(const QVariant &mode = QVariant());
 
     /// The message of the last verb failure, for the widgets. ApiModule::fail
     /// throws into the JS engine, which a button click has no access to — the
@@ -96,6 +99,7 @@ private:
     avatar::AvatarPreviewModel *mModel = nullptr;
     SnapshotFn mSnapshot;
     std::function<void()> mResolvePose;
+    std::function<void(const char *)> mPersistMode;
     std::function<void()> mChanged;
     std::function<void()> mSubjectChanged;
 };

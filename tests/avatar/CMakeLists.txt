@@ -21,6 +21,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia)
 # through it. Same set tests/assetmeta links.
 set(AVATAR_LOAD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp

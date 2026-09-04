@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include <QWidget>
 
 class QCheckBox;
+class QComboBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -86,6 +87,7 @@ private:
     QListWidget *mHistory = nullptr;
     QPushButton *mLoadButton = nullptr;
     QPushButton *mLoadAnimButton = nullptr;
+    QComboBox   *mSpaceCombo = nullptr;
     QCheckBox   *mMeshToggle = nullptr;
     QCheckBox   *mSkeletonToggle = nullptr;
     QPushButton *mPlayButton = nullptr;

@@ -35,6 +35,8 @@ For more information see the LICENSE file
 // moved to Ogre (ANIMATION_ENGINE_MIGRATION_SPEC) and the document does not
 // compute one any more.
 
+#include "modules/avatar/avatarspace.h"
+
 #include <QHash>
 #include <QMap>
 #include <QMatrix4x4>
@@ -139,6 +141,14 @@ public:
     iris::SceneNodePtr  fragment() const { return mFragment; }
     iris::CameraNodePtr camera() const { return mCamera; }
 
+    // ---- the space (SPECS/AVATAR_SPACE_SPEC.md) ---------------------------
+    /// Switches the environment: Grid (empty founding look) or Modern (the
+    /// Tron room). Idempotent; returns false only when the room's geometry
+    /// resources are unavailable (headless tests). The choice is NOT persisted
+    /// here — the module owns the setting.
+    bool setSpaceMode(avatar::SpaceMode mode);
+    avatar::SpaceMode spaceMode() const { return mSpaceMode; }
+
     // ---- what the details panel shows -------------------------------------
     int boneCount() const { return mBoneCount; }
     int meshCount() const { return mMeshCount; }
@@ -226,6 +236,9 @@ private:
     void buildDocument();
     void collectRig();
     void applyMeshVisibility();
+    /// Scales the Modern room to the loaded subject (Mixamo rigs are ~170
+    /// units tall; the room is designed for 1.8m). Grid mode: no-op.
+    void rescaleSpace();
     /// Snapshots every node's local transform right after a load, and puts
     /// them back before a clip switch.
     void captureRestPose();
@@ -238,6 +251,8 @@ private:
     QString rootMotionChannel(const iris::SkeletalAnimationPtr &skel) const;
 
     iris::ScenePtr      mDocument;
+    iris::SceneNodePtr  mSpaceRoot;   // the Modern room group, null in Grid mode
+    avatar::SpaceMode   mSpaceMode = avatar::SpaceMode::Grid;
     iris::CameraNodePtr mCamera;
     iris::SceneNodePtr  mFragment;
 
