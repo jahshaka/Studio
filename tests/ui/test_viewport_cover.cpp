@@ -21,6 +21,7 @@ private slots:
     void hiddenWhilePresenting();
     void coversEveryPixel();
     void statesAndSubtitle();
+    void failedStateShowsTheReason();
     void showNowPaintsSynchronously();
 };
 
@@ -99,6 +100,34 @@ void TestViewportCover::statesAndSubtitle()
     cover.setSubtitle(QString());
     const QImage loadingNoName = renderCover(cover);
     QVERIFY2(loadingNoName != loading, "the world name is actually drawn");
+}
+
+/// The Failed state (deep audit area 7): the on-screen View could not be
+/// created, so this cover is permanent and its subtitle is the ONLY place the
+/// engine's reason is ever shown. It must be visible, look different from the
+/// other two, and actually draw the message.
+void TestViewportCover::failedStateShowsTheReason()
+{
+    QWidget host;
+    host.resize(400, 200);
+    ViewportCover cover(&host);
+    cover.resize(400, 200);
+    host.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&host));
+
+    cover.setSubtitle(QString());
+    cover.setState(ViewportCover::State::NoScene);
+    const QImage noScene = renderCover(cover);
+
+    cover.setSubtitle(QStringLiteral("createView: host must supply its X display"));
+    cover.setState(ViewportCover::State::Failed);
+    QCOMPARE(cover.state(), ViewportCover::State::Failed);
+    QVERIFY2(cover.isVisible(), "the failed cover must be up — nothing else reports this");
+    const QImage failed = renderCover(cover);
+    QVERIFY2(failed != noScene, "the failed state does not look like an empty viewport");
+
+    cover.setSubtitle(QStringLiteral("createView: a completely different reason"));
+    QVERIFY2(renderCover(cover) != failed, "the engine's reason is actually drawn");
 }
 
 void TestViewportCover::showNowPaintsSynchronously()

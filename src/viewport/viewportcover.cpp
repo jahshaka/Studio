@@ -70,11 +70,24 @@ void ViewportCover::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.fillRect(rect(), mBackground);
 
-    const QString title = mState == State::Loading ? tr("Loading world…")
-                                                   : tr("No world open");
-    const QString subtitle = mState == State::Loading
-                                 ? mSubtitle
-                                 : tr("Open or create a world from the Desktop");
+    QString title, subtitle;
+    switch (mState) {
+    case State::Loading:
+        title = tr("Loading world…");
+        subtitle = mSubtitle;
+        break;
+    case State::Failed:
+        title = tr("The 3D view could not be created");
+        // The engine's own message. Nothing else in the app would show it, and a
+        // blank viewport with no explanation is what this state exists to end.
+        subtitle = mSubtitle;
+        break;
+    case State::NoScene:
+    case State::Presenting:
+        title = tr("No world open");
+        subtitle = tr("Open or create a world from the Desktop");
+        break;
+    }
 
     QFont titleFont = font();
     titleFont.setPointSizeF(qMax(11.0, font().pointSizeF() * 1.45));

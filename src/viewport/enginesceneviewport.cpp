@@ -254,6 +254,20 @@ bool EngineSceneViewport::ensureEngineScene()
     return true;
 }
 
+void EngineSceneViewport::viewRecreated()
+{
+    // The old View took its camera, workspace and scene binding with it.
+    if (view() && mEngineScene) {
+        view()->setScene(mEngineScene);
+        view()->setShadows(true);
+    }
+    // A fresh View starts its present count at zero, so the baseline must too —
+    // otherwise presentsSinceBind() reads a subtraction of a larger number and
+    // the cover never comes down again.
+    mPresentBaseline = 0;
+    updateCover();
+}
+
 void EngineSceneViewport::showEvent(QShowEvent *e)
 {
     EngineViewWidget::showEvent(e);
@@ -1040,6 +1054,16 @@ qulonglong EngineSceneViewport::framesPresented() const
 void EngineSceneViewport::updateCover()
 {
     if (!mCover) return;
+    // The on-screen View could not be created and we are running on an offscreen
+    // fallback: nothing will ever present into this widget, so the cover is the
+    // permanent state here and it carries the engine's reason. Checked FIRST —
+    // presentationState() would answer "offscreen", which maps to Presenting and
+    // would hide the cover over a region the engine never writes.
+    if (!viewCreationError().isEmpty()) {
+        mCover->setSubtitle(viewCreationError());
+        mCover->setState(ViewportCover::State::Failed);
+        return;
+    }
     const QString state = presentationState();
     if (state == QLatin1String("loading"))
         mCover->setState(ViewportCover::State::Loading);

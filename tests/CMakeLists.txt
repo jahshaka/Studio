@@ -1,4 +1,14 @@
 # Headless test suites. No Qt, no app: each suite links exactly one library.
+#
+# THE ON-SCREEN SUITES' DISPLAY is a cache variable, not a literal. A handful of
+# suites need a real window (the application self-tests, the WinIdChange one),
+# and they used to pin ":0" — which on a developer machine means "the owner's
+# live session": a parallel worktree build had no way to run its own gate
+# without opening windows on somebody else's desktop. Configure with
+# -DJAH_TEST_DISPLAY=:NN to point them at an Xvfb of your own. Default unchanged.
+set(JAH_TEST_DISPLAY ":0" CACHE STRING
+    "X display the on-screen test suites run on (Linux only)")
+
 add_subdirectory(engine)
 add_subdirectory(document)
 add_subdirectory(mirror)

@@ -97,9 +97,12 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral(JAHSHAKA_VERSION));
 #endif
 
-	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    // (AA_EnableHighDpiScaling / AA_UseHighDpiPixmaps were set here three times
+    // between them. Both are no-ops in Qt 6 — high-DPI scaling is always on and
+    // cannot be turned off by an attribute — so they were removed rather than
+    // left to read as if this application had a HiDPI policy. It does not: the
+    // engine's unit contract is in Engine.h (createView), and actually handling
+    // scaled displays is its own program.)
     // The editor embeds a native render window (WA_NativeWindow). Without this
     // attribute Qt silently promotes EVERY sibling widget to a native X window, and
     // on xcb the page-switch mapping of those windows desyncs: QStackedWidget said

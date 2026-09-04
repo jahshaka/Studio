@@ -116,6 +116,12 @@ public:
     { return view() ? int(view()->sampleCount()) : 1; }
     bool isOffscreen() const override
     { return view() ? view()->isOffscreen() : true; }
+    /// The size of what is actually being rendered into, in pixels — View::
+    /// width()/height() report the live render target (the swapchain for an
+    /// on-screen view), never the size this widget last pushed down. That is
+    /// what makes a resize assertion mean something: while these returned our
+    /// own request the selftest's post-resize check compared the pushed values
+    /// with themselves and could not fail (deep audit area 7 F3).
     QSize renderTargetSize() const override
     { return view() ? QSize(int(view()->width()), int(view()->height())) : QSize(); }
     int shadowResolution() const override
@@ -196,6 +202,10 @@ protected:
     void keyReleaseEvent(QKeyEvent *) override;
     void focusOutEvent(QFocusEvent *) override;
     bool event(QEvent *) override;
+    /// The View was rebuilt on a new native window (EngineViewWidget::
+    /// recreateViewForNewWindow): re-attach the engine scene, which belonged to
+    /// the old View, and restart the present accounting the cover reads.
+    void viewRecreated() override;
 
 private:
     bool ensureEngineScene();

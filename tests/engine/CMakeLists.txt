@@ -65,6 +65,26 @@ add_dependencies(test_decals JahshakaEngineMedia)
 add_test(NAME decals.engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(decals.engine PROPERTIES TIMEOUT 600 LABELS "engine")
 
+# The ON-SCREEN (swapchain) path — Linux/X11 only, and the only suite in the tree
+# that binds a View to a native window. It never MAPS that window, so it is safe
+# on a shared display; it still needs a real X server, like every other engine
+# suite. Deep audit area 7 F1/F3.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(test_engine_window test_engine_window.cpp)
+    set_target_properties(test_engine_window PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_engine_window PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_link_libraries(test_engine_window PRIVATE JahshakaEngine ${X11_LIBRARIES})
+    add_dependencies(test_engine_window JahshakaEngineMedia)
+    add_test(NAME engine.window COMMAND test_engine_window
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(engine.window PROPERTIES TIMEOUT 600 LABELS "engine")
+endif()
+
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
