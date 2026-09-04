@@ -17,8 +17,10 @@ For more information see the LICENSE file
 // "#rrggbb" strings or {r,g,b} maps with 0-255 channels).
 
 #include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
+#include <QVector3D>
 #include <QJSValue>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -30,6 +32,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -180,6 +183,62 @@ inline QString colorHelp(const QVariant &raw)
     return QStringLiteral("'%1' is not a colour — use \"#rrggbb\"/\"#aarrggbb\", "
                           "an SVG colour name (\"red\"), or {r,g,b[,a]} with 0-255 channels")
         .arg(normalizeJs(raw).toString());
+}
+
+/// The script-facing name of a Property kind. `file` is deliberately reported
+/// as "string": FileProperty is what irisgl uses for every QString-valued row
+/// (there is no StringProperty), so a node's `name` and a particle emitter's
+/// `shape` are FileProperties and calling them "file" would be a lie.
+inline QString propertyTypeName(iris::PropertyType type)
+{
+    switch (type) {
+    case iris::PropertyType::Bool:    return QStringLiteral("bool");
+    case iris::PropertyType::Int:     return QStringLiteral("int");
+    case iris::PropertyType::Float:   return QStringLiteral("float");
+    case iris::PropertyType::Vec2:    return QStringLiteral("vec2");
+    case iris::PropertyType::Vec3:    return QStringLiteral("vec3");
+    case iris::PropertyType::Vec4:    return QStringLiteral("vec4");
+    case iris::PropertyType::Color:   return QStringLiteral("color");
+    case iris::PropertyType::Texture: return QStringLiteral("texture");
+    case iris::PropertyType::File:    return QStringLiteral("string");
+    case iris::PropertyType::List:    return QStringLiteral("list");
+    case iris::PropertyType::None:    break;
+    }
+    return QStringLiteral("unknown");
+}
+
+/// A Property row in the shape node.properties()/material.properties() report:
+/// {name, displayName, type, value} plus min/max ONLY when a range was actually
+/// declared.
+///
+/// The min/max rule is the whole point of the row (AI_SURFACE_PROGRAM_SPEC
+/// §3.A): IntProperty/FloatProperty left minValue/maxValue uninitialised until
+/// this program, and no scene-node getProperties() has ever assigned them, so
+/// reporting them unconditionally would hand a model two indeterminate numbers
+/// as fact. They are zero-initialised now, and `max > min` is the declared-range
+/// test — an undeclared range is ABSENT from the object rather than reported as
+/// 0..0, which a model would read as "this value must be zero".
+inline QVariantMap propertyRowToJs(iris::Property *prop)
+{
+    QVariantMap row;
+    if (!prop) return row;
+    row["name"] = prop->name;
+    row["displayName"] = prop->displayName;
+    row["type"] = propertyTypeName(prop->type);
+
+    const QVariant value = prop->getValue();
+    switch (value.typeId()) {
+    case QMetaType::QColor:    row["value"] = colorToJs(value.value<QColor>()); break;
+    case QMetaType::QVector3D: row["value"] = vecToJs(iris::fromQt(value.value<QVector3D>())); break;
+    default:                   row["value"] = value; break;
+    }
+
+    if (auto *f = dynamic_cast<iris::FloatProperty *>(prop)) {
+        if (f->maxValue > f->minValue) { row["min"] = f->minValue; row["max"] = f->maxValue; }
+    } else if (auto *i = dynamic_cast<iris::IntProperty *>(prop)) {
+        if (i->maxValue > i->minValue) { row["min"] = i->minValue; row["max"] = i->maxValue; }
+    }
+    return row;
 }
 
 /// Depth-first search of the document by GUID.

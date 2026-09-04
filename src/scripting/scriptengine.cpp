@@ -105,6 +105,10 @@ QString ScriptResult::toString() const
 ScriptEngine::ScriptEngine(ScriptHost &host, QObject *parent)
     : QObject(parent), mHost(host)
 {
+    // The host carries the registry back to the modules so app.apiProblems()
+    // can validate the live surface (AI_SURFACE_PROGRAM_SPEC §2.0). One
+    // ScriptEngine per host, so this is never contested.
+    mHost.registry = &mRegistry;
 }
 
 void ScriptEngine::addModule(ApiModule *module)

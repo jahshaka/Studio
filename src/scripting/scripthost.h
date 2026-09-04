@@ -25,6 +25,7 @@ For more information see the LICENSE file
 
 #include <functional>
 
+class ApiRegistry;
 class MainWindow;
 class Database;
 class Project;
@@ -50,6 +51,16 @@ struct ScriptHost
     /// hosts that have no services (the scripting core stays Studio-free:
     /// this is a forward declaration only).
     StudioServices  *services = nullptr;
+
+    /// The registry the modules were installed into. Set by ScriptEngine's
+    /// constructor, so it is non-null in every host that has a ScriptEngine —
+    /// including the headless CLI runs. It exists for ONE reason: a verb that
+    /// reports the registry's own metadata problems (app.apiProblems), so
+    /// ApiRegistry::validate() finally runs over the REAL module set instead
+    /// of only over the scripting unit test's fake module
+    /// (AI_SURFACE_PROGRAM_SPEC §2.0). Nothing else should reach for it — a
+    /// verb that needs another verb should call the module, not the registry.
+    ApiRegistry     *registry = nullptr;
 
     /// True when a project is open (a scene is loaded and `project` has a
     /// guid). Unset = false: verbs that requireProject() fail cleanly.

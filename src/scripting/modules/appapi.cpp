@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 #include "shell/mainwindow.h"
 #include "ui/pages/projectmanager.h"
+#include "scripting/apiregistry.h"
 #include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
@@ -111,6 +112,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "on a page with no viewport should advance `skipped` and leave `rendered` still. `enabledViews` "
           "is the engine's live answer to the same question the loop asks each tick. Note the scripted "
           "stepping verb editor.frame(n) bypasses the driver entirely, so it moves none of these.",
+          Needs::Document },
+        { "apiProblems", "app.apiProblems() -> [string]",
+          "Everything wrong with the scripting API's OWN metadata, as sentences: a verb with no "
+          "doc string or signature, a duplicate name, a module that registers nothing, or — the "
+          "one that actually bites — a verb advertised in a module's verbs() list with no "
+          "invokable method behind it, which makes api.help() and the docs page promise something "
+          "no script can call. An empty list is the contract: it means every one of the modules "
+          "installed in THIS session describes itself completely. Read it beside the api.contract "
+          "test, which proves docs/SCRIPTING.md still matches the registry that produced it.",
           Needs::Document },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -270,6 +280,20 @@ QVariantMap AppApi::engineErrors(bool reset)
     // over. Needs::Document for the same reason.
     const QVariantMap out = EngineErrorPump::instance().report();
     if (reset) EngineErrorPump::instance().reset();
+    return out;
+}
+
+QVariantList AppApi::apiProblems()
+{
+    // ApiRegistry::validate() has existed since the scripting engine shipped
+    // and had exactly ONE caller: the scripting unit test, whose binary links
+    // only the scripting core and therefore validates a fake module
+    // (AI_SURFACE_PROGRAM_SPEC §1, row 4). This verb is what runs it over the
+    // real 14 modules — including modules contributed by StudioModules, which
+    // no unit test can see.
+    if (!host.registry) { fail("app.apiProblems: no script registry in this session"); return {}; }
+    QVariantList out;
+    for (const QString &problem : host.registry->validate()) out.append(problem);
     return out;
 }
 

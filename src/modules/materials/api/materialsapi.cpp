@@ -73,6 +73,48 @@ QVector<MaterialPreset> loadPresets()
     return presets;
 }
 
+// The material.* key vocabulary, at file scope so material.set, its refusal
+// message and material.properties all read the SAME lists. They used to be
+// function-statics inside set(), which is how the "unknown property" error and
+// the set of keys that actually work drift apart.
+const QStringList kColorKeys = { "baseColor", "emissiveColor",
+                                 "ambientColor", "diffuseColor", "specularColor" };
+/// The PBR texture slots. PbrMaterial::createProperties DOES declare all six as
+/// rows today (verified at this pin), so they arrive through the declared path;
+/// this list is what keeps material.set working on a material whose property
+/// list does not carry them, and what the F7 refusal message quotes.
+const QStringList kPbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
+                                  "normalMap", "occlusionMap", "emissiveMap" };
+/// CustomMaterial's spellings (Default.shader declares them as Properties).
+/// On a PbrMaterial they name nothing and are REFUSED by name (F7) — so they
+/// are never writable keys, on either material class.
+const QStringList kLegacyMapKeys = { "diffuseTexture", "specularTexture",
+                                     "normalTexture", "reflectionTexture" };
+const QStringList kMapKeys = kPbrMapKeys + kLegacyMapKeys;
+
+/// The material's declared Property rows: CustomMaterial and PbrMaterial each
+/// keep their own list and there is no common accessor.
+QList<iris::Property *> declaredProperties(const iris::MaterialPtr &material)
+{
+    if (auto custom = material.dynamicCast<iris::CustomMaterial>()) return custom->properties;
+    if (auto pbr = material.dynamicCast<iris::PbrMaterial>()) return pbr->properties;
+    return {};
+}
+
+/// The keys material.set will accept on this material — the declared rows plus,
+/// on a PbrMaterial only, the undeclared PBR texture slots.
+QStringList writableMaterialKeys(const iris::MaterialPtr &material)
+{
+    QStringList keys;
+    for (auto *prop : declaredProperties(material)) keys << prop->name;
+    // The union, deduplicated: the six slots are declared rows on today's
+    // PbrMaterial, but material.set accepts them either way, and a key listed
+    // twice in an error message reads as a bug in the message.
+    if (!material.dynamicCast<iris::PbrMaterial>().isNull()) keys << kPbrMapKeys;
+    keys.removeDuplicates();
+    return keys;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------- materials.*
@@ -369,7 +411,21 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property.",
           Needs::Document },
         { "get", "material.get(nodeId) -> {property: value}",
-          "Reads the node material's editor-facing properties.",
+          "Reads the node material's editor-facing properties. material.properties(nodeId) is the "
+          "same values plus their types, ranges and the full writable-key list.",
+          Needs::Document },
+        { "properties", "material.properties(nodeId) -> {class, rows:[{name, displayName, type, value, min?, max?}], writableKeys:[…]}",
+          "What this node's material can be told, without guessing. 'class' is PbrMaterial or "
+          "CustomMaterial (they have different vocabularies). 'rows' are the DECLARED properties "
+          "in panel order, with 'min'/'max' present only where a range is declared — the PBR "
+          "material declares real ones (metallic and roughness are 0..1, emissiveIntensity 0..10), "
+          "so this is where a scale actually means something. 'writableKeys' is the exact set "
+          "material.set accepts — the row names plus, on a PbrMaterial, its six texture slots "
+          "(baseColorMap, metallicMap, roughnessMap, normalMap, occlusionMap, emissiveMap), "
+          "which take a file path or an image asset guid. Read 'writableKeys' rather than "
+          "deriving keys from 'rows': the two agree today but the slot list is what material.set "
+          "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
+          "NOT writable on a PBR material and are refused by name.",
           Needs::Document },
     };
 }
@@ -441,20 +497,46 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     auto material = meshNode->getMaterial();
     if (!material) return fail("material.set: the node has no material");
 
-    static const QStringList colorKeys = { "baseColor", "emissiveColor",
-                                           "ambientColor", "diffuseColor", "specularColor" };
-    // The four *Texture spellings are CustomMaterial's (Default.shader declares
-    // them as Properties). They are still resolved here so a CustomMaterial can
-    // be written, but on a PbrMaterial they name nothing — see F7 below.
-    static const QStringList pbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
-                                            "normalMap", "occlusionMap", "emissiveMap" };
-    static const QStringList legacyMapKeys = { "diffuseTexture", "specularTexture",
-                                               "normalTexture", "reflectionTexture" };
-    static const QStringList mapKeys = pbrMapKeys + legacyMapKeys;
+    // The vocabularies live at file scope (top of this file) so this function,
+    // its refusal message and material.properties can never disagree.
+    const QStringList &colorKeys = kColorKeys;
+    const QStringList &legacyMapKeys = kLegacyMapKeys;
+    const QStringList &mapKeys = kMapKeys;
+
+    const bool isCustomMaterial = !material.dynamicCast<iris::CustomMaterial>().isNull();
 
     for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
+
+        // THE KEY IS CHECKED BEFORE ITS VALUE. Found building lane A: F7's
+        // "that is a legacy shader texture name" message was UNREACHABLE for
+        // the values people actually pass. A legacy key fell into the texture
+        // branch below first, and any path that is not an existing file and not
+        // an asset guid — i.e. every plausible typo — was refused with "no
+        // texture file or asset 'x.png'", which sends the reader off hunting for
+        // a missing file when the real problem is that this material has no such
+        // slot at all. Only a legacy key whose value happened to resolve ever
+        // reached the message written for it.
+        if (!isCustomMaterial && legacyMapKeys.contains(key)) {
+            static const QMap<QString, QString> replacement{
+                { QStringLiteral("diffuseTexture"),    QStringLiteral("baseColorMap") },
+                { QStringLiteral("normalTexture"),     QStringLiteral("normalMap") },
+                { QStringLiteral("specularTexture"),   QString() },
+                { QStringLiteral("reflectionTexture"), QString() },
+            };
+            const QString instead = replacement.value(key);
+            return fail(QStringLiteral(
+                            "material.set: '%1' is a legacy shader texture name and this "
+                            "node's PBR material has no such slot — %2 (the PBR maps are "
+                            "baseColorMap, metallicMap, roughnessMap, normalMap, "
+                            "occlusionMap, emissiveMap)")
+                            .arg(key,
+                                 instead.isEmpty()
+                                     ? QStringLiteral("there is no PBR equivalent")
+                                     : QStringLiteral("use '%1'").arg(instead)));
+        }
+
         if (colorKeys.contains(key)) {
             // F8: a colour string the parser cannot read used to keep the old
             // value and still report success.
@@ -490,46 +572,55 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         // Old value for undo: from the material's editor property list when the
         // key is declared there; texture/map keys fall back to empty.
         QVariant oldValue;
-        QList<iris::Property *> props;
-        if (auto custom = material.dynamicCast<iris::CustomMaterial>()) props = custom->properties;
-        else if (auto pbr = material.dynamicCast<iris::PbrMaterial>()) props = pbr->properties;
+        QList<iris::Property *> props = declaredProperties(material);
         bool known = false;
         for (auto prop : props) {
             if (prop->name == key) { oldValue = prop->getValue(); known = true; break; }
         }
         if (!known) {
             // CustomMaterial's command path asserts on unknown properties;
-            // PbrMaterial map keys are legal without a Property declaration.
-            const bool isCustom = !material.dynamicCast<iris::CustomMaterial>().isNull();
-            if (isCustom || !mapKeys.contains(key))
-                return fail(QStringLiteral("material.set: unknown property '%1'").arg(key));
-            // F7 (AI_SURFACE_AUDIT): the four legacy CustomMaterial texture
-            // spellings reached this point on a PbrMaterial, were pushed as a
-            // command, and set nothing — material.set answered true and the
-            // material never changed. They now say which slot to use instead.
-            if (legacyMapKeys.contains(key)) {
-                static const QMap<QString, QString> replacement{
-                    { QStringLiteral("diffuseTexture"),    QStringLiteral("baseColorMap") },
-                    { QStringLiteral("normalTexture"),     QStringLiteral("normalMap") },
-                    { QStringLiteral("specularTexture"),   QString() },
-                    { QStringLiteral("reflectionTexture"), QString() },
-                };
-                const QString instead = replacement.value(key);
-                return fail(QStringLiteral(
-                                "material.set: '%1' is a legacy shader texture name and this "
-                                "node's PBR material has no such slot — %2 (the PBR maps are "
-                                "baseColorMap, metallicMap, roughnessMap, normalMap, "
-                                "occlusionMap, emissiveMap)")
-                                .arg(key,
-                                     instead.isEmpty()
-                                         ? QStringLiteral("there is no PBR equivalent")
-                                         : QStringLiteral("use '%1'").arg(instead)));
-            }
+            // a PbrMaterial map key is legal even if its Property row were ever
+            // dropped. The legacy *Texture spellings never reach here — they are
+            // refused by name at the top of the loop (F7).
+            if (isCustomMaterial || !mapKeys.contains(key))
+                // The key list is the ONE thing that turns this from a bare
+                // rejection into a usable answer (AI_SURFACE_PROGRAM_SPEC §3.A
+                // item #1): exactly the keys that survive the F7 fix. The legacy
+                // spellings are deliberately NOT in it.
+                return fail(QStringLiteral("material.set: unknown property '%1' — this "
+                                           "material accepts: %2 (material.properties('%3') "
+                                           "gives their types, values and ranges)")
+                                .arg(key, writableMaterialKeys(material).join(QStringLiteral(", ")),
+                                     nodeId));
         }
 
         host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
     }
     return true;
+}
+
+QVariantMap MaterialApi::properties(const QString &nodeId)
+{
+    QVariantMap out;
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.properties"));
+    if (!meshNode) return out;
+    auto material = meshNode->getMaterial();
+    if (!material) { fail("material.properties: the node has no material"); return out; }
+
+    // Unlike SceneNode::getProperties(), a material's rows are OWNED by the
+    // material (iris::Material holds the QList<Property*> for its lifetime) —
+    // read them, never delete them.
+    out["class"] = !material.dynamicCast<iris::PbrMaterial>().isNull()
+                       ? QStringLiteral("PbrMaterial")
+                   : !material.dynamicCast<iris::CustomMaterial>().isNull()
+                       ? QStringLiteral("CustomMaterial")
+                       : QStringLiteral("Material");
+
+    QVariantList rows;
+    for (auto *prop : declaredProperties(material)) rows.append(propertyRowToJs(prop));
+    out["rows"] = rows;
+    out["writableKeys"] = writableMaterialKeys(material);
+    return out;
 }
 
 QVariantMap MaterialApi::get(const QString &nodeId)
@@ -540,10 +631,7 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     auto material = meshNode->getMaterial();
     if (!material) return out;
 
-    QList<iris::Property *> props;
-    if (auto custom = material.dynamicCast<iris::CustomMaterial>()) props = custom->properties;
-    else if (auto pbr = material.dynamicCast<iris::PbrMaterial>()) props = pbr->properties;
-    for (auto prop : props) {
+    for (auto prop : declaredProperties(material)) {
         const QVariant value = prop->getValue();
         if (value.typeId() == QMetaType::QColor) out[prop->name] = colorToJs(value.value<QColor>());
         else if (value.typeId() == QMetaType::QVector3D) out[prop->name] = vecToJs(iris::fromQt(value.value<QVector3D>()));

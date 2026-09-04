@@ -177,6 +177,17 @@ add_test(NAME scripting.e2e.scene_query
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.scene_query PROPERTIES
+# AI_SURFACE_PROGRAM_SPEC lane 0 + lane A — DISCOVERY. app.apiProblems() runs
+# ApiRegistry::validate() over the real module set (the unit test only ever saw
+# its own fake module), and the lane A verbs that stop an agent guessing key
+# names: node.properties, material.properties, the world set* aliases, the
+# Ground primitive and addPrimitive {count}. Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-introspection)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.introspection
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_introspection.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.introspection PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 180)

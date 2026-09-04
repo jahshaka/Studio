@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "scripting/modules/sceneapi.h"
 
 
+#include <QtMath>
+
 #include "scripting/modules/moduleshared.h"
 #include "commands/reparentscenenodecommand.h"
 #include "commands/transformscenenodecommand.h"
@@ -29,7 +31,7 @@ using namespace scriptmod;
 
 namespace {
 const QStringList kPrimitives = {
-    "Plane", "Cone", "Cube", "Cylinder", "Sphere", "Torus",
+    "Plane", "Ground", "Cone", "Cube", "Cylinder", "Sphere", "Torus",
     "Capsule", "Gear", "Pyramid", "Teapot", "Sponge", "Steps"
 };
 }
@@ -55,8 +57,13 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "root", "scene.root() -> id",
           "The scene root's id.",
           Needs::Document },
-        { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent}) -> id",
-          "Adds a built-in primitive (plane, cone, cube, cylinder, sphere, torus, capsule, gear, pyramid, teapot, sponge, steps). Undoable.",
+        { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count}) -> id | [id]",
+          "Adds a built-in primitive: plane, ground, cone, cube, cylinder, sphere, torus, capsule, "
+          "gear, pyramid, teapot, sponge, steps ('ground' is the large floor plane the Add menu "
+          "offers). {count: N} adds N of them and returns an ARRAY of ids instead of one id; "
+          "every copy gets the same position/rotation/scale/parent options, so move them "
+          "afterwards with node.transform. Undoable — the whole batch is one step of the run's "
+          "undo macro.",
           Needs::Document },
         { "addLight", "scene.addLight(type, {position, ...}) -> id",
           "Adds a light: point, spot, directional or area. Undoable.",
@@ -250,22 +257,53 @@ QString SceneApi::finishAdd(const QVariantMap &options, const QString &verb)
     return node->getGUID();
 }
 
-QString SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
+QVariant SceneApi::addPrimitive(const QString &name, const QVariantMap &options)
 {
-    if (!requireProject()) return QString();   // the primitive gets a DB asset row
-    if (!sceneOrFail()) return QString();
+    if (!requireProject()) return QVariant();   // the primitive gets a DB asset row
+    if (!sceneOrFail()) return QVariant();
 
     QString normalized = name.trimmed().toLower();
     if (!normalized.isEmpty()) normalized[0] = normalized[0].toUpper();
     if (!kPrimitives.contains(normalized)) {
         fail(QStringLiteral("scene.addPrimitive: unknown primitive '%1' (try: %2)")
                  .arg(name, kPrimitives.join(", ").toLower()));
-        return QString();
+        return QVariant();
     }
 
-    host.services->selection->select(iris::SceneNodePtr());
-    host.services->sceneEdit->addPrimitive(normalized);
-    return finishAdd(options, QStringLiteral("scene.addPrimitive"));
+    // {count} is the batch form (AI_SURFACE_AUDIT #16). One id for the default
+    // and for count 1, an array from 2 up — a caller that never passes count
+    // sees exactly what it saw before. Everything still rides the run's single
+    // undo macro, so one Ctrl+Z removes the whole batch.
+    const QVariant countValue = normalizeJs(options.value(QStringLiteral("count")));
+    int count = 1;
+    if (countValue.isValid() && !countValue.isNull()) {
+        bool numeric = false;
+        const double asked = countValue.toDouble(&numeric);
+        if (!numeric || asked != qFloor(asked) || asked < 1) {
+            fail(QStringLiteral("scene.addPrimitive: count must be a whole number >= 1, got '%1'")
+                     .arg(countValue.toString()));
+            return QVariant();
+        }
+        // A bound, because the verb is reachable from a model: 256 primitives
+        // is already an absurd single call, and an unbounded one is a way to
+        // wedge the editor by typo.
+        if (asked > 256) {
+            fail(QStringLiteral("scene.addPrimitive: count %1 is above the 256 limit for one call")
+                     .arg(qint64(asked)));
+            return QVariant();
+        }
+        count = int(asked);
+    }
+
+    QVariantList ids;
+    for (int i = 0; i < count; ++i) {
+        host.services->selection->select(iris::SceneNodePtr());
+        host.services->sceneEdit->addPrimitive(normalized);
+        const QString id = finishAdd(options, QStringLiteral("scene.addPrimitive"));
+        if (id.isEmpty()) return QVariant();   // finishAdd already threw
+        ids.append(id);
+    }
+    return count > 1 ? QVariant(ids) : QVariant(ids.first().toString());
 }
 
 QString SceneApi::addLight(const QString &type, const QVariantMap &options)
