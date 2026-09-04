@@ -53,7 +53,15 @@ namespace Contants
     // ply/stl are the scanner + 3D-print formats: geometry only, no materials,
     // and for stl no UVs and no usable vertex normals (the canonical preset
     // generates them).
-    QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "blend", "glb", "gltf", "ply", "stl"};
+    // NOT here, deliberately: "blend". ASSIMP_BUILD_BLEND_IMPORTER is not in
+    // the allowlist, so a .blend was offered in every file dialog and then
+    // failed at ReadFile with assimp's generic "unknown file format" — a
+    // guaranteed runtime failure the list itself promised (deep audit 2026-09,
+    // area 4). Reversible in one line the day the importer is compiled in:
+    // add the option in irisgl/CMakeLists.txt, the extension back here, and a
+    // suite that proves a .blend loads through our paths (the three-part rule
+    // in that file's allowlist comment).
+    QList<QString> MODEL_EXTS   = { "obj", "fbx", "dae", "glb", "gltf", "ply", "stl"};
     // Animation formats. bvh is MOCAP — the file is a joint hierarchy and a
     // table of channel values, with no geometry in the format at all — so it
     // belongs to the Avatar module's cross-file clip path and NOT to

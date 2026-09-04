@@ -1140,7 +1140,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
                     QString path;
                     QDir dir(assetPath);
                     foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-                        if (Constants::MODEL_EXTS.contains(file.suffix())) {
+                        if (Constants::MODEL_EXTS.contains(file.suffix().toLower())) {
                             path = file.absoluteFilePath();
                             break;
                         }
@@ -1251,6 +1251,13 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 		for (const auto &ext : Constants::IMAGE_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::AUDIO_EXTS) patterns << "*." + ext;
 		for (const auto &ext : Constants::VIDEO_EXTS) patterns << "*." + ext;
+		// The other four importers the pipeline owns. They were absent here,
+		// so the only way to reach ShaderImporter/MaterialImporter/IesImporter/
+		// FileImporter from this page was drag-and-drop (deep audit 2026-09).
+		patterns << "*." + Constants::SHADER_EXT;
+		for (const auto &ext : Constants::MATERIAL_EXTS) patterns << "*." + ext;
+		for (const auto &ext : Constants::LIGHT_PROFILE_EXTS) patterns << "*." + ext;
+		for (const auto &ext : Constants::WHITELIST) patterns << "*." + ext;
 		patterns << "*." + Constants::ASSET_EXT;
 
 		const auto files = QFileDialog::getOpenFileNames(this,
@@ -1470,7 +1477,7 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
         QString path;
         QDir dir(AssetStorePaths::legacyFolder(guid));
         foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-            if (Constants::MODEL_EXTS.contains(file.suffix())) {
+            if (Constants::MODEL_EXTS.contains(file.suffix().toLower())) {
                 path = file.absoluteFilePath();
                 break;
             }
@@ -1535,9 +1542,18 @@ void AssetView::importFiles(const QStringList &fileNames)
 				request.typeHint = static_cast<int>(type);
 				request.drawerId = selectedDrawerId();
 				break;
-			default:
-				// Meshes and everything they reference: the viewer-driven path.
+			case ModelTypes::Mesh:
+				// Meshes and everything they reference: the viewer-driven path
+				// (handleImportedFile keys the mesh tail off this hint).
 				request.typeHint = static_cast<int>(ModelTypes::Mesh);
+				break;
+			default:
+				// NO HINT: the pipeline sniffs. This `default` used to say
+				// "Mesh", which pinned pickImporter to MeshImporter alone and
+				// made FOUR of the nine importers unreachable from this page —
+				// a .shader, .material, .ies or whitelisted text file dropped
+				// on the Assets page could only ever fail as "not a model"
+				// (deep audit 2026-09, area 4).
 				break;
 			}
 		}
