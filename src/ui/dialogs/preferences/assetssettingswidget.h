@@ -15,9 +15,10 @@ For more information see the LICENSE file
 // The Assets page of the Preferences dialog (ASSET_PIPELINE_SPEC §3.1.1,
 // phase 1): current store root + free-space readout, Move Store… (copy →
 // verify → flip setting; old tree retained), Use Existing Store… (catalog
-// sanity-checked), Reset to Default, and the online/offline status with
-// Reconnect. All actions run through AssetStoreService — the same
-// implementation behind the assets.setStoreRoot/storeStatus verbs.
+// sanity-checked), Reset to Default, Clean up Storage… (the assets.gc dry
+// run, then the sweep on confirmation) and the online/offline status with
+// Reconnect. All actions run through AssetStoreService / AssetGc — the same
+// implementations behind the assets.setStoreRoot/storeStatus/gc verbs.
 
 #include <QWidget>
 
@@ -42,6 +43,7 @@ private slots:
     void moveStore();
     void useExistingStore();
     void resetToDefault();
+    void cleanUpStorage();
 
 private:
     void applyRoot(const QString &path, bool move);

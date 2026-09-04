@@ -209,6 +209,7 @@ set(SRCS
     src/services/iesprofile.cpp
     src/services/lightbindings.cpp
     src/services/assetcas.cpp
+    src/services/assetgc.cpp
     src/services/assetmigration.cpp
     src/services/assetstore.cpp
     src/services/assetstorepaths.cpp
@@ -424,6 +425,7 @@ set(HEADERS
     src/services/assetimporter.h
     src/services/assetmetadata.h
     src/services/assetcas.h
+    src/services/assetgc.h
     src/services/assetmigration.h
     src/services/assetstore.h
     src/services/assetstorepaths.h

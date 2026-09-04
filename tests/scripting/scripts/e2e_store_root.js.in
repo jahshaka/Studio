@@ -87,6 +87,39 @@ try {
     // Move retained the old tree, so the default root still has the files.
     assert(assets.refreshThumbnail(png), "default root still holds the original files (move = copy, retain)");
 
+    // ---- assets.gc: the verb exists, defaults to a dry run, and finds
+    //      nothing to reap in a healthy store (deep audit 2026-09, area 6) ----
+    var gc = assets.gc();
+    assert(gc.dryRun === true, "assets.gc() defaults to a DRY RUN");
+    assert(gc.ok === true, "assets.gc() reports ok on the live store");
+    assert(gc.removed === 0, "a dry run removes nothing");
+    assert(typeof gc.classes === "object", "the report carries the per-class map");
+    var classNames = ["unreferencedObjects", "strayObjects", "straySidecars",
+                      "legacyFolders", "redundantLegacyFiles"];
+    for (var c = 0; c < classNames.length; c++) {
+        var cls = gc.classes[classNames[c]];
+        assert(cls && typeof cls.count === "number" && typeof cls.bytes === "number"
+               && cls.items instanceof Array,
+               "class " + classNames[c] + " reports {count, bytes, items}");
+    }
+    // A freshly imported library asset leaves NO content garbage. (The two
+    // legacy-view classes are deliberately not asserted at zero: this scratch
+    // HOME survives across runs, so a store written by an older build still
+    // carries per-guid folders here — which is exactly what those classes
+    // exist to reclaim.)
+    assert(gc.classes.unreferencedObjects.count === 0, "no unreferenced objects in a fresh store");
+    assert(gc.classes.strayObjects.count === 0, "no stray objects in a fresh store");
+    assert(gc.classes.straySidecars.count === 0, "no stray sidecars in a fresh store");
+
+    // THE REAL RUN, in the app, against a live library: it must not eat the
+    // one asset in it.
+    var swept = assets.gc({ dryRun: false });
+    assert(swept.ok === true, "assets.gc({dryRun:false}) succeeded");
+    assert(swept.dryRun === false, "…and reports itself as a real run");
+    assert(assetByGuid(png) !== null, "the library row survived a real sweep");
+    // and the imported asset is still readable afterwards
+    assert(assets.refreshThumbnail(png), "the library asset still resolves after gc");
+
     console.log("store_root e2e: all checks passed");
 }
 finally {
