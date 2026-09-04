@@ -87,5 +87,6 @@ void AvatarModule::shutdown()
     // the API module belongs to the ScriptEngine. Only the document model is
     // ours, and it must go before the engine does.
     if (mPreview) mPreview->setPreviewModel(nullptr);
+    if (mPage) mPage->detachModel();   // stop the 100ms ticker + null its raw pointer
     mModel.reset();
 }

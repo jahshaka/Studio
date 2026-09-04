@@ -67,6 +67,12 @@ public:
 
     /// Re-reads the model into every widget. Called after each verb.
     void refreshFromModel();
+    /// The module is about to free the model (shutdown step 3). The page's
+    /// mModel is a RAW pointer and mTicker fires every 100 ms — without this,
+    /// any tick between module shutdown and widget-tree death dereferenced the
+    /// freed model (intermittent exit crash, 1-in-5 full-suite runs, found by
+    /// the AI fix wave's gate B).
+    void detachModel();
 
 private:
     QWidget *buildLeftColumn();
@@ -77,6 +83,7 @@ private:
     void loadPath(const QString &path);
     void refreshHistory();
     void refreshTransportReadout();
+
 
     AvatarPreviewModel   *mModel = nullptr;
     IAvatarPreviewWidget *mPreview = nullptr;

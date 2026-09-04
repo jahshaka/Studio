@@ -71,6 +71,13 @@ AvatarPage::AvatarPage(AvatarPreviewModel *model, QWidget *parent)
     refreshFromModel();
 }
 
+
+void AvatarPage::detachModel()
+{
+    if (mTicker) mTicker->stop();
+    mModel = nullptr;
+}
+
 void AvatarPage::refreshTransportReadout()
 {
     if (!mModel || !mModel->isLoaded() || mUpdating) return;
