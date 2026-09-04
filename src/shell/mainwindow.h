@@ -464,6 +464,15 @@ public slots:
     void updateWindowTitle();
     void redo();
 
+    /// Ctrl+Z / Ctrl+Shift+Z, routed to whichever edit stack the ACTIVE SPACE
+    /// owns: the Materials space owns the graph's (owner decision, deep audit
+    /// 2026-09 area 1), every other space the editor's. The registry entries
+    /// "edit.undo"/"edit.redo" and the Edit menu/toolbar actions all call these
+    /// — never undo()/redo() directly — so there is exactly one claimant for
+    /// the chord and one place the routing rule lives.
+    void undoActiveSpace();
+    void redoActiveSpace();
+
     void takeScreenshot();
     void toggleLightWires(bool state);
     void toggleGrid(bool state);

@@ -1196,12 +1196,11 @@ void EffectsPage::configureToolbar()
 	actionRedo->setIcon(fontIcons->icon(fa::share, options));
 	toolBar->addAction(actionRedo);
 
-	connect(actionUndo, &QAction::triggered, [=]() {
-		scene->stack->undo();
-	});
-	connect(actionRedo, &QAction::triggered, [=]() {
-		scene->stack->redo();
-	});
+	// Through the page's own entry point, not scene->stack directly: one place
+	// decides what "undo on this page" means, and the toolbar buttons, the
+	// graph.undo verb and the shell's Ctrl+Z all go through it.
+	connect(actionUndo, &QAction::triggered, [this]() { graphUndo(); });
+	connect(actionRedo, &QAction::triggered, [this]() { graphRedo(); });
 
 	toolBar->addSeparator();
 
@@ -1366,6 +1365,36 @@ QString EffectsPage::selectedGraphNodeId()
 void EffectsPage::deselectGraphNodes()
 {
 	if (scene != nullptr) scene->deselectAll();
+}
+
+// ---- the graph's edit stack (graph.undo / graph.redo, and the shell's
+//      Ctrl+Z while the Materials space is active) --------------------------
+
+bool EffectsPage::graphUndo()
+{
+	if (!stack || !stack->canUndo()) return false;
+	stack->undo();
+	// The scene has to be told to repaint: the commands mutate node/connection
+	// state directly and QGraphicsScene has no way to know (this is what the
+	// page's own toolbar undo button did, and the graph view's deleted
+	// shortcut before it).
+	if (scene) scene->update();
+	return true;
+}
+
+bool EffectsPage::graphRedo()
+{
+	if (!stack || !stack->canRedo()) return false;
+	stack->redo();
+	if (scene) scene->update();
+	return true;
+}
+
+int EffectsPage::graphUndoCount() const { return stack ? stack->index() : 0; }
+
+int EffectsPage::graphRedoCount() const
+{
+	return stack ? stack->count() - stack->index() : 0;
 }
 
 void EffectsPage::setSceneOpenProbe(std::function<bool()> probe)

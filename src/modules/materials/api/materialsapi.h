@@ -100,6 +100,20 @@ public:
     };
     void setSelectionDelegate(const SelectionDelegate &delegate) { mSelection = delegate; }
 
+    /// The Effects page's edit stack, when a page exists. graph.undo/graph.redo
+    /// are the API-first half of the owner's "on the Materials page the GRAPH
+    /// undo wins" decision: the verbs and the shell's Ctrl+Z call the SAME
+    /// EffectsPage entry points through this delegate. Headless slices leave it
+    /// unset — the API-local script graph has no command stack, so the verbs
+    /// fail cleanly rather than pretending.
+    struct UndoDelegate {
+        std::function<bool()> undo;
+        std::function<bool()> redo;
+        std::function<int()>  undoCount;
+        std::function<int()>  redoCount;
+    };
+    void setUndoDelegate(const UndoDelegate &delegate) { mUndo = delegate; }
+
     Q_INVOKABLE QVariantList nodes();
     Q_INVOKABLE QVariantList nodeTypes();
     Q_INVOKABLE QString addNode(const QString &type);
@@ -117,6 +131,9 @@ public:
     Q_INVOKABLE bool deselect();
     Q_INVOKABLE QVariantMap settings();
     Q_INVOKABLE bool setBlendMode(const QString &mode);
+    Q_INVOKABLE bool undo();
+    Q_INVOKABLE bool redo();
+    Q_INVOKABLE QVariantMap undoState();
 
 private:
     NodeGraph *graphOrFail(const QString &verb);
@@ -125,6 +142,7 @@ private:
     QString mAssetGuid;
     QString mSelectedNodeId;      // API-local selection (headless fallback)
     SelectionDelegate mSelection; // the Effects page, when wired
+    UndoDelegate mUndo;           // the Effects page's edit stack, when wired
 };
 
 #endif // SCRIPTING_MATERIALSAPI_H

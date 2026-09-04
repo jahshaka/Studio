@@ -63,6 +63,16 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
         delegate.selected = [effectsPage]() { return effectsPage->selectedGraphNodeId(); };
         delegate.deselect = [effectsPage]() { effectsPage->deselectGraphNodes(); };
         graphApi->setSelectionDelegate(delegate);
+
+        // graph.undo/graph.redo — the page's ONE edit-stack entry point, the
+        // same one the shell's Ctrl+Z reaches while the Materials space is
+        // active (the owner's 2026-09 decision that the graph undo wins there).
+        GraphApi::UndoDelegate undoDelegate;
+        undoDelegate.undo      = [effectsPage]() { return effectsPage->graphUndo(); };
+        undoDelegate.redo      = [effectsPage]() { return effectsPage->graphRedo(); };
+        undoDelegate.undoCount = [effectsPage]() { return effectsPage->graphUndoCount(); };
+        undoDelegate.redoCount = [effectsPage]() { return effectsPage->graphRedoCount(); };
+        graphApi->setUndoDelegate(undoDelegate);
     }
     engine.addModule(materialsApi);
     engine.addModule(new MaterialApi(host));
