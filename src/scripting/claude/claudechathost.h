@@ -31,6 +31,22 @@ For more information see the LICENSE file
 // prune, machine move or copied project folder could trigger. handleFinished
 // now recognises that failure, DROPS the id, and restarts once with the user's
 // message re-queued.
+//
+// Orphan hardening (CLAUDE_EDITOR_SPEC D2). A NORMAL quit already kills the
+// child in the right place — shutdown() runs from MainWindow::shutdown-
+// BackgroundWork, step 2 `BackgroundWork` of src/shell/shutdownorder.h
+// (mainwindow.cpp, before modules, engine and database), bounded 1.5 s + 1 s.
+// What was not covered is a CRASHING app: the child then only notices stdin
+// EOF, which was measured at ~4 s while idle and is unmeasured mid-turn, and
+// the zombie-process incident class is on the record
+// (tests/importasync/CMakeLists.txt). Two belts:
+//   * Linux: PR_SET_PDEATHSIG/SIGKILL through QProcess::setChildProcessModifier
+//     — the kernel reaps the child the instant this process dies, however it
+//     dies. `__linux__` only: there is no macOS or Windows equivalent.
+//   * Everywhere: the child's pid is recorded in <project>/.claude/
+//     jahshaka-chat.pid, and the NEXT configure() for that project kills a
+//     recorded pid that is still alive AND still carries our launch signature
+//     in its command line (pids are recycled — a number alone is never enough).
 
 #include <QObject>
 #include <QProcess>
@@ -69,6 +85,15 @@ public:
 
     ClaudeStreamParser *parser() { return &mParser; }
 
+    /// The pid of the live child, or 0 (test/diagnostic seam).
+    qint64 childProcessId() const;
+
+    /// Kills a child recorded for this project that outlived the app that
+    /// spawned it (D2, above). Returns the pid it reaped, or 0. Safe to call
+    /// when there is nothing to reap; NEVER kills a pid whose command line
+    /// does not carry ClaudeLaunchConfig::launchSignature().
+    static qint64 reapStaleChild(const QString &projectFolder);
+
     /// Sends one user turn (starts/restarts the subprocess as needed).
     void sendMessage(const QString &text);
     /// Interrupts the current turn (control_request, then kill fallback).
@@ -99,6 +124,7 @@ private:
     void setBusy(bool busy);
     void handleFinished(int exitCode, QProcess::ExitStatus status);
     bool isStaleResumeFailure(const QString &stderrText) const;
+    void clearPidRecord();
 
     QString mProjectFolder;
     bool mMcpEnabled = false;
@@ -117,6 +143,7 @@ private:
     bool mStopping = false;    // deliberate shutdown — don't report failure
     bool mResumeRecovered = false;  // D3: one recovery attempt per session id
     int mRequestCounter = 0;
+    QString mPidProject;       // the project the live pid file belongs to
 };
 
 #endif // CLAUDECHATHOST_H

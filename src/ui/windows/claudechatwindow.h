@@ -19,20 +19,41 @@ For more information see the LICENSE file
 // persisted under "claude_chat/geometry" in jahsettings.ini.
 //
 // The window renders a message list (user/assistant bubbles, streamed text,
-// collapsible "using <tool>…" lines), an input box (Enter sends,
+// collapsible tool rows, inline images), an input box (Enter sends,
 // Shift+Enter newline) and Send/Stop buttons, plus three special states:
 // the friendly "install Claude Code" state when the CLI is absent, the
 // "open a project" state, and an "MCP off" banner offering to enable it.
+//
+// B3 (CLAUDE_EDITOR_SPEC §E): the transcript renders what the stream already
+// carried and the window used to drop —
+//   * TOOL ROWS read as work, not as protocol: "taking a screenshot" plus a
+//     one-line argument digest, with the full JSON one click away. The raw
+//     `mcp__jahshaka__screenshot` name is still in the detail block.
+//   * IMAGES. `screenshot` and `browse_assets` return real PNGs and the dock
+//     showed the string "(image)" — the one place it was poorer than a
+//     terminal. They are now scaled into the transcript, click for full size.
+//   * COST. `result.total_cost_usd` was parsed and thrown away; it is a muted
+//     per-turn line in the header (the dock's model is not free).
+//   * DENIALS. `result.permission_denials` (§C rung b) becomes a row that says
+//     the editor is reached through scripting only — the lockdown, explained
+//     at the moment it bites, instead of an invisible refusal.
+//   * A "thought for a moment" affordance, a rate-limit row, and `parseError`
+//     finally connected (garbage used to vanish silently).
+// The MODEL PICKER sits in the header: it writes the `claude_model` setting
+// MainWindow already reads, and applies to the NEXT conversation — a live
+// session keeps the model it launched with, so the row says so.
 //
 // Colors are a self-contained dark palette (explicit on every widget) so the
 // popup reads identically under Qlementine dark and stays legible under
 // Classic — it deliberately opts out of both themes' cascades.
 
+#include <QStringList>
 #include <QWidget>
 
 #include "scripting/claude/claudecliprobe.h"
 
 class ClaudeChatHost;
+class QComboBox;
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
@@ -61,10 +82,27 @@ public:
     void setProjectOpen(bool open);
     void setMcpRunning(bool running);
 
+    /// The friendly label for a tool row: "mcp__jahshaka__screenshot" reads as
+    /// "taking a screenshot". Unknown tools keep their own name.
+    static QString toolLabel(const QString &toolName);
+    /// A one-line digest of a tool's input JSON for the row: the interesting
+    /// values, whitespace collapsed, bounded. Never the whole script.
+    static QString compactArgs(const QString &inputJson);
+
     // Introspection for tests and callers.
     bool isInstallStateVisible() const;
     bool isMcpBannerVisible() const;
     int messageCount() const { return mMessageCount; }
+    /// Images rendered inline in the transcript so far.
+    int imageCount() const { return mImageCount; }
+    /// The header's per-turn cost line ("$0.043"), empty before the first turn.
+    QString costText() const;
+    /// The tool rows' visible text, in order.
+    QStringList toolLines() const { return mToolLines; }
+    /// The muted info rows' text, in order (denials, rate limits, notices).
+    QStringList infoLines() const { return mInfoLines; }
+    /// The model id the picker currently shows.
+    QString selectedModel() const;
 
 signals:
     /// The user clicked "Enable MCP" on the banner.
@@ -87,6 +125,8 @@ private:
     QWidget *addBubble(const QString &text, bool user);
     void addInfoLine(const QString &text);
     void addToolLine(const QString &name, const QString &inputJson);
+    void addImage(const QByteArray &imageData, const QString &mimeType);
+    void applyModelChoice(const QString &modelId, bool announce);
     void beginAssistantBubble();
     void appendAssistantDelta(const QString &text);
     void finalizeAssistantBubble(const QString &fullText);
@@ -104,6 +144,8 @@ private:
 
     // Header / states / chrome.
     QLabel *mStatusLabel = nullptr;
+    QLabel *mCostLabel = nullptr;
+    QComboBox *mModelCombo = nullptr;
     QStackedWidget *mStack = nullptr;   // page 0 = chat, 1 = install, 2 = no project
     QWidget *mMcpBanner = nullptr;
     QLabel *mInstallDetail = nullptr;
@@ -123,6 +165,11 @@ private:
     bool mMcpRunning = false;
     bool mResumeNoticeShown = false;
     int mMessageCount = 0;
+    int mImageCount = 0;
+    bool mStopRequested = false;   // the user pressed Stop: the turn's failure
+                                   // result is "stopped", not an error
+    QStringList mToolLines;
+    QStringList mInfoLines;
     QPoint mDragOffset;
     bool mDragging = false;
 };

@@ -12,12 +12,17 @@ For more information see the LICENSE file
 #include "claudechatwindow.h"
 
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -31,10 +36,19 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 
 #include "scripting/claude/claudechathost.h"
+#include "scripting/claude/claudelaunchconfig.h"
 
 namespace {
 
 const char *kGeometryKey = "claude_chat/geometry";
+// The same key MainWindow::toggleClaudeChat reads when it builds the host, so
+// a choice made here survives a close/reopen and an app restart.
+const char *kModelKey = "claude_model";
+
+// Inline images are bounded by the popup, not by the PNG: a browse_assets
+// answer can carry two dozen of them.
+const int kInlineImageMaxWidth = 320;
+const int kInlineImageMaxHeight = 260;
 
 // Self-contained dark palette — identical under Qlementine dark and Classic.
 const char *kWindowStyle = R"(
@@ -45,7 +59,16 @@ QWidget#claudeChatHeader { background: #2a2c30; border-bottom: 1px solid #3c3f44
 QLabel { color: #e8e8ea; background: transparent; }
 QLabel#claudeTitle { font-weight: bold; color: #e8e8ea; }
 QLabel#claudeStatus { color: #9aa0a6; font-size: 11px; }
+QLabel#claudeCost { color: #7d8288; font-size: 11px; }
 QLabel#claudeInfoLine { color: #9aa0a6; font-size: 11px; font-style: italic; }
+QLabel#claudeImage { background: #26272b; border: 1px solid #3c3f44; border-radius: 6px; }
+QComboBox#claudeModel {
+    background: #35373c; color: #b8bcc2; border: 1px solid #4a4d52;
+    border-radius: 4px; padding: 1px 6px; font-size: 11px;
+}
+QComboBox#claudeModel QAbstractItemView {
+    background: #2a2c30; color: #e8e8ea; selection-background-color: #3d6db5;
+}
 QLabel#claudeBubbleUser {
     background: #2f4f77; color: #eef2f8; border-radius: 8px; padding: 7px 10px;
 }
@@ -99,6 +122,17 @@ ClaudeChatWindow::ClaudeChatWindow(QSettings *settings, ClaudeChatHost *host, QW
     setMinimumSize(300, 320);
     buildUi();
 
+    // The persisted choice wins over the shipped default; selecting it here
+    // must not write an info row (nothing changed for the user).
+    if (mSettings && mModelCombo) {
+        const QString saved = mSettings->value(QString::fromLatin1(kModelKey)).toString();
+        const int index = saved.isEmpty() ? -1 : mModelCombo->findData(saved);
+        if (index >= 0) {
+            QSignalBlocker block(mModelCombo);
+            mModelCombo->setCurrentIndex(index);
+        }
+    }
+
     bool restored = false;
     if (mSettings) {
         const QByteArray geometry =
@@ -108,6 +142,9 @@ ClaudeChatWindow::ClaudeChatWindow(QSettings *settings, ClaudeChatHost *host, QW
     if (!restored) resize(380, 520);
 
     if (host) setHost(host);
+    // Whatever the picker shows is what the host must use — including the
+    // shipped default when nothing was ever persisted.
+    applyModelChoice(selectedModel(), false);
     refreshStates();
 }
 
@@ -137,6 +174,25 @@ void ClaudeChatWindow::buildUi()
     headerLayout->addWidget(title);
     headerLayout->addSpacing(8);
     headerLayout->addWidget(mStatusLabel, 1);
+
+    // Per-turn cost (result.total_cost_usd, previously parsed and dropped).
+    mCostLabel = new QLabel(header);
+    mCostLabel->setObjectName(QStringLiteral("claudeCost"));
+    mCostLabel->setToolTip(tr("What the last turn cost on your Claude account"));
+    headerLayout->addWidget(mCostLabel);
+
+    // Model picker. The owner's default leads the list; a change applies to
+    // the NEXT conversation because the argv is built when the process starts.
+    mModelCombo = new QComboBox(header);
+    mModelCombo->setObjectName(QStringLiteral("claudeModel"));
+    mModelCombo->setCursor(Qt::PointingHandCursor);
+    mModelCombo->setToolTip(tr("Model for new conversations"));
+    for (const auto &choice : ClaudeLaunchConfig::modelChoices())
+        mModelCombo->addItem(choice.label, choice.id);
+    connect(mModelCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+        applyModelChoice(selectedModel(), true);
+    });
+    headerLayout->addWidget(mModelCombo);
 
     auto *clearBtn = new QToolButton(header);
     clearBtn->setObjectName(QStringLiteral("claudeHeaderBtn"));
@@ -211,7 +267,11 @@ void ClaudeChatWindow::buildUi()
     mStopButton->setObjectName(QStringLiteral("claudeStop"));
     mStopButton->hide();
     connect(mStopButton, &QPushButton::clicked, this, [this]() {
-        if (mHost) mHost->stopTurn();
+        if (!mHost) return;
+        // A cooperative interrupt ends the turn with is_error — that is the
+        // user's own Stop, not a failure, so do not paint it red.
+        mStopRequested = true;
+        mHost->stopTurn();
     });
     buttonColumn->addWidget(mSendButton);
     buttonColumn->addWidget(mStopButton);
@@ -299,6 +359,28 @@ void ClaudeChatWindow::connectHost()
                     bubble->style()->polish(bubble);
                 }
             });
+    // The screenshots and thumbnails the tools return — the transcript's one
+    // remaining gap versus a terminal.
+    connect(parser, &ClaudeStreamParser::toolResultImage, this, &ClaudeChatWindow::addImage);
+    connect(parser, &ClaudeStreamParser::thinkingBlock, this,
+            [this]() { addInfoLine(tr("thought for a moment")); });
+    connect(parser, &ClaudeStreamParser::rateLimitEvent, this,
+            [this](const QString &status, const QString &resetsAt) {
+                addInfoLine(resetsAt.isEmpty()
+                                ? tr("rate limit: %1").arg(status)
+                                : tr("rate limit: %1 — resets at %2").arg(status, resetsAt));
+            });
+    // §C rung b: the lockdown explained at the moment it bites.
+    connect(parser, &ClaudeStreamParser::permissionsDenied, this,
+            [this](const QStringList &tools) {
+                addInfoLine(tr("blocked: %1 — the editor is reached through scripting only")
+                                .arg(tools.join(QStringLiteral(", "))));
+            });
+    // parseError was emitted and never connected: garbage on the stream simply
+    // vanished, which is the worst way to debug a CLI that changed its output.
+    connect(parser, &ClaudeStreamParser::parseError, this, [this](const QString &line) {
+        addInfoLine(tr("unreadable line from Claude Code: %1").arg(line.left(80)));
+    });
     connect(parser, &ClaudeStreamParser::sessionStarted, this,
             [this](const QString &, const QStringList &, const QStringList &, bool mcpConnected) {
                 mStatusLabel->setText(mcpConnected ? tr("connected to the editor")
@@ -306,16 +388,27 @@ void ClaudeChatWindow::connectHost()
                                                                   : tr("editor control off")));
             });
     connect(parser, &ClaudeStreamParser::turnCompleted, this,
-            [this](bool ok, const QString &resultText, const QString &, double) {
+            [this](bool ok, const QString &resultText, const QString &, double costUsd) {
                 mStreamingBubble = nullptr;
                 mStreamingText.clear();
-                if (!ok) {
-                    auto *bubble = addBubble(
-                        resultText.isEmpty() ? tr("The turn failed.") : resultText, false);
-                    bubble->setObjectName(QStringLiteral("claudeBubbleError"));
-                    bubble->style()->unpolish(bubble);
-                    bubble->style()->polish(bubble);
+                if (costUsd > 0.0 && mCostLabel)
+                    mCostLabel->setText(QStringLiteral("$%1").arg(costUsd, 0, 'f', 3));
+                if (ok) {
+                    mStopRequested = false;
+                    return;
                 }
+                if (mStopRequested) {
+                    // The user's own interrupt came back as an error result;
+                    // the next send resumes this same session.
+                    mStopRequested = false;
+                    addInfoLine(tr("stopped"));
+                    return;
+                }
+                auto *bubble = addBubble(
+                    resultText.isEmpty() ? tr("The turn failed.") : resultText, false);
+                bubble->setObjectName(QStringLiteral("claudeBubbleError"));
+                bubble->style()->unpolish(bubble);
+                bubble->style()->polish(bubble);
             });
     connect(mHost, &ClaudeChatHost::busyChanged, this, &ClaudeChatWindow::updateBusyUi);
     connect(mHost, &ClaudeChatHost::processFailed, this, [this](const QString &detail) {
@@ -324,8 +417,10 @@ void ClaudeChatWindow::connectHost()
         bubble->style()->unpolish(bubble);
         bubble->style()->polish(bubble);
     });
-    connect(mHost, &ClaudeChatHost::turnAborted, this,
-            [this]() { addInfoLine(tr("stopped")); });
+    connect(mHost, &ClaudeChatHost::turnAborted, this, [this]() {
+        mStopRequested = false;   // the kill fallback fired; no result is coming
+        addInfoLine(tr("stopped"));
+    });
     // D3: the previous conversation could not be resumed. The host has already
     // dropped the id and restarted with the user's message — say so, so the
     // lost context is visible rather than mysterious.
@@ -399,6 +494,34 @@ bool ClaudeChatWindow::isMcpBannerVisible() const
     return mMcpBanner && mMcpBanner->isVisibleTo(const_cast<ClaudeChatWindow *>(this));
 }
 
+QString ClaudeChatWindow::costText() const
+{
+    return mCostLabel ? mCostLabel->text() : QString();
+}
+
+QString ClaudeChatWindow::selectedModel() const
+{
+    if (!mModelCombo) return ClaudeLaunchConfig::defaultModel();
+    return mModelCombo->currentData().toString();
+}
+
+// A live `claude` keeps the model it launched with (the argv is built at
+// start), so this is honest about when it takes effect rather than pretending
+// the current conversation changed underneath the user.
+void ClaudeChatWindow::applyModelChoice(const QString &modelId, bool announce)
+{
+    if (modelId.isEmpty()) return;
+    if (mHost) mHost->setModel(modelId);
+    if (!announce) return;
+    // Only a real choice is persisted: writing the shipped default here would
+    // pin today's default into the user's settings for ever.
+    if (mSettings) mSettings->setValue(QString::fromLatin1(kModelKey), modelId);
+    const bool live = mHost && (mHost->isProcessRunning() || !mHost->sessionId().isEmpty());
+    addInfoLine(live ? tr("model: %1 — applies to the next conversation (Clear starts one)")
+                           .arg(modelId)
+                     : tr("model: %1").arg(modelId));
+}
+
 // ---- message list ----
 
 QWidget *ClaudeChatWindow::addBubble(const QString &text, bool user)
@@ -430,7 +553,88 @@ void ClaudeChatWindow::addInfoLine(const QString &text)
     auto *label = new QLabel(text);
     label->setObjectName(QStringLiteral("claudeInfoLine"));
     label->setAlignment(Qt::AlignCenter);
+    label->setWordWrap(true);
     mMessages->insertWidget(mMessages->count() - 1, label);
+    mInfoLines << text;
+    scrollToBottom();
+}
+
+// A transcript reads as work when the rows name the work. The protocol name
+// stays available in the expanded detail — this is presentation only.
+QString ClaudeChatWindow::toolLabel(const QString &toolName)
+{
+    static const QString prefix = QStringLiteral("mcp__jahshaka__");
+    QString bare = toolName;
+    if (bare.startsWith(prefix)) bare = bare.mid(prefix.size());
+    if (bare == QLatin1String("run_script")) return tr("running a script");
+    if (bare == QLatin1String("screenshot")) return tr("taking a screenshot");
+    if (bare == QLatin1String("describe_scene")) return tr("reading the scene");
+    if (bare == QLatin1String("browse_assets")) return tr("browsing assets");
+    if (bare == QLatin1String("api_docs")) return tr("looking up the API");
+    if (bare == QLatin1String("undo_redo")) return tr("stepping undo");
+    if (bare == QLatin1String("Skill")) return tr("loading a skill");
+    return bare;   // a tool added to the server after this build
+}
+
+QString ClaudeChatWindow::compactArgs(const QString &inputJson)
+{
+    const QJsonObject input =
+        QJsonDocument::fromJson(inputJson.toUtf8()).object();
+    QStringList parts;
+    for (auto it = input.constBegin(); it != input.constEnd(); ++it) {
+        QString value;
+        const QJsonValue v = it.value();
+        if (v.isString()) value = v.toString();
+        else if (v.isBool()) value = v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        else if (v.isDouble()) value = QString::number(v.toDouble());
+        else if (v.isArray())
+            value = QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
+        else if (v.isObject())
+            value = QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
+        else continue;
+        value = value.simplified();
+        if (value.size() > 48) value = value.left(45) + QStringLiteral("…");
+        // The script itself is the one argument worth showing bare: a key name
+        // in front of it wastes the row's width.
+        parts << (it.key() == QLatin1String("script")
+                      ? value
+                      : QStringLiteral("%1: %2").arg(it.key(), value));
+    }
+    QString joined = parts.join(QStringLiteral(", "));
+    if (joined.size() > 90) joined = joined.left(87) + QStringLiteral("…");
+    return joined;
+}
+
+void ClaudeChatWindow::addImage(const QByteArray &imageData, const QString &mimeType)
+{
+    QPixmap pixmap;
+    if (!pixmap.loadFromData(imageData)) {
+        addInfoLine(tr("an image came back that could not be decoded (%1)").arg(mimeType));
+        return;
+    }
+    auto *row = new QWidget();
+    auto *rowLayout = new QHBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto *view = new QLabel(row);
+    view->setObjectName(QStringLiteral("claudeImage"));
+    const QPixmap scaled =
+        (pixmap.width() > kInlineImageMaxWidth || pixmap.height() > kInlineImageMaxHeight)
+            ? pixmap.scaled(kInlineImageMaxWidth, kInlineImageMaxHeight,
+                            Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            : pixmap;
+    view->setPixmap(scaled);
+    view->setCursor(Qt::PointingHandCursor);
+    view->setToolTip(tr("%1×%2 — click for full size").arg(pixmap.width()).arg(pixmap.height()));
+    // Full size opens in its own top-level label, owned by nothing else so it
+    // closes with the app (and never steals the popup's geometry key).
+    view->installEventFilter(this);
+    view->setProperty("claudeFullPixmap", pixmap);
+
+    rowLayout->addWidget(view);
+    rowLayout->addStretch(1);
+    mMessages->insertWidget(mMessages->count() - 1, row);
+    ++mImageCount;
     scrollToBottom();
 }
 
@@ -445,11 +649,19 @@ void ClaudeChatWindow::addToolLine(const QString &name, const QString &inputJson
     toggle->setObjectName(QStringLiteral("claudeToolLine"));
     toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     toggle->setArrowType(Qt::RightArrow);
-    toggle->setText(tr("using %1…").arg(name));
+    const QString digest = compactArgs(inputJson);
+    const QString rowText = digest.isEmpty()
+                                ? toolLabel(name)
+                                : QStringLiteral("%1 — %2").arg(toolLabel(name), digest);
+    toggle->setText(rowText);
+    toggle->setToolTip(name);
     toggle->setCheckable(true);
     toggle->setCursor(Qt::PointingHandCursor);
+    mToolLines << rowText;
 
-    auto *detail = new QLabel(inputJson.trimmed(), container);
+    // The detail keeps the protocol truth: the namespaced tool name and the
+    // whole input, so nothing the friendly row summarised is lost.
+    auto *detail = new QLabel(name + QStringLiteral("\n") + inputJson.trimmed(), container);
     detail->setObjectName(QStringLiteral("claudeToolDetail"));
     detail->setWordWrap(true);
     detail->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -514,6 +726,7 @@ void ClaudeChatWindow::sendCurrentInput()
     if (text.isEmpty() || !mProjectOpen || !mCliFound) return;
     addBubble(text, true);
     mInput->clear();
+    mStopRequested = false;
     mHost->sendMessage(text);
 }
 
@@ -540,6 +753,11 @@ void ClaudeChatWindow::clearTranscript()
     mStreamingBubble = nullptr;
     mStreamingText.clear();
     mMessageCount = 0;
+    mImageCount = 0;
+    mStopRequested = false;
+    mToolLines.clear();
+    mInfoLines.clear();
+    if (mCostLabel) mCostLabel->clear();
     mResumeNoticeShown = true; // fresh session — no resume notice
 }
 
@@ -554,6 +772,20 @@ void ClaudeChatWindow::clearConversation()
 
 bool ClaudeChatWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    // An inline image was clicked: show it at its real size in its own window.
+    if (event->type() == QEvent::MouseButtonRelease && watched != mInput) {
+        const QVariant full = watched->property("claudeFullPixmap");
+        if (full.canConvert<QPixmap>()) {
+            const QPixmap pixmap = full.value<QPixmap>();
+            auto *viewer = new QLabel(nullptr, Qt::Tool);
+            viewer->setAttribute(Qt::WA_DeleteOnClose);
+            viewer->setWindowTitle(tr("Claude — image"));
+            viewer->setPixmap(pixmap);
+            viewer->resize(pixmap.size());
+            viewer->show();
+            return true;
+        }
+    }
     if (watched == mInput && event->type() == QEvent::KeyPress) {
         auto *keyEvent = static_cast<QKeyEvent *>(event);
         if ((keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter)

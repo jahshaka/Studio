@@ -11,14 +11,24 @@
 //      stream-json): full send→stream→result round-trip, argv lockdown at the
 //      spawn boundary, session-id persistence, Clear semantics, --resume.
 //   5. ClaudeChatWindow smoke (offscreen): flags, states, geometry.
+//   6. B2/B3 (AI_SURFACE_PROGRAM_SPEC lane E): the rich transcript — inline
+//      images, per-turn cost, permission denials, thinking, rate limits and
+//      parse errors, all from a fixture; friendly tool rows; the model picker;
+//      the orphan reaper; and interrupt-then-resume, which CLAUDE_EDITOR_SPEC
+//      §J listed as unverified.
 // The real-CLI end-to-end (a live chat turn driving the MCP server) is a
 // manual test — it needs a logged-in Claude Code.
 
 #include <QApplication>
+#include <QComboBox>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QImage>
+#include <QProcess>
+#include <QPushButton>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <cstdio>
@@ -94,6 +104,64 @@ static void testLaunchConfig()
         CHECK(ClaudeLaunchConfig::skillVersion(markdown) >= 1,
               qPrintable("config: frontmatter version: " + name));
     }
+
+    // ---- F14: the skills teach the CURRENT surface ------------------------
+    // installSkills only replaces a target whose installed version is OLDER
+    // than the shipped one, so a content refresh that forgets the version bump
+    // ships to nobody. These minimums are the delivery mechanism, asserted.
+    struct SkillFloor { const char *name; int version; };
+    const SkillFloor floors[] = {
+        {"jahshaka-scene-building", 2}, {"jahshaka-materials", 2},
+        {"jahshaka-assets", 4},         {"jahshaka-particles", 1},
+        {"jahshaka-decals", 1},         {"jahshaka-world", 1}};
+    CHECK(ClaudeLaunchConfig::skillNames().size() == 6,
+          "skills: six pages ship (particles, decals and world modes joined the three)");
+    for (const auto &floor : floors) {
+        const QString name = QString::fromLatin1(floor.name);
+        CHECK(ClaudeLaunchConfig::skillNames().contains(name),
+              qPrintable("skills: shipped: " + name));
+        const QString markdown = QString::fromUtf8(
+            readFile(project + "/.claude/skills/" + name + "/SKILL.md"));
+        CHECK(ClaudeLaunchConfig::skillVersion(markdown) >= floor.version,
+              qPrintable(QString("skills: %1 is at least version %2 (the refresh is deliverable)")
+                             .arg(name).arg(floor.version)));
+    }
+
+    // The refreshed content, spot-checked where it carries a promise: the
+    // debugging loop, the look-act-look loop and the discovery-first rule are
+    // the three things the audit says the surface was missing.
+    const QString sceneMd = QString::fromUtf8(
+        readFile(project + "/.claude/skills/jahshaka-scene-building/SKILL.md"));
+    CHECK(sceneMd.contains("node.properties"), "skills: scene teaches node.properties discovery");
+    CHECK(sceneMd.contains("editor.setCamera") && sceneMd.contains("editor.frameNode")
+              && sceneMd.contains("frameNode:"),
+          "skills: scene teaches the camera verbs AND the framed screenshot");
+    CHECK(sceneMd.contains("app.engineErrors") && sceneMd.contains("editor.viewportState")
+              && sceneMd.contains("editor.frame(") && sceneMd.contains("engineErrors` block"),
+          "skills: scene has the DEBUGGING section (engineErrors, viewportState, frame(n,dt))");
+    CHECK(sceneMd.contains("node.physics") && sceneMd.contains("scene.addViewer")
+              && sceneMd.contains("editor.setOverlays"),
+          "skills: scene teaches physics, the viewer and the overlay switches");
+    CHECK(sceneMd.contains("api.help") && sceneMd.contains("api_docs({search"),
+          "skills: scene teaches the cold-start lookups");
+    CHECK(sceneMd.contains("ground") && sceneMd.contains("count:"),
+          "skills: scene knows the ground primitive and the count option");
+    const QString particlesMd = QString::fromUtf8(
+        readFile(project + "/.claude/skills/jahshaka-particles/SKILL.md"));
+    CHECK(particlesMd.contains("particles.setColourKeys")
+              && particlesMd.contains("scene.addParticles")
+              && particlesMd.contains("editor.frame(60, 1/60)"),
+          "skills: particles page teaches ramps, creation and deterministic stepping");
+    const QString decalsMd = QString::fromUtf8(
+        readFile(project + "/.claude/skills/jahshaka-decals/SKILL.md"));
+    CHECK(decalsMd.contains("scene.addDecal") && decalsMd.contains("scene.addImagePlane")
+              && decalsMd.contains("node.setDecalTexture"),
+          "skills: decals page covers both decals and image planes");
+    const QString worldMd = QString::fromUtf8(
+        readFile(project + "/.claude/skills/jahshaka-world/SKILL.md"));
+    CHECK(worldMd.contains("world.override") && worldMd.contains("world.modeTable")
+              && worldMd.contains("giMode"),
+          "skills: world page teaches modes, overrides and the registry");
     // Skills mention only real verbs — spot-check a few signatures.
     const QString sceneSkill = QString::fromUtf8(
         readFile(project + "/.claude/skills/jahshaka-scene-building/SKILL.md"));
@@ -110,6 +178,8 @@ static void testLaunchConfig()
           "config: assets skill teaches assets.importAndPlace");
     CHECK(assetSkill.contains("scene.addMesh") && assetSkill.contains("FAILS"),
           "config: ...and still says scene.addMesh fails");
+    CHECK(assetSkill.contains("browse_assets"),
+          "config: assets skill points at browse_assets for visual browsing");
 
     // Version upgrade: an OLD copy is refreshed…
     const QString target = project + "/.claude/skills/jahshaka-materials/SKILL.md";
@@ -181,6 +251,25 @@ static void testLaunchConfig()
     const int modelAt = modelArgs.indexOf("--model");
     CHECK(modelAt >= 0 && modelArgs.value(modelAt + 1) == ClaudeLaunchConfig::defaultModel(),
           "argv: --model carries the chosen model");
+    // The picker's list, and the owner's pick leading it.
+    const auto choices = ClaudeLaunchConfig::modelChoices();
+    CHECK(choices.size() >= 3 && choices.first().id == ClaudeLaunchConfig::defaultModel(),
+          "config: the picker offers >= 3 models, the shipped default first");
+    QStringList choiceIds;
+    for (const auto &c : choices) choiceIds << c.id;
+    CHECK(choiceIds.contains("sonnet") && choiceIds.contains("opus"),
+          "config: sonnet and opus are offered beside the default");
+    for (const auto &c : choices) {
+        const QStringList a = ClaudeLaunchConfig::arguments(project, true, QString(), c.id);
+        CHECK(a.value(a.indexOf("--model") + 1) == c.id,
+              qPrintable("argv: every offered model reaches --model: " + c.id));
+    }
+
+    // D2: the reaper identifies OUR orphan by the system prompt in its argv.
+    // If that sentence ever leaves the prompt, the reaper silently stops
+    // recognising anything — so the two are pinned together here.
+    CHECK(joined.contains(ClaudeLaunchConfig::launchSignature()),
+          "argv: carries the launch signature the orphan reaper matches on");
 
     // ---- session persistence (owner decision 3) ----
     CHECK(ClaudeLaunchConfig::readSessionId(project).isEmpty(), "session: none initially");
@@ -199,12 +288,29 @@ struct ParserCapture {
     QStringList finals;               // assistantText payloads
     QStringList toolNames, toolInputs;
     QStringList toolResults;
+    QList<QPair<QByteArray, QString>> images;
+    QStringList denials;
+    QStringList rateLimits;
+    int thinkings = 0;
     int completions = 0;
     bool lastOk = false;
     QString lastResult;
+    double lastCost = 0.0;
     int parseErrors = 0;
 
     void attach(ClaudeStreamParser &parser) {
+        QObject::connect(&parser, &ClaudeStreamParser::toolResultImage,
+                         [this](const QByteArray &data, const QString &mime) {
+                             images.append({data, mime});
+                         });
+        QObject::connect(&parser, &ClaudeStreamParser::thinkingBlock,
+                         [this]() { ++thinkings; });
+        QObject::connect(&parser, &ClaudeStreamParser::rateLimitEvent,
+                         [this](const QString &status, const QString &resets) {
+                             rateLimits << (status + "|" + resets);
+                         });
+        QObject::connect(&parser, &ClaudeStreamParser::permissionsDenied,
+                         [this](const QStringList &tools) { denials << tools; });
         QObject::connect(&parser, &ClaudeStreamParser::sessionStarted,
                          [this](const QString &id, const QStringList &t, const QStringList &s, bool c) {
                              sessionId = id; tools = t; servers = s; mcpConnected = c;
@@ -220,8 +326,8 @@ struct ParserCapture {
         QObject::connect(&parser, &ClaudeStreamParser::toolResult,
                          [this](const QString &snippet, bool) { toolResults << snippet; });
         QObject::connect(&parser, &ClaudeStreamParser::turnCompleted,
-                         [this](bool ok, const QString &result, const QString &, double) {
-                             ++completions; lastOk = ok; lastResult = result;
+                         [this](bool ok, const QString &result, const QString &, double cost) {
+                             ++completions; lastOk = ok; lastResult = result; lastCost = cost;
                          });
         QObject::connect(&parser, &ClaudeStreamParser::parseError,
                          [this](const QString &) { ++parseErrors; });
@@ -277,6 +383,58 @@ static void testParser(const QString &fixtureDir)
               "parser: both assistant messages finalized");
         CHECK(capture.completions == 1 && capture.lastOk, "parser: tool turn completes ok");
     }
+    // B3: everything the parser used to drop on the floor. One fixture turn
+    // carrying a thinking block, a screenshot tool_result (caption + a real
+    // PNG), a rate_limit_event, a cost and a permission denial.
+    {
+        ClaudeStreamParser parser;
+        ParserCapture capture;
+        capture.attach(parser);
+        parser.feed(readFile(fixtureDir + "/turn_rich.jsonl"));
+        CHECK(capture.parseErrors == 0, "rich: the transcript parses clean");
+        CHECK(capture.thinkings == 1, "rich: a thinking block is announced (content stays elided)");
+        CHECK(capture.toolNames == QStringList{"mcp__jahshaka__screenshot"},
+              "rich: the tool call surfaced");
+        CHECK(capture.toolResults.value(0).startsWith("camera: position"),
+              "rich: the caption text is the tool-result preview, not \"(image)\"");
+        CHECK(capture.images.size() == 1, "rich: exactly one image block surfaced");
+        QImage decoded;
+        CHECK(!capture.images.isEmpty()
+                  && decoded.loadFromData(capture.images[0].first)
+                  && decoded.size() == QSize(48, 32),
+              "rich: the image content DECODES to a real 48x32 QImage");
+        CHECK(!capture.images.isEmpty() && capture.images[0].second == "image/png",
+              "rich: with its media type");
+        CHECK(capture.rateLimits.size() == 1
+                  && capture.rateLimits[0].startsWith("allowed_warning|"),
+              "rich: rate_limit_event surfaces its status");
+        CHECK(capture.denials == QStringList{"Write"},
+              "rich: result.permission_denials names the refused tool");
+        CHECK(capture.completions == 1 && capture.lastOk
+                  && qAbs(capture.lastCost - 0.0431) < 1e-9,
+              "rich: the turn's total_cost_usd reaches turnCompleted");
+    }
+    // A rate_limit_event in a shape we do not recognise is silence, not noise.
+    {
+        ClaudeStreamParser parser;
+        ParserCapture capture;
+        capture.attach(parser);
+        parser.feed("{\"type\":\"rate_limit_event\",\"something\":\"else\"}\n");
+        CHECK(capture.rateLimits.isEmpty() && capture.parseErrors == 0,
+              "rich: an unknown rate_limit shape produces no row and no error");
+    }
+    // An image whose base64 is junk must not fabricate an empty picture.
+    {
+        ClaudeStreamParser parser;
+        ParserCapture capture;
+        capture.attach(parser);
+        parser.feed("{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":"
+                    "\"tool_result\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":"
+                    "\"base64\",\"media_type\":\"image/png\",\"data\":\"\"}}]}]}}\n");
+        CHECK(capture.images.isEmpty() && capture.toolResults.size() == 1,
+              "rich: an empty image payload is dropped, the tool result still lands");
+    }
+
     // Error turn + garbage line.
     {
         ClaudeStreamParser parser;
@@ -485,6 +643,250 @@ static void testHost(const QString &scratch)
     qunsetenv("JAHSHAKA_CLAUDE_CLI");
 }
 
+// ------------------------------------------------------- D2 orphan reaper ----
+// The pid file is the portable half of the PDEATHSIG hardening: a child the
+// app never got to kill (because the app crashed) must die at the NEXT launch.
+// The dangerous half is the kill, so the negative case matters more than the
+// positive one — pids are recycled and a bare number proves nothing.
+static void testOrphanReaper(const QString &scratch)
+{
+    QTemporaryDir projectDir;
+    const QString project = projectDir.path();
+    QDir(project).mkpath(QStringLiteral(".claude"));
+    Q_UNUSED(scratch);
+
+    CHECK(ClaudeChatHost::reapStaleChild(project) == 0, "D2: nothing recorded, nothing reaped");
+    CHECK(ClaudeLaunchConfig::readPid(project) == 0, "D2: and no pid to read");
+
+    // A stand-in orphan: a process whose command line carries our launch
+    // signature, exactly as a real spawned `claude` would.
+    QProcess orphan;
+    orphan.start(QStringLiteral("/bin/sh"),
+                 {QStringLiteral("-c"), QStringLiteral("sleep 30"),
+                  ClaudeLaunchConfig::launchSignature()});
+    CHECK(orphan.waitForStarted(3000), "D2: the stand-in orphan started");
+    CHECK(ClaudeLaunchConfig::writePid(project, orphan.processId()), "D2: its pid is recorded");
+    CHECK(ClaudeLaunchConfig::readPid(project) == orphan.processId(), "D2: and reads back");
+
+    const qint64 reaped = ClaudeChatHost::reapStaleChild(project);
+    CHECK(reaped == orphan.processId(), "D2: the recorded orphan is reaped");
+    CHECK(orphan.waitForFinished(3000) || orphan.state() == QProcess::NotRunning,
+          "D2: ...and is really gone");
+    CHECK(ClaudeLaunchConfig::readPid(project) == 0, "D2: the record is cleared after reaping");
+
+    // A pid that is alive but is NOT ours: never killed.
+    QProcess stranger;
+    stranger.start(QStringLiteral("/bin/sh"),
+                   {QStringLiteral("-c"), QStringLiteral("sleep 30"),
+                    QStringLiteral("somebody-elses-process")});
+    CHECK(stranger.waitForStarted(3000), "D2: a stranger process started");
+    ClaudeLaunchConfig::writePid(project, stranger.processId());
+    CHECK(ClaudeChatHost::reapStaleChild(project) == 0,
+          "D2: a pid without our launch signature is NOT killed");
+    CHECK(stranger.state() != QProcess::NotRunning, "D2: ...it is still running");
+    CHECK(ClaudeLaunchConfig::readPid(project) == 0,
+          "D2: but the stale record is dropped either way");
+    stranger.kill();
+    stranger.waitForFinished(3000);
+
+    // A pid that no longer exists at all.
+    ClaudeLaunchConfig::writePid(project, 2147483646);
+    CHECK(ClaudeChatHost::reapStaleChild(project) == 0, "D2: a dead pid reaps nothing");
+    CHECK(ClaudeLaunchConfig::readPid(project) == 0, "D2: and its record is gone");
+}
+
+// The Linux half: PR_SET_PDEATHSIG on the spawned child, set through
+// QProcess::setChildProcessModifier. Proven by asking the child itself
+// (PR_GET_PDEATHSIG), which needs the child to be the exec'd process — hence a
+// python "claude" rather than a shell one. Skipped where python3 is absent.
+static void testPdeathsig(const QString &scratch)
+{
+#ifndef __linux__
+    std::printf("skip: PDEATHSIG is Linux-only\n");
+    Q_UNUSED(scratch);
+    return;
+#else
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    if (python.isEmpty()) {
+        std::printf("skip: PDEATHSIG probe needs python3\n");
+        return;
+    }
+    const QString reportPath = scratch + "/pdeathsig.txt";
+    const QString fake = scratch + "/fake-claude-pdeathsig";
+    const QString script = QStringLiteral(
+        "#!%1\n"
+        "import ctypes, os, sys\n"
+        "v = ctypes.c_int(-1)\n"
+        "ctypes.CDLL('libc.so.6').prctl(2, ctypes.byref(v))\n"   // PR_GET_PDEATHSIG
+        "open(os.environ['JAHSHAKA_PDEATHSIG_OUT'], 'w').write(str(v.value))\n"
+        "for line in sys.stdin:\n"
+        "    if 'control_request' in line: continue\n"
+        "    sys.stdout.write('{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":"
+        "\"pd-session\",\"tools\":[\"Skill\"],\"mcp_servers\":[]}\\n')\n"
+        "    sys.stdout.write('{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,"
+        "\"result\":\"ok\",\"session_id\":\"pd-session\"}\\n')\n"
+        "    sys.stdout.flush()\n").arg(python);
+    writeFile(fake, script.toUtf8());
+    QFile::setPermissions(fake, QFile::permissions(fake) | QFile::ExeOwner);
+    qputenv("JAHSHAKA_CLAUDE_CLI", fake.toUtf8());
+    qputenv("JAHSHAKA_PDEATHSIG_OUT", reportPath.toUtf8());
+
+    QTemporaryDir projectDir;
+    ClaudeChatHost host;
+    int completions = 0;
+    QObject::connect(host.parser(), &ClaudeStreamParser::turnCompleted,
+                     [&](bool, const QString &, const QString &, double) { ++completions; });
+    host.configure(projectDir.path(), false, 0, QString());
+    host.sendMessage("ping");
+    CHECK(waitFor([&]() { return completions == 1; }), "D2: the python fake CLI answered");
+    // The pid file exists WHILE the child lives, and is gone once it does not.
+    CHECK(ClaudeLaunchConfig::readPid(projectDir.path()) == host.childProcessId()
+              && host.childProcessId() > 0,
+          "D2: the live child's pid is on disk for the next launch to find");
+    host.shutdown();
+    CHECK(ClaudeLaunchConfig::readPid(projectDir.path()) == 0,
+          "D2: a clean shutdown removes the pid record");
+
+    CHECK(QString::fromUtf8(readFile(reportPath)).trimmed() == "9",
+          "D2: the spawned CLI runs with PR_SET_PDEATHSIG = SIGKILL");
+    qunsetenv("JAHSHAKA_PDEATHSIG_OUT");
+    qunsetenv("JAHSHAKA_CLAUDE_CLI");
+#endif
+}
+
+// ------------------------------------------------ interrupt, then resume ----
+// CLAUDE_EDITOR_SPEC §J: "whether --resume after an interrupted turn resumes
+// cleanly is unproven, as is whether the 3 s kill fallback ever fires". Both,
+// against a fake CLI that speaks the real interrupt protocol.
+static void testInterruptResume(const QString &scratch)
+{
+    const QString argvLog = scratch + "/interrupt-argv.txt";
+    auto makeFake = [&](const QString &path, bool cooperative) {
+        const QString script = QStringLiteral(
+            "#!/bin/bash\n"
+            "echo \"$@\" > '%1'\n"
+            "init=0\n"
+            "while IFS= read -r line; do\n"
+            "  case \"$line\" in\n"
+            "    *control_request*)\n"
+            "      %2\n"
+            "      continue;;\n"
+            "  esac\n"
+            "  if [ $init = 0 ]; then\n"
+            "    printf '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"slow-session\","
+            "\"tools\":[\"Skill\"],\"mcp_servers\":[]}\\n'\n"
+            "    init=1\n"
+            "  fi\n"
+            "  case \"$line\" in\n"
+            "    *slow*)\n"
+            "      printf '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\","
+            "\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}}\\n'\n"
+            "      printf '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\","
+            "\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"working\"}}}\\n'\n"
+            "      ;;\n"
+            "    *)\n"
+            "      printf '{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":"
+            "[{\"type\":\"text\",\"text\":\"done\"}]},\"session_id\":\"slow-session\"}\\n'\n"
+            "      printf '{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,"
+            "\"result\":\"done\",\"session_id\":\"slow-session\"}\\n'\n"
+            "      ;;\n"
+            "  esac\n"
+            "done\n")
+            .arg(argvLog,
+                 cooperative
+                     ? QStringLiteral(
+                           "printf '{\"type\":\"result\",\"subtype\":\"error_during_execution\","
+                           "\"is_error\":true,\"result\":\"Interrupted by user\","
+                           "\"session_id\":\"slow-session\"}\\n'")
+                     : QStringLiteral(": # deliberately deaf to the interrupt"));
+        writeFile(path, script.toUtf8());
+        QFile::setPermissions(path, QFile::permissions(path) | QFile::ExeOwner);
+    };
+
+    // ---- the CLI answers the interrupt: the SESSION SURVIVES in place -----
+    {
+        const QString fake = scratch + "/fake-claude-interrupt";
+        makeFake(fake, true);
+        qputenv("JAHSHAKA_CLAUDE_CLI", fake.toUtf8());
+        QTemporaryDir projectDir;
+        ClaudeChatHost host;
+        QString streamed, finalText;
+        int completions = 0, failures = 0;
+        QObject::connect(host.parser(), &ClaudeStreamParser::textDelta,
+                         [&](const QString &t) { streamed += t; });
+        QObject::connect(host.parser(), &ClaudeStreamParser::assistantText,
+                         [&](const QString &t) { finalText = t; });
+        QObject::connect(host.parser(), &ClaudeStreamParser::turnCompleted,
+                         [&](bool, const QString &, const QString &, double) { ++completions; });
+        QObject::connect(&host, &ClaudeChatHost::processFailed,
+                         [&](const QString &) { ++failures; });
+        host.configure(projectDir.path(), false, 0, QString());
+
+        host.sendMessage("this one is slow");
+        CHECK(waitFor([&]() { return streamed.contains("working"); }),
+              "interrupt: a long turn is streaming");
+        const qint64 pidDuring = host.childProcessId();
+        CHECK(pidDuring > 0 && host.isBusy(), "interrupt: busy, with a live child");
+
+        host.stopTurn();
+        CHECK(waitFor([&]() { return completions == 1; }),
+              "interrupt: the CLI ends the turn on control_request");
+        CHECK(!host.isBusy(), "interrupt: and the dock is idle again");
+        CHECK(host.isProcessRunning() && host.childProcessId() == pidDuring,
+              "interrupt: the process is NOT killed when the interrupt is answered");
+        CHECK(host.sessionId() == "slow-session", "interrupt: the session id survives");
+
+        // The §J question: send again — does the conversation continue?
+        host.sendMessage("and now a quick one");
+        CHECK(waitFor([&]() { return completions == 2; }),
+              "interrupt: the NEXT message is answered after an interrupt");
+        CHECK(finalText == "done", "interrupt: ...with a real reply");
+        CHECK(host.childProcessId() == pidDuring,
+              "interrupt: in the SAME session — no restart, so nothing but the "
+              "interrupted turn was lost");
+        CHECK(failures == 0, "interrupt: none of it is reported as a failure");
+        host.shutdown();
+    }
+
+    // ---- the CLI ignores the interrupt: the 3 s kill fallback fires -------
+    {
+        const QString fake = scratch + "/fake-claude-deaf";
+        makeFake(fake, false);
+        qputenv("JAHSHAKA_CLAUDE_CLI", fake.toUtf8());
+        QTemporaryDir projectDir;
+        ClaudeChatHost host;
+        QString streamed;
+        int completions = 0, aborts = 0, failures = 0;
+        QObject::connect(host.parser(), &ClaudeStreamParser::textDelta,
+                         [&](const QString &t) { streamed += t; });
+        QObject::connect(host.parser(), &ClaudeStreamParser::turnCompleted,
+                         [&](bool, const QString &, const QString &, double) { ++completions; });
+        QObject::connect(&host, &ClaudeChatHost::turnAborted, [&]() { ++aborts; });
+        QObject::connect(&host, &ClaudeChatHost::processFailed,
+                         [&](const QString &) { ++failures; });
+        host.configure(projectDir.path(), false, 0, QString());
+
+        host.sendMessage("this one is slow");
+        CHECK(waitFor([&]() { return streamed.contains("working"); }),
+              "kill fallback: a long turn is streaming");
+        host.stopTurn();
+        CHECK(waitFor([&]() { return aborts == 1; }, 10000),
+              "kill fallback: an unanswered interrupt kills the process");
+        CHECK(!host.isProcessRunning() && !host.isBusy(),
+              "kill fallback: the dock is idle with no child");
+        CHECK(failures == 0, "kill fallback: a deliberate kill is not a failure");
+
+        // And the next send resumes the session the killed process created.
+        host.sendMessage("still there?");
+        CHECK(waitFor([&]() { return completions == 1; }),
+              "kill fallback: the next message restarts the CLI and completes");
+        CHECK(QString::fromUtf8(readFile(argvLog)).contains("--resume slow-session"),
+              "kill fallback: the restart RESUMES the interrupted conversation");
+        host.shutdown();
+    }
+    qunsetenv("JAHSHAKA_CLAUDE_CLI");
+}
+
 // ---------------------------------------------------------------- window ----
 static void testWindow(const QString &scratch)
 {
@@ -525,6 +927,79 @@ static void testWindow(const QString &scratch)
                                      + "/turn_tooluse.jsonl"));
         CHECK(window.messageCount() > before, "window: fixture turn renders bubbles");
 
+        // ---- B3: the tool row reads as work, not as protocol --------------
+        CHECK(ClaudeChatWindow::toolLabel("mcp__jahshaka__screenshot") == "taking a screenshot"
+                  && ClaudeChatWindow::toolLabel("mcp__jahshaka__run_script") == "running a script"
+                  && ClaudeChatWindow::toolLabel("mcp__jahshaka__browse_assets") == "browsing assets",
+              "window: tool names become friendly labels");
+        CHECK(ClaudeChatWindow::toolLabel("mcp__jahshaka__future_tool") == "future_tool",
+              "window: a tool this build has never heard of keeps its own name");
+        const QString compact = ClaudeChatWindow::compactArgs(
+            "{\n \"width\": 800,\n \"frameNode\": {\"id\": \"node_7\"}\n}");
+        CHECK(compact.contains("width: 800") && compact.contains("frameNode")
+                  && !compact.contains('\n'),
+              "window: arguments compact to one line");
+        CHECK(ClaudeChatWindow::compactArgs("{\"script\": \"scene.addPrimitive('cube')\"}")
+                  == "scene.addPrimitive('cube')",
+              "window: a script argument shows bare, without its key");
+        const QString longArgs = ClaudeChatWindow::compactArgs(
+            QStringLiteral("{\"script\": \"%1\"}").arg(QString(400, QLatin1Char('x'))));
+        CHECK(longArgs.size() <= 91, "window: a long argument is bounded, not pasted whole");
+        CHECK(!window.toolLines().isEmpty()
+                  && window.toolLines().first().startsWith("running a script"),
+              "window: the rendered row starts with the friendly label");
+        CHECK(window.toolLines().first().contains("scene.addPrimitive('cube')"),
+              "window: ...and carries the argument digest");
+
+        // ---- B3: images, cost, denials, thinking, rate limits, parse errors -
+        const int imagesBefore = window.imageCount();
+        host.parser()->feed(readFile(qEnvironmentVariable("CLAUDECHAT_FIXTURES")
+                                     + "/turn_rich.jsonl"));
+        CHECK(window.imageCount() == imagesBefore + 1,
+              "window: the screenshot the tool returned is rendered INLINE");
+        CHECK(window.costText() == "$0.043",
+              "window: the turn's cost is surfaced in the header");
+        CHECK(window.infoLines().filter("blocked: Write").size() == 1,
+              "window: a permission denial becomes a row that explains the lockdown");
+        CHECK(window.infoLines().filter("thought for a moment").size() == 1,
+              "window: the thinking block gets its affordance");
+        CHECK(window.infoLines().filter("rate limit").size() == 1,
+              "window: a rate-limit event is a row, not a mystery stall");
+        host.parser()->feed("this is not json\n");
+        CHECK(window.infoLines().filter("unreadable line").size() == 1,
+              "window: parseError is finally connected (garbage used to vanish)");
+
+        // ---- B3: the model picker ----------------------------------------
+        CHECK(window.selectedModel() == ClaudeLaunchConfig::defaultModel(),
+              "window: the picker starts on the shipped default (the owner's big model)");
+        CHECK(host.model() == ClaudeLaunchConfig::defaultModel(),
+              "window: ...and the host launches with it");
+        auto *combo = window.findChild<QComboBox *>("claudeModel");
+        CHECK(combo && combo->count() == ClaudeLaunchConfig::modelChoices().size(),
+              "window: every offered model is in the combo");
+        if (combo) combo->setCurrentIndex(combo->findData("sonnet"));
+        CHECK(window.selectedModel() == "sonnet" && host.model() == "sonnet",
+              "window: choosing a model retargets the host");
+        CHECK(ini.value("claude_model").toString() == "sonnet",
+              "window: ...and persists under the key MainWindow reads");
+        CHECK(!window.infoLines().filter("model: sonnet").isEmpty(),
+              "window: the change is announced (it applies to the next conversation)");
+        if (combo) combo->setCurrentIndex(combo->findData(ClaudeLaunchConfig::defaultModel()));
+
+        // ---- Stop is not an error ----------------------------------------
+        // A cooperative interrupt comes back as is_error, which used to paint
+        // a red "The turn failed." bubble at the user who pressed Stop.
+        auto *stop = window.findChild<QPushButton *>("claudeStop");
+        CHECK(stop != nullptr, "window: the Stop button exists");
+        const int bubblesBefore = window.messageCount();
+        if (stop) stop->click();
+        host.parser()->feed("{\"type\":\"result\",\"subtype\":\"error_during_execution\","
+                            "\"is_error\":true,\"result\":\"Interrupted by user\"}\n");
+        CHECK(!window.infoLines().filter("stopped").isEmpty(),
+              "window: the user's own interrupt reads as \"stopped\"");
+        CHECK(window.messageCount() == bubblesBefore,
+              "window: ...and does not add a red failure bubble");
+
         window.resize(444, 555);
         window.show();
         window.close();          // saves geometry
@@ -554,6 +1029,9 @@ int main(int argc, char **argv)
     testParser(fixtures);
     testProbe(scratch.path());
     testHost(scratch.path());
+    testOrphanReaper(scratch.path());
+    testPdeathsig(scratch.path());
+    testInterruptResume(scratch.path());
     testWindow(scratch.path());
 
     std::printf(failures ? "claude.chat: %d FAILURES\n" : "claude.chat: all checks passed\n",

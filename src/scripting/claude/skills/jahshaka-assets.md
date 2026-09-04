@@ -1,7 +1,7 @@
 ---
 name: jahshaka-assets
-description: Import files into Jahshaka's asset store, organize drawers, and bring assets into projects and scenes via the assets verbs. Use when the user asks to import models/images/audio/video, organize the asset library, or place an asset in the scene.
-version: 3
+description: Import files into Jahshaka's asset store, browse the library visually, organize drawers, and bring assets into projects and scenes via the assets verbs. Use when the user asks to import models/images/audio/video, find or organize library assets, or place an asset in the scene.
+version: 4
 ---
 
 # Assets in Jahshaka
@@ -53,6 +53,29 @@ var guid2 = assets.importFile("/path/to/texture.png", drawerId);
 
 Only paths the user gives you are reachable — there is no file browser here;
 ask for the path when you don't have it.
+
+## Finding things — LOOK at the library
+
+`browse_assets` is the only tool that carries pictures: it returns the matching
+rows as JSON *and* each asset's stored thumbnail as an image, captioned with
+its name and guid so rows and pictures line up. Use it when the user says
+"the wooden chair" and you have to work out which guid that is.
+
+```
+browse_assets({ query: "chair" })
+browse_assets({ type: "texture", drawer: 3, limit: 12 })
+```
+
+Images are budgeted (a small default, a hard maximum, thumbnails downscaled),
+so ask narrowly. An asset with no stored thumbnail still appears in the rows,
+flagged — `assets.refreshThumbnail(guid)` renders one.
+
+It adds no capability: everything it filters on, a script can ask for too —
+only the PIXELS need a tool, because a script result is JSON.
+
+```js
+assets.list({ query: "chair", drawer: 3, limit: 10 });
+```
 
 ## Inspecting
 
@@ -108,9 +131,16 @@ assets.refreshThumbnail(guid);
 ## Verify
 
 After imports, confirm with `assets.list` + `assets.metadata` (did the mesh
-really have the triangle count you expect?). After `addToScene` or
-`importAndPlace`, use `describe_scene` and the `screenshot` tool to see the
-placed asset.
+really have the triangle count you expect?), or `browse_assets({query: name})`
+to see the thumbnail. After `addToScene` or `importAndPlace`, use
+`describe_scene` and the `screenshot` tool — aim it at the new node with
+`screenshot({frameNode: {id: r.nodeId}})` instead of hoping the current view
+contains it.
+
+An import that "worked" but shows nothing is usually a RENDERER refusal, not a
+script error: check the `engineErrors` block on the `run_script` response, or
+`app.engineErrors()` after `editor.frame(1)`. The `jahshaka-scene-building`
+skill's Debugging section has the loop.
 
 `importAndPlace` refuses anything it does not understand rather than guessing:
 a path that is not there, an option key you misspelled, a drawer *name* where
