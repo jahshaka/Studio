@@ -629,7 +629,12 @@ bool ProjectManager::checkForEmptyState()
 
 void ProjectManager::cleanupOnClose()
 {
-    AssetManager::getAssets().clear();
+    // clearAssetList(), not getAssets().clear(): the registry OWNS its assets
+    // (io/assetmanager.h) and a bare clear() dropped every pointer on the
+    // floor — including, for model assets, the SceneNodePtr subtree the
+    // payload QVariant pins. Reached from showProjectManagerInternal(), which
+    // does not always run after closeProject().
+    AssetManager::clearAssetList();
 }
 
 void ProjectManager::openSampleProject(QListWidgetItem *item)

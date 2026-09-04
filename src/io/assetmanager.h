@@ -38,6 +38,13 @@ struct Asset {
     QPixmap             thumbnail;
     bool                deletable;
 
+    // AssetManager OWNS every registered Asset (see assetmanager.cpp). The
+    // destructor is virtual because the list is a QVector<Asset*> of derived
+    // types: deleting through the base without it is undefined behaviour, and
+    // for the payload-carrying subclasses it would also skip the QVariant that
+    // pins a whole SceneNodePtr subtree.
+    virtual ~Asset() = default;
+
     virtual QVariant    getValue() = 0;
     virtual void        setValue(QVariant val) = 0;
 	QVariant			value;
@@ -213,13 +220,29 @@ struct AssetMusic : public Asset
 	}
 };
 
+/// The session asset registry — the assets the panels, the viewport's
+/// drag-drop lookups and the scene reader see for the OPEN project.
+///
+/// OWNERSHIP (deep audit 2026-09, area 3, critical): every pointer handed to
+/// addAsset()/replaceAssets() belongs to this list and is DELETED when it
+/// leaves it. Before that, `clearAssetList()` only called QVector::clear() —
+/// so every project open leaked its whole session (~80 allocations for the
+/// Showroom sample), and because the payload QVariant holds a SceneNodePtr,
+/// each leaked Asset pinned an entire mesh subtree for the life of the
+/// process. Nothing stores an Asset* across a clear (verified over all
+/// getAssets() consumers), so deleting here is safe.
 class AssetManager
 {
 public:
     static QVector<Asset*> assets;
     static QVector<Asset*>& getAssets();
+    /// Takes ownership of `asset`.
     static void addAsset(Asset* asset);
+    /// Takes ownership of `asset` and DESTROYS the asset previously
+    /// registered under `oldAssetGuid`, if any.
 	static void replaceAssets(QString oldAssetGuid, Asset* asset);
+    /// Destroys every registered asset and empties the list. This is the
+    /// project-close / project-open boundary.
 	static void clearAssetList();
 	static Asset* getAssedByGuid(QString guid);
 };
