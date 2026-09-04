@@ -37,7 +37,7 @@ public:
     Q_INVOKABLE QVariantList nodes();
     Q_INVOKABLE QVariant find(const QString &name);
     Q_INVOKABLE QString root();
-    Q_INVOKABLE QString addPrimitive(const QString &name, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariant addPrimitive(const QString &name, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addLight(const QString &type, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addEmpty(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addMesh(const QString &path, const QVariantMap &options = QVariantMap());

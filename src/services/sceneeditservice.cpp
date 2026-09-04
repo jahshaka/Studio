@@ -133,6 +133,10 @@ void SceneEditService::addGear()     { addBuiltinPrimitive(":/content/primitives
 
 void SceneEditService::addPrimitive(const QString &text)
 {
+    // "Ground" had an addGround() and a menu action but no branch here, so the
+    // one shipped floor primitive was unreachable from scene.addPrimitive —
+    // AI_SURFACE_AUDIT #16.
+    if (text == "Ground")   addGround();
     if (text == "Plane")    addPlane();
     if (text == "Cone")     addCone();
     if (text == "Cube")     addCube();

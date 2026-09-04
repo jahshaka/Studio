@@ -105,6 +105,30 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "modeTable", "world.modeTable() -> object",
           "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from.",
           Needs::Document },
+
+        // The nine set* aliases (owner decision D5). Canonical spelling stays
+        // the noun; these exist so the obvious guess works. Each doc string
+        // points at its twin and nowhere else — the arguments are documented
+        // once, on the verb that implements them.
+        { "setAmbient", "world.setAmbient(color) -> bool",
+          "Alias of world.ambient — same arguments, same result.", Needs::Document },
+        { "setGravity", "world.setGravity(value) -> bool",
+          "Alias of world.gravity — same arguments, same result.", Needs::Document },
+        { "setFog", "world.setFog({enabled, color, density, ...}) -> bool",
+          "Alias of world.fog — same arguments, same result.", Needs::Document },
+        { "setShadows", "world.setShadows({enabled}) -> bool",
+          "Alias of world.shadows — same arguments, same result.", Needs::Document },
+        { "setGi", "world.setGi({mode, quality, bounces, ...}) -> bool",
+          "Alias of world.gi — same arguments, same result.", Needs::Document },
+        { "setAmbientFromSky", "world.setAmbientFromSky(enabled) -> bool",
+          "Alias of world.ambientFromSky — same arguments, same result.", Needs::Document },
+        { "setSky", "world.setSky(type, {...}) -> bool",
+          "Alias of world.sky — same arguments, same result.", Needs::Document },
+        { "setMode", "world.setMode({mode}) -> string",
+          "Alias of world.mode — same arguments, same result (and, called with no argument, the "
+          "same read).", Needs::Document },
+        { "setPostFx", "world.setPostFx({exposure, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
+          "Alias of world.postFx — same arguments, same result.", Needs::Document },
     };
 }
 

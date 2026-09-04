@@ -53,10 +53,22 @@ QVector<VerbInfo> NodeApi::verbs() const
           "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable.",
           Needs::Document },
         { "property", "node.property(id, key) -> value",
-          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight).",
+          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values.",
           Needs::Document },
         { "setProperty", "node.setProperty(id, key, value) -> bool",
-          "Writes a reflected property (same keys as node.property). Undoable — the write rides the run's undo macro.",
+          "Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Undoable — the write rides the run's undo macro.",
+          Needs::Document },
+        { "properties", "node.properties(id) -> [{name, displayName, type, value, min?, max?, writable}]",
+          "Every property this node reflects, in the order the document declares them — the "
+          "answer to \"what can I set on this thing?\" without guessing a key and burning a turn. "
+          "'type' is bool|int|float|vec3|color|texture|string|list; 'value' is the current value "
+          "in the same JSON shape node.property returns. 'min'/'max' are PRESENT ONLY WHERE A "
+          "RANGE IS DECLARED — most document rows declare none, and an absent range means "
+          "unbounded, not 0..0. 'writable' false means node.setProperty will refuse the row "
+          "(a mesh's meshPath/meshIndex, a particle emitter's texture): those need an operation "
+          "reflection cannot do, and have their own verbs. The light and decal ASSET bindings "
+          "(IES profile, area mask, decal image) are not rows here — node.setLightProfile, "
+          "node.setLightTexture and node.setDecalTexture own them.",
           Needs::Document },
         { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale}",
           "Everything scene.nodes() reports, for one node.",
@@ -204,13 +216,52 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
              { "scale", vecToJs(node->getLocalScale()) } };
 }
 
+// The reflected key list, read off the document itself rather than kept as a
+// second copy here — a hand-maintained list is exactly how an error message
+// starts lying about the surface it describes.
+//
+// OWNERSHIP (AI_SURFACE_PROGRAM_SPEC §3.A): getProperties() hands back freshly
+// `new`'d Property objects with a virtual destructor and no owner. Every caller
+// must delete them; animationwidget.cpp:149 does not, and is not this lane's
+// problem, but nothing here copies that.
+QStringList NodeApi::propertyKeys(const iris::SceneNodePtr &node)
+{
+    QStringList keys;
+    if (!node) return keys;
+    const auto props = node->getProperties();
+    for (auto *prop : props) keys << prop->name;
+    qDeleteAll(props);
+    return keys;
+}
+
+QVariant NodeApi::properties(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.properties"));
+    if (!node) return QVariant();
+
+    QVariantList out;
+    const auto props = node->getProperties();
+    for (auto *prop : props) {
+        QVariantMap row = propertyRowToJs(prop);
+        // `writable` is the Property's own declaration (property.h), set at the
+        // getProperties() site that knows why the row is refused. It is NOT
+        // probed by writing the value back: `preset` on a particle emitter
+        // re-applies a whole preset, so a probe write would rewrite the node.
+        row["writable"] = !prop->readOnly;
+        out.append(row);
+    }
+    qDeleteAll(props);
+    return out;
+}
+
 QVariant NodeApi::property(const QString &id, const QString &key)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.property"));
     if (!node) return QVariant();
     const QVariant value = node->getPropertyValue(key);
     if (!value.isValid()) {
-        fail(QStringLiteral("node.property: '%1' has no property '%2'").arg(node->getName(), key));
+        fail(QStringLiteral("node.property: '%1' has no property '%2' — this node reflects: %3")
+                 .arg(node->getName(), key, propertyKeys(node).join(QStringLiteral(", "))));
         return QVariant();
     }
     switch (value.typeId()) {
@@ -230,7 +281,11 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
     // the vector/colour the document field expects.
     const QVariant current = node->getPropertyValue(key);
     if (!current.isValid())
-        return fail(QStringLiteral("node.setProperty: '%1' has no property '%2'").arg(node->getName(), key));
+        return fail(QStringLiteral("node.setProperty: '%1' has no property '%2' — this node "
+                                   "reflects: %3 (node.properties('%4') gives their types, "
+                                   "current values and which are writable)")
+                        .arg(node->getName(), key,
+                             propertyKeys(node).join(QStringLiteral(", ")), id));
 
     QVariant converted = value;
     switch (current.typeId()) {
@@ -262,7 +317,11 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
     // same value twice is a no-op, and this keeps one code path for "did the
     // node accept it?".
     if (!node->setPropertyValue(key, converted))
-        return fail(QStringLiteral("node.setProperty: '%1' rejected property '%2'").arg(node->getName(), key));
+        return fail(QStringLiteral("node.setProperty: '%1' rejected property '%2' — the key "
+                                   "exists but is read-only through reflection "
+                                   "(node.properties('%3') reports writable:false for it; a "
+                                   "mesh's geometry and an emitter's image have their own verbs)")
+                        .arg(node->getName(), key, id));
     if (host.services && host.services->undo)
         host.services->undo->push(new SetNodePropertyCommand(node, key, current, converted));
     return true;

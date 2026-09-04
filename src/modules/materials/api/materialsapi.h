@@ -70,6 +70,7 @@ public:
     Q_INVOKABLE bool apply(const QString &nodeId, const QString &presetOrGuid);
     Q_INVOKABLE bool set(const QString &nodeId, const QVariantMap &values);
     Q_INVOKABLE QVariantMap get(const QString &nodeId);
+    Q_INVOKABLE QVariantMap properties(const QString &nodeId);
 
 private:
     iris::MeshNodePtr meshNodeOrFail(const QString &nodeId, const QString &verb);

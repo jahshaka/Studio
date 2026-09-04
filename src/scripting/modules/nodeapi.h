@@ -21,6 +21,7 @@ For more information see the LICENSE file
 
 #include <functional>
 
+#include <QStringList>
 #include <QVariantMap>
 
 #include "scripting/apimodule.h"
@@ -41,6 +42,7 @@ public:
     Q_INVOKABLE QVariantMap transform(const QString &id, const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariant property(const QString &id, const QString &key);
     Q_INVOKABLE bool setProperty(const QString &id, const QString &key, const QVariant &value);
+    Q_INVOKABLE QVariant properties(const QString &id);
     Q_INVOKABLE QVariant info(const QString &id);
     Q_INVOKABLE QVariant boneNames(const QString &id);
     Q_INVOKABLE QString skinningMode(const QString &id);
@@ -57,6 +59,10 @@ public:
 
 private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);
+    /// The node's reflected property names, in declaration order. The list the
+    /// two "unknown property" errors quote, so a rejected key is followed by
+    /// the keys that would have worked.
+    static QStringList propertyKeys(const iris::SceneNodePtr &node);
     iris::LightNodePtr lightOrFail(const QString &id, const QString &verb);
     iris::DecalNodePtr decalOrFail(const QString &id, const QString &verb);
 

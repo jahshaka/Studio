@@ -46,7 +46,7 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `scene.nodes() -> [{id, name, type, parent, position, rotation, scale}]` | document | Every node in the open scene, depth-first from the root. |
 | `scene.find(name) -> id \| null` | document | The first node with this exact name, or null. |
 | `scene.root() -> id` | document | The scene root's id. |
-| `scene.addPrimitive(name, {position, rotation, scale, parent}) -> id` | document | Adds a built-in primitive (plane, cone, cube, cylinder, sphere, torus, capsule, gear, pyramid, teapot, sponge, steps). Undoable. |
+| `scene.addPrimitive(name, {position, rotation, scale, parent, count}) -> id \| [id]` | document | Adds a built-in primitive: plane, ground, cone, cube, cylinder, sphere, torus, capsule, gear, pyramid, teapot, sponge, steps ('ground' is the large floor plane the Add menu offers). {count: N} adds N of them and returns an ARRAY of ids instead of one id; every copy gets the same position/rotation/scale/parent options, so move them afterwards with node.transform. Undoable — the whole batch is one step of the run's undo macro. |
 | `scene.addLight(type, {position, ...}) -> id` | document | Adds a light: point, spot, directional or area. Undoable. |
 | `scene.addEmpty({position, parent}) -> id` | document | Adds an empty group node. Undoable. |
 | `scene.addMesh(path, {position, ...}) -> REFUSED` | document | REMOVED — this verb always fails. It used to parse a mesh file straight into the scene, which wrote the DISK PATH where the reader expects an asset guid: the node came back empty on the next open and never exported (the archiver is asset-row driven). Use the ONE import pipeline instead: var g = assets.importFile(path); var p = assets.addToProject(g); assets.addToScene(p, {position}). Only the last of those three is undoable. |
@@ -62,8 +62,9 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `node.duplicate(id) -> newId` | document | Duplicates the node under the same parent. Undoable. |
 | `node.reparent(id, parentId) -> bool` | document | Moves the node under a new parent, keeping its world pose; cycles are refused. Undoable. |
 | `node.transform(id, {position, rotation, scale}) -> {position, rotation, scale}` | document | Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable. |
-| `node.property(id, key) -> value` | document | Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). |
-| `node.setProperty(id, key, value) -> bool` | document | Writes a reflected property (same keys as node.property). Undoable — the write rides the run's undo macro. |
+| `node.property(id, key) -> value` | document | Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. |
+| `node.setProperty(id, key, value) -> bool` | document | Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Undoable — the write rides the run's undo macro. |
+| `node.properties(id) -> [{name, displayName, type, value, min?, max?, writable}]` | document | Every property this node reflects, in the order the document declares them — the answer to "what can I set on this thing?" without guessing a key and burning a turn. 'type' is bool\|int\|float\|vec3\|color\|texture\|string\|list; 'value' is the current value in the same JSON shape node.property returns. 'min'/'max' are PRESENT ONLY WHERE A RANGE IS DECLARED — most document rows declare none, and an absent range means unbounded, not 0..0. 'writable' false means node.setProperty will refuse the row (a mesh's meshPath/meshIndex, a particle emitter's texture): those need an operation reflection cannot do, and have their own verbs. The light and decal ASSET bindings (IES profile, area mask, decal image) are not rows here — node.setLightProfile, node.setLightTexture and node.setDecalTexture own them. |
 | `node.info(id) -> {id, name, type, parent, position, rotation, scale}` | document | Everything scene.nodes() reports, for one node. |
 | `node.boneNames(id) -> [string]` | document | The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged. |
 | `node.skinningMode(id) -> "gpu" \| "none"` | document | How the node deforms: "gpu" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), "none" when it is static. Diagnostic. |
@@ -164,6 +165,15 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 | `world.clearOverrides() -> object` | document | Drops every pinned row and re-applies the current mode. Returns world.settings(). |
 | `world.postFx({exposure, bloomThreshold, ssaoPower, ssaoRadius}) -> object` | document | The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them. |
 | `world.modeTable() -> object` | document | The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from. |
+| `world.setAmbient(color) -> bool` | document | Alias of world.ambient — same arguments, same result. |
+| `world.setGravity(value) -> bool` | document | Alias of world.gravity — same arguments, same result. |
+| `world.setFog({enabled, color, density, ...}) -> bool` | document | Alias of world.fog — same arguments, same result. |
+| `world.setShadows({enabled}) -> bool` | document | Alias of world.shadows — same arguments, same result. |
+| `world.setGi({mode, quality, bounces, ...}) -> bool` | document | Alias of world.gi — same arguments, same result. |
+| `world.setAmbientFromSky(enabled) -> bool` | document | Alias of world.ambientFromSky — same arguments, same result. |
+| `world.setSky(type, {...}) -> bool` | document | Alias of world.sky — same arguments, same result. |
+| `world.setMode({mode}) -> string` | document | Alias of world.mode — same arguments, same result (and, called with no argument, the same read). |
+| `world.setPostFx({exposure, bloomThreshold, ssaoPower, ssaoRadius}) -> object` | document | Alias of world.postFx — same arguments, same result. |
 
 ## assets
 
@@ -245,7 +255,8 @@ Asset/store operations are NOT undoable — asset mutations are permanent.
 |---|---|---|
 | `material.apply(nodeId, presetOrGuid) -> bool` | document | Applies a built-in preset (by name or reserved guid) or a saved project material asset (by guid) to a node. A container node (an imported model's root) applies to every mesh under it, each with its own material instance. Also registers preset applies as a project asset, like the presets panel. Undoable. |
 | `material.set(nodeId, {baseColor, roughness, metallic, baseColorMap, ...}) -> bool` | document | Sets material properties on a mesh node (PBR keys; *Map keys take texture paths or asset guids). Undoable per property. |
-| `material.get(nodeId) -> {property: value}` | document | Reads the node material's editor-facing properties. |
+| `material.get(nodeId) -> {property: value}` | document | Reads the node material's editor-facing properties. material.properties(nodeId) is the same values plus their types, ranges and the full writable-key list. |
+| `material.properties(nodeId) -> {class, rows:[{name, displayName, type, value, min?, max?}], writableKeys:[…]}` | document | What this node's material can be told, without guessing. 'class' is PbrMaterial or CustomMaterial (they have different vocabularies). 'rows' are the DECLARED properties in panel order, with 'min'/'max' present only where a range is declared — the PBR material declares real ones (metallic and roughness are 0..1, emissiveIntensity 0..10), so this is where a scale actually means something. 'writableKeys' is the exact set material.set accepts — the row names plus, on a PbrMaterial, its six texture slots (baseColorMap, metallicMap, roughnessMap, normalMap, occlusionMap, emissiveMap), which take a file path or an image asset guid. Read 'writableKeys' rather than deriving keys from 'rows': the two agree today but the slot list is what material.set actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are NOT writable on a PBR material and are refused by name. |
 
 ## graph
 
