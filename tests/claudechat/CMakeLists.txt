@@ -22,3 +22,6 @@ add_test(NAME claude.chat COMMAND test_claude_chat
 set_tests_properties(claude.chat PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CLAUDECHAT_FIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
     LABELS "scripting")
+
+# The leak lane (scripts/sanitize.sh lsan).
+jah_lsan_lane(claude.chat)

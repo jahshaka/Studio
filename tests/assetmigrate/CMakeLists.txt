@@ -34,3 +34,7 @@ target_link_libraries(test_asset_migrate PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt
 add_test(NAME assets.cas COMMAND test_asset_migrate
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(assets.cas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
+
+# The leak lane (scripts/sanitize.sh lsan): CAS + database, no driver.
+# QUARANTINED (L1 iris::Material properties — the suite's only leak).
+jah_lsan_blocked(assets.cas)

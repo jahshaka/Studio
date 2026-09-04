@@ -15,3 +15,7 @@ target_link_libraries(test_theme_manager PRIVATE Qt6::Widgets qlementine)
 add_test(NAME theme.manager COMMAND test_theme_manager
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(theme.manager PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+
+# The leak lane (scripts/sanitize.sh lsan): ThemeManager installs a QStyle and
+# palettes — ownership hand-offs Qt does not warn about.
+jah_lsan_lane(theme.manager)

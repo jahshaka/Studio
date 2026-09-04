@@ -13,3 +13,7 @@ target_link_libraries(test_shortcut_registry PRIVATE Qt6::Widgets)
 add_test(NAME shortcuts.registry COMMAND test_shortcut_registry
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(shortcuts.registry PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+
+# The leak lane (scripts/sanitize.sh lsan): the registry owns QAction/QShortcut
+# objects whose parenting is exactly the kind of thing this lane checks.
+jah_lsan_lane(shortcuts.registry)

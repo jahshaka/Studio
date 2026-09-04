@@ -164,3 +164,12 @@ add_test(NAME importer.security COMMAND test_importer_security
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.security PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+
+# The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
+# buffers. Only the two suites that do NOT link the engine — importer.glb and
+# importer.meshformats bring a Vulkan device up, which is what the lane's
+# membership rule excludes.
+# importer.fbx is clean; importer.security is QUARANTINED (L3 — every
+# imported asset leaks its AssetNodeObject and the mesh subtree under it).
+jah_lsan_lane(importer.fbx)
+jah_lsan_blocked(importer.security)

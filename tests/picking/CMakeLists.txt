@@ -11,3 +11,8 @@ target_compile_definitions(test_scene_picker PRIVATE JAHSHAKA_SOURCE_DIR="${CMAK
 target_link_libraries(test_scene_picker PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
 add_test(NAME picking.document COMMAND test_scene_picker WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(picking.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")
+
+# The leak lane (scripts/sanitize.sh lsan): document picking allocates the
+# triangle/BVH scratch per pick.
+# QUARANTINED (L2 LightNode::shadowMap — 12 bytes, the suite's only leak).
+jah_lsan_blocked(picking.document)

@@ -31,3 +31,6 @@ target_link_libraries(test_drawers_db PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::
 add_test(NAME drawers.db COMMAND test_drawers_db
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(drawers.db PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "drawers")
+
+# The leak lane (scripts/sanitize.sh lsan).
+jah_lsan_lane(drawers.db)

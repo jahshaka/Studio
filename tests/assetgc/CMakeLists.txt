@@ -38,3 +38,6 @@ target_link_libraries(test_asset_gc PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Mu
 add_test(NAME assets.gc COMMAND test_asset_gc
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(assets.gc PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
+
+# The leak lane (scripts/sanitize.sh lsan).
+jah_lsan_lane(assets.gc)

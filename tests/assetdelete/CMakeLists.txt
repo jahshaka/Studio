@@ -33,3 +33,6 @@ add_test(NAME assets.delete_roundtrip COMMAND test_asset_delete
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(assets.delete_roundtrip PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
+
+# The leak lane (scripts/sanitize.sh lsan).
+jah_lsan_lane(assets.delete_roundtrip)

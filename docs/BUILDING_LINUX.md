@@ -136,6 +136,77 @@ The suite is fully headless (offscreen Vulkan) but a reachable X display is requ
 Vulkan platform plugin. On machines without a GPU:
 `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json ctest ...` runs everything on lavapipe.
 
+## 6b. The sanitizer lanes (on demand — NOT part of the gate)
+
+Two extra lanes exist for memory and threading work. **Neither runs as part of `ctest`**: a
+plain `ctest` in `build-linux` runs exactly what it always ran. Run them deliberately — after
+touching ownership or threading, and before a release — not on every build.
+
+```bash
+./scripts/sanitize.sh lsan          # leaks: the document/service suites (~40 s)
+./scripts/sanitize.sh tsan          # data races: the async suites (first run builds build-tsan/)
+```
+
+Membership is a ctest label (`lsan`, `tsan`) set next to each suite's `add_test`; the reason a
+suite is in or out — or quarantined as `lsan-blocked` / `tsan-blocked` — is written there.
+`scripts/sanitize.sh` builds what the lane needs, runs `ctest -L <lane>`, and passes any extra
+arguments straight to ctest
+(`./scripts/sanitize.sh lsan -R document`).
+
+**lsan — leaks, under a minute, no rebuild.** LeakSanitizer's runtime is `LD_PRELOAD`ed over the
+ordinary Debug binaries: it intercepts `malloc`/`free` process-wide whether or not the code was
+compiled with `-fsanitize=address`, so the binaries under test are the same ones the normal gate
+runs. The lane covers the suites that never initialise Vulkan and never spawn the app — the four
+ASan-built engine suites keep `detect_leaks=0` because the Vulkan loader's Mesa device-select
+layer leaks ~6 dbus allocations we do not own, and that excuse does not extend to code that never
+loads a driver. Suppressions live in `scripts/lsan.supp`, one commented entry per verified
+external allocation; the lane runs with `print_suppressions=1` so every run states what it hid.
+The script refuses to run if a deliberate-leak canary does not trip, because a preload that
+silently failed would leave the lane green while checking nothing.
+
+Suites that are eligible for the lane but fail it today because of a known leak underneath them
+carry the label `lsan-blocked` instead — the quarantine. Every one of them names the defect that
+blocks it beside its `add_test`, `sanitize.sh lsan` lists them at the end of every run, and
+`ctest -L '^lsan-blocked$'` (with the same environment) reproduces them. They are not hidden and
+they are not suppressed; they are simply not allowed to hold the gate red. When a blocker is
+fixed, move the suite from `jah_lsan_blocked()` to `jah_lsan_lane()` — one word.
+
+**tsan — data races, its own build dir, slow.** ThreadSanitizer cannot share a process with
+AddressSanitizer and has to instrument every translation unit, so it gets `build-tsan/`
+(`-DJAHSHAKA_TSAN=ON`, which adds `-fsanitize=thread` tree-wide). The first run configures and
+builds it (~15 min); after that only the changed files rebuild. Ogre-Next, Qt and the Vulkan
+driver stay uninstrumented — `scripts/tsan.supp` records what that costs.
+
+Race reports are collected per process into `build-tsan/tsan-logs/` (`TSAN_OPTIONS=log_path`,
+because a child process's stderr would otherwise be swallowed by its harness) and summarised at
+the end of the run, whether or not ctest passed. Two TSAN_OPTIONS carry the lane and are worth
+understanding before you widen it:
+
+* `ignore_noninstrumented_modules=1` — TSan cannot see the synchronisation inside Qt (QMutex and
+  QWaitCondition are futex-based, and libQt6Core is not instrumented), so without this flag every
+  cross-thread `new`/`delete` of a QEvent or a QArrayData is reported as a data race: 62 reports
+  in this lane's first run, not one of them ours. With it, an access is reported only when at
+  least one side is in code we compiled.
+* `report_thread_leaks=0` — every thread in these processes belongs to Qt (`QThreadPool`,
+  `QDBusConnection`) and is left idle at exit rather than joined, by Qt's design.
+
+The same blind spot costs `scripts/tsan.supp` its one entry: a queued
+`QMetaObject::invokeMethod(obj, lambda, Qt::QueuedConnection)` copies the lambda's captures on
+the calling thread and reads them on the receiving one, ordered by a mutex inside libQt6Core that
+TSan cannot see, so it reports a race between two lines of ours. The suppression names Qt's
+`QCallableObject` (the captures' heap home) and nothing else; what it costs is written in the
+file. Races on anything a worker and the UI thread share **by reference** still report.
+
+**The suites that spawn the real Jahshaka binary are quarantined (`tsan-blocked`) and this is not
+our bug.** Under GCC 15's libtsan the app aborts during startup with
+`ThreadSanitizer: CHECK failed: sanitizer_thread_registry.cpp:186` from the `pthread_create`
+interceptor under `QThreadPool::start` (reached from `QImage::convertToFormat_helper` while
+ProjectManager's `setupUi` loads a pixmap) — TSan's own thread registry rejecting a recycled
+`pthread_t`, before the app ever reaches its event loop. Nothing in our code can work around it;
+clang's ThreadSanitizer is the untried alternative. Until then the tsan lane runs the in-process
+suites only (`import.async`, `services.memory`) — the threaded-import runner is the part that
+matters most — and finishes in about a second.
+
 ## 7. Crash dumps on a dev box
 
 Every fatal signal already writes a `crash-<unixtime>.log` next to the app's log

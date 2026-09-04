@@ -21,3 +21,7 @@ add_test(NAME archive.responsive COMMAND test_archive_responsive
 set_tests_properties(archive.responsive PROPERTIES
     ENVIRONMENT "HOME=${_archive_home}"
     TIMEOUT 600 LABELS "archive")
+
+# The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
+# plus its cancel path. Same wall-clock caveat as open.responsive.
+jah_tsan_blocked(archive.responsive)   # spawns the app: see jah_tsan_blocked

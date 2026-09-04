@@ -55,3 +55,8 @@ if(UNIX AND NOT APPLE)
     set_tests_properties(assets.torn_write PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "assets")
 endif()
+
+# The leak lane (scripts/sanitize.sh lsan). assets.torn_write is NOT in it: it
+# kills a child mid-write on purpose, and a SIGKILLed process never reaches
+# LeakSanitizer's atexit check, so the entry would be decoration.
+jah_lsan_lane(assets.paths)

@@ -33,3 +33,7 @@ target_link_libraries(test_asset_metadata PRIVATE IrisGL Qt6::Widgets Qt6::Sql Q
 add_test(NAME assets.metadata COMMAND test_asset_metadata
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(assets.metadata PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets")
+
+# The leak lane (scripts/sanitize.sh lsan): metadata extraction allocates per
+# asset type (image decode, audio probe, model parse).
+jah_lsan_lane(assets.metadata)

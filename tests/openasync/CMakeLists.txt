@@ -24,3 +24,9 @@ add_test(NAME open.responsive COMMAND test_open_responsive
 set_tests_properties(open.responsive PROPERTIES
     ENVIRONMENT "HOME=${_open_home}"
     TIMEOUT 480 LABELS "openasync")
+
+# The race lane (scripts/sanitize.sh tsan): a threaded open racing a main-thread
+# heartbeat is exactly what TSan is for. Note the 500 ms gap budget above is a
+# WALL-CLOCK assertion — under TSan's 5-15x slowdown it can legitimately fail
+# while proving no race; read the race reports, not the verdict.
+jah_tsan_blocked(open.responsive)   # spawns the app: see jah_tsan_blocked

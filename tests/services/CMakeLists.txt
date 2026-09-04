@@ -60,3 +60,15 @@ add_test(NAME services.memory COMMAND test_memory_ownership
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(services.memory PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "services")
+
+# The sanitizer lanes (scripts/sanitize.sh).
+#   tsan  services.memory registers and drops session assets the way the app
+#         does from more than one thread's callbacks.
+#   lsan  services.core and services.memory are the ownership suites: whatever
+#         AssetManager/ThumbnailManager fail to free shows up here first, and
+#         neither one loads a driver.
+jah_tsan_lane(services.memory)
+# services.memory is QUARANTINED (L2 LightNode::shadowMap — 24 bytes, its
+# only leak; the registry ownership it actually tests is clean).
+jah_lsan_lane(services.core)
+jah_lsan_blocked(services.memory)

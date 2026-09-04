@@ -3,6 +3,7 @@ build-linux/
 build-macos/
 build-macos-rel/
 build-mcp/
+build-tsan/
 build-media/
 build/
 
