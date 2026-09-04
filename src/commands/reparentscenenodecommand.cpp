@@ -19,7 +19,7 @@ ReparentSceneNodeCommand::ReparentSceneNodeCommand(iris::SceneNodePtr sceneNode,
                                                    iris::SceneNodePtr newParent)
 {
     this->sceneNode = sceneNode;
-    this->oldParent = sceneNode ? sceneNode->parent : iris::SceneNodePtr();
+    this->oldParent = sceneNode ? sceneNode->getParent() : iris::SceneNodePtr();
     this->newParent = newParent;
     setText(QObject::tr("Reparent %1").arg(sceneNode ? sceneNode->getName() : QString()));
 }

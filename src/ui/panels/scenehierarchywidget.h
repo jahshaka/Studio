@@ -159,8 +159,10 @@ private:
     QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
 
     // maps scene nodes to their widgetitems
-    QMap<long, QSharedPointer<iris::SceneNode>> nodeList;
-    QMap<long, QTreeWidgetItem*> treeItemList;
+    // Keyed by iris::SceneNode::nodeId, which is qint64 (it was `long`, i.e.
+    // 32-bit on Windows LLP64).
+    QMap<qint64, QSharedPointer<iris::SceneNode>> nodeList;
+    QMap<qint64, QTreeWidgetItem*> treeItemList;
 
     QSharedPointer<iris::SceneNode> lastDraggedHiearchyItemSrc;
 

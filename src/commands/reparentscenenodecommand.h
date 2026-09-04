@@ -40,7 +40,7 @@ public:
                                  const iris::SceneNodePtr &target)
     {
         if (!node || !target) return true;
-        for (iris::SceneNodePtr p = target; !!p; p = p->parent)
+        for (iris::SceneNodePtr p = target; !!p; p = p->getParent())
             if (p == node) return true;
         return false;
     }

@@ -597,8 +597,8 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
     for (const auto &h : hits) {
         if (!h.node || h.triangleIndex < 0) continue;
         bool own = false;                       // never snap to the dragged subtree
-        for (iris::SceneNode *n = h.node.data(); n; n = n->parent.data())
-            if (n == mSelectedNode.data()) { own = true; break; }
+        for (auto n = h.node; n; n = n->getParent())
+            if (n.data() == mSelectedNode.data()) { own = true; break; }
         if (own) continue;
         if (!best.node || h.distanceFromCameraSqrd < best.distanceFromCameraSqrd) best = h;
     }
@@ -1253,8 +1253,8 @@ bool EngineSceneViewport::snapSelectionToFloor()
     for (const auto &h : hits) {
         if (!h.node) continue;
         bool own = false;                       // ignore the selection's own subtree
-        for (iris::SceneNode *n = h.node.data(); n; n = n->parent.data())
-            if (n == mSelectedNode.data()) { own = true; break; }
+        for (auto n = h.node; n; n = n->getParent())
+            if (n.data() == mSelectedNode.data()) { own = true; break; }
         if (own) continue;
         if (!found || h.hitPoint.y() > targetY) { targetY = h.hitPoint.y(); found = true; }
     }

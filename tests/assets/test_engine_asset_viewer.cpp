@@ -168,7 +168,7 @@ int main(int argc, char **argv)
         auto ball = assets.setMaterialSubject(green.staticCast<iris::Material>());
         assets.resetCamera();
         CHECK(!!ball && assets.subject() == ball, "the material ball replaced the cube as the subject");
-        CHECK(cube->parent == nullptr, "the previous subject left the document");
+        CHECK(!cube->hasParent(), "the previous subject left the document");
         Image mat = render(assets, *engine, view, 3);
         show("second material on the sphere", mat, W / 2, H / 2);
         CHECK(isGreen(at(mat, W / 2, H / 2)), "centre shows the second material's colour");

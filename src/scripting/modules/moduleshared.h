@@ -146,7 +146,8 @@ inline QVariantMap nodeToJs(const iris::SceneNodePtr &node)
     m["id"] = node->getGUID();
     m["name"] = node->getName();
     m["type"] = nodeTypeName(node->getSceneNodeType());
-    m["parent"] = node->parent ? node->parent->getGUID() : QString();
+    auto parentNode = node->getParent();
+    m["parent"] = parentNode ? parentNode->getGUID() : QString();
     m["position"] = vecToJs(node->getLocalPos());
     m["rotation"] = vecToJs(node->getLocalRot().toEulerAngles());
     m["scale"] = vecToJs(node->getLocalScale());
