@@ -20,6 +20,9 @@ For more information see the LICENSE file
 #include <QDebug>
 
 #include "data/database/database.h"
+#include <QSqlDatabase>
+
+#include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "ui/pages/iassetviewer.h"
@@ -93,9 +96,15 @@ ImportMeshTail::Outcome ImportMeshTail::run(Database *db, IAssetViewer *viewer,
     }
     else {
         // No fragment came through (older path, .jaf-shaped callers):
-        // the stored model loads through the viewer's reader as before.
-        const QString storedModel =
-            AssetStorePaths::legacyFilePath(guid, QFileInfo(fileName).fileName());
+        // the stored model loads through the viewer's reader as before —
+        // resolved by guid through the CAS, not from the retired per-guid
+        // view (deep audit 2026-09, area 6).
+        QString storedModel = AssetCas::resolveFile(
+            QSqlDatabase::database(), AssetStorePaths::root(),
+            guid, QFileInfo(fileName).fileName());
+        if (storedModel.isEmpty())
+            storedModel = AssetCas::resolveSource(
+                QSqlDatabase::database(), AssetStorePaths::root(), guid);
         viewer->loadModel(storedModel, guid);
     }
 

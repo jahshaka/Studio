@@ -80,7 +80,9 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/services.h"
 #include "services/assetstore.h"
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include <QSqlDatabase>
 #include "services/projectservice.h"
 #include "ui/controls/assetviewgrid.h"
 #include "ui/controls/assetgriditem.h"
@@ -169,52 +171,6 @@ bool AssetView::eventFilter(QObject *watched, QEvent *event)
 	}
 
 	return QObject::eventFilter(watched, event);
-}
-
-void AssetView::copyTextures(const QString &folderGuid)
-{
-    const QString relativePath = "Textures";
-    const aiScene *scene = viewer->sceneSource()->importer.GetScene();
-
-    QStringList texturesToCopy;
-
-    for (int i = 0; i < scene->mNumMeshes; i++) {
-        auto mesh = scene->mMeshes[i];
-        auto material = scene->mMaterials[mesh->mMaterialIndex];
-
-        aiString textureName;
-
-        if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureName);
-            texturesToCopy.append(textureName.C_Str());
-        }
-
-		if (material->GetTextureCount(aiTextureType_SPECULAR) > 0) {
-			material->GetTexture(aiTextureType_SPECULAR, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_NORMALS) > 0) {
-			material->GetTexture(aiTextureType_NORMALS, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-
-		if (material->GetTextureCount(aiTextureType_HEIGHT) > 0) {
-			material->GetTexture(aiTextureType_HEIGHT, 0, &textureName);
-			texturesToCopy.append(textureName.C_Str());
-		}
-    }
-
-    if (!texturesToCopy.isEmpty()) {
-        QString assetPath = AssetStorePaths::legacyFolder(folderGuid);
-
-        for (auto texture : texturesToCopy) {
-			QString tex = QFileInfo(texture).isRelative()
-									? QDir::cleanPath(QDir(QFileInfo(filename).absoluteDir()).filePath(texture))
-									: QDir::cleanPath(texture);
-            QFile::copy(tex, QDir(assetPath).filePath(QFileInfo(texture).fileName()));
-        }
-    }
 }
 
 void AssetView::checkForEmptyState()
@@ -1086,7 +1042,6 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 			//auto material = db->getAssetMaterialGlobal(gridItem->metadata["guid"].toString());
 			//auto materialObj = QJsonDocument::fromBinaryData(material);
 
-            auto assetPath = AssetStorePaths::legacyFolder(gridItem->metadata["guid"].toString());
 
 			// viewer->setMaterial(materialObj.object());
 
@@ -1130,21 +1085,18 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
             // (the currentChanged hook), before the new page starts.
             viewers->setCurrentIndex(static_cast<int>(page));
 
-            // Store-file path for the media pages (the row's primary file).
-            const QString storeFile =
-                AssetStorePaths::legacyFilePath(guid, db->fetchAsset(guid).name);
+            // The row's primary file, resolved through the CAS by guid — the
+            // retired <root>/<guid>/ view is gone (deep audit 2026-09, area 6).
+            const QString storeFile = AssetCas::resolveSource(
+                QSqlDatabase::database(), AssetStorePaths::root(), guid);
 
             switch (page) {
             case PreviewPage::Viewer3D: {
                 if (type == ModelTypes::Object || type == ModelTypes::ParticleSystem) {
-                    QString path;
-                    QDir dir(assetPath);
-                    foreach(auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-                        if (Constants::MODEL_EXTS.contains(file.suffix().toLower())) {
-                            path = file.absoluteFilePath();
-                            break;
-                        }
-                    }
+                    // The model file IS the asset's source-role object; the
+                    // old "scan the per-guid folder for a MODEL_EXTS suffix"
+                    // was the retired legacy view's only remaining reader here.
+                    const QString path = storeFile;
                     if (viewer->cachedAsset(guid))
                         viewer->addNodeToScene(viewer->cachedAsset(guid), guid, true, false);
                     else
@@ -1466,22 +1418,17 @@ void AssetView::finishJafImport(const ImportResult &result, const QString &fileN
     else if (result.jafKind == QStringLiteral("texture")) {
         renameModelField->setText(QFileInfo(filename).baseName());
         viewers->setCurrentIndex(1);
-        const QString imagePath = AssetStorePaths::legacyFilePath(guid, db->fetchAsset(guid).name);
+        const QString imagePath = AssetCas::resolveSource(
+            QSqlDatabase::database(), AssetStorePaths::root(), guid);
         QPixmap image(imagePath);
         assetImageCanvas->setPixmap(image.scaledToHeight(480, Qt::SmoothTransformation));
         addToJahLibrary(filename, guid, true);
     }
     else if (result.jafKind == QStringLiteral("object")) {
         viewers->setCurrentIndex(0);
-        // The archive's model file, from the store's per-guid view.
-        QString path;
-        QDir dir(AssetStorePaths::legacyFolder(guid));
-        foreach (auto &file, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-            if (Constants::MODEL_EXTS.contains(file.suffix().toLower())) {
-                path = file.absoluteFilePath();
-                break;
-            }
-        }
+        // The archive's model file: the asset's source-role object.
+        const QString path = AssetCas::resolveSource(
+            QSqlDatabase::database(), AssetStorePaths::root(), guid);
         renameModelField->setText(QFileInfo(filename).baseName());
         viewer->loadJafModel(path, guid);
         addToJahLibrary(filename, guid, true);
@@ -2640,13 +2587,14 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 	const auto record = db->fetchAsset(guid);
 	if (record.guid.isEmpty()) return;
 
-	const auto assetFolder = AssetStorePaths::legacyFolder(guid);
+	const QString sourceFile = AssetCas::resolveSource(
+	    QSqlDatabase::database(), AssetStorePaths::root(), guid);
 
 	QPixmap pixmap;
 	switch (static_cast<ModelTypes>(record.type)) {
 	case ModelTypes::Texture: {
 		// straight from the source image, like the import path
-		auto thumb = ThumbnailManager::createThumbnail(IrisUtils::join(assetFolder, record.name), 256, 256);
+		auto thumb = ThumbnailManager::createThumbnail(sourceFile, 256, 256);
 		if (thumb && !thumb->thumb.isNull()) pixmap = QPixmap::fromImage(thumb->thumb);
 		break;
 	}
@@ -2655,21 +2603,14 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		break;
 	case ModelTypes::Video:
 		// Re-grab the first-second frame (film icon when decode fails).
-		pixmap = VideoUtils::thumbnailFor(IrisUtils::join(assetFolder, record.name));
+		pixmap = VideoUtils::thumbnailFor(sourceFile);
 		break;
 	case ModelTypes::Object:
 	case ModelTypes::ParticleSystem: {
 		// the import-time flow: load into the asset viewer, screenshot it —
 		// the same lit, textured render a fresh import stores today.
-		QString path;
-		for (const auto &file : QDir(assetFolder).entryInfoList(QDir::NoDotAndDotDot | QDir::Files)) {
-			if (Constants::MODEL_EXTS.contains(file.suffix().toLower())) {
-				path = file.absoluteFilePath();
-				break;
-			}
-		}
 		viewers->setCurrentIndex(0);
-		viewer->loadJafModel(path, guid, false, true, false);
+		viewer->loadJafModel(sourceFile, guid, false, true, false);
 		const QImage shot = viewer->takeScreenshot(512, 512);
 		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
 		break;
@@ -2720,14 +2661,17 @@ void AssetView::clearLoadingTile()
 
 void AssetView::removeAssetFromProject(AssetGridItem *item)
 {
-    auto assetPath = AssetStorePaths::root();
-
 	auto option = QMessageBox::question(this,
 	    "Deleting Asset", "Are you sure you want to delete this asset?",
 	    QMessageBox::Yes | QMessageBox::Cancel);
 
 	if (option == QMessageBox::Yes) {
-	    if (IrisUtils::removeDir(QDir(assetPath).filePath(item->metadata["guid"].toString()))) {
+	    // Whatever the retired per-guid view left for this asset goes with it
+	    // (a no-op, and TRUE, when there is nothing there — the case every
+	    // asset imported since the view was retired is in). The CONTENT is
+	    // assets.gc's to reclaim: only it can tell a shared object from an
+	    // exclusive one.
+	    if (IrisUtils::removeDir(AssetStorePaths::legacyFolder(item->metadata["guid"].toString()))) {
 	        fastGrid->deleteTile(item);
 			// if the item is being used soft delete it
 			//db->deleteAsset(item->metadata["guid"].toString());

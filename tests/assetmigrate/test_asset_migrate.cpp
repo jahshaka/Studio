@@ -15,8 +15,8 @@
 //   - verify: clean store, then detected bit-rot on a corrupted object;
 //   - sidecars + rebuildCatalog: a fresh DB reconstructed from sidecars
 //     matches (the honest I2 test);
-//   - materializeLegacyView: the per-guid hardlink view for not-yet-
-//     rerouted readers.
+//   - the RETIRED legacy view: no writer creates <root>/<guid>/ any more,
+//     but the resolver still reads one.
 //
 // Headless (offscreen platform); throwaway files in the test working dir.
 #include <QApplication>
@@ -201,12 +201,27 @@ int main(int argc, char **argv)
     CHECK(QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, "guidC")),
           "file-less row still gets a sidecar");
 
-    // ---- legacy hardlink view ----
-    CHECK(AssetCas::materializeLegacyView(conn, root, "guidB", &error), "legacy view for guidB");
-    CHECK(readFile(root + "/guidB/b.png") == contentY, "view file carries the object bytes");
-    CHECK(AssetCas::materializeLegacyView(conn, root, "guidB", &error), "view materialization is idempotent");
-    CHECK(AssetCas::materializeLegacyView(conn, root, "guidC", &error),
-          "view of a file-less row is a no-op, not an error");
+    // ---- the RETIRED legacy view: still READ, never written ----
+    // materializeLegacyView is gone (deep audit 2026-09, area 6) — nothing
+    // hardlinks <root>/<guid>/ any more. The resolver keeps reading such a
+    // folder so an old store, and the writers that still create one outside
+    // the ONE import pipeline (the materials module's texture import), stay
+    // resolvable until assets.gc reclaims it.
+    {
+        // (i) an asset with NO asset_files row at all, bytes only in the
+        //     legacy folder — the materials-module shape
+        insertAsset("guidLegacy", 2, "legacy.png", 3);
+        writeFile(root + "/guidLegacy/legacy.png", contentY);
+        QString legacyName;
+        const QString legacyPath = AssetCas::resolveSource(conn, root, "guidLegacy", &legacyName);
+        CHECK(readFile(legacyPath) == contentY && legacyName == "legacy.png",
+              "resolveSource reads a legacy folder for a row with no asset_files");
+        CHECK(readFile(AssetCas::resolveFile(conn, root, "guidLegacy", "legacy.png")) == contentY,
+              "resolveFile reads the same legacy folder by name");
+        // and nothing materialized a view for the CAS-backed assets
+        CHECK(!QFileInfo::exists(root + "/guidB/b.png"),
+              "no per-guid view is created for a CAS-backed asset any more");
+    }
 
     // AssetMigration::verify/rebuildCatalog open the database file themselves,
     // so hand the default connection back first. `conn` is a COPY of that

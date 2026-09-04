@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "shaderassetwidget.h"
 #include "data/project.h"
+#include <QSqlDatabase>
+#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QMenu>
 #include <QEvent>
@@ -516,31 +518,29 @@ QString ShaderAssetWidget::createShader(QListWidgetItem * item)
 			if (type == "texture") {
 				auto value = prop.toObject()["value"].toString();
 
-				const QString assetFolder = AssetStorePaths::legacyFolder(value);
-				QDirIterator it(assetFolder);
+				// The texture's stored bytes, by ITS guid — the CAS, not a
+				// directory walk of the retired <root>/<guid>/ view (deep
+				// audit 2026-09, area 6). The walk also happened to iterate
+				// EVERY file in the folder and register each as a separate
+				// texture; the asset has exactly one source file.
+				QString sourceName;
+				const QString sourcePath = AssetCas::resolveSource(
+				    QSqlDatabase::database(), AssetStorePaths::root(), value, &sourceName);
+				if (sourcePath.isEmpty()) continue;
 
-				while (it.hasNext()) {
-					auto imgGuid = materials::EffectsPage::genGUID();
-					auto fileName = it.next();
-					auto splitted = fileName.split('/');
-					if (splitted.back() == '.' || splitted.back() == "..") continue;
+				const QString imgGuid = materials::EffectsPage::genGUID();
+				// find the old guid and replace with the new guid
+				str = str.replace(value, imgGuid);
 
-					//get extension only
-					auto spl = splitted.back().split('.');
+				// the project copy keeps the guid-as-name convention this
+				// widget has always written, with the source's extension
+				const QString suffix = QFileInfo(sourceName.isEmpty() ? sourcePath : sourceName).suffix();
+				const QString newName = suffix.isEmpty() ? value : value + '.' + suffix;
 
-					// find the old guid and replace with the new guid
-					str = str.replace(value, imgGuid);
+				QFile::copy(sourcePath, IrisUtils::join(project->getProjectFolder(), newName));
 
-					QFile file(fileName);
-					//assigns the guid for the file name and the original extension
-					auto newName = value +'.'+ spl.back();
-
-					QFile::copy(file.fileName(), project->getProjectFolder()+'/'+ newName);
-					
-					db->createAssetEntry(project->getProjectGuid(), imgGuid, newName, static_cast<int>(ModelTypes::Texture));
-					db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::Texture), targetGuid, imgGuid, project->getProjectGuid());
-
-				}
+				db->createAssetEntry(project->getProjectGuid(), imgGuid, newName, static_cast<int>(ModelTypes::Texture));
+				db->createDependency(static_cast<int>(ModelTypes::Shader), static_cast<int>(ModelTypes::Texture), targetGuid, imgGuid, project->getProjectGuid());
 			}
 		}
 
