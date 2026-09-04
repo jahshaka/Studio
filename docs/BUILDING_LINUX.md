@@ -136,6 +136,56 @@ The suite is fully headless (offscreen Vulkan) but a reachable X display is requ
 Vulkan platform plugin. On machines without a GPU:
 `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json ctest ...` runs everything on lavapipe.
 
+## 7. Crash dumps on a dev box
+
+Every fatal signal already writes a `crash-<unixtime>.log` next to the app's log
+(`src/app/crashhandler.cpp`; the working directory, normally `build-linux/bin`). That happens
+with no setup at all, and Linux builds are linked with `-rdynamic` so the frames carry function
+names rather than bare offsets. Decode one, or the newest one, with:
+
+```bash
+scripts/debug-crash.sh                        # newest crash log (+ core, if any)
+scripts/debug-crash.sh --log build-linux/bin/crash-1772500000.log
+```
+
+`addr2line` adds `file:line` and resolves the frames `-rdynamic` cannot (statics and
+anonymous-namespace functions never reach `.dynsym`). Keep the build tree — the log is useless
+against a different binary.
+
+**Core dumps are a separate, opt-in thing, and `ulimit` alone will not give you one.** On a
+stock Ubuntu box:
+
+```bash
+cat /proc/sys/kernel/core_pattern     # |/usr/share/apport/apport -p%p -s%s ... -- %E
+ulimit -c                             # 0
+```
+
+Apport keeps reports for *packaged* binaries only, so a Jahshaka crash produces nothing in
+`/var/crash`. And per `man 5 core`, **`RLIMIT_CORE` is ignored while `core_pattern` is a pipe**
+— raising `ulimit -c` changes nothing until the pattern stops being a pipe. Both settings are
+needed, in this order:
+
+```bash
+# 1. stop piping to apport; write cores into the crashing process's cwd (needs root)
+sudo sysctl -w kernel.core_pattern=core.%p        # not persistent, by design
+
+# 2. now the limit matters — per shell, so set it in the shell you launch from
+ulimit -c unlimited
+
+cd build-linux/bin && ./Jahshaka                  # crash → ./core.<pid>
+scripts/debug-crash.sh                            # gdb over the newest core
+```
+
+Deliberately NOT automated and NOT persisted: `core_pattern` is machine-wide state that also
+governs every other program on the box, so it is a decision the box's owner makes, not
+something a build script or a test suite changes underneath them. To go back:
+`sudo sysctl -w kernel.core_pattern='|/usr/share/apport/apport -p%p -s%s -c%c -d%d -P%P -u%u -g%g -- %E'`
+(or just reboot — the sysctl above is not persistent).
+
+`gdb` is required for the core path (`sudo apt install gdb`). `scripts/debug-crash.sh` prints
+the current `core_pattern`/`ulimit` state at the top of every run, so a run that produced no
+core tells you why.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
@@ -146,3 +196,5 @@ Vulkan platform plugin. On machines without a GPU:
 | `git submodule update` fails on ogre-next | Network access to github.com/OGRECave required (large repo; the clone is blob-filtered) |
 | A patch fails in build-ogre.sh after updating the submodule | Upstream changed a patched file — see `irisgl/docs/OGRE_BUILD.md`, "Updating Ogre" |
 | Configure fails with `PATCH DOES NOT APPLY` | An assimp patch no longer applies (upstream moved, or the submodule tree is dirty) — see `irisgl/thirdparty/assimp-patches/README.md` |
+| The app crashed but there is no core file | Expected — see §7. `crash-*.log` is written regardless; cores need the `core_pattern` change first |
+| Crash-log frames are bare `Jahshaka(+0x…)` offsets | The binary was linked without `-rdynamic` (an old build dir). Re-configure; `scripts/debug-crash.sh` decodes them either way |

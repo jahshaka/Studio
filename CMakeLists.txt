@@ -53,6 +53,26 @@ set(MACOSX_BUNDLE_COPYRIGHT "Copyright (c) 2016-2026 EXEDOS LLC")
 # macOS branch already bakes @loader_path — but this makes us robust either way.)
 if(UNIX AND NOT APPLE)
     add_link_options(-Wl,--disable-new-dtags)
+
+    # -rdynamic: readable crash logs (STABILITY_PROGRAM_SPEC Lane 7).
+    #
+    # crashhandler.cpp writes its backtrace with backtrace_symbols_fd(), which
+    # resolves addresses through dladdr() — and dladdr() can only see an
+    # executable's DYNAMIC symbol table. Without this flag a PIE executable
+    # exports nothing, so every frame of every crash-*.log printed as
+    # `./Jahshaka(+0x1234ab) [0x5566...]`: module plus offset, no names.
+    # (Verified before the change: `readelf --dyn-syms bin/Jahshaka |
+    # grep -c MainWindow` == 0.)
+    #
+    # -rdynamic puts every extern-linkage symbol in .dynsym, so the frames now
+    # read `./Jahshaka(_ZN10MainWindow...+0x2a)`. It does NOT help statics or
+    # anonymous-namespace functions — those never reach .dynsym — which is why
+    # scripts/debug-crash.sh still runs addr2line over the raw offsets; DWARF
+    # resolves those and gives file:line as well. Keep both.
+    #
+    # Cost: a bigger .dynsym and slightly slower symbol lookup at load. Nothing
+    # about linking or the loader's search order changes.
+    add_link_options(-rdynamic)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
