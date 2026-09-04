@@ -65,3 +65,49 @@ selftest (≈17%), and 3.9 s of the run elapses before the first shader is touch
 Of that 1.2 s, glslang is 0.32 s and driver PSO creation is 0.64 s — so the *driver*
 half is the bigger one, and it is layer 3 (`VkPipelineCache`) that recovers it. No
 combination of caches can make a cold selftest faster than ~5.9 s.
+
+## Recorded results — the same box, after the program landed
+
+`--engine-selftest`, three runs per mode, both caches pinned to scratch:
+
+| mode | wall | shaders compiled | microcode hits |
+|---|---|---|---|
+| baseline (no cache at all, before this lane) | 7.17 s | 68 | 0 |
+| cold (first ever launch) | 7.16 s | 65 | 3 |
+| warm — our cache warm, DRIVER cache cold | 6.06 s | 0.7 | 71 |
+| warm-all — both warm | 6.05 s | 0.7 | 71 |
+
+Three things worth reading off that table:
+
+1. **The cold path costs nothing.** 7.16 s against a 7.17 s pre-cache baseline —
+   the fingerprinting, the checksums, the atomic writes and the startup gate all
+   fit inside the noise.
+2. **A warm launch is 1.10 s (15%) faster**, and that is the whole ceiling: the
+   probes in the section above measured shader + PSO work at ~1.2 s of a 7.1 s
+   cold start, and this recovers essentially all of it. `SHADER_CACHE_SPEC` §8's
+   estimate of 7.2 s → 4.5–5.5 s was never reachable; the work simply is not
+   there.
+3. **`warm` and `warm-all` are the same number.** Our own pipeline cache fully
+   substitutes for the NVIDIA driver's — the 0.67 s that used to arrive by
+   accident now arrives under our control, and a driver update no longer looks
+   like a performance regression.
+
+The three microcode hits on a cold run are not a cache read: two shaders
+generated from byte-identical source share one microcode entry in memory, and
+the SMAA materials do it every launch. "Did the disk cache work" is answered by
+`app.shaderCache().microcodeLoaded`, never by that number.
+
+### And the number nobody was measuring: cold scene-open responsiveness
+
+`open.responsive` reports the worst UI-thread gap during a threaded open of the
+Showroom. Same build, same box, cache on versus off:
+
+| | worst gap, cold open | worst gap, second open |
+|---|---|---|
+| shader cache ON | 477 – 479 ms | 510 ms |
+| shader cache OFF | 2264 ms | 513 ms |
+
+A cold open without the cache spends 2.3 seconds unable to answer the window,
+because that is where the world's shaders get compiled. With the cache it is
+under half a second. That is a bigger user-visible win than the 1.1 s of startup,
+and it was not what the program set out to buy.
