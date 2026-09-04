@@ -10,7 +10,13 @@
 //   - tools/list exposes EXACTLY the five phase-1 tools
 //   - run_script creates a project + primitive, verified via describe_scene
 //   - run_script errors surface as isError tool results with console intact
-//   - screenshot returns a decodable PNG at the requested size
+//   - screenshot returns a decodable PNG at the requested size, and always
+//     echoes the camera pose in a text block beside it
+//   - screenshot camera/frameNode move the camera through the registry verbs:
+//     the framed shot is different PIXELS from the default view, the red cube
+//     is in the middle of it, and the echoed pose matches editor.camera()
+//   - describe_scene is bounded by default (depth 2 + childCount/truncated),
+//     escapable via depth/subtree, and enriched via include[]
 //   - undo_redo reverts the last run_script call (describe_scene confirms)
 //   - api_docs returns the registry reference (whole and per-module)
 //   - F5: a scripted node.setProperty is UNDOABLE through undo_redo
@@ -276,19 +282,225 @@ int main(int argc, char **argv)
     }
 
     // ---- screenshot ------------------------------------------------------
+    // The image content block is content[0] and stays there: the camera/pose
+    // work below only APPENDS a text block, so a client that reads content[0]
+    // and nothing else keeps working.
+    auto shotImage = [&](const QJsonObject &result, QImage &into) {
+        const QJsonArray content = result.value("content").toArray();
+        if (content.isEmpty()) return false;
+        const QJsonObject item = content.first().toObject();
+        if (item.value("type").toString() != QLatin1String("image")) return false;
+        return into.loadFromData(
+            QByteArray::fromBase64(item.value("data").toString().toLatin1()), "PNG");
+    };
+    /// The pose echo: the text block beside the image, parsed back to JSON.
+    auto shotPose = [&](const QJsonObject &result) {
+        const QJsonArray content = result.value("content").toArray();
+        for (const QJsonValue &v : content) {
+            const QJsonObject item = v.toObject();
+            if (item.value("type").toString() != QLatin1String("text")) continue;
+            const QString text = item.value("text").toString();
+            const int brace = text.indexOf('{');
+            if (brace < 0) continue;
+            return QJsonDocument::fromJson(text.mid(brace).toUtf8()).object();
+        }
+        return QJsonObject();
+    };
     {
         const QJsonObject result = callTool(net, url, token, ++id, "screenshot",
                                             QJsonObject{ { "width", 320 }, { "height", 240 } });
         const QJsonArray content = result.value("content").toArray();
-        CHECK(content.size() == 1
-                  && content.first().toObject().value("type").toString() == "image"
+        CHECK(content.first().toObject().value("type").toString() == "image"
                   && content.first().toObject().value("mimeType").toString() == "image/png",
-              "screenshot returns one MCP image content item");
-        const QByteArray png = QByteArray::fromBase64(
-            content.first().toObject().value("data").toString().toLatin1());
+              "screenshot returns an MCP image content item first");
         QImage img;
-        CHECK(img.loadFromData(png, "PNG"), "the screenshot decodes as PNG");
+        CHECK(shotImage(result, img), "the screenshot decodes as PNG");
         CHECK(img.width() == 320 && img.height() == 240, "the screenshot has the requested size");
+
+        // The pose echo is unconditional: an image with no idea where it was
+        // taken from is half an answer.
+        const QJsonObject pose = shotPose(result);
+        CHECK(pose.contains("position") && pose.contains("rotation"),
+              "screenshot echoes the camera pose beside the image");
+        CHECK(pose.value("width").toInt() == 320 && pose.value("height").toInt() == 240,
+              "…and the size it actually rendered");
+    }
+
+    // ---- screenshot camera / frameNode (AI_SURFACE_PROGRAM_SPEC lane B #4a)
+    // The tool is only the byte-carrying view of editor.setCamera /
+    // editor.frameNode. What has to be true end-to-end: the camera really
+    // moved (different PIXELS, not just a different number), and the pose the
+    // tool echoed is the pose the editor is actually in.
+    {
+        // A cube far from the default view, so framing it cannot look like the
+        // default frame by accident.
+        const QJsonObject built = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script",
+                           "var n = scene.addPrimitive('cube', {position:{x:40,y:0,z:-40}});"
+                           // emissive so the assertion does not depend on where
+                           // the default scene's lights happen to point
+                           "material.set(n, {baseColor:'#ff0000', roughness:0.4,"
+                           "                 emissiveColor:'#ff0000', emissiveIntensity:1.0});"
+                           "editor.setCamera({position:{x:0,y:5,z:14}, lookAt:{x:0,y:0,z:0}}); n" },
+                         { "label", "a distant red cube" } }));
+        CHECK(built.value("ok").toBool(), "a red cube 40 units away, camera back at the default view");
+        const QString cubeId = built.value("result").toString();
+
+        const QJsonObject defaultShot = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "width", 200 }, { "height", 200 }, { "postFx", false } });
+        QImage defaultImg;
+        CHECK(shotImage(defaultShot, defaultImg), "the default-view shot decodes");
+        const QJsonObject defaultPose = shotPose(defaultShot);
+
+        const QJsonObject framedShot = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "width", 200 }, { "height", 200 }, { "postFx", false },
+                         { "frameNode", QJsonObject{ { "id", cubeId },
+                                                     { "yaw", 0 }, { "pitch", -15 },
+                                                     { "distance", 6 } } } });
+        QImage framedImg;
+        CHECK(shotImage(framedShot, framedImg), "the framed shot decodes");
+        CHECK(!framedImg.isNull() && !defaultImg.isNull() && framedImg != defaultImg,
+              "the FRAMED screenshot is different pixels from the default view");
+        // …and specifically: the red cube is in the middle of the framed one.
+        // An 11x11 average, not the single centre pixel — a specular highlight
+        // sits exactly on the centre pixel and reads pure white there.
+        auto centreAverage = [](const QImage &img) {
+            long r = 0, g = 0, b = 0, n = 0;
+            for (int dy = -5; dy <= 5; ++dy) {
+                for (int dx = -5; dx <= 5; ++dx) {
+                    const QColor c = img.pixelColor(img.width() / 2 + dx, img.height() / 2 + dy);
+                    r += c.red(); g += c.green(); b += c.blue(); ++n;
+                }
+            }
+            return QColor(int(r / n), int(g / n), int(b / n));
+        };
+        const QColor middle = centreAverage(framedImg);
+        const QColor wasMiddle = centreAverage(defaultImg);
+        CHECK(middle.red() > middle.green() + 40 && middle.red() > middle.blue() + 40,
+              QString("the red cube is in the centre of the framed shot (%1,%2,%3)")
+                  .arg(middle.red()).arg(middle.green()).arg(middle.blue()).toUtf8().constData());
+        CHECK(!(wasMiddle.red() > wasMiddle.green() + 40),
+              QString("…and it was NOT in the centre of the default view (%1,%2,%3)")
+                  .arg(wasMiddle.red()).arg(wasMiddle.green()).arg(wasMiddle.blue()).toUtf8().constData());
+
+        const QJsonObject framedPose = shotPose(framedShot);
+        CHECK(framedPose.contains("target") && framedPose.contains("distance"),
+              "the frameNode pose echo says what it framed and from how far");
+        CHECK(qAbs(framedPose.value("distance").toDouble() - 6.0) < 0.05,
+              "…at the distance that was asked for");
+        CHECK(framedPose.value("position").toObject() != defaultPose.value("position").toObject(),
+              "…and the echoed pose is not the default one");
+
+        // THE echo assertion: what the tool reported IS where the editor is.
+        const QJsonObject live = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "editor.camera()" } }));
+        const QJsonObject livePos = live.value("result").toObject().value("position").toObject();
+        const QJsonObject echoPos = framedPose.value("position").toObject();
+        CHECK(qAbs(livePos.value("x").toDouble() - echoPos.value("x").toDouble()) < 1e-3
+                  && qAbs(livePos.value("y").toDouble() - echoPos.value("y").toDouble()) < 1e-3
+                  && qAbs(livePos.value("z").toDouble() - echoPos.value("z").toDouble()) < 1e-3,
+              "the echoed pose MATCHES what editor.camera() reports afterwards");
+
+        // camera:{} takes the same route through editor.setCamera.
+        const QJsonObject placedShot = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "width", 120 }, { "height", 120 },
+                         { "camera", QJsonObject{
+                               { "position", QJsonObject{ { "x", 40 }, { "y", 9 }, { "z", -30 } } },
+                               { "lookAt", QJsonObject{ { "x", 40 }, { "y", 0 }, { "z", -40 } } },
+                               { "fov", 55 } } } });
+        const QJsonObject placedPose = shotPose(placedShot);
+        CHECK(qAbs(placedPose.value("position").toObject().value("x").toDouble() - 40.0) < 1e-3
+                  && qAbs(placedPose.value("fov").toDouble() - 55.0) < 1e-3,
+              "screenshot camera:{position, lookAt, fov} placed the camera and echoed it");
+
+        // Refusals travel as tool errors, with the verb's own message.
+        const QJsonObject both = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "camera", QJsonObject{} },
+                         { "frameNode", QJsonObject{ { "id", cubeId } } } });
+        CHECK(both.value("isError").toBool(), "screenshot refuses camera AND frameNode together");
+        const QJsonObject noId = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "frameNode", QJsonObject{ { "yaw", 10 } } } });
+        CHECK(noId.value("isError").toBool(), "screenshot refuses frameNode with no id");
+        const QJsonObject badKey = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "camera", QJsonObject{ { "postion", QJsonObject{} } } } });
+        CHECK(badKey.value("isError").toBool()
+                  && toolText(badKey).contains(QLatin1String("unknown key")),
+              "a misspelled camera key comes back as the VERB's error, not a silent no-op");
+        const QJsonObject player = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "view", "player" } });
+        CHECK(player.value("isError").toBool(), "view:'player' is refused (editor view only)");
+    }
+
+    // ---- describe_scene include / subtree / depth (lane B #8) -------------
+    {
+        const QJsonObject built = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script",
+                           "var a = scene.addEmpty();"
+                           "var b = scene.addPrimitive('cube', {parent:a});"
+                           "var c = scene.addPrimitive('sphere', {parent:b});"
+                           "var l = scene.addLight('spot', {position:{x:0,y:6,z:0}});"
+                           "node.setProperty(l, 'intensity', 4.5);"
+                           "material.set(b, {baseColor:'#00ff00'});"
+                           "JSON.stringify({a:a, b:b, c:c, l:l})" },
+                         { "label", "a 3-deep chain" } }));
+        CHECK(built.value("ok").toBool(), "describe_scene fixture: a 3-deep chain plus a spot light");
+        const QJsonObject ids =
+            QJsonDocument::fromJson(built.value("result").toString().toUtf8()).object();
+
+        auto rowFor = [](const QJsonObject &scene, const QString &nodeId) {
+            for (const QJsonValue &v : scene.value("nodes").toArray())
+                if (v.toObject().value("id").toString() == nodeId) return v.toObject();
+            return QJsonObject();
+        };
+
+        // The DEFAULT is bounded, and says so.
+        const QJsonObject shallow = toolJson(callTool(net, url, token, ++id, "describe_scene"));
+        CHECK(shallow.value("depth").toInt() == 2, "describe_scene reports the depth it used (2)");
+        CHECK(!rowFor(shallow, ids.value("c").toString()).contains("id"),
+              "the default depth does NOT reach the 3rd level");
+        const QJsonObject cutRow = rowFor(shallow, ids.value("b").toString());
+        CHECK(cutRow.value("truncated").toBool() && cutRow.value("childCount").toInt() == 1,
+              "…and the node whose children were cut off carries childCount + truncated");
+
+        // …and it is escapable.
+        const QJsonObject deep = toolJson(callTool(net, url, token, ++id, "describe_scene",
+            QJsonObject{ { "depth", -1 } }));
+        CHECK(rowFor(deep, ids.value("c").toString()).contains("id"),
+              "depth -1 reaches the whole tree");
+        const QJsonObject sub = toolJson(callTool(net, url, token, ++id, "describe_scene",
+            QJsonObject{ { "subtree", ids.value("a").toString() }, { "depth", -1 } }));
+        CHECK(sub.value("nodes").toArray().size() == 3
+                  && rowFor(sub, ids.value("l").toString()).isEmpty(),
+              "subtree describes exactly that branch");
+
+        // include: each flag adds its block, and nothing it was not asked for.
+        const QJsonObject plain = toolJson(callTool(net, url, token, ++id, "describe_scene",
+            QJsonObject{ { "depth", -1 } }));
+        CHECK(!rowFor(plain, ids.value("b").toString()).contains("material")
+                  && !rowFor(plain, ids.value("l").toString()).contains("light")
+                  && !rowFor(plain, ids.value("b").toString()).contains("visible")
+                  && !plain.contains("world"),
+              "describe_scene without include is the plain node rows (the cheap default)");
+
+        const QJsonObject rich = toolJson(callTool(net, url, token, ++id, "describe_scene",
+            QJsonObject{ { "depth", -1 },
+                         { "include", QJsonArray{ "materials", "lights", "visibility", "world" } } }));
+        const QJsonObject meshRow = rowFor(rich, ids.value("b").toString());
+        CHECK(meshRow.value("material").toObject().value("baseColor").toString() == "#00ff00",
+              "include materials: the mesh row carries its material summary");
+        const QJsonObject lightRow = rowFor(rich, ids.value("l").toString());
+        CHECK(lightRow.value("light").toObject().value("lightType").toString() == "spot"
+                  && qAbs(lightRow.value("light").toObject().value("intensity").toDouble() - 4.5) < 1e-3,
+              "include lights: the light row carries its parameters");
+        CHECK(meshRow.value("visible").toBool() && meshRow.value("visibleInScene").toBool(),
+              "include visibility: visible + visibleInScene");
+        CHECK(rich.value("world").toObject().contains("ambient")
+                  && rich.value("world").toObject().contains("fog"),
+              "include world: the scene-level settings arrive beside the nodes");
+
+        const QJsonObject unknown = callTool(net, url, token, ++id, "describe_scene",
+            QJsonObject{ { "include", QJsonArray{ "textures" } } });
+        CHECK(unknown.value("isError").toBool(), "an unknown include is refused, not ignored");
     }
 
     // ---- undo_redo -------------------------------------------------------

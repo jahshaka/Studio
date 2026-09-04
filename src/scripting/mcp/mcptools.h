@@ -52,7 +52,7 @@ public:
 private:
     QJsonObject runScript(const QJsonObject &args);
     QJsonObject apiDocs(const QJsonObject &args);
-    QJsonObject describeScene();
+    QJsonObject describeScene(const QJsonObject &args);
     QJsonObject screenshot(const QJsonObject &args);
     QJsonObject undoRedo(const QJsonObject &args);
 

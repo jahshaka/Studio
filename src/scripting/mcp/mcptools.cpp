@@ -26,6 +26,12 @@ namespace {
 /// enough that a runaway loop does not look like a hung editor.
 constexpr int kDefaultScriptTimeoutMs = 30000;
 
+/// describe_scene's default bound (AI_SURFACE_PROGRAM_SPEC owner row D2, option
+/// c). The dock pays this on most turns, and an unbounded depth-first dump of a
+/// large scene is the single largest avoidable cost on the surface. Two levels
+/// covers a flat scene whole; anything deeper says so per row (truncated).
+constexpr int kDefaultDescribeDepth = 2;
+
 QJsonObject textResult(const QString &text, bool isError = false)
 {
     QJsonObject item{ { "type", "text" }, { "text", text } };
@@ -110,9 +116,37 @@ QJsonArray McpTools::listTools() const
     tools.append(QJsonObject{
         { "name", "describe_scene" },
         { "description",
-          "The open scene as JSON: every node (id, name, type, transform) plus the "
-          "current selection. The fast way to see what exists before and after edits." },
-        { "inputSchema", QJsonObject{ { "type", "object" }, { "properties", QJsonObject{} } } } });
+          QStringLiteral(
+              "The open scene as JSON: the nodes (id, name, type, transform) plus the current "
+              "selection. The fast way to see what exists before and after edits.\n"
+              "It is BOUNDED by default: only %1 levels below the root are listed, and any node "
+              "whose children were cut off carries childCount and truncated:true — so nothing is "
+              "silently missing and a 500-node scene is not re-sent every turn. Raise `depth` (-1 "
+              "= the whole tree) or point `subtree` at a node id to go deeper in one place. "
+              "`include` adds blocks: \"materials\" (a material summary on mesh nodes), \"lights\" "
+              "(the parameters of each light), \"visibility\" (each node's own flag plus whether "
+              "an ancestor hides it) and \"world\" (the scene-level settings — ambient, fog, sky, "
+              "shadows, GI, post-fx — as one object beside the nodes).\n"
+              "Every field comes from a registry verb: scene.nodes({subtree, depth, include}) and "
+              "world.get(). run_script can call them directly.")
+              .arg(kDefaultDescribeDepth) },
+        { "inputSchema", QJsonObject{
+            { "type", "object" },
+            { "properties", QJsonObject{
+                { "include", QJsonObject{
+                    { "type", "array" },
+                    { "items", QJsonObject{ { "type", "string" },
+                        { "enum", QJsonArray{ "materials", "lights", "visibility", "world" } } } },
+                    { "description", "Extra blocks to attach (default: none)." } } },
+                { "subtree", QJsonObject{
+                    { "type", "string" },
+                    { "description", "A node id to describe instead of the whole scene "
+                                     "(that node and its descendants)." } } },
+                { "depth", QJsonObject{
+                    { "type", "integer" },
+                    { "description", QStringLiteral("Levels below the start node to list; 0 is "
+                                                    "the start node alone, -1 the whole tree "
+                                                    "(default %1).").arg(kDefaultDescribeDepth) } } } } } } } });
 
     tools.append(QJsonObject{
         { "name", "screenshot" },
@@ -121,16 +155,34 @@ QJsonArray McpTools::listTools() const
           "Requires the engine viewport (open or create a project first). By "
           "default the scene's post-processing chain (HDR/tonemap, bloom, ambient "
           "occlusion, SMAA) is applied so the image matches what the user sees; "
-          "pass postFx:false for a neutral render." },
+          "pass postFx:false for a neutral render.\n"
+          "The EDITOR view is the only view there is: the player view has no offscreen "
+          "render path and no verb behind it, so it is not a parameter here.\n"
+          "`camera` and `frameNode` move the editor camera before the shot — they are "
+          "editor.setCamera / editor.frameNode, called for you, and they MOVE THE USER'S "
+          "VIEWPORT (there is no separate screenshot camera). The resulting pose is "
+          "always echoed in a text block beside the image, so you can see where the shot "
+          "was taken from and take the next one relative to it." },
         { "inputSchema", QJsonObject{
             { "type", "object" },
             { "properties", QJsonObject{
                 { "view", QJsonObject{
                     { "type", "string" },
                     { "enum", QJsonArray{ "editor" } },
-                    { "description", "Which view to capture (phase 1: editor only)." } } },
+                    { "description", "Which view to capture — editor only." } } },
                 { "width", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 800)." } } },
                 { "height", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 600)." } } },
+                { "camera", QJsonObject{
+                    { "type", "object" },
+                    { "description", "Place the editor camera first — editor.setCamera's argument: "
+                                     "{position?:{x,y,z}, lookAt?:{x,y,z} | rotation?:{x,y,z,scalar}, "
+                                     "fov?}. Mutually exclusive with frameNode." } } },
+                { "frameNode", QJsonObject{
+                    { "type", "object" },
+                    { "description", "Frame a node first — editor.frameNode: {id (required), yaw?, "
+                                     "pitch?, distance?}, angles in degrees (pitch is clamped to "
+                                     "-89..89). A bare node id string is accepted too. Mutually "
+                                     "exclusive with camera." } } },
                 { "postFx", QJsonObject{ { "type", "boolean" },
                     { "description", "Apply the scene's post-processing chain so the image "
                                      "matches the viewport (default true); false renders "
@@ -156,7 +208,7 @@ QJsonObject McpTools::call(const QString &name, const QJsonObject &args)
 {
     if (name == QLatin1String("run_script"))     return runScript(args);
     if (name == QLatin1String("api_docs"))       return apiDocs(args);
-    if (name == QLatin1String("describe_scene")) return describeScene();
+    if (name == QLatin1String("describe_scene")) return describeScene(args);
     if (name == QLatin1String("screenshot"))     return screenshot(args);
     if (name == QLatin1String("undo_redo"))      return undoRedo(args);
     return textResult(QStringLiteral("unknown tool: %1").arg(name), true);
@@ -211,18 +263,48 @@ QJsonObject McpTools::apiDocs(const QJsonObject &args)
     return textResult(registry.helpText(moduleName));
 }
 
-QJsonObject McpTools::describeScene()
+QJsonObject McpTools::describeScene(const QJsonObject &args)
 {
     if (!mEngine->scriptHost().isProjectOpen())
         return jsonResult(QJsonObject{ { "projectOpen", false },
                                        { "hint", "run_script: project.create(name) or project.open(name)" } });
 
+    // The include names split two ways: three of them are per-NODE blocks that
+    // scene.nodes understands, and "world" is a scene-level read of its own.
+    QJsonArray nodeIncludes;
+    bool wantWorld = false;
+    for (const QJsonValue &v : args.value(QLatin1String("include")).toArray()) {
+        const QString name = v.toString();
+        if (name == QLatin1String("world")) { wantWorld = true; continue; }
+        if (name != QLatin1String("materials") && name != QLatin1String("lights")
+            && name != QLatin1String("visibility"))
+            return textResult(QStringLiteral(
+                "describe_scene: unknown include '%1' (materials, lights, visibility, world)")
+                    .arg(name), true);
+        nodeIncludes.append(name);
+    }
+
+    QJsonObject nodeOptions;
+    nodeOptions["depth"] = args.contains(QLatin1String("depth"))
+                               ? args.value(QLatin1String("depth")).toInt(kDefaultDescribeDepth)
+                               : kDefaultDescribeDepth;
+    const QString subtree = args.value(QLatin1String("subtree")).toString();
+    if (!subtree.isEmpty()) nodeOptions["subtree"] = subtree;
+    if (!nodeIncludes.isEmpty()) nodeOptions["include"] = nodeIncludes;
+
     // Bundle the existing verbs — the registry stays the single source of
-    // scene truth; no macro (pure query, no undo entry).
-    const ScriptResult result = mEngine->evaluate(
-        QStringLiteral("({ projectOpen: true, root: scene.root(),"
-                       "   selection: editor.selection(), nodes: scene.nodes() })"),
-        QStringLiteral("<describe_scene>"), false);
+    // scene truth; no macro (pure query, no undo entry). A compact JSON object
+    // is a valid JS object literal, which is how the options travel.
+    const QString options = QString::fromUtf8(
+        QJsonDocument(nodeOptions).toJson(QJsonDocument::Compact));
+    QString expr = QStringLiteral(
+        "({ projectOpen: true, root: scene.root(), selection: editor.selection(),"
+        "   depth: %1, nodes: scene.nodes(%2)")
+        .arg(nodeOptions.value("depth").toInt()).arg(options);
+    if (wantWorld) expr += QStringLiteral(", world: world.get()");
+    expr += QStringLiteral(" })");
+
+    const ScriptResult result = mEngine->evaluate(expr, QStringLiteral("<describe_scene>"), false);
     if (!result.ok)
         return textResult(QStringLiteral("describe_scene: %1").arg(result.error), true);
     return jsonResult(QJsonDocument::fromVariant(result.value).object());
@@ -238,11 +320,49 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
 
     const QString view = args.value(QLatin1String("view")).toString(QStringLiteral("editor"));
     if (view != QLatin1String("editor"))
-        return textResult(QStringLiteral("screenshot: view '%1' is not available in "
-                                         "phase 1 (only 'editor')").arg(view), true);
+        return textResult(QStringLiteral("screenshot: view '%1' does not exist — the editor "
+                                         "view is the only one that can be captured").arg(view), true);
 
     const int width = qBound(16, args.value(QLatin1String("width")).toInt(800), 4096);
     const int height = qBound(16, args.value(QLatin1String("height")).toInt(600), 4096);
+
+    // Optional camera placement, done by CALLING THE VERBS: editor.setCamera /
+    // editor.frameNode carry the capability and their tests gate it; this tool
+    // is only the thing that can carry the resulting bytes back. The pose the
+    // verb returns is echoed beside the image — without it the model has an
+    // image and no idea where it was taken from.
+    const bool hasCamera = args.contains(QLatin1String("camera"));
+    const bool hasFrameNode = args.contains(QLatin1String("frameNode"));
+    if (hasCamera && hasFrameNode)
+        return textResult(QStringLiteral("screenshot: pass EITHER camera or frameNode, not both"), true);
+
+    QString poseExpr = QStringLiteral("editor.camera()");
+    if (hasCamera) {
+        poseExpr = QStringLiteral("editor.setCamera(%1)").arg(QString::fromUtf8(
+            QJsonDocument(args.value(QLatin1String("camera")).toObject())
+                .toJson(QJsonDocument::Compact)));
+    } else if (hasFrameNode) {
+        const QJsonValue raw = args.value(QLatin1String("frameNode"));
+        QJsonObject framing = raw.toObject();
+        QString nodeId = framing.take(QStringLiteral("id")).toString();
+        if (raw.isString()) nodeId = raw.toString();   // a bare id is accepted
+        if (nodeId.isEmpty())
+            return textResult(QStringLiteral(
+                "screenshot: frameNode needs a node id — {id: \"…\", yaw?, pitch?, distance?} "
+                "(describe_scene lists the ids)"), true);
+        // QJsonDocument only serializes objects/arrays, so the id rides in a
+        // throwaway array to get it correctly quoted and escaped.
+        const QByteArray quotedId =
+            QJsonDocument(QJsonArray{ nodeId }).toJson(QJsonDocument::Compact);
+        poseExpr = QStringLiteral("editor.frameNode(%1, %2)")
+                       .arg(QString::fromUtf8(quotedId.mid(1, quotedId.size() - 2)),
+                            QString::fromUtf8(QJsonDocument(framing).toJson(QJsonDocument::Compact)));
+    }
+    const ScriptResult poseResult =
+        mEngine->evaluate(poseExpr, QStringLiteral("<screenshot>"), false);
+    if (!poseResult.ok)
+        return textResult(QStringLiteral("screenshot: %1").arg(poseResult.error), true);
+    const QJsonObject pose = QJsonDocument::fromVariant(poseResult.value).object();
 
     // Deterministic frame: document -> engine sync + render before reading pixels
     // (the editor.frame(n) pattern of the headless suites).
@@ -264,7 +384,17 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
     QJsonObject item{ { "type", "image" },
                       { "data", QString::fromLatin1(png.toBase64()) },
                       { "mimeType", "image/png" } };
-    return QJsonObject{ { "content", QJsonArray{ item } } };
+    // The image FIRST (clients that read only content[0] keep working), the
+    // pose echo beside it.
+    QJsonObject echo = pose;
+    echo["view"] = QStringLiteral("editor");
+    echo["width"] = img.width();
+    echo["height"] = img.height();
+    const QJsonObject poseItem{
+        { "type", "text" },
+        { "text", QStringLiteral("camera pose for this shot: %1")
+                      .arg(QString::fromUtf8(QJsonDocument(echo).toJson(QJsonDocument::Compact))) } };
+    return QJsonObject{ { "content", QJsonArray{ item, poseItem } } };
 }
 
 QJsonObject McpTools::undoRedo(const QJsonObject &args)
