@@ -81,24 +81,6 @@ void MaterialReader::setSource(TextureSource texSrc, QString globalSrcFolder)
 	globalSourceFolder = globalSrcFolder;
 }
 
-void MaterialReader::readJahShader(const QString &filePath)
-{
-    dir = AssetIOBase::getDirFromFileName(filePath);
-    QFile file(filePath);
-    file.open(QIODevice::ReadOnly);
-
-    auto data = file.readAll();
-    file.close();
-    auto doc = QJsonDocument::fromJson(data);
-
-    parsedShader = doc.object();
-}
-
-QJsonObject MaterialReader::getParsedShader()
-{
-    return parsedShader;
-}
-
 iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid, Database* db)
 {
 	auto shaderObject = getShaderObjectFromId(shaderGuid, db);

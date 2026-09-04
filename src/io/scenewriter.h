@@ -38,6 +38,21 @@ class SceneWriter : public AssetIOBase
 	// invoke unqualified, so there is no instance to hang it off. Wired once by
 	// the shell in MainWindow::setupServices.
 	static Project *projectHandle;
+
+	/// The base directory the STATIC writers relativize against.
+	///
+	/// AssetIOBase::dir is per instance now (it used to be one static QDir
+	/// shared by every reader and writer in the process — the import worker's
+	/// SceneReader rewrote it under the UI thread's). SceneWriter's write
+	/// family is static for the same reason `handle`/`projectHandle` are: a
+	/// dozen call sites invoke it unqualified with no instance in sight
+	/// ("SceneWriter statics", ENGINEERING_DEBT_SPEC). Until that debt is
+	/// paid, the static writers keep their own base, published by
+	/// getSceneObject() — the exact behaviour they had before, and no longer
+	/// entangled with the readers'.
+	static QDir staticRelativeBase;
+	/// getRelativePath() for the static writers.
+	static QString relativeToStaticBase(QString filename);
 public:
 	void setDatabaseHandle(Database *db) {
 		this->handle = db;

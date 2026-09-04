@@ -60,6 +60,15 @@ For more information see the LICENSE file
 
 Database *SceneWriter::handle = 0;
 Project *SceneWriter::projectHandle = nullptr;
+QDir SceneWriter::staticRelativeBase;
+
+QString SceneWriter::relativeToStaticBase(QString filename)
+{
+    // Same contract as AssetIOBase::getRelativePath: resources pass through.
+    if (filename.trimmed().startsWith(":") || filename.trimmed().startsWith("qrc:"))
+        return filename;
+    return staticRelativeBase.relativeFilePath(filename);
+}
 
 // DELETED: writeScene(QString filePath, ...) — the only place a scene was ever
 // written to a FILE, and it had no callers (STABILITY_PROGRAM_SPEC.md Lane 2).
@@ -77,6 +86,8 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        EditorData *editorData)
 {
     dir = projectPath;
+    // Publish it for the static writer family (see scenewriter.h).
+    staticRelativeBase = dir;
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
 
@@ -404,7 +415,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
             // load, so saved scenes converge on the stable relative form.
             QString source = skelAnim->source;
             if (!source.isEmpty() && QFileInfo(source).isAbsolute())
-                source = dir.relativeFilePath(source);
+                source = staticRelativeBase.relativeFilePath(source);
             skelObj["source"] = source;
             skelObj["name"] = skelAnim->name;
             animObj["skeletalAnimation"] = skelObj;
@@ -602,12 +613,12 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			//matObj[prop->name] = relative ? getRelativePath(prop->getValue().toString()) : QFileInfo(prop->getValue().toString()).fileName();
 			auto id = relative
 				? assetGuidForTexturePath(prop->getValue().toString())
-				: getRelativePath(prop->getValue().toString());
+				: relativeToStaticBase(prop->getValue().toString());
 			// A texture that is not a database asset (no GUID) would otherwise be
 			// written as an empty string and lost; fall back to a relative path,
 			// which the reader also resolves.
 			if (relative && id.isEmpty() && !prop->getValue().toString().isEmpty())
-				id = getRelativePath(prop->getValue().toString());
+				id = relativeToStaticBase(prop->getValue().toString());
 			valuesObj[prop->name] = id;
         }
 

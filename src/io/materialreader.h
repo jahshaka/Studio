@@ -51,9 +51,6 @@ public:
 	/// The flat join(projectFolder, name) resolution is GONE.
 	QString resolveTextureGuid(const QString &guid, Database *db);
 
-    void readJahShader(const QString &filePath);
-    QJsonObject getParsedShader();
-
 	// if handle is null then it will try to fetch the assets
 	// from the asset manager
 	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
@@ -91,8 +88,10 @@ public:
 
 	int getMaterialVersion(QJsonObject oldMatObj);
 
-private:
-    QJsonObject parsedShader;
+// (readJahShader/getParsedShader and the `parsedShader` member they filled
+// were removed with the deep-audit 2026-09 pass: zero callers, and
+// readJahShader was the last writer of the once-static AssetIOBase::dir that
+// did not belong to a load in progress.)
 };
 
 // used by material reader to create a material from a shader
