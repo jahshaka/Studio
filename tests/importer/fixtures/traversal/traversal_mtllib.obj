@@ -1,0 +1,19 @@
+# The SECOND untrusted path an .obj carries: the material library itself.
+#
+# ModelImporter::convert reads the `mtllib` lines to stage the .mtl sidecars
+# precisely (no directory sweeps) — and used to resolve whatever the file said
+# against the model's directory and stage it if it existed. `mtllib
+# ../../outside_secret.mtl` therefore copied a file from outside the model's
+# folder into the store as this asset's sidecar.
+#
+# The suite plants <tmp>/outer/outside_secret.mtl beside the .png and asserts
+# no staged file of this import lives outside <tmp>/outer/inner/model/.
+mtllib ../../outside_secret.mtl
+
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+
+vn 0.0 0.0 1.0
+
+f 1//1 2//1 3//1

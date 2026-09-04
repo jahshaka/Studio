@@ -1,0 +1,39 @@
+# Texture-path containment fixture (deep audit 2026-09, finding F2).
+#
+# A model names its own textures, and those names are FILE CONTENT. This quad
+# names two of them OUTSIDE its own directory, which is legal in every mesh
+# format and is exactly the shape of the finding: before containment landed,
+# both were resolved verbatim, opened, hashed into the content-addressed store
+# as "textures" of this asset, and written into every export of the project.
+#
+# The suite (tests/importer/test_importer_security.cpp) copies this directory
+# to <tmp>/outer/inner/model/ and plants a readable "secret" at
+# <tmp>/outer/outside_secret.png, which is precisely where ../../ points.
+#
+#   escapes_no_fallback     ../../outside_secret.png — nothing of that name
+#                           sits beside the model, so the reference must be
+#                           DROPPED (and warned about).
+#   escapes_with_fallback   ../../beside.png — beside.png DOES sit beside the
+#                           model (the suite writes it), so containment falls
+#                           back to that copy: the innocent real-world case is
+#                           a DCC tool writing an authoring-machine path for a
+#                           texture that ships with the model.
+mtllib traversal.mtl
+
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 0.0 1.0 0.0
+v 1.0 1.0 0.0
+
+vt 0.0 0.0
+vt 1.0 0.0
+vt 0.0 1.0
+vt 1.0 1.0
+
+vn 0.0 0.0 1.0
+
+usemtl escapes_no_fallback
+f 1/1/1 2/2/1 3/3/1
+
+usemtl escapes_with_fallback
+f 2/2/1 4/4/1 3/3/1

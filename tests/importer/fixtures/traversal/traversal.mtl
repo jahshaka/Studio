@@ -1,0 +1,8 @@
+# Material library for traversal.obj — see that file's header.
+newmtl escapes_no_fallback
+Kd 1.000 1.000 1.000
+map_Kd ../../outside_secret.png
+
+newmtl escapes_with_fallback
+Kd 1.000 1.000 1.000
+map_Kd ../../beside.png
