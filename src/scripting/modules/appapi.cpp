@@ -105,14 +105,35 @@ QVector<VerbInfo> AppApi::verbs() const
           "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
           "true to clear the record after reading it.",
           Needs::Document },
-        { "frameStats", "app.frameStats() -> {running, intervalMs, ticks, rendered, skipped, enabledViews}",
+        { "frameStats", "app.frameStats() -> {running, intervalMs, ticks, rendered, skipped, workMs, worstMs, slowFrames, enabledViews}",
           "What the ONE render loop (EngineRenderDriver) has been doing, cumulatively since the engine "
           "started. `ticks` counts timer fires, `rendered` the ticks that actually called the engine, "
           "`skipped` the ticks that had no enabled View to draw and therefore submitted nothing — sitting "
           "on a page with no viewport should advance `skipped` and leave `rendered` still. `enabledViews` "
           "is the engine's live answer to the same question the loop asks each tick. Note the scripted "
-          "stepping verb editor.frame(n) bypasses the driver entirely, so it moves none of these.",
+          "stepping verb editor.frame(n) bypasses the driver entirely, so it moves none of these. "
+          "`workMs` is THE HONEST PERFORMANCE NUMBER on this architecture and the reason to prefer it "
+          "over any FPS reading: the loop is a fixed 16 ms timer, so a healthy editor reports ~62 fps "
+          "whatever the scene costs, and only starts dropping once the budget is already blown. workMs "
+          "is how long the frame's work actually took, averaged over the last ~60 rendered ticks; "
+          "`worstMs` is the worst single tick since startup and `slowFrames` counts the ticks that "
+          "crossed the 100 ms hitch threshold (the ones that also log `[open-profile] slow frame`). "
+          "Read app.renderStats() beside this for the renderer's own view of the same frames.",
           Needs::Document },
+        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances}",
+          "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
+          "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
+          "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
+          "The timings come from Ogre's own FrameStats, which our render loop feeds: `fps`/`frameMs` are "
+          "the rolling average, `lastMs` the latest (noisy) sample, `p95Ms`/`p99Ms` the percentiles, "
+          "`bestMs`/`worstMs` the extremes. READ THE HONESTY NOTE ON app.frameStats: `fps` here measures "
+          "the loop's 16 ms timer, not the renderer's headroom — frameStats().workMs is the number that "
+          "diagnoses anything. The geometry counters are the FRAME's totals, not one view's (Ogre "
+          "snapshots them per camera at the end of that camera's pass, so with two on-screen views the "
+          "second includes the first). They are LAZY: recording costs integer adds per draw call and is "
+          "off until something asks, so the very first call reports metricsRecording=false with zeroed "
+          "counters and every call after a rendered frame reports real ones.",
+          Needs::Engine },
         { "apiProblems", "app.apiProblems() -> [string]",
           "Everything wrong with the scripting API's OWN metadata, as sentences: a verb with no "
           "doc string or signature, a duplicate name, a module that registers nothing, or — the "
@@ -310,7 +331,40 @@ QVariantMap AppApi::frameStats()
     out.insert("ticks", QVariant::fromValue(s.ticks));
     out.insert("rendered", QVariant::fromValue(s.rendered));
     out.insert("skipped", QVariant::fromValue(s.skipped));
+    out.insert("workMs", s.workMs);
+    out.insert("worstMs", s.worstMs);
+    out.insert("slowFrames", QVariant::fromValue(s.slowFrames));
     auto engine = EngineHost::instance().engine();
     out.insert("enabledViews", engine ? engine->hasEnabledViews() : false);
+    return out;
+}
+
+QVariantMap AppApi::renderStats()
+{
+    // Needs::Engine, unlike frameStats: every number here comes out of the
+    // backend, so "there is no engine" has no honest answer to give — an empty
+    // map with a refusal beats a map full of zeros that reads like a stalled
+    // renderer.
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.renderStats: no engine in this session"); return out; }
+    jahshaka::engine::RenderStats s;
+    if (!engine->renderStats(s)) {
+        fail("app.renderStats: the engine could not report its counters");
+        return out;
+    }
+    out.insert("metricsRecording", s.metricsRecording);
+    out.insert("fps", s.fps);
+    out.insert("frameMs", s.frameMs);
+    out.insert("lastMs", s.lastMs);
+    out.insert("p95Ms", s.p95Ms);
+    out.insert("p99Ms", s.p99Ms);
+    out.insert("bestMs", s.bestMs);
+    out.insert("worstMs", s.worstMs);
+    out.insert("draws", QVariant::fromValue(qulonglong(s.draws)));
+    out.insert("batches", QVariant::fromValue(qulonglong(s.batches)));
+    out.insert("triangles", QVariant::fromValue(qulonglong(s.triangles)));
+    out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
+    out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
     return out;
 }

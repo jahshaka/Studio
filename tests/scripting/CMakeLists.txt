@@ -55,6 +55,13 @@ add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 add_script_e2e(editor_controls e2e_editor_controls.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
 add_script_e2e(desktops e2e_desktops.js)
+# STATS_OVERLAY_SPEC phase 1 — the DATA half of the engine-drawn stats overlay,
+# landed and tested before a pixel of it exists (the API-first rule). Pins the
+# shape of app.renderStats(), the LAZY geometry counters, the invariants between
+# the timing fields, and the driver's new work-per-tick numbers — the honest
+# performance figure this architecture has, which the render loop used to
+# measure and throw away.
+add_script_e2e(render_stats e2e_render_stats.js)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
 add_script_e2e(planar e2e_planar.js)
