@@ -32,6 +32,9 @@
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/propertyanim.h"
+#include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/physics/physicsproperties.h"
 // The reparent command's cycle guard is header-only document logic (its
@@ -257,6 +260,166 @@ int main(int argc, char **argv)
 
         plain.reset(); refLight.reset(); refMesh.reset(); refCam.reset();
         refParticles.reset(); refViewer.reset();
+    }
+
+    // --- Transform invalidation (deep audit 2026-09, area 3; List B item 4) ---
+    // `transformDirty` and `hasDirtyChildren` were set true in the constructor
+    // and never cleared, so update() recomposed every node's local AND global
+    // transform every frame. They are a real cache now, which means a mutator
+    // that forgets to set a flag leaves a STALE globalTransform — and the
+    // picker, the gizmos and the mirror's selection outline all read that field
+    // directly. Every mutator is asserted here, through update() (which is the
+    // only thing that honours the flags; getGlobalTransform() recomputes
+    // unconditionally and would hide every one of these).
+    {
+        auto approx = [](const QVector3D &a, const QVector3D &b) {
+            return (a - b).length() < 1e-4f;
+        };
+        auto worldPos = [](const iris::SceneNodePtr &n) {
+            return n->globalTransform.column(3).toVector3D();   // the CACHED value
+        };
+
+        auto tScene = iris::Scene::create();
+        auto tRoot  = tScene->getRootNode();
+        auto mid    = iris::SceneNode::create();
+        auto leaf   = iris::SceneNode::create();
+        tRoot->addChild(mid);
+        mid->addChild(leaf);
+
+        mid->setLocalPos(QVector3D(10, 0, 0));
+        leaf->setLocalPos(QVector3D(0, 5, 0));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(10, 5, 0)),
+              "invalidation: a fresh hierarchy composes on the first update");
+
+        // The case the flags cannot get from setTransformDirty alone: a node
+        // moves and its DESCENDANTS' world transforms must follow. The dirty
+        // flag propagates upward; only update() can push it down.
+        mid->setLocalPos(QVector3D(-4, 0, 0));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+              "invalidation: moving a parent refreshes the whole subtree below it");
+
+        // Nothing moved: the cache must hold the same answer (and, being a
+        // cache, must not have been recomputed — asserted by the fact that a
+        // deliberately corrupted cache below is NOT repaired by an idle update).
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+              "invalidation: an idle update leaves the composed transforms alone");
+        leaf->globalTransform.translate(QVector3D(100, 100, 100));
+        tScene->update(0.0f);
+        CHECK(!approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+              "invalidation: an idle update really does skip the recompute (it IS a cache)");
+        leaf->setTransformDirty();
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-4, 5, 0)),
+              "invalidation: ...and marking it dirty repairs it");
+
+        // Every remaining mutator, each asserted through the cache.
+        leaf->setLocalRot(QQuaternion::fromEulerAngles(0, 90, 0));
+        leaf->setLocalPos(QVector3D(0, 0, 3));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-4, 0, 3)),
+              "invalidation: setLocalPos/setLocalRot");
+
+        leaf->rotate(QQuaternion::fromEulerAngles(0, 90, 0));
+        mid->setLocalScale(QVector3D(2, 2, 2));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-4, 0, 6)),
+              "invalidation: rotate() and setLocalScale()");
+
+        QMatrix4x4 lt; lt.setToIdentity(); lt.translate(QVector3D(1, 1, 1));
+        leaf->setLocalTransform(lt);
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-2, 2, 2)),
+              "invalidation: setLocalTransform()");
+
+        // setGlobalPos/setGlobalRot on a node WITH a parent, and on one
+        // without (the root) — the parentless early-returns wrote the field
+        // and set no flag at all.
+        leaf->setGlobalPos(QVector3D(7, 7, 7));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(7, 7, 7)), "invalidation: setGlobalPos() under a parent");
+
+        tRoot->setGlobalPos(QVector3D(0, 1, 0));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(tRoot), QVector3D(0, 1, 0)),
+              "invalidation: setGlobalPos() on a parentless node (the early-return path)");
+        CHECK(approx(worldPos(leaf), QVector3D(7, 8, 7)),
+              "...and it carried the subtree with it");
+
+        tRoot->setGlobalRot(QQuaternion::fromEulerAngles(0, 180, 0));
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), QVector3D(-7, 8, -7)),
+              "invalidation: setGlobalRot() on a parentless node");
+        tRoot->setLocalRot(QQuaternion());
+        tRoot->setLocalPos(QVector3D());
+
+        // Reparenting: the world transform changes even when the local one does
+        // not, and insertChild's keepTransform branch writes pos/rot/scale
+        // directly.
+        auto other = iris::SceneNode::create();
+        other->setLocalPos(QVector3D(0, 0, 20));
+        tRoot->addChild(other);
+        tScene->update(0.0f);
+        const QVector3D before = worldPos(leaf);
+        other->addChild(leaf, true);                     // keepTransform
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(leaf), before),
+              "invalidation: a keepTransform reparent leaves the node where it was");
+        other->addChild(mid, false);                     // no keepTransform
+        tScene->update(0.0f);
+        CHECK(approx(worldPos(mid), QVector3D(0, 0, 20) + mid->getLocalPos()),
+              "invalidation: a plain reparent recomposes against the new parent");
+
+        // Losing a parent: the local transform becomes the global one.
+        mid->removeFromParent();
+        mid->update(0.0f);
+        CHECK(approx(worldPos(mid), mid->getLocalPos()),
+              "invalidation: removeFromParent() recomposes the orphan");
+
+        // The property-animation path writes pos/rot/scale directly.
+        {
+            auto animated = iris::SceneNode::create();
+            tRoot->addChild(animated);
+            auto anim = iris::Animation::create("t");
+            auto *pa = new iris::Vector3DPropertyAnim();
+            pa->setName("position");
+            for (int axis = 0; axis < 3; ++axis) {
+                pa->getKeyFrame(axis)->addKey(0.0f, 0.0);
+                pa->getKeyFrame(axis)->addKey(axis == 0 ? 9.0f : 0.0f, 1.0);
+            }
+            anim->addPropertyAnim(pa);
+            anim->setLooping(false);          // sample at t=1 == the last key
+            animated->setAnimation(anim);
+            tScene->update(0.0f);
+            tScene->updateSceneAnimation(1.0f);
+            tScene->update(0.0f);
+            CHECK(approx(worldPos(animated), QVector3D(9, 0, 0)),
+                  "invalidation: the property-animation path marks the node dirty");
+        }
+
+        // ViewerNode::setViewScale and CameraNode::lookAt both write the node's
+        // TRS directly instead of going through the setters.
+        {
+            auto viewer = iris::ViewerNode::create();
+            tRoot->addChild(viewer.staticCast<iris::SceneNode>());
+            tScene->update(0.0f);
+            viewer->setViewScale(4.0f);
+            tScene->update(0.0f);
+            CHECK(qFuzzyCompare(viewer->globalTransform.column(0).toVector3D().length(), 4.0f),
+                  "invalidation: ViewerNode::setViewScale()");
+
+            auto cam = iris::CameraNode::create();
+            cam->setLocalPos(QVector3D(0, 0, 5));
+            cam->update(0.0f);
+            cam->lookAt(QVector3D(0, 0, 0));
+            cam->update(0.0f);
+            const QVector3D fwd = (cam->globalTransform * QVector4D(0, 0, -1, 0)).toVector3D();
+            CHECK(fwd.z() < -0.9f, "invalidation: CameraNode::lookAt()");
+        }
+
+        tScene->cleanup();
     }
 
     // --- Teardown with no GL must not crash either
