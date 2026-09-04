@@ -142,6 +142,9 @@ add_subdirectory(archiveasync)
 add_subdirectory(shutdown)
 add_subdirectory(ui)
 add_subdirectory(avatar)
+# The shipped sample scenes on a VIRGIN HOME, one test each — the owner's
+# post-wipe first run (samples.cleanstart.*).
+add_subdirectory(samples)
 # The shader cache's container (SHADER_CACHE_SPEC §4.5). AFTER tests/engine:
 # it reuses that directory's JAHSHAKA_ASAN option and its sanitised backend.
 add_subdirectory(shadercache)

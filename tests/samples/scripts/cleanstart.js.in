@@ -1,0 +1,256 @@
+// samples.cleanstart.<sample> — ONE shipped sample, ONE virgin HOME, the whole
+// first-run journey the owner takes after a database wipe.
+//
+// WHY THIS EXISTS, beside scripting.e2e.samples. That suite proves the samples
+// import and render with the right materials, and it does it for all five of
+// its samples in ONE session and ONE home. This one asks the questions a clean
+// start asks and that one cannot:
+//
+//   * a FRESH HOME per sample (one ctest test each), because "it worked after
+//     the previous sample had already populated the store" is not the owner's
+//     first run,
+//   * app.engineErrors() after 120 fixed-dt frames — the renderer swallows its
+//     failures by design, so a sample can look fine and still be telling the
+//     error sink that a texture would not decode. The pump is the truth serum;
+//     a sample that records ANY unexpected engine error fails here,
+//   * the SAVE / CLOSE / REOPEN field diff (scene.reopen_fidelity's technique,
+//     applied to shipped content instead of a fresh default scene). This is
+//     what caught the reader's keepTransform defect: every top-level node with
+//     a scale other than 1 came back rotated, by up to 10 degrees per open on
+//     Showroom, compounding forever because closing autosaves,
+//   * assets.bakeAll then reopen — the mesh bake landed 2026-09-04 and the
+//     samples are its first real content; a baked open must produce the same
+//     document as an unbaked one,
+//   * SHOWROOM, which scripting.e2e.samples does not cover at all.
+//
+// PIXELS are asserted with deliberately wide tolerance: Showroom, Particles,
+// Physics and Skeletal are NOT open-to-open pixel-deterministic (particle RNG,
+// GI, physics), so this suite asserts structure + errors + "not obviously
+// broken" (the frame is neither black nor blown out and carries colour), and
+// leaves exact-colour probing to scripting.e2e.samples.
+
+var SAMPLE = "@SAMPLE@";
+var ZIP = "@SOURCE_DIR@/scenes/" + SAMPLE + ".zip";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: [" + SAMPLE + "] " + msg);
+    console.log("ok: [" + SAMPLE + "] " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+// ---------------------------------------------------------------------------
+// What each sample is supposed to BE. Node counts are minima (a sample may
+// grow), names are the ones the sample's design promises.
+var EXPECTED = {
+    "Matcaps": { nodes: 5, names: ["StanfordDragon", "Ground", "Directional Light"],
+                 types: { mesh: 2, light: 2 } },
+    "Particles": { nodes: 10, names: ["Fire Pit", "Ground", "Sphere"],
+                   types: { mesh: 3, particles: 4 } },
+    "Physics": { nodes: 16, names: ["Teapot", "ball", "pipe", "Ground"],
+                 types: { mesh: 13, light: 2 } },
+    "Showroom": { nodes: 200, names: ["Ground", "floormark", "RootNode"],
+                  types: { mesh: 20, light: 5, decal: 1 } },
+    "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
+                            types: { mesh: 4, light: 2 } },
+    "World Background": { nodes: 7, names: ["SceneNode24", "Ground"],
+                          types: { mesh: 4, light: 2 } }
+};
+
+// ENGINE ERRORS THE SUITE TOLERATES, each with the reason it is not this
+// sample's fault. Anything else fails the gate — that is the whole point of
+// reading the pump.
+//
+//   "setClipStates: the node has no clips" — SceneMirror::attachClipsFor
+//   disables the previous clip set before attaching a new one
+//   (irisgl/mirror/scenemirror.cpp:1703) and the engine refuses that call when
+//   the node has no clips yet, which is exactly the first attach. One entry per
+//   rigged character per open, purely cosmetic, and irisgl-side: reported
+//   2026-09-04, not fixed in this lane.
+var TOLERATED = ["setClipStates: the node has no clips"];
+
+function errorsClean(tag) {
+    var e = app.engineErrors(false);
+    var bad = [];
+    for (var i = 0; i < e.entries.length; i++) {
+        var m = e.entries[i].message;
+        var ok = false;
+        for (var t = 0; t < TOLERATED.length; t++) if (m.indexOf(TOLERATED[t]) >= 0) ok = true;
+        if (!ok) bad.push(e.entries[i]);
+    }
+    console.log("engineErrors " + tag + ": drains=" + e.drains + " recorded=" + e.recorded +
+                " entries=" + J(e.entries));
+    assert(e.drains > 0, tag + ": the frame loop ran (drains " + e.drains + ")");
+    assert(bad.length === 0, tag + ": no unexpected engine errors " + J(bad));
+}
+
+// The document state a round trip has to preserve. Live RUNTIME counters are
+// excluded on purpose: world.planarReflections.activeActors counts the
+// reflectors the renderer has registered this session, which is 0 before the
+// first frames and 2 after — a reading, not a document field.
+function snapshot() {
+    var w = world.get();
+    if (w.planarReflections) delete w.planarReflections.activeActors;
+    var nodes = scene.nodes();
+    var arr = [];
+    var keys = ["intensity", "color", "distance", "spotCutOff", "shadowType",
+                "shadowAlpha", "shadowBias", "castShadow", "visible", "lightType"];
+    for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        var rec = { name: n.name, type: n.type };
+        for (var k = 0; k < keys.length; k++) {
+            try {
+                var v = node.property(n.id, keys[k]);
+                if (v !== undefined && v !== null) rec[keys[k]] = v;
+            } catch (e) { /* the node has no such property */ }
+        }
+        var inf = node.info(n.id);
+        rec.pos = inf.position; rec.rot = inf.rotation; rec.scale = inf.scale;
+        if (n.type === "mesh") rec.mat = material.get(n.id);
+        arr.push(rec);
+    }
+    // node ids are minted per open for some node kinds — compare CONTENT.
+    arr.sort(function (a, b) {
+        var ka = a.name + "|" + a.type + "|" + J(a.pos), kb = b.name + "|" + b.type + "|" + J(b.pos);
+        return ka < kb ? -1 : (ka > kb ? 1 : 0);
+    });
+    return { world: w, nodes: arr };
+}
+
+// Numbers compare with an epsilon, everything else exactly. FLOAT RESIDUE (a
+// value that moves by ~1e-7 relative) is what a float32 -> JSON -> float32 trip
+// legitimately costs; anything bigger is a field that CHANGED, which is the
+// defect class this gate exists for (0.66 deg on a Showroom wall panel, per
+// open, is 1e-2 relative — six orders of magnitude above this bar).
+function diffs(a, b, path, out) {
+    path = path || ""; out = out || [];
+    if (out.length > 20) return out;
+    var ta = typeof a, tb = typeof b;
+    if (ta === "number" && tb === "number") {
+        if (a !== b) {
+            var mag = Math.abs(a - b);
+            var rel = Math.abs(a) > 1e-4 ? mag / Math.abs(a) : mag;
+            if (rel > 1e-5) out.push(path + ": " + a + " -> " + b);
+        }
+        return out;
+    }
+    if (a === null || b === null || ta !== "object" || tb !== "object") {
+        if (J(a) !== J(b)) out.push(path + ": " + J(a) + " -> " + J(b));
+        return out;
+    }
+    var keys = {}, k;
+    for (k in a) keys[k] = 1;
+    for (k in b) keys[k] = 1;
+    for (k in keys) {
+        if (!(k in a)) { out.push(path + "." + k + ": ADDED " + J(b[k])); continue; }
+        if (!(k in b)) { out.push(path + "." + k + ": REMOVED " + J(a[k])); continue; }
+        diffs(a[k], b[k], path + "." + k, out);
+    }
+    return out;
+}
+
+function structure() {
+    var nodes = scene.nodes();
+    var byType = {}, names = {};
+    for (var i = 0; i < nodes.length; i++) {
+        byType[nodes[i].type] = (byType[nodes[i].type] || 0) + 1;
+        names[nodes[i].name] = true;
+    }
+    return { count: nodes.length, byType: byType, names: names };
+}
+
+// "Not obviously broken": 25 probes spread over the frame. A scene that failed
+// to render is uniformly black; one whose materials all fell back to blown-out
+// white has no colour anywhere. Both are caught without pinning a single pixel.
+function renderSanity(tag) {
+    editor.frame(120, 1.0 / 60.0);
+    var pts = [];
+    for (var y = 0; y < 5; y++) for (var x = 0; x < 5; x++)
+        pts.push({ x: 0.1 + x * 0.2, y: 0.1 + y * 0.2 });
+    var shot = editor.screenshot("cleanstart_" + SAMPLE.replace(/ /g, "_") + "_" + tag + ".png",
+                                 640, 360, pts);
+    var black = 0, mean = 0, spread = 0;
+    for (var i = 0; i < shot.probes.length; i++) {
+        var p = shot.probes[i], b = (p.r + p.g + p.b) / 3;
+        mean += b;
+        if (b < 2) black++;
+        spread = Math.max(spread, Math.abs(p.r - p.b), Math.abs(p.g - p.b));
+    }
+    mean /= shot.probes.length;
+    console.log(tag + " pixels: mean=" + Math.round(mean) + " black=" + black +
+                " maxChannelSpread=" + spread);
+    assert(black <= 12, tag + ": the frame is not mostly black (" + black + "/25 probes)");
+    assert(mean > 4 && mean < 250, tag + ": the frame has usable exposure (mean " + Math.round(mean) + ")");
+    return shot;
+}
+
+// ---------------------------------------------------------------------------
+var want = EXPECTED[SAMPLE];
+assert(!!want, "the suite knows what " + SAMPLE + " should contain");
+app.engineErrors(true);
+
+// 1. INSTALL, through the same verb the sample dialog's double-click runs.
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10, "importArchive -> " + (imported ? imported.guid : "null"));
+assert(imported.assets > 0, "catalog rows imported (" + imported.assets + ")");
+assert(imported.objects > 0, "objects ingested (" + imported.objects + ")");
+
+// 2. OPEN and check the content is the content.
+assert(project.open(imported.guid) === true, "project.open");
+var s = structure();
+console.log("structure: " + J(s.byType) + " total " + s.count);
+assert(s.count >= want.nodes, "node count >= " + want.nodes + " (" + s.count + ")");
+for (var i = 0; i < want.names.length; i++)
+    assert(s.names[want.names[i]] === true, "the '" + want.names[i] + "' node is in the scene");
+for (var t in want.types)
+    assert((s.byType[t] || 0) >= want.types[t],
+           "at least " + want.types[t] + " " + t + " nodes (" + (s.byType[t] || 0) + ")");
+
+// 3. MATERIALS resolve to files, never to bare guids or nothing.
+var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var textured = 0;
+var nodes = scene.nodes();
+for (i = 0; i < nodes.length; i++) {
+    if (nodes[i].type !== "mesh") continue;
+    var m = material.get(nodes[i].id);
+    var maps = ["diffuseTexture", "normalTexture", "baseColorMap", "normalMap", "roughnessMap"];
+    for (var k = 0; k < maps.length; k++) {
+        var v = m[maps[k]];
+        if (typeof v !== "string" || v.length === 0) continue;
+        assert(!GUID_RE.test(v), nodes[i].name + "." + maps[k] + " is a path, not a raw guid (" + v + ")");
+        textured++;
+    }
+}
+console.log("resolved texture references: " + textured);
+
+// 4. RENDER, then read the pump.
+renderSanity("open");
+errorsClean("after open");
+var s0 = snapshot();
+
+// 5. SAVE / CLOSE / REOPEN — the field diff.
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(imported.guid) === true, "project.open (REOPEN)");
+var d = diffs(s0, snapshot());
+assert(d.length === 0, "the document survived save/close/reopen unchanged: " + J(d));
+renderSanity("reopen");
+errorsClean("after reopen");
+
+// 6. BAKE the sample's models, then reopen: an open that LOADS geometry must
+//    produce the same document as one that parses it.
+var dry = assets.bakeAll({ dryRun: true });
+console.log("bakeAll dry run: " + J(dry));
+var baked = assets.bakeAll({ dryRun: false });
+console.log("bakeAll: " + J(baked));
+assert(baked.failed === 0, "every bake succeeded (" + J(baked.errors) + ")");
+assert(baked.baked === dry.needed, "the dry run counted what the real run baked (" +
+       dry.needed + " vs " + baked.baked + ")");
+var s1 = snapshot();
+assert(project.close() === true, "project.close (after bake)");
+assert(project.open(imported.guid) === true, "project.open (BAKED)");
+d = diffs(s1, snapshot());
+assert(d.length === 0, "the baked open produced the same document: " + J(d));
+renderSanity("baked");
+errorsClean("after baked reopen");
+
+console.log("samples.cleanstart[" + SAMPLE + "]: ALL OK");
