@@ -170,6 +170,7 @@ For more information see the LICENSE file
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
 #include "services/loadtimeline.h"
+#include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
 #include "shell/shutdownorder.h"
@@ -601,6 +602,11 @@ void MainWindow::shutdownBackgroundWork()
         std::fflush(nullptr);
         std::_Exit(0);
     }).detach();
+
+    // The lazy mesh-bake queue: nothing left to schedule. A bake already in
+    // flight writes into its own QTemporaryDir and is discarded on arrival
+    // (its completion hop is a no-op once cancelled).
+    MeshBakeStore::cancelPendingBakes();
 
     // Import pipeline: abort batches, join workers (bounded), close the
     // progress dialogs, drop viewer-tail queues.
@@ -1059,6 +1065,13 @@ void MainWindow::saveScene()
 
 void MainWindow::openStageBegin()
 {
+	// The bake cache window (MESH_BAKE_SPEC phase 1): while it is open, the
+	// scene reader and the session registrations share ONE deserialized model
+	// per source file. openStageReveal closes it, so nothing is retained
+	// between opens.
+	MeshBakeStore::endScope();      // idempotent: an abandoned open's scope
+	MeshBakeStore::beginScope();
+
 	// The cover goes up FIRST, before any teardown: opening a world from
 	// inside the editor (load in place) must not leave the previous world on
 	// screen while this one loads.
@@ -1139,7 +1152,24 @@ void MainWindow::openStageReveal(bool playMode)
 
 	// force a refresh
 	this->update();
+	MeshBakeStore::endScope();
 	LoadTimeline::end();
+
+	// LAZY RE-BAKE (MESH_BAKE_SPEC phase 1, "existing libraries"). Every world
+	// that arrived as an ARCHIVE — which is all five samples, and every
+	// project imported before this build — has no mesh bake, so this open
+	// parsed. Queue the bake now that the world is on screen: the parse and
+	// the serialize run on a worker, the catalog write is one small step per
+	// model, and the NEXT open of this world is a load. Nothing here can fail
+	// the open; a bake that cannot be built simply never appears.
+	if (projectService && pmContainer) {
+		QStringList models = pmContainer->plannedSessionModelPaths();
+		for (const QString &path : projectService->plannedModelPaths())
+			if (!models.contains(path)) models.append(path);
+		const int queued = MeshBakeStore::scheduleBakes(models);
+		if (queued > 0)
+			irisLog(QString("mesh bake: %1 model(s) queued for a lazy bake").arg(queued));
+	}
 }
 
 void MainWindow::openProject(bool playMode)

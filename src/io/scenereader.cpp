@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/lightbindings.h"
 #include "services/loadtimeline.h"
+#include "services/meshbakestore.h"
 
 #include <functional>
 #include <QSqlDatabase>
@@ -1130,7 +1131,30 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath)
     if (!assimpScenes.contains(filePath)) {
         QList<iris::MeshPtr> meshList;
         QMap<QString, iris::SkeletalAnimationPtr> animationss;
-        
+
+        // THE BAKE (MESH_BAKE_SPEC phase 1) — the parse, already paid at
+        // import. On the threaded open the worker has read it; on the
+        // synchronous one we resolve it here (a catalog query, UI thread).
+        // Either way the model is SHARED with the session registration, so a
+        // world's geometry is deserialized exactly once per open.
+        // The counter spans the RESOLVE AND THE READ, not just the copy out of
+        // an already-loaded model: a ledger that timed the memcpy and not the
+        // file would report 0 ms and prove nothing. A miss is counted too —
+        // it is one catalog query, and it is honest to see it.
+        LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sceneReader"));
+        iris::BakedModelPtr baked = prewarm ? prewarm->baked(filePath) : iris::BakedModelPtr();
+        if (!baked) baked = MeshBakeStore::load(filePath);
+        if (baked) {
+            meshList = baked->meshes;
+            animationss = baked->animations;
+            for (auto &anim : animationss) anim->source = filePath;
+            meshes.insert(filePath, meshList);
+            assimpScenes.insert(filePath);
+            animations.insert(filePath, animationss);
+            return;
+        }
+        bakeAttempt.stop();   // a miss must not bank the parse below
+
         // The threaded open parses these on a worker BEFORE the reader runs
         // (irisgl/import/meshprewarm.h): consume that and this whole stage is
         // a copy out of an aiScene instead of an assimp parse.

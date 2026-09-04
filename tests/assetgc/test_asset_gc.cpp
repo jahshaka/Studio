@@ -181,6 +181,20 @@ int main(int argc, char **argv)
     CHECK(scalar(conn, "SELECT COUNT(*) FROM asset_files WHERE oid = '" + oidDrift + "'") == 1,
           "the drift object is still named by an asset_files row");
 
+    // THE MESH BAKE (MESH_BAKE_SPEC phase 1): derived data recorded as an
+    // ordinary asset_files row with role 'bake'. It must be reachable through
+    // that row like any other file — the GC knows nothing about bakes, and the
+    // point of this case is to prove it does not need to. It must survive the
+    // sweep, and it must be collected when its asset dies.
+    const QByteArray bytesBake = QByteArray("MESHBAKE").repeated(80);
+    writeFile(srcDir + "/model.jmb", bytesBake);
+    QString oidBake;
+    CHECK(AssetCas::ingestFile(conn, root, srcDir + "/model.jmb", "guidCow", "bake",
+                               "model.jmb", &oidBake, &error),
+          "a role-'bake' derived file recorded against a live asset");
+    CHECK(scalar(conn, "SELECT COUNT(*) FROM asset_files WHERE oid = '" + oidBake + "' AND role = 'bake'") == 1,
+          "the bake has exactly one asset_files row, under its asset");
+
     // A live sidecar, and a live per-guid folder holding bytes the CAS does
     // NOT have (the materials-module texture shape).
     CHECK(AssetCas::writeSidecar(conn, root, "guidSolo", &error), "sidecar for a live asset");
@@ -271,6 +285,10 @@ int main(int argc, char **argv)
           "THE LAW: the pinned copy-on-write object (refcount 0) is NOT collected");
     CHECK(!reportsId(dry.unreferencedObjects, oidDrift),
           "THE LAW: an object whose refcount CACHE reads 0 but whose row exists is NOT collected");
+    CHECK(!reportsId(dry.unreferencedObjects, oidBake),
+          "THE LAW: a role-'bake' file is reachable through its asset row and is NOT collected");
+    CHECK(!reports(dry.strayObjects, AssetStorePaths::objectPathIn(root, oidBake, "jmb")),
+          "…and the bake object is not mistaken for an uncatalogued stray");
     CHECK(!reportsId(dry.unreferencedObjects, oidShared), "the shared object is not collected");
     CHECK(!reportsId(dry.unreferencedObjects, oidSolo), "the single-reference object is not collected");
     CHECK(dry.refcountDrift >= 1, "the drifted refcount is REPORTED (never acted on)");
@@ -362,6 +380,8 @@ int main(int argc, char **argv)
           "LIVE: the project still resolves its pin to those exact bytes");
     CHECK(readFile(AssetStorePaths::objectPathIn(root, oidDrift, "bin")) == bytesDrift,
           "LIVE: the refcount-drift object is byte-for-byte intact");
+    CHECK(readFile(AssetStorePaths::objectPathIn(root, oidBake, "jmb")) == bytesBake,
+          "LIVE: the mesh bake survived the sweep byte-for-byte");
     CHECK(readFile(root + "/guidLegacyLive/keepme.bin") == bytesLegacy,
           "LIVE: the legacy-only file is byte-for-byte intact");
     CHECK(readFile(freshTemp) == bytesSolo, "LIVE: the in-flight staging temp is untouched");
@@ -420,6 +440,28 @@ int main(int argc, char **argv)
         CHECK(!QFileInfo::exists(path), "deleteAsset removed the sidecar");
         CHECK(scalar(QSqlDatabase::database(), "SELECT COUNT(*) FROM assets WHERE guid = 'guidSolo'") == 0,
               "…and the row really went");
+    }
+
+    // ============ THE BAKE DIES WITH ITS ASSET (MESH_BAKE_SPEC) ============
+    //
+    // Derived data must not outlive what it was derived from. deleteAsset
+    // drops every asset_files row, which leaves the bake object unreferenced —
+    // and the very next sweep collects it, with no bake-specific code
+    // anywhere in the GC.
+    {
+        QSqlDatabase live = QSqlDatabase::database();
+        const QString bakeObject = AssetStorePaths::objectPathIn(root, oidBake, "jmb");
+        CHECK(QFileInfo::exists(bakeObject), "the bake is still on disk before its asset dies");
+        CHECK(db.deleteAsset("guidCow"), "the asset that owns the bake is deleted");
+        CHECK(scalar(live, "SELECT COUNT(*) FROM asset_files WHERE oid = '" + oidBake + "'") == 0,
+              "the delete dropped the bake's asset_files row");
+
+        const auto reap = AssetGc::sweep(live, root, /*dryRun*/ true);
+        CHECK(reap.ok && reportsId(reap.unreferencedObjects, oidBake),
+              "the now-unreferenced bake is reported for collection");
+        const auto reaped = AssetGc::sweep(live, root, /*dryRun*/ false);
+        CHECK(reaped.ok, "the sweep that reaps the bake succeeded");
+        CHECK(!QFileInfo::exists(bakeObject), "the bake object is gone with its asset");
     }
 
     // ================= rebuildCatalog SKIPS TOMBSTONES =================

@@ -16,8 +16,9 @@ For more information see the LICENSE file
 // phase 1): current store root + free-space readout, Move Store… (copy →
 // verify → flip setting; old tree retained), Use Existing Store… (catalog
 // sanity-checked), Reset to Default, Clean up Storage… (the assets.gc dry
-// run, then the sweep on confirmation) and the online/offline status with
-// Reconnect. All actions run through AssetStoreService / AssetGc — the same
+// run, then the sweep on confirmation), Bake All Models (MESH_BAKE_SPEC
+// phase 1 — the explicit form of the lazy bake every open already does) and
+// the online/offline status with Reconnect. All actions run through AssetStoreService / AssetGc — the same
 // implementations behind the assets.setStoreRoot/storeStatus/gc verbs.
 
 #include <QWidget>
@@ -44,6 +45,7 @@ private slots:
     void useExistingStore();
     void resetToDefault();
     void cleanUpStorage();
+    void bakeAllModels();
 
 private:
     void applyRoot(const QString &path, bool move);

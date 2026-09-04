@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QtConcurrent>
 
 #include "services/loadtimeline.h"
+#include "services/meshbakestore.h"
 
 SceneOpenRunner::SceneOpenRunner(Database *db, Project *project, QObject *parent)
     : QObject(parent), db(db), project(project),
@@ -40,7 +41,12 @@ SceneOpenRunner::~SceneOpenRunner()
 void SceneOpenRunner::setPlan(const QStringList &modelPaths, const QVector<Slice> &slices,
                               const QString &label)
 {
+    // The bake PLAN is resolved HERE, on the UI thread that owns the database
+    // connection (MESH_BAKE_SPEC phase 1): the worker only ever reads files.
     mModelPaths = modelPaths;
+    mPlan.clear();
+    mPlan.reserve(modelPaths.size());
+    for (const QString &path : modelPaths) mPlan.append(MeshBakeStore::planFor(path));
     mSlices = slices;
     mLabel = label;
     mNextSlice = 0;
@@ -64,13 +70,15 @@ void SceneOpenRunner::start()
 
 void SceneOpenRunner::runWorker()
 {
-    const int total = mModelPaths.size();
+    const int total = mPlan.size();   // the array indexed below, not its source
     for (int i = 0; i < total; ++i) {
         if (mAborted.load()) break;
-        const QString path = mModelPaths.at(i);
+        const iris::PrewarmItem &item = mPlan.at(i);
         {
+            // Named "assimp" for continuity of the ledger, but a bake hit
+            // never reaches assimp — worker:bakeHits is the split.
             LoadTimeline::Accumulate parse(QStringLiteral("worker:assimp"));
-            mPrewarm->parse(path);
+            mPrewarm->parse(item);
         }
         const int pct = 5 + (35 * (i + 1)) / total;
         QMetaObject::invokeMethod(this, [this, pct, total, i]() {
@@ -78,6 +86,7 @@ void SceneOpenRunner::runWorker()
         }, Qt::QueuedConnection);
     }
     mParsed.store(true);
+    LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, mPrewarm->bakedCount());
     // Hand back through the event loop — NOT a blocking connection: a UI loop
     // that stopped pumping (the app quitting) must never be able to strand
     // this worker (the import.shutdown zombie).

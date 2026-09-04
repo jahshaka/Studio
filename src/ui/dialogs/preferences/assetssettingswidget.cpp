@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "services/assetgc.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
+#include "services/meshbakestore.h"
 #include "ui/style/stylesheet.h"
 
 AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *db,
@@ -64,11 +65,13 @@ AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *
     auto *resetButton = new QPushButton("Reset to Default", this);
     auto *reconnectButton = new QPushButton("Reconnect", this);
     auto *cleanButton = new QPushButton("Clean up Storage…", this);
+    auto *bakeButton = new QPushButton("Bake All Models…", this);
     buttons->addWidget(moveButton);
     buttons->addWidget(useButton);
     buttons->addWidget(resetButton);
     buttons->addWidget(reconnectButton);
     buttons->addWidget(cleanButton);
+    buttons->addWidget(bakeButton);
     buttons->addStretch(1);
     layout->addLayout(buttons);
 
@@ -88,6 +91,7 @@ AssetsSettingsWidget::AssetsSettingsWidget(SettingsManager *settings, Database *
     connect(resetButton, &QPushButton::clicked, this, &AssetsSettingsWidget::resetToDefault);
     connect(reconnectButton, &QPushButton::clicked, this, &AssetsSettingsWidget::refresh);
     connect(cleanButton, &QPushButton::clicked, this, &AssetsSettingsWidget::cleanUpStorage);
+    connect(bakeButton, &QPushButton::clicked, this, &AssetsSettingsWidget::bakeAllModels);
 
     refresh();
 }
@@ -224,5 +228,49 @@ void AssetsSettingsWidget::cleanUpStorage()
             QStringLiteral("Removed %1 item(s), freeing %2.")
                 .arg(done.removedCount()).arg(QLocale().formattedDataSize(done.removedBytes())));
     }
+    refresh();
+}
+
+void AssetsSettingsWidget::bakeAllModels()
+{
+    // Same verb, same implementation as `assets.bakeAll` (API-first): a dry
+    // run to say what would happen, then the work on confirmation.
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QStringList needing = MeshBakeStore::modelSourcesNeedingBake(conn, root);
+    if (needing.isEmpty()) {
+        QMessageBox::information(this, "Bake All Models",
+                                 "Every model in the library already has a current bake.\n\n"
+                                 "Opening a world loads its geometry instead of re-reading "
+                                 "the model files.");
+        return;
+    }
+
+    if (QMessageBox::question(
+            this, "Bake All Models",
+            QStringLiteral("%1 model(s) have no current bake.\n\n"
+                           "Baking reads each model once and stores the prepared geometry "
+                           "beside it, so opening a world that uses it becomes a load "
+                           "instead of a re-read. The original files are never changed.\n\n"
+                           "Bake them now?").arg(needing.size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) != QMessageBox::Yes)
+        return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    int baked = 0;
+    QStringList errors;
+    for (const QString &path : needing) {
+        QString error;
+        if (MeshBakeStore::bakeSource(conn, root, path, &error)) ++baked;
+        else if (!error.isEmpty()) errors.append(error);
+    }
+    MeshBakeStore::clear();
+    QApplication::restoreOverrideCursor();
+
+    QString message = QStringLiteral("Baked %1 of %2 model(s).").arg(baked).arg(needing.size());
+    if (!errors.isEmpty())
+        message += QStringLiteral("\n\n%1 could not be baked:\n%2")
+                       .arg(errors.size()).arg(errors.mid(0, 5).join(QLatin1Char('\n')));
+    QMessageBox::information(this, "Bake All Models", message);
     refresh();
 }

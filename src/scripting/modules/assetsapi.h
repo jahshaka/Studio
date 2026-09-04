@@ -61,6 +61,7 @@ public:
     Q_INVOKABLE QVariantMap verify(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap rebuildCatalog(const QString &dbPath, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap gc(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap bakeAll(const QVariantMap &options = QVariantMap());
 };
 
 #endif // SCRIPTING_ASSETSAPI_H

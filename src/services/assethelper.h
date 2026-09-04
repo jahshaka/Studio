@@ -20,6 +20,8 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "data/database/database.h"
 
+namespace iris { class SceneSource; }
+
 class AssetHelper
 {
 public:
@@ -39,12 +41,17 @@ public:
     /// `extractDir`: where embedded textures / derived maps are written
     /// (import staging). Empty = beside the source — wrong for read-only
     /// sources; the import pipeline always passes a staging dir.
+    /// `keepScene`: pass a caller-owned SceneSource to keep the aiScene alive
+    /// after the call (`keepScene->importer.GetScene()`). The mesh importer
+    /// uses it to write the mesh BAKE from the SAME parse — one parse per
+    /// import, still, which is what meshParseCount() guards.
     static iris::SceneNodePtr extractTexturesAndMaterialFromMesh(const QString &filePath,
                                                                  QStringList &textureList,
                                                                  QStringList &texturesFullPath,
                                                                  bool& hasEmbeddedTexture,
                                                                  QJsonObject *modelStats = nullptr,
-                                                                 const QString &extractDir = QString());
+                                                                 const QString &extractDir = QString(),
+                                                                 iris::SceneSource *keepScene = nullptr);
 
     /// Process-wide count of extractTexturesAndMaterialFromMesh runs — each
     /// is one full assimp parse of a model file. Instrumentation for the

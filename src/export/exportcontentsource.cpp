@@ -60,9 +60,19 @@ QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QStrin
         if (pinQuery.exec() && pinQuery.next()) pin = pinQuery.value(0).toString();
     }
 
+    // THE MESH BAKE IS NOT EXPORTED (MESH_BAKE_SPEC phase 1, design call).
+    // It is derived data keyed on the BUILD that produced it: an archive
+    // carrying one would ship megabytes that the importing installation is
+    // likely to reject as stale on sight, and the .jaf ingest has no way to
+    // preserve a role anyway (it re-derives 'source' vs 'file' from the file
+    // name). An imported project therefore arrives with sources only and
+    // re-bakes lazily on its first open — the same path every pre-bake
+    // library takes. (Phase 2's "runtime only, no sources" mode is where a
+    // bake becomes archive PAYLOAD, and it will carry its own marker.)
     QSqlQuery files(conn);
     files.prepare("SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
                   "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
+                  "AND AF.role <> 'bake' "
                   "ORDER BY AF.role, AF.name");
     files.addBindValue(guid);
     files.exec();

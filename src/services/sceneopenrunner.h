@@ -123,6 +123,10 @@ private:
     Project *project;
 
     QStringList mModelPaths;
+    /// The same paths with their bakes resolved (MESH_BAKE_SPEC phase 1),
+    /// filled by setPlan on the UI thread because bake lookup is a database
+    /// query and QSqlDatabase connections are per-thread.
+    QVector<iris::PrewarmItem> mPlan;
     QVector<Slice> mSlices;
     QString mLabel;
     int mNextSlice = 0;

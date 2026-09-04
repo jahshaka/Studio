@@ -229,6 +229,7 @@ set(SRCS
     src/services/projectassets.cpp
     src/services/engineerrorpump.cpp
     src/services/loadtimeline.cpp
+    src/services/meshbakestore.cpp
     src/services/mainthreadheartbeat.cpp
     src/services/mainthreadwatchdog.cpp
     src/shell/shutdownorder.cpp
