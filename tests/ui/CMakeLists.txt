@@ -61,11 +61,14 @@ add_test(NAME ui.material_panel COMMAND test_material_panel
 set_tests_properties(ui.material_panel PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 
-# ui.property_anim — the timeline PropertyAnim factory returns nullptr, never
-# an indeterminate pointer, for property types it has no track shape for
-# (ENGINEERING_DEBT_SPEC item 8: the createPropertyAnim release-build UB).
-# Header-only factory + IrisGL's animation classes: no widgets, no display.
-add_executable(test_property_anim test_property_anim.cpp)
+# ui.property_anim — the keyframe edit service (src/services/animationedits.h):
+# the track factory returns nullptr, never an indeterminate pointer, for
+# property types it has no track shape for (ENGINEERING_DEBT_SPEC item 8: the
+# createPropertyAnim release-build UB), and the write/remove operations the
+# Timeline panel and the anim.* verbs SHARE behave the same for both callers.
+# Document code only: no widgets, no display.
+add_executable(test_property_anim test_property_anim.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/animationedits.cpp)
 set_target_properties(test_property_anim PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 17

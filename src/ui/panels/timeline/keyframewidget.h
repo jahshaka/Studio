@@ -27,7 +27,6 @@ namespace iris
     class SceneNode;
 }
 
-class KeyFrameLabelWidget;
 class KeyFrameLabelTreeWidget;
 
 class QTreeWidget;

@@ -31,7 +31,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/materials/custommaterial.h"
 
-#include "ui/panels/timeline/propertyanimfactory.h"
+#include "services/animationedits.h"
 #include "ui/panels/timeline/keyframewidget.h"
 #include "ui/panels/timeline/keyframecurvewidget.h"
 #include "ui/panels/timeline/animationwidgetdata.h"
@@ -160,11 +160,16 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 
         buildPropertiesMenu();
 
-        animation = node->getAnimation();
+        // AFTER refreshAnimationList: selecting a row is what makes an
+        // animation active (OnAnimationChanged), and a node can arrive here
+        // with NONE active — deleting the active one of several leaves the
+        // node without one until something picks the next.
         refreshAnimationList();
+        animation = node->getAnimation();
         showKeyFrameWidget();
         hideCreateAnimWidget();
-        ui->loopCheckBox->setChecked(animation->getLooping());
+        if (!!animation)
+            ui->loopCheckBox->setChecked(animation->getLooping());
 
         // enable ui
         ui->deleteAnimBtn->setEnabled(true);
@@ -197,8 +202,10 @@ void AnimationWidget::buildPropertiesMenu()
         // lightType, meshPath...). This filter is defence in depth: since
         // 2026-09-01 makePropertyAnim() returns nullptr rather than an
         // indeterminate pointer for the rest, and addPropertyKey() bails out on
-        // it. Same predicate on both sides so they cannot drift apart.
-        if (!isAnimatablePropertyType(prop->type))
+        // it. Same predicate on both sides so they cannot drift apart — and
+        // since the anim.* verbs landed, the same predicate the SCRIPTS see
+        // through anim.properties (animedits::, src/services/animationedits.h).
+        if (!animedits::isAnimatablePropertyType(prop->type))
             continue;
 
         auto action = new QAction();
@@ -320,7 +327,11 @@ void AnimationWidget::clearAnimationList()
 void AnimationWidget::removeProperty(QString propertyName)
 {
     if (!!node) {
-        node->getAnimation()->removePropertyAnim(propertyName);
+        // getAnimation() is null on a node whose only animation was just
+        // deleted (and on one that never had one) — removeTrack answers false
+        // for both. The label row goes either way: if there is a row for a
+        // track that is not there, that row is exactly what should not stay.
+        animedits::removeTrack(node->getAnimation(), propertyName);
         ui->keylabelView->removeProperty(propertyName);
 
         this->repaintViews();
@@ -332,20 +343,11 @@ void AnimationWidget::clearPropertyKeys(QString propertyName)
 
 }
 
-//! Returns nullptr for property types the timeline has no track shape for.
-//! See src/ui/panels/timeline/propertyanimfactory.h.
-iris::PropertyAnim *AnimationWidget::createPropertyAnim(iris::Property* prop)
-{
-    if (!prop)
-        return nullptr;
-
-    return makePropertyAnim(prop->type, prop->name);
-}
-
 void AnimationWidget::setLooping(bool loop)
 {
     if (!!node) {
-        node->getAnimation()->setLooping(loop);
+        if (auto anim = node->getAnimation())
+            anim->setLooping(loop);
     }
 }
 
@@ -381,7 +383,13 @@ void AnimationWidget::addAnimation()
 
 void AnimationWidget::deleteAnimation()
 {
-    node->deleteAnimation(node->getAnimation());
+    if (!node)
+        return;
+    // Through the shared service (animedits::removeAnimation), which also
+    // clears the node's ACTIVE animation: SceneNode::deleteAnimation only
+    // drops it from the list, and the node went on holding — and keying into
+    // — a clip that no longer appeared in the list.
+    animedits::removeAnimation(node, node->getAnimation());
 
     //refresh ui
     this->setSceneNode(node);
@@ -400,89 +408,37 @@ void AnimationWidget::addPropertyKey(QAction *action)
     if (!animProp)
         return;
 
-    // Get or create property
-    iris::PropertyAnim* anim;
-    if (animation->hasPropertyAnim(animProp->name))
-    {
-        anim = animation->getPropertyAnim(animProp->name);
-    } else {
-        anim = createPropertyAnim(animProp);
-        if (!anim) {
-            // The menu filter (buildPropertiesMenu) and the factory share one
-            // predicate, so a null here can only mean the two got out of sync
-            // — or an action reached this slot from somewhere else. Report it
-            // once per property instead of dereferencing garbage.
-            static QSet<QString> reported;
-            if (!reported.contains(animProp->name)) {
-                reported.insert(animProp->name);
-                irisLog(QString("AnimationWidget: property '%1' has no animatable "
-                                "track type (%2) — key ignored")
-                            .arg(animProp->name)
-                            .arg(static_cast<int>(animProp->type)));
-            }
-            return;
+    // ONE keyframe writer (services/animationedits.h): the get-or-create, the
+    // track-shape check, the overwrite-at-the-same-time rule and the length
+    // recompute are the same code the anim.* verbs run, so the panel and a
+    // script cannot key a property differently. The panel keeps only what is
+    // its own: the menu index, the label view and the reporting.
+    animedits::PropertyInfo info;
+    info.name = animProp->name;
+    info.displayName = animProp->displayName;
+    info.type = animProp->type;
+    info.index = index;
+    // The cached Property carries the value the node had when it was SELECTED;
+    // the key must carry what it holds now.
+    info.value = node->getPropertyValue(animProp->name);
+
+    bool createdTrack = false;
+    QString error;
+    if (!animedits::setKeyframe(animation, info, animWidgetData->cursorPosInSeconds,
+                                QVariant(), &createdTrack, &error)) {
+        // The menu filter and the writer share one predicate, so a refusal here
+        // can only mean the two got out of sync — or an action reached this slot
+        // from somewhere else. Report it once per property.
+        static QSet<QString> reported;
+        if (!reported.contains(animProp->name)) {
+            reported.insert(animProp->name);
+            irisLog(QString("AnimationWidget: %1 — key ignored").arg(error));
         }
-        animation->addPropertyAnim(anim);
+        return;
+    }
+
+    if (createdTrack)
         ui->keylabelView->addProperty(animProp->name);
-    }
-
-    // Covers the other branch: hasPropertyAnim() said yes but getPropertyAnim()
-    // handed back nothing.
-    if (!anim)
-        return;
-
-    auto val = node->getPropertyValue(animProp->name);
-    auto frames = anim->getKeyFrames();
-
-    // An existing track for this name may have been built for a different
-    // shape than the property now reports (a Float track for a Vec3 property,
-    // say, after a document change). Check the track width before indexing it.
-    const auto hasFrames = [&frames](int count) {
-        if (frames.count() < count)
-            return false;
-        for (int i = 0; i < count; ++i)
-            if (!frames[i].keyFrame)
-                return false;
-        return true;
-    };
-
-    switch (animProp->type) {
-    case iris::PropertyType::Float:
-    {
-        if (!hasFrames(1))
-            return;
-        auto value = val.toFloat();
-        frames[0].keyFrame->addKey(value, animWidgetData->cursorPosInSeconds);
-    }
-        break;
-    case iris::PropertyType::Vec3:
-    {
-        if (!hasFrames(3))
-            return;
-        auto value = val.value<QVector3D>();
-        frames[0].keyFrame->addKey(value.x(), animWidgetData->cursorPosInSeconds);
-        frames[1].keyFrame->addKey(value.y(), animWidgetData->cursorPosInSeconds);
-        frames[2].keyFrame->addKey(value.z(), animWidgetData->cursorPosInSeconds);
-    }
-        break;
-    case iris::PropertyType::Color:
-    {
-        if (!hasFrames(4))
-            return;
-        auto value = val.value<QColor>();
-        frames[0].keyFrame->addKey(value.redF(),    animWidgetData->cursorPosInSeconds);
-        frames[1].keyFrame->addKey(value.greenF(),  animWidgetData->cursorPosInSeconds);
-        frames[2].keyFrame->addKey(value.blueF(),   animWidgetData->cursorPosInSeconds);
-        frames[3].keyFrame->addKey(value.alphaF(),  animWidgetData->cursorPosInSeconds);
-    }
-        break;
-    default:
-        // Unreachable while the menu filter and makePropertyAnim agree; a
-        // no-op rather than an unhandled shape if they ever do not.
-        return;
-    }
-
-    animation->calculateAnimationLength();
 
     // recalc summary keys for this property
     ui->keylabelView->recalcPropertySummaryKeys(animProp->name);
@@ -561,6 +517,10 @@ void AnimationWidget::OnAnimationChanged(QString name)
     {
         if (anim->getName() == name) {
             node->setAnimation(anim);
+            // The panel's own handle has to follow too: addPropertyKey keys
+            // THIS pointer, so leaving it behind meant switching animations in
+            // the combo and then keying into the previous one.
+            animation = anim;
             ui->keylabelView->setActiveAnimation(anim);
             this->repaintViews();
         }

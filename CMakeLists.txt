@@ -128,9 +128,7 @@ set(SRCS
 	src/ui/dialogs/custompopup.cpp
     src/ui/dialogs/loadmeshdialog.cpp 
     src/ui/panels/timeline/animationwidget.cpp 
-    src/ui/panels/timeline/keyframelabelwidget.cpp 
     src/ui/panels/timeline/keyframewidget.cpp 
-    src/ui/panels/timeline/maintimelinewidget.cpp 
     src/ui/panels/timeline/timelinewidget.cpp 
     src/ui/panels/timeline/nodekeyframeanimation.cpp 
     src/data/project.cpp 
@@ -159,6 +157,7 @@ set(SRCS
     src/scripting/modules/worldapi.cpp
     src/scripting/modules/assetsapi.cpp
     src/scripting/modules/particlesapi.cpp
+    src/scripting/modules/animapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
@@ -224,8 +223,8 @@ set(SRCS
     src/services/shortcutregistry.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
+    src/services/animationedits.cpp
     src/services/playbackservice.cpp
-    src/ui/panels/presets/assetfavorites.cpp 
     src/ui/panels/presets/assetmodelpanel.cpp 
     src/ui/panels/presets/assetmaterialpanel.cpp 
     src/ui/controls/accordionbladewidget.cpp 
@@ -352,9 +351,7 @@ set(HEADERS
     src/ui/dialogs/infodialog.h 
     src/ui/dialogs/loadmeshdialog.h 
     src/ui/panels/timeline/animationwidget.h 
-    src/ui/panels/timeline/keyframelabelwidget.h 
     src/ui/panels/timeline/keyframewidget.h
-    src/ui/panels/timeline/maintimelinewidget.h
     src/ui/panels/timeline/timelinewidget.h 
     src/ui/panels/timeline/timelinekeys.h 
     src/ui/panels/timeline/nodekeyframe.h 
@@ -386,6 +383,7 @@ set(HEADERS
     src/scripting/modules/desktopapi.h
     src/scripting/modules/worldapi.h
     src/scripting/modules/particlesapi.h
+    src/scripting/modules/animapi.h
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
@@ -441,8 +439,8 @@ set(HEADERS
     src/services/shortcutregistry.h
     src/services/worldmodes.h
     src/services/planarreflectors.h
+    src/services/animationedits.h
     src/services/playbackservice.h
-    src/ui/panels/presets/assetfavorites.h 
     src/ui/panels/presets/assetpanel.h 
     src/ui/panels/presets/assetmodelpanel.h 
     src/ui/panels/presets/assetmaterialpanel.h 
@@ -576,11 +574,9 @@ set(WIDGETS
     src/ui/dialogs/infodialog.ui 
     src/ui/dialogs/loadmeshdialog.ui 
     src/ui/panels/timeline/animationwidget.ui 
-    src/ui/panels/timeline/maintimelinewidget.ui 
     src/ui/controls/accordionbladewidget.ui 
     src/ui/panels/scenehierarchywidget.ui 
     src/ui/panels/presets/skypresets.ui 
-    src/ui/panels/timeline/keyframelabelwidget.ui 
     src/ui/panels/timeline/keyframelabeltreewidget.ui 
     src/ui/controls/labelwidget.ui 
     src/ui/controls/checkboxwidget.ui 
