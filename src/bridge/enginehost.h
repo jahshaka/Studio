@@ -34,6 +34,12 @@ public:
     /// Deletes that directory. Safe with no engine running; the next launch is
     /// cold. This is our `r.InvalidateCachedShaders`.
     static bool clearShaderCacheOnDisk();
+    /// The recorded warm-up set (SHADER_CACHE_SPEC §2.7b): the permutation list
+    /// this machine's previous sessions used, replayed at the next startup so
+    /// their shaders exist before anything is drawn. Lives beside the cache and
+    /// dies with it — it is derived data too, and re-recording costs one
+    /// session.
+    static QString warmUpSetPath();
     /// Starts the burst-settle save watchdog: once shaders have been compiled
     /// and then NOT compiled for a few seconds, the cache is written. Without
     /// it a crash (or a pkill, which this codebase's history is full of) throws

@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QThread>
 
 using namespace jahshaka::engine;
@@ -102,6 +103,26 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     for (int i = 0; i < kWarmUpFrames && warmView; ++i) {
         engine->renderOneFrame();
         poll();
+    }
+
+    // THE RECORDED SET (SHADER_CACHE_SPEC §2.7b). The previous session wrote
+    // down which permutations it actually used — a list of vertex formats,
+    // render queues and one representative material each, not shaders. Applying
+    // it here builds every one of them against degenerate 4-vertex buffers, so
+    // this session's Hlms permutations exist before the window does, without
+    // loading a single mesh, skeleton or texture.
+    //
+    // This is what the process-wide warm-up above cannot do on its own: Hlms
+    // shaders are per RENDERABLE, so guessing at them from an empty scene is
+    // impossible — but REMEMBERING them from last time is not.
+    if (warmScene) {
+        const QString setPath = EngineHost::warmUpSetPath();
+        if (!setPath.isEmpty() && QFileInfo::exists(setPath)) {
+            const unsigned built =
+                engine->applyWarmUpSet(setPath.toStdString(), warmScene);
+            poll();
+            qInfo("startup: replayed the recorded warm-up set (%u shader(s) built)", built);
+        }
     }
     // The SCENE goes; the VIEW stays, disabled, for the life of the process.
     //

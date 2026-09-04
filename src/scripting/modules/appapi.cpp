@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
 #include "bridge/enginehost.h"
+#include <QDir>
+#include <QFileInfo>
 
 QVector<VerbInfo> AppApi::verbs() const
 {
@@ -62,6 +64,17 @@ QVector<VerbInfo> AppApi::verbs() const
           "Writes the shader cache now instead of waiting for the burst-settle watchdog or a clean "
           "quit. A no-op returning true when nothing new has been compiled. Mostly for tests: the "
           "app saves on its own.",
+          Needs::Engine },
+        { "warmUpSet", "app.warmUpSet(action?) -> {path, exists, sizeBytes, recorded?, saved?, built?}",
+          "The recorded warm-up set (SHADER_CACHE_SPEC.md §2.7b) — this machine's list of the "
+          "shader permutations previous sessions actually used. Not shaders and not SPIR-V: a list "
+          "of vertex formats, render queues and one representative material each, which is why it "
+          "is tiny and why it is the only cached artifact that is platform- and driver-independent. "
+          "With no argument it reports. 'record' adds every live scene to the set and writes it; "
+          "'apply' replays it, compiling every permutation against degenerate 4-vertex buffers so "
+          "nothing is loaded from disk, and reports how many shaders that built. The app records on "
+          "quit and applies at startup on its own; these are for tests and for recording a set "
+          "deliberately from a scene built for the purpose.",
           Needs::Engine },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -123,6 +136,39 @@ bool AppApi::saveShaderCache()
     auto engine = EngineHost::instance().engine();
     if (!engine) return fail("app.saveShaderCache: the engine is not running");
     return engine->saveShaderCache();
+}
+
+QVariantMap AppApi::warmUpSet(const QString &action)
+{
+    QVariantMap m;
+    const QString path = EngineHost::warmUpSetPath();
+    m["path"] = path;
+    auto engine = EngineHost::instance().engine();
+    const QString what = action.trimmed().toLower();
+    if (!what.isEmpty() && !engine) { fail("app.warmUpSet: the engine is not running"); return m; }
+
+    if (what == QLatin1String("record")) {
+        const bool recorded = engine->recordWarmUpSet();
+        m["recorded"] = recorded;
+        if (recorded) {
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            m["saved"] = engine->saveWarmUpSet(path.toStdString());
+        }
+    } else if (what == QLatin1String("apply")) {
+        // Needs a scene to host the degenerate renderables. The editor's own
+        // scene is the natural one and leaves nothing behind (createWarmUp /
+        // destroyWarmUp are paired inside the engine).
+        m["built"] = 0u;
+        if (!QFileInfo::exists(path)) return fail("app.warmUpSet: no set recorded yet"), m;
+        m["built"] = engine->applyWarmUpSet(path.toStdString(), nullptr);
+    } else if (!what.isEmpty()) {
+        return fail(QStringLiteral("app.warmUpSet: unknown action '%1' (record, apply)").arg(action)), m;
+    }
+
+    const QFileInfo info(path);
+    m["exists"] = info.exists();
+    m["sizeBytes"] = QVariant::fromValue(qulonglong(info.exists() ? info.size() : 0));
+    return m;
 }
 
 bool AppApi::quit()

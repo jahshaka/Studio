@@ -187,6 +187,12 @@ QString EngineHost::shaderCacheDirectory()
     return QDir(base).filePath(QStringLiteral("shadercache"));
 }
 
+QString EngineHost::warmUpSetPath()
+{
+    const QString dir = shaderCacheDirectory();
+    return dir.isEmpty() ? QString() : QDir(dir).filePath(QStringLiteral("warmup.set"));
+}
+
 bool EngineHost::clearShaderCacheOnDisk()
 {
     const QString dir = shaderCacheDirectory();
@@ -271,6 +277,18 @@ void EngineHost::startShaderCacheWatchdog()
 void EngineHost::shutdown()
 {
     if (mCacheWatchdog) { mCacheWatchdog->stop(); delete mCacheWatchdog; mCacheWatchdog = nullptr; }
+    // Record what this session actually drew, for the NEXT launch to warm from
+    // (SHADER_CACHE_SPEC §2.7b). A set is a permutation LIST, not shaders: it
+    // lets the next startup compile everything this session needed without
+    // loading one mesh, skeleton or texture. Recording every live scene here is
+    // the whole "merge the recordings" step — the engine's storage accumulates.
+    if (mEngine) {
+        const QString setPath = warmUpSetPath();
+        if (!setPath.isEmpty() && mEngine->recordWarmUpSet()) {
+            QDir().mkpath(QFileInfo(setPath).absolutePath());
+            mEngine->saveWarmUpSet(setPath.toStdString());
+        }
+    }
     // THE clean-quit save (SHADER_CACHE_SPEC §4.4). The engine's destructor
     // saves too, but a viewport that still holds the shared_ptr can defer that
     // destructor past Qt's own teardown — this is the point we can prove runs,
