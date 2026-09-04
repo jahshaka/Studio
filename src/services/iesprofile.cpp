@@ -56,11 +56,36 @@ QString keywordValue(const QString &header, const QString &key)
     return m.hasMatch() ? m.captured(1).trimmed() : QString();
 }
 
+// BOUNDS (deep audit 2026-09). Everything below this line is attacker-supplied
+// once a user imports a downloaded .ies, so the parser must state its limits
+// before it allocates on the file's word.
+//
+//   kMaxFileBytes  — the whole file is read into memory and split into tokens.
+//                    Real photometric files are single-digit KB; the largest
+//                    manufacturer files in the wild are well under 1 MB.
+//   kMaxAngles     — the declared vertical/horizontal angle counts drive a
+//                    reserve() each. LM-63 files carry tens of angles; the
+//                    format's own practical ceiling is a few hundred.
+constexpr qint64 kMaxFileBytes = 8 * 1024 * 1024;
+constexpr int    kMaxAngles    = 4096;
+
 }  // namespace
 
 IesProfile IesProfile::parse(const QString &path)
 {
     IesProfile p;
+
+    const QFileInfo info(path);
+    // Size FIRST: readAll() on a file that only claims to be an .ies is an
+    // unbounded allocation, and so is the token split that follows it.
+    if (info.size() > kMaxFileBytes) {
+        p.error = QStringLiteral("%1 is %2 MB; IES photometric files are kilobytes "
+                                 "(the limit is %3 MB)")
+                      .arg(info.fileName())
+                      .arg(double(info.size()) / (1024.0 * 1024.0), 0, 'f', 1)
+                      .arg(kMaxFileBytes / (1024 * 1024));
+        return p;
+    }
 
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -137,6 +162,16 @@ IesProfile IesProfile::parse(const QString &path)
                       .arg(QFileInfo(path).fileName());
         return p;
     }
+    // The declared counts are file content and they size two reserve()s and the
+    // candela loop below. A file may declare 2,000,000,000 angles in fifty
+    // bytes; it must not get to ask for the memory.
+    if (p.numVerticalAngles > kMaxAngles || p.numHorizontalAngles > kMaxAngles) {
+        p.error = QStringLiteral("%1 declares %2 vertical and %3 horizontal angles; "
+                                 "the limit is %4 each")
+                      .arg(QFileInfo(path).fileName())
+                      .arg(p.numVerticalAngles).arg(p.numHorizontalAngles).arg(kMaxAngles);
+        return p;
+    }
     if (photometricType != 1) {
         p.error = QStringLiteral("%1 is photometric type %2; only type C is supported")
                       .arg(QFileInfo(path).fileName()).arg(photometricType);
@@ -205,9 +240,12 @@ IesProfile IesProfile::parse(const QString &path)
 
     // --- Candela grid. Every value is read (short files are corrupt), but only
     // the first horizontal slice is kept: that is the only one that is sampled.
-    const int total = p.numVerticalAngles * p.numHorizontalAngles;
+    // qint64: both counts are bounded by kMaxAngles above, but the product of
+    // two ints is an int and this one is derived from file content — the
+    // multiply itself must not be where the bound is lost.
+    const qint64 total = qint64(p.numVerticalAngles) * qint64(p.numHorizontalAngles);
     p.candela.reserve(p.numVerticalAngles);
-    for (int i = 0; i < total; ++i) {
+    for (qint64 i = 0; i < total; ++i) {
         float v = 0.0f;
         if (!nums.next(&v)) {
             p.error = QStringLiteral("%1 contains %2 of the %3 candela values it declares")
