@@ -43,3 +43,6 @@ add_test(NAME desktops.slider_model COMMAND test_slider_model
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(desktops.slider_model PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "desktops")
+
+# The leak lane (scripts/sanitize.sh lsan): database + model objects only.
+jah_lsan_lane(desktops.db desktops.slider_model)

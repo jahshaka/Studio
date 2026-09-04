@@ -77,6 +77,37 @@ endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+# ThreadSanitizer: the race lane (deep audit 2026-09, area 3 finding 4).
+#
+# TSan is all-or-nothing in a way ASan is not — it only sees the memory accesses
+# and the synchronisation of code it instrumented, so a partial build produces
+# FALSE races (a happens-before edge established inside an uninstrumented
+# library is invisible to it). Hence a global flag rather than the per-target
+# opt-in JAHSHAKA_ASAN uses, and hence its own build directory: the two runtimes
+# cannot coexist in one process, and every TU has to be recompiled anyway.
+#
+#     cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DJAHSHAKA_TSAN=ON ...
+#     ./scripts/sanitize.sh tsan
+#
+# Ogre-Next, Qt and the Vulkan driver stay uninstrumented (we link installed
+# shared libraries) — scripts/tsan.supp documents what that costs. Placed before
+# add_subdirectory(irisgl) so the flags reach every target in the tree.
+option(JAHSHAKA_TSAN "Build the whole tree with ThreadSanitizer (use a separate build dir)" OFF)
+if(JAHSHAKA_TSAN)
+    if(JAHSHAKA_ASAN)
+        message(FATAL_ERROR
+            "JAHSHAKA_TSAN and JAHSHAKA_ASAN cannot be combined — the two runtimes "
+            "refuse to load into one process. Configure a separate build directory.")
+    endif()
+    if(NOT (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+        message(FATAL_ERROR "JAHSHAKA_TSAN needs GCC or Clang")
+    endif()
+    # -g so the reports carry file:line; frame pointers so the stacks are whole.
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=thread)
+    message(STATUS "ThreadSanitizer: ON (whole tree; Ogre/Qt remain uninstrumented)")
+endif()
+
 find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia Qml HttpServer)
 

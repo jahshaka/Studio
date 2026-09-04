@@ -320,3 +320,14 @@ target_include_directories(resave_presets PRIVATE
 target_link_libraries(resave_presets PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
 
 
+
+# The leak lane (scripts/sanitize.sh lsan): the CPU evaluator allocates a
+# BakeProgram, per-texel buffers and a QImage per baked map — all pure document
+# work, no driver anywhere near it.
+# The five suites that build a NodeLibrary are QUARANTINED (L4 — the node
+# library/graph own raw pointers and nothing has a destructor; 88 KB in one
+# run of baker_parity — plus L1 underneath).
+jah_lsan_lane(shadergraph.fuzzy_search shadergraph.selection)
+jah_lsan_blocked(shadergraph.pbr_evaluator shadergraph.node_regressions
+                 shadergraph.baker_parity shadergraph.bake_output
+                 shadergraph.panel_migration)

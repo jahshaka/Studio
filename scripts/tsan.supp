@@ -1,0 +1,44 @@
+# ThreadSanitizer suppressions for the race lane (scripts/sanitize.sh tsan).
+#
+# THE RULE FOR THIS FILE: TSan only sees the synchronisation of code it
+# instrumented. build-tsan instruments everything we compile (Studio, IrisGL,
+# the engine boundary, the vendored libraries) but NOT Ogre-Next, Qt, the Vulkan
+# loader or the driver — we link their installed shared libraries. A
+# happens-before edge established inside one of those is invisible to TSan, so
+# it can report a race between two accesses that are in fact ordered. Those
+# reports, and only those, belong here.
+#
+# An entry must name a library or a symbol we do not compile, and say what edge
+# TSan cannot see. Suppressing anything under src/ or irisgl/ is forbidden: that
+# is the code the lane exists to check.
+#
+# Formats used here (see the TSan docs):
+#   race:<function or file substring>      suppress races whose stacks contain it
+#   called_from_lib:<library filename>     suppress reports from an
+#                                          uninstrumented library's own threads
+#   deadlock:<function>                    lock-order reports
+#
+# EMPTY IS THE HONEST DEFAULT. Entries are added only after a report has been
+# read and understood; the lane's whole value is the reports it does print.
+
+# ---------------------------------------------------------------------------
+# Qt's queued-invocation functor — the one unavoidable blind spot, verified
+# 2026-09-04 on import.async (3 identical reports, roughly one run in three).
+#
+# QMetaObject::invokeMethod(obj, lambda, Qt::QueuedConnection) copies the
+# lambda's captures into a heap QCallableObject ON THE CALLING THREAD, posts it
+# to obj's event queue, and the receiving thread reads those captures when it
+# runs the call. The hand-off is ordered by the post-event-list mutex inside
+# libQt6Core — which is uninstrumented, so TSan sees only "thread A wrote this
+# heap block, thread B read it" and reports a race. Both frames it names are
+# ours (src/services/import/importbatchrunner.cpp:102 writes, :103 reads),
+# which is why the file's own rule needs this exception spelled out.
+#
+# `QCallableObject` is Qt's class, not ours; the only allocations it covers are
+# lambda captures being handed to an event queue, and nothing else in our code
+# constructs one. It is therefore as narrow as this can be made without
+# instrumenting Qt itself. THE COST, stated plainly: a genuine race on data that
+# a slot reads *out of its own captures* would be hidden too. Races on anything
+# a worker and the UI thread share by reference — members, singletons,
+# containers, the registries — are unaffected and still report.
+race:QCallableObject

@@ -68,3 +68,21 @@ add_test(NAME import.shutdown COMMAND test_import_shutdown
 set_tests_properties(import.shutdown PROPERTIES
     ENVIRONMENT "HOME=${_shutdown_home}"
     TIMEOUT 480 LABELS "importer")
+
+# The race lane (scripts/sanitize.sh tsan). import.async IS the threaded-import
+# contract — prepare on a worker, commit on the DB thread, progress callbacks
+# crossing between them — so it is the single highest-value suite in the lane.
+# import.shutdown drives the same runner through a mid-batch quit, which is
+# where a cancel/teardown race would live — but import.shutdown is
+# QUARANTINED there for now: the app cannot start at all under GCC 15's
+# libtsan (see jah_tsan_blocked in tests/CMakeLists.txt).
+jah_tsan_lane(import.async)
+jah_tsan_blocked(import.shutdown)
+
+# The leak lane (scripts/sanitize.sh lsan): in-process, no Vulkan, and it
+# allocates the whole import closure (assimp scene, CAS blobs, thumbnails).
+# import.shutdown is NOT eligible at all — it spawns the app, which loads a
+# driver. import.async is eligible but QUARANTINED (L3 — every imported asset
+# leaks its AssetNodeObject and the mesh subtree under it: 21 KB in 248
+# allocations here, from two imports).
+jah_lsan_blocked(import.async)

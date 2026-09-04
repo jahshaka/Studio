@@ -27,7 +27,15 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     connect(ui->slider,     SIGNAL(sliderPressed()),        SLOT(sliderPressed()));
     connect(ui->slider,     SIGNAL(sliderReleased()),       SLOT(sliderReleased()));
 
-    setStyle(new CustomStyle(this->style()));
+    // QWidget::setStyle does NOT take ownership of the style — it only stores
+    // the pointer. Every slider row therefore leaked one CustomStyle (a
+    // QProxyStyle, ~210 bytes with its private) for the life of the process:
+    // 176 of them in a single run of ui.material_panel, which is one properties
+    // panel. Parent it to the widget so the row frees it with everything else.
+    // (Found by the LeakSanitizer lane, scripts/sanitize.sh lsan.)
+    auto *sliderStyle = new CustomStyle(this->style());
+    sliderStyle->setParent(this);
+    setStyle(sliderStyle);
 
     ui->spinbox->setButtonSymbols(QAbstractSpinBox::NoButtons);
 

@@ -82,3 +82,10 @@ target_link_libraries(test_raw_export PRIVATE Qt6::Core Qt6::Sql)
 add_test(NAME export.raw COMMAND test_raw_export
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(export.raw PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
+
+# The leak lane (scripts/sanitize.sh lsan): the walkers and writers build whole
+# document trees in memory. export.embed spawns a browser, so it stays out.
+# export.raw is clean; the other two are QUARANTINED (L1 iris::Material
+# properties, and export.web additionally L2).
+jah_lsan_lane(export.raw)
+jah_lsan_blocked(export.web export.walkers)

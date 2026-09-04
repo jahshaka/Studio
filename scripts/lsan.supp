@@ -1,0 +1,48 @@
+# LeakSanitizer suppressions for the leak lane (scripts/sanitize.sh lsan).
+#
+# THE RULE FOR THIS FILE: an entry may only describe an allocation that is
+#   (a) made inside a library we do not own and did not ask for directly, and
+#   (b) one-time or bounded — something the library never frees by design, not
+#       something that grows with the work the test does,
+# and every entry names the run that proved it and what the leak actually was.
+# A suppression that hides one of OUR allocations makes the whole lane
+# worthless; if a leak is ours the lane is doing its job — fix it, or record it
+# as a finding. Suppressing anything under src/ or irisgl/ is forbidden.
+#
+# The lane runs with print_suppressions=1, so every run prints how many bytes
+# each of these actually matched. A line that stops matching is deleted (an
+# unmatched suppression is a claim nobody is checking any more); a line whose
+# byte count starts growing is no longer one-time and has to be re-audited.
+#
+# Format: leak:<substring of a function name, source file or library>, matched
+# against every frame of the allocation stack.
+# https://clang.llvm.org/docs/AddressSanitizer.html#suppressing-memory-leaks
+
+# ---------------------------------------------------------------------------
+# libdbus-1 — 184 bytes, one allocation, in the suites that construct a
+# QGuiApplication with Qt Multimedia loaded (audio.peaks, ui.media_lazy;
+# verified 2026-09-04). dbus's message loader queues an incoming message inside
+# _dbus_message_loader_queue_messages, reached from libQt6DBus through a
+# QSocketNotifier while the app is still starting; the buffer belongs to the
+# connection, and the connection is a process-lifetime singleton dbus never
+# tears down. This is the same family of allocations the four ASan-built engine
+# suites cite when they set detect_leaks=0 (there, reached from the Vulkan
+# loader's Mesa device-select layer instead of from Qt DBus).
+leak:libdbus-1.so
+
+# libdrm via FFmpeg — 87 bytes in 4 allocations, in the two suites that let Qt
+# Multimedia probe hardware decoders (audio.peaks, ui.media_lazy; verified
+# 2026-09-04). libavutil calls drmGetVersion() while enumerating DRM render
+# nodes and never calls drmFreeVersion(); the struct plus its three strdup'd
+# strings are the whole leak. One per device probe, not per file decoded.
+leak:drmGetVersion
+
+# glibc's pthread_cond 2.0-ABI compat shim — 48 bytes, one allocation, in
+# ui.media_lazy on about two runs in three (verified 2026-09-04; it appears only
+# when FFmpeg finds a hardware decoder to probe). A codec plugin libavcodec
+# dlopen()s still calls the pre-2.3.2 pthread_cond_broadcast symbol;
+# old_pthread_cond_broadcast.c allocates the new-ABI condition variable behind
+# it and keeps it in a table glibc never frees, by design. Nothing we compile
+# can reach the 2.0 symbol — modern glibc headers only bind the current one —
+# so this can never hide a leak of ours. One per condvar in that plugin.
+leak:__pthread_cond_broadcast_2_0

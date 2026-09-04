@@ -394,3 +394,7 @@ set_tests_properties(scripting.e2e.world_modes PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 120)
+
+# The leak lane (scripts/sanitize.sh lsan): the QJSEngine host only. The
+# scripting.e2e.* suites run the real binary with the engine up and stay out.
+jah_lsan_lane(scripting.engine)

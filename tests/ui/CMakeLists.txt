@@ -164,3 +164,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         ENVIRONMENT "DISPLAY=${JAH_TEST_DISPLAY};QT_QPA_PLATFORM=xcb"
         TIMEOUT 180 LABELS "ui")
 endif()
+
+# The leak lane (scripts/sanitize.sh lsan): the offscreen widget suites — panel
+# and dialog ownership (a missing parent is the classic Qt leak). The on-screen
+# ui.engine_view_winid suite links the engine and stays out.
+# ui.material_panel is QUARANTINED (L1 iris::Material properties — 54
+# materials' worth). Its other leak, one QProxyStyle per slider row, was
+# this lane's first fix (hfloatsliderwidget.cpp).
+jah_lsan_lane(ui.property_anim ui.viewport_cover ui.media_lazy)
+jah_lsan_blocked(ui.material_panel)
