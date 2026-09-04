@@ -50,6 +50,7 @@ struct RebuildReport
     int assets = 0;             // asset rows written from sidecars
     int files = 0;              // files rows
     int links = 0;              // asset_files rows
+    int skipped = 0;            // tombstones: sidecars whose objects are all gone
     qint64 elapsedMs = 0;
 
     QVariantMap toMap() const;
