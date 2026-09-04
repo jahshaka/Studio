@@ -262,29 +262,33 @@ void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
 	generator->requestThumbnail(ThumbnailRequestType::Shader, QString(), shaderGuid);
 }
 
-void EffectsPage::onShaderThumbnail(ThumbnailResult *result)
+void EffectsPage::onShaderThumbnail(const ThumbnailResult &result)
 {
 	// The queue is shared: only our own Shader renders are ours to store.
-	if (!result || result->type != ThumbnailRequestType::Shader) return;
-	if (result->preview || result->thumbnail.isNull() || result->id.isEmpty()) return;
+	// (The payload used to arrive as a ThumbnailResult* that AssetWidget's
+	// slot had already deleted by the time this one ran — a read-after-free
+	// decided by connection order, and the likely root of shader thumbnails
+	// that "sometimes" failed to save. It is a value now.)
+	if (result.type != ThumbnailRequestType::Shader) return;
+	if (result.preview || result.thumbnail.isNull() || result.id.isEmpty()) return;
 
 	QByteArray bytes;
 	QBuffer buffer(&bytes);
 	buffer.open(QIODevice::WriteOnly);
-	QPixmap::fromImage(result->thumbnail).save(&buffer, "PNG");
+	QPixmap::fromImage(result.thumbnail).save(&buffer, "PNG");
 	if (bytes.isEmpty()) return;
 
-	dataBase->updateAssetThumbnail(result->id, bytes);
-	if (auto item = selectCorrectItemFromDrop(result->id))
+	dataBase->updateAssetThumbnail(result.id, bytes);
+	if (auto item = selectCorrectItemFromDrop(result.id))
 		ListWidget::updateThumbnailImage(bytes, item);
 
 	// The derived material asset carries the same picture (it already did —
 	// it just used to copy emptiness). The graph's own "materialGuid" names it;
 	// read it straight out of the stored definition, no graph rebuild.
-	const auto definition = QJsonDocument::fromJson(dataBase->fetchAssetData(result->id)).object();
+	const auto definition = QJsonDocument::fromJson(dataBase->fetchAssetData(result.id)).object();
 	const QString materialGuid =
 		definition["shadergraph"].toObject()["materialGuid"].toString();
-	if (!materialGuid.isEmpty()) updateMaterialThumbnail(result->id, materialGuid);
+	if (!materialGuid.isEmpty()) updateMaterialThumbnail(result.id, materialGuid);
 }
 
 void EffectsPage::saveDefaultShader()
@@ -1762,17 +1766,31 @@ void EffectsPage::configureConnections()
 	
 
 	QShortcut *shortcut = new QShortcut(QKeySequence("space"), this);
-	QShortcut *undo = new QShortcut(QKeySequence("crtl+z"), this);
-	QShortcut *redo = new QShortcut(QKeySequence("crtl+shift+z"), this);
+	// (No page-level Ctrl+Z / Ctrl+Shift+Z here. There WERE two, spelled
+	// "crtl+z" and "crtl+shift+z" — QKeySequence parses the typo'd modifier
+	// as nothing, so neither had ever fired since the day they were written
+	// (deep audit 2026-09, area 1).
+	//
+	// Spelling them correctly would not have made them work, and would have
+	// made the page's shortcut story worse. Two live claimants already own
+	// Ctrl+Z whenever this page is visible — MainWindow's ShortcutRegistry
+	// "edit.undo" and GraphicsView::addShortcuts' own graph undo, both
+	// Qt::WindowShortcut — so Qt dispatches the chord AMBIGUOUSLY here and
+	// QShortcut answers an ambiguous event by doing nothing. Measured on
+	// Xvfb with qt.gui.shortcutmap.debug: on this page the log says "The
+	// following shortcuts are about to be activated ambiguously" and sends
+	// QShortcutEvent("Ctrl+Z", -4, TRUE); on the editor page, where the
+	// graph view is not visible, the same key sends (..., -32, false) and
+	// the editor's undo runs. A third claimant would not have changed that.
+	//
+	// The duplicates are deleted rather than fixed: this page's `stack` IS
+	// the graph scene's stack (scene->setUndoRedoStack(stack) below), so
+	// they were exact duplicates of GraphicsView's pair anyway. Making the
+	// chord work on this page is a decision about WHICH undo owns it —
+	// reported to the lead, not made here.)
 	connect(shortcut, &QShortcut::activated, [=]() {
 		auto dialog = new SearchDialog(this->graph, scene, { 0,0 });
 		dialog->exec();
-	});
-	connect(undo, &QShortcut::activated, [=]() {
-		stack->undo();
-	});
-	connect(redo, &QShortcut::activated, [=]() {
-		stack->redo();
 	});
 
     //connections for MyFx sections

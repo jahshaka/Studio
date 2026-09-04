@@ -39,3 +39,24 @@ add_dependencies(test_engine_error_pump JahshakaEngineMedia)
 add_test(NAME engine.error_pump COMMAND test_engine_error_pump
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(engine.error_pump PROPERTIES TIMEOUT 600 LABELS "services")
+
+# services.memory — session-registry OWNERSHIP (deep audit 2026-09, area 3).
+# Links only the two registries it tests plus IrisGL (the SceneNodePtr payload
+# an asset pins). No engine, no database, no display; runs offscreen.
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+add_executable(test_memory_ownership test_memory_ownership.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp)
+set_target_properties(test_memory_ownership PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_memory_ownership PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    # iris headers expose assimp and bullet types; these are IrisGL's own include paths
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_memory_ownership PRIVATE IrisGL Qt6::Gui)
+add_test(NAME services.memory COMMAND test_memory_ownership
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(services.memory PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "services")

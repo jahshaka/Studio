@@ -2647,7 +2647,7 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 	case ModelTypes::Texture: {
 		// straight from the source image, like the import path
 		auto thumb = ThumbnailManager::createThumbnail(IrisUtils::join(assetFolder, record.name), 256, 256);
-		if (thumb && thumb->thumb) pixmap = QPixmap::fromImage(*thumb->thumb);
+		if (thumb && !thumb->thumb.isNull()) pixmap = QPixmap::fromImage(thumb->thumb);
 		break;
 	}
 	case ModelTypes::Music:

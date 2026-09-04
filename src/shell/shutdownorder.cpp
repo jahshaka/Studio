@@ -24,10 +24,10 @@ void record(int step, const char *name)
     // apart, and the last steps happen after the services (and, at step 7,
     // most of Qt's world) are gone. A fixed array and a raw fprintf survive
     // that; a container that allocates would be one more thing to trust.
-    static int  sSeen[8] = { 0 };
+    static int  sSeen[kStepCount + 1] = { 0 };
     static int  sHighest = 0;
 
-    if (step < 1 || step > 7) return;
+    if (step < 1 || step > kStepCount) return;
     if (sSeen[step]++)
         qWarning("[shutdown] step %d (%s) fired again (%dx) — the order in "
                  "shell/shutdownorder.h says once", step, name, sSeen[step]);
@@ -36,10 +36,10 @@ void record(int step, const char *name)
                  "see shell/shutdownorder.h", step, name, sHighest);
     if (step > sHighest) sHighest = step;
 
-    // stderr directly, unbuffered and Qt-free: step 7 can run after the
+    // stderr directly, unbuffered and Qt-free: the last step can run after the
     // message handler's world has been dismantled, and the gate reads these
     // lines out of the spawned process's output.
-    std::fprintf(stderr, "[shutdown] step %d/7 %s\n", step, name);
+    std::fprintf(stderr, "[shutdown] step %d/%d %s\n", step, int(kStepCount), name);
     std::fflush(stderr);
 #else
     Q_UNUSED(step);

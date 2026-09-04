@@ -64,7 +64,7 @@ QImage thumbnailImageFor(int type, const QString &filePath)
     switch (static_cast<ModelTypes>(type)) {
     case ModelTypes::Texture: {
         auto thumb = ThumbnailManager::createThumbnail(filePath, 256, 256);
-        if (thumb && thumb->thumb) return *thumb->thumb;
+        if (thumb && !thumb->thumb.isNull()) return thumb->thumb;
         return QImage();
     }
     case ModelTypes::Video: {
@@ -203,7 +203,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         QImage texThumb;
         {
             auto thumb = ThumbnailManager::createThumbnail(entry.path, 72, 72);
-            if (thumb && thumb->thumb) texThumb = *thumb->thumb;
+            if (thumb && !thumb->thumb.isNull()) texThumb = thumb->thumb;
         }
         StagedRow texRow;
         texRow.guid = entry.guid;
@@ -583,7 +583,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
         QImage texThumb;
         {
             auto thumb = ThumbnailManager::createThumbnail(tex.path, 72, 72);
-            if (thumb && thumb->thumb) texThumb = *thumb->thumb;
+            if (thumb && !thumb->thumb.isNull()) texThumb = thumb->thumb;
         }
         StagedRow texRow;
         texRow.guid = tex.guid;

@@ -370,7 +370,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
 	QByteArray thumbnailBytes;
 	QBuffer buffer(&thumbnailBytes);
 	buffer.open(QIODevice::WriteOnly);
-	QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
+	QPixmap::fromImage(thumb->thumb).save(&buffer, "PNG");
 
 	const QString tileGuid = GUIDManager::generateGUID();
 	const QString assetGuid = db->createAssetEntry(tileGuid,
@@ -643,6 +643,27 @@ void MainWindow::shutdownBackgroundWork()
         std::fflush(nullptr);
         std::_Exit(0);
     }
+
+    shutdownModules();
+}
+
+void MainWindow::shutdownModules()
+{
+    // STEP 3 of the shutdown order (see ~MainWindow / shell/shutdownorder.h).
+    //
+    // StudioModule::shutdown() is part of the module contract and had ZERO
+    // call sites (deep audit 2026-09, area 1): the avatar module's documented
+    // guarantee — "only the document model is ours, and it must go before the
+    // engine does" — simply did not hold. Here is the place where it does:
+    // after the workers are joined and BEFORE EngineHost::shutdown() (step 4),
+    // so a module still sees a live engine while it lets go of it.
+    //
+    // The module OBJECTS are deleted in ~MainWindow, not here: a module's page
+    // is still in the stacked widget at this point and the destructor order of
+    // the two must stay the Qt one.
+    JAH_SHUTDOWN_STEP(ShutdownOrder::Modules, "modules shut down");
+    for (auto *module : modules)
+        if (module) module->shutdown();
 }
 
 void MainWindow::setupFileMenu()
@@ -3170,17 +3191,20 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 //   2 BackgroundWork    MainWindow::shutdownBackgroundWork — the
 //                       bounded teardown of every worker this window owns.
 //                       Idempotent: closeEvent AND aboutToQuit land here
-//   3 EngineHostRelease finalizeAppExit (app/cli/scriptrunner.cpp) ->
+//   3 Modules           MainWindow::shutdownModules — StudioModule::shutdown()
+//                       on every module, while the engine is still alive
+//   4 EngineHostRelease finalizeAppExit (app/cli/scriptrunner.cpp) ->
 //                       EngineHost::shutdown(): the render driver stops, the
 //                       shader cache and warm-up set are written, the HOST's
 //                       shared_ptr is dropped. It does NOT destroy the Engine
-//   4 WindowBody        this destructor's body: undoStack->clear() first
-//                       (incident 1), then the services and the Ui:: struct
-//   5 EngineViews       destroyEngineViews() — the widgets holding the last
+//   5 WindowBody        this destructor's body: undoStack->clear() first
+//                       (incident 1), then the module objects, the services
+//                       and the Ui:: struct
+//   6 EngineViews       destroyEngineViews() — the widgets holding the last
 //                       shared_ptr<Engine> are deleted HERE (incident 2), so
 //                       ~OgreEngine runs with the database still open
-//   6 DatabaseClosed    db->closeDatabase(), last
-//   7 WidgetTree        ~QWidget(MainWindow): whatever step 5 did not reach.
+//   7 DatabaseClosed    db->closeDatabase(), last
+//   8 WidgetTree        ~QWidget(MainWindow): whatever step 6 did not reach.
 //                       Nothing here may touch the database or the engine
 //
 //  If you add a participant, add it to shutdownorder.h's enum and to this
@@ -3190,9 +3214,9 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 
 void MainWindow::destroyEngineViews()
 {
-    // STEP 5, and the reason it exists.
+    // STEP 6, and the reason it exists.
     //
-    // EngineHost::shutdown() (step 3) drops the HOST's reference and stops the
+    // EngineHost::shutdown() (step 4) drops the HOST's reference and stops the
     // render loop — but the Engine is a shared_ptr and four widgets hold their
     // own copies: the editor viewport (viewport/enginesceneviewport.h), the
     // player view, the Assets page's viewer, and the module previews (materials
@@ -3236,7 +3260,7 @@ void MainWindow::destroyEngineViews()
     // added a shared_ptr<Engine> holder that is not in this window's widget
     // tree, and the Engine is once again dying after the database closes.
     if (!EngineHost::instance().isRunning() && !mEngineWatch.expired())
-        qWarning("[shutdown] step 5: the Engine is STILL referenced after the "
+        qWarning("[shutdown] step 6: the Engine is STILL referenced after the "
                  "viewports were destroyed — a holder outside MainWindow's "
                  "widget tree exists, and the engine will now be torn down "
                  "after closeDatabase(). See shell/shutdownorder.h.");
@@ -3254,6 +3278,18 @@ MainWindow::~MainWindow()
     // the SQLite driver's only complaint was "Parameter count mismatch" at
     // [info] level. Drain the stack here, while the connection is still open.
     if (undoStack) undoStack->clear();
+
+    // The modules. They are plain heap objects the shell news up in
+    // setupViewPort() and nothing ever deleted them (deep audit 2026-09,
+    // area 1). shutdown() already ran at step 3, with the engine alive; only
+    // the objects are left. Their PAGES belong to the stacked widget and die
+    // with the widget tree.
+    qDeleteAll(modules);
+    modules.clear();
+    materialsModule = nullptr;
+    publishModule = nullptr;
+    avatarModule = nullptr;
+    shaderGraph = nullptr;
 
     // The QObject services (selection/playback/sceneEdit) are parented to the
     // window; the plain ones are deleted here.

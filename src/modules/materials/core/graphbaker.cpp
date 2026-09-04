@@ -394,9 +394,16 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 				// each worker keeps its own scratch buffer
 				QVector<int> rows(resolution);
 				std::iota(rows.begin(), rows.end(), 0);
+				// bits()/bytesPerLine() ONCE, outside the parallel map:
+				// QImage::scanLine() is the non-const overload and calls
+				// detach() — every worker thread poking the same QImageData
+				// concurrently. The rows themselves are independent, so a base
+				// pointer plus a stride is both correct and race-free.
+				uchar* const base = image.bits();
+				const qsizetype stride = image.bytesPerLine();
 				QtConcurrent::blockingMap(rows, [&](int y) {
 					QVarLengthArray<materials::Value, 64> scratch;
-					uchar* line = image.scanLine(y);
+					uchar* line = base + y * stride;
 					EvalContext ctx = uniformCtx;
 					ctx.v = (y + 0.5) / resolution;
 					for (int x = 0; x < resolution; ++x) {
@@ -434,9 +441,13 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 				QImage image(resolution, resolution, QImage::Format_RGBA8888);
 				QVector<int> rows(resolution);
 				std::iota(rows.begin(), rows.end(), 0);
+				// See the base-colour bake above: scanLine() detaches, so the
+				// base pointer and stride are read once, on this thread.
+				uchar* const base = image.bits();
+				const qsizetype stride = image.bytesPerLine();
 				QtConcurrent::blockingMap(rows, [&](int y) {
 					QVarLengthArray<materials::Value, 64> scratch;
-					uchar* line = image.scanLine(y);
+					uchar* line = base + y * stride;
 					EvalContext ctx = uniformCtx;
 					ctx.v = (y + 0.5) / resolution;
 					for (int x = 0; x < resolution; ++x) {

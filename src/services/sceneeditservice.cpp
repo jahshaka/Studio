@@ -272,7 +272,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
         QByteArray thumbnailBytes;
         QBuffer buffer(&thumbnailBytes);
         buffer.open(QIODevice::WriteOnly);
-        QPixmap::fromImage(*thumb->thumb).save(&buffer, "PNG");
+        QPixmap::fromImage(thumb->thumb).save(&buffer, "PNG");
 
         const QString tileGuid = GUIDManager::generateGUID();
         assetGuid = db->createAssetEntry(tileGuid,

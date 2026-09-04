@@ -58,7 +58,7 @@ void AssetPickerWidget::populateWidget(QString filter)
 
             if (Constants::IMAGE_EXTS.contains(file.suffix())) {
                 auto thumb = ThumbnailManager::createThumbnail(asset->path, 128, 128);
-                pixmap = QPixmap::fromImage(*thumb->thumb);
+                pixmap = QPixmap::fromImage(thumb->thumb);
                 item->setIcon(QIcon(pixmap));
             }
 

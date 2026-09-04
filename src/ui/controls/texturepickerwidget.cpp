@@ -90,7 +90,7 @@ void TexturePickerWidget::setLabelImage(QLabel *label, QString file, bool emitSi
 	}
 	else {
 		auto thumb = ThumbnailManager::createThumbnail(file, ui->texture->width(), ui->texture->height());
-		QPixmap pixmap = QPixmap::fromImage(*thumb->thumb).scaled(QSize(28, 28));
+		QPixmap pixmap = QPixmap::fromImage(thumb->thumb).scaled(QSize(28, 28));
 		ui->texture->setPixmap(pixmap);
 		filePath = file;
 	}

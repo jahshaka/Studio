@@ -63,6 +63,12 @@ private:
 	int gridCounter;
 	QWidget *gridWidget;
 	QList<AssetGridItem*> originalItems;
+	/// The "nothing is selected" payload for a click on empty canvas.
+	/// selectedTile carries a tile pointer, so the empty case needs an object;
+	/// mousePressEvent used to `new` a throwaway AssetGridItem per click and
+	/// leak it. One parented, hidden instance, reused.
+	AssetGridItem *emptySelection = nullptr;
+	AssetGridItem *emptySelectionTile();
 
 signals:
 	void gridCount(int);
@@ -71,7 +77,6 @@ signals:
 	/// WITHOUT loading anything into the preview (the tile flip kept
 	/// loading on double-click only).
 	void lightSelectedTile(AssetGridItem*);
-	void contextSelected(AssetGridItem*);
 	void selectedTileToAdd(AssetGridItem*);
 };
 
