@@ -178,6 +178,8 @@ set(SRCS
     src/services/projectassets.cpp
     src/services/loadtimeline.cpp
     src/services/mainthreadheartbeat.cpp
+    src/services/mainthreadwatchdog.cpp
+    src/shell/shutdownorder.cpp
     src/services/sceneopenrunner.cpp
     src/services/imagematerial.cpp
     src/services/projectarchiver.cpp

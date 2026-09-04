@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include <QLabel>
 #include <QCheckBox>
 #include <QMenu>
+#include <QPointer>
+#include <memory>
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
@@ -37,6 +39,9 @@ namespace Ui {
 
 class AssetView;
 class ViewportCover;
+/// Only ever held as a weak_ptr here (mEngineWatch) — the shell includes the
+/// engine header in the .cpp, never in this one.
+namespace jahshaka { namespace engine { class Engine; } }
 namespace materials { class EffectsPage; }
 class StudioModule;
 class MaterialsModule;
@@ -216,6 +221,12 @@ public:
     /// that will not die is abandoned (the process-level force-exit guard in
     /// main() has the final word).
     void shutdownBackgroundWork();
+
+    /// Step 5 of the shutdown order (shell/shutdownorder.h): destroys the
+    /// child widgets that hold the last shared_ptr<Engine>, so the engine dies
+    /// with a name on it and BEFORE closeDatabase(). Called only from
+    /// ~MainWindow.
+    void destroyEngineViews();
 
     /// Parameterised node verbs for the scripting API: same behaviour as the
     /// deleteNode()/duplicateNode() context-menu slots but on an explicit node
@@ -547,6 +558,19 @@ private:
     QActionGroup* cameraGroup;
 
     Database *db;
+
+    /// The THREADED project-archive export (STABILITY_PROGRAM_SPEC Lane 4).
+    /// Created on first use, parented here; shutdownBackgroundWork cancels and
+    /// joins it (ProjectArchiver::shutdownArchives).
+    class ProjectArchiver *archiver = nullptr;
+    QPointer<class ProgressDialog> archiveProgress;
+
+    /// A NON-owning watch on the process's Engine, taken when the viewport is
+    /// created. Step 5 of the shutdown order (shell/shutdownorder.h) uses it to
+    /// prove the engine really died with the viewports — if a new
+    /// shared_ptr<Engine> holder ever appears outside this window's widget
+    /// tree, this is what notices.
+    std::weak_ptr<jahshaka::engine::Engine> mEngineWatch;
 
     /// The one live Project instance, owned by the shell and injected into
     /// everything that needs it (Phase 4: was the Globals::project static).

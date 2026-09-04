@@ -171,7 +171,10 @@ For more information see the LICENSE file
 #include "services/projectservice.h"
 #include "services/loadtimeline.h"
 #include "services/sceneopenrunner.h"
+#include "services/mainthreadwatchdog.h"
+#include "shell/shutdownorder.h"
 #include "services/projectarchiver.h"
+#include "ui/dialogs/progressdialog.h"
 #include "services/sceneeditservice.h"
 #include "services/thumbnailservice.h"
 #include "services/assetservice.h"
@@ -279,6 +282,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	// exitApp()'s QApplication::exit, quitOnLastWindowClosed) — teardown of
 	// background workers must not depend on closeEvent alone.
 	connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::shutdownBackgroundWork);
+
+	// Step 7 of the shutdown order has no code of its own: it IS ~QWidget
+	// destroying this window's children. A plain QObject child records it on
+	// the way out (shell/shutdownorder.h).
+	new ShutdownOrder::WidgetTreeMarker(this);
+
+	// The main-thread watchdog (STABILITY_PROGRAM_SPEC Lane 5). Started HERE,
+	// from the UI thread, because the thread that starts it is the thread its
+	// backtraces will be of. Dev builds only, and it stops itself in
+	// shutdownBackgroundWork so a normal teardown is never photographed.
+	MainThreadWatchdog::start();
 }
 
 void MainWindow::grabOpenGLContextHack()
@@ -498,7 +512,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
 		event->accept();
 	}
 	else {
-		if (undoService->isDirty() && !undoService->savedCountMatchesCurrent()) {
+		// `isSceneOpen()` is part of the CONDITION, not just the branch above
+		// it (2026-09-04, found by app.watchdog_stall): with no project open
+		// the undo stack is still dirty — the editor's default scene put
+		// entries there — so this asked the user to save a document that does
+		// not exist, with a modal QMessageBox that swallowed the quit and left
+		// the process alive — the same zombie the in-flight-open settle at the
+		// top of this function was written for, in a second guise. Nothing to
+		// save means nothing to ask.
+		if (undoService->isDirty() && !undoService->savedCountMatchesCurrent()
+		    && projectService->isSceneOpen()) {
 			QMessageBox::StandardButton reply;
 			reply = QMessageBox::question(this,
 				"Unsaved Changes",
@@ -534,6 +557,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 #endif // !BUILD_PLAYER_ONLY
 
+	// STEP 1 of the shutdown order (the whole sequence is documented in one
+	// place, at ~MainWindow, and enumerated in shell/shutdownorder.h). Recorded
+	// HERE, past the Cancel branch above: a close the user backed out of is not
+	// a shutdown.
+	JAH_SHUTDOWN_STEP(ShutdownOrder::CloseEvent, "closeEvent: autosave + settings");
+
 	settings->setValue("geometry", saveGeometry());
 	settings->setValue("windowState", saveState());
 
@@ -550,6 +579,17 @@ void MainWindow::shutdownBackgroundWork()
     static bool sDone = false;
     if (sDone) return;
     sDone = true;
+
+    // STEP 2 of the shutdown order (see ~MainWindow / shell/shutdownorder.h).
+    JAH_SHUTDOWN_STEP(ShutdownOrder::BackgroundWork, "shutdownBackgroundWork: workers joined");
+
+    // The main-thread watchdog goes FIRST. A teardown that takes two seconds
+    // is normal — the joins below are bounded at 3 s each on purpose — and a
+    // watchdog left running would photograph a perfectly healthy shutdown and
+    // deliver a signal into the middle of it. (Not to be confused with the 20 s
+    // force-exit thread started a few lines down: that one IS the shutdown
+    // watchdog. STABILITY_PROGRAM_SPEC §3 item 10.)
+    MainThreadWatchdog::stop();
 
     // A worker that will not die must never zombify the process: from here
     // the whole teardown is bounded. If anything below (or Qt's/Ogre's own
@@ -572,6 +612,12 @@ void MainWindow::shutdownBackgroundWork()
     }
     if (assetWidget) workersStopped &= assetWidget->shutdownImports(3000);
     if (_assetView) workersStopped &= _assetView->shutdownImports(3000);
+
+    // Archive export/import (STABILITY_PROGRAM_SPEC Lane 4): cancelled and
+    // joined, bounded, exactly like the import batches. Every live archiver —
+    // this window's exporter and the project page's importer — is covered by
+    // the one static call.
+    workersStopped &= ProjectArchiver::shutdownArchives(3000);
 
     // The MCP endpoint must not accept requests into a half-torn-down app.
     if (mcpServer) mcpServer->stop();
@@ -1689,13 +1735,46 @@ void MainWindow::exportSceneAsZip()
     if (!filePath.endsWith(".zip")) filePath += ".zip";
     if (!!scene) saveScene();
 
+    if (archiver && archiver->isRunning()) {
+        QMessageBox::information(this, tr("Export"),
+                                 tr("An archive operation is already running."), QMessageBox::Ok);
+        return;
+    }
+    if (!archiver) {
+        // Parented: it dies with this window (step 5 of the shutdown order),
+        // and shutdownBackgroundWork cancels + joins it before that.
+        archiver = new ProjectArchiver(db, project, this);
+        archiveProgress = new ProgressDialog(this);
+        // SIGNAL-driven, never pumping: a pump from inside a slice re-enters
+        // the loop and can destroy objects the slice is still using
+        // (ProgressDialog::setPumpsEventLoop documents the scar).
+        archiveProgress->setPumpsEventLoop(false);
+        connect(archiveProgress, &ProgressDialog::canceled, this,
+                [this]() { if (archiver) archiver->requestCancel(); });
+        connect(archiver, &ProjectArchiver::progress, this,
+                [this](int percent, const QString &text) {
+                    if (archiveProgress) archiveProgress->setValueAndText(percent, text);
+                });
+        connect(archiver, &ProjectArchiver::finished, this, [this](bool canceled) {
+            if (archiveProgress) archiveProgress->close();
+            if (!canceled && !archiver->result().ok())
+                QMessageBox::warning(this, tr("Export failed"),
+                                     archiver->result().error, QMessageBox::Ok);
+        });
+    }
+
     // Pin-world archives (phase 4): catalog snapshot + manifest v2 + the
     // pinned CAS objects, through the one archive implementation the
-    // project.exportArchive verb also calls.
-    const auto result = ProjectArchiver::exportArchive(db, project, filePath);
-    if (!result.ok()) {
-        QMessageBox::warning(this, tr("Export failed"), result.error, QMessageBox::Ok);
+    // project.exportArchive verb also calls — THREADED here (Lane 4), so the
+    // window keeps painting while a multi-hundred-megabyte world compresses.
+    if (archiveProgress) {
+        archiveProgress->setLabelText(tr("Exporting scene…"));
+        archiveProgress->resetCancel();
+        archiveProgress->setCancelVisible(true);
+        archiveProgress->setValue(0);
+        archiveProgress->show();
     }
+    archiver->startExport(filePath);
 }
 void MainWindow::setupDockWidgets()
 {
@@ -2237,6 +2316,9 @@ void MainWindow::setupViewPort()
         QString error;
         if (host.start(error)) {
             sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
+            // Non-owning: step 5 of the shutdown order checks it (see
+            // destroyEngineViews / shell/shutdownorder.h).
+            mEngineWatch = host.engine();
             host.driver()->start(16);
         } else {
             qCritical("Engine unavailable (%s): using the headless document-only viewport.",
@@ -3077,8 +3159,93 @@ void MainWindow::newProject(const QString &filename, const QString &projectPath)
 	updateTopMenuStates(WindowSpaces::EDITOR);
 }
 
+// ===========================================================================
+//  THE SHUTDOWN ORDER  (STABILITY_PROGRAM_SPEC.md §1.5 / Lane 3)
+//  Written down ONCE, here. shell/shutdownorder.h carries the enumeration and
+//  the two incidents that paid for it; this is the code half.
+//
+//   1 CloseEvent        MainWindow::closeEvent — settle an in-flight open,
+//                       autosave / unsaved-changes prompt, donate dialog,
+//                       geometry + state to settings
+//   2 BackgroundWork    MainWindow::shutdownBackgroundWork — the
+//                       bounded teardown of every worker this window owns.
+//                       Idempotent: closeEvent AND aboutToQuit land here
+//   3 EngineHostRelease finalizeAppExit (app/cli/scriptrunner.cpp) ->
+//                       EngineHost::shutdown(): the render driver stops, the
+//                       shader cache and warm-up set are written, the HOST's
+//                       shared_ptr is dropped. It does NOT destroy the Engine
+//   4 WindowBody        this destructor's body: undoStack->clear() first
+//                       (incident 1), then the services and the Ui:: struct
+//   5 EngineViews       destroyEngineViews() — the widgets holding the last
+//                       shared_ptr<Engine> are deleted HERE (incident 2), so
+//                       ~OgreEngine runs with the database still open
+//   6 DatabaseClosed    db->closeDatabase(), last
+//   7 WidgetTree        ~QWidget(MainWindow): whatever step 5 did not reach.
+//                       Nothing here may touch the database or the engine
+//
+//  If you add a participant, add it to shutdownorder.h's enum and to this
+//  block. The app.shutdown_order gate reads the steps out of the process's
+//  own output and fails when they fire twice or out of order.
+// ===========================================================================
+
+void MainWindow::destroyEngineViews()
+{
+    // STEP 5, and the reason it exists.
+    //
+    // EngineHost::shutdown() (step 3) drops the HOST's reference and stops the
+    // render loop — but the Engine is a shared_ptr and four widgets hold their
+    // own copies: the editor viewport (viewport/enginesceneviewport.h), the
+    // player view, the Assets page's viewer, and the module previews (materials
+    // Display, avatar). Every one of them lives in this window's child widget
+    // tree, which Qt destroys in ~QWidget — AFTER this destructor's body, i.e.
+    // after closeDatabase().
+    //
+    // So before this lane the Engine died at a point with no name, after the
+    // database was gone, and the ENGINE TEARDOWN LAW (workspaces -> scenes ->
+    // drop every MeshPtr -> delete Root) ran there. Nothing in engine teardown
+    // writes to the database today, which made it latent rather than live —
+    // and exactly the shape of the bug `740e0155` fixed for the undo stack one
+    // level up.
+    //
+    // Deleting the direct child widgets here is precisely what ~QWidget would
+    // do a moment later; doing it in the body just moves it in FRONT of
+    // closeDatabase() and gives it a name. It is strictly safer than the old
+    // order too: widgets are now destroyed while the database connection is
+    // still open, not after it closed.
+    //
+    // QPointer, because deleting one child can delete another (a dock's
+    // titlebar widget, a page's children).
+    QList<QPointer<QWidget>> kids;
+    for (QObject *child : children())
+        if (QWidget *w = qobject_cast<QWidget *>(child)) kids.append(w);
+    for (QPointer<QWidget> &w : kids)
+        if (!w.isNull()) delete w.data();
+
+    // Everything below points into that tree. Nothing runs after this except
+    // closeDatabase(), but a dangling `sceneView` is the kind of thing a later
+    // edit trips over.
+    sceneView = nullptr;
+    playerView = nullptr;
+    viewPort = nullptr;
+    _assetView = nullptr;
+
+    // The Engine must be gone now. It is not an assert because a MainWindow
+    // can legitimately be destroyed before finalizeAppExit ran (a CLI path
+    // that returns early), in which case EngineHost still holds its reference
+    // — that case is excluded, and what is left is the real finding: somebody
+    // added a shared_ptr<Engine> holder that is not in this window's widget
+    // tree, and the Engine is once again dying after the database closes.
+    if (!EngineHost::instance().isRunning() && !mEngineWatch.expired())
+        qWarning("[shutdown] step 5: the Engine is STILL referenced after the "
+                 "viewports were destroyed — a holder outside MainWindow's "
+                 "widget tree exists, and the engine will now be torn down "
+                 "after closeDatabase(). See shell/shutdownorder.h.");
+}
+
 MainWindow::~MainWindow()
 {
+    JAH_SHUTDOWN_STEP(ShutdownOrder::WindowBody, "~MainWindow body");
+
     // ORDER IS LOAD-BEARING. Undo commands write to the database when they die
     // (DeleteSceneNodeCommand finalises the asset row once no undo can reach
     // the delete any more), and undoStack is parented to this window — so it
@@ -3097,6 +3264,10 @@ MainWindow::~MainWindow()
     delete undoService;
     delete ui;
 
+    JAH_SHUTDOWN_STEP(ShutdownOrder::EngineViews, "engine-holding widgets destroyed");
+    destroyEngineViews();
+
+    JAH_SHUTDOWN_STEP(ShutdownOrder::DatabaseClosed, "database closed");
     this->db->closeDatabase();
 }
 

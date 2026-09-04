@@ -32,6 +32,8 @@ add_subdirectory(export)
 add_subdirectory(importer)
 add_subdirectory(importasync)
 add_subdirectory(openasync)
+add_subdirectory(archiveasync)
+add_subdirectory(shutdown)
 add_subdirectory(ui)
 add_subdirectory(avatar)
 # The shader cache's container (SHADER_CACHE_SPEC §4.5). AFTER tests/engine:

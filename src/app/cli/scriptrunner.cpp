@@ -23,9 +23,29 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
+#include "services/mainthreadwatchdog.h"
+#include "shell/shutdownorder.h"
 
 int finalizeAppExit(int rc)
 {
+    // STEP 3 of the shutdown order. The whole sequence is documented in one
+    // place — at ~MainWindow (src/shell/mainwindow.cpp), enumerated in
+    // src/shell/shutdownorder.h.
+    //
+    // NOTE WHAT THIS DOES NOT DO: EngineHost::shutdown() stops the render
+    // driver, writes the shader cache and the warm-up set, and drops the
+    // HOST's shared_ptr — it does NOT destroy the Engine, because the
+    // viewport widgets hold their own copies. The Engine dies at step 5,
+    // inside ~MainWindow, deliberately before the database closes.
+    JAH_SHUTDOWN_STEP(ShutdownOrder::EngineHostRelease,
+                      "finalizeAppExit: EngineHost::shutdown (driver + host ref)");
+
+    // The CLI paths (--script, --dump-api-docs, --engine-selftest) never close
+    // the window, so they never reach step 2 — and step 2 is where the
+    // main-thread watchdog normally stops. Stopping it again here is a no-op
+    // for the window-close path and the only stop the CLI paths get.
+    MainThreadWatchdog::stop();
+
     // The engine borrows Qt's X display: release it before QApplication goes away.
     EngineHost::instance().shutdown();
     if (!QThreadPool::globalInstance()->waitForDone(5000)) {
