@@ -118,7 +118,13 @@ void TestEngineViewWinId::rebuildsWhenTheNativeWindowIsReplaced()
     QVERIFY2(widget->internalWinId() != firstId, "the native window was not replaced");
     View *second = widget->view();
     QVERIFY2(second != nullptr, "the view was not rebuilt after the window changed");
-    QVERIFY2(second != first, "the view still points at the OLD native window");
+    // NOT `second != first`: `first` is freed by the rebuild, and glibc happily
+    // hands the SAME address back for the new View — the pointer-inequality
+    // check compared a dangling pointer against a fresh allocation and failed
+    // spuriously whenever the allocator reused the block (deterministic under
+    // plain glibc, 4/4 green under ASan's quarantine — wave-1 gate, 2026-09-05).
+    // The rebuild is proven by the winId change above plus the behavioural
+    // assertions below (non-offscreen, scene rebind, framesPresented rising).
     QVERIFY2(!second->isOffscreen(), "the rebuild fell back offscreen");
 
     // And it renders. A rebuilt view has no scene (the old one took its binding
