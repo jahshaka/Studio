@@ -54,6 +54,8 @@ public:
     Q_INVOKABLE QVariant particleTexture(const QString &id);
     Q_INVOKABLE bool setPlanarReflector(const QString &id, bool enabled);
     Q_INVOKABLE bool planarReflector(const QString &id);
+    Q_INVOKABLE bool physics(const QString &id, const QVariantMap &change = QVariantMap());
+    Q_INVOKABLE QVariantMap physicsInfo(const QString &id);
 
 private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);

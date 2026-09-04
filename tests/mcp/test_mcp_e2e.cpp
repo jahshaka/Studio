@@ -14,6 +14,8 @@
 //   - undo_redo reverts the last run_script call (describe_scene confirms)
 //   - api_docs returns the registry reference (whole and per-module)
 //   - F5: a scripted node.setProperty is UNDOABLE through undo_redo
+//   - lane D #14: a scripted node.physics write is UNDOABLE too (the only
+//     place undo is observable — a --script run's macro never closes)
 //   - F6: run_script timeoutMs interrupts a runaway loop, the app survives,
 //     and the NEXT request is served (the setInterrupted reset)
 //   - F16: run_script's module list is generated from the live registry
@@ -368,6 +370,53 @@ int main(int argc, char **argv)
             QJsonObject{ { "script", QStringLiteral("node.property('%1','intensity')").arg(lightId) } }));
         CHECK(qAbs(reread.value("result").toDouble() - 99) < 0.001,
               "F5: and redo restores the scripted property write");
+    }
+
+    // ---- lane D #14: node.physics is UNDOABLE -----------------------------
+    // The physics verb records a NodeEditCommand, exactly like the F5 verbs
+    // above. This is the only place that assertion is observable: a --script
+    // run holds ONE open undo macro for its whole life and QUndoStack freezes
+    // its index while a macro is open, so scripting.e2e.physics can prove the
+    // round trip, the refusals and the SIMULATION but never the undo. Two
+    // separate run_script calls (two closed macros) can.
+    {
+        const QJsonObject made = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script",
+                           "var c = scene.addPrimitive('cube', {position:{x:0,y:1,z:0}});"
+                           "node.physics(c, {type:'rigidbody', shape:'sphere', mass:2.5});"
+                           "JSON.stringify({id:c, p:node.physicsInfo(c)})" },
+                         { "label", "a physics body" } }));
+        CHECK(made.value("ok").toBool(), "run_script makes a cube a physics body");
+        const QJsonObject madeInfo =
+            QJsonDocument::fromJson(made.value("result").toString().toUtf8()).object();
+        const QString cubeId = madeInfo.value("id").toString();
+        const QJsonObject first = madeInfo.value("p").toObject();
+        CHECK(first.value("type").toString() == "rigidbody"
+                  && qAbs(first.value("mass").toDouble() - 2.5) < 0.001,
+              "the first run left it rigidbody/mass 2.5");
+
+        // Second run, so the first run's macro is closed: change the mass.
+        const QJsonObject heavier = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral(
+                               "node.physics('%1', {mass: 40});"
+                               "node.physicsInfo('%1').mass").arg(cubeId) },
+                         { "label", "make it heavy" } }));
+        CHECK(heavier.value("ok").toBool()
+                  && qAbs(heavier.value("result").toDouble() - 40) < 0.001,
+              "a second run raises the mass to 40");
+
+        const QJsonObject undone = toolJson(callTool(net, url, token, ++id, "undo_redo",
+                                                     QJsonObject{ { "action", "undo" } }));
+        CHECK(undone.value("applied").toBool(), "undo_redo applies");
+        const QJsonObject back = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", QStringLiteral("JSON.stringify(node.physicsInfo('%1'))").arg(cubeId) } }));
+        const QJsonObject reverted =
+            QJsonDocument::fromJson(back.value("result").toString().toUtf8()).object();
+        CHECK(qAbs(reverted.value("mass").toDouble() - 2.5) < 0.001,
+              "lane D #14: undo_redo REVERTED the scripted physics write (2.5 again)");
+        CHECK(reverted.value("type").toString() == "rigidbody"
+                  && reverted.value("shape").toString() == "sphere",
+              "...and the keys the second run never touched are still what the first wrote");
     }
 
     // ---- F6: timeoutMs interrupts a runaway script ------------------------

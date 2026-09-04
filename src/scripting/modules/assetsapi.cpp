@@ -130,6 +130,17 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "addToScene", "assets.addToScene(guid, {position}) -> nodeId",
           "Instantiates a project object asset into the scene (undoable, like a drag from the asset browser).",
           Needs::Document },
+        { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId}",
+          "THE way to get a model file on disk into the open scene, in one call: it runs the one "
+          "import pipeline (assets.importFile), pins the result into the open project "
+          "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow "
+          "scene.addMesh used to short-circuit into a node that came back empty on the next open. "
+          "`drawer` files the library asset in a drawer (id from assets.drawers()); `position` "
+          "places the node (without it, it spawns in front of the editor camera). "
+          "PARTLY UNDOABLE, and the split matters: the import and the pin are PERMANENT (an undo "
+          "removes the node, not the library asset), only the placement is on the undo stack. Any "
+          "other option key is refused rather than ignored.",
+          Needs::Document },
         { "builtins", "assets.builtins() -> [{guid, name, kind}]",
           "The reserved built-ins: primitives, materials and shaders with their reserved guids. Guids collide across kinds — always pair guid with kind.",
           Needs::Document },
@@ -432,6 +443,83 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
         return QString();
     }
     return node->getGUID();
+}
+
+// AI_SURFACE_PROGRAM_SPEC lane D #7 — the other half of the F1 story.
+//
+// scene.addMesh(diskPath) existed because it LOOKED like the obvious verb; it
+// wrote a disk path where the reader expects a guid and now refuses, naming
+// this verb. So this composes the three real calls and nothing more: no fourth
+// import route (ASSET_PIPELINE_SPEC: one pipeline), no new placement path.
+//
+// It is deliberately not "atomic". The import and the pin are permanent
+// (assets.importFile / addToProject are documented NOT undoable); only
+// addToScene pushes a command. Rolling the import back on a placement failure
+// would mean deleting a library asset the user may already see in the browser
+// — so instead the failure message says exactly which guids DID land, and the
+// doc string says the split out loud rather than implying one undo covers it.
+QVariantMap AssetsApi::importAndPlace(const QString &path, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.services || !host.services->assets) {
+        fail("assets: not available in this session");
+        return out;
+    }
+    if (!requireProject()) return out;   // the pin needs an open project
+
+    // Unknown keys are refused, never swallowed (the F7/F8/F9 class).
+    static const QStringList known = { "position", "drawer" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("assets.importAndPlace: unknown option '%1' (known: %2)")
+                     .arg(it.key(), known.join(", ")));
+            return out;
+        }
+    }
+
+    if (!QFileInfo::exists(path)) {
+        fail(QStringLiteral("assets.importAndPlace: no such file: %1").arg(path));
+        return out;
+    }
+
+    int drawerId = -1;
+    if (options.contains("drawer")) {
+        bool numeric = false;
+        drawerId = options.value("drawer").toInt(&numeric);
+        if (!numeric) {
+            fail(QStringLiteral("assets.importAndPlace: 'drawer' must be a drawer id "
+                                "(assets.drawers() lists them; 0 = Uncategorized)"));
+            return out;
+        }
+    }
+
+    // 1. the ONE import pipeline. Reuses the verb so a drawer-filing failure,
+    //    a rejected format and the thumbnail rule are all decided in one place.
+    const QString assetGuid = importFile(path, drawerId);
+    if (assetGuid.isEmpty()) return out;   // importFile already threw
+    out["assetGuid"] = assetGuid;
+
+    const auto record = host.db ? host.db->fetchAsset(assetGuid) : AssetRecord();
+    if (record.type != static_cast<int>(ModelTypes::Object)) {
+        fail(QStringLiteral("assets.importAndPlace: '%1' imported as a %2 asset (%3), which cannot "
+                            "be placed in the scene — only models can. The library asset IS there; "
+                            "use assets.addToProject to pin it.")
+                 .arg(QFileInfo(path).fileName(), typeName(record.type), assetGuid));
+        return out;
+    }
+
+    // 2. pin it into the open project (reference-with-pin: same guid back).
+    const QString projectGuid = addToProject(assetGuid);
+    if (projectGuid.isEmpty()) return out;
+    out["projectGuid"] = projectGuid;
+
+    // 3. place it — the only undoable step.
+    QVariantMap placeOptions;
+    if (options.contains("position")) placeOptions["position"] = options.value("position");
+    const QString nodeId = addToScene(projectGuid, placeOptions);
+    if (nodeId.isEmpty()) return out;
+    out["nodeId"] = nodeId;
+    return out;
 }
 
 QVariantList AssetsApi::builtins()

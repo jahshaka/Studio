@@ -58,6 +58,22 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, gameView}",
+          "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
+          "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
+          "highlight style (true = polygon wireframe, false = silhouette outline), `gameView` the "
+          "master switch that hides all of them at once. There is deliberately no `fps` row: "
+          "nothing in the engine viewport draws an FPS counter (setShowFps is an empty override), "
+          "so reporting one would be a number that is never true.",
+          Needs::Engine },
+        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, gameView}) -> bool",
+          "Turns the viewport's editor helpers on and off — the View Options rows and the G key, "
+          "as one verb. Omitted keys keep their value; an unknown key is REFUSED (a silently "
+          "ignored overlay key is indistinguishable from a broken renderer). `gameView` hides all "
+          "of them at once and is not persisted; `grid` is per-scene; the others are viewport "
+          "state for this session. NOTE the View Options menu's checkmarks do not yet follow a "
+          "script-driven change (same as editor.setCameraMode) — the viewport does.",
+          Needs::Engine },
         { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
           "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes.",
           Needs::Engine },
@@ -198,6 +214,56 @@ bool EditorApi::isGameView()
 {
     if (!requireEngine()) return false;
     return host.viewport->isGameView();
+}
+
+// AI_SURFACE_PROGRAM_SPEC lane D #15. Deliberately four keys, not five: the
+// audit asked for `fps` too, but IEditorViewport::setShowFps is an EMPTY
+// override in the engine viewport (enginesceneviewport.h) and nothing anywhere
+// draws a counter — shipping the key would be a new F7-class silent no-op on
+// the exact surface this program exists to clean up. `gameView` rides along
+// because it is the master switch over the other three and already has a verb;
+// having it in the read-back object is what makes the object honest (grid:true
+// while gameView:true means "on, but hidden").
+QVariantMap EditorApi::overlays()
+{
+    QVariantMap out;
+    if (!requireEngine()) return out;
+    out["grid"] = host.viewport->getShowGrid();
+    out["lightWires"] = host.viewport->getShowLightWires();
+    out["selectionWireframe"] = host.viewport->getSelectionWireframe();
+    out["gameView"] = host.viewport->isGameView();
+    return out;
+}
+
+bool EditorApi::setOverlays(const QVariantMap &change)
+{
+    if (!requireEngine()) return false;
+    if (change.isEmpty())
+        return fail("editor.setOverlays: nothing to change — pass a map "
+                    "({grid, lightWires, selectionWireframe, gameView}); "
+                    "editor.overlays() reads the current values");
+
+    static const QStringList known = { "grid", "lightWires", "selectionWireframe", "gameView" };
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("editor.setOverlays: unknown overlay '%1' (known: %2). "
+                                       "There is no 'fps' overlay — the engine viewport draws no "
+                                       "FPS counter.")
+                            .arg(it.key(), known.join(", ")));
+        // A non-boolean here used to mean "0" everywhere in Qt's variant
+        // conversion; on this surface it means the caller guessed the type.
+        const QVariant value = scriptmod::normalizeJs(it.value());
+        if (value.typeId() != QMetaType::Bool)
+            return fail(QStringLiteral("editor.setOverlays: '%1' must be true or false, got '%2'")
+                            .arg(it.key(), value.toString()));
+    }
+
+    if (change.contains("grid")) host.viewport->setShowGrid(change.value("grid").toBool());
+    if (change.contains("lightWires")) host.viewport->setShowLightWires(change.value("lightWires").toBool());
+    if (change.contains("selectionWireframe"))
+        host.viewport->setSelectionWireframe(change.value("selectionWireframe").toBool());
+    if (change.contains("gameView")) host.viewport->setGameView(change.value("gameView").toBool());
+    return true;
 }
 
 bool EditorApi::setView(const QString &view)

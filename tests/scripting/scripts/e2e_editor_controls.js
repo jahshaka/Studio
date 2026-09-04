@@ -193,3 +193,61 @@ assert(editor.setCameraMode("free"), "back to the free camera");
 assert(editor.cameraMode() === "free", "cameraMode reads back free");
 
 console.log("editor_controls: verbs verified");
+
+// ---- overlays (AI_SURFACE_PROGRAM_SPEC lane D #15) ----
+// The View Options rows as a verb pair. Four keys, not five: setShowFps is an
+// empty override in the engine viewport and nothing draws a counter, so an
+// `fps` key would be a silent no-op — which is the defect class this program
+// exists to stop. The read-back object is the assertion.
+var ov0 = editor.overlays();
+assert(typeof ov0.grid === "boolean", "overlays().grid is a boolean");
+assert(typeof ov0.lightWires === "boolean", "overlays().lightWires is a boolean");
+assert(typeof ov0.selectionWireframe === "boolean", "overlays().selectionWireframe is a boolean");
+assert(typeof ov0.gameView === "boolean", "overlays().gameView is a boolean");
+assert(ov0.fps === undefined, "there is NO fps key (nothing draws one)");
+assert(ov0.grid === true && ov0.lightWires === true, "grid and light wires are on by default");
+assert(ov0.selectionWireframe === false, "selection highlight defaults to the outline");
+
+assert(editor.setOverlays({ grid: false, lightWires: false, selectionWireframe: true }), "setOverlays");
+var ov1 = editor.overlays();
+assert(ov1.grid === false && ov1.lightWires === false && ov1.selectionWireframe === true,
+    "all three read back changed: " + JSON.stringify(ov1));
+editor.frame(2);   // a frame renders with the helpers off
+
+// Omitted keys keep their value.
+assert(editor.setOverlays({ grid: true }), "setOverlays({grid:true}) alone");
+var ov2 = editor.overlays();
+assert(ov2.grid === true, "grid came back on");
+assert(ov2.lightWires === false && ov2.selectionWireframe === true, "the other two did not move");
+
+// gameView is in the same object and is the same switch editor.gameView flips.
+assert(editor.setOverlays({ gameView: true }), "setOverlays({gameView:true})");
+assert(editor.overlays().gameView === true && editor.isGameView() === true,
+    "overlays().gameView and isGameView() agree");
+assert(editor.overlays().grid === true,
+    "grid still reads ON while Game View hides it (the object is honest, not a render report)");
+assert(editor.gameView(false), "back out of game view");
+assert(editor.overlays().gameView === false, "and overlays() agrees");
+
+// Refusals: an unknown key and a non-boolean value both fail loudly.
+var fpsRefused = false;
+try { editor.setOverlays({ fps: true }); } catch (e) {
+    fpsRefused = ("" + e).indexOf("no 'fps' overlay") >= 0;
+}
+assert(fpsRefused, "setOverlays REFUSES the fps key, and says why");
+var typoRefused = false;
+try { editor.setOverlays({ lightwires: false }); } catch (e) { typoRefused = true; }
+assert(typoRefused, "a mis-cased key is refused rather than ignored");
+var typeRefused = false;
+try { editor.setOverlays({ grid: "yes" }); } catch (e) { typeRefused = true; }
+assert(typeRefused, "a non-boolean value is refused");
+var emptyRefused = false;
+try { editor.setOverlays({}); } catch (e) { emptyRefused = true; }
+assert(emptyRefused, "an empty change is refused");
+assert(editor.overlays().grid === true, "and none of the refusals changed anything");
+
+// Restore the defaults for anything running after this script.
+assert(editor.setOverlays({ grid: true, lightWires: true, selectionWireframe: false }),
+    "overlays restored");
+
+console.log("editor_controls: overlays verified");

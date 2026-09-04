@@ -153,6 +153,32 @@ set_tests_properties(scripting.e2e.mesh_roundtrip PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# AI_SURFACE_PROGRAM_SPEC lane D #7 + #12: assets.importAndPlace — the correct
+# import in ONE call — and scene.addViewer. The round trip scene.addMesh never
+# had (place -> save -> close -> reopen -> the geometry identity still
+# resolves) is the reason this suite exists. Document verbs only -> --headless;
+# fixture paths configured in.
+configure_file(scripts/e2e_world_reach.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_reach)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.world_reach
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_world_reach.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.world_reach PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
+# AI_SURFACE_PROGRAM_SPEC lane D #14: node.physics / node.physicsInfo — the last
+# UI-with-no-verb domain. Every scalar and both enums round-trip, every refusal
+# is loud, the values survive a reopen, AND the settings reach Bullet (two
+# identical spheres, one made dynamic and one static by the verb, simulated in
+# the same world — one falls, one does not). ENGINE UP, not --headless: the
+# physics stepper lives in the engine viewport's syncFrame and the headless
+# stand-in's startPhysicsSimulation is an empty override.
+add_script_e2e(physics e2e_physics.js)
+set_tests_properties(scripting.e2e.physics PROPERTIES TIMEOUT 240)
+
 # AI_SURFACE_AUDIT F7/F8/F9 — the three SILENT SUCCESSES. A verb that accepts a
 # value it does not understand, changes nothing and answers true is the worst
 # defect class on an agent surface. Document verbs only.

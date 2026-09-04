@@ -40,6 +40,7 @@ public:
     Q_INVOKABLE QString addPrimitive(const QString &name, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addLight(const QString &type, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addEmpty(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString addViewer(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addMesh(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addImagePlane(const QString &textureGuid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addDecal(const QString &textureGuid, const QVariantMap &options = QVariantMap());
