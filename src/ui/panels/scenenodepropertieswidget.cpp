@@ -74,7 +74,7 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	connect(worldModesPropView, &WorldModesPropertyWidget::worldSettingsChanged,
 	        this, [this]() {
 		auto sc = scene;
-		if (!sc && !!sceneNode) sc = sceneNode->scene;
+		if (!sc && !!sceneNode) sc = sceneNode->getScene();
 		if (!sc) return;
 		worldAaPropView->setScene(sc);
 		worldShadowPropView->setScene(sc);
@@ -151,20 +151,20 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
         if (sceneNode->isRootNode()) {
             fogPropView->setParent(this);
-            fogPropView->setScene(sceneNode->scene);
+            fogPropView->setScene(sceneNode->getScene());
             worldPropView->setParent(this);
-            worldPropView->setScene(sceneNode->scene);
+            worldPropView->setScene(sceneNode->getScene());
             worldModesPropView->setParent(this);
             worldModesPropView->setSceneView(sceneView);
-            worldModesPropView->setScene(sceneNode->scene);
+            worldModesPropView->setScene(sceneNode->getScene());
             worldGiPropView->setParent(this);
-            worldGiPropView->setScene(sceneNode->scene);
+            worldGiPropView->setScene(sceneNode->getScene());
             worldAaPropView->setParent(this);
             worldAaPropView->setSceneView(sceneView);
-            worldAaPropView->setScene(sceneNode->scene);
+            worldAaPropView->setScene(sceneNode->getScene());
             worldShadowPropView->setParent(this);
             worldShadowPropView->setSceneView(sceneView);
-            worldShadowPropView->setScene(sceneNode->scene);
+            worldShadowPropView->setScene(sceneNode->getScene());
             widgetPropertyLayout->addWidget(worldPropView);
             widgetPropertyLayout->addWidget(worldSkyPropView);
             widgetPropertyLayout->addWidget(worldModesPropView);

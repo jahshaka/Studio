@@ -147,7 +147,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
 
     if (!!node) {
         nodeProperties = node->getProperties();
-        scene = node->scene;
+        scene = node->getScene();
         ui->sceneNodeName->setText(node->name);
 
         if(node->getAnimations().count() == 0) {

@@ -202,8 +202,8 @@ void PlayerMouseController::doObjectPicking(
     iris::SceneNodePtr lastSelectedRoot;
 
     auto pickedRoot = hitList.last().hitNode;
-    while (pickedRoot->isAttached())
-        pickedRoot = pickedRoot->parent;
+    while (pickedRoot->isAttached() && pickedRoot->hasParent())
+        pickedRoot = pickedRoot->getParent();
 
     if (pickedNode->isPhysicsBody) {
         scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,

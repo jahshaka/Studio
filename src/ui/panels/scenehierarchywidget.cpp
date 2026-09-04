@@ -281,7 +281,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
 
         // Refuse: no target row, dropping on the current parent (no-op), or any
         // target that is the dragged node itself / one of its descendants.
-        if (!target || target == dragged->parent ||
+        if (!target || target == dragged->getParent() ||
             ReparentSceneNodeCommand::wouldCreateCycle(dragged, target)) {
             dropEventPtr->setDropAction(Qt::IgnoreAction);
             dropEventPtr->ignore();
@@ -464,7 +464,8 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 	}
 
 	// attchment
-	if (node->scene->getRootNode() != node) {
+	auto nodeScene = node->getScene();
+	if (nodeScene && nodeScene->getRootNode() != node) {
 		QMenu *attachMenu = menu.addMenu("Attach..");
 
 		QAction* attachChildrenMenu = attachMenu->addAction("Attach All Children");
@@ -686,11 +687,13 @@ void SceneHierarchyWidget::detachFromParent(iris::SceneNodePtr node)
 
 void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 {
-	auto rootNode = node->scene->getRootNode();
+	auto nodeScene = node->getScene();
+	if (!nodeScene) return;
+	auto rootNode = nodeScene->getRootNode();
 	auto treeNode = treeItemList[node->getNodeId()];
     treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
 	if (node->isAttached() &&
-		node->parent != rootNode) {
+		node->getParent() != rootNode) {
         treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
 	}
 
@@ -734,9 +737,11 @@ void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
 
 void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
 {
-    auto parentTreeItem = treeItemList[childNode->parent->nodeId];
+    auto parentNode = childNode->getParent();
+    if (!parentNode) return;
+    auto parentTreeItem = treeItemList[parentNode->nodeId];
     auto childItem = createTreeItems(childNode);
-    parentTreeItem->insertChild(childNode->parent->children.indexOf(childNode),childItem);
+    parentTreeItem->insertChild(parentNode->children.indexOf(childNode),childItem);
 
     // add to lists
     nodeList.insert(childNode->getNodeId(), childNode);

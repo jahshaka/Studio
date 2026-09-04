@@ -686,7 +686,7 @@ bool SceneEditService::deleteNode(iris::SceneNodePtr node)
     // The command owns the asset-row cleanup: the row is deleted only when the
     // delete becomes permanent, so undo no longer resurrects a node whose DB
     // asset is gone (SCRIPTING_SPEC §1.2).
-    auto cmd = new DeleteSceneNodeCommand(node->parent, node,
+    auto cmd = new DeleteSceneNodeCommand(node->getParent(), node,
                                           node->isBuiltIn ? db : nullptr, node->getGUID());
     undo->push(cmd);
     return true;
@@ -701,7 +701,7 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
     // refreshes the hierarchy and selects it — the manual addChild+repopulate
     // this slot used to do, minus the missing undo entry.
-    undo->push(new AddSceneNodeCommand(source->parent, node));
+    undo->push(new AddSceneNodeCommand(source->getParent(), node));
     return node;
 }
 

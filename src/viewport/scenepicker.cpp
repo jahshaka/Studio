@@ -140,7 +140,10 @@ iris::SceneNodePtr ScenePicker::resolveRootSelection(iris::SceneNodePtr picked, 
 {
     if (!picked || !selectRootObject) return picked;
     iris::SceneNodePtr pickedRoot = picked;
-    while (pickedRoot->isAttached()) pickedRoot = pickedRoot->parent;
+    // hasParent() as well as isAttached(): `parent` is a weak reference now,
+    // so "attached but the parent is gone" is a reachable state and used to be
+    // an infinite loop on a null pointer.
+    while (pickedRoot->isAttached() && pickedRoot->hasParent()) pickedRoot = pickedRoot->getParent();
     // A click selects the whole asset (its root) — even when a part of it is
     // already selected (a just-dropped asset arrives selected, and the old
     // "same root drills down" rule then sent the FIRST viewport click straight

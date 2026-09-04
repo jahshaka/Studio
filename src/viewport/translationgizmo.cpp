@@ -264,7 +264,9 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDi
 	auto targetPos = nodeStartPos + diff;
 
 	// bring to local space
-	auto localTarget = selectedNode->parent->getGlobalTransform().inverted() * targetPos;
+	auto parentNode = selectedNode->getParent();
+	auto localTarget = parentNode ? parentNode->getGlobalTransform().inverted() * targetPos
+	                              : targetPos;
 	
 	//selectedNode->setLocalPos(localTarget);
 	selectedNode->setGlobalPos(targetPos);

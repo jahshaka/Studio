@@ -20,7 +20,19 @@
 //      thumbnails"). The picture is a value now and the cache is bounded;
 //      observed here by overflowing the cap and asserting the size.
 //
-// No engine, no database, no display: two registries and a temp directory.
+//   3. The SCENE GRAPH ITSELF (List B item 4). `SceneNode::parent` and
+//      `SceneNode::scene` were QSharedPointers, so a parent/child pair and a
+//      node/scene pair were both reference CYCLES: no subtree and no scene the
+//      app ever opened was destroyed, whatever the registries above did.
+//      `Scene` had no destructor, and `Scene::cleanup()` — the project-close
+//      path — did not clear `nodes`/`decals`, which are a second strong
+//      reference to every node in the world. Both back-references are weak now
+//      and cleanup() releases both halves; this section builds a real
+//      multi-level subtree in a real scene, closes the project the way
+//      MainWindow does, and asserts that every node AND the scene expire.
+//
+// No engine, no database, no display: two registries, a document and a temp
+// directory.
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
@@ -29,7 +41,9 @@
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
 #include "io/assetmanager.h"
@@ -61,17 +75,20 @@ static QVector<QWeakPointer<iris::SceneNode>> openSession(int count)
 {
     QVector<QWeakPointer<iris::SceneNode>> watches;
     for (int i = 0; i < count; ++i) {
-        // Deliberately a SINGLE node, not a subtree. iris::SceneNode::parent
-        // and ::scene are QSharedPointers, so any parent/child pair is a
-        // reference CYCLE that no amount of asset-registry hygiene can break
-        // (deep audit 2026-09, area 3; List B item 4 — parent/scene must
-        // become QWeakPointer, a document-model change of its own). What this
-        // suite can prove — and what the registry is responsible for — is that
-        // the registry itself lets go: the payload QVariant is destroyed, so
-        // the reference count it held is released. With a real subtree the
-        // node still would not die, but for a reason that lives in irisgl.
+        // A real two-level subtree, which is what a model asset actually pins.
+        // This used to have to be a SINGLE node: while iris::SceneNode::parent
+        // was a QSharedPointer any parent/child pair was a reference cycle that
+        // no amount of asset-registry hygiene could break, so the subtree
+        // outlived the registry no matter what the registry did. The
+        // back-references are weak now (List B item 4), so the whole shape the
+        // audit named is observable here: releasing the payload releases the
+        // tree under it.
         auto root = iris::MeshNode::create();
         root->setName(QStringLiteral("asset%1").arg(i));
+        auto part = iris::MeshNode::create();
+        part->setName(QStringLiteral("asset%1-part").arg(i));
+        root->addChild(part.staticCast<iris::SceneNode>());
+        watches.append(part.toWeakRef());
 
         auto *asset = new CountedAsset;
         asset->assetGuid = QStringLiteral("guid-%1").arg(i);
@@ -161,6 +178,165 @@ static void testReplaceAssets()
 }
 
 // ---------------------------------------------------------------------------
+// 3. The scene graph
+// ---------------------------------------------------------------------------
+//
+// The audit's exact blocker, stated as a test: build a real multi-node subtree
+// in a real scene, watch every level of it plus the scene, close the project,
+// and require every watch to expire. Before List B item 4 not one of them did.
+
+struct GraphWatches
+{
+    QWeakPointer<iris::Scene>     scene;
+    QWeakPointer<iris::SceneNode> root;
+    QWeakPointer<iris::SceneNode> mid;
+    QWeakPointer<iris::SceneNode> leaf;
+    QWeakPointer<iris::SceneNode> mesh;
+    QWeakPointer<iris::SceneNode> light;
+
+    bool allExpired() const
+    {
+        return scene.isNull() && root.isNull() && mid.isNull()
+            && leaf.isNull() && mesh.isNull() && light.isNull();
+    }
+    bool allAlive() const
+    {
+        return !scene.isNull() && !root.isNull() && !mid.isNull()
+            && !leaf.isNull() && !mesh.isNull() && !light.isNull();
+    }
+};
+
+/// root -> mid -> leaf -> mesh, plus a light beside mid. Four levels deep, two
+/// branches, and node types whose Scene registration differs (LightNode and
+/// MeshNode land in `lights`/`meshes` as well as `nodes`).
+static GraphWatches buildWorld(const iris::ScenePtr &scene)
+{
+    GraphWatches w;
+    w.scene = scene.toWeakRef();
+
+    auto root = scene->getRootNode();
+    w.root = root.toWeakRef();
+
+    auto mid = iris::SceneNode::create();
+    mid->setName(QStringLiteral("mid"));
+    root->addChild(mid);
+    w.mid = mid.toWeakRef();
+
+    auto leaf = iris::SceneNode::create();
+    leaf->setName(QStringLiteral("leaf"));
+    mid->addChild(leaf);
+    w.leaf = leaf.toWeakRef();
+
+    auto mesh = iris::MeshNode::create();
+    mesh->setName(QStringLiteral("mesh"));
+    leaf->addChild(mesh.staticCast<iris::SceneNode>());
+    w.mesh = mesh.toWeakRef();
+
+    auto light = iris::LightNode::create();
+    light->setName(QStringLiteral("light"));
+    mid->addChild(light.staticCast<iris::SceneNode>());
+    w.light = light.toWeakRef();
+
+    return w;
+}
+
+static void testSceneGraphOwnership()
+{
+    std::printf("\n-- a scene and its subtree die when the project closes --\n");
+
+    // ---- the links are real while the world is open ----
+    GraphWatches open;
+    {
+        auto scene = iris::Scene::create();
+        open = buildWorld(scene);
+
+        auto mid  = open.mid.toStrongRef();
+        auto leaf = open.leaf.toStrongRef();
+        auto mesh = open.mesh.toStrongRef();
+
+        CHECK(open.allAlive(), "the world is alive while it is open");
+        CHECK(leaf->getParent() == mid, "getParent() locks the real parent");
+        CHECK(mesh->getParent() == leaf, "...at every level");
+        CHECK(leaf->getScene() == scene, "getScene() locks the scene the node was added to");
+        CHECK(mesh->getScene() == scene, "...for nodes added to an already-attached subtree");
+        CHECK(leaf->hasParent() && leaf->hasScene(), "hasParent()/hasScene() agree with the locks");
+        CHECK(!scene->getRootNode()->hasParent(), "the root node has no parent");
+        CHECK(scene->getRootNode()->isRootNode(), "...and knows it is the root");
+        CHECK(scene->nodes.count() == 5, "every node registered with the scene (root + 4)");
+        CHECK(scene->lights.count() == 1 && scene->meshes.count() == 1,
+              "and the typed registries saw the light and the mesh");
+    }
+    // Every strong reference is now out of scope: the ScenePtr, and the three
+    // node handles the block held.
+    CHECK(open.allExpired(),
+          "dropping the last ScenePtr destroyed the scene AND its whole subtree");
+
+    // ---- the project-close path: cleanup() then drop, exactly as MainWindow does ----
+    GraphWatches closed;
+    {
+        auto scene = iris::Scene::create();
+        closed = buildWorld(scene);
+        CHECK(closed.allAlive(), "world #2 is alive while it is open");
+
+        scene->cleanup();
+        // cleanup() releases the scene's own two strong halves — the root of
+        // the tree and the `nodes`/`lights`/`meshes` registries — so the whole
+        // subtree is gone before the ScenePtr itself is even dropped.
+        CHECK(closed.root.isNull() && closed.mid.isNull() && closed.leaf.isNull()
+                  && closed.mesh.isNull() && closed.light.isNull(),
+              "cleanup() alone destroyed every node in the world");
+        CHECK(scene->nodes.isEmpty() && scene->lights.isEmpty() && scene->meshes.isEmpty(),
+              "...and emptied the registries that used to keep them (`nodes` was never cleared)");
+        CHECK(!closed.scene.isNull(), "the scene object itself is still the caller's to hold");
+    }
+    CHECK(closed.allExpired(), "and it goes when the last ScenePtr does");
+
+    // ---- a node held past its scene is safe, not dangling ----
+    {
+        iris::SceneNodePtr survivor;
+        QWeakPointer<iris::Scene> sceneWatch;
+        {
+            auto scene = iris::Scene::create();
+            sceneWatch = scene.toWeakRef();
+            auto mid = iris::SceneNode::create();
+            scene->getRootNode()->addChild(mid);
+            survivor = iris::SceneNode::create();
+            mid->addChild(survivor);
+            CHECK(!!survivor->getScene() && !!survivor->getParent(),
+                  "the survivor is attached while the world is open");
+        }
+        CHECK(sceneWatch.isNull(), "the scene died even though one of its nodes is still held");
+        CHECK(survivor->getScene().isNull(),
+              "the orphan's getScene() is null, not a dangling pointer");
+        CHECK(survivor->getParent().isNull(), "...and so is its getParent()");
+        CHECK(!survivor->hasScene() && !survivor->hasParent(),
+              "hasScene()/hasParent() report the expiry too");
+    }
+
+    // ---- removing a subtree releases it ----
+    {
+        auto scene = iris::Scene::create();
+        QWeakPointer<iris::SceneNode> branch, twig;
+        {
+            auto mid = iris::SceneNode::create();
+            scene->getRootNode()->addChild(mid);
+            branch = mid.toWeakRef();
+            auto leaf = iris::SceneNode::create();
+            mid->addChild(leaf);
+            twig = leaf.toWeakRef();
+            CHECK(scene->nodes.count() == 3, "the branch registered with the scene");
+            mid->removeFromParent();
+            CHECK(scene->nodes.count() == 1,
+                  "removeFromParent() unregistered the whole branch, not just its top");
+            CHECK(!branch.isNull() && !twig.isNull(),
+                  "...and the branch is still alive while this block holds it");
+        }
+        CHECK(branch.isNull() && twig.isNull(),
+              "a detached branch dies with the last handle to it");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 2. The thumbnail cache
 // ---------------------------------------------------------------------------
 
@@ -239,6 +415,7 @@ int main(int argc, char **argv)
 
     testAssetListOwnership();
     testReplaceAssets();
+    testSceneGraphOwnership();
     testThumbnailCache();
 
     std::printf(failures ? "\nFAILED: %d check(s)\n" : "\nALL CHECKS PASSED\n", failures);
