@@ -157,6 +157,15 @@ void Upgrader::checkIfSchemaNeedsUpdating()
 
 	if (!QFile(path).exists()) return;
 
+	// This runs from main() BEFORE MainWindow exists (main.cpp:139) and it takes
+	// Qt's DEFAULT SQL connection — the same one MainWindow::setupProjectDB
+	// re-opens moments later. It therefore MUST hand the connection back; the
+	// closeDatabase() at the end of this function does that, and Database's
+	// destructor now backstops every early-return path (the pair used to leak
+	// the registration, which is half of the boot-time "duplicate connection
+	// name 'qt_sql_default_connection'" warning — STABILITY_PROGRAM_SPEC §1.7a;
+	// the other half was closeDatabase() reading the name after invalidating
+	// the handle).
 	Database db;
 	if (db.initializeDatabase(path)) {
 		auto projectDb = db.getDbMetadata();

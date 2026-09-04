@@ -102,3 +102,32 @@ add_test(NAME ui.viewport_cover COMMAND test_viewport_cover
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.viewport_cover PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+
+# ui.media_lazy — Qt Multimedia stays off the startup path
+# (STABILITY_PROGRAM_SPEC Lane 6a). VideoPreviewWidget and iris::Scene both
+# used to construct a QMediaPlayer in their constructors, which loaded the
+# ffmpeg backend and enumerated audio devices (pipewire/PulseAudio) on every
+# launch and in every headless suite. Pins: nothing built until something is
+# played, playing still decodes the fixture, stop()-before-play is safe.
+find_package(Qt6 REQUIRED COMPONENTS Multimedia)
+add_executable(test_media_lazy test_media_lazy.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/videopreviewwidget.cpp)
+set_target_properties(test_media_lazy PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_media_lazy PRIVATE
+    JAHSHAKA_TINY_MP4="${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/tiny.mp4")
+target_include_directories(test_media_lazy PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_media_lazy
+    PRIVATE IrisGL Qt6::Widgets Qt6::Multimedia Qt6::Test)
+add_test(NAME ui.media_lazy COMMAND test_media_lazy
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.media_lazy PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")

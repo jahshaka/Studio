@@ -43,6 +43,9 @@ public:
 
     void showVideo(const QString &filePath, const QString &displayName);
     void stop();   // selection/page changes stop and release the source
+    // (No "is the player up?" accessor: the player is a QObject child of the
+    // widget, so ui.media_lazy asks findChild<QMediaPlayer*>() directly —
+    // which tests the thing that matters, that no such object EXISTS.)
 
 private:
     // Raster frame canvas: letterboxed, aspect-preserving, no native window.
@@ -60,9 +63,15 @@ private:
         QImage frame;
     };
 
-    QMediaPlayer *player;
-    QAudioOutput *audioOutput;
-    QVideoSink *videoSink;
+    // Built on the first showVideo(), not in the constructor: a QMediaPlayer
+    // pulls in the ffmpeg backend and a QAudioOutput enumerates audio devices
+    // (pipewire/PulseAudio probe). AssetView constructs this widget during
+    // shell setup, so eager construction put both on every launch's startup
+    // path — STABILITY_PROGRAM_SPEC §1.7c / Lane 6a. nullptr until then.
+    void ensurePlayer();
+    QMediaPlayer *player = nullptr;
+    QAudioOutput *audioOutput = nullptr;
+    QVideoSink *videoSink = nullptr;
     VideoCanvas *canvas;
     QLabel *nameLabel;
     QPushButton *playButton;

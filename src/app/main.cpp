@@ -110,8 +110,18 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
 
 	installCrashHandler();   // STABILITY_AUDIT.md §5.1 — backtraces for every fatal
-	                         // signal, ALWAYS on (breakpad or not; it re-raises, so
-	                         // breakpad chains behind it when enabled).
+	                         // signal, ALWAYS on. Linux links -rdynamic so the
+	                         // frames carry names; scripts/debug-crash.sh decodes.
+	//
+	// ORDER CAVEAT, for the day someone flips DISABLE_BREAKPAD=OFF: this used to
+	// claim "breakpad chains behind it". It does not. The signal goes to the
+	// LAST handler installed, so with the call below breakpad runs FIRST — and
+	// on a successful dump it installs SIG_DFL instead of restoring what it
+	// replaced (breakpad/src/client/linux/handler/exception_handler.cc:383-386),
+	// which means no crash-*.log is written at all. The two lines want to be
+	// swapped when breakpad goes live; see docs/BREAKPAD_BETA_PLAN.md §3.
+	// Left as-is here because USE_BREAKPAD is off in every build we run and
+	// swapping it untested buys nothing.
 #ifdef USE_BREAKPAD
 	initializeBreakpad();
 #endif

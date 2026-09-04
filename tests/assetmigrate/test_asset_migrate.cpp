@@ -208,6 +208,16 @@ int main(int argc, char **argv)
     CHECK(AssetCas::materializeLegacyView(conn, root, "guidC", &error),
           "view of a file-less row is a no-op, not an error");
 
+    // AssetMigration::verify/rebuildCatalog open the database file themselves,
+    // so hand the default connection back first. `conn` is a COPY of that
+    // connection and must die before removeDatabase(), or Qt warns
+    // "connection 'qt_sql_default_connection' is still in use" and disowns the
+    // handle out from under it. (Before the Lane 6b fix, closeDatabase()
+    // read the name after invalidating and so never removed anything — the
+    // copy was harmless and the connection stayed registered, which is also
+    // why the section further down could keep using QSqlDatabase::database()
+    // without reopening. Both of those were accidents of the bug.)
+    conn = QSqlDatabase();
     db.closeDatabase();
 
     // ---- verify: clean, then corrupted ----
@@ -264,6 +274,10 @@ int main(int argc, char **argv)
     // map silently drops (the mottled-import defect).
     {
         AssetStorePaths::setRootOverride(root);
+        // Re-open the default connection: this section talks to the library
+        // again (insertAsset, AssetCas::ingestFile, updateNodeMaterial) and
+        // closeDatabase() above genuinely removed it.
+        CHECK(db.initializeDatabase(dbPath), "default connection reopened");
 
         const QString texPng = srcDir + "/resolve_me.png";
         {

@@ -385,9 +385,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     // filename, play/pause, seek, time. Qt Multimedia was already linked; this
     // is its first real playback consumer.
     assetAudioViewer = new QWidget;
-    mediaPlayer = new QMediaPlayer(this);
-    audioOutput = new QAudioOutput(this);
-    mediaPlayer->setAudioOutput(audioOutput);
+    // mediaPlayer / audioOutput are NOT built here — see ensureAudioPlayer()
+    // and the note on the members. The page's widgets are free; the player is
+    // an audio-device probe at startup.
 
     audioNameLabel = new QLabel;
     audioNameLabel->setAlignment(Qt::AlignCenter);
@@ -421,38 +421,24 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     audioLayout->setContentsMargins(48, 0, 48, 0);
     assetAudioViewer->setLayout(audioLayout);
 
-    const auto formatTime = [](qint64 ms) {
-        const qint64 secs = ms / 1000;
-        return QStringLiteral("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
-    };
-
+    // Controls that only need widgets are wired here. Everything that touches
+    // mediaPlayer is wired inside ensureAudioPlayer(), which the two entry
+    // points below (this button, showAudioPreview) call first.
     connect(audioPlayButton, &QPushButton::clicked, this, [this]() {
+        ensureAudioPlayer();
         if (mediaPlayer->playbackState() == QMediaPlayer::PlayingState) mediaPlayer->pause();
         else mediaPlayer->play();
     });
-    connect(mediaPlayer, &QMediaPlayer::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
-        audioPlayButton->setText(state == QMediaPlayer::PlayingState ? tr("Pause") : tr("Play"));
-    });
-    connect(mediaPlayer, &QMediaPlayer::durationChanged, this, [this](qint64 duration) {
-        audioSeekSlider->setRange(0, static_cast<int>(duration));
-    });
-    connect(mediaPlayer, &QMediaPlayer::positionChanged, this, [this, formatTime](qint64 position) {
-        if (!audioSeekSlider->isSliderDown())
-            audioSeekSlider->setValue(static_cast<int>(position));
-        audioTimeLabel->setText(formatTime(position) + " / " + formatTime(mediaPlayer->duration()));
-    });
     connect(audioSeekSlider, &QSlider::sliderMoved, this, [this](int position) {
-        mediaPlayer->setPosition(position);
+        if (mediaPlayer) mediaPlayer->setPosition(position);
     });
-
-    // Waveform ↔ player wiring (§2): playhead follows playback, clicks seek.
-    connect(mediaPlayer, &QMediaPlayer::durationChanged, waveform, &WaveformWidget::setDuration);
-    connect(mediaPlayer, &QMediaPlayer::positionChanged, waveform, &WaveformWidget::setPosition);
     connect(waveform, &WaveformWidget::seekRequested, this, [this](qint64 ms) {
-        mediaPlayer->setPosition(ms);
+        if (mediaPlayer) mediaPlayer->setPosition(ms);
     });
 
-    // Video page (PreviewPage::Video) — ASSET_MEDIA_SPEC §2.
+    // Video page (PreviewPage::Video) — ASSET_MEDIA_SPEC §2. The widget itself
+    // is cheap; its own QMediaPlayer is deferred the same way (see
+    // videopreviewwidget.cpp, ensurePlayer()).
     assetVideoViewer = new VideoPreviewWidget;
 
     // Placeholder page (PreviewPage::Placeholder): icon + name, so File rows
@@ -1774,9 +1760,54 @@ void AssetView::stopMediaPreviews()
 	if (assetVideoViewer) assetVideoViewer->stop();
 }
 
+// Build the audio player and everything wired to it, once, on first use.
+//
+// This used to run in the constructor, and AssetView is constructed
+// unconditionally during shell setup, so every launch — including
+// `--engine-selftest` and every headless suite — loaded the Qt multimedia
+// (ffmpeg) plugin and enumerated audio devices. On this box that is a
+// pipewire connect attempt followed by a PulseAudio fallback, both of which
+// log and neither of which any startup path needs
+// (STABILITY_PROGRAM_SPEC §1.7c / Lane 6a).
+//
+// Idempotent by the early return; call it from anywhere that is about to
+// dereference mediaPlayer.
+void AssetView::ensureAudioPlayer()
+{
+	if (mediaPlayer) return;
+
+	mediaPlayer = new QMediaPlayer(this);
+	audioOutput = new QAudioOutput(this);
+	mediaPlayer->setAudioOutput(audioOutput);
+
+	const auto formatTime = [](qint64 ms) {
+		const qint64 secs = ms / 1000;
+		return QStringLiteral("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QChar('0'));
+	};
+
+	connect(mediaPlayer, &QMediaPlayer::playbackStateChanged, this,
+	        [this](QMediaPlayer::PlaybackState state) {
+		audioPlayButton->setText(state == QMediaPlayer::PlayingState ? tr("Pause") : tr("Play"));
+	});
+	connect(mediaPlayer, &QMediaPlayer::durationChanged, this, [this](qint64 duration) {
+		audioSeekSlider->setRange(0, static_cast<int>(duration));
+	});
+	connect(mediaPlayer, &QMediaPlayer::positionChanged, this, [this, formatTime](qint64 position) {
+		if (!audioSeekSlider->isSliderDown())
+			audioSeekSlider->setValue(static_cast<int>(position));
+		audioTimeLabel->setText(formatTime(position) + " / " + formatTime(mediaPlayer->duration()));
+	});
+
+	// Waveform <-> player wiring (§2): playhead follows playback, clicks seek
+	// (the seekRequested half is wired in the ctor and nullptr-guards).
+	connect(mediaPlayer, &QMediaPlayer::durationChanged, waveform, &WaveformWidget::setDuration);
+	connect(mediaPlayer, &QMediaPlayer::positionChanged, waveform, &WaveformWidget::setPosition);
+}
+
 void AssetView::showAudioPreview(const QString &guid, const QString &filePath,
                                  const QString &displayName)
 {
+	ensureAudioPlayer();
 	viewers->setCurrentIndex(static_cast<int>(PreviewPage::Audio));
 	audioNameLabel->setText(displayName);
 	audioSeekSlider->setValue(0);

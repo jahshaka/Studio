@@ -321,8 +321,16 @@ private:
     QPushButton *audioPlayButton;
     QSlider *audioSeekSlider;
     QLabel *audioTimeLabel;
-    QMediaPlayer *mediaPlayer;
-    QAudioOutput *audioOutput;
+    // Built on FIRST AUDIO PLAYBACK, not in the constructor: constructing a
+    // QMediaPlayer loads the Qt multimedia (ffmpeg) backend and constructing a
+    // QAudioOutput enumerates audio devices, which on this box means a
+    // pipewire/PulseAudio probe on the startup path
+    // (STABILITY_PROGRAM_SPEC §1.7c). Nothing on the Assets page needs either
+    // until someone actually plays a sound. Always nullptr-checked or reached
+    // through ensureAudioPlayer(); never assume they exist.
+    QMediaPlayer *mediaPlayer = nullptr;
+    QAudioOutput *audioOutput = nullptr;
+    void ensureAudioPlayer();   // idempotent; builds the player + its wiring
     WaveformWidget *waveform = nullptr;
     QString waveformGuid;   // the guid the waveform (or its pending decode) is for
 
