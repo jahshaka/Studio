@@ -37,6 +37,7 @@ Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
 #include "core/math/quat.h"
 #include "core/math/mat4.h"
 #include "core/math/qtinterop.h"
+#include "core/math/trs.h"
 
 #include <cstdio>
 #include <cstring>
@@ -612,6 +613,135 @@ int main()
                 chkm("sweep.rotate", qm, im);
             }
         }
+    }
+
+
+    // -------------------------------------------------------------------------
+    // DECOMPOSITION CORRECTNESS. Not a Qt-parity check — a correctness one, and
+    // the only section of this suite that Qt cannot be the oracle for, because
+    // what it guards against is a mistake this tree made rather than one Qt
+    // makes.
+    //
+    // SceneNode::setLocalTransform, SceneNode::insertChild(keepTransform) and
+    // CameraNode::lookAt all used to take their rotation from
+    // QMatrix4x4::normalMatrix() — the INVERSE-TRANSPOSE of the basis, R*S^-1,
+    // which equals R only when the scale is 1. On a non-uniformly scaled node
+    // it returns a shear wearing a quaternion's clothes: measured at +55
+    // degrees of yaw on a scaled character root, compounding once per reparent.
+    // decomposeTRS normalizes each column by its own length first, which is the
+    // step normalMatrix does not perform.
+    //
+    // Each case below asserts BOTH halves: that decomposeTRS recovers the
+    // rotation, and that the normalMatrix route does NOT. The second assertion
+    // is what stops the fix being "simplified" back.
+    // -------------------------------------------------------------------------
+    {
+        std::mt19937 drng(4242u);
+        std::uniform_real_distribution<float> dang(-170.0f, 170.0f);
+        std::uniform_real_distribution<float> dsc(0.15f, 6.0f);
+        std::uniform_real_distribution<float> dpos(-20.0f, 20.0f);
+
+        const auto angleBetween = [](const iris::Quat &a, const iris::Quat &b) {
+            float dot = iris::Quat::dotProduct(a.normalized(), b.normalized());
+            dot = std::min(1.0f, std::max(-1.0f, std::abs(dot)));
+            return float(2.0 * std::acos(double(dot)) * 180.0 / 3.14159265358979323846);
+        };
+
+        // Component-wise, after aligning the sign (q and -q are the same
+        // rotation). NOT 2*acos(dot): that metric is hopelessly ill-conditioned
+        // near dot == 1, where two float ulps read as 0.04 degrees.
+        const auto quatErr = [](const iris::Quat &a, const iris::Quat &b) {
+            const float sign = iris::Quat::dotProduct(a, b) < 0.0f ? -1.0f : 1.0f;
+            return std::max({ std::abs(a.scalar() - sign * b.scalar()),
+                              std::abs(a.x() - sign * b.x()),
+                              std::abs(a.y() - sign * b.y()),
+                              std::abs(a.z() - sign * b.z()) });
+        };
+
+        int decomposeChecked = 0, oldRouteWrong = 0;
+        for (int iter = 0; iter < 3000; ++iter) {
+            const iris::Vec3 pos(dpos(drng), dpos(drng), dpos(drng));
+            const iris::Quat rot = iris::Quat::fromEulerAngles(dang(drng), dang(drng), dang(drng)).normalized();
+            // Every seventh case is the CONTROL: scale exactly 1, the only
+            // scale at which the old route was ever right. Note that "uniform"
+            // is not enough — normalMatrix of R*sI is R/s, and
+            // fromRotationMatrix on a basis that is not unit length returns a
+            // quaternion pointing somewhere else entirely. The bug bit at any
+            // scale != 1, uniform or not; non-uniformity is not the trigger,
+            // it is just where it was noticed.
+            const bool control = (iter % 7) == 0;
+            const iris::Vec3 scale = control ? iris::Vec3(1, 1, 1)
+                                             : iris::Vec3(dsc(drng), dsc(drng), dsc(drng));
+
+            iris::Mat4 m;
+            m.setToIdentity();
+            m.translate(pos);
+            m.rotate(rot);
+            m.scale(scale);
+
+            iris::Vec3 p2, s2;
+            iris::Quat r2;
+            const float shear = iris::decomposeTRS(m, p2, r2, s2);
+
+            ++checks;
+            if (shear > 1e-4f) { ++failures; std::printf("FAIL decompose.shear %g\n", shear); }
+
+            ++checks;
+            const float err = quatErr(rot, r2);
+            if (!(err < 1e-4f)) {
+                ++failures;
+                if (failures < 40)
+                    std::printf("FAIL decompose.rotation err=%g scale=(%g,%g,%g)\n",
+                                err, scale.x(), scale.y(), scale.z());
+            }
+            const auto nearf = [](float a, float b, float tol) { return std::abs(a - b) <= tol; };
+            ++checks;
+            if (!(nearf(p2.x(), pos.x(), 1e-3f) && nearf(p2.y(), pos.y(), 1e-3f)
+                  && nearf(p2.z(), pos.z(), 1e-3f))) {
+                ++failures; std::printf("FAIL decompose.position\n");
+            }
+            ++checks;
+            if (!(nearf(s2.x(), scale.x(), 1e-3f) && nearf(s2.y(), scale.y(), 1e-3f)
+                  && nearf(s2.z(), scale.z(), 1e-3f))) {
+                ++failures;
+                if (failures < 40)
+                    std::printf("FAIL decompose.scale got=(%g,%g,%g) want=(%g,%g,%g)\n",
+                                s2.x(), s2.y(), s2.z(), scale.x(), scale.y(), scale.z());
+            }
+            ++decomposeChecked;
+
+            // The route that used to be here, kept as the negative control so
+            // that nobody can quietly restore it.
+            const iris::Quat old = iris::Quat::fromRotationMatrix(m.normalMatrix()).normalized();
+            const float oldErr = quatErr(rot, old);
+            ++checks;
+            if (control) {
+                if (!(oldErr < 1e-4f)) {
+                    ++failures;
+                    if (failures < 40)
+                        std::printf("FAIL decompose.controlAtScale1 old route err=%g\n", oldErr);
+                }
+            } else {
+                const float off = std::max({ std::abs(scale.x() - 1.0f), std::abs(scale.y() - 1.0f),
+                                             std::abs(scale.z() - 1.0f) });
+                if (off > 0.25f) {
+                    // 20x the tolerance the correct route meets (1e-4): enough to
+                    // prove the old route is wrong without depending on how wrong.
+                    if (!(oldErr > 2e-3f)) {
+                        ++failures;
+                        if (failures < 40)
+                            std::printf("FAIL decompose.negativeControl: the normalMatrix route was "
+                                        "accurate (err=%g) at scale (%g,%g,%g) — this case no longer "
+                                        "discriminates\n", oldErr, scale.x(), scale.y(), scale.z());
+                    }
+                    ++oldRouteWrong;
+                } else {
+                    --checks;
+                }
+            }
+        }
+        std::printf("decomposition: %d matrices, %d of them scaled far enough from 1 that the "
+                    "old normalMatrix route is provably wrong\n", decomposeChecked, oldRouteWrong);
     }
 
     std::printf("%d checks, %d failures\n", checks, failures);
