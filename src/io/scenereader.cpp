@@ -483,7 +483,31 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     for (const auto childObj : children) {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
-        scene->getRootNode()->addChild(childNode);
+        // keepTransform = FALSE, exactly like the nested children below: the
+        // node's local TRS is what was just read, and it is already the local
+        // transform this parent wants.
+        //
+        // THE DEFECT THIS FIXES (found by the clean-start sample audit,
+        // 2026-09-04): addChild's default is keepTransform=TRUE, which makes
+        // SceneNode::insertChild recompose the child's local TRS out of
+        // parentGlobal^-1 * childGlobal — and it extracts the rotation with
+        // QQuaternion::fromRotationMatrix(diff.normalMatrix()). normalMatrix
+        // is the inverse-transpose, i.e. R*S^-1, NOT R, so the extracted
+        // rotation is only correct when the scale is exactly 1. Every
+        // top-level node in every saved scene therefore came back ROTATED on
+        // open, by an amount that grows with how far its scale is from 1:
+        // measured on Showroom, a 0.16/0.75/0.16 wall panel moved 0.66 deg and
+        // a 1.5-scaled torus 10 deg PER OPEN, and since closing a project
+        // autosaves, the wrong value is persisted and the error compounds
+        // every single time the scene is opened. (Nested children never had
+        // this: line ~565 already passes false.)
+        //
+        // insertChild's decomposition is wrong on its own account — a real
+        // reparent of a scaled node loses the same way — but that is
+        // irisgl-side and out of this lane's scope; it is reported, not fixed
+        // here. This line is the reader's half and it is the one the shipped
+        // samples hit.
+        scene->getRootNode()->addChild(childNode, false);
     }
 
     return scene;

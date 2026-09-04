@@ -136,4 +136,58 @@ for (var cycle = 1; cycle <= 3; cycle++) {
     assert(s === s0, "cycle " + cycle + ": the whole document is field-identical to the fresh scene");
 }
 
+// ---------------------------------------------------------------------------
+// SCALED NODES (added 2026-09-04 by the clean-start sample audit). The scene
+// above is entirely scale-1, and that is exactly the blind spot a whole class
+// of round-trip defect lived in: SceneReader added the root's children with
+// addChild's default keepTransform=TRUE, which makes SceneNode::insertChild
+// recompose the child's local TRS from parentGlobal^-1 * childGlobal and
+// extract the rotation with fromRotationMatrix(diff.normalMatrix()) — the
+// inverse-transpose, R*S^-1, which equals R only when S is 1.
+//
+// So every top-level node with any other scale came back ROTATED on open, by
+// an amount that grows with the scale's distance from 1 and with its
+// anisotropy — and because closing a project autosaves, the wrong rotation was
+// persisted and the error compounded on every single open. Measured on the
+// shipped Showroom sample before the fix: a 0.16/0.75/0.16 wall panel moved
+// 0.66 degrees per open and a 1.5-scaled torus 10 degrees per open, without
+// bound. Nothing gated it because nothing saved a rotated, scaled node.
+//
+// Three shapes, three scale flavours: uniform-1 (the old blind spot's only
+// case), uniform-not-1, and anisotropic.
+var rotGuid = project.create("Reopen Scaled " + Date.now());
+function scaledNode(prim, rot, scl) {
+    var id = scene.addPrimitive(prim, { position: { x: 0, y: 1, z: 0 } });
+    node.transform(id, { rotation: rot, scale: scl });
+    return id;
+}
+var cases = [
+    { prim: "cube",   name: "Cube",   rot: { x: 76.8, y: -14.17, z: 14.17 }, scale: { x: 1, y: 1, z: 1 } },
+    { prim: "sphere", name: "Sphere", rot: { x: 14, y: -34.9, z: -1.05 },    scale: { x: 0.5, y: 0.5, z: 0.5 } },
+    { prim: "plane",  name: "Plane",  rot: { x: 12, y: 40, z: 28.64 },       scale: { x: 0.16, y: 0.75, z: 0.34 } }
+];
+var before = [];
+for (var c = 0; c < cases.length; c++) {
+    scaledNode(cases[c].prim, cases[c].rot, cases[c].scale);
+    before.push(node.info(scene.find(cases[c].name)).rotation);
+}
+console.log("scaled nodes as authored: " + JSON.stringify(before));
+
+for (cycle = 1; cycle <= 3; cycle++) {
+    assert(project.save() === true, "scaled cycle " + cycle + ": project.save");
+    assert(project.close() === true, "scaled cycle " + cycle + ": project.close");
+    assert(project.open(rotGuid) === true, "scaled cycle " + cycle + ": project.open");
+    for (c = 0; c < cases.length; c++) {
+        var now = node.info(scene.find(cases[c].name)).rotation;
+        // 1e-3 degrees is far above the float32 round-trip residue (~2e-6) and
+        // far below the smallest real drift this ever produced (0.03 degrees).
+        var d = Math.max(Math.abs(now.x - before[c].x),
+                         Math.abs(now.y - before[c].y),
+                         Math.abs(now.z - before[c].z));
+        assert(d < 1e-3, "scaled cycle " + cycle + ": " + cases[c].name + " scale " +
+               JSON.stringify(cases[c].scale) + " kept its rotation (" +
+               JSON.stringify(before[c]) + " -> " + JSON.stringify(now) + ", delta " + d + ")");
+    }
+}
+
 console.log("reopen_fidelity: ALL OK");
