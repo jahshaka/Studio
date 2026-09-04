@@ -75,6 +75,25 @@ CacheSettingsWidget::CacheSettingsWidget(SettingsManager *settings, QWidget *par
     mEnabled->setChecked(mSettings->getValue("shader_cache_enabled", true).toBool());
     layout->addWidget(mEnabled);
 
+    // SHADER_CACHE_SPEC §5. Off by default: it removes the hitch on the first
+    // frames of a freshly-opened world, and it costs ~250 ms of unresponsive
+    // window on every open after the first in a session (measured against the
+    // Showroom; the numbers and the reasoning are at the call site in
+    // MainWindow's open plan). Whether that is a good trade is a judgement
+    // about a specific machine, which is why it is a switch and not a default.
+    if (ThemeManager::classicActive())
+        mWarmUpOnOpen = new QCheckBox(tr("Precompile a world's shaders while it opens"), this);
+    else {
+        auto *sw = new oclero::qlementine::Switch(this);
+        sw->setText(tr("Precompile a world's shaders while it opens"));
+        mWarmUpOnOpen = sw;
+    }
+    mWarmUpOnOpen->setChecked(mSettings->getValue("shader_warmup_on_open", false).toBool());
+    mWarmUpOnOpen->setToolTip(tr(
+        "Builds the shaders a world needs behind the loading screen instead of on the first "
+        "frames you see. Opening takes longer; the first seconds after it are smoother."));
+    layout->addWidget(mWarmUpOnOpen);
+
     auto *form = new QFormLayout;
 
     // (b) WHERE it is. Read-only on purpose: the location is derived from the
@@ -187,4 +206,6 @@ void CacheSettingsWidget::saveSettings()
     // directory is resolved once, when the engine starts, and re-resolving it
     // under a live Hlms would mean tearing the engine down.
     mSettings->setValue("shader_cache_enabled", mEnabled->isChecked());
+    // Read on every open, so this one takes effect immediately.
+    mSettings->setValue("shader_warmup_on_open", mWarmUpOnOpen->isChecked());
 }

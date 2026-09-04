@@ -54,6 +54,7 @@ private:
     SettingsManager *mSettings;
 
     QAbstractButton *mEnabled;
+    QAbstractButton *mWarmUpOnOpen;
     QLineEdit *mLocation;
     QLabel *mSize;
     QLabel *mLayers;

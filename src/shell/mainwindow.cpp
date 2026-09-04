@@ -1189,6 +1189,37 @@ void MainWindow::openProjectAsync(bool playMode)
 		LoadTimeline::mark(QStringLiteral("primeSceneEnvironment"));
 		sceneView->primeSceneEnvironment();
 	} });
+	// SHADER_CACHE_SPEC §5: build the world's shaders while the cover is still
+	// up, so the frames right after the reveal do not hitch through dozens of
+	// compiles. Its own slice and its own event-loop turn, so the window keeps
+	// answering while it runs.
+	//
+	// OFF BY DEFAULT, and the reason is a measurement, not caution. On this box,
+	// open.responsive against the Showroom (worst UI-thread gap, ms):
+	//
+	//                        cold open        second open
+	//   without this slice   1691 - 1789      439 - 476
+	//   with it              1723 - 1761      646 - 736
+	//
+	// The cold open — the one this exists for — is UNCHANGED: those compiles
+	// happened either way, and the gap there is dominated by other stages. But
+	// the second open pays ~250 ms more, and the responsiveness budget the lane
+	// contract pins is 500 ms with about 25 ms of headroom. That 250 ms is a
+	// single renderOneFrame, which is atomic — it cannot be split across event
+	// loop turns, and rendering the warm-up through a smaller target would build
+	// a DIFFERENT chain's shaders, i.e. the wrong ones.
+	//
+	// So the capability ships and the policy does not: Preferences -> Cache
+	// turns it on, editor.warmUpShaders() runs it on demand, and whether it
+	// becomes the default is a decision about that 500 ms budget rather than
+	// something this code should assume.
+	if (settings->getValue("shader_warmup_on_open", false).toBool()) {
+		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
+			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
+			const unsigned built = sceneView->warmUpShaders();
+			if (built) qInfo("scene open: precompiled %u shader(s) behind the cover", built);
+		} });
+	}
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { openStageReveal(playMode); } });
 

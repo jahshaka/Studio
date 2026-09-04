@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QImage>
 #include <QUndoStack>
+#include <QElapsedTimer>
 
 #include "scripting/modules/moduleshared.h"
 #include "viewport/ieditorviewport.h"
@@ -26,6 +27,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/undoservice.h"
+#include "bridge/enginehost.h"
 
 using namespace scriptmod;
 
@@ -94,6 +96,14 @@ QVector<VerbInfo> EditorApi::verbs() const
           Needs::Document },
         { "frame", "editor.frame(n=1, dt=-1) -> bool",
           "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 the document's clock AND the engine's particle simulation advance by exactly that many seconds per frame instead of by the wall clock, which is what makes stepping deterministic in play mode and for particles alike (without it, each stepped frame charged the document for however long the previous statement took, and a scripted frame bought a millisecond of fire).",
+          Needs::Engine },
+        { "warmUpShaders", "editor.warmUpShaders() -> {built, compiledThisRun, loadedThisRun, ms}",
+          "Compiles every shader the OPEN world needs, now, instead of on the first frames the user "
+          "sees (SHADER_CACHE_SPEC.md §5). The engine generates a shader per renderable on first "
+          "draw, so a freshly-opened world hitches through dozens of compiles unless something does "
+          "this first — which the scene-open path now does, behind the loading cover. `built` is how "
+          "many this call compiled; on a warm shader cache it is 0 and the call is nearly free. "
+          "Synchronous by design: the caller holds its cover up until it returns.",
           Needs::Engine },
         { "viewportState", "editor.viewportState() -> {state, framesPresented}",
           "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping.",
@@ -308,6 +318,23 @@ bool EditorApi::simulate(bool enabled)
     if (enabled) host.services->playback->startSimulation();
     else host.services->playback->stopSimulation();
     return true;
+}
+
+QVariantMap EditorApi::warmUpShaders()
+{
+    QVariantMap m;
+    if (!host.viewport) { fail("editor.warmUpShaders: no viewport in this session"); return m; }
+    QElapsedTimer t; t.start();
+    const unsigned built = host.viewport->warmUpShaders();
+    m["built"] = built;
+    m["ms"] = double(t.elapsed());
+    if (auto engine = EngineHost::instance().engine()) {
+        unsigned compiled = 0, cached = 0, expected = 0;
+        engine->shaderBuildProgress(compiled, cached, expected);
+        m["compiledThisRun"] = compiled;
+        m["loadedThisRun"] = cached;
+    }
+    return m;
 }
 
 bool EditorApi::frame(int n, double dt)

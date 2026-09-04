@@ -144,6 +144,14 @@ public:
     void coverIfNotPresenting() override;
     void primeSceneGeometry() override;
     void primeSceneEnvironment() override;
+    unsigned warmUpShaders() override;
+    /// Sentinel for mWarmUpIdleAt meaning "always run the warm-up": no real
+    /// compile count can equal it.
+    static constexpr unsigned kWarmUpAlwaysRun = ~0u;
+    /// The engine's total compile count when a warm-up last found nothing to
+    /// do. While the count still reads this, another warm-up would be 250 ms of
+    /// UI block for zero shaders — see warmUpShaders() for the measurements.
+    unsigned mWarmUpIdleAt = kWarmUpAlwaysRun;
     /// Recomputes the cover's state from the view's present count. Called once
     /// a frame (before the engine's frame, so it sees the presents already
     /// made) and at every event that can change the answer.

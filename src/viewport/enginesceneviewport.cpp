@@ -1099,6 +1099,48 @@ void EngineSceneViewport::primeSceneEnvironment()
     if (mEditorCam) mMirror->applyCamera(mEditorCam, view());
 }
 
+unsigned EngineSceneViewport::warmUpShaders()
+{
+    // The third prime (SHADER_CACHE_SPEC §5). Runs on the open path, after the
+    // geometry and environment pushes and BEFORE the page is revealed — the
+    // loading cover is up, so the frame the engine renders to build its shaders
+    // is invisible.
+    if (!mEngine || !view() || !mEngineScene) return 0;
+
+    unsigned before = 0, cached = 0, expected = 0;
+    mEngine->shaderBuildProgress(before, cached, expected);
+
+    // THE BUDGET, and it is measured, not guessed (open.responsive, Showroom,
+    // this box):
+    //
+    //   no warm-up          cold open worst UI gap 1691-1789 ms, warm 439-476
+    //   warm-up every open  cold 1723-1761 ms,                    warm 646-717
+    //
+    // The cold open is unchanged — the compiles happened either way, and the
+    // gap there is dominated by other stages. What the second open pays is
+    // ~250 ms for a frame that compiles NOTHING: the Hlms shader cache is
+    // PROCESS-wide, so once this process has built a world's shaders, opening
+    // another world mostly finds them already there. 250 ms of UI block for
+    // nothing is exactly what the 500 ms responsiveness budget exists to catch,
+    // and widening that budget to accommodate a no-op would be the wrong trade.
+    //
+    // So: warm up while it is still paying. If a warm-up compiles nothing, note
+    // the compile count and skip the next one — until something compiles for
+    // any OTHER reason (new content in a later world), which moves the count
+    // and re-arms this. Self-correcting in both directions, and no heuristic
+    // about what a world contains.
+    if (mWarmUpIdleAt == before) return 0;
+
+    {
+        LoadTimeline::Accumulate warm(QStringLiteral("engine:warmUpShaders"));
+        view()->warmUpShaders();
+    }
+    unsigned after = 0;
+    mEngine->shaderBuildProgress(after, cached, expected);
+    mWarmUpIdleAt = (after == before) ? before : kWarmUpAlwaysRun;
+    return after - before;
+}
+
 void EngineSceneViewport::coverIfNotPresenting()
 {
     updateCover();

@@ -262,6 +262,13 @@ public:
     /// primeSceneSync() is exactly calling both, in this order.
     virtual void primeSceneGeometry() {}
     virtual void primeSceneEnvironment() {}
+    /// The third half (SHADER_CACHE_SPEC.md §5): compile the shaders the newly
+    /// bound world needs, while the loading cover is still up. The engine
+    /// generates a shader per renderable on FIRST DRAW, so without this the
+    /// first frames after the cover drops are the ones that stutter. Returns
+    /// the number of shaders built (0 when there was nothing to do, or when
+    /// this viewport has no engine). LENGTHENS a cold open by design.
+    virtual unsigned warmUpShaders() { return 0; }
 
     // ---- lifecycle ----
     virtual void begin() = 0;
