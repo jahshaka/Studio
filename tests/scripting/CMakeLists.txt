@@ -203,6 +203,10 @@ add_test(NAME scripting.e2e.scene_query
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(scripting.e2e.scene_query PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # AI_SURFACE_PROGRAM_SPEC lane 0 + lane A — DISCOVERY. app.apiProblems() runs
 # ApiRegistry::validate() over the real module set (the unit test only ever saw
 # its own fake module), and the lane A verbs that stop an agent guessing key
