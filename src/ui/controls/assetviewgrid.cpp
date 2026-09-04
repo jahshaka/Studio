@@ -116,38 +116,51 @@ void AssetViewGrid::resizeEvent(QResizeEvent *event)
 	QScrollArea::resizeEvent(event);
 }
 
+AssetGridItem *AssetViewGrid::emptySelectionTile()
+{
+	if (!emptySelection) {
+		emptySelection = new AssetGridItem(QJsonObject(), QImage(), QJsonObject(), QJsonObject(), this);
+		emptySelection->hide();
+	}
+	return emptySelection;
+}
+
 void AssetViewGrid::mousePressEvent(QMouseEvent *event)
 {
+	// A click on empty canvas means "nothing selected": receivers read the
+	// (empty) metadata and clear their panes. One reused hidden tile — this
+	// used to allocate a fresh AssetGridItem per click and drop it.
 	if (event->button() == Qt::LeftButton) {
-		emit selectedTile(new AssetGridItem(QJsonObject(), QImage(), QJsonObject(), QJsonObject()));
+		emit selectedTile(emptySelectionTile());
 	}
-
-	if (event->button() == Qt::RightButton) {
-		emit contextSelected(new AssetGridItem(QJsonObject(), QImage(), QJsonObject(), QJsonObject()));
-	}
+	// The RightButton branch emitted contextSelected — a signal with no
+	// connection anywhere in the app — and leaked another tile doing it.
+	// Removed with the signal.
 }
 
 void AssetViewGrid::deleteTile(AssetGridItem *widget)
 {
-    int index = _layout->indexOf(widget);
-    if (index != -1) {
-        int row, col, col_span, row_span;
-        _layout->getItemPosition(index, &row, &col, &col_span, &row_span);
+    const int index = _layout->indexOf(widget);
+    if (index == -1) return;
 
-        auto w = _layout->itemAtPosition(row, col)->widget();
-        auto idx = _layout->layout()->indexOf(w);
-        auto item = _layout->takeAt(idx);
+    // takeAt returns an OWNED QLayoutItem (the QWidgetItem wrapper): the old
+    // code dropped it, and then called deleteLater() on the widget twice —
+    // once through deleteChildWidgets and once directly.
+    QLayoutItem *item = _layout->takeAt(index);
+    if (item) {
         deleteChildWidgets(item);
-        item->widget()->deleteLater();
-
-        originalItems.removeOne(widget);
-        updateGridColumns(lastWidth);
-
-        emit gridCount(_layout->count());
+        delete item;
     }
+
+    originalItems.removeOne(widget);
+    if (emptySelection == widget) emptySelection = nullptr;
+    updateGridColumns(lastWidth);
+
+    emit gridCount(_layout->count());
 }
 
 void AssetViewGrid::deleteChildWidgets(QLayoutItem *item) {
+    if (!item) return;
     if (item->layout()) {
         // Process all child items recursively.
         for (int i = 0; i < item->layout()->count(); i++) {
@@ -155,8 +168,8 @@ void AssetViewGrid::deleteChildWidgets(QLayoutItem *item) {
         }
     }
 
-    // delete item->widget();
-    item->widget()->deleteLater();
+    // Spacers and stretches have no widget.
+    if (QWidget *w = item->widget()) w->deleteLater();
 }
 
 void AssetViewGrid::searchTiles(QString searchString)
