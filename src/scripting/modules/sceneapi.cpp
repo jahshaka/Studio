@@ -71,13 +71,23 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "addEmpty", "scene.addEmpty({position, parent}) -> id",
           "Adds an empty group node. Undoable.",
           Needs::Document },
+        { "addViewer", "scene.addViewer({position, rotation, scale, parent}) -> id",
+          "Adds a viewer node — the hierarchy panel's \"Viewer\" action, named \"Avatar\". A viewer "
+          "is the scene's first-person stand-in: SIDE EFFECT, and it is not optional — the new "
+          "viewer TAKES the active character controller (every other viewer in the scene is "
+          "deactivated) and registers itself with the physics world, so a second addViewer "
+          "silently demotes the first. Without {position} the node spawns in front of the editor "
+          "camera like every other add. This verb only creates the node; nothing walks or drives "
+          "it until play mode builds its controller. Undoable.",
+          Needs::Document },
         { "addMesh", "scene.addMesh(path, {position, ...}) -> REFUSED",
           "REMOVED — this verb always fails. It used to parse a mesh file straight into the "
           "scene, which wrote the DISK PATH where the reader expects an asset guid: the node "
           "came back empty on the next open and never exported (the archiver is asset-row "
-          "driven). Use the ONE import pipeline instead: "
-          "var g = assets.importFile(path); var p = assets.addToProject(g); "
-          "assets.addToScene(p, {position}). Only the last of those three is undoable.",
+          "driven). Use assets.importAndPlace(path, {position}) instead — it runs the ONE import "
+          "pipeline and returns {assetGuid, projectGuid, nodeId}. (It is the three calls "
+          "assets.importFile / addToProject / addToScene in one; only the last of those is "
+          "undoable.)",
           Needs::Document },
         { "addImagePlane", "scene.addImagePlane(textureGuid, {position?, doubleSided?}) -> id",
           "Spawns an image plane for a Texture asset (IMAGE_PLANE_SPEC option A): a plane sized to the image's aspect (long side 1 m), facing the editor camera at creation, with a basic PBR material carrying the image as baseColorMap (roughness 1, metallic 0; images with an alpha channel blend). Bytes resolve pin-first through the CAS. doubleSided defaults true. Undoable.",
@@ -331,6 +341,24 @@ QString SceneApi::addEmpty(const QVariantMap &options)
     return finishAdd(options, QStringLiteral("scene.addEmpty"));
 }
 
+// AI_SURFACE_PROGRAM_SPEC lane D #12. The service used to return void, which
+// is the whole reason this verb could not exist; it now hands the node back so
+// a scene-less call fails loudly instead of reporting whatever happened to be
+// selected. `ignorePlacement` keeps the node at the origin when the caller
+// gave a position — applyOptions then puts it exactly there, in one transform
+// command, rather than moving it twice.
+QString SceneApi::addViewer(const QVariantMap &options)
+{
+    if (!sceneOrFail()) return QString();
+    host.services->selection->select(iris::SceneNodePtr());
+    auto node = host.services->sceneEdit->addViewer(options.contains("position"));
+    if (!node) {
+        fail(QStringLiteral("scene.addViewer: the viewer was not created"));
+        return QString();
+    }
+    return finishAdd(options, QStringLiteral("scene.addViewer"));
+}
+
 QString SceneApi::addImagePlane(const QString &textureGuid, const QVariantMap &options)
 {
     if (!requireProject()) return QString();   // the plane gets a DB object row + dependency
@@ -445,7 +473,9 @@ QString SceneApi::addParticles(const QString &preset, const QVariantMap &options
 // flow is NOT undoable (assets.importFile), so quietly turning a verb documented
 // "Undoable" into a half-undoable one would just trade this defect for the F5
 // class. ASSET_PIPELINE_SPEC's "one pipeline" rule says the composition belongs
-// in assets.importAndPlace (AI_SURFACE_PROGRAM_SPEC lane D #7), not here.
+// in assets.importAndPlace (AI_SURFACE_PROGRAM_SPEC lane D #7) — which now
+// exists, so the message points at it first and keeps the three explicit calls
+// underneath (a reader who wants the drawer/pin steps apart still needs them).
 QString SceneApi::addMesh(const QString &path, const QVariantMap &options)
 {
     Q_UNUSED(options);
@@ -453,6 +483,8 @@ QString SceneApi::addMesh(const QString &path, const QVariantMap &options)
              "scene.addMesh is removed: it wrote the disk path '%1' where the scene reader "
              "expects an asset guid, so the node came back EMPTY on the next open and never "
              "exported. Import it properly instead:\n"
+             "  assets.importAndPlace(\"%1\", {position: ...});  // -> {assetGuid, projectGuid, nodeId}\n"
+             "which is these three, in one call (only the last is undoable):\n"
              "  var g = assets.importFile(\"%1\");   // library asset (not undoable)\n"
              "  var p = assets.addToProject(g);      // pin it into this project (not undoable)\n"
              "  assets.addToScene(p, {position: ...}); // places it (undoable)")

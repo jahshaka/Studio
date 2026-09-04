@@ -1,0 +1,148 @@
+// scripting.e2e.world_reach — AI_SURFACE_PROGRAM_SPEC lane D, items #7 and #12.
+//
+// #7  assets.importAndPlace(path, {position, drawer}) — the correct import in
+//     ONE call, and the round trip scene.addMesh never had: place -> save ->
+//     close -> reopen -> the node still resolves its geometry. That round trip
+//     is the whole point of the verb: the F1 data loss was invisible until a
+//     reopen, so a verb that claims to replace addMesh has to prove the reopen.
+// #12 scene.addViewer({position}) — the hierarchy panel's Viewer action, with
+//     its character-controller side effect asserted rather than assumed.
+//
+// Document verbs only -> --headless.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function caught(fn) {
+    try { fn(); } catch (e) { return "" + e; }
+    return null;
+}
+function nodeById(id) {
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; ++i) if (all[i].id === id) return all[i];
+    return null;
+}
+function meshNodesUnder(id) {
+    var all = scene.nodes();
+    var kept = {};
+    kept[id] = true;
+    var out = [];
+    for (var i = 0; i < all.length; ++i) {
+        if (kept[all[i].parent] || all[i].id === id) kept[all[i].id] = true;
+        if (kept[all[i].id] && all[i].type === "mesh") out.push(all[i]);
+    }
+    return out;
+}
+
+var fixture = "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb";
+
+var proj = project.create("World Reach " + Date.now());
+assert(proj.length > 10, "project.create -> " + proj);
+
+// ---- #7 preconditions: the refusals ---------------------------------------
+var missing = caught(function () { assets.importAndPlace("/no/such/model.obj"); });
+assert(missing !== null && missing.indexOf("no such file") >= 0,
+       "importAndPlace refuses a nonexistent path: " + missing);
+
+var badKey = caught(function () {
+    assets.importAndPlace(fixture, { positon: { x: 1, y: 0, z: 0 } });   // typo on purpose
+});
+assert(badKey !== null && badKey.indexOf("unknown option") >= 0,
+       "a misspelled option is REFUSED, not swallowed: " + badKey);
+
+var badDrawer = caught(function () { assets.importAndPlace(fixture, { drawer: "Props" }); });
+assert(badDrawer !== null && badDrawer.indexOf("drawer id") >= 0,
+       "a drawer NAME where an id belongs is refused with the fix: " + badDrawer);
+
+// ---- #7: the one call ------------------------------------------------------
+var drawerId = assets.createDrawer("Placed Props");
+assert(drawerId >= 0, "a drawer to file it in -> " + drawerId);
+
+var before = scene.nodes().length;
+var placed = assets.importAndPlace(fixture, { position: { x: 4, y: 5, z: 6 }, drawer: drawerId });
+assert(placed.assetGuid && placed.assetGuid.length > 10, "assetGuid -> " + placed.assetGuid);
+assert(placed.projectGuid === placed.assetGuid,
+       "projectGuid IS the asset guid (reference-with-pin, no copy)");
+assert(placed.nodeId && placed.nodeId.length > 10, "nodeId -> " + placed.nodeId);
+assert(scene.nodes().length > before, "the scene grew");
+
+var node0 = nodeById(placed.nodeId);
+assert(node0 !== null, "the placed node is in the scene");
+assert(Math.abs(node0.position.x - 4) < 0.001 &&
+       Math.abs(node0.position.y - 5) < 0.001 &&
+       Math.abs(node0.position.z - 6) < 0.001,
+       "at the requested position: " + JSON.stringify(node0.position));
+
+// It went through the ONE pipeline: the library row exists, it is an object,
+// and it is filed in the drawer we asked for.
+var listed = assets.list({ scope: "store" }).filter(function (a) { return a.guid === placed.assetGuid; });
+assert(listed.length === 1, "the library has exactly one row for it");
+assert(listed[0].type === "object", "it is an object asset");
+assert(listed[0].drawer === drawerId, "filed in drawer " + drawerId);
+
+// Geometry identity, not a disk path (the F1 assertion).
+var meshes = meshNodesUnder(placed.nodeId);
+assert(meshes.length >= 1, "the placed asset has mesh nodes: " + meshes.length);
+var path = node.property(meshes[0].id, "meshPath");
+assert(path && path.length > 0, "the mesh node carries a meshPath: " + path);
+assert(path !== fixture, "and it is NOT the raw disk path");
+
+// ---- #12: the viewer -------------------------------------------------------
+var viewerId = scene.addViewer({ position: { x: -2, y: 0, z: -3 } });
+assert(viewerId.length > 10, "scene.addViewer -> " + viewerId);
+var viewer = nodeById(viewerId);
+assert(viewer !== null && viewer.type === "viewer", "it is a viewer node");
+assert(viewer.name === "Avatar", "named Avatar, like the panel's action makes it");
+assert(Math.abs(viewer.position.x + 2) < 0.001 &&
+       Math.abs(viewer.position.z + 3) < 0.001,
+       "at the requested position: " + JSON.stringify(viewer.position));
+
+// The documented side effect: a SECOND viewer takes the controller from the
+// first. activeCharacterController is a reflected property on ViewerNode.
+var viewer2 = scene.addViewer({ position: { x: 5, y: 0, z: 0 } });
+assert(viewer2.length > 10 && viewer2 !== viewerId, "a second viewer -> " + viewer2);
+assert(node.property(viewer2, "activeCharacterController") === true,
+       "the NEW viewer holds the active character controller");
+assert(node.property(viewerId, "activeCharacterController") === false,
+       "and the first one was demoted (the side effect the doc string names)");
+
+// Without a position it still lands somewhere in front of the camera.
+var viewer3 = scene.addViewer();
+assert(viewer3.length > 10, "scene.addViewer() with no options -> " + viewer3);
+assert(node.remove(viewer3) === true, "and it is a normal, removable node");
+
+// ---- the round trip scene.addMesh never had --------------------------------
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(proj) === true, "project.open (REOPEN)");
+
+var reopened = nodeById(placed.nodeId);
+assert(reopened !== null, "the placed node SURVIVED the reopen");
+assert(Math.abs(reopened.position.x - 4) < 0.001 &&
+       Math.abs(reopened.position.y - 5) < 0.001 &&
+       Math.abs(reopened.position.z - 6) < 0.001,
+       "with its transform: " + JSON.stringify(reopened.position));
+
+var meshesAfter = meshNodesUnder(placed.nodeId);
+assert(meshesAfter.length === meshes.length,
+       "with the same mesh nodes under it: " + meshesAfter.length + " vs " + meshes.length);
+var pathAfter = node.property(meshesAfter[0].id, "meshPath");
+assert(pathAfter === path,
+       "AND THE GEOMETRY IDENTITY RESOLVED, unchanged: " + pathAfter);
+
+var viewerAfter = nodeById(viewerId);
+assert(viewerAfter !== null && viewerAfter.type === "viewer",
+       "the viewer survived the reopen too");
+
+// It exports (the archiver walks asset rows — the other half of the F1 story).
+var manifest = project.exportManifest("manifest-out");
+assert(manifest.assets >= 1, "the imported asset reaches the export manifest: " + manifest.assets);
+
+// ---- scene.addMesh's message now points HERE -------------------------------
+var refusal = caught(function () { scene.addMesh(fixture); });
+assert(refusal !== null, "scene.addMesh still refuses");
+assert(refusal.indexOf("assets.importAndPlace") >= 0,
+       "and its message names assets.importAndPlace first: " + refusal);
+
+console.log("scripting.e2e.world_reach PASSED");

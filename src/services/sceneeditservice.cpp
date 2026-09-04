@@ -202,13 +202,14 @@ void SceneEditService::addEmpty()
     addNodeToScene(node);
 }
 
-void SceneEditService::addViewer()
+iris::ViewerNodePtr SceneEditService::addViewer(bool ignorePlacement)
 {
+    auto scene = this->scene();
+    if (!scene) return iris::ViewerNodePtr();
+
     auto node = iris::ViewerNode::create();
     node->setName("Avatar");
-    addNodeToScene(node);
-
-    auto scene = this->scene();
+    addNodeToScene(node, ignorePlacement);
 
     // Set all other controllers to false
     for (auto child : scene->getRootNode()->children) {
@@ -219,6 +220,7 @@ void SceneEditService::addViewer()
 
     node->setActiveCharacterController(true);
     scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
+    return node;
 }
 
 iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePreset preset)

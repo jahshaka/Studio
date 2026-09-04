@@ -1,7 +1,7 @@
 ---
 name: jahshaka-assets
 description: Import files into Jahshaka's asset store, organize drawers, and bring assets into projects and scenes via the assets verbs. Use when the user asks to import models/images/audio/video, organize the asset library, or place an asset in the scene.
-version: 2
+version: 3
 ---
 
 # Assets in Jahshaka
@@ -15,7 +15,15 @@ deletes cannot be Ctrl+Z'd. Confirm with the user before `assets.remove` or
 
 There are two scopes: the global **store** (the shared library) and the open
 **project** (which *pins* store assets rather than copying them). There is
-exactly ONE way to get a file on disk into a scene, and it is three calls:
+exactly ONE way to get a file on disk into a scene, and one verb that does it:
+
+```js
+var r = assets.importAndPlace("/path/to/prop.obj", { position: {x:0, y:0, z:0} });
+// -> { assetGuid, projectGuid, nodeId }
+```
+
+It is these three calls, in one — reach for them separately only when you need
+a step in between (filing in a drawer is an option on `importAndPlace` already):
 
 ```js
 var g = assets.importFile("/path/to/prop.obj");   // 1. into the store
@@ -23,10 +31,14 @@ var p = assets.addToProject(g);                   // 2. pin it into this project
 var nodeId = assets.addToScene(p, { position: {x:0, y:0, z:0} });  // 3. place it
 ```
 
-**Do not look for a one-call shortcut.** `scene.addMesh(path)` exists in older
-notes and always FAILS now: it used to write the disk path where the scene
-reader expects an asset guid, so the object came back empty on the next open
-and never exported. Steps 1 and 2 are not undoable; step 3 is.
+**Steps 1 and 2 are NOT undoable; only the placement is** — so an undo after
+`importAndPlace` removes the node and leaves the library asset. Say so if the
+user asks to "undo the import".
+
+**`scene.addMesh(path)` always FAILS.** It appears in older notes; it used to
+write the disk path where the scene reader expects an asset guid, so the object
+came back empty on the next open and never exported. Its error message names
+`assets.importAndPlace`.
 
 ## Importing
 
@@ -83,6 +95,12 @@ var pguid = assets.addToProject(storeGuid);
 // like dragging from the asset browser):
 var nodeId = assets.addToScene(pguid, { position: {x: 0, y: 0, z: 0} });
 
+// All three at once, for a file the user just handed you — optionally filed
+// in a drawer on the way through:
+var r = assets.importAndPlace("/path/to/chair.glb",
+                              { position: {x: 2, y: 0, z: 0}, drawer: d });
+console.log(r.assetGuid, r.projectGuid, r.nodeId);
+
 // Fix a stale/blank thumbnail:
 assets.refreshThumbnail(guid);
 ```
@@ -90,5 +108,11 @@ assets.refreshThumbnail(guid);
 ## Verify
 
 After imports, confirm with `assets.list` + `assets.metadata` (did the mesh
-really have the triangle count you expect?). After `addToScene`, use
-`describe_scene` and the `screenshot` tool to see the placed asset.
+really have the triangle count you expect?). After `addToScene` or
+`importAndPlace`, use `describe_scene` and the `screenshot` tool to see the
+placed asset.
+
+`importAndPlace` refuses anything it does not understand rather than guessing:
+a path that is not there, an option key you misspelled, a drawer *name* where
+an id belongs, and a file that imports as an image/audio/video (those are not
+placeable — the library asset still lands, and the error says so).

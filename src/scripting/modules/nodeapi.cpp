@@ -115,6 +115,29 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "planarReflector", "node.planarReflector(id) -> bool",
           "Whether this object is a planar reflection plane.",
           Needs::Document },
+        { "physics", "node.physics(id, {type, shape, mass, restitution, friction, damping, collisionMargin}) -> bool",
+          "Makes the node a physics body and/or edits its body settings — the Properties panel's "
+          "Physics section, as a verb. `type` is \"none\" | \"static\" | \"rigidbody\" (\"none\" "
+          "takes the node out of the simulation entirely). `shape` is \"none\" | \"plane\" | "
+          "\"sphere\" | \"cube\" | \"convexhull\" | \"trianglemesh\" | \"compound\"; the two that "
+          "read geometry (convexhull, trianglemesh) are refused on a node with no mesh. Enum "
+          "values travel as NAMES, never ordinals, and an unknown one is refused with the list. "
+          "`mass` 0 means an immovable body — setting type \"static\" forces it to 0, and passing "
+          "a non-zero mass in the same call is refused rather than silently ignored. "
+          "`restitution` is bounciness (0..1), `friction` 0..1, `damping` velocity damping, "
+          "`collisionMargin` the collision skin. Values are read at the START of a simulation "
+          "(editor.simulate / editor.play), so editing them mid-run does nothing until the next "
+          "start. Undoable. NOTE the panel's \"Visible\" checkbox has no key here on purpose: "
+          "isVisible is not serialized, so a verb for it would not survive a save.",
+          Needs::Document },
+        { "physicsInfo", "node.physicsInfo(id) -> {enabled, type, shape, mass, restitution, friction, damping, collisionMargin, isStatic, constraints}",
+          "The node's physics body settings, enums as names. `enabled` is the isPhysicsBody flag "
+          "(false = the node is not in the simulation and nothing else here is written to the "
+          "scene file). `isStatic` is derived, not set directly: it is true for type \"static\" or "
+          "mass 0. `constraints` is the COUNT of inter-node constraints on this node — those have "
+          "their own UI path and no verb yet (AI_SURFACE_PROGRAM_SPEC owner row D4a), and "
+          "node.physics never touches them.",
+          Needs::Document },
     };
 }
 
@@ -522,4 +545,226 @@ QVariant NodeApi::lightTexture(const QString &id)
     return QVariantMap{ { "guid", light->lightTextureGuid },
                         { "path", light->lightTexturePath },
                         { "applies", applies } };
+}
+
+// --- Physics (AI_SURFACE_PROGRAM_SPEC lane D #14) --------------------------
+//
+// The last UI-with-no-verb domain: iris::PhysicsProperty carries every field,
+// SceneWriter serializes them, and the ONLY writer was
+// PhysicsPropertyWidget::on*Changed. Two verbs, and the panel stays the
+// semantics reference:
+//   * enums travel as NAMES (the particles module's rule), never ordinals —
+//     an ordinal in a scene file is an implementation detail, and a model that
+//     guesses "2" for a shape has no way to be told it guessed wrong;
+//   * `isPhysicsBody` is the flag the writer gates on, so type "none" clears
+//     it and any other type sets it (exactly what the panel's type combo does);
+//   * `isStatic` is derived (type static OR mass 0) rather than exposed —
+//     the panel derives it the same way, and two ways to say one thing on an
+//     AI surface is a defect waiting to happen.
+//
+// Scope is owner row D4(a): scalars + shape + type. Constraints are inter-node
+// references with their own UI path and are only COUNTED here.
+//
+// Deliberately absent: `isVisible`. The panel has the checkbox, but
+// SceneWriter never writes the field (scenewriter.cpp's physics block), so a
+// verb for it would answer true and lose the value on the next open — the
+// exact F7/F8 silent-success class this program exists to stop.
+
+namespace {
+
+struct EnumRow { const char *name; int value; };
+
+const EnumRow kPhysicsTypes[] = {
+    { "none",      static_cast<int>(iris::PhysicsType::None) },
+    { "static",    static_cast<int>(iris::PhysicsType::Static) },
+    { "rigidbody", static_cast<int>(iris::PhysicsType::RigidBody) },
+    // SoftBody exists in the enum and is deliberately NOT reachable: the panel
+    // hides it (physicspropertywidget.cpp) and PhysicsHelper builds no body for
+    // it, so accepting the name would be a silent no-op.
+};
+
+const EnumRow kPhysicsShapes[] = {
+    { "none",         static_cast<int>(iris::PhysicsCollisionShape::None) },
+    { "plane",        static_cast<int>(iris::PhysicsCollisionShape::Plane) },
+    { "sphere",       static_cast<int>(iris::PhysicsCollisionShape::Sphere) },
+    { "cube",         static_cast<int>(iris::PhysicsCollisionShape::Cube) },
+    { "convexhull",   static_cast<int>(iris::PhysicsCollisionShape::ConvexHull) },
+    { "trianglemesh", static_cast<int>(iris::PhysicsCollisionShape::TriangleMesh) },
+    { "compound",     static_cast<int>(iris::PhysicsCollisionShape::Compound) },
+};
+
+template <int N>
+QString enumName(const EnumRow (&rows)[N], int value)
+{
+    for (const auto &row : rows)
+        if (row.value == value) return QString::fromLatin1(row.name);
+    return QStringLiteral("unknown");
+}
+
+template <int N>
+QStringList enumNames(const EnumRow (&rows)[N])
+{
+    QStringList out;
+    for (const auto &row : rows) out.append(QString::fromLatin1(row.name));
+    return out;
+}
+
+template <int N>
+bool enumValue(const EnumRow (&rows)[N], const QString &name, int *value)
+{
+    const QString key = name.trimmed().toLower();
+    for (const auto &row : rows) {
+        if (key == QLatin1String(row.name)) { *value = row.value; return true; }
+    }
+    return false;
+}
+
+QVariantMap physicsToJs(const iris::SceneNodePtr &node)
+{
+    const auto &p = node->physicsProperty;
+    return QVariantMap{
+        { "enabled",         node->isPhysicsBody },
+        { "type",            enumName(kPhysicsTypes, static_cast<int>(p.type)) },
+        { "shape",           enumName(kPhysicsShapes, static_cast<int>(p.shape)) },
+        { "mass",            p.objectMass },
+        { "restitution",     p.objectRestitution },
+        { "friction",        p.objectFriction },
+        { "damping",         p.objectDamping },
+        { "collisionMargin", p.objectCollisionMargin },
+        { "isStatic",        p.isStatic },
+        { "constraints",     p.constraints.size() },
+    };
+}
+
+} // namespace
+
+QVariantMap NodeApi::physicsInfo(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.physicsInfo"));
+    if (!node) return QVariantMap();
+    return physicsToJs(node);
+}
+
+bool NodeApi::physics(const QString &id, const QVariantMap &change)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.physics"));
+    if (!node) return false;
+
+    if (change.isEmpty())
+        return fail("node.physics: nothing to change — pass a map "
+                    "({type, shape, mass, restitution, friction, damping, collisionMargin}); "
+                    "node.physicsInfo(id) reads the current values");
+
+    static const QStringList known = { "type", "shape", "mass", "restitution",
+                                       "friction", "damping", "collisionMargin" };
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        if (!known.contains(it.key()))
+            return fail(QStringLiteral("node.physics: unknown key '%1' (known: %2). "
+                                       "Note isVisible is intentionally absent — it is not "
+                                       "serialized, so setting it would be lost on the next open.")
+                            .arg(it.key(), known.join(", ")));
+    }
+
+    // Everything is validated into a COPY first; the node is only touched once
+    // every key is understood, so a refused call changes nothing at all.
+    const bool wasBody = node->isPhysicsBody;
+    const iris::PhysicsProperty was = node->physicsProperty;
+    iris::PhysicsProperty next = was;
+    bool nextIsBody = wasBody;
+
+    const auto number = [&](const char *key, float *out) -> bool {
+        if (!change.contains(QLatin1String(key))) return true;
+        const QVariant raw = scriptmod::normalizeJs(change.value(QLatin1String(key)));
+        bool numeric = false;
+        const double v = raw.toDouble(&numeric);
+        // `true` converts to 1.0 with ok=true — so a booleanised scalar would
+        // land as "mass 1" and answer true. That is the silent-success class
+        // this program exists to remove; a bool is not a number here.
+        if (raw.typeId() == QMetaType::Bool) numeric = false;
+        if (!numeric)
+            return fail(QStringLiteral("node.physics: '%1' must be a number, got '%2'")
+                            .arg(QLatin1String(key), change.value(QLatin1String(key)).toString()));
+        *out = float(v);
+        return true;
+    };
+
+    if (change.contains("type")) {
+        int value = 0;
+        if (!enumValue(kPhysicsTypes, change.value("type").toString(), &value))
+            return fail(QStringLiteral("node.physics: unknown type '%1' (%2)")
+                            .arg(change.value("type").toString(),
+                                 enumNames(kPhysicsTypes).join(", ")));
+        next.type = static_cast<iris::PhysicsType>(value);
+        // The panel's type combo does exactly this: None takes the node out of
+        // the simulation (isPhysicsBody false, which is what SceneWriter gates
+        // the whole physics block on), anything else puts it in.
+        nextIsBody = (next.type != iris::PhysicsType::None);
+    }
+
+    if (change.contains("shape")) {
+        int value = 0;
+        if (!enumValue(kPhysicsShapes, change.value("shape").toString(), &value))
+            return fail(QStringLiteral("node.physics: unknown shape '%1' (%2)")
+                            .arg(change.value("shape").toString(),
+                                 enumNames(kPhysicsShapes).join(", ")));
+        next.shape = static_cast<iris::PhysicsCollisionShape>(value);
+        // PhysicsHelper's ConvexHull/TriangleMesh branches call
+        // meshNode->getMesh() through an unchecked staticCast — on a node with
+        // no mesh that is a read past the object. The panel hides these rows
+        // for Empty nodes; a verb has to say no out loud instead.
+        const bool needsGeometry = next.shape == iris::PhysicsCollisionShape::ConvexHull ||
+                                   next.shape == iris::PhysicsCollisionShape::TriangleMesh;
+        if (needsGeometry && node->getSceneNodeType() != iris::SceneNodeType::Mesh)
+            return fail(QStringLiteral("node.physics: shape '%1' is built from the node's geometry "
+                                       "and '%2' is a %3, not a mesh — use sphere, cube, plane or "
+                                       "compound")
+                            .arg(change.value("shape").toString().trimmed().toLower(),
+                                 node->getName(), nodeTypeName(node->getSceneNodeType())));
+    }
+
+    if (!number("mass", &next.objectMass)) return false;
+    if (!number("restitution", &next.objectRestitution)) return false;
+    if (!number("friction", &next.objectFriction)) return false;
+    if (!number("damping", &next.objectDamping)) return false;
+    if (!number("collisionMargin", &next.objectCollisionMargin)) return false;
+
+    if (next.objectMass < 0.0f)
+        return fail(QStringLiteral("node.physics: mass must be >= 0 (0 = immovable), got %1")
+                        .arg(double(next.objectMass)));
+
+    // A static body has mass 0 in Bullet — the panel's type combo zeroes the
+    // mass slider for exactly this reason. Doing it silently when the caller
+    // ALSO asked for a mass would be the quiet-lie class, so that combination
+    // is refused and the plain "type: static" case is documented.
+    if (next.type == iris::PhysicsType::Static) {
+        if (change.contains("mass") && next.objectMass != 0.0f)
+            return fail(QStringLiteral("node.physics: a \"static\" body has mass 0 — "
+                                       "drop the mass, or use type \"rigidbody\" for mass %1")
+                            .arg(double(next.objectMass)));
+        next.objectMass = 0.0f;
+    }
+
+    // Derived, exactly as the panel derives it. Not a key of its own.
+    next.isStatic = (next.type == iris::PhysicsType::Static) || next.objectMass == 0.0f;
+
+    auto apply = [](const iris::SceneNodePtr &n, const iris::PhysicsProperty &props, bool isBody) {
+        // Field-wise, never a whole-struct assign: constraints, centerOfMass
+        // and pivotPoint are outside this verb's scope and a struct copy would
+        // silently carry (or drop) them.
+        n->physicsProperty.type = props.type;
+        n->physicsProperty.shape = props.shape;
+        n->physicsProperty.objectMass = props.objectMass;
+        n->physicsProperty.objectRestitution = props.objectRestitution;
+        n->physicsProperty.objectFriction = props.objectFriction;
+        n->physicsProperty.objectDamping = props.objectDamping;
+        n->physicsProperty.objectCollisionMargin = props.objectCollisionMargin;
+        n->physicsProperty.isStatic = props.isStatic;
+        n->isPhysicsBody = isBody;
+    };
+
+    apply(node, next, nextIsBody);
+    recordNodeEdit(QStringLiteral("physics"),
+                   [node, next, nextIsBody, apply]() { apply(node, next, nextIsBody); },
+                   [node, was, wasBody, apply]() { apply(node, was, wasBody); });
+    return true;
 }

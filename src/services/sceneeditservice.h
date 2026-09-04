@@ -104,7 +104,15 @@ public:
     void addAreaLight();
 
     void addEmpty();
-    void addViewer();
+    /// Adds a viewer (the "Avatar" node the hierarchy panel's Viewer action
+    /// makes). Returns the node so callers — the scripting verb, chiefly — can
+    /// report an id; null when there is no scene. SIDE EFFECT, and it is the
+    /// reason this cannot be a plain add: the new viewer TAKES the active
+    /// character controller (every other viewer in the scene is deactivated)
+    /// and registers itself with the physics world.
+    /// `ignorePlacement` true keeps the node at the origin instead of the
+    /// spawn-in-front-of-the-camera offset addNodeToScene applies.
+    iris::ViewerNodePtr addViewer(bool ignorePlacement = false);
     /// Adds an emitter, optionally stamped from a preset recipe
     /// (PARTICLES_FX2_SPEC §6). Returns the node so callers — the scripting
     /// verb, chiefly — can address what they just made; null when there is no

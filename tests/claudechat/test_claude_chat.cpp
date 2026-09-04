@@ -100,6 +100,16 @@ static void testLaunchConfig()
     CHECK(sceneSkill.contains("scene.addPrimitive") && sceneSkill.contains("world.gi")
               && sceneSkill.contains("run_script"),
           "config: scene skill grounded in real verbs");
+    // The assets skill teaches the ONE-CALL import (lane D #7). It taught
+    // scene.addMesh as a shortcut once (audit F2), and that is what made the
+    // F1 data loss reachable from the dock — so what it names here is a gate,
+    // not prose.
+    const QString assetSkill = QString::fromUtf8(
+        readFile(project + "/.claude/skills/jahshaka-assets/SKILL.md"));
+    CHECK(assetSkill.contains("assets.importAndPlace"),
+          "config: assets skill teaches assets.importAndPlace");
+    CHECK(assetSkill.contains("scene.addMesh") && assetSkill.contains("FAILS"),
+          "config: ...and still says scene.addMesh fails");
 
     // Version upgrade: an OLD copy is refreshed…
     const QString target = project + "/.claude/skills/jahshaka-materials/SKILL.md";
