@@ -53,6 +53,19 @@ public:
     /// help() text: all modules+verbs, or one module / one verb when topic given.
     QString helpText(const QString &topic = QString()) const;
 
+    /// ONE verb's signature + doc + needs, by "module.verb" or by a bare verb
+    /// name (which may match in several modules — all matches come back).
+    /// Empty when nothing matches. The `api_docs({verb})` source
+    /// (AI_SURFACE_PROGRAM_SPEC lane C #2): the whole reference is ~55 KB and
+    /// an agent that knows the verb's name should not have to read all of it.
+    QString verbText(const QString &name) const;
+
+    /// Every verb whose qualified name OR doc string contains `needle`
+    /// (case-insensitive), newest-registered last, capped at `limit` rows
+    /// (<= 0 = uncapped). The header names the match count so a truncated
+    /// result says so instead of looking complete.
+    QString searchText(const QString &needle, int limit = 0) const;
+
     /// The whole surface as JSON — the v2 MCP schema source.
     QJsonArray schema() const;
 

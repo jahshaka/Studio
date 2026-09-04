@@ -94,8 +94,9 @@ QString storeFileFor(const QString &guid)
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type}) -> [{guid, name, type, drawer}]",
-          "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there.",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, drawer, limit}) -> [{guid, name, type, drawer}]",
+          "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
+          "query is a case-insensitive substring match on the asset NAME; drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query — and limit last, so a limited listing is the first N of the filtered set, not a sample of it.",
           Needs::Document },
         { "metadata", "assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}",
           "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
@@ -207,8 +208,28 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         if (typeFilter < 0) { fail(QStringLiteral("assets.list: unknown type '%1'").arg(options.value("type").toString())); return out; }
     }
 
+    // The browse filters (AI_SURFACE_PROGRAM_SPEC lane C #6). They live on the
+    // VERB, not in the MCP tool: browse_assets is only the byte-carrying view
+    // of this listing, so anything a script cannot ask for is a capability the
+    // tool would own alone.
+    const QString query = options.value("query").toString().trimmed();
+    const bool hasDrawer = options.contains("drawer");
+    const int drawerFilter = options.value("drawer", -1).toInt();
+    const int limit = options.value("limit", 0).toInt();
+    const auto nameMatches = [&query](const QString &name) {
+        return query.isEmpty() || name.contains(query, Qt::CaseInsensitive);
+    };
+    // Applied where the rows are built, so `limit` bounds the WORK too on the
+    // store path (a 5000-row library browsed with limit 12 stops at 12).
+    const auto full = [&out, limit]() { return limit > 0 && out.size() >= limit; };
+
     QVector<AssetRecord> records;
     if (scope == "session") {
+        if (hasDrawer) {
+            fail("assets.list: scope 'session' carries no drawer — drop the drawer filter "
+                 "or list scope 'store'/'project'");
+            return out;
+        }
         // The live AssetManager registrations — what the viewport's drag-drop
         // lookups and the panels actually see. Makes session hydration
         // observable to scripts and tests (IMAGE_PLANE_SPEC §6 gate).
@@ -216,6 +237,8 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         for (Asset *asset : AssetManager::getAssets()) {
             if (!asset) continue;
             if (typeFilter >= 0 && static_cast<int>(asset->type) != typeFilter) continue;
+            if (!nameMatches(asset->fileName)) continue;
+            if (full()) break;
             out.append(QVariantMap{ { "guid", asset->assetGuid },
                                     { "name", asset->fileName },
                                     { "type", typeName(static_cast<int>(asset->type)) } });
@@ -247,6 +270,9 @@ QVariantList AssetsApi::list(const QVariantMap &options)
                 records.append(record);
             }
             for (const auto &record : records) {
+                if (hasDrawer && record.collection != drawerFilter) continue;
+                if (!nameMatches(record.name)) continue;
+                if (full()) break;
                 out.append(QVariantMap{ { "guid", record.guid },
                                         { "name", record.name },
                                         { "type", typeName(typeFilter) },
@@ -273,6 +299,9 @@ QVariantList AssetsApi::list(const QVariantMap &options)
 
     for (const auto &record : records) {
         if (typeFilter >= 0 && record.type != typeFilter) continue;
+        if (hasDrawer && record.collection != drawerFilter) continue;
+        if (!nameMatches(record.name)) continue;
+        if (full()) break;
         out.append(QVariantMap{ { "guid", record.guid },
                                 { "name", record.name },
                                 { "type", typeName(record.type) },

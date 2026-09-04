@@ -161,6 +161,69 @@ QString ApiRegistry::helpText(const QString &topic) const
     return out;
 }
 
+QString ApiRegistry::verbText(const QString &name) const
+{
+    const QString wanted = name.trimmed();
+    if (wanted.isEmpty()) return QString();
+
+    QString moduleTopic, verbTopic = wanted;
+    const int dot = wanted.indexOf('.');
+    if (dot > 0) {
+        moduleTopic = wanted.left(dot);
+        verbTopic = wanted.mid(dot + 1);
+    }
+
+    QString out;
+    for (auto *m : mModules) {
+        if (!moduleTopic.isEmpty() && m->jsName().compare(moduleTopic, Qt::CaseInsensitive) != 0)
+            continue;
+        for (const auto &v : m->verbs()) {
+            if (v.name.compare(verbTopic, Qt::CaseInsensitive) != 0) continue;
+            out += QStringLiteral("%1\n    %2 [%3]\n")
+                       .arg(v.signature, v.doc, needsName(v.needs));
+        }
+    }
+    return out;
+}
+
+QString ApiRegistry::searchText(const QString &needle, int limit) const
+{
+    const QString q = needle.trimmed();
+    if (q.isEmpty()) return QString();
+
+    QStringList rows;
+    int matches = 0;
+    for (auto *m : mModules) {
+        for (const auto &v : m->verbs()) {
+            const QString qualified = m->jsName() + QLatin1Char('.') + v.name;
+            // Name first, then the doc TEXT: "light" must find world.ambient's
+            // prose as well as scene.addLight's name, which is the whole point
+            // of a search over a curated registry.
+            if (!qualified.contains(q, Qt::CaseInsensitive)
+                && !v.signature.contains(q, Qt::CaseInsensitive)
+                && !v.doc.contains(q, Qt::CaseInsensitive))
+                continue;
+            ++matches;
+            if (limit > 0 && rows.size() >= limit) continue;
+            rows << QStringLiteral("%1\n    %2 [%3]")
+                        .arg(v.signature, v.doc, needsName(v.needs));
+        }
+    }
+
+    if (matches == 0)
+        return QStringLiteral("no verb matches '%1' — api_docs with no arguments "
+                              "returns the whole reference\n").arg(q);
+
+    QString out = QStringLiteral("%1 verb%2 match '%3'")
+                      .arg(matches)
+                      .arg(matches == 1 ? QString() : QStringLiteral("s"), q);
+    if (rows.size() < matches)
+        out += QStringLiteral(" — showing the first %1; narrow the search or pass "
+                              "a module to api_docs for the rest").arg(rows.size());
+    out += QStringLiteral("\n\n") + rows.join(QStringLiteral("\n")) + QStringLiteral("\n");
+    return out;
+}
+
 QJsonArray ApiRegistry::schema() const
 {
     QJsonArray modulesJson;

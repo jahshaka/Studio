@@ -79,6 +79,42 @@ assert(assetByGuid(png).drawer === weapons, "moveToDrawer round-trips");
 mustThrow(function () { assets.moveToDrawer(png, 424242); }, "move to unknown drawer throws");
 mustThrow(function () { assets.moveToDrawer("not-a-guid", 0); }, "move of unknown asset throws");
 
+// ---- assets.list filters: query / drawer / limit ----
+// AI_SURFACE_PROGRAM_SPEC lane C #6. These are the browse_assets MCP tool's
+// whole capability: the tool carries thumbnail BYTES (which a script result
+// cannot), the filtering is here, on the verb, where a script can use it too.
+// State at this point: png AND wav are both filed in `weapons`.
+var inWeapons = assets.list({ scope: "store", drawer: weapons });
+assert(inWeapons.length === 2, "assets.list({drawer}) returns just that drawer (" + inWeapons.length + ")");
+for (var i = 0; i < inWeapons.length; i++)
+    assert(inWeapons[i].drawer === weapons, "every drawer-filtered row is in the drawer");
+
+var tinyRows = assets.list({ scope: "store", query: "tiny.wav" });
+assert(tinyRows.length >= 1, "assets.list({query}) matches on the name");
+for (var j = 0; j < tinyRows.length; j++)
+    assert(tinyRows[j].name.toLowerCase().indexOf("tiny.wav") >= 0,
+           "every query-filtered row matches the query");
+assert(assets.list({ scope: "store", query: "TINY.WAV" }).length === tinyRows.length,
+       "the query is case-insensitive");
+assert(assets.list({ scope: "store", query: "zzz-no-such-asset" }).length === 0,
+       "a query that matches nothing returns an empty list, not everything");
+
+assert(assets.list({ scope: "store", limit: 1 }).length === 1, "assets.list({limit}) caps the rows");
+assert(assets.list({ scope: "store", limit: 0 }).length >= 2, "limit 0 means no cap");
+
+// The filters compose, and in the documented order (type, drawer, query).
+var composed = assets.list({ scope: "store", drawer: weapons, type: "texture" });
+assert(composed.length === 1 && composed[0].guid === png,
+       "assets.list({drawer, type}) composes");
+assert(assets.list({ scope: "store", drawer: weapons, query: "tiny.png", limit: 5 }).length === 1,
+       "assets.list({drawer, query, limit}) composes");
+
+// Honest refusals, not silent ignores.
+mustThrow(function () { assets.list({ scope: "session", drawer: 0 }); },
+          "assets.list: a drawer filter on scope 'session' throws (session rows carry no drawer)");
+mustThrow(function () { assets.list({ scope: "store", type: "sandwich" }); },
+          "assets.list: an unknown type still throws");
+
 // ---- deleteDrawer reassigns the subtree's assets to Uncategorized ----
 assert(assets.deleteDrawer(props), "assets.deleteDrawer (whole branch)");
 assert(drawerById(props) === null && drawerById(weapons) === null, "branch rows removed");
