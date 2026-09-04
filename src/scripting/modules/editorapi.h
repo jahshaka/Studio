@@ -39,6 +39,8 @@ public:
     Q_INVOKABLE bool setView(const QString &view);
     Q_INVOKABLE QString view();
     Q_INVOKABLE QVariantMap camera();
+    Q_INVOKABLE QVariantMap setCamera(const QVariant &pose);
+    Q_INVOKABLE QVariantMap frameNode(const QString &id, const QVariant &options = QVariant());
     Q_INVOKABLE QString cameraMode();
     Q_INVOKABLE bool setCameraMode(const QString &mode);
     Q_INVOKABLE double snapSize();

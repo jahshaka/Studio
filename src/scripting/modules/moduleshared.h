@@ -16,6 +16,7 @@ For more information see the LICENSE file
 // (SCRIPTING_SPEC — ids are GUID strings, vectors are {x,y,z}, colors are
 // "#rrggbb" strings or {r,g,b} maps with 0-255 channels).
 
+#include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QJSValue>
@@ -25,6 +26,10 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "irisgl/irisglfwd.h"
+#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -91,6 +96,40 @@ inline iris::Vec3 vecFromJs(const QVariant &raw, const iris::Vec3 &fallback = ir
                          l.value(1, fallback.y()).toFloat(),
                          l.value(2, fallback.z()).toFloat());
     }
+    return fallback;
+}
+
+/// Accepts BOTH rotation spellings the surface already uses:
+///   {x,y,z,scalar}  a quaternion, exactly what editor.camera() hands back
+///                   ("w" is accepted as an alias for "scalar")
+///   {x,y,z}         Euler degrees (pitch, yaw, roll) — what node.info() and
+///                   node.transform() report — and [x,y,z] arrays likewise.
+/// `ok` reports whether the value was UNDERSTOOD (the F8 rule: a rotation a
+/// verb cannot parse must fail loudly, never silently keep the old one).
+inline iris::Quat quatFromJs(const QVariant &raw, const iris::Quat &fallback = iris::Quat(),
+                             bool *ok = nullptr)
+{
+    if (ok) *ok = true;
+    const QVariant value = normalizeJs(raw);
+    if (value.typeId() == QMetaType::QVariantMap) {
+        const auto m = value.toMap();
+        const bool quaternion = m.contains(QStringLiteral("scalar")) || m.contains(QStringLiteral("w"));
+        if (quaternion) {
+            const QVariant w = m.contains(QStringLiteral("scalar")) ? m.value(QStringLiteral("scalar"))
+                                                                    : m.value(QStringLiteral("w"));
+            iris::Quat q(w.toFloat(), m.value("x").toFloat(),
+                         m.value("y").toFloat(), m.value("z").toFloat());
+            if (q.length() < 1e-4f) { if (ok) *ok = false; return fallback; }
+            q.normalize();
+            return q;
+        }
+        if (m.contains(QStringLiteral("x")) || m.contains(QStringLiteral("y"))
+            || m.contains(QStringLiteral("z")))
+            return iris::Quat::fromEulerAngles(vecFromJs(value));
+    }
+    if (value.typeId() == QMetaType::QVariantList && value.toList().size() >= 3)
+        return iris::Quat::fromEulerAngles(vecFromJs(value));
+    if (ok) *ok = false;
     return fallback;
 }
 
@@ -180,6 +219,110 @@ inline QVariantMap nodeToJs(const iris::SceneNodePtr &node)
     m["position"] = vecToJs(node->getLocalPos());
     m["rotation"] = vecToJs(node->getLocalRot().toEulerAngles());
     m["scale"] = vecToJs(node->getLocalScale());
+    return m;
+}
+
+// ---- optional per-node enrichment (AI_SURFACE_PROGRAM_SPEC lane B #8) ------
+//
+// The blocks scene.nodes({include: […]}) can attach, and therefore what
+// describe_scene's `include` carries. They are HERE, beside nodeToJs, so the
+// tool and the verb serialize identically by construction — the tool is only
+// ever the byte-carrying view of the verb.
+
+inline QString lightTypeName(iris::LightType type)
+{
+    switch (type) {
+    case iris::LightType::Point:       return QStringLiteral("point");
+    case iris::LightType::Directional: return QStringLiteral("directional");
+    case iris::LightType::Spot:        return QStringLiteral("spot");
+    case iris::LightType::Area:        return QStringLiteral("area");
+    }
+    return QStringLiteral("unknown");
+}
+
+/// The light parameters, or an empty map for a node that is not a light. Only
+/// the rows that MEAN something for that light type: a point light has no
+/// spot cone and a spot light has no rectangle, and reporting them anyway
+/// teaches a model to set fields that do nothing.
+inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
+{
+    QVariantMap m;
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Light) return m;
+    auto light = node.staticCast<iris::LightNode>();
+    m["lightType"] = lightTypeName(light->lightType);
+    m["color"] = colorToJs(light->color);
+    m["intensity"] = light->intensity;
+    m["shadowAlpha"] = light->shadowAlpha;
+    m["shadowColor"] = colorToJs(light->shadowColor);
+    if (light->lightType != iris::LightType::Directional)
+        m["distance"] = light->distance;
+    if (light->lightType == iris::LightType::Spot) {
+        m["spotCutOff"] = light->spotCutOff;
+        m["spotCutOffSoftness"] = light->spotCutOffSoftness;
+    }
+    if (light->lightType == iris::LightType::Area) {
+        m["rectWidth"] = light->rectWidth;
+        m["rectHeight"] = light->rectHeight;
+        m["doubleSided"] = light->doubleSided;
+        m["accurate"] = light->accurate;
+    }
+    if (!light->iesProfileGuid.isEmpty()) m["lightProfile"] = light->iesProfileGuid;
+    if (!light->lightTextureGuid.isEmpty()) m["lightTexture"] = light->lightTextureGuid;
+    return m;
+}
+
+/// A mesh node's material as a SUMMARY, not as material.get()'s full property
+/// dump: what a model needs to decide whether to look closer (the class, the
+/// handful of numbers that describe the look, and which texture slots are in
+/// use). material.get(id) is still the full read.
+inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
+{
+    QVariantMap m;
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return m;
+    auto material = node.staticCast<iris::MeshNode>()->getMaterial();
+    if (!material) return m;
+    if (auto pbr = material.dynamicCast<iris::PbrMaterial>()) {
+        static const char *kAlphaModes[] = { "opaque", "cutout", "blend", "glass",
+                                             "additive", "modulate", "refractive" };
+        m["class"] = QStringLiteral("pbr");
+        m["baseColor"] = colorToJs(pbr->baseColor);
+        m["metallic"] = pbr->metallicFactor;
+        m["roughness"] = pbr->roughnessFactor;
+        m["emissiveColor"] = colorToJs(pbr->emissiveColor);
+        m["emissiveIntensity"] = pbr->emissiveIntensity;
+        m["alpha"] = pbr->alpha;
+        m["alphaMode"] = kAlphaModes[qBound(0, pbr->alphaMode, 6)];
+        QVariantList maps;
+        if (pbr->useBaseColorMap) maps << QStringLiteral("baseColor");
+        if (pbr->useMetallicMap)  maps << QStringLiteral("metallic");
+        if (pbr->useRoughnessMap) maps << QStringLiteral("roughness");
+        if (pbr->useNormalMap)    maps << QStringLiteral("normal");
+        if (pbr->useOcclusionMap) maps << QStringLiteral("occlusion");
+        if (pbr->useEmissiveMap)  maps << QStringLiteral("emissive");
+        m["maps"] = maps;
+    } else if (auto custom = material.dynamicCast<iris::CustomMaterial>()) {
+        // The base Material carries no name — only CustomMaterial does.
+        m["class"] = QStringLiteral("custom");
+        m["name"] = custom->getName();
+    } else {
+        m["class"] = QStringLiteral("material");
+    }
+    return m;
+}
+
+/// Visibility, with the answer a caller actually wants: `visible` is the
+/// node's own flag, `visibleInScene` is false as soon as ANY ancestor is
+/// hidden — which is why a node can be `visible: true` and still not be on
+/// screen, a question that used to need a manual parent walk.
+inline QVariantMap visibilityToJs(const iris::SceneNodePtr &node)
+{
+    QVariantMap m;
+    if (!node) return m;
+    bool inherited = node->isVisible();
+    for (auto p = node->getParent(); p && inherited; p = p->getParent())
+        inherited = p->isVisible();
+    m["visible"] = node->isVisible();
+    m["visibleInScene"] = inherited;
     return m;
 }
 

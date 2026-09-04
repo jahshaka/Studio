@@ -37,8 +37,17 @@ const QStringList kPrimitives = {
 QVector<VerbInfo> SceneApi::verbs() const
 {
     return {
-        { "nodes", "scene.nodes() -> [{id, name, type, parent, position, rotation, scale}]",
-          "Every node in the open scene, depth-first from the root.",
+        { "nodes", "scene.nodes({subtree?, depth?, include?}) -> [{id, name, type, parent, position, rotation, scale, …}]",
+          "Every node in the open scene, depth-first from the root. With no argument that is the WHOLE tree, which on a "
+          "large scene is the most expensive read on this surface — the options bound it. `subtree` is a node id to start "
+          "from (that node and its descendants, itself included). `depth` is how many levels BELOW the start to walk: 0 is "
+          "the start node alone, 1 adds its children, and omitting it (or a negative value) means the whole subtree; a row "
+          "whose children were cut off carries `childCount` and `truncated: true`, so nothing is silently missing. "
+          "`include` is an array of extra blocks per row: \"materials\" attaches a `material` summary to mesh nodes "
+          "(class, baseColor, metallic, roughness, emissive, alpha mode, and which texture slots are in use — "
+          "material.get(id) is still the full read), \"lights\" attaches a `light` block to light nodes (only the rows that "
+          "mean something for that light type), and \"visibility\" attaches `visible` plus `visibleInScene`, which is false "
+          "as soon as any ANCESTOR is hidden. Unknown option keys and unknown include names are refused, not ignored.",
           Needs::Document },
         { "find", "scene.find(name) -> id | null",
           "The first node with this exact name, or null.",
@@ -95,16 +104,94 @@ iris::ScenePtr SceneApi::sceneOrFail()
     return scene;
 }
 
-QVariantList SceneApi::nodes()
+QVariantList SceneApi::nodes(const QVariant &options)
 {
     QVariantList out;
     auto scene = sceneOrFail();
     if (!scene) return out;
-    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
-        out.append(nodeToJs(node));
-        for (const auto &child : node->children) walk(child);
+
+    const QVariant normalized = scriptmod::normalizeJs(options);
+    QVariantMap params;
+    if (normalized.isValid() && !normalized.isNull()) {
+        if (normalized.typeId() != QMetaType::QVariantMap) {
+            fail("scene.nodes: the argument is an object — {subtree?, depth?, include?}");
+            return out;
+        }
+        params = normalized.toMap();
+    }
+    static const QStringList knownKeys{ QStringLiteral("subtree"), QStringLiteral("depth"),
+                                        QStringLiteral("include") };
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!knownKeys.contains(it.key())) {
+            fail(QStringLiteral("scene.nodes: unknown option '%1' (known: %2)")
+                     .arg(it.key(), knownKeys.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+
+    iris::SceneNodePtr start = scene->getRootNode();
+    if (params.contains(QStringLiteral("subtree"))) {
+        const QString id = params.value(QStringLiteral("subtree")).toString();
+        start = findNodeByGuid(scene->getRootNode(), id);
+        if (!start) {
+            fail(QStringLiteral("scene.nodes: no node with id '%1' to start the subtree from").arg(id));
+            return out;
+        }
+    }
+
+    int depth = -1;   // -1 = unbounded, the historic behaviour
+    if (params.contains(QStringLiteral("depth"))) {
+        bool numeric = false;
+        const int d = params.value(QStringLiteral("depth")).toInt(&numeric);
+        if (!numeric) { fail("scene.nodes: depth must be a number"); return out; }
+        depth = d < 0 ? -1 : d;
+    }
+
+    bool wantMaterials = false, wantLights = false, wantVisibility = false;
+    if (params.contains(QStringLiteral("include"))) {
+        const QVariant raw = scriptmod::normalizeJs(params.value(QStringLiteral("include")));
+        QVariantList names = raw.typeId() == QMetaType::QVariantList ? raw.toList()
+                                                                    : QVariantList{ raw };
+        for (const QVariant &n : names) {
+            const QString name = n.toString();
+            if (name == QLatin1String("materials")) wantMaterials = true;
+            else if (name == QLatin1String("lights")) wantLights = true;
+            else if (name == QLatin1String("visibility")) wantVisibility = true;
+            else {
+                fail(QStringLiteral("scene.nodes: unknown include '%1' "
+                                    "(known: materials, lights, visibility)").arg(name));
+                return out;
+            }
+        }
+    }
+
+    std::function<void(const iris::SceneNodePtr &, int)> walk =
+        [&](const iris::SceneNodePtr &node, int level) {
+        QVariantMap row = nodeToJs(node);
+        if (wantMaterials) {
+            const QVariantMap material = scriptmod::materialSummaryToJs(node);
+            if (!material.isEmpty()) row["material"] = material;
+        }
+        if (wantLights) {
+            const QVariantMap light = scriptmod::lightToJs(node);
+            if (!light.isEmpty()) row["light"] = light;
+        }
+        if (wantVisibility) {
+            const QVariantMap vis = scriptmod::visibilityToJs(node);
+            for (auto it = vis.constBegin(); it != vis.constEnd(); ++it) row[it.key()] = it.value();
+        }
+        // A subtree that gets cut off says so, with its size — the whole point
+        // of a bounded read is that the caller knows what it did not get.
+        const bool cutOff = (depth >= 0 && level >= depth && !node->children.isEmpty());
+        if (cutOff) {
+            row["childCount"] = node->children.size();
+            row["truncated"] = true;
+        }
+        out.append(row);
+        if (cutOff) return;
+        for (const auto &child : node->children) walk(child, level + 1);
     };
-    walk(scene->getRootNode());
+    walk(start, 0);
     return out;
 }
 

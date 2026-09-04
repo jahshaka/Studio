@@ -167,6 +167,20 @@ set_tests_properties(scripting.e2e.ai_surface PROPERTIES
     LABELS "scripting"
     TIMEOUT 180)
 
+# AI_SURFACE_PROGRAM_SPEC lane B #8 (verb half): scene.nodes({subtree, depth,
+# include}). describe_scene is only the byte-carrying view of these options, so
+# the bounding (childCount/truncated) and the enrichment blocks are gated here,
+# on the verb. Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-scene_query)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.scene_query
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_query.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.scene_query PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
+
 # Web export (WEB_EXPORT_AUDIT): project.exportWeb through the real binary.
 # Document-only, so --headless.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-export_web)

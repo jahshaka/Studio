@@ -13,6 +13,7 @@
 // is not a wish list. Legacy-only operations (GL context juggling around resource
 // loads, the IrisGL renderer) are kept as explicit, nullable calls so the callers
 // can be found and retired.
+#include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QObject>
 #include <QImage>
@@ -48,6 +49,32 @@ signals:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
     void updateToolbarButton();
     void changeSkyFromAssetWidget(int index);
+};
+
+/// What `editor.setCamera` asks the viewport for (AI_SURFACE_PROGRAM_SPEC lane
+/// B #3). Every field is optional so a caller can nudge one thing: "move here,
+/// keep looking where I look" is `position` alone. Orientation comes from
+/// EITHER `lookAt` (a world-space target) OR `rotation`, never both — the verb
+/// refuses that ambiguity before it reaches here.
+struct EditorCameraPose
+{
+    iris::Vec3 position;   bool hasPosition = false;
+    iris::Vec3 lookAt;     bool hasLookAt = false;
+    iris::Quat rotation;   bool hasRotation = false;
+    /// Perspective field of view in degrees (iris::CameraNode::angle). <= 0
+    /// leaves it alone; it is inert while the camera is orthographic.
+    float fovDegrees = 0.0f;
+};
+
+/// What `editor.frameNode` asks for: a viewing direction on the sphere around
+/// the node's world bounds. Absent yaw/pitch mean "keep the direction the
+/// camera already looks from", which makes `frameNode(id)` the verb form of
+/// the F key. `distance <= 0` means the bounds-derived framing distance.
+struct EditorFraming
+{
+    float yawDegrees = 0.0f;   bool hasYaw = false;
+    float pitchDegrees = 0.0f; bool hasPitch = false;
+    float distance = 0.0f;
 };
 
 class IEditorViewport
@@ -104,6 +131,16 @@ public:
     /// until one is set). Purely informational — free orbiting afterwards
     /// does not reset it.
     virtual QString cameraView() const { return QStringLiteral("perspective"); }
+    /// Place the editor camera directly (editor.setCamera). Implementations
+    /// MUST resync the active camera controller afterwards — both existing
+    /// camera movers (focusOnNode, restoreViewState) do, and a pose written
+    /// without it snaps back on the first mouse move. Returns false when there
+    /// is no editor camera. Optional; headless viewports may leave it out.
+    virtual bool setCameraPose(const EditorCameraPose &) { return false; }
+    /// Frame `node` from a chosen direction (editor.frameNode): focusOnNode's
+    /// bounds maths with the view direction taken from `framing` instead of
+    /// from the current camera. Same controller-resync obligation.
+    virtual bool frameNode(iris::SceneNodePtr, const EditorFraming &) { return false; }
     virtual void setEditorData(EditorData *data) = 0;
     virtual EditorData *getEditorData() = 0;
 
