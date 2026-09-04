@@ -91,6 +91,25 @@ public:
 	QString selectedGraphNodeId();
 	void deselectGraphNodes();
 
+	// ---- The graph's edit stack ----------------------------------------
+	// THE page's undo stack (`stack` below): every GraphNodeScene this page
+	// creates is given it (createNewScene -> setUndoRedoStack), so node adds,
+	// deletes, moves, connections, pastes and the settings-dock property edits
+	// all land on this one stack.
+	//
+	// These two exist so there is exactly ONE entry point to it, called by the
+	// graph.undo/graph.redo verbs (MaterialsModule::registerApi wires them) AND
+	// by the shell's Ctrl+Z when the Materials space is the active one — the
+	// API-first rule, and the owner's decision that on this page the GRAPH undo
+	// is the one that wins. Return false when there is nothing to undo/redo, so
+	// a caller can tell "did nothing" from "not available".
+	bool graphUndo();
+	bool graphRedo();
+	/// Depth of the two halves of that stack — what the verbs report and what a
+	/// test asserts against.
+	int graphUndoCount() const;
+	int graphRedoCount() const;
+
     ~EffectsPage();
 
 	QList<NodeGraphPreset> list;

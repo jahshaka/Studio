@@ -188,24 +188,24 @@ void GraphicsView::addShortcuts()
 		this->repaint();
 	});
 
-	// undo-redo
-	auto undoShortcut = new QShortcut(this);
-	undoShortcut->setKey(QKeySequence::Undo);
-	connect(undoShortcut, &QShortcut::activated, [this]()
-	{
-		scene->undo();
-		scene->update();
-		//this->repaint();
-	});
-
-	auto redoShortcut = new QShortcut(this);
-	redoShortcut->setKey(QKeySequence::Redo);
-	connect(redoShortcut, &QShortcut::activated, [this]()
-	{
-		scene->redo();
-		scene->update();
-		//this->repaint();
-	});
+	// NO undo/redo shortcuts here. There were two — QKeySequence::Undo and
+	// ::Redo, Qt::WindowShortcut like every bare QShortcut — and they were one
+	// of the TWO claimants that made Ctrl+Z do NOTHING on the Materials page
+	// (deep audit 2026-09, area 1): MainWindow's ShortcutRegistry "edit.undo"
+	// is the other, also WindowShortcut, so Qt found the chord ambiguous and
+	// QShortcut answers an ambiguous event by ignoring it. Measured on Xvfb
+	// with qt.gui.shortcutmap.debug: "The following shortcuts are about to be
+	// activated ambiguously", then QShortcutEvent("Ctrl+Z", ..., TRUE).
+	//
+	// The owner's decision is that on this page the GRAPH undo wins, so the
+	// chord now has exactly ONE claimant — the registry entry — and MainWindow
+	// forwards it to EffectsPage::graphUndo when the Materials space is active
+	// (the same entry point graph.undo/graph.redo call). Re-adding a QShortcut
+	// here would restore the ambiguity and kill the chord again; if the graph
+	// view ever needs its own binding, register it in ShortcutRegistry with a
+	// distinct sequence.
+	//
+	// The rest below stay: none of their sequences is claimed anywhere else.
 
 	// copy / paste / duplicate
 	auto copyShortcut = new QShortcut(this);

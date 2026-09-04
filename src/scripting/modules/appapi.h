@@ -42,6 +42,7 @@ public:
     Q_INVOKABLE bool saveShaderCache();
     Q_INVOKABLE QVariantMap warmUpSet(const QString &action = QString());
     Q_INVOKABLE QVariantMap engineErrors(bool reset = false);
+    Q_INVOKABLE QVariantMap frameStats();
 };
 
 #endif // SCRIPTING_APPAPI_H

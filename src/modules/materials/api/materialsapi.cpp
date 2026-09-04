@@ -569,6 +569,19 @@ QVector<VerbInfo> GraphApi::verbs() const
           "the Unreal set; 'Blend' is accepted as the legacy name for 'Translucent'). Material state only: bakes are "
           "unaffected, the evaluated material's alphaMode changes.",
           Needs::Document },
+        { "undo", "graph.undo() -> bool",
+          "Undoes one edit on the Materials page's graph — the SAME stack the page's toolbar arrows and "
+          "Ctrl+Z on that page drive (node adds and deletes, moves, connections, pastes, property edits). "
+          "False when there is nothing to undo, or when this session has no Materials page (the API-local "
+          "script graph keeps no command history). Scene edits are editor.undo's; the two stacks are separate.",
+          Needs::Window },
+        { "redo", "graph.redo() -> bool",
+          "Redoes the last undone graph edit. False when there is nothing to redo, or with no Materials page.",
+          Needs::Window },
+        { "undoState", "graph.undoState() -> {available, canUndo, canRedo, undoCount, redoCount}",
+          "The depth of the Materials page's graph edit stack. `available` is false in sessions with no "
+          "Materials page, which is also why the counts are then zero.",
+          Needs::Document },
     };
 }
 
@@ -851,6 +864,41 @@ bool GraphApi::setBlendMode(const QString &mode)
     s.blendMode = want;
     graph->setMaterialSettings(s);
     return true;
+}
+
+// ---- the Materials page's edit stack ---------------------------------------
+// The verbs and the shell's Ctrl+Z on that page are two callers of ONE entry
+// point (EffectsPage::graphUndo/graphRedo), reached through the delegate
+// MaterialsModule::registerApi installs. No page (headless slices, the
+// document-only script host) = no stack: say so instead of silently doing
+// nothing, because "graph.undo() returned true" is what a test believes.
+
+bool GraphApi::undo()
+{
+    if (!mUndo.undo)
+        return fail("graph.undo: no Materials page in this session (the script-local graph keeps no history)");
+    return mUndo.undo();
+}
+
+bool GraphApi::redo()
+{
+    if (!mUndo.redo)
+        return fail("graph.redo: no Materials page in this session (the script-local graph keeps no history)");
+    return mUndo.redo();
+}
+
+QVariantMap GraphApi::undoState()
+{
+    QVariantMap out;
+    const bool available = bool(mUndo.undoCount) && bool(mUndo.redoCount);
+    const int undoCount = available ? mUndo.undoCount() : 0;
+    const int redoCount = available ? mUndo.redoCount() : 0;
+    out.insert("available", available);
+    out.insert("canUndo", undoCount > 0);
+    out.insert("canRedo", redoCount > 0);
+    out.insert("undoCount", undoCount);
+    out.insert("redoCount", redoCount);
+    return out;
 }
 
 bool GraphApi::save()

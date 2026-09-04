@@ -60,3 +60,37 @@ set_tests_properties(app.startup_quiet PROPERTIES
     ENVIRONMENT "HOME=${_sq_home}"
     TIMEOUT 300
     LABELS "app")
+
+# app.pacing_undo — the frame-pacing loop (deep audit area 7 F8) and the Ctrl+Z
+# routing on the Materials page (area 1), both against the real binary with real
+# mouse and key events. The script's header says why nothing smaller can gate
+# either half: the render loop is a QTimer no script can step, and shortcut
+# ambiguity only exists in a live window with real widget visibility.
+#
+# NOTE THE MISSING DISPLAY= : this is the one suite that does NOT take
+# JAH_TEST_DISPLAY. It synthesises input, and JAH_TEST_DISPLAY defaults to :0 —
+# so it starts and owns a private Xvfb instead (the script explains it fully).
+# Linux only, and registered only when the four tools it drives exist, so a box
+# without them says so at configure time instead of failing mysteriously.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(JAH_XDOTOOL xdotool)
+    find_program(JAH_CURL curl)
+    find_program(JAH_JQ jq)
+    find_program(JAH_XVFB Xvfb)
+    if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
+        set(_pu_home ${CMAKE_CURRENT_BINARY_DIR}/pacing-undo-home)
+        file(MAKE_DIRECTORY ${_pu_home}/run)
+        # A port of its own: mcp.e2e picks its own and both may run in one gate.
+        add_test(NAME app.pacing_undo
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pacing_undo.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8747
+                 WORKING_DIRECTORY ${_pu_home}/run)
+        set_tests_properties(app.pacing_undo PROPERTIES
+            ENVIRONMENT "HOME=${_pu_home}"
+            RUN_SERIAL TRUE
+            TIMEOUT 400
+            LABELS "app")
+    else()
+        message(STATUS "app.pacing_undo skipped: needs xdotool, curl, jq and Xvfb")
+    endif()
+endif()

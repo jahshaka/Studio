@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "services/mainthreadheartbeat.h"
 #include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
+#include "viewport/enginerenderdriver.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -102,6 +103,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "repeats the 5-second rate limiter swallowed. drains counts the pump calls themselves, so "
           "a zero there means the frame loop is not running, not that the renderer is happy. Pass "
           "true to clear the record after reading it.",
+          Needs::Document },
+        { "frameStats", "app.frameStats() -> {running, intervalMs, ticks, rendered, skipped, enabledViews}",
+          "What the ONE render loop (EngineRenderDriver) has been doing, cumulatively since the engine "
+          "started. `ticks` counts timer fires, `rendered` the ticks that actually called the engine, "
+          "`skipped` the ticks that had no enabled View to draw and therefore submitted nothing — sitting "
+          "on a page with no viewport should advance `skipped` and leave `rendered` still. `enabledViews` "
+          "is the engine's live answer to the same question the loop asks each tick. Note the scripted "
+          "stepping verb editor.frame(n) bypasses the driver entirely, so it moves none of these.",
           Needs::Document },
         { "quit", "app.quit() -> bool",
           "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
@@ -261,5 +270,23 @@ QVariantMap AppApi::engineErrors(bool reset)
     // over. Needs::Document for the same reason.
     const QVariantMap out = EngineErrorPump::instance().report();
     if (reset) EngineErrorPump::instance().reset();
+    return out;
+}
+
+QVariantMap AppApi::frameStats()
+{
+    // No engine guard, same reasoning as engineErrors: "the loop is not running"
+    // is one of the answers this verb exists to give, so it must be readable
+    // when there is no engine at all.
+    QVariantMap out;
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    const EngineRenderDriver::Stats s = driver ? driver->stats() : EngineRenderDriver::Stats{};
+    out.insert("running", driver ? driver->isRunning() : false);
+    out.insert("intervalMs", driver ? driver->intervalMs() : 0);
+    out.insert("ticks", QVariant::fromValue(s.ticks));
+    out.insert("rendered", QVariant::fromValue(s.rendered));
+    out.insert("skipped", QVariant::fromValue(s.skipped));
+    auto engine = EngineHost::instance().engine();
+    out.insert("enabledViews", engine ? engine->hasEnabledViews() : false);
     return out;
 }

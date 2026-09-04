@@ -777,28 +777,16 @@ void MainWindow::setupUndoRedo()
     undoStack = new QUndoStack(this);
 
 
-    connect(ui->actionUndo, &QAction::triggered, [this]() {
-        undo();
-        updateWindowTitle();
-    });
-
-    connect(ui->actionEditUndo, &QAction::triggered, [this]() {
-        undo();
-        updateWindowTitle();
-    });
+    // All four go through the space-routing entry points, like the registry
+    // shortcut — one rule, one place (undoActiveSpace).
+    connect(ui->actionUndo, &QAction::triggered, [this]() { undoActiveSpace(); });
+    connect(ui->actionEditUndo, &QAction::triggered, [this]() { undoActiveSpace(); });
 
     // (shortcut moved to ShortcutRegistry "edit.undo" — this action is not
     // attached to any widget, so a QKeySequence here never fired anyway)
 
-    connect(ui->actionRedo, &QAction::triggered, [this]() {
-        redo();
-        updateWindowTitle();
-    });
-
-    connect(ui->actionEditRedo, &QAction::triggered, [this]() {
-        redo();
-        updateWindowTitle();
-    });
+    connect(ui->actionRedo, &QAction::triggered, [this]() { redoActiveSpace(); });
+    connect(ui->actionEditRedo, &QAction::triggered, [this]() { redoActiveSpace(); });
 
     // (shortcut moved to ShortcutRegistry "edit.redo")
 }
@@ -2731,10 +2719,12 @@ void MainWindow::setupShortcuts()
     // only working trigger). Registered here like every other binding.
     // Redo is explicit Ctrl+Shift+Z — QKeySequence::Redo's Ctrl+Y alternate
     // would collide with view.bottom.
+    // The ONE claimant for each chord — see undoActiveSpace() for why that
+    // matters and which stack each space owns.
     reg.add("edit.undo", "Undo", "Editing", QKeySequence(Qt::CTRL | Qt::Key_Z), this,
-            [this]() { undo(); updateWindowTitle(); });
+            [this]() { undoActiveSpace(); });
     reg.add("edit.redo", "Redo", "Editing", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z), this,
-            [this]() { redo(); updateWindowTitle(); });
+            [this]() { redoActiveSpace(); });
 
     // ---- file / windows ----
     reg.add("file.save", "Save Scene", "File", QKeySequence(Qt::CTRL | Qt::Key_S), this,
@@ -2971,6 +2961,33 @@ void MainWindow::updateWindowTitle()
 void MainWindow::redo()
 {
     undoService->redo();
+}
+
+// ---- Ctrl+Z / Ctrl+Shift+Z routing (deep audit 2026-09, area 1) ------------
+//
+// Ctrl+Z had TWO claimants whenever the Materials page was visible —
+// "edit.undo" here and GraphicsView's own QShortcut, both Qt::WindowShortcut —
+// so Qt dispatched the chord ambiguously and NEITHER ran: on that page undo did
+// nothing at all. The graph view's pair is deleted (materials/widgets/
+// graphicsview.cpp says why), leaving this the single claimant, and the owner's
+// decision is that on the Materials page the GRAPH stack is the one it drives.
+//
+// Deliberately not a fallback: with the Materials space active, Ctrl+Z with an
+// empty graph stack does NOTHING rather than quietly undoing a scene edit the
+// user cannot see. Everywhere else it is exactly the editor undo it always was.
+
+void MainWindow::undoActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT && shaderGraph) { shaderGraph->graphUndo(); return; }
+    undo();
+    updateWindowTitle();
+}
+
+void MainWindow::redoActiveSpace()
+{
+    if (currentSpace == WindowSpaces::EFFECT && shaderGraph) { shaderGraph->graphRedo(); return; }
+    redo();
+    updateWindowTitle();
 }
 
 void MainWindow::takeScreenshot()
