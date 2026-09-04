@@ -12,11 +12,14 @@
 //                 app.saveShaderCache() writes files, app.clearShaderCache()
 //                 removes them, and the session survives its own cache being
 //                 deleted underneath it.
-//   run 2, warm : after run 1 has quit and saved, a second launch compiles
-//                 NOTHING and serves everything from the cache. This is the
-//                 whole feature, asserted.
-//   run 3       : --clear-shader-cache makes run 2's warm launch cold again,
-//                 and the run still succeeds. Our r.InvalidateCachedShaders.
+//   run 2, warm : after run 1 has quit and saved, a second launch compiles a
+//                 small fraction of what the cold one did and serves the rest
+//                 from the cache. This is the whole feature, asserted.
+//   run 3       : steady state — NOTHING compiles. (Run 2 is not zero because
+//                 it also replays the warm-up set run 1 recorded, whose
+//                 degenerate vertex formats are permutations of their own.)
+//   run 4       : --clear-shader-cache makes a warm launch cold again, and the
+//                 run still succeeds. Our r.InvalidateCachedShaders.
 #include <QCoreApplication>
 #include <QDir>
 #include <QJsonDocument>
@@ -110,7 +113,15 @@ int main(int argc, char **argv)
     // launch, and it is also a test of that rewrite path.
     const QJsonObject warm = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
     CHECK(rc == 0, "run 2 exited cleanly");
-    CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING");
+    // NOT "compiled nothing", and the reason is a real (small, one-off) cost
+    // worth pinning: run 1 also RECORDED a warm-up set, and run 2 replays it.
+    // The replay applies the recorded materials to DEGENERATE 4-vertex buffers,
+    // whose vertex format is not byte-identical to the originals — so the first
+    // launch that replays a set compiles a handful of permutations of its own,
+    // once, and caches them. Measured: 64 cold, 2 on the first replay, 0 from
+    // then on. What must hold is that the cache did nearly all the work.
+    CHECK(warm.value("compiledThisRun").toInt() * 4 < cold.value("compiledThisRun").toInt(),
+          "run 2 compiled a small fraction of what the cold run did");
     CHECK(warm.value("loadedThisRun").toInt() > 0, "run 2 served its shaders from the cache");
     CHECK(warm.value("microcodeLoaded").toBool(), "the microcode layer loaded");
     CHECK(warm.value("pipelineCacheLoaded").toBool(), "the pipeline layer loaded");
@@ -120,10 +131,18 @@ int main(int argc, char **argv)
     CHECK(warm.value("fingerprint").toString() == cold.value("fingerprint").toString(),
           "the fingerprint is stable between launches");
 
-    // ---- run 3: --clear-shader-cache --------------------------------------
+    // ---- run 3: steady state ----------------------------------------------
+    // The launch after the warm-up set's own permutations have been cached: the
+    // number that describes every launch a user ever sees after the first two.
+    const QJsonObject steady = runApp(home, scripts + "e2e_shader_cache_warm.js", {}, &rc);
+    CHECK(rc == 0, "run 3 exited cleanly");
+    CHECK(steady.value("compiledThisRun").toInt() == 0, "run 3 compiled NOTHING AT ALL");
+    CHECK(steady.value("loadedThisRun").toInt() > 0, "and served everything from the cache");
+
+    // ---- run 4: --clear-shader-cache --------------------------------------
     const QJsonObject cleared = runApp(home, scripts + "e2e_shader_cache_warm.js",
                                        {QStringLiteral("--clear-shader-cache")}, &rc);
-    CHECK(rc == 0, "run 3 exited cleanly with --clear-shader-cache");
+    CHECK(rc == 0, "run 4 exited cleanly with --clear-shader-cache");
     CHECK(cleared.value("compiledThisRun").toInt() > 0,
           "--clear-shader-cache made the next launch cold again");
     // NOT "loadedThisRun == 0": that counter also ticks for an IN-PROCESS
