@@ -3,5 +3,8 @@
         <file alias="skills/jahshaka-scene-building.md">skills/jahshaka-scene-building.md</file>
         <file alias="skills/jahshaka-materials.md">skills/jahshaka-materials.md</file>
         <file alias="skills/jahshaka-assets.md">skills/jahshaka-assets.md</file>
+        <file alias="skills/jahshaka-particles.md">skills/jahshaka-particles.md</file>
+        <file alias="skills/jahshaka-decals.md">skills/jahshaka-decals.md</file>
+        <file alias="skills/jahshaka-world.md">skills/jahshaka-world.md</file>
     </qresource>
 </RCC>

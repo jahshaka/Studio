@@ -21,6 +21,7 @@ namespace {
 
 const char *kMcpFile = "jahshaka-mcp.json";
 const char *kChatFile = "jahshaka-chat.json";
+const char *kPidFile = "jahshaka-chat.pid";
 
 // Everything Claude Code could otherwise do — denied at launch, never asked
 // about (owner decision 2). --tools "Skill" already removes these outright;
@@ -72,11 +73,62 @@ QString ClaudeLaunchConfig::defaultModel()
     return QStringLiteral("fable");
 }
 
+QList<ClaudeLaunchConfig::ModelChoice> ClaudeLaunchConfig::modelChoices()
+{
+    // The owner's pick leads (capability over cost); the cheaper aliases are
+    // there because a long scripting session on the big model is real money.
+    return {{QStringLiteral("fable"), QStringLiteral("Fable (default)")},
+            {QStringLiteral("opus"), QStringLiteral("Opus")},
+            {QStringLiteral("sonnet"), QStringLiteral("Sonnet (cheapest)")}};
+}
+
+QString ClaudeLaunchConfig::launchSignature()
+{
+    // The first sentence of the appended system prompt: present in the argv of
+    // every session this app spawns, and of nothing else on the machine.
+    return QStringLiteral("You are the assistant inside the Jahshaka 3D editor.");
+}
+
+QString ClaudeLaunchConfig::pidFilePath(const QString &projectFolder)
+{
+    if (projectFolder.isEmpty()) return QString();
+    return QDir(projectFolder).filePath(QStringLiteral(".claude/") + kPidFile);
+}
+
+bool ClaudeLaunchConfig::writePid(const QString &projectFolder, qint64 pid)
+{
+    if (projectFolder.isEmpty()) return false;
+    QDir project(projectFolder);
+    if (!project.mkpath(QStringLiteral(".claude"))) return false;
+    return writeFileAtomic(pidFilePath(projectFolder),
+                           QByteArray::number(pid) + "\n", nullptr);
+}
+
+qint64 ClaudeLaunchConfig::readPid(const QString &projectFolder)
+{
+    const QString path = pidFilePath(projectFolder);
+    if (path.isEmpty()) return 0;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return 0;
+    bool ok = false;
+    const qint64 pid = file.readAll().trimmed().toLongLong(&ok);
+    return (ok && pid > 0) ? pid : 0;
+}
+
+void ClaudeLaunchConfig::clearPid(const QString &projectFolder)
+{
+    const QString path = pidFilePath(projectFolder);
+    if (!path.isEmpty()) QFile::remove(path);
+}
+
 QStringList ClaudeLaunchConfig::skillNames()
 {
     return {QStringLiteral("jahshaka-scene-building"),
             QStringLiteral("jahshaka-materials"),
-            QStringLiteral("jahshaka-assets")};
+            QStringLiteral("jahshaka-assets"),
+            QStringLiteral("jahshaka-particles"),
+            QStringLiteral("jahshaka-decals"),
+            QStringLiteral("jahshaka-world")};
 }
 
 QString ClaudeLaunchConfig::mcpConfigPath(const QString &projectFolder)

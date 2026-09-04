@@ -11,12 +11,52 @@ For more information see the LICENSE file
 
 #include "claudechathost.h"
 
+#include <QCoreApplication>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
 #include "claudecliprobe.h"
 #include "claudelaunchconfig.h"
+
+#ifdef __linux__
+#include <signal.h>
+#include <sys/prctl.h>
+#endif
+#ifdef Q_OS_UNIX
+#include <signal.h>
+#endif
+
+namespace {
+
+#ifdef Q_OS_UNIX
+/// The command line of a live pid, or an empty string when it is gone (or is
+/// not ours to look at). Linux reads /proc directly; other Unixes shell out to
+/// ps once, and only when a pid file actually exists.
+QByteArray processCommandLine(qint64 pid)
+{
+#ifdef __linux__
+    QFile cmdline(QStringLiteral("/proc/%1/cmdline").arg(pid));
+    if (!cmdline.open(QIODevice::ReadOnly)) return QByteArray();
+    QByteArray raw = cmdline.readAll();
+    raw.replace('\0', ' ');
+    return raw;
+#else
+    QProcess ps;
+    ps.start(QStringLiteral("ps"),
+             {QStringLiteral("-o"), QStringLiteral("command="),
+              QStringLiteral("-p"), QString::number(pid)});
+    if (!ps.waitForFinished(2000)) {
+        ps.kill();
+        return QByteArray();
+    }
+    return ps.readAllStandardOutput();
+#endif
+}
+#endif // Q_OS_UNIX
+
+} // namespace
 
 ClaudeChatHost::ClaudeChatHost(QObject *parent)
     : QObject(parent), mModel(ClaudeLaunchConfig::defaultModel())
@@ -76,6 +116,9 @@ bool ClaudeChatHost::configure(const QString &projectFolder, bool mcpEnabled,
         mSessionId = projectFolder.isEmpty()
                          ? QString()
                          : ClaudeLaunchConfig::readSessionId(projectFolder);
+        // D2: a child this project recorded and nobody reaped (the app died
+        // before shutdownBackgroundWork ran) dies here, before we spawn ours.
+        if (!mProjectFolder.isEmpty()) reapStaleChild(mProjectFolder);
         if (hadConversation) emit projectChanged(projectFolder);
     } else if (mcpEnabled != mMcpEnabled || mcpPort != mMcpPort || mcpToken != mMcpToken) {
         // MCP wiring changed mid-chat: the running process keeps its old
@@ -94,6 +137,39 @@ bool ClaudeChatHost::configure(const QString &projectFolder, bool mcpEnabled,
 bool ClaudeChatHost::isProcessRunning() const
 {
     return mProcess && mProcess->state() != QProcess::NotRunning;
+}
+
+qint64 ClaudeChatHost::childProcessId() const
+{
+    return isProcessRunning() ? mProcess->processId() : 0;
+}
+
+// D2, the portable half. A pid alone proves nothing (pids are recycled), so a
+// recorded pid is killed only when its command line still carries the system
+// prompt this app appends to every session it spawns.
+qint64 ClaudeChatHost::reapStaleChild(const QString &projectFolder)
+{
+    const qint64 pid = ClaudeLaunchConfig::readPid(projectFolder);
+    if (pid <= 0) return 0;
+#ifdef Q_OS_UNIX
+    if (pid == qint64(QCoreApplication::applicationPid())) {
+        ClaudeLaunchConfig::clearPid(projectFolder);
+        return 0;
+    }
+    const QByteArray cmdline = processCommandLine(pid);
+    const bool ours = !cmdline.isEmpty()
+                      && cmdline.contains(ClaudeLaunchConfig::launchSignature().toUtf8());
+    ClaudeLaunchConfig::clearPid(projectFolder);
+    if (!ours) return 0;   // dead, recycled, or somebody else's claude
+    ::kill(pid_t(pid), SIGKILL);
+    return pid;
+#else
+    // Windows: no PDEATHSIG and no cheap command-line read — the record is
+    // dropped rather than acted on. (The Windows package does not exist yet;
+    // SPECS/WINDOWS_BUILD_SPEC.md.)
+    ClaudeLaunchConfig::clearPid(projectFolder);
+    return 0;
+#endif
 }
 
 void ClaudeChatHost::sendMessage(const QString &text)
@@ -124,6 +200,13 @@ void ClaudeChatHost::startProcess()
     mProcess->setArguments(
         ClaudeLaunchConfig::arguments(mProjectFolder, mMcpEnabled, mSessionId, mModel));
 
+#ifdef __linux__
+    // D2: runs in the CHILD between fork and exec — async-signal-safe only.
+    // The kernel now kills the CLI the moment this process dies, crash
+    // included; the graceful path (stdin EOF from shutdown()) is unchanged.
+    mProcess->setChildProcessModifier([]() { ::prctl(PR_SET_PDEATHSIG, SIGKILL); });
+#endif
+
     connect(mProcess, &QProcess::readyReadStandardOutput, this,
             [this]() { mParser.feed(mProcess->readAllStandardOutput()); });
     connect(mProcess, &QProcess::readyReadStandardError, this, [this]() {
@@ -131,6 +214,11 @@ void ClaudeChatHost::startProcess()
         if (mStderr.size() > 16384) mStderr = mStderr.right(16384);
     });
     connect(mProcess, &QProcess::started, this, [this]() {
+        // The pid file is the off-Linux half of D2 and the belt-and-braces
+        // half on Linux: written the moment the child exists, removed on every
+        // exit path below.
+        mPidProject = mProjectFolder;
+        ClaudeLaunchConfig::writePid(mPidProject, mProcess->processId());
         if (!mPendingMessage.isEmpty()) {
             writeUserMessage(mPendingMessage);
             mPendingMessage.clear();
@@ -185,6 +273,7 @@ void ClaudeChatHost::shutdown()
 {
     mKillTimer.stop();
     mPendingMessage.clear();
+    clearPidRecord();
     if (mProcess) {
         mStopping = true;
         disconnect(mProcess, nullptr, this, nullptr);
@@ -213,9 +302,17 @@ bool ClaudeChatHost::isStaleResumeFailure(const QString &stderrText) const
            || text.contains(QLatin1String("resume failed"));
 }
 
+void ClaudeChatHost::clearPidRecord()
+{
+    if (mPidProject.isEmpty()) return;
+    ClaudeLaunchConfig::clearPid(mPidProject);
+    mPidProject.clear();
+}
+
 void ClaudeChatHost::handleFinished(int exitCode, QProcess::ExitStatus status)
 {
     mKillTimer.stop();
+    clearPidRecord();   // this child is gone; nothing to reap next launch
     const bool failed = !mStopping && (status != QProcess::NormalExit || exitCode != 0);
     const QString detail = QString::fromUtf8(mStderr).trimmed();
 

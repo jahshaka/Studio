@@ -11,8 +11,36 @@ For more information see the LICENSE file
 
 #include "claudestreamparser.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QList>
+#include <QPair>
+
+namespace {
+
+// A tool_result may carry several images (browse_assets returns one per
+// asset). The cap is a rendering budget, not a protocol limit: the dock is a
+// small popup and the tool itself already bounds its response.
+const int kMaxImagesPerToolResult = 24;
+
+/// "resetsAt" has been seen as epoch seconds and as an ISO string; render
+/// whichever arrives as a local time, and nothing at all when neither does.
+QString formatResetTime(const QJsonValue &value)
+{
+    if (value.isDouble()) {
+        const qint64 epoch = qint64(value.toDouble());
+        if (epoch <= 0) return QString();
+        // Seconds or milliseconds — both have appeared in agent tooling.
+        const QDateTime when = epoch > 100000000000LL
+                                   ? QDateTime::fromMSecsSinceEpoch(epoch)
+                                   : QDateTime::fromSecsSinceEpoch(epoch);
+        return when.toLocalTime().toString(QStringLiteral("HH:mm"));
+    }
+    return value.toString();
+}
+
+} // namespace
 
 ClaudeStreamParser::ClaudeStreamParser(QObject *parent) : QObject(parent) {}
 
@@ -68,13 +96,40 @@ void ClaudeStreamParser::parseLine(const QByteArray &line)
     } else if (type == "user") {
         handleUser(obj.value("message").toObject());
     } else if (type == "result") {
-        emit turnCompleted(!obj.value("is_error").toBool(),
-                           obj.value("result").toString(),
-                           obj.value("session_id").toString(),
-                           obj.value("total_cost_usd").toDouble());
-        mTextBlockOpen = false;
+        handleResult(obj);
+    } else if (type == "rate_limit_event") {
+        handleRateLimit(obj);
     }
-    // system/status, rate_limit_event, control_* — deliberately ignored.
+    // system/status, control_* — deliberately ignored.
+}
+
+// The denials come FIRST so the dock explains the refusal above the turn's
+// closing line rather than after it.
+void ClaudeStreamParser::handleResult(const QJsonObject &obj)
+{
+    QStringList denied;
+    for (const auto &d : obj.value("permission_denials").toArray()) {
+        const QString tool = d.toObject().value("tool_name").toString();
+        if (!tool.isEmpty() && !denied.contains(tool)) denied << tool;
+    }
+    if (!denied.isEmpty()) emit permissionsDenied(denied);
+
+    emit turnCompleted(!obj.value("is_error").toBool(),
+                       obj.value("result").toString(),
+                       obj.value("session_id").toString(),
+                       obj.value("total_cost_usd").toDouble());
+    mTextBlockOpen = false;
+}
+
+void ClaudeStreamParser::handleRateLimit(const QJsonObject &obj)
+{
+    // Defensive: the payload has been documented both at the top level and
+    // nested under "rate_limit" (see the header's shape-provenance note).
+    const QJsonObject nested = obj.value("rate_limit").toObject();
+    const QJsonObject src = nested.isEmpty() ? obj : nested;
+    const QString status = src.value("status").toString();
+    if (status.isEmpty()) return;   // not a shape we understand — stay silent
+    emit rateLimitEvent(status, formatResetTime(src.value("resetsAt")));
 }
 
 void ClaudeStreamParser::handleStreamEvent(const QJsonObject &event)
@@ -111,6 +166,10 @@ void ClaudeStreamParser::handleAssistant(const QJsonObject &message)
             const QJsonDocument input(block.value("input").toObject());
             emit toolUseStarted(block.value("name").toString(),
                                 QString::fromUtf8(input.toJson(QJsonDocument::Indented)));
+        } else if (btype == "thinking" || btype == "redacted_thinking") {
+            // The content stays elided (that was the ask); only the fact that
+            // there WAS a pause is surfaced.
+            emit thinkingBlock();
         }
     }
     if (!text.isEmpty()) emit assistantText(text);
@@ -124,20 +183,34 @@ void ClaudeStreamParser::handleUser(const QJsonObject &message)
         if (block.value("type").toString() != "tool_result") continue;
         const bool isError = block.value("is_error").toBool();
         QString snippet;
+        QList<QPair<QByteArray, QString>> images;   // decoded bytes + mime
         const QJsonValue content = block.value("content");
         if (content.isString()) {
             snippet = content.toString();
         } else if (content.isArray()) {
             for (const auto &part : content.toArray()) {
                 const QJsonObject po = part.toObject();
-                if (po.value("type").toString() == "text") {
-                    snippet = po.value("text").toString();
-                    break;
+                const QString ptype = po.value("type").toString();
+                if (ptype == "text") {
+                    // The FIRST text part is the preview; later ones (the
+                    // per-image captions browse_assets sends) are not.
+                    if (snippet.isEmpty()) snippet = po.value("text").toString();
+                } else if (ptype == "image" && images.size() < kMaxImagesPerToolResult) {
+                    const QJsonObject source = po.value("source").toObject();
+                    if (source.value("type").toString() != QLatin1String("base64"))
+                        continue;   // url sources are not something we fetch
+                    const QByteArray decoded = QByteArray::fromBase64(
+                        source.value("data").toString().toLatin1());
+                    if (decoded.isEmpty()) continue;
+                    QString mime = source.value("media_type").toString();
+                    if (mime.isEmpty()) mime = QStringLiteral("image/png");
+                    images.append({decoded, mime});
                 }
-                if (po.value("type").toString() == "image") snippet = "(image)";
             }
         }
         snippet.truncate(400);
         emit toolResult(snippet, isError);
+        // After the text preview, so the picture lands under its caption.
+        for (const auto &image : images) emit toolResultImage(image.first, image.second);
     }
 }

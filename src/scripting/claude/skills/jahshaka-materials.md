@@ -1,18 +1,37 @@
 ---
 name: jahshaka-materials
 description: Author PBR materials in Jahshaka — presets, per-property edits, texture maps, and node-based shadergraph authoring via the materials/material/graph verbs. Use when the user asks about materials, textures, colors, metal/roughness, or effect graphs.
-version: 1
+version: 2
 ---
 
 # Materials in Jahshaka
 
 All material work goes through `run_script` (JavaScript on the live editor).
 `api_docs({module:"material"})`, `{module:"materials"}` and `{module:"graph"}`
-give the current signatures.
+give the current signatures; `api_docs({verb:"material.set"})` gives one.
 
 Jahshaka's engine materials are PBR metallic-roughness. Material edits via
 `material.set` are undoable per property; graph edits save into the project's
 shader asset.
+
+## Ask the material what it accepts
+
+Do not guess key spellings — the legacy shader names (`diffuseTexture`,
+`normalTexture`, …) are refused by name on a PBR material:
+
+```js
+material.properties(nodeId);
+// {class: "PbrMaterial",
+//  rows: [{name:"roughness", displayName:"Roughness", type:"float",
+//          value:0.5, min:0, max:1}, ...],
+//  writableKeys: ["baseColor","roughness","metallic", ...,
+//                 "baseColorMap","normalMap", ...]}
+```
+
+`writableKeys` is the exact set `material.set` accepts — read it rather than
+deriving keys from `rows`. `min`/`max` are present only where a range is
+really declared (metallic and roughness 0..1, emissiveIntensity 0..10), which
+is where a slider value actually means something.
 
 ## Presets and direct properties
 
@@ -40,13 +59,22 @@ material.set(nodeId, {
 });
 ```
 
+`materials.createFromImage(textureGuid)` mints the standard image material for
+a Texture asset (the image as baseColorMap, roughness 1, metallic 0) when you
+want a material rather than a whole graph.
+
 Tips that match the engine's behavior:
 - Glass: apply the `Glass` preset — it maps to true transparency that keeps
   specular highlights.
 - Metals want a non-white `baseColor` (that IS the metal tint) and
   `metallic: 1`.
-- Verify with the `screenshot` tool after applying — lighting and IBL affect
+- Verify with the `screenshot` tool after applying, aimed at the object:
+  `screenshot({frameNode: {id: nodeId, pitch: 15}})`. Lighting and IBL affect
   how a material reads far more than its raw numbers.
+- A map that silently does nothing is usually a RENDERER refusal (an image
+  that would not decode, a mesh with no tangents for a normal map). Those never
+  reach the script's error — check the `engineErrors` block on the
+  `run_script` response, or `app.engineErrors()` after `editor.frame(1)`.
 
 ## Shadergraph (node-based) authoring
 

@@ -46,12 +46,20 @@ For more information see the LICENSE file
 // the dock only, since external Claude Code users control their own allow list.
 // The glob must stay server-anchored: bare `mcp__*` is ignored with a warning.
 
+#include <QList>
 #include <QString>
 #include <QStringList>
 
 class ClaudeLaunchConfig
 {
 public:
+    /// One entry of the chat header's model picker.
+    struct ModelChoice
+    {
+        QString id;      ///< what goes after --model
+        QString label;   ///< what the combo shows
+    };
+
     /// The permission pattern that covers EVERY tool on the jahshaka MCP
     /// server, present and future (`mcp__jahshaka__*`).
     static QString jahshakaMcpToolPattern();
@@ -65,8 +73,28 @@ public:
     /// alias that reproduces exactly the model the owner priced and approved.
     static QString defaultModel();
 
+    /// The models the chat header offers, defaultModel() first. Deliberately
+    /// short: these are aliases the CLI resolves itself, so they keep working
+    /// as the underlying model ids move.
+    static QList<ModelChoice> modelChoices();
+
     /// <project>/.claude/jahshaka-mcp.json (the path, whether or not written).
     static QString mcpConfigPath(const QString &projectFolder);
+
+    /// <project>/.claude/jahshaka-chat.pid — the child pid this app spawned,
+    /// so a LATER launch can reap one that outlived a crashing app
+    /// (CLAUDE_EDITOR_SPEC D2; the portable half of the PDEATHSIG hardening).
+    static QString pidFilePath(const QString &projectFolder);
+    static bool writePid(const QString &projectFolder, qint64 pid);
+    /// The recorded pid, or 0 when there is none.
+    static qint64 readPid(const QString &projectFolder);
+    static void clearPid(const QString &projectFolder);
+
+    /// A stable sentence out of the appended system prompt. It is in the argv
+    /// of every session THIS APP spawns and of no other claude session, so a
+    /// reaper can prove a recorded pid is really our orphan before killing it
+    /// (pids are recycled; killing on a number alone is not acceptable).
+    static QString launchSignature();
 
     /// Writes jahshaka-mcp.json for the live server and installs/updates the
     /// skills. Pass mcpPort 0 for "MCP off" — the MCP file is then removed so
