@@ -165,7 +165,11 @@ PreparedImport AssetImportService::prepare(const ImportRequest &request,
     // version + assimp version. Recorded on the row; assets.importSettings
     // reads it back and assets.checkConsistency re-derives the object set.
     staged.importRecord = QJsonObject{
-        { "sourceOid", AssetCas::hashFile(request.sourcePath) },
+        // An importer that already hashed the source (MeshImporter, which keys
+        // its bake on it) hands the oid over instead of making us read the
+        // whole file again.
+        { "sourceOid", staged.sourceOid.isEmpty() ? AssetCas::hashFile(request.sourcePath)
+                                                  : staged.sourceOid },
         { "importer", importer->name() },
         { "importerVersion", importer->version() },
         { "assimp", QStringLiteral("%1.%2.%3").arg(aiGetVersionMajor())

@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "services/assetmigration.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
+#include "services/meshbakestore.h"
 #include "data/constants.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"
@@ -180,6 +181,16 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "DRY RUN BY DEFAULT: the report lists exactly what a real run would delete, per class, with paths and byte totals. "
           "Live content is never collected — reachability is read from the asset_files rows and the project_assets pins, not from the refcount cache (a copy-on-write edit's object is referenced ONLY by its project's pin), and the sweep refuses a store this catalog does not recognize unless {force: true}. "
           "{root} sweeps an explicit store root instead of the active one.",
+          Needs::Document },
+        { "bakeAll", "assets.bakeAll({dryRun: true}) -> {needed, baked, failed, errors}",
+          "Builds the MESH BAKE (the parsed, ready-to-load form of a model — MESH_BAKE_SPEC phase 1) for every "
+          "stored MODEL FILE that has none or whose bake this build cannot read (counted by content, not by "
+          "asset row: one object backs however many rows name it and needs exactly one bake). A bake is DERIVED data: the source "
+          "file stays the truth and is never touched, and a bake is rebuilt whenever the code that produces it "
+          "changes. Opening a world then LOADS its geometry instead of re-parsing every model with assimp. "
+          "DRY RUN BY DEFAULT: reports how many assets would be baked without writing anything. "
+          "Assets are baked lazily on first open too, so this is the bulk/explicit form — the button beside "
+          "Preferences \u2192 Assets\u2019 storage cleanup.",
           Needs::Document },
     };
 }
@@ -714,6 +725,39 @@ QVariantMap AssetsApi::importSettings(const QString &guid)
     const QJsonObject record = service.importSettings(guid);
     if (record.isEmpty()) { fail(QStringLiteral("assets.importSettings: no import record for '%1'").arg(guid)); return out; }
     return record.toVariantMap();
+}
+
+QVariantMap AssetsApi::bakeAll(const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const bool dryRun = options.value(QStringLiteral("dryRun"), true).toBool();
+
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+    const QStringList needing = MeshBakeStore::modelSourcesNeedingBake(conn, root);
+
+    QVariantList errors;
+    int baked = 0, failed = 0;
+    if (!dryRun) {
+        for (const QString &path : needing) {
+            QString error;
+            if (MeshBakeStore::bakeSource(conn, root, path, &error)) {
+                ++baked;
+            } else {
+                ++failed;
+                errors.append(QStringLiteral("%1: %2").arg(QFileInfo(path).fileName(), error));
+            }
+        }
+        MeshBakeStore::clear();
+    }
+
+    out.insert(QStringLiteral("dryRun"), dryRun);
+    out.insert(QStringLiteral("needed"), needing.size());
+    out.insert(QStringLiteral("baked"), baked);
+    out.insert(QStringLiteral("failed"), failed);
+    out.insert(QStringLiteral("errors"), errors);
+    return out;
 }
 
 QVariantMap AssetsApi::checkConsistency(const QString &guid)

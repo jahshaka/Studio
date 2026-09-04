@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "services/assetcas.h"
+#include "services/meshbakestore.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
@@ -30,6 +31,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/meshbake.h"
 
 namespace {
 
@@ -152,6 +154,30 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
                 mat->setValue("shininess", data.shininess);
                 return iris::MaterialPtr(mat);
             };
+            // THE BAKE first (MESH_BAKE_SPEC phase 1): the SAME deserialized
+            // model the scene reader used this open — one file read served
+            // both consumers, where the old path parsed the file twice.
+            // The counter spans the resolve, the read AND the fragment build —
+            // the whole of what the assimp branch below costs, so the two are
+            // directly comparable in the ledger.
+            LoadTimeline::Accumulate bakeAttempt(QStringLiteral("bake:sessionAsset"));
+            iris::BakedModelPtr baked = prewarm ? prewarm->baked(path) : iris::BakedModelPtr();
+            if (!baked) baked = MeshBakeStore::load(path);
+            if (!baked) bakeAttempt.stop();   // a miss must not bank the parse below
+            if (baked) {
+                auto node = iris::MeshBake::buildFragment(*baked, path, makeMaterial);
+                if (!node) break;
+                const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();
+                AssetHelper::updateNodeMaterial(node, definition, db);
+                auto *asset = new AssetNodeObject;
+                asset->assetGuid = member;
+                asset->fileName = memberRecord.name;
+                asset->path = path;
+                asset->setValue(QVariant::fromValue(node));
+                AssetManager::addAsset(asset);
+                break;
+            }
+
             const aiScene *ready = prewarm ? prewarm->scene(path) : nullptr;
             if (ready) {
                 LoadTimeline::Accumulate hit(QStringLiteral("prewarm:sessionAssetHit"));

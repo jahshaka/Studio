@@ -43,6 +43,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/materialhelper.h"
+#include "irisgl/import/meshbake.h"
+#include "irisgl/core/logger.h"
 
 namespace {
 
@@ -123,8 +125,13 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // Drop anything a previous parse on this thread left behind, so the
     // warnings taken below belong to THIS model.
     iris::MaterialHelper::takeContainmentWarnings();
+    // OUR SceneSource, so the aiScene survives the call and the mesh BAKE
+    // (MESH_BAKE_SPEC phase 1) is written from the SAME parse — the import
+    // still pays exactly one assimp parse, which import.async asserts.
+    iris::SceneSource modelScene;
     auto node = AssetHelper::extractTexturesAndMaterialFromMesh(
-        request.sourcePath, textureNames, texturePaths, hasEmbedded, &modelStats, stagingDir);
+        request.sourcePath, textureNames, texturePaths, hasEmbedded, &modelStats, stagingDir,
+        &modelScene);
     // Texture references that named a file outside the model's own folder:
     // contained by MaterialHelper (the path never resolves outside), reported
     // here so the user learns their model lost a map (deep audit 2026-09 F2).
@@ -149,6 +156,33 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
                        QStringLiteral("source"), sourceInfo.fileName() });
     out.files.append({ sourceInfo.absoluteFilePath(), out.meshGuid,
                        QStringLiteral("source"), sourceInfo.fileName() });
+
+    // ---- THE BAKE (MESH_BAKE_SPEC phase 1) --------------------------------
+    //
+    // The parse we just paid, frozen: opening a world that uses this model is
+    // then a file read instead of ~0.9 s of assimp per open, forever. Derived
+    // data — the source above stays the truth and is never deleted; a bake
+    // whose fingerprint no longer matches this build is ignored and rebuilt.
+    //
+    // Recorded under BOTH guids exactly as the source is, so `assets.gc`
+    // reaches it through the same asset_files rows and reaps it with the
+    // asset. A failure here is NEVER an import failure: the open path falls
+    // back to the parse it has always done.
+    out.sourceOid = AssetCas::hashFile(request.sourcePath);
+    if (!out.sourceOid.isEmpty()) {
+        const QString bakeName = iris::MeshBake::fileNameFor(out.sourceOid);
+        const QString bakePath = QDir(stagingDir).filePath(bakeName);
+        iris::MeshBake::Model baked = iris::MeshBake::buildFromScene(
+            modelScene.importer.GetScene(), request.sourcePath,
+            iris::MeshBake::fingerprintFor(out.sourceOid), stagingDir);
+        QString bakeError;
+        if (baked.valid && iris::MeshBake::write(bakePath, baked, &bakeError)) {
+            out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });
+            out.files.append({ bakePath, out.meshGuid, iris::MeshBake::casRole(), bakeName });
+        } else if (!bakeError.isEmpty()) {
+            irisLog("import: " + bakeError + " (the open path will parse instead)");
+        }
+    }
 
     // .obj sidecars: exactly the .mtl files the model names (a precise
     // manifest — the old whole-directory sweeps die here).
