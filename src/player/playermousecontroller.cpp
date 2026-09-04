@@ -118,8 +118,8 @@ void PlayerMouseController::onMouseMove(int dx, int dy)
         // update picking constraint
         if (leftMouseDown && !!pickedNode) {
             if (pickedNode->isPhysicsBody) {
-                scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
-                                                                        iris::PhysicsHelper::btVector3FromQVector3D(this->camera->getGlobalPosition()));
+                scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromVec3(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
+                                                                        iris::PhysicsHelper::btVector3FromVec3(this->camera->getGlobalPosition()));
             }
         }
     } else {
@@ -210,7 +210,7 @@ void PlayerMouseController::doObjectPicking(
     if (pickedNode->isPhysicsBody) {
         scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,
                                                                 pickedNode->getGUID(),
-                                                                iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint),
+                                                                iris::PhysicsHelper::btVector3FromVec3(hitList.last().hitPoint),
                                                                 segStart,
                                                                 segEnd);
         this->pickedNode = pickedNode;
@@ -400,8 +400,8 @@ void PlayerMouseController::update(float dt)
     }
 
     if (!!pickedNode && pickedNode->isPhysicsBody) {
-        scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
-                                                                iris::PhysicsHelper::btVector3FromQVector3D(this->camera->getGlobalPosition()));
+        scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromVec3(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
+                                                                iris::PhysicsHelper::btVector3FromVec3(this->camera->getGlobalPosition()));
     }
 }
 
