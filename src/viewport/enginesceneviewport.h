@@ -71,6 +71,8 @@ public:
     QString cameraMode() const override;
     bool setCameraView(const QString &view) override;
     QString cameraView() const override { return mCameraView; }
+    bool setCameraPose(const EditorCameraPose &pose) override;
+    bool frameNode(iris::SceneNodePtr sceneNode, const EditorFraming &framing) override;
     void setEditorData(EditorData *data) override;
     EditorData *getEditorData() override;
 
@@ -228,6 +230,12 @@ private:
     /// False when the view has never been visited (caller applies the default).
     bool restoreViewState(const QString &view);
     void clearViewStates();
+    /// The three lines every camera mover in here ends with: hand the moved
+    /// camera back to the ACTIVE controller so its yaw/pitch (free) or pivot
+    /// (arcball) are re-derived. Without it the first mouse move snaps the
+    /// camera back to where the controller still thinks it is. `orbitDistance`
+    /// is what the arcball should adopt (<= 0 = keep the current one).
+    void resyncCameraController(float orbitDistance = -1.0f);
     /// V-hold vertex snapping during a translate drag (EDITOR_SHORTCUTS_SPEC §4).
     bool snapDragToVertexUnderCursor();
     void setCameraController(CameraControllerBase *c);

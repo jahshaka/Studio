@@ -193,3 +193,176 @@ assert(editor.setCameraMode("free"), "back to the free camera");
 assert(editor.cameraMode() === "free", "cameraMode reads back free");
 
 console.log("editor_controls: verbs verified");
+
+// ---- editor.setCamera / editor.frameNode -------------------------------
+// AI_SURFACE_PROGRAM_SPEC lane B #3. The verbs that let an agent point the
+// camera at something instead of guessing at a view name.
+//
+// THE assertion in here is the controller RESYNC one: both existing camera
+// movers end by handing the moved camera back to the active controller, and
+// the arcball controller REBUILDS the camera pose from its own pivot/yaw/pitch
+// on EVERY frame (OrbitalCameraController::update -> updateCameraRot). A
+// setCamera that skipped the resync therefore looks like it worked and is
+// silently undone by the next frame — which reads as "the camera verb is
+// broken" and gets blamed on the model.
+
+/// The camera's forward direction from the quaternion editor.camera() reports:
+/// (0,0,-1) rotated by q (v + 2*qv x (qv x v + w*v)).
+function forwardOf(q) {
+    var x = q.x, y = q.y, z = q.z, w = q.scalar;
+    var vx = 0, vy = 0, vz = -1;
+    var cx = y * vz - z * vy, cy = z * vx - x * vz, cz = x * vy - y * vx;
+    cx += w * vx; cy += w * vy; cz += w * vz;
+    var dx = y * cz - z * cy, dy = z * cx - x * cz, dz = x * cy - y * cx;
+    return { x: vx + 2 * dx, y: vy + 2 * dy, z: vz + 2 * dz };
+}
+function normalized(v) {
+    var l = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return { x: v.x / l, y: v.y / l, z: v.z / l };
+}
+function refused(fn, what) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, what);
+}
+
+assert(editor.cameraMode() === "free", "camera verbs: starting on the free camera");
+
+// position alone moves without turning
+var beforePose = editor.camera();
+var moved1 = editor.setCamera({ position: { x: 3, y: 4, z: 5 } });
+assert(vecNear(moved1.position, { x: 3, y: 4, z: 5 }, 1e-3), "setCamera({position}) moved the camera");
+assert(quatNear(moved1.rotation, beforePose.rotation), "setCamera({position}) alone did not turn it");
+assert(vecNear(editor.camera().position, moved1.position, 1e-4),
+    "the returned pose is what editor.camera() reports");
+
+// lookAt aims it
+var aimed = editor.setCamera({ position: { x: 0, y: 3, z: 12 }, lookAt: { x: 0, y: 0, z: 0 } });
+var wantDir = normalized({ x: 0 - 0, y: 0 - 3, z: 0 - 12 });
+var haveDir = forwardOf(aimed.rotation);
+assert(vecNear(haveDir, wantDir, 1e-3),
+    "setCamera({lookAt}) points the camera at the target (" +
+    haveDir.x + "," + haveDir.y + "," + haveDir.z + ")");
+
+// rotation round-trips through the quaternion editor.camera() hands out
+var savedPose = editor.camera();
+editor.setCamera({ position: { x: -20, y: 9, z: -20 }, lookAt: { x: 5, y: 0, z: 5 } });
+assert(!quatNear(editor.camera().rotation, savedPose.rotation), "the camera really turned away");
+var restored = editor.setCamera({ position: savedPose.position, rotation: savedPose.rotation });
+assert(vecNear(restored.position, savedPose.position, 1e-3) &&
+       quatNear(restored.rotation, savedPose.rotation),
+    "setCamera({rotation}) round-trips editor.camera()'s quaternion");
+// …and Euler degrees are accepted too (what node.info() reports)
+var eulered = editor.setCamera({ rotation: { x: -30, y: 45, z: 0 } });
+assert(quatNear(eulered.rotation, editor.camera().rotation), "setCamera({rotation}) accepts Euler degrees");
+editor.setCamera({ position: savedPose.position, rotation: savedPose.rotation });
+
+// fov
+var fovPose = editor.setCamera({ fov: 60 });
+assert(near(fovPose.fov, 60, 1e-3), "setCamera({fov}) writes the field of view");
+assert(vecNear(editor.camera().position, savedPose.position, 1e-3), "…without moving the camera");
+assert(near(editor.setCamera({ fov: 45 }).fov, 45, 1e-3), "fov restored to 45");
+
+// refusals — a pose verb that silently ignores half of what it was asked is
+// the F7/F8 defect class this program exists to stop repeating.
+refused(function () { editor.setCamera({ postion: { x: 1, y: 1, z: 1 } }); },
+    "setCamera refuses a misspelled key instead of ignoring it");
+refused(function () { editor.setCamera({ lookAt: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } }); },
+    "setCamera refuses lookAt AND rotation together");
+refused(function () { editor.setCamera({ position: { x: 1, y: 2, z: 3 }, lookAt: { x: 1, y: 2, z: 3 } }); },
+    "setCamera refuses a lookAt at the camera's own position");
+refused(function () { editor.setCamera({ fov: 0 }); }, "setCamera refuses fov 0");
+refused(function () { editor.setCamera({ fov: 400 }); }, "setCamera refuses fov 400");
+refused(function () { editor.setCamera("here"); }, "setCamera refuses a non-object");
+
+// ---- the resync: the pose survives the next frames, in BOTH modes ------
+// `at`/`look` differ per mode ON PURPOSE: switching the controller syncs it to
+// whatever pose the camera is in, so re-placing the camera where it already is
+// would pass with no resync at all. The pose must be NEW after the controller
+// has settled on the old one — that is the only shape of this test that fails
+// when the resync is removed (verified by deleting it).
+function poseSurvivesFrames(mode, at, look) {
+    assert(editor.setCameraMode(mode), "resync check: " + mode + " camera");
+    editor.frame(2);   // the controller now owns the CURRENT pose
+    var placed = editor.setCamera({ position: at, lookAt: look });
+    editor.frame(5);
+    var after = editor.camera();
+    assert(vecNear(after.position, placed.position, 1e-2),
+        mode + ": setCamera survived 5 frames (" + placed.position.x + "," + placed.position.y + "," +
+        placed.position.z + " -> " + after.position.x + "," + after.position.y + "," + after.position.z + ")");
+    assert(quatNear(after.rotation, placed.rotation, 1e-3), mode + ": and the orientation held");
+}
+poseSurvivesFrames("free", { x: 6, y: 5, z: 14 }, { x: 0, y: 1, z: 0 });
+poseSurvivesFrames("orbit", { x: -9, y: 7, z: -11 }, { x: 2, y: 0, z: 3 });
+assert(editor.setCameraMode("free"), "back to the free camera");
+
+// ---- frameNode --------------------------------------------------------
+var target = scene.addPrimitive("sphere", { position: { x: 12, y: 0, z: -7 } });
+assert(target.length > 10, "a sphere to frame at (12,0,-7)");
+
+// look at it from straight above (top view) and from the front: two different
+// poses of the same subject, both centred on it.
+var fromTop = editor.frameNode(target, { yaw: 0, pitch: -80, distance: 9 });
+assert(vecNear(fromTop.target, { x: 12, y: 0, z: -7 }, 0.6),
+    "frameNode reports the bounds centre it framed (" + fromTop.target.x + "," +
+    fromTop.target.y + "," + fromTop.target.z + ")");
+assert(near(fromTop.distance, 9, 1e-2), "frameNode honoured distance 9");
+assert(fromTop.position.y > 8, "pitch -80 put the camera above the sphere (y=" + fromTop.position.y + ")");
+var toTarget = normalized({ x: fromTop.target.x - fromTop.position.x,
+                            y: fromTop.target.y - fromTop.position.y,
+                            z: fromTop.target.z - fromTop.position.z });
+assert(vecNear(forwardOf(fromTop.rotation), toTarget, 1e-3), "…and it looks straight at it");
+
+var fromFront = editor.frameNode(target, { yaw: 0, pitch: 0, distance: 9 });
+assert(near(fromFront.position.z, -7 + 9, 1e-2) && near(fromFront.position.y, 0, 1e-2),
+    "yaw 0 / pitch 0 is the front view: +Z of the subject (" + fromFront.position.x + "," +
+    fromFront.position.y + "," + fromFront.position.z + ")");
+
+// pitch is CLAMPED: the poles are where the controllers' yaw/pitch
+// decomposition degenerates and where the camera flips under its subject.
+var clamped = editor.frameNode(target, { yaw: 30, pitch: -200, distance: 9 });
+var atLimit = editor.frameNode(target, { yaw: 30, pitch: -89, distance: 9 });
+assert(vecNear(clamped.position, atLimit.position, 1e-3),
+    "frameNode clamps pitch -200 to -89 (" + clamped.position.y + " == " + atLimit.position.y + ")");
+var clampedUp = editor.frameNode(target, { yaw: 30, pitch: 400, distance: 9 });
+var atUpper = editor.frameNode(target, { yaw: 30, pitch: 89, distance: 9 });
+assert(vecNear(clampedUp.position, atUpper.position, 1e-3), "and pitch 400 to 89");
+
+// no options = keep the direction, use the bounds-derived distance (the F key)
+editor.setCamera({ position: { x: 12, y: 0, z: 3 }, lookAt: { x: 12, y: 0, z: -7 } });
+var kept = editor.frameNode(target);
+assert(kept.distance > 0.5 && kept.distance < 20,
+    "frameNode() with no options derives a framing distance (" + kept.distance + ")");
+assert(near(kept.position.x, 12, 0.5) && near(kept.position.y, 0, 0.5) && kept.position.z > -7,
+    "…from the direction the camera already looked (" + kept.position.x + "," +
+    kept.position.y + "," + kept.position.z + ")");
+
+refused(function () { editor.frameNode("not-a-guid"); }, "frameNode refuses an unknown id");
+refused(function () { editor.frameNode(target, { yawe: 10 }); }, "frameNode refuses a misspelled key");
+refused(function () { editor.frameNode(target, { yaw: "left" }); }, "frameNode refuses a non-numeric yaw");
+
+// frameNode's pose survives the frames too, under the arcball
+assert(editor.setCameraMode("orbit"), "orbit for the frameNode resync check");
+var framed = editor.frameNode(target, { yaw: 25, pitch: -35, distance: 8 });
+editor.frame(5);
+var framedAfter = editor.camera();
+assert(vecNear(framedAfter.position, framed.position, 1e-2) &&
+       quatNear(framedAfter.rotation, framed.rotation, 1e-3),
+    "orbit: frameNode survived 5 frames — the arcball adopted the pivot we framed");
+assert(editor.setCameraMode("free"), "back to the free camera again");
+
+// ---- pixels: framing the sphere is not the same picture as looking away ----
+editor.setCamera({ position: { x: -40, y: 30, z: 40 }, lookAt: { x: -60, y: 40, z: 60 } });
+editor.frame(3);
+var away = editor.screenshot("camera_away.png", 256, 256);
+editor.frameNode(target, { yaw: 0, pitch: -20, distance: 6 });
+editor.frame(3);
+var onTarget = editor.screenshot("camera_framed.png", 256, 256);
+var pixelsMoved = !near(away.center.r, onTarget.center.r, 2) ||
+                  !near(away.center.g, onTarget.center.g, 2) ||
+                  !near(away.center.b, onTarget.center.b, 2);
+assert(pixelsMoved, "frameNode changed what the viewport renders (" +
+    away.center.r + "," + away.center.g + "," + away.center.b + " -> " +
+    onTarget.center.r + "," + onTarget.center.g + "," + onTarget.center.b + ")");
+
+console.log("editor_controls: camera placement verbs verified");

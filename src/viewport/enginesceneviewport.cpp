@@ -205,6 +205,92 @@ void EngineSceneViewport::clearViewStates()
     mCameraView = QStringLiteral("perspective");
 }
 
+// The resync every camera mover in this file owes the active controller.
+// OrbitalCameraController::setCamera() DECOMPOSES the camera's rotation into
+// pitch/yaw and then REBUILDS the pose from pivot + orbit distance
+// (updateCameraRot) — which round-trips exactly for a roll-free rotation and
+// silently drops any roll otherwise. The free controller does the same to the
+// rotation and leaves the position alone.
+void EngineSceneViewport::resyncCameraController(float orbitDistance)
+{
+    if (!mCamController || !mEditorCam) return;
+    if (mCamController == mOrbitCam && mOrbitCam) {
+        if (orbitDistance > 0.0f) mOrbitCam->distFromPivot = orbitDistance;
+        mOrbitCam->setCamera(mEditorCam);
+    } else {
+        mCamController->setCamera(mEditorCam);
+    }
+}
+
+// editor.setCamera: place the camera outright. Every field is optional, so
+// "move here, keep looking the same way" is a position on its own.
+bool EngineSceneViewport::setCameraPose(const EditorCameraPose &pose)
+{
+    if (!mEditorCam) return false;
+    if (pose.hasPosition) mEditorCam->setLocalPos(pose.position);
+    if (pose.hasLookAt) {
+        mEditorCam->lookAt(pose.lookAt);
+        // A target beyond the far plane renders as an empty frame and looks
+        // like the verb did nothing — grow the plane to contain it, the same
+        // adaptation focusOnNode makes (previewframing.h's rationale).
+        const float dist = mEditorCam->getLocalPos().distanceToPoint(pose.lookAt);
+        mEditorCam->farClip = qMax(mEditorCam->farClip, dist * 2.0f);
+    } else if (pose.hasRotation) {
+        mEditorCam->setLocalRot(pose.rotation);
+    }
+    if (pose.fovDegrees > 0.0f) mEditorCam->angle = pose.fovDegrees;
+    mEditorCam->update(0.0f);
+    // The arcball keeps its orbit distance; its pivot is re-derived from the
+    // new pose inside setCamera().
+    resyncCameraController();
+    return true;
+}
+
+// editor.frameNode: focusOnNode's framing maths with the view direction taken
+// from {yaw, pitch} instead of from wherever the camera happens to be. The
+// yaw/pitch convention is the arcball's own (updateCameraRot): the eye sits at
+// pivot + Quat::fromEulerAngles(pitch, yaw, 0) * (0,0,1) * distance, which is
+// also what setCameraView's axis table uses (top = yaw 0, pitch -90).
+bool EngineSceneViewport::frameNode(iris::SceneNodePtr sceneNode, const EditorFraming &framing)
+{
+    if (!sceneNode || !mEditorCam) return false;
+    sceneNode->update(0.0f);
+
+    iris::Vec3 target = sceneNode->getGlobalPosition();
+    float radius = 1.0f;
+    const iris::AABB bounds = preview::worldBoundingBox(sceneNode);
+    if (bounds.getMin().x() <= bounds.getMax().x()) {   // non-empty (meshes exist)
+        target = bounds.getCenter();
+        radius = qMax(0.05f, bounds.getSize().length() * 0.5f);
+    }
+    const float dist = framing.distance > 0.0f
+                           ? framing.distance
+                           : qMax(1.0f, preview::framingDistance(radius, mEditorCam->angle));
+
+    // Missing yaw/pitch = "keep looking from where I look now", which makes
+    // frameNode(id) the verb form of the F key.
+    float pitch = 0.0f, yaw = 0.0f, roll = 0.0f;
+    mEditorCam->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+    if (framing.hasYaw) yaw = framing.yawDegrees;
+    if (framing.hasPitch) pitch = framing.pitchDegrees;
+
+    const iris::Quat rot = iris::Quat::fromEulerAngles(pitch, yaw, 0.0f);
+    const iris::Vec3 offset = rot.rotatedVector(iris::Vec3(0, 0, 1));
+    mEditorCam->setLocalPos(target + offset * dist);
+    mEditorCam->setLocalRot(rot);
+    float nearClip, farClip;
+    preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
+    mEditorCam->farClip = qMax(mEditorCam->farClip, farClip);
+    mEditorCam->update(0.0f);
+
+    // The arcball adopts THIS pivot: hand it the distance we framed at and let
+    // setCamera() re-derive the pivot, which lands back on `target` exactly
+    // (the pose above is already the controller's own orbit formula).
+    resyncCameraController(dist);
+    mLastOrbitPivot = target;   // a following Alt+drag orbits what we framed
+    return true;
+}
+
 void EngineSceneViewport::setActiveGizmo(Gizmo *g)
 {
     if (mGizmo == g) return;

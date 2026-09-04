@@ -20,9 +20,12 @@ For more information see the LICENSE file
 #include <QUndoStack>
 #include <QElapsedTimer>
 
+#include <cmath>
+
 #include "scripting/modules/moduleshared.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
@@ -66,6 +69,29 @@ QVector<VerbInfo> EditorApi::verbs() const
           Needs::Engine },
         { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize}",
           "The editor camera's current pose: local position, local rotation quaternion, projection mode and ortho zoom. Read-only — the pixel-free way to assert camera moves (focus, view switches).",
+          Needs::Engine },
+        { "setCamera", "editor.setCamera({position?, lookAt? | rotation?, fov?}) -> {position, rotation, projection, orthoSize, fov}",
+          "Places the editor camera and returns the pose that resulted (the same shape editor.camera() reports, plus `fov`). "
+          "`position` is the world-space eye point ({x,y,z} or [x,y,z]); every key is optional, so `{position:…}` alone moves "
+          "the camera without turning it. Orientation is EITHER `lookAt` (a world-space point to aim at, up = +Y) OR `rotation` "
+          "(a {x,y,z,scalar} quaternion as editor.camera() returns it, or {x,y,z} Euler DEGREES as node.info() returns them) — "
+          "passing both is refused rather than silently preferring one. `fov` is the vertical field of view in degrees and is "
+          "inert while the camera is orthographic (editor.camera().projection says which it is; editor.setView switches). "
+          "A `lookAt` beyond the far clip plane pushes the plane out so the target cannot render as an empty frame. "
+          "The active camera controller is resynced, so the next mouse move continues from here instead of snapping back — "
+          "but the arcball controller rebuilds the pose from pitch/yaw only, so any ROLL in a `rotation` is dropped while "
+          "editor.cameraMode() is \"orbit\".",
+          Needs::Engine },
+        { "frameNode", "editor.frameNode(id, {yaw?, pitch?, distance?}) -> {position, rotation, projection, orthoSize, fov, target, distance}",
+          "Frames a node from a chosen direction: the camera is placed on the sphere around the node's world bounding box "
+          "(its origin when it has no meshes) at `yaw`/`pitch` DEGREES and `distance` world units, looking at the centre. "
+          "This is editor.focusSelection with the view direction under your control — omit `yaw`/`pitch` to keep the "
+          "direction the camera already looks from, omit `distance` for the bounds-derived framing distance that makes the "
+          "node fill the view. The angle convention is the viewport's own: yaw 0 / pitch 0 looks down -Z from +Z (the "
+          "\"front\" view), yaw turns right-handed about +Y, pitch -90 is straight down (\"top\") and +90 straight up. "
+          "`pitch` is CLAMPED to -89..89 (the poles are where the yaw/pitch decomposition the camera controllers run on "
+          "degenerates, and where the camera flips under its subject) and `distance` to 0.01..100000. Returns the resulting "
+          "pose plus the `target` it framed. Selection is untouched.",
           Needs::Engine },
         { "cameraMode", "editor.cameraMode() -> \"free\" | \"orbit\"",
           "The active camera controller: \"free\" (fly camera) or \"orbit\" (arcball).",
@@ -233,6 +259,161 @@ QVariantMap EditorApi::camera()
     out["projection"] = cam->projMode == iris::CameraProjection::Perspective
                             ? QStringLiteral("perspective") : QStringLiteral("orthogonal");
     out["orthoSize"] = cam->orthoSize;
+    return out;
+}
+
+QVariantMap EditorApi::setCamera(const QVariant &poseArg)
+{
+    QVariantMap out;
+    if (!requireEngine()) return out;
+    auto cam = host.viewport->editorCamera();
+    if (!cam) { fail("editor.setCamera: no editor camera"); return out; }
+
+    const QVariant normalized = scriptmod::normalizeJs(poseArg);
+    if (normalized.typeId() != QMetaType::QVariantMap) {
+        fail("editor.setCamera: expects an object — {position?, lookAt? | rotation?, fov?}");
+        return out;
+    }
+    const QVariantMap params = normalized.toMap();
+
+    // An unknown key is a typo the model must SEE (the F7/F8 silent-success
+    // class): a pose that quietly ignores half of what was asked reads as "the
+    // camera verb is broken".
+    static const QStringList known{ QStringLiteral("position"), QStringLiteral("lookAt"),
+                                    QStringLiteral("rotation"), QStringLiteral("fov") };
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("editor.setCamera: unknown key '%1' (known: %2)")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+    if (params.contains(QStringLiteral("lookAt")) && params.contains(QStringLiteral("rotation"))) {
+        fail("editor.setCamera: pass EITHER lookAt or rotation, not both");
+        return out;
+    }
+
+    EditorCameraPose pose;
+    if (params.contains(QStringLiteral("position"))) {
+        pose.position = scriptmod::vecFromJs(params.value(QStringLiteral("position")),
+                                             cam->getLocalPos());
+        pose.hasPosition = true;
+    }
+    if (params.contains(QStringLiteral("lookAt"))) {
+        const iris::Vec3 eye = pose.hasPosition ? pose.position : cam->getLocalPos();
+        pose.lookAt = scriptmod::vecFromJs(params.value(QStringLiteral("lookAt")), eye);
+        if ((pose.lookAt - eye).length() < 1e-4f) {
+            fail("editor.setCamera: lookAt is the camera's own position — there is no direction in that");
+            return out;
+        }
+        pose.hasLookAt = true;
+    }
+    if (params.contains(QStringLiteral("rotation"))) {
+        bool ok = false;
+        pose.rotation = scriptmod::quatFromJs(params.value(QStringLiteral("rotation")),
+                                              cam->getLocalRot(), &ok);
+        if (!ok) {
+            fail("editor.setCamera: rotation must be {x,y,z,scalar} (a quaternion, as editor.camera() "
+                 "returns) or {x,y,z} Euler degrees");
+            return out;
+        }
+        pose.hasRotation = true;
+    }
+    if (params.contains(QStringLiteral("fov"))) {
+        bool numeric = false;
+        const double fov = params.value(QStringLiteral("fov")).toDouble(&numeric);
+        if (!numeric || fov <= 0.0 || fov >= 180.0) {
+            fail("editor.setCamera: fov must be a field of view in degrees, 0 < fov < 180");
+            return out;
+        }
+        pose.fovDegrees = float(fov);
+    }
+
+    if (!host.viewport->setCameraPose(pose)) {
+        fail("editor.setCamera: this viewport cannot place the camera");
+        return out;
+    }
+    out = camera();
+    out["fov"] = double(cam->angle);
+    return out;
+}
+
+QVariantMap EditorApi::frameNode(const QString &id, const QVariant &optionsArg)
+{
+    QVariantMap out;
+    if (!requireEngine()) return out;
+    auto cam = host.viewport->editorCamera();
+    if (!cam) { fail("editor.frameNode: no editor camera"); return out; }
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { fail("editor.frameNode: no scene is open"); return out; }
+    auto node = findNodeByGuid(scene->getRootNode(), id);
+    if (!node) {
+        fail(QStringLiteral("editor.frameNode: no node with id '%1'").arg(id));
+        return out;
+    }
+
+    const QVariant normalized = scriptmod::normalizeJs(optionsArg);
+    QVariantMap params;
+    if (normalized.isValid() && !normalized.isNull()) {
+        if (normalized.typeId() != QMetaType::QVariantMap) {
+            fail("editor.frameNode: the second argument is an object — {yaw?, pitch?, distance?}");
+            return out;
+        }
+        params = normalized.toMap();
+    }
+    static const QStringList known{ QStringLiteral("yaw"), QStringLiteral("pitch"),
+                                    QStringLiteral("distance") };
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("editor.frameNode: unknown key '%1' (known: %2)")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+
+    EditorFraming framing;
+    auto readNumber = [&](const char *key, float &into, bool &has, const char *what) -> bool {
+        const QString k = QString::fromLatin1(key);
+        if (!params.contains(k)) return true;
+        bool numeric = false;
+        const double v = params.value(k).toDouble(&numeric);
+        if (!numeric) {
+            fail(QStringLiteral("editor.frameNode: %1 must be a number").arg(QString::fromLatin1(what)));
+            return false;
+        }
+        into = float(v);
+        has = true;
+        return true;
+    };
+    if (!readNumber("yaw", framing.yawDegrees, framing.hasYaw, "yaw")) return out;
+    if (!readNumber("pitch", framing.pitchDegrees, framing.hasPitch, "pitch")) return out;
+    bool hasDistance = false;
+    if (!readNumber("distance", framing.distance, hasDistance, "distance")) return out;
+
+    // Clamp what an agent can ask for. The camera controllers carry the pose as
+    // pitch/yaw and rebuild it (OrbitalCameraController::updateCameraRot), and
+    // the orbital one — unlike the free camera — never clamps its pitch: ±90 is
+    // where that decomposition degenerates and where the camera ends up hanging
+    // upside down under its subject. distance <= 0 stays the "derive it" signal.
+    if (framing.hasPitch) framing.pitchDegrees = qBound(-89.0f, framing.pitchDegrees, 89.0f);
+    if (framing.hasYaw) framing.yawDegrees = std::fmod(framing.yawDegrees, 360.0f);
+    if (hasDistance) framing.distance = qBound(0.01f, framing.distance, 100000.0f);
+    else framing.distance = 0.0f;
+
+    if (!host.viewport->frameNode(node, framing)) {
+        fail("editor.frameNode: this viewport cannot place the camera");
+        return out;
+    }
+    out = camera();
+    out["fov"] = double(cam->angle);
+    // What was actually framed, so a caller can assert on it without redoing
+    // the bounds maths: the framed centre and the distance that came out.
+    const iris::AABB bounds = preview::worldBoundingBox(node);
+    const iris::Vec3 target = (bounds.getMin().x() <= bounds.getMax().x())
+                                  ? bounds.getCenter() : node->getGlobalPosition();
+    out["target"] = scriptmod::vecToJs(target);
+    out["distance"] = double(cam->getLocalPos().distanceToPoint(target));
     return out;
 }
 
