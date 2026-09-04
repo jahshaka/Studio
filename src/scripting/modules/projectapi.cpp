@@ -98,7 +98,29 @@ QVector<VerbInfo> ProjectApi::verbs() const
         { "importArchive", "project.importArchive(path) -> {guid, name, assets, objects}",
           "Imports a project archive as a NEW project: rows, objects ingested CAS-first, fresh pins. "
           "Does not open it.",
-          Needs::Document },    
+          Needs::Document },
+        { "exportArchiveAsync", "project.exportArchiveAsync(path) -> bool",
+          "Exports the open project as an archive WITHOUT blocking the UI thread: the catalog reads happen "
+          "here, the object copies and the zip on a worker (services/projectarchiver.h). Returns as soon as "
+          "the export is under way — poll project.archiveState() for completion and project.archiveResult() "
+          "for the outcome. Needs a window; a headless session should use project.exportArchive.",
+          Needs::Window },
+        { "importArchiveAsync", "project.importArchiveAsync(path) -> bool",
+          "Imports a project archive WITHOUT blocking the UI thread: the extraction runs on a worker and the "
+          "catalog rows are committed one asset per event-loop turn. Returns as soon as the import is under "
+          "way — poll project.archiveState(). Needs a window.",
+          Needs::Window },
+        { "archiveState", "project.archiveState() -> 'idle' | 'running'",
+          "Whether an asynchronous archive export/import is still in flight.",
+          Needs::Window },
+        { "archiveResult", "project.archiveResult() -> {ok, error, canceled, path, guid, name, assets, objects}",
+          "The outcome of the most recent asynchronous archive operation in this session.",
+          Needs::Window },
+        { "cancelArchive", "project.cancelArchive() -> bool",
+          "Asks an in-flight archive operation to stop. Honoured between zip/extract entries and between "
+          "catalog-install slices; a cancelled export deletes its partial archive and a cancelled import "
+          "deletes the project it had started building.",
+          Needs::Window },
     };
 }
 
@@ -417,12 +439,81 @@ QVariantMap ProjectApi::exportArchive(const QString &path)
     if (!host.db) { fail("project.exportArchive: no database in this session"); return out; }
     if (path.trimmed().isEmpty()) { fail("project.exportArchive: a destination path is required"); return out; }
 
-    const auto r = ProjectArchiver::exportArchive(host.db, host.project, path);
+    // The SYNCHRONOUS path: the same three phases inline (scripts and headless
+    // runs have no event loop to slice against). The threaded twin is
+    // project.exportArchiveAsync.
+    ProjectArchiver archiver(host.db, host.project);
+    const auto r = archiver.exportArchive(path);
     if (!r.ok()) { fail(QStringLiteral("project.exportArchive: %1").arg(r.error)); return out; }
     out["path"] = r.path;
     out["assets"] = r.assets;
     out["objects"] = r.objects;
     return out;
+}
+
+namespace {
+// One archiver per SESSION for the async verbs: the state the poll verbs read
+// has to outlive the call that started it. Parented to nothing and never
+// deleted while a run is in flight (its own destructor joins the worker).
+ProjectArchiver *&sessionArchiver()
+{
+    static ProjectArchiver *a = nullptr;
+    return a;
+}
+}   // namespace
+
+bool ProjectApi::exportArchiveAsync(const QString &path)
+{
+    if (!requireProject()) return false;
+    if (!host.db) return fail("project.exportArchiveAsync: no database in this session");
+    if (path.trimmed().isEmpty())
+        return fail("project.exportArchiveAsync: a destination path is required");
+    ProjectArchiver *&a = sessionArchiver();
+    if (a && a->isRunning()) return fail("project.exportArchiveAsync: an archive operation is already running");
+    if (!a) a = new ProjectArchiver(host.db, host.project);
+    return a->startExport(path);
+}
+
+bool ProjectApi::importArchiveAsync(const QString &path)
+{
+    if (!host.db) return fail("project.importArchiveAsync: no database in this session");
+    if (path.trimmed().isEmpty())
+        return fail("project.importArchiveAsync: an archive path is required");
+    ProjectArchiver *&a = sessionArchiver();
+    if (a && a->isRunning()) return fail("project.importArchiveAsync: an archive operation is already running");
+    if (!a) a = new ProjectArchiver(host.db, host.project);
+    return a->startImport(path);
+}
+
+QString ProjectApi::archiveState()
+{
+    ProjectArchiver *a = sessionArchiver();
+    return (a && a->isRunning()) ? QStringLiteral("running") : QStringLiteral("idle");
+}
+
+QVariantMap ProjectApi::archiveResult()
+{
+    QVariantMap out;
+    ProjectArchiver *a = sessionArchiver();
+    if (!a) { out["ok"] = false; out["error"] = QStringLiteral("no archive operation has run"); return out; }
+    const ProjectArchiver::Result &r = a->result();
+    out["ok"] = r.ok();
+    out["error"] = r.error;
+    out["canceled"] = r.canceled;
+    out["path"] = r.path;
+    out["guid"] = r.projectGuid;
+    out["name"] = r.worldName;
+    out["assets"] = r.assets;
+    out["objects"] = r.objects;
+    return out;
+}
+
+bool ProjectApi::cancelArchive()
+{
+    ProjectArchiver *a = sessionArchiver();
+    if (!a || !a->isRunning()) return false;
+    a->requestCancel();
+    return true;
 }
 
 QVariantMap ProjectApi::importArchive(const QString &path)
@@ -431,7 +522,8 @@ QVariantMap ProjectApi::importArchive(const QString &path)
     if (!host.db) { fail("project.importArchive: no database in this session"); return out; }
     if (path.trimmed().isEmpty()) { fail("project.importArchive: an archive path is required"); return out; }
 
-    const auto r = ProjectArchiver::importArchive(host.db, path);
+    ProjectArchiver archiver(host.db, nullptr);
+    const auto r = archiver.importArchive(path);
     if (!r.ok()) { fail(QStringLiteral("project.importArchive: %1").arg(r.error)); return out; }
     out["guid"] = r.projectGuid;
     out["name"] = r.worldName;

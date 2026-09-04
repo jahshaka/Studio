@@ -11,14 +11,21 @@ For more information see the LICENSE file
 
 #include "services/projectarchiver.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QMetaObject>
+#include <QPointer>
 #include <QSet>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
+#include <QThread>
+#include <QTimer>
+#include <QtConcurrent>
 
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -31,6 +38,8 @@ For more information see the LICENSE file
 using exportformat::ExportManifest;
 using exportformat::ManifestAsset;
 using exportformat::ManifestFile;
+
+QVector<ProjectArchiver *> ProjectArchiver::sLive;
 
 namespace {
 
@@ -52,29 +61,92 @@ QString typeNameOf(int type)
     }
 }
 
-} // namespace
+}   // namespace
 
-ProjectArchiver::Result ProjectArchiver::exportArchive(Database *db, Project *project,
-                                                       const QString &destZipPath)
+ProjectArchiver::ProjectArchiver(Database *db, Project *project, QObject *parent)
+    : QObject(parent), db(db), project(project)
 {
-    Result result;
+    sLive.append(this);
+}
+
+ProjectArchiver::~ProjectArchiver()
+{
+    // A live worker writes into this object's members — it must be gone before
+    // we are. It never waits on the UI thread, so this join is bounded by one
+    // zip entry / one file copy. A BLOCKING join and not a pump: pumping the
+    // event loop from a destructor is the exact re-entrancy
+    // ProgressDialog::setPumpsEventLoop documents (~SceneOpenRunner does the
+    // same thing for the same reason).
+    mCanceled.store(true);
+    if (mFuture.isValid() && !mFuture.isFinished()) mFuture.waitForFinished();
+    mRunning.store(false);
+    sLive.removeAll(this);
+    delete mStage;
+}
+
+void ProjectArchiver::emitProgress(int percent, const QString &text)
+{
+    if (mThreaded && QThread::currentThread() != thread()) {
+        // From the worker: through the event loop, never blocking. `this` is
+        // the context object, so a dead archiver simply drops the call.
+        QMetaObject::invokeMethod(this, [this, percent, text]() {
+            emit progress(percent, text);
+        }, Qt::QueuedConnection);
+        return;
+    }
+    emit progress(percent, text);
+}
+
+void ProjectArchiver::finish(bool canceled)
+{
+    mResult.canceled = canceled;
+    if (canceled && mResult.error.isEmpty())
+        mResult.error = QStringLiteral("cancelled");
+    // The staging directory goes here, at the ONE place every path ends: an
+    // extracted Showroom is ~50 MB of /tmp, and a session archiver that keeps
+    // one alive until the next import is a leak with a long fuse. Result::path
+    // for an import has always named this directory and has always been stale
+    // by the time a caller reads it — nothing uses it.
+    delete mStage;
+    mStage = nullptr;
+    mRunning.store(false);
+    if (mThreaded) emit finished(canceled);
+}
+
+// ===========================================================================
+//  EXPORT
+// ===========================================================================
+
+bool ProjectArchiver::planExport(const QString &destZipPath)
+{
+    // UI THREAD. Every line below is a database read (or resolves a CAS path
+    // from one) — this is the phase that cannot move, and the reason there is
+    // no per-thread QSqlDatabase connection anywhere in this file.
+    mResult = Result();
+    mDestZip = destZipPath;
+    mCopies.clear();
+    mManifest = ExportManifest();
+
     if (!db || !project || project->getProjectGuid().isEmpty()) {
-        result.error = QStringLiteral("no open project");
-        return result;
+        mResult.error = QStringLiteral("no open project");
+        return false;
     }
     const QString projectGuid = project->getProjectGuid();
 
-    QTemporaryDir stage;
-    if (!stage.isValid()) {
-        result.error = QStringLiteral("cannot create a staging directory");
-        return result;
+    delete mStage;
+    mStage = new QTemporaryDir();
+    if (!mStage->isValid()) {
+        mResult.error = QStringLiteral("cannot create a staging directory");
+        return false;
     }
 
+    emitProgress(5, QStringLiteral("Reading the catalog…"));
+
     // 1. The catalog snapshot (pin-aware since phase 4).
-    db->createExportScene(stage.path(), projectGuid);
-    if (!QFileInfo::exists(QDir(stage.path()).filePath(projectGuid + ".db"))) {
-        result.error = QStringLiteral("could not write the catalog snapshot");
-        return result;
+    db->createExportScene(mStage->path(), projectGuid);
+    if (!QFileInfo::exists(QDir(mStage->path()).filePath(projectGuid + ".db"))) {
+        mResult.error = QStringLiteral("could not write the catalog snapshot");
+        return false;
     }
 
     // 2. Membership: project rows + pinned library assets.
@@ -90,12 +162,11 @@ ProjectArchiver::Result ProjectArchiver::exportArchive(Database *db, Project *pr
     members.addBindValue(projectGuid);
     members.exec();
 
-    ExportManifest manifest;
-    manifest.kind = QStringLiteral("project");
-    manifest.generator = QStringLiteral("Jahshaka");
-    manifest.created = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    mManifest.kind = QStringLiteral("project");
+    mManifest.generator = QStringLiteral("Jahshaka");
+    mManifest.created = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
-    const QString objectsDir = QDir(stage.path()).filePath(QStringLiteral("objects"));
+    const QString objectsDir = QDir(mStage->path()).filePath(QStringLiteral("objects"));
     QSet<QString> written;
 
     while (members.next()) {
@@ -146,107 +217,345 @@ ProjectArchiver::Result ProjectArchiver::exportArchive(Database *db, Project *pr
             }
             first = false;
 
+            // The COPY is planned here (a CAS path resolution is a catalog
+            // read) and performed on the worker.
             const QString objPath = AssetStorePaths::objectPathIn(root, file.oid, ext);
             if (!file.oid.isEmpty() && QFileInfo::exists(objPath) && !written.contains(file.oid)) {
-                QDir().mkpath(objectsDir);
-                QFile::copy(objPath, QDir(objectsDir).filePath(file.oid + "." + ext));
+                mCopies.append({ objPath, QDir(objectsDir).filePath(file.oid + "." + ext) });
                 written.insert(file.oid);
-                ++result.objects;
+                ++mResult.objects;
             }
             asset.files.append(file);
         }
 
-        manifest.assets.append(asset);
-        ++result.assets;
+        mManifest.assets.append(asset);
+        ++mResult.assets;
     }
+    return true;
+}
 
-    if (!manifest.write(QDir(stage.path()).filePath(exportformat::manifestFileName()),
-                        &result.error))
-        return result;
+bool ProjectArchiver::workExport()
+{
+    // WORKER THREAD (or inline for the synchronous verb). File work only.
+    const QString objectsDir = QDir(mStage->path()).filePath(QStringLiteral("objects"));
+    if (!mCopies.isEmpty()) QDir().mkpath(objectsDir);
+
+    const int totalCopies = mCopies.size();
+    for (int i = 0; i < totalCopies; ++i) {
+        if (mCanceled.load()) return false;
+        QFile::copy(mCopies.at(i).src, mCopies.at(i).dst);
+        if ((i % 8) == 0 || i + 1 == totalCopies)
+            emitProgress(10 + (40 * (i + 1)) / qMax(1, totalCopies),
+                         QStringLiteral("Collecting content (%1 of %2)…")
+                             .arg(i + 1).arg(totalCopies));
+    }
+    if (mCanceled.load()) return false;
+
+    if (!mManifest.write(QDir(mStage->path()).filePath(exportformat::manifestFileName()),
+                         &mResult.error))
+        return false;
 
     // Legacy .manifest marker so pre-v2 validators recognise the archive.
     {
-        QFile marker(QDir(stage.path()).filePath(QStringLiteral(".manifest")));
+        QFile marker(QDir(mStage->path()).filePath(QStringLiteral(".manifest")));
         if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate))
             marker.write("project\n");
     }
 
-    if (!ZipHelper::zipDirectory(stage.path(), destZipPath, &result.error)) return result;
-    result.path = destZipPath;
-    return result;
+    emitProgress(55, QStringLiteral("Compressing…"));
+    const bool zipped = ZipHelper::zipDirectory(
+        mStage->path(), mDestZip, &mResult.error,
+        [this](const QString &, int index, int total) {
+            if (mCanceled.load()) return false;
+            if (total > 0 && ((index % 8) == 0 || index == total))
+                emitProgress(55 + (40 * index) / total,
+                             QStringLiteral("Compressing (%1 of %2)…").arg(index).arg(total));
+            return true;
+        });
+    return zipped && !mCanceled.load();
 }
 
-ProjectArchiver::Result ProjectArchiver::importArchive(Database *db, const QString &zipPath)
+void ProjectArchiver::installExport()
 {
-    Result result;
-    if (!db) { result.error = QStringLiteral("no database"); return result; }
+    // UI THREAD. An export writes nothing to the catalog, so there is no
+    // chunked commit here — only publishing the result.
+    mResult.path = mDestZip;
+    emitProgress(100, QStringLiteral("Exported."));
+}
 
-    QTemporaryDir stage;
-    if (!stage.isValid()) {
-        result.error = QStringLiteral("cannot create a staging directory");
-        return result;
+ProjectArchiver::Result ProjectArchiver::exportArchive(const QString &destZipPath)
+{
+    mThreaded = false;
+    mExporting = true;
+    mCanceled.store(false);
+    mRunning.store(true);
+    if (planExport(destZipPath) && workExport()) installExport();
+    const bool canceled = mCanceled.load();
+    finish(canceled);
+    return mResult;
+}
+
+// ===========================================================================
+//  IMPORT
+// ===========================================================================
+
+bool ProjectArchiver::planImport(const QString &zipPath)
+{
+    // UI THREAD. There is nothing to read from the catalog before the archive
+    // is open, so this phase is short by nature — the staging directory and
+    // the source check. (It stays a phase so both directions read the same.)
+    mResult = Result();
+    mSourceZip = zipPath;
+    mIngest.clear();
+    mNextIngest = 0;
+    mGuidMap.clear();
+    mBlobDbBase.clear();
+
+    if (!db) { mResult.error = QStringLiteral("no database"); return false; }
+    if (!QFileInfo::exists(zipPath)) {
+        mResult.error = QStringLiteral("no such archive %1").arg(zipPath);
+        return false;
     }
-    if (!ZipHelper::extract(zipPath, stage.path(), &result.error)) return result;
+
+    delete mStage;
+    mStage = new QTemporaryDir();
+    if (!mStage->isValid()) {
+        mResult.error = QStringLiteral("cannot create a staging directory");
+        return false;
+    }
+    return true;
+}
+
+bool ProjectArchiver::workImport()
+{
+    // WORKER THREAD (or inline). Extraction + the manifest read + matching the
+    // manifest's oids to files on disk. No database: everything below produces
+    // a PLAN the install slices commit.
+    emitProgress(5, QStringLiteral("Extracting…"));
+    if (!ZipHelper::extract(mSourceZip, mStage->path(), &mResult.error,
+                            [this](const QString &, int index, int total) {
+                                if (mCanceled.load()) return false;
+                                if (total > 0 && ((index % 16) == 0 || index == total))
+                                    emitProgress(5 + (45 * index) / total,
+                                                 QStringLiteral("Extracting (%1 of %2)…")
+                                                     .arg(index).arg(total));
+                                return true;
+                            }))
+        return false;
+    if (mCanceled.load()) return false;
 
     // The catalog snapshot: <guid>.db.
-    QString blobDbBase;
-    for (const QFileInfo &entry : QDir(stage.path()).entryInfoList(QDir::Files)) {
-        if (entry.suffix() == QStringLiteral("db")) { blobDbBase = entry.completeBaseName(); break; }
+    for (const QFileInfo &entry : QDir(mStage->path()).entryInfoList(QDir::Files)) {
+        if (entry.suffix() == QStringLiteral("db")) { mBlobDbBase = entry.completeBaseName(); break; }
     }
-    if (blobDbBase.isEmpty()) {
-        result.error = QStringLiteral("not a Jahshaka project archive (no catalog snapshot)");
-        return result;
-    }
-    if (!db->checkIfProjectVersionSupported(QDir(stage.path()).filePath(blobDbBase + ".db"))) {
-        result.error = QStringLiteral("this scene was made with an unsupported version of Jahshaka");
-        return result;
+    if (mBlobDbBase.isEmpty()) {
+        mResult.error = QStringLiteral("not a Jahshaka project archive (no catalog snapshot)");
+        return false;
     }
 
     QString manifestError;
     const ExportManifest manifest = ExportManifest::fromFile(
-        QDir(stage.path()).filePath(exportformat::manifestFileName()), &manifestError);
-
-    // Catalog rows (fresh guids; scene blob remapped inside importProject).
-    const QString newProjectGuid = GUIDManager::generateGUID();
-    QMap<QString, QString> guidMap;
-    if (!db->importProject(QDir(stage.path()).filePath(blobDbBase), newProjectGuid,
-                           result.worldName, guidMap)) {
-        result.error = QStringLiteral("the archive's catalog could not be imported");
-        return result;
-    }
+        QDir(mStage->path()).filePath(exportformat::manifestFileName()), &manifestError);
 
     // Objects + asset_files + pins, from the manifest (v2 archives; a legacy
     // archive without one imports rows only — its flat files are ignored,
     // there is no flat-folder world to put them in).
-    QSqlDatabase conn = QSqlDatabase::database();
-    const QString root = AssetStorePaths::root();
-    const QDir objectsDir(QDir(stage.path()).filePath(QStringLiteral("objects")));
-
     if (manifest.isValid() && manifest.version >= 2) {
+        const QDir objectsDir(QDir(mStage->path()).filePath(QStringLiteral("objects")));
         for (const ManifestAsset &asset : manifest.assets) {
-            const QString localGuid = guidMap.value(asset.guid, asset.guid);
-            QString sourceOid;
+            IngestAsset plan;
+            plan.archiveGuid = asset.guid;
             for (const ManifestFile &file : asset.files) {
                 // objects/<oid>.<ext> — find by oid prefix (ext recorded in name).
-                QString objectFile;
-                const auto candidates = objectsDir.entryInfoList({ file.oid + ".*", file.oid }, QDir::Files);
-                if (!candidates.isEmpty()) objectFile = candidates.first().absoluteFilePath();
-                if (objectFile.isEmpty()) continue;
-
-                QString oid;
-                if (!AssetCas::ingestFile(conn, root, objectFile, localGuid,
-                                          file.role, file.name, &oid, &result.error))
-                    return result;
-                if (sourceOid.isEmpty() || file.role == QStringLiteral("source"))
-                    if (sourceOid.isEmpty()) sourceOid = oid;
-                ++result.objects;
+                const auto candidates =
+                    objectsDir.entryInfoList({ file.oid + ".*", file.oid }, QDir::Files);
+                if (candidates.isEmpty()) continue;
+                plan.files.append({ candidates.first().absoluteFilePath(), file.role, file.name });
             }
-            AssetCas::writePin(conn, newProjectGuid, localGuid, sourceOid);
-            ++result.assets;
+            mIngest.append(plan);
         }
     }
+    emitProgress(55, QStringLiteral("Importing the catalog…"));
+    return !mCanceled.load();
+}
 
-    result.projectGuid = newProjectGuid;
-    result.path = stage.path();
-    return result;
+void ProjectArchiver::beginInstallImport()
+{
+    // UI THREAD. The catalog half, and the only place this class writes to the
+    // database.
+    if (!db->checkIfProjectVersionSupported(QDir(mStage->path()).filePath(mBlobDbBase + ".db"))) {
+        mResult.error = QStringLiteral("this scene was made with an unsupported version of Jahshaka");
+        return;
+    }
+
+    // Catalog rows (fresh guids; scene blob remapped inside importProject).
+    const QString newProjectGuid = GUIDManager::generateGUID();
+    if (!db->importProject(QDir(mStage->path()).filePath(mBlobDbBase), newProjectGuid,
+                           mResult.worldName, mGuidMap)) {
+        mResult.error = QStringLiteral("the archive's catalog could not be imported");
+        return;
+    }
+    mResult.projectGuid = newProjectGuid;
+    mResult.path = mStage->path();
+    mNextIngest = 0;
+}
+
+void ProjectArchiver::installImportSlice()
+{
+    // UI THREAD, one asset per event-loop turn. A slice is bounded by one
+    // asset's files, which is what keeps the heartbeat gap inside its budget:
+    // AssetCas::ingestFile hashes and copies, so a single huge texture is the
+    // worst slice this operation can produce and there is nothing smaller to
+    // cut without reaching into the CAS.
+    if (mCanceled.load() || !mResult.error.isEmpty() || mNextIngest >= mIngest.size()) {
+        if (mCanceled.load() && !mResult.projectGuid.isEmpty()) {
+            // Roll the catalog back: a cancelled import must not leave a
+            // half-populated project behind (Lane 4's "zero orphans").
+            db->deleteProject(mResult.projectGuid);
+            mResult.projectGuid.clear();
+        }
+        if (!mThreaded) return;
+        if (!mCanceled.load() && mResult.error.isEmpty())
+            emitProgress(100, QStringLiteral("Imported."));
+        finish(mCanceled.load());
+        return;
+    }
+
+    QSqlDatabase conn = QSqlDatabase::database();
+    const QString root = AssetStorePaths::root();
+
+    const IngestAsset &asset = mIngest.at(mNextIngest++);
+    const QString localGuid = mGuidMap.value(asset.archiveGuid, asset.archiveGuid);
+    QString sourceOid;
+    for (const IngestFile &file : asset.files) {
+        QString oid;
+        if (!AssetCas::ingestFile(conn, root, file.path, localGuid,
+                                  file.role, file.name, &oid, &mResult.error)) {
+            // Same as the pre-threading behaviour: the first ingest failure
+            // ends the import, and no pin is written for a half-ingested
+            // asset.
+            if (mThreaded) finish(false);
+            return;
+        }
+        if (sourceOid.isEmpty()) sourceOid = oid;
+        ++mResult.objects;
+    }
+    AssetCas::writePin(conn, mResult.projectGuid, localGuid, sourceOid);
+    ++mResult.assets;
+
+    emitProgress(55 + (40 * mNextIngest) / qMax(1, mIngest.size()),
+                 QStringLiteral("Storing content (%1 of %2)…")
+                     .arg(mNextIngest).arg(mIngest.size()));
+
+    if (!mThreaded) return;   // the synchronous path drives the loop itself
+
+    // ONE millisecond, not zero: a chain of zero-timers is always "due" and
+    // Qt's dispatcher keeps picking it over timers that are merely due NOW,
+    // including the render tick (measured in the open lane). The lambda's
+    // context object is `this`, so Qt drops it if the archiver dies first.
+    QTimer::singleShot(1, this, [this]() { installImportSlice(); });
+}
+
+ProjectArchiver::Result ProjectArchiver::importArchive(const QString &zipPath)
+{
+    mThreaded = false;
+    mExporting = false;
+    mCanceled.store(false);
+    mRunning.store(true);
+    if (planImport(zipPath) && workImport()) {
+        beginInstallImport();
+        while (mResult.error.isEmpty() && !mCanceled.load() && mNextIngest < mIngest.size())
+            installImportSlice();
+        installImportSlice();   // the terminating call (rollback on cancel)
+        if (mResult.error.isEmpty()) emitProgress(100, QStringLiteral("Imported."));
+    }
+    const bool canceled = mCanceled.load();
+    finish(canceled);
+    return mResult;
+}
+
+// ===========================================================================
+//  The threaded drivers
+// ===========================================================================
+
+void ProjectArchiver::runWorkerThread()
+{
+    const bool ok = mExporting ? workExport() : workImport();
+    // Hand back through the event loop — NOT a blocking connection: a UI loop
+    // that stopped pumping (the app quitting) must never be able to strand
+    // this worker (the import.shutdown zombie).
+    QMetaObject::invokeMethod(this, [this, ok]() {
+        if (!ok || mCanceled.load()) { finish(mCanceled.load()); return; }
+        if (mExporting) { installExport(); finish(false); return; }
+        beginInstallImport();
+        if (!mResult.error.isEmpty()) { finish(false); return; }
+        installImportSlice();
+    }, Qt::QueuedConnection);
+}
+
+bool ProjectArchiver::startExport(const QString &destZipPath)
+{
+    if (mRunning.load()) return false;
+    mThreaded = true;
+    mExporting = true;
+    mCanceled.store(false);
+    mRunning.store(true);
+    if (!planExport(destZipPath)) { finish(false); return false; }
+    mFuture = QtConcurrent::run([this]() { runWorkerThread(); });
+    return true;
+}
+
+bool ProjectArchiver::startImport(const QString &zipPath)
+{
+    if (mRunning.load()) return false;
+    mThreaded = true;
+    mExporting = false;
+    mCanceled.store(false);
+    mRunning.store(true);
+    if (!planImport(zipPath)) { finish(false); return false; }
+    mFuture = QtConcurrent::run([this]() { runWorkerThread(); });
+    return true;
+}
+
+bool ProjectArchiver::waitForDone(int msTimeout)
+{
+    QPointer<ProjectArchiver> self(this);
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < msTimeout) {
+        if (self.isNull() || !self->mRunning.load()) return true;
+        // Service the worker's completion hop and the install slices so a
+        // healthy run drains through its normal path; user input stays out so
+        // nothing re-enters the UI mid-shutdown.
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+        if (self.isNull() || !self->mRunning.load()) return true;
+        QThread::msleep(5);
+    }
+    return self.isNull() || !self->mRunning.load();
+}
+
+bool ProjectArchiver::shutdownArchives(int msTimeout)
+{
+    // Step 2 of the shutdown order. Bounded in TOTAL, not per archiver: the
+    // close path's budget is the sum of everything it joins, and there is
+    // never more than one archive in flight in practice.
+    if (sLive.isEmpty()) return true;
+    QElapsedTimer timer;
+    timer.start();
+    // A SNAPSHOT of guarded pointers: waitForDone pumps the event loop, and an
+    // archiver can be deleted (its owner page destroyed, a slice finishing)
+    // while we are inside it — which would both invalidate sLive's indices and
+    // leave us holding a dangling raw pointer.
+    QVector<QPointer<ProjectArchiver>> live;
+    for (ProjectArchiver *archiver : sLive) live.append(QPointer<ProjectArchiver>(archiver));
+    for (const QPointer<ProjectArchiver> &archiver : live)
+        if (archiver) archiver->requestCancel();
+    bool allStopped = true;
+    for (const QPointer<ProjectArchiver> &archiver : live) {
+        if (archiver.isNull()) continue;
+        const int left = msTimeout - int(timer.elapsed());
+        if (left <= 0) { allStopped = allStopped && !archiver->isRunning(); continue; }
+        allStopped &= archiver->waitForDone(left);
+    }
+    return allStopped;
 }

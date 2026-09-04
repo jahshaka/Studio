@@ -51,6 +51,11 @@ public:
     Q_INVOKABLE QVariantMap exportManifest(const QString &dir = QString());
     Q_INVOKABLE QVariantMap exportArchive(const QString &path);
     Q_INVOKABLE QVariantMap importArchive(const QString &path);
+    Q_INVOKABLE bool exportArchiveAsync(const QString &path);
+    Q_INVOKABLE bool importArchiveAsync(const QString &path);
+    Q_INVOKABLE QString archiveState();
+    Q_INVOKABLE QVariantMap archiveResult();
+    Q_INVOKABLE bool cancelArchive();
 
 private:
     QString resolveGuid(const QString &guidOrName, QString *nameOut = nullptr);

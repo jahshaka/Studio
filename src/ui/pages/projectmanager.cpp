@@ -214,6 +214,11 @@ int on_extract_entry(const char *filename, void *arg) {
     return 0;
 }
 
+// Importing an archive is THREADED (STABILITY_PROGRAM_SPEC Lane 4): the
+// extraction — the multi-second half — runs on a worker while this window
+// keeps painting, and the catalog rows are committed back here in slices.
+// The tail that used to follow the synchronous call now lives in
+// onArchiveImportFinished; everything between the two is event-loop time.
 void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
 {
     QString fileName;
@@ -226,16 +231,56 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         fileName = file;
     }
 
-    progressDialog->setLabelText("Importing scene....");
-    progressDialog->setValue(20);
-    progressDialog->show();
+    if (archiver && archiver->isRunning()) {
+        QMessageBox::information(this, "Import Scene",
+                                 "An archive operation is already running.", QMessageBox::Ok);
+        return;
+    }
+    if (!archiver) {
+        // Parented: it dies with this page, and its destructor joins the worker.
+        archiver = new ProjectArchiver(db, project, this);
+        connect(archiver, &ProjectArchiver::progress, this,
+                [this](int percent, const QString &text) { showOpenProgress(percent, text); });
+        connect(archiver, &ProjectArchiver::finished, this,
+                &ProjectManager::onArchiveImportFinished);
+    }
+    mImportShouldOpen = shouldOpen;
+
+    // SIGNAL-driven, pumping OFF: a pump from inside an install slice
+    // re-enters the loop and can destroy the very objects the slice is using
+    // (ProgressDialog::setPumpsEventLoop documents the scar).
+    if (progressDialog) {
+        progressDialog->setPumpsEventLoop(false);
+        progressDialog->setLabelText("Importing scene....");
+        progressDialog->resetCancel();
+        progressDialog->setCancelVisible(true);
+        disconnect(progressDialog, &ProgressDialog::canceled, this, nullptr);
+        connect(progressDialog, &ProgressDialog::canceled, this,
+                [this]() { if (archiver) archiver->requestCancel(); });
+        progressDialog->setValue(5);
+        progressDialog->show();
+    }
 
     // Pin-world archives (phase 4): ProjectArchiver imports the catalog
     // snapshot, ingests the archive's objects CAS-first and writes fresh
     // pins. No flat project-folder extraction exists any more.
-    const auto result = ProjectArchiver::importArchive(db, fileName);
+    // No manual completion call on a refusal: startImport() already emits
+    // finished() through finish() when the plan phase fails.
+    archiver->startImport(fileName);
+}
+
+void ProjectManager::onArchiveImportFinished(bool canceled)
+{
+    const ProjectArchiver::Result result = archiver ? archiver->result()
+                                                    : ProjectArchiver::Result();
+    if (canceled) {
+        // The archiver already rolled the half-built project back — nothing to
+        // clean up here.
+        hideOpenProgress();
+        return;
+    }
     if (!result.ok()) {
-        progressDialog->close();
+        hideOpenProgress();
         QMessageBox::warning(
             this,
             "Incompatible Scene format",
@@ -245,7 +290,10 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
         return;
     }
 
-    progressDialog->setValue(80);
+    if (progressDialog) {
+        progressDialog->setCancelVisible(false);
+        progressDialog->setValue(80);
+    }
 
     // Imported projects land on the desktop the user is looking at. The
     // project folder is created empty (scenes may write their own files
@@ -258,13 +306,13 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     auto pDir = QDir(QDir(defaultProjectDirectory).filePath("Projects")).filePath(result.projectGuid);
     QDir().mkpath(pDir);
 
-    if (shouldOpen) {
+    if (mImportShouldOpen) {
         // The dialog stays up THROUGH the scene load (owner: it must close when
         // the scene has loaded, not before the 3-second open runs "naked").
         // Safe again because ProgressDialog::dropNativeWindow() destroys the
         // native window unconditionally on close — the page-switch desync that
         // used to strand a ghost X window can no longer keep it mapped.
-        progressDialog->setValueAndText(85, "Opening scene....");
+        if (progressDialog) progressDialog->setValueAndText(85, "Opening scene....");
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));
@@ -275,8 +323,7 @@ void ProjectManager::importProjectFromFile(const QString& file, bool shouldOpen)
     }
 
     addImportedTileToDesktop(result.projectGuid);
-    progressDialog->setValue(100);
-    progressDialog->close();
+    hideOpenProgress();
 }
 void ProjectManager::exportProjectFromWidget(ItemGridWidget *widget)
 {

@@ -34,6 +34,7 @@ class DynamicGrid;
 class GridWidget;
 class ItemGridWidget;
 class ProgressDialog;
+class ProjectArchiver;
 class QMenu;
 class QAction;
 
@@ -124,6 +125,10 @@ protected slots:
 
     void openSampleBrowser();
 
+    /// The install half of importProjectFromFile: everything that used to
+    /// follow the synchronous ProjectArchiver call.
+    void onArchiveImportFinished(bool canceled);
+
     void openProjectFromWidget(ItemGridWidget*, bool playMode);
     void exportProjectFromWidget(ItemGridWidget*);
     void renameProjectFromWidget(ItemGridWidget*);
@@ -177,6 +182,12 @@ private:
     Project *project;
 
 	QPointer<ProgressDialog> progressDialog;
+
+	/// The THREADED archive import (STABILITY_PROGRAM_SPEC Lane 4). Created on
+	/// first use and parented here; its destructor joins the worker, and
+	/// ProjectArchiver::shutdownArchives cancels it at close.
+	ProjectArchiver *archiver = nullptr;
+	bool mImportShouldOpen = false;
 
     bool isNewProject;
     bool isMainWindowActive;
