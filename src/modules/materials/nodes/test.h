@@ -1,5 +1,6 @@
 #pragma once
 
+#include "irisgl/core/math/vec.h"
 #include <QLineEdit>
 #include <QComboBox>
 #include <QDoubleValidator>
@@ -161,7 +162,7 @@ class Vector2Node : public NodeModel
 public:
 	Vector2Node();
 	double x, y; // was int — truncated every fractional component (audit D4)
-	QVector2D value;
+	iris::Vec2 value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);
@@ -173,7 +174,7 @@ class Vector3Node : public NodeModel
 public:
 	Vector3Node();
 	double x, y, z; // was int — truncated every fractional component (audit D4)
-	QVector3D value;
+	iris::Vec3 value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox, *zSpinBox;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);
@@ -185,7 +186,7 @@ class Vector4Node : public NodeModel
 public:
 	Vector4Node();
 	double x, y, z, w; // was int — truncated every fractional component (audit D4)
-	QVector4D value;
+	iris::Vec4 value;
 	QDoubleSpinBox *xSpinBox, *ySpinBox, *zSpinBox, *wSpinBox;
 
 	QJsonValue serializeWidgetValue(int widgetIndex);

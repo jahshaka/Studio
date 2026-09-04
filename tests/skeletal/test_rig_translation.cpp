@@ -18,8 +18,8 @@
 //
 // An engine and an offscreen view exist because a live Ogre::Root is what the v1
 // resource managers and the VaoManager need — nothing here reads a pixel.
+#include "irisgl/core/math/mat4.h"
 #include <QGuiApplication>
-#include <QMatrix4x4>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -67,12 +67,12 @@ static std::vector<BonePose> armPoses(float t)
     return out;
 }
 
-// The engine's resolved bone matrix as a QMatrix4x4 (row-major 3x4 + [0,0,0,1]).
-static QMatrix4x4 engineBone(Scene *s, NodeId node, size_t bone, size_t boneCount)
+// The engine's resolved bone matrix as an iris::Mat4 (row-major 3x4 + [0,0,0,1]).
+static iris::Mat4 engineBone(Scene *s, NodeId node, size_t bone, size_t boneCount)
 {
     std::vector<float> m(boneCount * 12, 0.0f);
-    if (!s->boneMatrices(node, m.data(), boneCount)) return QMatrix4x4();
-    QMatrix4x4 out;
+    if (!s->boneMatrices(node, m.data(), boneCount)) return iris::Mat4();
+    iris::Mat4 out;
     const float *b = &m[bone * 12];
     for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c) out(r, c) = b[r * 4 + c];
     out(3, 0) = 0; out(3, 1) = 0; out(3, 2) = 0; out(3, 3) = 1;
@@ -176,7 +176,7 @@ int main(int argc, char **argv)
 
     double worst = 0.0;
     for (size_t b = 0; b < 2; ++b) {
-        QMatrix4x4 got = engineBone(s, node, b, 2);
+        iris::Mat4 got = engineBone(s, node, b, 2);
         for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
             worst = std::max(worst, std::fabs(double(got(r, c)) - (r == c ? 1.0 : 0.0)));
     }
@@ -192,10 +192,10 @@ int main(int argc, char **argv)
         poses = armPoses(t);
         s->setBonePoses(node, poses.data(), poses.size());
         engine->renderOneFrame();
-        const QVector<QMatrix4x4> want = armrig::swingSkinMatrices(-90.0f, t);
+        const QVector<iris::Mat4> want = armrig::swingSkinMatrices(-90.0f, t);
         double w = 0.0;
         for (size_t b = 0; b < 2; ++b) {
-            const QMatrix4x4 got = engineBone(s, node, b, 2);
+            const iris::Mat4 got = engineBone(s, node, b, 2);
             for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
                 w = std::max(w, std::fabs(double(got(r, c)) - double(want[int(b)](r, c))));
         }
@@ -217,8 +217,8 @@ int main(int argc, char **argv)
         s->setBonePoses(node, poseA.data(), poseA.size());
         s->setBonePoses(n2, poseB.data(), poseB.size());
         engine->renderOneFrame();
-        const QMatrix4x4 m1 = engineBone(s, node, 1, 2);
-        const QMatrix4x4 m2 = engineBone(s, n2, 1, 2);
+        const iris::Mat4 m1 = engineBone(s, node, 1, 2);
+        const iris::Mat4 m2 = engineBone(s, n2, 1, 2);
         CHECK(m1 != m2, "two nodes on ONE mesh hold two DIFFERENT bone matrices");
         double idErr = 0.0;
         for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)

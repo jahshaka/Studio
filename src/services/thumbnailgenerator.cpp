@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
 #include "services/thumbnailgenerator.h"
 
 #include <QJsonDocument>

@@ -30,6 +30,7 @@
 // plane and the bone octahedron straddles it, so the front half still shows
 // with the mesh on — on a real character the skeleton is inside the mesh and
 // is hidden, which is the accepted behaviour until an X-ray mode exists.
+#include "irisgl/core/math/vec.h"
 #include <QApplication>
 #include <QColor>
 #include <cmath>
@@ -269,10 +270,10 @@ int main(int argc, char **argv)
         CHECK(model.hasPoseSource(), "S8: the preview scene installed an engine pose source");
         model.setTime(0.0f);
         render(scene, *engine, view);
-        const QVector3D tip0 = model.bones()[1].position;
+        const iris::Vec3 tip0 = model.bones()[1].position;
         model.setTime(0.5f);
         render(scene, *engine, view);
-        const QVector3D tipHalf = model.bones()[1].position;
+        const iris::Vec3 tipHalf = model.bones()[1].position;
         std::printf("    jointTip (engine): t=0 (%.3f, %.3f, %.3f)  t=0.5 (%.3f, %.3f, %.3f)\n",
                     tip0.x(), tip0.y(), tip0.z(), tipHalf.x(), tipHalf.y(), tipHalf.z());
         CHECK((tipHalf - tip0).length() > 0.05f,
@@ -309,12 +310,12 @@ int main(int argc, char **argv)
 
             model.setTime(0.0f);
             Image a = render(scene, *engine, view);
-            const QVector3D tip0 = model.bones()[1].position;
+            const iris::Vec3 tip0 = model.bones()[1].position;
             const float centroid0 = overlayCentroidY(a);
 
             model.setTime(0.5f);
             Image b = render(scene, *engine, view);
-            const QVector3D tipHalf = model.bones()[1].position;
+            const iris::Vec3 tipHalf = model.bones()[1].position;
             const float centroidHalf = overlayCentroidY(b);
 
             show("S10 mocap t=0", a);

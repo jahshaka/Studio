@@ -9,7 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "shell/mainwindow.h"
 #include "ui_mainwindow.h"
 
@@ -195,7 +196,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	SnapSettings::bindSettings(settings->settings);   // snap sizes persist beside the shortcuts
 
 
-
     QFont font;
     font.setFamily(font.defaultFamily());
     font.setPointSize(font.pointSize() * devicePixelRatio());
@@ -323,7 +323,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     // second node
     auto node = iris::MeshNode::create();
     node->setMesh(":/models/ground.obj");
-    node->setLocalPos(QVector3D(0, 1e-4, 0)); // prevent z-fighting with the default plane reset (iKlsR)
+    node->setLocalPos(iris::Vec3(0, 1e-4, 0)); // prevent z-fighting with the default plane reset (iKlsR)
     node->setName("Ground");
     node->setPickable(false);
 	node->setFaceCullingMode(iris::FaceCullingMode::None);
@@ -408,8 +408,8 @@ iris::ScenePtr MainWindow::createDefaultScene()
     dlight->setLightType(iris::LightType::Directional);
     scene->rootNode->addChild(dlight);
     dlight->setName("Directional Light");
-    dlight->setLocalPos(QVector3D(4, 4, 0));
-    dlight->setLocalRot(QQuaternion::fromEulerAngles(15, 0, 0));
+    dlight->setLocalPos(iris::Vec3(4, 4, 0));
+    dlight->setLocalRot(iris::Quat::fromEulerAngles(15, 0, 0));
     dlight->intensity = 1;
     dlight->icon = iris::Texture2D::load(":/icons/light.png");
 
@@ -417,7 +417,7 @@ iris::ScenePtr MainWindow::createDefaultScene()
     plight->setLightType(iris::LightType::Point);
     scene->rootNode->addChild(plight);
     plight->setName("Point Light");
-    plight->setLocalPos(QVector3D(-4, 4, 0));
+    plight->setLocalPos(iris::Vec3(-4, 4, 0));
     plight->intensity = 1;
     plight->icon = iris::Texture2D::load(":/icons/bulb.png");
 	plight->setShadowMapType(iris::ShadowMapType::None);
@@ -1594,7 +1594,7 @@ void MainWindow::addParticleSystem()
     sceneEditService->addParticleSystem(iris::ParticlePreset::Custom);
 }
 
-void MainWindow::addMesh(const QString &path, bool ignore, QVector3D position)
+void MainWindow::addMesh(const QString &path, bool ignore, iris::Vec3 position)
 {
     QString filename;
     if (path.isEmpty()) {
@@ -1622,12 +1622,12 @@ void MainWindow::addPrimitiveObject(const QString &text)
     sceneEditService->addPrimitive(text);
 }
 
-void MainWindow::addMaterialMesh(const QString &path, bool ignore, QVector3D position, const QString &guid, const QString &assetName)
+void MainWindow::addMaterialMesh(const QString &path, bool ignore, iris::Vec3 position, const QString &guid, const QString &assetName)
 {
     sceneEditService->addMaterialMesh(path, ignore, position, guid, assetName);
 }
 
-void MainWindow::addAssetParticleSystem(bool ignore, QVector3D position, QString guid, QString assetName)
+void MainWindow::addAssetParticleSystem(bool ignore, iris::Vec3 position, QString guid, QString assetName)
 {
     sceneEditService->addAssetParticleSystem(ignore, position, guid, assetName);
 }
@@ -1636,7 +1636,7 @@ void MainWindow::addDragPlaceholder()
 {
     /*
     auto node = iris::MeshNode::create();
-    node->scale = QVector3D(.5f, .5f, .5f);
+    node->scale = iris::Vec3(.5f, .5f, .5f);
     node->setMesh(":app/content/primitives/arrow.obj");
     node->setName("Arrow");
     addNodeToScene(node, true);
@@ -2398,7 +2398,7 @@ void MainWindow::setupViewPort()
     sceneView->setCover(viewportCover);
 
     auto events = sceneView->events();
-    connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString path, bool v, QVector3D pos, QString guid, QString name) {
+    connect(events, &EditorViewportEvents::addDroppedMesh, this, [this](QString path, bool v, iris::Vec3 pos, QString guid, QString name) {
         addMaterialMesh(path, v, pos, guid, name);
     });
 
@@ -2406,11 +2406,11 @@ void MainWindow::setupViewPort()
         addPrimitiveObject(guid);
     });
 
-    connect(events, &EditorViewportEvents::addDroppedParticleSystem, this, [this](bool v, QVector3D pos, QString guid, QString name) {
+    connect(events, &EditorViewportEvents::addDroppedParticleSystem, this, [this](bool v, iris::Vec3 pos, QString guid, QString name) {
         addAssetParticleSystem(v, pos, guid, name);
     });
 
-    connect(events, &EditorViewportEvents::addDroppedImagePlane, this, [this](QVector3D pos, QString guid) {
+    connect(events, &EditorViewportEvents::addDroppedImagePlane, this, [this](iris::Vec3 pos, QString guid) {
         sceneEditService->addImagePlane(guid, pos);
     });
 

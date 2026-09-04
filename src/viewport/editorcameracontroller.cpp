@@ -9,9 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/editorcameracontroller.h"
-#include <QVector3D>
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include <qmath.h>
@@ -50,7 +50,7 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
 
 	orthoZoom = camera->orthoSize;
 
-    auto viewVec = cam->getLocalRot().rotatedVector(QVector3D(0,0,-1));//default forward is -z
+    auto viewVec = cam->getLocalRot().rotatedVector(iris::Vec3(0,0,-1));//default forward is -z
     viewVec.normalize();
 
     float roll;
@@ -59,10 +59,10 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
     this->updateCameraRot();
 }
 
-QVector3D EditorCameraController::getPos()
+iris::Vec3 EditorCameraController::getPos()
 {
     //return this->camera->position();
-    return QVector3D();
+    return iris::Vec3();
 }
 
 void EditorCameraController::setLinearSpeed(float speed)
@@ -94,10 +94,10 @@ float EditorCameraController::getLookSpeed()
 void EditorCameraController::tilt(float angle)
 {
     /*
-    auto forward = camera->rot.rotatedVector(QVector3D(0,0,-1));
-    auto up = QVector3D(0,1,0);
+    auto forward = camera->rot.rotatedVector(iris::Vec3(0,0,-1));
+    auto up = iris::Vec3(0,1,0);
 
-    auto side = QVector3D::crossProduct(forward,up);
+    auto side = iris::Vec3::crossProduct(forward,up);
     */
 
     pitch += angle;
@@ -111,7 +111,7 @@ void EditorCameraController::tilt(float angle)
  */
 void EditorCameraController::pan(float angle)
 {
-    //camera->rot = QQuaternion::fromAxisAndAngle(QVector3D(0,1,0),angle)*camera->rot;
+    //camera->rot = iris::Quat::fromAxisAndAngle(iris::Vec3(0,1,0),angle)*camera->rot;
     yaw += angle;
     //yaw = fmod(yaw,360);
 }
@@ -131,8 +131,8 @@ void EditorCameraController::onMouseMove(int x,int y)
         this->yaw += x / 10.0f;
         this->pitch += y / 10.0f;
         pitch = (pitch < -89.0f ? -89.0f : (pitch > 89.0f ? 89.0f : pitch));
-        const QQuaternion rot = QQuaternion::fromEulerAngles(pitch, yaw, 0);
-        camera->setLocalPos(altOrbitPivot + rot.rotatedVector(QVector3D(0, 0, 1)) * altOrbitDistance);
+        const iris::Quat rot = iris::Quat::fromEulerAngles(pitch, yaw, 0);
+        camera->setLocalPos(altOrbitPivot + rot.rotatedVector(iris::Vec3(0, 0, 1)) * altOrbitDistance);
         camera->setLocalRot(rot);
         camera->update(0);
         return;   // never also pan/look on the same drag
@@ -149,7 +149,7 @@ void EditorCameraController::onMouseMove(int x,int y)
     {
         //translate camera
         float dragSpeed = 0.01f;
-        auto dir = camera->getLocalRot().rotatedVector(QVector3D(x*dragSpeed,-y*dragSpeed,0));
+        auto dir = camera->getLocalRot().rotatedVector(iris::Vec3(x*dragSpeed,-y*dragSpeed,0));
         camera->setLocalPos( camera->getLocalPos() + dir);
 
         camera->update(0);//force calculation of global transform. find a better way to do this
@@ -157,11 +157,11 @@ void EditorCameraController::onMouseMove(int x,int y)
 
     /*
     //todo: world-space translation using keyboard
-    QVector3D upVector(0,1,0);
-    QVector3D viewVector = camera->viewCenter() - camera->position();
-    auto x = QVector3D::crossProduct(viewVector, upVector).normalized();
+    iris::Vec3 upVector(0,1,0);
+    iris::Vec3 viewVector = camera->viewCenter() - camera->position();
+    auto x = iris::Vec3::crossProduct(viewVector, upVector).normalized();
     //auto z = viewVector.normalized();
-    auto z = QVector3D::crossProduct(upVector,x).normalized();
+    auto z = iris::Vec3::crossProduct(upVector,x).normalized();
 
     camera->translateWorld(txAxis->value()*x*linearSpeed);
     camera->translateWorld(tyAxis->value()*z*linearSpeed);
@@ -170,7 +170,7 @@ void EditorCameraController::onMouseMove(int x,int y)
     updateCameraRot();
 }
 
-void EditorCameraController::setAltOrbit(bool active, const QVector3D &pivot)
+void EditorCameraController::setAltOrbit(bool active, const iris::Vec3 &pivot)
 {
 	CameraControllerBase::setAltOrbit(active, pivot);
 	if (!active || !camera) return;
@@ -199,7 +199,7 @@ bool EditorCameraController::canLeftMouseDrag()
 void EditorCameraController::onMouseWheel(int delta)
 {
     auto zoomSpeed = 0.01f;
-    auto forward = camera->getLocalRot().rotatedVector(QVector3D(0,0,-1));
+    auto forward = camera->getLocalRot().rotatedVector(iris::Vec3(0,0,-1));
     auto movement = camera->getLocalPos() + forward*zoomSpeed*delta;
 	if (camera->projMode == iris::CameraProjection::Perspective)
 		camera->setLocalPos(movement);
@@ -238,11 +238,11 @@ void EditorCameraController::setAxisView(float yawDeg, float pitchDeg)
 
 void EditorCameraController::updateCameraRot()
 {
-    //QQuaternion yawQuat = QQuaternion::fromEulerAngles(0,yaw,0);
-    //QQuaternion pitchQuat = QQuaternion::fromEulerAngles(pitch,0,0);
+    //iris::Quat yawQuat = iris::Quat::fromEulerAngles(0,yaw,0);
+    //iris::Quat pitchQuat = iris::Quat::fromEulerAngles(pitch,0,0);
 
     //camera->rot = yawQuat*pitchQuat;
-    camera->setLocalRot(QQuaternion::fromEulerAngles(pitch,yaw,0));
+    camera->setLocalRot(iris::Quat::fromEulerAngles(pitch,yaw,0));
     camera->update(0);
 }
 
@@ -254,11 +254,11 @@ void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
 
-    const QVector3D worldUp(0, 1, 0);
-    const QVector3D forward = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
-    const QVector3D right = QVector3D::crossProduct(forward, worldUp).normalized();
+    const iris::Vec3 worldUp(0, 1, 0);
+    const iris::Vec3 forward = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
+    const iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
 
-    QVector3D move;
+    iris::Vec3 move;
     if (heldKeys.contains(Qt::Key_W)) move += forward;
     if (heldKeys.contains(Qt::Key_S)) move -= forward;
     if (heldKeys.contains(Qt::Key_D)) move += right;

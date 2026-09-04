@@ -7,6 +7,7 @@
 // node per item slot, convert each handle mesh once (SceneMirror::toMeshData), give
 // every slot its own unlit depth-test-off material and push transform + colour.
 // Studio code: iris + engine abstraction, never Ogre.
+#include "irisgl/core/math/vec.h"
 #include <QHash>
 #include <QVector>
 #include "viewport/gizmo.h"
@@ -19,7 +20,7 @@ public:
     ~GizmoOverlay();
 
     /// Pushes this frame's items. A null gizmo (or nothing selected) hides everything.
-    void update(Gizmo *gizmo, const QVector3D &rayPos, const QVector3D &rayDir, const QVector3D &viewDir);
+    void update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Vec3 &rayDir, const iris::Vec3 &viewDir);
     void clear();
     int visibleItems() const { return mVisible; }
 

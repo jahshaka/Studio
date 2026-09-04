@@ -11,8 +11,8 @@
 // the document's scene camera looks. No GL, no Ogre, no QWidget — so it is
 // testable headless with an offscreen View (tests/player). EnginePlayerView
 // wraps it.
+#include "irisgl/core/math/mat4.h"
 #include <memory>
-#include <QMatrix4x4>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -69,7 +69,7 @@ private:
     std::unique_ptr<SceneMirror> mMirror;
     iris::ScenePtr mDocument;
     PlayBack *mPlayback = nullptr;
-    QMatrix4x4 mSavedCameraMatrix;
+    iris::Mat4 mSavedCameraMatrix;
     bool mHaveSavedCamera = false;
 };
 

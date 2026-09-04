@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef SCENEIOBASE_H
 #define SCENEIOBASE_H
 
+#include "irisgl/core/math/vec.h"
 #include <QDir>
 
 class AssetIOBase
@@ -50,27 +51,27 @@ protected:
 
     /**
      * Reads x and y from vector json object
-     * returns default QVector2D() if vecObj is null
+     * returns default iris::Vec2() if vecObj is null
      * @param vecObj
      * @return
      */
-    QVector2D readVector2(const QJsonObject& vecObj);
+    iris::Vec2 readVector2(const QJsonObject& vecObj);
 
 	/**
 	 * Reads x,y and z from vector json object
-	 * returns default QVector3D() if vecObj is null
+	 * returns default iris::Vec3() if vecObj is null
 	 * @param vecObj
 	 * @return
 	 */
-	QVector3D readVector3(const QJsonObject& vecObj);
+	iris::Vec3 readVector3(const QJsonObject& vecObj);
 
 	/**
 	 * Reads x,y,z and w from vector json object
-	 * returns default QVector4D() if vecObj is null
+	 * returns default iris::Vec4() if vecObj is null
 	 * @param vecObj
 	 * @return
 	 */
-	QVector4D readVector4(const QJsonObject& vecObj);
+	iris::Vec4 readVector4(const QJsonObject& vecObj);
 
 public:
 	/**

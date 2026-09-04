@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #define CHANGEMATERIALPROPERTYCOMMAND_H
 
 #include <QUndoCommand>
-#include <QMatrix4x4>
 #include <QVariant>
 #include "irisgl/irisglfwd.h"
 

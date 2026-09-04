@@ -8,6 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "irisgl/core/math/vec.h"
 #include "test.h"
 #include "../models/library.h"
 #include "../core/texturemanager.h"
@@ -422,14 +423,14 @@ Vector2Node::Vector2Node()
 
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
-		value = QVector2D(x, y);
+		value = iris::Vec2(x, y);
 		emit valueChanged(this, 0);
 
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		value = QVector2D(x, y);
+		value = iris::Vec2(x, y);
 		emit valueChanged(this, 0);
 	});
 
@@ -503,20 +504,20 @@ Vector3Node::Vector3Node()
 
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
-		value = QVector3D(x, y, z);
+		value = iris::Vec3(x, y, z);
 		emit valueChanged(this, 0);
 
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		value = QVector3D(x, y, z);
+		value = iris::Vec3(x, y, z);
 		emit valueChanged(this, 0);
 	});
 
 	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		z = val;
-		value = QVector3D(x, y, z);
+		value = iris::Vec3(x, y, z);
 		emit valueChanged(this, 0);
 	});
 
@@ -593,27 +594,27 @@ Vector4Node::Vector4Node()
 
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
-		value = QVector4D(x, y, z, w);
+		value = iris::Vec4(x, y, z, w);
 		emit valueChanged(this, 0);
 
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		value = QVector4D(x, y, z, w);
+		value = iris::Vec4(x, y, z, w);
 		emit valueChanged(this, 0);
 	});
 
 	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		z = val;
-		value = QVector4D(x, y, z, w);
+		value = iris::Vec4(x, y, z, w);
 		emit valueChanged(this, 0);
 	});
 
 	// was wired to zSpinBox twice; w never updated from its own box
 	connect(wSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		w = val;
-		value = QVector4D(x, y, z, w);
+		value = iris::Vec4(x, y, z, w);
 		emit valueChanged(this, 0);
 	});
 

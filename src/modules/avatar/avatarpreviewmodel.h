@@ -35,18 +35,17 @@ For more information see the LICENSE file
 // moved to Ogre (ANIMATION_ENGINE_MIGRATION_SPEC) and the document does not
 // compute one any more.
 
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/vec.h"
 #include "modules/avatar/avatarspace.h"
 
 #include <QHash>
 #include <QMap>
-#include <QMatrix4x4>
-#include <QQuaternion>
 #include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QVector>
-#include <QVector3D>
 #include <functional>
 #include <memory>
 
@@ -88,7 +87,7 @@ struct BoneInfo
 {
     QString   name;
     QString   parent;
-    QVector3D position;      ///< world-space, from getGlobalTransform()
+    iris::Vec3 position;      ///< world-space, from getGlobalTransform()
 };
 
 /// A drawable bone→parent segment, in world space.
@@ -96,13 +95,13 @@ struct BoneSegment
 {
     QString   fromName;      ///< the parent bone
     QString   toName;        ///< the child bone
-    QVector3D from;
-    QVector3D to;
+    iris::Vec3 from;
+    iris::Vec3 to;
     /// World-space bone axis of the CHILD bone — its own local +Y, which is
     /// the axis rig bones run along (measured on the synthetic fixture and on a
     /// Mixamo character: 64 of 66 bones point at their child along local +Y).
     /// The overlay draws a leaf bone's stub along this, not along `to - from`.
-    QVector3D toAxis;
+    iris::Vec3 toAxis;
     /// The child bone has no bone children of its own — the end of a chain.
     bool      toIsLeaf = false;
 };
@@ -207,13 +206,13 @@ public:
     /// exactly that; with none installed the bone list still has the right
     /// SHAPE — names, parents, hierarchy — but its positions are the rig's REST
     /// pose, because there is no engine to have posed it.
-    using PoseSource = std::function<bool(QHash<QString, QMatrix4x4> &)>;
+    using PoseSource = std::function<bool(QHash<QString, iris::Mat4> &)>;
     void setPoseSource(PoseSource source) { mPoseSource = std::move(source); }
     bool hasPoseSource() const { return bool(mPoseSource); }
 
     /// Every bone's WORLD matrix by name — from the pose source when one is
     /// installed, from the rig's rest transforms otherwise.
-    QHash<QString, QMatrix4x4> boneWorldMatrices() const;
+    QHash<QString, iris::Mat4> boneWorldMatrices() const;
     /// Every bone that has a scene node, in tree order.
     QVector<BoneInfo> bones() const;
     /// One segment per bone that has a bone ancestor: count == bones − roots.

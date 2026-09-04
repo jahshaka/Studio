@@ -12,9 +12,9 @@ For more information see the LICENSE file
 #ifndef EDITORCAMERACONTROLLER_H
 #define EDITORCAMERACONTROLLER_H
 
+#include "irisgl/core/math/vec.h"
 #include <QPoint>
 #include <QSet>
-#include <QVector3D>
 #include <QSharedPointer>
 #include "viewport/cameracontrollerbase.h"
 
@@ -51,7 +51,7 @@ public:
 	iris::CameraNodePtr getCamera();
     void setCamera(iris::CameraNodePtr cam) override;
 
-    QVector3D getPos();
+    iris::Vec3 getPos();
 
     void setLinearSpeed(float speed);
     float getLinearSpeed();
@@ -85,7 +85,7 @@ public:
 	/// TEMPORARY one for the drag — the distance to the pivot is captured
 	/// here and the camera is re-placed on the orbit sphere as the drag turns
 	/// yaw/pitch. Plain fly behaviour returns when the drag ends.
-	void setAltOrbit(bool active, const QVector3D &pivot) override;
+	void setAltOrbit(bool active, const iris::Vec3 &pivot) override;
 
 	/// True while the fly keys should own W/A/S/D/Q/E (RMB held) — the viewport
 	/// uses this to withhold those keys from the shortcut system.

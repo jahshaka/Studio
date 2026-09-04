@@ -1,11 +1,9 @@
 #pragma once
+#include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QVector2D>
-#include <QVector3D>
-#include <QVector4D>
 
 
 class WideRangeSpinBox;
@@ -33,7 +31,7 @@ public:
 	double y;
 	void setValues(float xValue, float yValue);
 signals:
-	void valueChanged(QVector2D val);
+	void valueChanged(iris::Vec2 val);
 
 };
 
@@ -54,7 +52,7 @@ public:
 	void setValues(float xValue, float yValue, float zValue);
 
 signals:
-	void valueChanged(QVector3D val);
+	void valueChanged(iris::Vec3 val);
 };
 
 
@@ -81,7 +79,7 @@ public:
 	void setValues(float xValue, float yValue, float zValue, float wValue);
 
 signals:
-	void valueChanged(QVector4D val);
+	void valueChanged(iris::Vec4 val);
 
 };
 
@@ -156,6 +154,5 @@ public:
 	QPushButton *texture;
 	QString fileName;
 };
-
 
 

@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/vec.h"
 #include "scripting/modules/worldapi.h"
 
 #include <QDir>
@@ -193,8 +194,8 @@ bool WorldApi::gi(const QVariantMap &params)
     if (params.contains("boundsMax"))
         scene->giBoundsMax = vecFromJs(params.value("boundsMax"), scene->giBoundsMax);
     if (params.contains("pccGrid")) {
-        const QVector3D g = vecFromJs(params.value("pccGrid"), scene->giPccGrid);
-        scene->giPccGrid = QVector3D(qBound(1, qRound(g.x()), 8), qBound(1, qRound(g.y()), 8),
+        const iris::Vec3 g = vecFromJs(params.value("pccGrid"), scene->giPccGrid);
+        scene->giPccGrid = iris::Vec3(qBound(1, qRound(g.x()), 8), qBound(1, qRound(g.y()), 8),
                                      qBound(1, qRound(g.z()), 8));
     }
     if (params.contains("autoRefresh"))

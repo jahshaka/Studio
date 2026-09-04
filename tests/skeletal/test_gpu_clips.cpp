@@ -10,9 +10,11 @@
 // blend is nlerpShortest; Ogre resamples at bake time onto a per-4-bone-block
 // key-time union with an explicitly unnormalized quaternion lerp; and composing
 // an FBX pivot chain is itself a resample.
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QImage>
-#include <QMatrix4x4>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -55,19 +57,19 @@ static iris::AnimationPtr buildDenseSwing(float tipDegrees, float rootDegrees,
                                           float length, int keys)
 {
     auto skelAnim = iris::SkeletalAnimation::create();
-    const auto addBone = [&](const char *name, float degrees, const QVector3D &pos) {
+    const auto addBone = [&](const char *name, float degrees, const iris::Vec3 &pos) {
         auto boneAnim = new iris::BoneAnimation();
         for (int i = 0; i <= keys; ++i) {
             const double t = double(length) * double(i) / double(keys);
             const float a = degrees * float(i) / float(keys);
             boneAnim->posKeys->addKey(pos, t);
-            boneAnim->rotKeys->addKey(QQuaternion::fromAxisAndAngle(0, 0, 1, a), t);
-            boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), t);
+            boneAnim->rotKeys->addKey(iris::Quat::fromAxisAndAngle(0, 0, 1, a), t);
+            boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), t);
         }
         skelAnim->addBoneAnimation(name, boneAnim);
     };
-    addBone("jointRoot", rootDegrees, QVector3D(0, 0, 0));
-    addBone("jointTip", tipDegrees, QVector3D(0, 1, 0));
+    addBone("jointRoot", rootDegrees, iris::Vec3(0, 0, 0));
+    addBone("jointTip", tipDegrees, iris::Vec3(0, 1, 0));
     return iris::Animation::createFromSkeletalAnimation(skelAnim);
 }
 
@@ -102,11 +104,11 @@ static MeshData armMeshData(const iris::MeshPtr &mesh)
     return d;
 }
 
-static QMatrix4x4 engineBone(Scene *s, NodeId node, size_t bone, size_t boneCount)
+static iris::Mat4 engineBone(Scene *s, NodeId node, size_t bone, size_t boneCount)
 {
     std::vector<float> m(boneCount * 12, 0.0f);
-    if (!s->boneMatrices(node, m.data(), boneCount)) return QMatrix4x4();
-    QMatrix4x4 out;
+    if (!s->boneMatrices(node, m.data(), boneCount)) return iris::Mat4();
+    iris::Mat4 out;
     const float *b = &m[bone * 12];
     for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c) out(r, c) = b[r * 4 + c];
     out(3, 0) = 0; out(3, 1) = 0; out(3, 2) = 0; out(3, 3) = 1;
@@ -117,8 +119,8 @@ static double worstBoneDiff(Scene *s, NodeId a, NodeId b, size_t boneCount)
 {
     double worst = 0.0;
     for (size_t i = 0; i < boneCount; ++i) {
-        const QMatrix4x4 ma = engineBone(s, a, i, boneCount);
-        const QMatrix4x4 mb = engineBone(s, b, i, boneCount);
+        const iris::Mat4 ma = engineBone(s, a, i, boneCount);
+        const iris::Mat4 mb = engineBone(s, b, i, boneCount);
         for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
             worst = std::max(worst, std::fabs(double(ma(r, c)) - double(mb(r, c))));
     }
@@ -148,8 +150,8 @@ static std::vector<BonePose> posesFrom(const SkeletonDesc &rig, const iris::Extr
     }
     for (const auto &track : clip.tracks) {
         if (track.bone < 0 || size_t(track.bone) >= out.size() || track.keys.isEmpty()) continue;
-        QVector3D pos, scale;
-        QQuaternion rot;
+        iris::Vec3 pos, scale;
+        iris::Quat rot;
         if (t <= track.keys.first().time) {
             pos = track.keys.first().position; rot = track.keys.first().rotation;
             scale = track.keys.first().scale;
@@ -165,7 +167,7 @@ static std::vector<BonePose> posesFrom(const SkeletonDesc &rig, const iris::Extr
                 const float u = span > 0.0f ? (t - a.time) / span : 0.0f;
                 pos = a.position + (b.position - a.position) * u;
                 scale = a.scale + (b.scale - a.scale) * u;
-                rot = QQuaternion::nlerp(a.rotation, b.rotation, u);
+                rot = iris::Quat::nlerp(a.rotation, b.rotation, u);
                 break;
             }
         }
@@ -302,13 +304,13 @@ int main(int argc, char **argv)
         CHECK(s->bonePoses(nodeClip, got.data(), got.size()), "bonePoses read back");
         double worst = 0.0;
         for (size_t i = 0; i < boneCount; ++i) {
-            QMatrix4x4 a, b;
-            a.translate(QVector3D(want[i].position.x, want[i].position.y, want[i].position.z));
-            a.rotate(QQuaternion(want[i].rotation.w, want[i].rotation.x, want[i].rotation.y, want[i].rotation.z));
-            a.scale(QVector3D(want[i].scale.x, want[i].scale.y, want[i].scale.z));
-            b.translate(QVector3D(got[i].position.x, got[i].position.y, got[i].position.z));
-            b.rotate(QQuaternion(got[i].rotation.w, got[i].rotation.x, got[i].rotation.y, got[i].rotation.z));
-            b.scale(QVector3D(got[i].scale.x, got[i].scale.y, got[i].scale.z));
+            iris::Mat4 a, b;
+            a.translate(iris::Vec3(want[i].position.x, want[i].position.y, want[i].position.z));
+            a.rotate(iris::Quat(want[i].rotation.w, want[i].rotation.x, want[i].rotation.y, want[i].rotation.z));
+            a.scale(iris::Vec3(want[i].scale.x, want[i].scale.y, want[i].scale.z));
+            b.translate(iris::Vec3(got[i].position.x, got[i].position.y, got[i].position.z));
+            b.rotate(iris::Quat(got[i].rotation.w, got[i].rotation.x, got[i].rotation.y, got[i].rotation.z));
+            b.scale(iris::Vec3(got[i].scale.x, got[i].scale.y, got[i].scale.z));
             for (int k = 0; k < 16; ++k)
                 worst = std::max(worst, std::fabs(double(a.constData()[k]) - double(b.constData()[k])));
         }
@@ -352,7 +354,7 @@ int main(int argc, char **argv)
                 // slerp, not nlerp, on the one animated bone
                 const auto &tr = sx.tracks.first();
                 const float u = std::min(std::max(t / sparse.clip->getLength(), 0.0f), 1.0f);
-                const QQuaternion q = QQuaternion::slerp(tr.keys.first().rotation,
+                const iris::Quat q = iris::Quat::slerp(tr.keys.first().rotation,
                                                          tr.keys.last().rotation, u);
                 poses[size_t(tr.bone)].rotation = Quat(q.x(), q.y(), q.z(), q.scalar());
             }
@@ -417,9 +419,9 @@ int main(int argc, char **argv)
             iris::ClipBoneTrack t;
             t.bone = 0;
             t.boneName = QStringLiteral("jointRoot");
-            iris::ClipBoneKey k0; k0.time = 0.0f; k0.scale = QVector3D(1, 1, 1);
+            iris::ClipBoneKey k0; k0.time = 0.0f; k0.scale = iris::Vec3(1, 1, 1);
             iris::ClipBoneKey k1 = k0; k1.time = length;
-            k1.rotation = QQuaternion::fromAxisAndAngle(0, 0, 1, 20.0f);
+            k1.rotation = iris::Quat::fromAxisAndAngle(0, 0, 1, 20.0f);
             t.keys.append(k0); t.keys.append(k1);
             partial.tracks.append(t);
         }
@@ -465,12 +467,12 @@ int main(int argc, char **argv)
         // ...and the pose agrees: the un-shared bone lands EXACTLY on the full
         // clip's pose, which is the assertion the weights only imply.
         engine->renderOneFrame();
-        const QMatrix4x4 blended = engineBone(s, nodeClip, 1, boneCount);
+        const iris::Mat4 blended = engineBone(s, nodeClip, 1, boneCount);
         ClipState solo; solo.name = "Swing"; solo.enabled = true; solo.time = length;
         solo.weight = 1.0f; solo.looping = false;
         s->setClipStates(nodeClip, &solo, 1);
         engine->renderOneFrame();
-        const QMatrix4x4 alone = engineBone(s, nodeClip, 1, boneCount);
+        const iris::Mat4 alone = engineBone(s, nodeClip, 1, boneCount);
         // Only the bone's OWN contribution can be compared: its parent moves
         // under the blend (RootOnly animates the root), so the full matrix
         // legitimately differs. bonePoses is parent-local and is the right

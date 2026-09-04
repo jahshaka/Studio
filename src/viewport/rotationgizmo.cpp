@@ -9,7 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/rotationgizmo.h"
 #include <QApplication>
 
@@ -37,37 +39,37 @@ RotationHandle::RotationHandle(Gizmo* gizmo, GizmoAxis axis)
 
 	switch (axis) {
 	case GizmoAxis::X:
-		handleExtent = QVector3D(1, 0, 0);
-		plane = QVector3D(1, 0, 0);
+		handleExtent = iris::Vec3(1, 0, 0);
+		plane = iris::Vec3(1, 0, 0);
 		setHandleColor(QColor(237, 66, 66));
 		break;
 	case GizmoAxis::Y:
-		handleExtent = QVector3D(0, 1, 0);
-		plane = QVector3D(0, 1, 0);
+		handleExtent = iris::Vec3(0, 1, 0);
+		plane = iris::Vec3(0, 1, 0);
 		setHandleColor(QColor(122, 204, 44));
 		break;
 	case GizmoAxis::Z:
-		handleExtent = QVector3D(0, 0, 1);
-		plane = QVector3D(0, 0, 1);
+		handleExtent = iris::Vec3(0, 0, 1);
+		plane = iris::Vec3(0, 0, 1);
 		setHandleColor(QColor(58, 122, 240));
 		break;
 	}
 }
 
-bool RotationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
+bool RotationHandle::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
 	auto gizmoTransform = gizmo->getTransform();
 	gizmoTransform.scale(handleScale * gizmo->getGizmoScale());
 	auto worldToGizmo = gizmoTransform.inverted();
 
 	rayPos = worldToGizmo * rayPos;
-	//rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
-	rayDir = (worldToGizmo * QVector4D(rayDir, 0)).toVector3D();
+	//rayDir = iris::Quat::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
+	rayDir = (worldToGizmo * iris::Vec4(rayDir, 0)).toVector3D();
 
-	QVector3D hitPoint;
+	iris::Vec3 hitPoint;
 	float hitDist;
-	QVector3D hitPlane;
-	if (QVector3D::dotProduct(plane, rayDir) < 0)
+	iris::Vec3 hitPlane;
+	if (iris::Vec3::dotProduct(plane, rayDir) < 0)
 		hitPlane = -plane;
 	else
 		hitPlane = plane;
@@ -81,7 +83,7 @@ bool RotationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 		//qDebug() << distToCenter;
 
 		// hit should be from the part facing the point, not the back side
-		if (QVector3D::dotProduct(hitPoint.normalized(), rayPos.normalized()) < 0)
+		if (iris::Vec3::dotProduct(hitPoint.normalized(), rayPos.normalized()) < 0)
 			return false;
 
 		if (distToCenter > innerRadius && distToCenter < outerRadius) {
@@ -97,15 +99,15 @@ bool RotationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 	return false;
 }
 
-bool RotationHandle::getHitAngle(QVector3D rayPos, QVector3D rayDir, float& angle)
+bool RotationHandle::getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& angle)
 {
 	auto gizmoTransform = gizmo->getTransform();
 	auto worldToGizmo = gizmoTransform.inverted();
 
 	rayPos = worldToGizmo * rayPos;
-	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
+	rayDir = iris::Quat::fromRotationMatrix(worldToGizmo.normalMatrix()).normalized() * rayDir;
 
-	QVector3D hitPoint;
+	iris::Vec3 hitPoint;
 	float hitDist;	
 
 	// first test of the handle's facing plane
@@ -120,7 +122,7 @@ bool RotationHandle::getHitAngle(QVector3D rayPos, QVector3D rayDir, float& angl
 		hitPoint.normalize();
 
 		// project to original handle's plane
-		auto d = QVector3D::dotProduct(plane, hitPoint);
+		auto d = iris::Vec3::dotProduct(plane, hitPoint);
 		hitPoint = hitPoint - plane*d;
 	}
 
@@ -170,7 +172,6 @@ void RotationGizmo::loadAssets()
 	screenRingMesh = GizmoMeshes::screenRing();
 
 
-
 	// create circle
 	QVector<float> points;
 	for (float i = 0; i < 360; i += 1) {
@@ -201,7 +202,7 @@ bool RotationGizmo::isDragging()
 	return dragging;
 }
 
-void RotationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+void RotationGizmo::startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	trans = Gizmo::getTransform();
 	//qDebug() << "drag starting";
@@ -228,7 +229,7 @@ void RotationGizmo::endDragging()
 	createUndoAction();
 }
 
-void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	//qDebug() << "dragging";
 	if (draggedHandle == nullptr) {
@@ -247,17 +248,17 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 		diff = Gizmo::snap(diff, SnapSettings::rotateSize());
 	}
 
-	QQuaternion rot;
+	iris::Quat rot;
 
 	switch (draggedHandle->axis) {
 		case GizmoAxis::X:
-			rot = QQuaternion::fromEulerAngles(diff, 0, 0);
+			rot = iris::Quat::fromEulerAngles(diff, 0, 0);
 			break;
 		case GizmoAxis::Y:
-			rot = QQuaternion::fromEulerAngles(0, diff, 0);
+			rot = iris::Quat::fromEulerAngles(0, diff, 0);
 			break;
 		case GizmoAxis::Z:
-			rot = QQuaternion::fromEulerAngles(0, 0, diff);
+			rot = iris::Quat::fromEulerAngles(0, 0, diff);
 			break;
 	}
 
@@ -271,7 +272,7 @@ void RotationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
 	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
-bool RotationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
+bool RotationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
 	trans = Gizmo::getTransform();
 	for (auto i = 0; i< 3; i++) {
@@ -286,7 +287,7 @@ bool RotationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 }
 
 // returns hit position of the hit handle
-RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle)
+RotationHandle* RotationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& hitAngle)
 {
 	RotationHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
@@ -308,7 +309,7 @@ RotationHandle* RotationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, 
 	return closestHandle;
 }
 
-QMatrix4x4 RotationGizmo::getTransform()
+iris::Mat4 RotationGizmo::getTransform()
 {
 	return trans;
 	//return Gizmo::getTransform();
@@ -326,7 +327,7 @@ void RotationGizmo::setSelectedNode(iris::SceneNodePtr node)
 	trans = Gizmo::getTransform();
 }
 
-QVector<GizmoDrawItem> RotationGizmo::drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
@@ -350,10 +351,10 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(QVector3D rayPos, QVector3D rayD
 	// Screen-facing outer circle framing the three axis rings — visual only
 	// (there is no fourth handle behind it), always oriented at the camera.
 	if (screenRingMesh) {
-		QMatrix4x4 t;
+		iris::Mat4 t;
 		t.translate(Gizmo::getTransform().column(3).toVector3D());
 		if (!viewDir.isNull())
-			t.rotate(QQuaternion::rotationTo(QVector3D(0, 0, 1), -viewDir.normalized()));
+			t.rotate(iris::Quat::rotationTo(iris::Vec3(0, 0, 1), -viewDir.normalized()));
 		t.scale(getGizmoScale() * handles[0]->handleScale);
 		items.append({ screenRingMesh, t, QColor(205, 205, 205) });
 	}

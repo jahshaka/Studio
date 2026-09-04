@@ -9,7 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/translationgizmo.h"
 #include <QApplication>
 
@@ -37,52 +38,52 @@ TranslationHandle::TranslationHandle(Gizmo* gizmo, GizmoAxis axis)
 
 	switch (axis) {
 	case GizmoAxis::Center:
-		handleExtent = QVector3D(0, 0, 0);
-		//planes.append(QVector3D(0, 1, 0)); // this will change based on the view direction
+		handleExtent = iris::Vec3(0, 0, 0);
+		//planes.append(iris::Vec3(0, 1, 0)); // this will change based on the view direction
 		setHandleColor(QColor(255, 255, 255));
 		break;
 	case GizmoAxis::X:
-		handleExtent = QVector3D(1, 0, 0);
-		planes.append(QVector3D(0, 1, 0));
-		planes.append(QVector3D(0, 0, 1));
+		handleExtent = iris::Vec3(1, 0, 0);
+		planes.append(iris::Vec3(0, 1, 0));
+		planes.append(iris::Vec3(0, 0, 1));
 		setHandleColor(QColor(237, 66, 66));
 		break;
 	case GizmoAxis::Y:
-		handleExtent = QVector3D(0, 1, 0);
-		planes.append(QVector3D(1, 0, 0));
-		planes.append(QVector3D(0, 0, 1));
+		handleExtent = iris::Vec3(0, 1, 0);
+		planes.append(iris::Vec3(1, 0, 0));
+		planes.append(iris::Vec3(0, 0, 1));
 		setHandleColor(QColor(122, 204, 44));
 		break;
 	case GizmoAxis::Z:
-		handleExtent = QVector3D(0, 0, 1);
-		planes.append(QVector3D(1, 0, 0));
-		planes.append(QVector3D(0, 1, 0));
+		handleExtent = iris::Vec3(0, 0, 1);
+		planes.append(iris::Vec3(1, 0, 0));
+		planes.append(iris::Vec3(0, 1, 0));
 		setHandleColor(QColor(58, 122, 240));
 		break;
 	}
 }
 
-bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
+bool TranslationHandle::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
     auto gizmoTrans = gizmo->getTransform();
 
 	if (this->axis == GizmoAxis::Center) {
 		// sphere center intersection
 		float t;
-		QVector3D hitPoint;
-		return iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, gizmoTrans * QVector3D(0, 0, 0), gizmo->getGizmoScale() * CENTER_CIRCLE_RADIUS, t, hitPoint);
+		iris::Vec3 hitPoint;
+		return iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, gizmoTrans * iris::Vec3(0, 0, 0), gizmo->getGizmoScale() * CENTER_CIRCLE_RADIUS, t, hitPoint);
 	}
 	else {
 
 		// calculate world space position of the segment representing the handle
-		auto p1 = gizmoTrans * QVector3D(0, 0, 0);
+		auto p1 = gizmoTrans * iris::Vec3(0, 0, 0);
 		auto q1 = gizmoTrans * (handleExtent * handleLength * gizmo->getGizmoScale() * handleScale);
 
 		auto p2 = rayPos;
 		auto q2 = rayPos + rayDir * 100000;// (nick) use segment instead of ray pos and ray dir
 
 		float s, t;
-		QVector3D c1, c2;
+		iris::Vec3 c1, c2;
 		auto dist = iris::MathHelper::closestPointBetweenSegments(p1, q1, p2, q2, s, t, c1, c2);
 		if (dist < handleScale * gizmo->getGizmoScale() * handleScale) {
 			return true;
@@ -92,26 +93,26 @@ bool TranslationHandle::isHit(QVector3D rayPos, QVector3D rayDir)
 	}
 }
 
-QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+iris::Vec3 TranslationHandle::getHitPos(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	bool hit = false;
-	QVector3D finalHitPos;
+	iris::Vec3 finalHitPos;
 	float closestDist = 10000000;
 
 	// transform rayPos and rayDir to gizmo space
 	auto gizmoTransform = gizmo->getTransform();
 	auto worldToGizmo = gizmoTransform.inverted();
 	rayPos = worldToGizmo * rayPos;
-	rayDir = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(rayDir);
+	rayDir = iris::Quat::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(rayDir);
 
 	if (this->axis == GizmoAxis::Center) {
 		// sphere center intersection
 		float t;
-		QVector3D hitPoint;
-		//iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, QVector3D(0, 0, 0), 1, t, hitPoint);
+		iris::Vec3 hitPoint;
+		//iris::IntersectionHelper::raySphereIntersects(rayPos, rayDir, iris::Vec3(0, 0, 0), 1, t, hitPoint);
 
 		//return gizmoTransform * hitPoint;
-		auto normal = QQuaternion::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(-viewDir);
+		auto normal = iris::Quat::fromRotationMatrix(worldToGizmo.normalMatrix()).rotatedVector(-viewDir);
 		iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPoint);
 
 		return gizmoTransform * hitPoint;
@@ -121,15 +122,15 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVect
 		// loop through planes
 		for (auto normal : planes) {
 			float t;
-			QVector3D hitPos;
+			iris::Vec3 hitPos;
 
 			// flip normal so its facing the ray source
-			if (QVector3D::dotProduct(normal, rayPos) < 0)
+			if (iris::Vec3::dotProduct(normal, rayPos) < 0)
 				normal = -normal;
 
 			if (iris::IntersectionHelper::intersectSegmentPlane(rayPos, rayPos + rayDir * 10000000, iris::Plane(normal, 0), t, hitPos)) {
 				// ignore planes at grazing angles
-				if (qAbs(QVector3D::dotProduct(rayDir, normal)) < 0.1f)
+				if (qAbs(iris::Vec3::dotProduct(rayDir, normal)) < 0.1f)
 					continue;
 
 				auto hitResult = handleExtent * hitPos;
@@ -153,7 +154,7 @@ QVector3D TranslationHandle::getHitPos(QVector3D rayPos, QVector3D rayDir, QVect
 	}
 
 	if (!hit) {
-		float dominantExtent = iris::MathHelper::sign(QVector3D::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
+		float dominantExtent = iris::MathHelper::sign(iris::Vec3::dotProduct(rayDir.normalized(), handleExtent));// results in -1 or 1
 		finalHitPos = dominantExtent * handleExtent * 10000;
 	}
 
@@ -218,7 +219,7 @@ bool TranslationGizmo::isDragging()
 	return dragging;
 }
 
-void TranslationGizmo::startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+void TranslationGizmo::startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	draggedHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 	if (draggedHandle == nullptr) {
@@ -240,7 +241,7 @@ void TranslationGizmo::endDragging()
 	createUndoAction();
 }
 
-void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+void TranslationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	if (draggedHandle == nullptr) {
 		return;
@@ -273,7 +274,7 @@ void TranslationGizmo::drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDi
 	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
-bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
+bool TranslationGizmo::isHit(iris::Vec3 rayPos, iris::Vec3 rayDir)
 {
 	for (auto i = 0; i< handles.size(); i++) {
 		if (handles[i]->isHit(rayPos, rayDir))
@@ -286,7 +287,7 @@ bool TranslationGizmo::isHit(QVector3D rayPos, QVector3D rayDir)
 }
 
 // returns hit position of the hit handle
-TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir, QVector3D& hitPos)
+TranslationHandle* TranslationGizmo::getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir, iris::Vec3& hitPos)
 {
 	TranslationHandle* closestHandle = nullptr;
 	float closestDistance = 10000000;
@@ -312,7 +313,7 @@ TranslationHandle* TranslationGizmo::getHitHandle(QVector3D rayPos, QVector3D ra
 	return closestHandle;
 }
 
-QVector<GizmoDrawItem> TranslationGizmo::drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir)
+QVector<GizmoDrawItem> TranslationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir)
 {
 	QVector<GizmoDrawItem> items;
 	if (!selectedNode) return items;
@@ -326,7 +327,7 @@ QVector<GizmoDrawItem> TranslationGizmo::drawItems(QVector3D rayPos, QVector3D r
 		}
 		return items;
 	}
-	QVector3D hitPos;
+	iris::Vec3 hitPos;
 	auto hitHandle = getHitHandle(rayPos, rayDir, viewDir, hitPos);
 	for (int i = 0; i < handles.size(); i++) {
 		auto transform = this->getTransform();

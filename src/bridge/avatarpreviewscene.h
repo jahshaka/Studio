@@ -21,10 +21,10 @@
 //
 // NEVER enables GI: HlmsPbs's VCT/PCC binding is process-wide, so a preview
 // scene that turned it on would steal it from the editor scene (R0.5).
+#include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QColor>
 #include <QImage>
-#include <QVector3D>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
@@ -107,7 +107,7 @@ private:
     // Orbit state
     float mYaw = 0, mPitch = 0, mTargetYaw = 0, mTargetPitch = 0;
     float mRotationSpeed = 0.5f;
-    QVector3D mPivot;
+    iris::Vec3 mPivot;
     float mDistFromPivot = 4.0f;
     float mSubjectRadius = 1.0f;
     bool mLeftDown = false, mRightDown = false, mMiddleDown = false;

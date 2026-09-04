@@ -15,8 +15,8 @@
 //
 // Everything here is world-space and adapts the clip planes to the framing.
 
-#include <QMatrix4x4>
-#include <QVector3D>
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/vec.h"
 #include <QtMath>
 
 #include "irisgl/core/geometry/aabb.h"
@@ -36,10 +36,10 @@ inline iris::AABB worldBoundingBox(const iris::SceneNodePtr &node)
         auto meshNode = node.staticCast<iris::MeshNode>();
         if (meshNode->getMesh()) {
             const iris::AABB local = meshNode->getMesh()->getAABB();
-            const QVector3D mn = local.getMin(), mx = local.getMax();
-            const QMatrix4x4 xf = meshNode->getGlobalTransform();
+            const iris::Vec3 mn = local.getMin(), mx = local.getMax();
+            const iris::Mat4 xf = meshNode->getGlobalTransform();
             for (int i = 0; i < 8; ++i) {
-                aabb.merge(xf.map(QVector3D(i & 1 ? mx.x() : mn.x(),
+                aabb.merge(xf.map(iris::Vec3(i & 1 ? mx.x() : mn.x(),
                                             i & 2 ? mx.y() : mn.y(),
                                             i & 4 ? mx.z() : mn.z())));
             }

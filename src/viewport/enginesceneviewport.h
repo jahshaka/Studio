@@ -10,6 +10,8 @@
 // Step 6 skeleton: rendering, document sync, camera, selection state and screenshots
 // work; gizmo drawing, picking and physics hooks arrive in later plan steps and are
 // explicit no-ops here (documented per method).
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <memory>
 #include "viewport/engineviewwidget.h"
 #include "viewport/ieditorviewport.h"
@@ -32,8 +34,6 @@ class OrbitalCameraController;
 #include <QPointer>
 #include <QPointF>
 #include <QHash>
-#include <QVector3D>
-#include <QQuaternion>
 
 class EngineSceneViewport : public EngineViewWidget, public IEditorViewport
 {
@@ -60,7 +60,7 @@ public:
     /// The point Alt+LMB orbits around: the selection's world bounding-box
     /// centre (its origin when it has no meshes), else the last focus point,
     /// else the world origin.
-    QVector3D orbitPivot() const;
+    iris::Vec3 orbitPivot() const;
     bool snapSelectionToFloor() override;
 
     iris::CameraNodePtr editorCamera() override { return mEditorCam; }
@@ -183,9 +183,9 @@ public:
     /// Picks the document object under a viewport pixel (legacy selection rule).
     /// `hitPoint` receives the world-space hit when a node is returned.
     iris::SceneNodePtr pickAt(const QPointF &point, bool selectRootObject = true,
-                              QVector3D *hitPoint = nullptr, bool forcePickable = false);
+                              iris::Vec3 *hitPoint = nullptr, bool forcePickable = false);
     /// Where a dragged asset would land: the picked surface, else the ground plane.
-    QVector3D dropPositionAt(const QPointF &point);
+    iris::Vec3 dropPositionAt(const QPointF &point);
 
 protected:
     void showEvent(QShowEvent *) override;
@@ -217,8 +217,8 @@ private:
     /// Session-only by design (matches standard editors; serializing it into
     /// EditorData is a possible future option). Cleared on scene switch.
     struct ViewCameraState {
-        QVector3D pos;
-        QQuaternion rot;
+        iris::Vec3 pos;
+        iris::Quat rot;
         float orthoSize = 10.0f;      // ortho zoom (CameraNode::orthoSize)
         float distFromPivot = 15.0f;  // orbital controller's orbit distance
     };
@@ -232,7 +232,7 @@ private:
     bool snapDragToVertexUnderCursor();
     void setCameraController(CameraControllerBase *c);
     /// Mouse ray for the current pointer position (false if the pointer never entered).
-    bool mouseRay(QVector3D &rayPos, QVector3D &rayDir, QVector3D &viewDir) const;
+    bool mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const;
 
     TranslationGizmo *mTranslateGizmo = nullptr;
     RotationGizmo    *mRotateGizmo = nullptr;
@@ -250,7 +250,7 @@ private:
     iris::SceneNodePtr mDragPreviewNode;
     iris::MaterialPtr mDragOriginalMaterial;
     bool mDragWasHit = false;
-    QVector3D mDragScenePos;
+    iris::Vec3 mDragScenePos;
     QElapsedTimer mFrameTimer;
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
@@ -274,7 +274,7 @@ private:
     iris::SceneNodePtr mSelectedNode;
     /// Alt+LMB orbit pivot when nothing is selected: the last focus point
     /// (F on a node), else the world origin.
-    QVector3D mLastOrbitPivot;
+    iris::Vec3 mLastOrbitPivot;
     iris::CameraNodePtr mEditorCam;
     EditorData *mEditorData = nullptr;
     bool mShowLightWires = true;

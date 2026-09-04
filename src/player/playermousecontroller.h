@@ -12,18 +12,18 @@ For more information see the LICENSE file
 #ifndef PLAYERMOUSECONTROLLER_H
 #define PLAYERMOUSECONTROLLER_H
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
-#include <QQuaternion>
-#include <QVector3D>
 #include "viewport/cameracontrollerbase.h"
 
 // Local picking record (was defined by the deleted legacy SceneViewWidget).
 struct PickingResult
 {
     iris::SceneNodePtr hitNode;
-    QVector3D hitPoint;
+    iris::Vec3 hitPoint;
 
     // this is often used for comparisons so it's not necessary to find the root
     float distanceFromCameraSqrd;
@@ -43,8 +43,8 @@ class PlayerMouseController : public CameraControllerBase
 
     // pos and rot of editor camera before being assigned
     // to this controller
-    QQuaternion camRot;
-    QVector3D camPos;
+    iris::Quat camRot;
+    iris::Vec3 camPos;
 	bool _isPlaying = false;
 
 	bool shouldRestoreCameraTransform;
@@ -65,14 +65,14 @@ public:
     void onMouseWheel(int delta) override;
     void onMouseDown(Qt::MouseButton button) override;
     void onMouseUp(Qt::MouseButton button) override;
-    QVector3D calculateMouseRay(const QPointF& pos);
+    iris::Vec3 calculateMouseRay(const QPointF& pos);
 
     void doObjectPicking(
         const QPointF& point);
-    QVector3D screenSpaceToWoldSpace(const QPointF& pos, float depth);
+    iris::Vec3 screenSpaceToWoldSpace(const QPointF& pos, float depth);
     void doScenePicking(const iris::SceneNodePtr& sceneNode,
-                        const QVector3D& segStart,
-                        const QVector3D& segEnd,
+                        const iris::Vec3& segStart,
+                        const iris::Vec3& segEnd,
                         QList<PickingResult>& hitList);
     void setViewport(const iris::Viewport& viewport);
 

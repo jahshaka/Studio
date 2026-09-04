@@ -30,6 +30,7 @@ For more information see the LICENSE file
 // Everything in here is pure document work: no Qt widgets, no engine, no
 // database — which is what makes the verbs headless-testable.
 
+#include "irisgl/core/math/vec.h"
 #include <QList>
 #include <QString>
 #include <QVariant>
@@ -115,7 +116,7 @@ bool removeTrack(const iris::AnimationPtr &anim, const QString &property);
 /// into) a clip that no longer appears anywhere.
 bool removeAnimation(const iris::SceneNodePtr &node, const iris::AnimationPtr &anim);
 
-/// The track's value at `time`, as the property's own type (float, QVector3D
+/// The track's value at `time`, as the property's own type (float, iris::Vec3
 /// or QColor). Invalid QVariant when there is no such track. Pure read — it
 /// does NOT pose the node.
 QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, double time);

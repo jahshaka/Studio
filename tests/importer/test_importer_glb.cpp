@@ -22,6 +22,8 @@
 //      (heals assets imported before the write-side fix).
 //   7. Double-import root-scale stability (phase 2): importing the same
 //      multi-mesh GLB twice in one process yields identical root transforms.
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -31,7 +33,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
-#include <QVector3D>
 #include <cmath>
 #include <cstdio>
 
@@ -425,12 +426,12 @@ int main(int argc, char **argv)
         auto node = iris::SceneNode::create();
         node->setName("scaled");
         node->name = "scaled";
-        node->setLocalScale(QVector3D(0.0143f, 0.0143f, 0.0143f));
-        node->setLocalRot(QQuaternion::fromEulerAngles(10.5f, 20.25f, 0.125f));
-        node->setLocalPos(QVector3D(0.00123f, 0, 0));
-        const QVector3D scaleBefore = node->getLocalScale();
-        const QQuaternion rotBefore = node->getLocalRot();
-        const QVector3D posBefore = node->getLocalPos();
+        node->setLocalScale(iris::Vec3(0.0143f, 0.0143f, 0.0143f));
+        node->setLocalRot(iris::Quat::fromEulerAngles(10.5f, 20.25f, 0.125f));
+        node->setLocalPos(iris::Vec3(0.00123f, 0, 0));
+        const iris::Vec3 scaleBefore = node->getLocalScale();
+        const iris::Quat rotBefore = node->getLocalRot();
+        const iris::Vec3 posBefore = node->getLocalPos();
 
         TransformEditor editor(nullptr);
         editor.setSceneNode(node);          // first population of a fresh panel

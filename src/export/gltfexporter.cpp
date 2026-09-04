@@ -9,6 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "export/gltfexporter.h"
 
 #include "export/walkers/scenewalker.h"
@@ -21,8 +23,6 @@ For more information see the LICENSE file
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QQuaternion>
-#include <QVector3D>
 
 #include <cmath>
 #include <cstring>
@@ -720,18 +720,18 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c)
 
 void writeTrs(QJsonObject &n, const iris::SceneNodePtr &node)
 {
-    const QVector3D p = node->getLocalPos();
+    const iris::Vec3 p = node->getLocalPos();
     if (!p.isNull()) {
         QJsonArray t; t.append(p.x()); t.append(p.y()); t.append(p.z());
         n["translation"] = t;
     }
-    const QQuaternion q = node->getLocalRot().normalized();
+    const iris::Quat q = node->getLocalRot().normalized();
     if (std::fabs(q.x()) > 1e-7f || std::fabs(q.y()) > 1e-7f || std::fabs(q.z()) > 1e-7f ||
         std::fabs(q.scalar() - 1.0f) > 1e-7f) {
         QJsonArray r; r.append(q.x()); r.append(q.y()); r.append(q.z()); r.append(q.scalar());
         n["rotation"] = r;
     }
-    const QVector3D s = node->getLocalScale();
+    const iris::Vec3 s = node->getLocalScale();
     if (std::fabs(s.x() - 1) > 1e-6f || std::fabs(s.y() - 1) > 1e-6f || std::fabs(s.z() - 1) > 1e-6f) {
         QJsonArray sc; sc.append(s.x()); sc.append(s.y()); sc.append(s.z());
         n["scale"] = sc;
@@ -1079,9 +1079,9 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         for (const auto &bone : skel->bones) {
             QJsonObject bn;
             bn["name"] = bone->name;
-            const QVector3D bp = bone->bindingPos;
-            const QQuaternion br = bone->bindingRot.normalized();
-            const QVector3D bs = bone->bindingScale;
+            const iris::Vec3 bp = bone->bindingPos;
+            const iris::Quat br = bone->bindingRot.normalized();
+            const iris::Vec3 bs = bone->bindingScale;
             QJsonArray t; t.append(bp.x()); t.append(bp.y()); t.append(bp.z());
             bn["translation"] = t;
             QJsonArray r; r.append(br.x()); r.append(br.y()); r.append(br.z()); r.append(br.scalar());
@@ -1171,7 +1171,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                     std::vector<float> t, v;
                     for (const auto *k : ba->rotKeys->keys) {
                         t.push_back(float(k->time));
-                        const QQuaternion q = k->value.normalized();
+                        const iris::Quat q = k->value.normalized();
                         v.push_back(q.x()); v.push_back(q.y()); v.push_back(q.z()); v.push_back(q.scalar());
                     }
                     addChannel("rotation", t, v, 4);

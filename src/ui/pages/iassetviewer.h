@@ -6,11 +6,11 @@
 // QOpenGLWidget with its own ForwardRenderer) and EngineAssetViewer (an
 // EngineViewWidget on jahshaka::engine). Neither GL nor the engine leaks through
 // here; the document types (iris::) do, because the page hands nodes across.
+#include "irisgl/core/math/vec.h"
 #include <QImage>
 #include <QJsonObject>
 #include <QMap>
 #include <QString>
-#include <QVector3D>
 #include <functional>
 #include "irisgl/irisglfwd.h"
 
@@ -49,7 +49,7 @@ public:
     virtual void cacheCurrentModel(QString guid) = 0;
 
     /// Restores a saved orbit (see getSceneProperties()).
-    virtual void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) = 0;
+    virtual void orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot) = 0;
     virtual QJsonObject getSceneProperties() = 0;
 
     virtual void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) = 0;

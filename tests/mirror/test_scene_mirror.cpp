@@ -4,13 +4,14 @@
 // it into an offscreen engine view and asserts on pixels through every document
 // operation the editor performs: move a parent, hide, show, remove.
 // No window; runs with DISPLAY reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QImage>
 #include <QDir>
 #include <QJsonObject>
 #include <QThread>
 #include "irisgl/document/assets/texture2d.h"
-#include <QVector3D>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -84,16 +85,16 @@ int main(int argc, char **argv)
     CHECK(!!meshNode->getMesh(), "cube.obj loaded into the document (no GL)");
     const float r = meshNode->getMeshRadius();
     const float s = r > 0.0f ? 1.0f / r : 1.0f;      // normalise to unit radius
-    meshNode->setLocalScale(QVector3D(s, s, s));
+    meshNode->setLocalScale(iris::Vec3(s, s, s));
     parent->addChild(meshNode);
     auto light = iris::LightNode::create();
     light->setName("sun");
     light->intensity = 1.0f;
-    light->setLocalRot(QQuaternion::fromEulerAngles(-50.0f, 30.0f, 0.0f));
+    light->setLocalRot(iris::Quat::fromEulerAngles(-50.0f, 30.0f, 0.0f));
     // Off-origin, out of frame: a directional light's position never affects
     // lighting, but its helper icon billboard would otherwise sit at the origin
     // and trip every "centre is background" assertion below.
-    light->setLocalPos(QVector3D(0.0f, 6.0f, 0.0f));
+    light->setLocalPos(iris::Vec3(0.0f, 6.0f, 0.0f));
     doc->getRootNode()->addChild(light);
 
     MeshData md;
@@ -115,13 +116,13 @@ int main(int argc, char **argv)
     CHECK(isMaterial(centre(img)), "centre is the mirrored cube");
 
     // ---- move the PARENT: the child must follow through the engine hierarchy ----
-    parent->setLocalPos(QVector3D(10.0f, 0.0f, 0.0f));
+    parent->setLocalPos(iris::Vec3(10.0f, 0.0f, 0.0f));
     mirror.sync();
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("parent moved +10x", img);
     CHECK(isBlue(centre(img)), "cube left the view when its PARENT moved");
 
-    parent->setLocalPos(QVector3D(0, 0, 0));
+    parent->setLocalPos(iris::Vec3(0, 0, 0));
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("parent back", img);
     CHECK(isMaterial(centre(img)), "cube is back");
@@ -138,14 +139,14 @@ int main(int argc, char **argv)
 
     // ---- re-parent in the document: cube moves under a second, offset node ----
     auto other = iris::SceneNode::create();
-    other->setLocalPos(QVector3D(0.0f, 10.0f, 0.0f));
+    other->setLocalPos(iris::Vec3(0.0f, 10.0f, 0.0f));
     doc->getRootNode()->addChild(other);
     parent->removeChild(meshNode);
     other->addChild(meshNode, false);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("re-parented +10y", img);
     CHECK(isBlue(centre(img)), "re-parenting in the document moved the cube in the engine");
-    other->setLocalPos(QVector3D(0, 0, 0));
+    other->setLocalPos(iris::Vec3(0, 0, 0));
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("new parent at origin", img);
     CHECK(isMaterial(centre(img)), "cube visible under its new parent");
@@ -162,7 +163,7 @@ int main(int argc, char **argv)
     // ---- step 4: material colour comes from the DOCUMENT ----
     auto meshNode2 = iris::MeshNode::create();
     meshNode2->setMesh(":assets/models/cube.obj");
-    meshNode2->setLocalScale(QVector3D(s, s, s));
+    meshNode2->setLocalScale(iris::Vec3(s, s, s));
     auto pbr = iris::PbrMaterial::create();
     pbr->setBaseColor(QColor(30, 80, 230));      // blue-ish
     pbr->setMetallicFactor(0.0f);
@@ -446,7 +447,7 @@ int main(int argc, char **argv)
     point->intensity = 4.0f;
     point->distance = 20.0f;
     point->color = QColor(255, 255, 255);
-    point->setLocalPos(QVector3D(4.0f, 1.0f, 2.5f));   // camera-right of the cube
+    point->setLocalPos(iris::Vec3(4.0f, 1.0f, 2.5f));   // camera-right of the cube
     doc->getRootNode()->addChild(point);
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
@@ -454,7 +455,7 @@ int main(int argc, char **argv)
     const float rightSide = lum(img.width * 3 / 4, img.height / 2), leftSide = lum(img.width / 4, img.height / 2);
     std::printf("    point light right: left-of-frame %.2f  right-of-frame %.2f\n", leftSide, rightSide);
     CHECK(rightSide > leftSide + 0.05f, "point light on the right lights the right side more");
-    point->setLocalPos(QVector3D(-4.0f, 1.0f, 2.5f));   // move the light node to the left
+    point->setLocalPos(iris::Vec3(-4.0f, 1.0f, 2.5f));   // move the light node to the left
     mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img);
     const float rightSide2 = lum(img.width * 3 / 4, img.height / 2), leftSide2 = lum(img.width / 4, img.height / 2);
@@ -464,21 +465,21 @@ int main(int argc, char **argv)
     // ---- document camera drives the view ----
     target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
     auto cam = iris::CameraNode::create();
-    cam->setLocalPos(QVector3D(0.0f, 0.0f, 4.0f));       // straight in front, looking -Z
+    cam->setLocalPos(iris::Vec3(0.0f, 0.0f, 4.0f));       // straight in front, looking -Z
     cam->angle = 45.0f; cam->nearClip = 0.1f; cam->farClip = 100.0f;
     doc->getRootNode()->addChild(cam);
     mirror.applyCamera(cam, view);
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("document camera", img);
     CHECK(!isBlue(centre(img)), "document camera sees the cube");
-    cam->setLocalPos(QVector3D(0.0f, 20.0f, 4.0f));      // way above: cube leaves the centre
+    cam->setLocalPos(iris::Vec3(0.0f, 20.0f, 4.0f));      // way above: cube leaves the centre
     mirror.applyCamera(cam, view);
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     view->readPixels(img); show("document camera moved", img);
     CHECK(isBlue(centre(img)), "moving the document camera moves the view");
 
     // ---- selection highlight (on-top wireframe) and light wires ----
-    cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f)); cam->lookAt(QVector3D(0, 0, 0));
+    cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f)); cam->lookAt(iris::Vec3(0, 0, 0));
     mirror.applyCamera(cam, view);
     // A green cube under the strong white point light: nothing but the highlight can read as yellow.
     meshNode2->setMaterial(legacy);
@@ -522,14 +523,14 @@ int main(int argc, char **argv)
     // Selecting a multi-part asset's ROOT must outline every descendant mesh;
     // before, only a single MeshNode selection drew anything.
     {
-        cam->setLocalPos(QVector3D(0.0f, 0.8f, 5.0f)); cam->lookAt(QVector3D(0, 0, 0));
+        cam->setLocalPos(iris::Vec3(0.0f, 0.8f, 5.0f)); cam->lookAt(iris::Vec3(0, 0, 0));
         mirror.applyCamera(cam, view);
         auto group = iris::SceneNode::create();
         auto makePart = [&](float x) {
             auto part = iris::MeshNode::create();
             part->setMesh(":assets/models/cube.obj");
-            part->setLocalScale(QVector3D(s, s, s));
-            part->setLocalPos(QVector3D(x, 0, 0));
+            part->setLocalScale(iris::Vec3(s, s, s));
+            part->setLocalPos(iris::Vec3(x, 0, 0));
             part->setMaterial(legacy);
             part->setAttached(true);
             group->addChild(part, false);
@@ -556,13 +557,13 @@ int main(int argc, char **argv)
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
         CHECK(countYellow(img) == 0, "group highlight cleared");
-        cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f)); cam->lookAt(QVector3D(0, 0, 0));
+        cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f)); cam->lookAt(iris::Vec3(0, 0, 0));
         mirror.applyCamera(cam, view);
     }
 
     doc->getRootNode()->removeChild(meshNode2);
     point->color = QColor(255, 0, 255);              // magenta wires
-    point->setLocalPos(QVector3D(0.0f, 0.0f, 0.0f));  // in the middle of the frame
+    point->setLocalPos(iris::Vec3(0.0f, 0.0f, 0.0f));  // in the middle of the frame
     point->distance = 0.35f;                          // rings are drawn at radius = range now
     auto countMagenta = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) ++n; } return n; };
     mirror.setLightWires(true);
@@ -688,7 +689,7 @@ int main(int argc, char **argv)
         area->distance = 20.0f;
         area->rectWidth = 2.0f; area->rectHeight = 2.0f;
         area->color = QColor(255, 255, 255);
-        area->setLocalPos(QVector3D(0.0f, 1.2f, 0.0f));   // just above the cube, facing down
+        area->setLocalPos(iris::Vec3(0.0f, 1.2f, 0.0f));   // just above the cube, facing down
         doc->getRootNode()->addChild(area);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img);
@@ -737,20 +738,20 @@ int main(int argc, char **argv)
         floorNode->setMesh(":assets/models/cube.obj");
         floorNode->setMaterial(floorMat);
         CHECK(!!floorNode->getMesh(), "decal: floor mesh loaded");
-        floorNode->setLocalScale(QVector3D(8.0f, 0.2f, 8.0f));
-        floorNode->setLocalPos(QVector3D(0, -1.1f, 0));
+        floorNode->setLocalScale(iris::Vec3(8.0f, 0.2f, 8.0f));
+        floorNode->setLocalPos(iris::Vec3(0, -1.1f, 0));
         doc->getRootNode()->addChild(floorNode);
         auto sun = iris::LightNode::create();
         sun->lightType = iris::LightType::Directional;   // identity = shines down -Y
         sun->intensity = 1.0f;
         sun->color = QColor(255, 255, 255);
-        sun->setLocalPos(QVector3D(0, 5, 0));
+        sun->setLocalPos(iris::Vec3(0, 5, 0));
         doc->getRootNode()->addChild(sun);
 
         // Overhead camera looking straight down.
         auto decalCam = iris::CameraNode::create();
-        decalCam->setLocalPos(QVector3D(0, 6, 0));
-        decalCam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), -90.0f));
+        decalCam->setLocalPos(iris::Vec3(0, 6, 0));
+        decalCam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -90.0f));
         decalCam->update(0.0f);
         mirror.applyCamera(decalCam, view);
 
@@ -774,7 +775,7 @@ int main(int argc, char **argv)
         decal->width = 3.0f; decal->height = 3.0f; decal->depth = 2.0f;
         decal->textureGuid = QStringLiteral("guid-red");
         decal->resolvedTexturePath = redPath;
-        decal->setLocalPos(QVector3D(0, 0, 0));
+        decal->setLocalPos(iris::Vec3(0, 0, 0));
         doc->getRootNode()->addChild(decal);
         CHECK(doc->decals.size() == 1, "Scene::decals registers the node by guid");
 
@@ -867,14 +868,14 @@ int main(int argc, char **argv)
         CHECK(doc->skyTexture && doc->skyTexture->isCubeMap(), "document cubemap keeps its six faces without GL");
         mirror.applySky(view);
         // Look straight down +X with a narrow FOV: the +X face is red.
-        cam->setLocalPos(QVector3D(0, 0, 0));
-        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(0, 1, 0), -90.0f));
+        cam->setLocalPos(iris::Vec3(0, 0, 0));
+        cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), -90.0f));
         cam->angle = 20.0f;
         mirror.applyCamera(cam, view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("cubemap sky +X", img);
         CHECK(centre(img).r > 0.8f && centre(img).g < 0.2f && centre(img).b < 0.2f, "+X face of the document cubemap is red");
-        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(0, 1, 0), 90.0f));
+        cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 90.0f));
         mirror.applyCamera(cam, view);
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img); show("cubemap sky -X", img);
@@ -891,12 +892,12 @@ int main(int argc, char **argv)
         doc->gradientBot = QColor(0, 0, 255);
         doc->gradientOffset = 0.5f;
         mirror.applySky(view);
-        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), 89.0f));   // look up
+        cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 89.0f));   // look up
         mirror.applyCamera(cam, view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("gradient sky zenith", img);
         CHECK(centre(img).r > 0.7f && centre(img).g < 0.35f, "gradient sky zenith is the top colour");
-        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), -89.0f));  // look down
+        cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -89.0f));  // look down
         mirror.applyCamera(cam, view);
         for (int i = 0; i < 2; ++i) engine->renderOneFrame();
         view->readPixels(img); show("gradient sky nadir", img);
@@ -916,7 +917,7 @@ int main(int argc, char **argv)
         doc->skyRealistic.sunPosZ = 0.0f;
         mirror.applySky(view);
         // Look toward the horizon: daytime sky pixels, blue over red, not black.
-        cam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), 25.0f));
+        cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 25.0f));
         mirror.applyCamera(cam, view);
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
         view->readPixels(img); show("realistic sky", img);
@@ -1074,8 +1075,8 @@ int main(int argc, char **argv)
         matte->setValue("roughness", 1.0f);
         meshNode->setMaterial(matte);
         doc->getRootNode()->addChild(meshNode);
-        cam->setLocalPos(QVector3D(1.6f, 2.6f, 1.6f));   // above: the top face fills the centre
-        cam->lookAt(QVector3D(0, 0, 0));
+        cam->setLocalPos(iris::Vec3(1.6f, 2.6f, 1.6f));   // above: the top face fills the centre
+        cam->lookAt(iris::Vec3(0, 0, 0));
         cam->angle = 45.0f;
         mirror.applyCamera(cam, view);
         doc->ambientFromSky = true;
@@ -1129,8 +1130,8 @@ int main(int argc, char **argv)
         QFile::remove(flipSkyPath);
         mirror.applySky(view);
         target->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
-        cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f));
-        cam->lookAt(QVector3D(0, 0, 0));
+        cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f));
+        cam->lookAt(iris::Vec3(0, 0, 0));
         mirror.applyCamera(cam, view);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     }
@@ -1154,8 +1155,8 @@ int main(int argc, char **argv)
         chromeMat->setValue("roughness", 0.1f);
         meshNode->setMaterial(chromeMat);
         doc->getRootNode()->addChild(meshNode);            // was removed by the earlier tests
-        cam->setLocalPos(QVector3D(2.2f, 1.8f, 2.6f));
-        cam->lookAt(QVector3D(0, 0, 0));
+        cam->setLocalPos(iris::Vec3(2.2f, 1.8f, 2.6f));
+        cam->lookAt(iris::Vec3(0, 0, 0));
         cam->angle = 45.0f;
         mirror.applyCamera(cam, view);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
@@ -1188,8 +1189,8 @@ int main(int argc, char **argv)
     // Empty scene, flat blue sky: every non-blue pixel is the grid. Looking
     // straight down from y=10 the ±100-unit grid fills the frame.
     {
-        cam->setLocalPos(QVector3D(0.0f, 10.0f, 0.01f));
-        cam->lookAt(QVector3D(0, 0, 0));
+        cam->setLocalPos(iris::Vec3(0.0f, 10.0f, 0.01f));
+        cam->lookAt(iris::Vec3(0, 0, 0));
         mirror.applyCamera(cam, view);
         auto gridPixels = [&](float minR) {
             int count = 0;
@@ -1228,8 +1229,8 @@ int main(int argc, char **argv)
         auto doc2 = iris::Scene::create();
         auto sun2 = iris::LightNode::create();
         sun2->intensity = 1.5f;
-        sun2->setLocalRot(QQuaternion::fromEulerAngles(-40.0f, 20.0f, 0.0f));
-        sun2->setLocalPos(QVector3D(0.0f, 8.0f, 0.0f));
+        sun2->setLocalRot(iris::Quat::fromEulerAngles(-40.0f, 20.0f, 0.0f));
+        sun2->setLocalPos(iris::Vec3(0.0f, 8.0f, 0.0f));
         doc2->getRootNode()->addChild(sun2);
 
         auto subject = iris::MeshNode::create();
@@ -1327,12 +1328,12 @@ int main(int argc, char **argv)
             auto wdoc = iris::Scene::create();
             auto wlight = iris::LightNode::create();
             wlight->intensity = 1.5f;
-            wlight->setLocalRot(QQuaternion::fromEulerAngles(-90.0f, 0.0f, 0.0f));
-            wlight->setLocalPos(QVector3D(0.0f, 8.0f, 0.0f));
+            wlight->setLocalRot(iris::Quat::fromEulerAngles(-90.0f, 0.0f, 0.0f));
+            wlight->setLocalPos(iris::Vec3(0.0f, 8.0f, 0.0f));
             wdoc->getRootNode()->addChild(wlight);
             auto floor2 = iris::MeshNode::create();
             floor2->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));
-            floor2->setLocalScale(QVector3D(4, 4, 4));
+            floor2->setLocalScale(iris::Vec3(4, 4, 4));
             auto white = iris::PbrMaterial::create();
             white->setBaseColor(QColor(240, 240, 240));
             white->setRoughnessFactor(0.9f);
@@ -1342,8 +1343,8 @@ int main(int argc, char **argv)
             mirror.setSource(wdoc);
             mirror.setLightWires(false);
             auto topCam = iris::CameraNode::create();
-            topCam->setLocalPos(QVector3D(0, 6, 0));
-            topCam->setLocalRot(QQuaternion::fromAxisAndAngle(QVector3D(1, 0, 0), -90.0f));
+            topCam->setLocalPos(iris::Vec3(0, 6, 0));
+            topCam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), -90.0f));
             topCam->update(0.0f);
             mirror.applyCamera(topCam, view);
             mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();

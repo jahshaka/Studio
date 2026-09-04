@@ -1,6 +1,8 @@
 #ifndef SHADERGRAPH_EXPORTER
 #define SHADERGRAPH_EXPORTER
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include <QJsonDocument>
 #include <QString>
 #include "zip.h"
@@ -183,7 +185,6 @@ public:
 	}
 
 
-
 	// utils
 	static void writeMaterial(QJsonObject& matObj, QString guid, Database* dataBase)
 	{
@@ -218,15 +219,15 @@ public:
 			}
 
 			if (prop->type == PropertyType::Vec2) {
-				valuesObj[prop->name] = SceneWriter::jsonVector2(prop->getValue().value<QVector2D>());
+				valuesObj[prop->name] = SceneWriter::jsonVector2(iris::fromQt(prop->getValue().value<QVector2D>()));
 			}
 
 			if (prop->type == PropertyType::Vec3) {
-				valuesObj[prop->name] = SceneWriter::jsonVector3(prop->getValue().value<QVector3D>());
+				valuesObj[prop->name] = SceneWriter::jsonVector3(iris::fromQt(prop->getValue().value<QVector3D>()));
 			}
 
 			if (prop->type == PropertyType::Vec4) {
-				valuesObj[prop->name] = SceneWriter::jsonVector4(prop->getValue().value<QVector4D>());
+				valuesObj[prop->name] = SceneWriter::jsonVector4(iris::fromQt(prop->getValue().value<QVector4D>()));
 			}
 		}
 

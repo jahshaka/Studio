@@ -17,6 +17,8 @@
 //
 // T6: the numbers. Non-failing print of ms/frame and bytes uploaded for both
 // paths at 1, 4 and 8 characters of ~50k vertices.
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QElapsedTimer>
 #include <cmath>
@@ -256,8 +258,8 @@ int main(int argc, char **argv)
         auto scene = iris::Scene::create();
         auto a = armrig::buildArmNode(docMesh, "a");
         auto b = armrig::buildArmNode(docMesh, "b");
-        a->setLocalPos(QVector3D(-1.2f, 0, 0));
-        b->setLocalPos(QVector3D( 1.2f, 0, 0));
+        a->setLocalPos(iris::Vec3(-1.2f, 0, 0));
+        b->setLocalPos(iris::Vec3( 1.2f, 0, 0));
         // TWO clips, one per avatar. Since the clip evaluator moved to the
         // engine the document states {which clip, one absolute clock} and the
         // engine samples it, so "pose A at 0.5 while B stays at 0" is no longer
@@ -383,12 +385,12 @@ int main(int argc, char **argv)
         MeshData staticData = strip.gpuData;
         staticData.blendIndices.clear(); staticData.blendWeights.clear();
         {
-            const QMatrix4x4 m = armrig::swingSkinMatrices(-90.0f, 1.0f)[1];
+            const iris::Mat4 m = armrig::swingSkinMatrices(-90.0f, 1.0f)[1];
             for (size_t i = 0; i < staticData.vertexCount(); ++i) {
-                const QVector3D p(staticData.positions[i*3], staticData.positions[i*3+1], staticData.positions[i*3+2]);
-                const QVector3D n(staticData.normals[i*3], staticData.normals[i*3+1], staticData.normals[i*3+2]);
-                const QVector3D tp = m.map(p);
-                const QVector3D tn = m.mapVector(n).normalized();
+                const iris::Vec3 p(staticData.positions[i*3], staticData.positions[i*3+1], staticData.positions[i*3+2]);
+                const iris::Vec3 n(staticData.normals[i*3], staticData.normals[i*3+1], staticData.normals[i*3+2]);
+                const iris::Vec3 tp = m.map(p);
+                const iris::Vec3 tn = m.mapVector(n).normalized();
                 staticData.positions[i*3] = tp.x(); staticData.positions[i*3+1] = tp.y(); staticData.positions[i*3+2] = tp.z();
                 staticData.normals[i*3] = tn.x(); staticData.normals[i*3+1] = tn.y(); staticData.normals[i*3+2] = tn.z();
             }
@@ -465,7 +467,7 @@ int main(int argc, char **argv)
             double uploadedMb = 0;
             for (int f = 0; f < frames; ++f) {
                 const float t = float(f) / float(frames);
-                const QVector<QMatrix4x4> skin = armrig::swingSkinMatrices(-90.0f, t);
+                const QVector<iris::Mat4> skin = armrig::swingSkinMatrices(-90.0f, t);
                 for (int i = 0; i < count; ++i) {
                     SceneMirror::skinVertices(skin, big.cpuData.positions, big.cpuData.normals,
                                               bi, bw, pos, nrm);

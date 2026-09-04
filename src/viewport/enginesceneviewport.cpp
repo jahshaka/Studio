@@ -1,3 +1,6 @@
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/enginesceneviewport.h"
 #include "viewport/viewportcover.h"
 
@@ -38,8 +41,6 @@
 #include "irisgl/core/math/intersectionhelper.h"
 #include "irisgl/core/geometry/trimesh.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include <QVector3D>
-#include <QQuaternion>
 
 #include "viewport/enginerenderdriver.h"
 #include "viewport/previewframing.h"
@@ -227,12 +228,12 @@ void EngineSceneViewport::setGizmoTransformToGlobal()
     mScaleGizmo->setTransformSpace(GizmoTransformSpace::Global);
 }
 
-bool EngineSceneViewport::mouseRay(QVector3D &rayPos, QVector3D &rayDir, QVector3D &viewDir) const
+bool EngineSceneViewport::mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const
 {
     if (!mEditorCam) return false;
-    viewDir = mEditorCam->getGlobalRotation().rotatedVector(QVector3D(0, 0, -1));
+    viewDir = mEditorCam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
     if (!mHaveMouse) return false;
-    QVector3D a, b;
+    iris::Vec3 a, b;
     ScenePicker::screenSegment(mEditorCam, width(), height(), mMousePos, a, b);
     rayPos = a; rayDir = (b - a).normalized();
     return true;
@@ -282,10 +283,10 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
 }
 
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
-                                                QVector3D *hitPoint, bool forcePickable)
+                                                iris::Vec3 *hitPoint, bool forcePickable)
 {
     if (!mScene || !mEditorCam) return iris::SceneNodePtr();
-    QVector3D a, b;
+    iris::Vec3 a, b;
     ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
     const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(), forcePickable);
     const ScenePick best = ScenePicker::nearest(hits);
@@ -293,18 +294,18 @@ iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool select
     return ScenePicker::resolveRootSelection(best.node, mSelectedNode, selectRootObject);
 }
 
-QVector3D EngineSceneViewport::dropPositionAt(const QPointF &point)
+iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
 {
-    QVector3D hit;
+    iris::Vec3 hit;
     if (pickAt(point, false, &hit, true)) return hit;
     // Ground plane (y = 0), like the legacy viewport's sceneFloor.
-    if (!mEditorCam) return QVector3D();
-    QVector3D a, b;
+    if (!mEditorCam) return iris::Vec3();
+    iris::Vec3 a, b;
     ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
-    const iris::Plane floor = iris::IntersectionHelper::computePlaneND(QVector3D(100, 0, 100), QVector3D(-100, 0, 100), QVector3D(-100, 0, -100));
-    float t; QVector3D q;
+    const iris::Plane floor = iris::IntersectionHelper::computePlaneND(iris::Vec3(100, 0, 100), iris::Vec3(-100, 0, 100), iris::Vec3(-100, 0, -100));
+    float t; iris::Vec3 q;
     if (iris::IntersectionHelper::intersectSegmentPlane(a, a + (b - a).normalized() * 1024.0f, floor, t, q)) return q;
-    return QVector3D();
+    return iris::Vec3();
 }
 
 // ---- drag and drop from the asset panel: ported from SceneViewWidget ----------------
@@ -466,7 +467,7 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
     if (mPlaying && mPlayback) { mPlayback->mousePressEvent(e); return; }
     mMousePos = mPrevMousePos = e->position(); mHaveMouse = true;
     if (e->button() == Qt::LeftButton) {
-        QVector3D rayPos, rayDir, viewDir;
+        iris::Vec3 rayPos, rayDir, viewDir;
         const bool haveRay = mouseRay(rayPos, rayDir, viewDir);
         // A hit on the active gizmo starts a drag and keeps the selection.
         if (haveRay && mSelectedNode && mGizmo && mGizmo->isHit(rayPos, rayDir)) {
@@ -513,7 +514,7 @@ void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
         // (EDITOR_SHORTCUTS_SPEC §4). No target under the cursor -> plain drag.
         if (mVertexSnapHeld && mGizmo == mTranslateGizmo && snapDragToVertexUnderCursor())
             return;
-        QVector3D rayPos, rayDir, viewDir;
+        iris::Vec3 rayPos, rayDir, viewDir;
         if (mouseRay(rayPos, rayDir, viewDir)) mGizmo->drag(rayPos, rayDir, viewDir);
         return;
     }
@@ -534,7 +535,7 @@ void EngineSceneViewport::mouseReleaseEvent(QMouseEvent *e)
     }
     // Alt+LMB orbit ends with the drag (the free camera returns to fly).
     if (e->button() == Qt::LeftButton && mCamController && mCamController->isAltOrbiting())
-        mCamController->setAltOrbit(false, QVector3D());
+        mCamController->setAltOrbit(false, iris::Vec3());
     if (mCamController) mCamController->onMouseUp(e->button());
 }
 
@@ -586,7 +587,7 @@ void EngineSceneViewport::focusOutEvent(QFocusEvent *e)
 bool EngineSceneViewport::snapDragToVertexUnderCursor()
 {
     if (!mSelectedNode || !mScene || !mEditorCam || !mHaveMouse) return false;
-    QVector3D a, b;
+    iris::Vec3 a, b;
     ScenePicker::screenSegment(mEditorCam, width(), height(), mMousePos, a, b);
     // refreshTransforms = false: this runs on every mouse move inside a live
     // translate drag, and the mirror's sync() already updated the document's
@@ -609,9 +610,9 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
         best.triangleIndex >= mesh->getTriMesh()->triangles.size())
         return false;
     const iris::Triangle &tri = mesh->getTriMesh()->triangles[best.triangleIndex];
-    const QMatrix4x4 &xf = meshNode->globalTransform;
-    const QVector3D corners[3] = { xf * tri.a, xf * tri.b, xf * tri.c };
-    QVector3D vertex = corners[0];
+    const iris::Mat4 &xf = meshNode->globalTransform;
+    const iris::Vec3 corners[3] = { xf * tri.a, xf * tri.b, xf * tri.c };
+    iris::Vec3 vertex = corners[0];
     for (int i = 1; i < 3; ++i)
         if ((corners[i] - best.hitPoint).lengthSquared() <
             (vertex - best.hitPoint).lengthSquared())
@@ -738,7 +739,7 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
     if (!sceneNode || !mEditorCam) return;
     sceneNode->update(0.0f);
 
-    QVector3D target = sceneNode->getGlobalPosition();
+    iris::Vec3 target = sceneNode->getGlobalPosition();
     float radius = 1.0f;
     const iris::AABB bounds = preview::worldBoundingBox(sceneNode);
     if (bounds.getMin().x() <= bounds.getMax().x()) {   // non-empty (meshes exist)
@@ -747,8 +748,8 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
     }
     const float dist = qMax(1.0f, preview::framingDistance(radius, mEditorCam->angle));
 
-    QVector3D dir = (mEditorCam->getGlobalPosition() - target).normalized();
-    if (dir.isNull()) dir = QVector3D(0.45f, 0.45f, 0.77f);
+    iris::Vec3 dir = (mEditorCam->getGlobalPosition() - target).normalized();
+    if (dir.isNull()) dir = iris::Vec3(0.45f, 0.45f, 0.77f);
     mEditorCam->setLocalPos(target + dir * dist);
     mEditorCam->lookAt(target);
     float nearClip, farClip;
@@ -768,7 +769,7 @@ void EngineSceneViewport::focusOnSelection()
     if (mSelectedNode) mLastOrbitPivot = orbitPivot();   // F then Alt+drag orbits there
 }
 
-QVector3D EngineSceneViewport::orbitPivot() const
+iris::Vec3 EngineSceneViewport::orbitPivot() const
 {
     // Alt+LMB orbits around the SELECTION's centre (its world bounding-box
     // centre when it has meshes, else its origin). With nothing selected we
@@ -800,8 +801,8 @@ void EngineSceneViewport::resetEditorCam()
 {
     clearViewStates();   // a fresh camera invalidates every remembered view pose
     mEditorCam = iris::CameraNode::create();
-    mEditorCam->setLocalPos(QVector3D(0, 5, 14));
-    mEditorCam->lookAt(QVector3D(0, 0, 0));
+    mEditorCam->setLocalPos(iris::Vec3(0, 5, 14));
+    mEditorCam->lookAt(iris::Vec3(0, 0, 0));
     mEditorCam->angle = 45.0f;
     mEditorCam->nearClip = 0.1f;
     mEditorCam->farClip = 1000.0f;
@@ -882,7 +883,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     }
     if (mGizmo && mEditorCam && mSelectedNode) mGizmo->updateSize(mEditorCam);
     if (mOverlay) {
-        QVector3D rayPos, rayDir, viewDir;
+        iris::Vec3 rayPos, rayDir, viewDir;
         mouseRay(rayPos, rayDir, viewDir);
         mOverlay->update((helpers && mSelectedNode) ? mGizmo : nullptr, rayPos, rayDir, viewDir);
     }
@@ -1239,14 +1240,14 @@ bool EngineSceneViewport::snapSelectionToFloor()
 
     const iris::AABB bounds = preview::worldBoundingBox(mSelectedNode);
     const bool hasBounds = bounds.getMin().x() <= bounds.getMax().x();
-    const QVector3D pos = mSelectedNode->getGlobalPosition();
+    const iris::Vec3 pos = mSelectedNode->getGlobalPosition();
     const float bottom = hasBounds ? bounds.getMin().y() : pos.y();
-    const QVector3D centre = hasBounds ? bounds.getCenter() : pos;
+    const iris::Vec3 centre = hasBounds ? bounds.getCenter() : pos;
 
     // Straight down from just under the selection's own bounds, so its own
     // meshes can never be the hit.
-    const QVector3D start(centre.x(), bottom - 0.001f, centre.z());
-    const QVector3D end = start + QVector3D(0.0f, -10000.0f, 0.0f);
+    const iris::Vec3 start(centre.x(), bottom - 0.001f, centre.z());
+    const iris::Vec3 end = start + iris::Vec3(0.0f, -10000.0f, 0.0f);
     const auto hits = ScenePicker::pickAll(mScene, start, end, start, true, false, false);
     float targetY = 0.0f;                       // fallback: the y = 0 plane
     bool found = false;
@@ -1262,11 +1263,11 @@ bool EngineSceneViewport::snapSelectionToFloor()
     const float delta = targetY - bottom;
     if (std::abs(delta) < 1e-5f) return true;   // already on the floor
 
-    const QVector3D oldLocalPos = mSelectedNode->getLocalPos();
-    const QQuaternion rot = mSelectedNode->getLocalRot();
-    const QVector3D scale = mSelectedNode->getLocalScale();
-    mSelectedNode->setGlobalPos(pos + QVector3D(0.0f, delta, 0.0f));
-    const QVector3D newLocalPos = mSelectedNode->getLocalPos();
+    const iris::Vec3 oldLocalPos = mSelectedNode->getLocalPos();
+    const iris::Quat rot = mSelectedNode->getLocalRot();
+    const iris::Vec3 scale = mSelectedNode->getLocalScale();
+    mSelectedNode->setGlobalPos(pos + iris::Vec3(0.0f, delta, 0.0f));
+    const iris::Vec3 newLocalPos = mSelectedNode->getLocalPos();
     if (mServices && mServices->undo) {
         mServices->undo->push(new TransformSceneNodeCommand(mSelectedNode,
                                                             oldLocalPos, rot, scale,

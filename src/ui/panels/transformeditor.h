@@ -12,10 +12,10 @@ For more information see the LICENSE file
 #ifndef TRANSFORMEDITOR_H
 #define TRANSFORMEDITOR_H
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QWidget>
 #include <QSharedPointer>
-#include <QVector3D>
-#include <QQuaternion>
 
 namespace iris
 {
@@ -82,9 +82,9 @@ private:
     QPushButton* resetBtn;
 
     // transform at scrub start, for the single undo command
-    QVector3D scrubStartPos;
-    QQuaternion scrubStartRot;
-    QVector3D scrubStartScale;
+    iris::Vec3 scrubStartPos;
+    iris::Quat scrubStartRot;
+    iris::Vec3 scrubStartScale;
 };
 
 #endif // TRANSFORMEDITOR_H

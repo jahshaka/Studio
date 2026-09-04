@@ -16,9 +16,9 @@
 //   4. removeCharacterControllerFromWorld deleted the controller while bullet
 //      still held its ghost object in the broadphase and its action in the
 //      world's action list.
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
-#include <QQuaternion>
-#include <QVector3D>
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
@@ -40,13 +40,13 @@ static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-static iris::MeshNodePtr makeBody(const QVector3D &pos, float mass)
+static iris::MeshNodePtr makeBody(const iris::Vec3 &pos, float mass)
 {
     auto node = iris::MeshNode::create();
     node->setName("body");
     node->setLocalPos(pos);
-    node->setLocalScale(QVector3D(2, 2, 2));
-    node->setLocalRot(QQuaternion::fromEulerAngles(0, 30, 0));
+    node->setLocalScale(iris::Vec3(2, 2, 2));
+    node->setLocalRot(iris::Quat::fromEulerAngles(0, 30, 0));
     node->isPhysicsBody = true;
     node->physicsProperty.type = iris::PhysicsType::RigidBody;
     // A sphere needs no mesh data, so this suite stays free of asset loading.
@@ -64,13 +64,13 @@ static iris::MeshNodePtr makeMeshBody(iris::PhysicsCollisionShape shape, int tri
     mesh->triMesh = new iris::TriMesh();
     for (int i = 0; i < triangles; ++i) {
         const float t = float(i);
-        mesh->triMesh->addTriangle(QVector3D(t, 0, 0), QVector3D(0, t, 0), QVector3D(0, 0, t));
+        mesh->triMesh->addTriangle(iris::Vec3(t, 0, 0), iris::Vec3(0, t, 0), iris::Vec3(0, 0, t));
     }
 
     auto node = iris::MeshNode::create();
     node->setName("meshbody");
     node->setMesh(mesh);
-    node->setLocalPos(QVector3D(0, 5, 0));
+    node->setLocalPos(iris::Vec3(0, 5, 0));
     node->isPhysicsBody = true;
     node->physicsProperty.type = iris::PhysicsType::RigidBody;
     node->physicsProperty.shape = shape;
@@ -92,7 +92,7 @@ static void testCollisionShapeOwnership()
     auto scene = iris::Scene::create();
     auto root = scene->getRootNode();
 
-    root->addChild(makeBody(QVector3D(0, 10, 0), 1.0f));                     // sphere: 1 shape
+    root->addChild(makeBody(iris::Vec3(0, 10, 0), 1.0f));                     // sphere: 1 shape
     root->addChild(makeMeshBody(iris::PhysicsCollisionShape::ConvexHull));   // 1 shape
     root->addChild(makeMeshBody(iris::PhysicsCollisionShape::TriangleMesh)); // 1 shape + 1 interface
 
@@ -149,8 +149,8 @@ static void testCollisionShapeOwnership()
     env->createPhysicsWorld();   // the Environment destructor expects a world
 }
 
-static bool sameTransform(const iris::SceneNodePtr &node, const QVector3D &pos,
-                          const QQuaternion &rot, const QVector3D &scale)
+static bool sameTransform(const iris::SceneNodePtr &node, const iris::Vec3 &pos,
+                          const iris::Quat &rot, const iris::Vec3 &scale)
 {
     return (node->getLocalPos() - pos).length() < 1e-4f &&
            (node->getLocalRot() - rot).length() < 1e-4f &&
@@ -164,7 +164,7 @@ static void testPhysicsInitIgnoresNonViewers()
     auto scene = iris::Scene::create();
     auto root = scene->getRootNode();
 
-    root->addChild(makeBody(QVector3D(0, 10, 0), 1.0f));
+    root->addChild(makeBody(iris::Vec3(0, 10, 0), 1.0f));
     root->addChild(iris::LightNode::create());
     // An Empty node is SMALLER than a ViewerNode: the old unguarded
     // staticCast<ViewerNode> read past the end of this allocation.
@@ -192,7 +192,7 @@ static void testCharacterControllerLifecycle()
     std::printf("\n-- character controllers: only flagged viewers, clean removal --\n");
     auto scene = iris::Scene::create();
     auto root = scene->getRootNode();
-    root->addChild(makeBody(QVector3D(0, 10, 0), 1.0f));
+    root->addChild(makeBody(iris::Vec3(0, 10, 0), 1.0f));
 
     auto passive = iris::ViewerNode::create();
     passive->setActiveCharacterController(false);
@@ -283,14 +283,14 @@ static void testPlayPauseResumeStop()
     auto scene = iris::Scene::create();
     auto root = scene->getRootNode();
 
-    const QVector3D startPos(0, 10, 0);
+    const iris::Vec3 startPos(0, 10, 0);
     auto body = makeBody(startPos, 1.0f);
     root->addChild(body);
-    const QQuaternion startRot = body->getLocalRot();
-    const QVector3D startScale = body->getLocalScale();
+    const iris::Quat startRot = body->getLocalRot();
+    const iris::Vec3 startScale = body->getLocalScale();
 
     auto camera = iris::CameraNode::create();
-    camera->setLocalPos(QVector3D(0, 2, 10));
+    camera->setLocalPos(iris::Vec3(0, 2, 10));
     scene->setCamera(camera);
     scene->update(0);
 
@@ -315,14 +315,14 @@ static void testPlayPauseResumeStop()
     CHECK(playingBodies == 1, "one rigid body in the played world");
 
     step(30);
-    const QVector3D fell = body->getLocalPos();
+    const iris::Vec3 fell = body->getLocalPos();
     CHECK(fell.y() < startPos.y() - 0.05f, "the body falls while playing");
 
     // ---- pause: frozen, and nothing added ----
     playback.pause();
     CHECK(playback.isScenePaused(), "pause() pauses");
     CHECK(playback.isScenePlaying(), "a paused scene is still IN play mode");
-    const QVector3D atPause = body->getLocalPos();
+    const iris::Vec3 atPause = body->getLocalPos();
     step(30);
     CHECK((body->getLocalPos() - atPause).length() < 1e-6f, "a paused scene is frozen");
     CHECK(objects() == playingObjects, "pausing adds nothing to the physics world");
@@ -348,7 +348,7 @@ static void testPlayPauseResumeStop()
           "three pause/resume cycles duplicate no rigid body");
 
     // A stray second playScene() while already playing must be a no-op too.
-    const QVector3D beforeRePlay = body->getLocalPos();
+    const iris::Vec3 beforeRePlay = body->getLocalPos();
     playback.playScene();
     CHECK(objects() == playingObjects, "playScene() while already playing changes nothing");
     CHECK((body->getLocalPos() - beforeRePlay).length() < 1e-6f, "and does not move the document");

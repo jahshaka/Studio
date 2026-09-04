@@ -9,6 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "scripting/modules/nodeapi.h"
 
 #include "scripting/modules/moduleshared.h"
@@ -172,12 +175,12 @@ QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)
     auto node = nodeOrFail(id, QStringLiteral("node.transform"));
     if (!node) return QVariantMap();
 
-    const QVector3D pos = vecFromJs(change.value("position"), node->getLocalPos());
-    const QVector3D rotEuler = vecFromJs(change.value("rotation"), node->getLocalRot().toEulerAngles());
-    const QVector3D scale = vecFromJs(change.value("scale"), node->getLocalScale());
+    const iris::Vec3 pos = vecFromJs(change.value("position"), node->getLocalPos());
+    const iris::Vec3 rotEuler = vecFromJs(change.value("rotation"), node->getLocalRot().toEulerAngles());
+    const iris::Vec3 scale = vecFromJs(change.value("scale"), node->getLocalScale());
 
     host.services->undo->push(new TransformSceneNodeCommand(
-        node, pos, QQuaternion::fromEulerAngles(rotEuler), scale));
+        node, pos, iris::Quat::fromEulerAngles(rotEuler), scale));
 
     return { { "position", vecToJs(node->getLocalPos()) },
              { "rotation", vecToJs(node->getLocalRot().toEulerAngles()) },
@@ -194,7 +197,7 @@ QVariant NodeApi::property(const QString &id, const QString &key)
         return QVariant();
     }
     switch (value.typeId()) {
-    case QMetaType::QVector3D: return vecToJs(value.value<QVector3D>());
+    case QMetaType::QVector3D: return vecToJs(iris::fromQt(value.value<QVector3D>()));
     case QMetaType::QColor:    return colorToJs(value.value<QColor>());
     default:                   return value;
     }
@@ -215,7 +218,7 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
     QVariant converted = value;
     switch (current.typeId()) {
     case QMetaType::QVector3D:
-        converted = QVariant::fromValue(vecFromJs(value, current.value<QVector3D>()));
+        converted = QVariant::fromValue(iris::toQt(vecFromJs(value, iris::fromQt(current.value<QVector3D>()))));
         break;
     case QMetaType::QColor:
         converted = QVariant::fromValue(colorFromJs(value, current.value<QColor>()));

@@ -4,6 +4,8 @@
 // container bytes are validated by hand. No Ogre, no GL, no assimp export —
 // runs offscreen like the document suite.
 
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
 #include <QImage>
@@ -415,9 +417,9 @@ int main(int argc, char **argv)
         auto tipBone = iris::Bone::create("jointTip");
         tipBone->meshSpacePoseMatrix.translate(0, 1, 0);
         tipBone->inverseMeshSpacePoseMatrix.translate(0, -1, 0);
-        tipBone->bindingPos = QVector3D(0, 1, 0);
-        tipBone->bindingScale = QVector3D(1, 1, 1);
-        rootBone->bindingScale = QVector3D(1, 1, 1);
+        tipBone->bindingPos = iris::Vec3(0, 1, 0);
+        tipBone->bindingScale = iris::Vec3(1, 1, 1);
+        rootBone->bindingScale = iris::Vec3(1, 1, 1);
         skel->addBone(rootBone);
         skel->addBone(tipBone);
         rootBone->addChild(tipBone);
@@ -426,12 +428,12 @@ int main(int argc, char **argv)
         auto anim = iris::SkeletalAnimation::create();
         anim->name = "swing";
         auto *boneAnim = new iris::BoneAnimation();
-        boneAnim->posKeys->addKey(QVector3D(0, 1, 0), 0.0);
-        boneAnim->posKeys->addKey(QVector3D(0, 1, 0), 1.0);
-        boneAnim->rotKeys->addKey(QQuaternion(), 0.0);
-        boneAnim->rotKeys->addKey(QQuaternion::fromAxisAndAngle(0, 0, 1, -90), 1.0);
-        boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), 0.0);
-        boneAnim->scaleKeys->addKey(QVector3D(1, 1, 1), 1.0);
+        boneAnim->posKeys->addKey(iris::Vec3(0, 1, 0), 0.0);
+        boneAnim->posKeys->addKey(iris::Vec3(0, 1, 0), 1.0);
+        boneAnim->rotKeys->addKey(iris::Quat(), 0.0);
+        boneAnim->rotKeys->addKey(iris::Quat::fromAxisAndAngle(0, 0, 1, -90), 1.0);
+        boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), 0.0);
+        boneAnim->scaleKeys->addKey(iris::Vec3(1, 1, 1), 1.0);
         anim->addBoneAnimation("jointTip", boneAnim);
         armMesh->addSkeletalAnimation("swing", anim);
 

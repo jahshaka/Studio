@@ -8,6 +8,7 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
+#include "irisgl/core/math/vec.h"
 #include "modules/avatar/avatarspace.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -17,8 +18,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/mesh.h"
 
 #include <QColor>
-#include <QQuaternion>
-#include <QVector3D>
 
 namespace avatar {
 namespace space {
@@ -105,7 +104,7 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     const float mid    = height * 0.5f;
 
     auto slab = [&](const iris::PbrMaterialPtr &mat, const char *name,
-                    const QVector3D &pos, const QVector3D &halfExtents) {
+                    const iris::Vec3 &pos, const iris::Vec3 &halfExtents) {
         auto node = makePanel(mesh, mat, name);
         node->setLocalPos(pos);
         node->setLocalScale(halfExtents);             // cube is 2x2x2: scale = half-extents
@@ -120,22 +119,22 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     // render; a hundred tile reflectors would be absurd), and the Tron floor
     // is a continuous mirror anyway.
     {
-        auto plate = slab(floorTile, "avatar-floor", QVector3D(0, -0.02f, 0),
-                          QVector3D(half, 0.02f, half));
+        auto plate = slab(floorTile, "avatar-floor", iris::Vec3(0, -0.02f, 0),
+                          iris::Vec3(half, 0.02f, half));
         plate->setPlanarReflector(true);
         const float lw = kTile * (1.0f - kFaceFloor) * 0.5f;   // line half-width
         for (int i = 0; i <= kFloorTiles; ++i) {
             const float o = (i - kFloorTiles * 0.5f) * kTile;
-            slab(floorLines, "avatar-floor-line", QVector3D(o, 0.0015f, 0),
-                 QVector3D(lw, 0.001f, half));                 // north-south
-            slab(floorLines, "avatar-floor-line", QVector3D(0, 0.0015f, o),
-                 QVector3D(half, 0.001f, lw));                 // east-west
+            slab(floorLines, "avatar-floor-line", iris::Vec3(o, 0.0015f, 0),
+                 iris::Vec3(lw, 0.001f, half));                 // north-south
+            slab(floorLines, "avatar-floor-line", iris::Vec3(0, 0.0015f, o),
+                 iris::Vec3(half, 0.001f, lw));                 // east-west
         }
     }
 
     // Walls: a thin glowing slab just OUTSIDE each wall line, then 10x4 white
     // tiles standing 3cm proud of it; the glow shows only in the 3cm gaps.
-    struct Wall { QVector3D glowPos, glowHalf, axisRight, axisUp; QVector3D tileNormalOffset; QVector3D tileHalf; };
+    struct Wall { iris::Vec3 glowPos, glowHalf, axisRight, axisUp; iris::Vec3 tileNormalOffset; iris::Vec3 tileHalf; };
     const float tw = kTile * kFaceWall * 0.5f;        // tile half-size on the wall
     const float t  = 0.015f;                          // tile thickness (half)
     const Wall walls[4] = {
@@ -157,8 +156,8 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     }
 
     // Ceiling: one soft light slab.
-    slab(ceiling, "avatar-ceiling", QVector3D(0, height + 0.01f, 0),
-         QVector3D(half, 0.01f, half));
+    slab(ceiling, "avatar-ceiling", iris::Vec3(0, height + 0.01f, 0),
+         iris::Vec3(half, 0.01f, half));
 
     scene->rootNode->addChild(group);
     return group;

@@ -9,8 +9,10 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
 
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "commands/transformscenenodecommand.h"
 
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -18,7 +20,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/sceneeditservice.h"
 
-TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform)
+TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, iris::Mat4 localTransform)
 {
     sceneNode = node;
     auto oldTransform = node->getLocalTransform();
@@ -27,7 +29,7 @@ TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QM
 	iris::MathHelper::decomposeMatrix(newTransform, newPos, newRot, newScale);
 }
 
-TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QVector3D pos, QQuaternion rot, QVector3D scale)
+TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, iris::Vec3 pos, iris::Quat rot, iris::Vec3 scale)
 {
 	sceneNode = node;
 	newPos = pos; newRot = rot; newScale = scale;
@@ -37,8 +39,8 @@ TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node, QV
 }
 
 TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node,
-	QVector3D oldPos, QQuaternion oldRot, QVector3D oldScale,
-	QVector3D newPos, QQuaternion newRot, QVector3D newScale)
+	iris::Vec3 oldPos, iris::Quat oldRot, iris::Vec3 oldScale,
+	iris::Vec3 newPos, iris::Quat newRot, iris::Vec3 newScale)
 {
 	sceneNode = node;
 	this->newPos = newPos;

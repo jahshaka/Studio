@@ -1,9 +1,11 @@
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "bridge/avatarpreviewscene.h"
 
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <QQuaternion>
 
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -102,7 +104,7 @@ void AvatarPreviewScene::bindModel(avatar::AvatarPreviewModel *model)
     // transforms; the pose lives in the engine's SkeletonInstance, and this is
     // the wire that brings it back for the overlay and for avatar.bones().
     SceneMirror *mirror = mMirror.get();
-    model->setPoseSource([mirror](QHash<QString, QMatrix4x4> &out) {
+    model->setPoseSource([mirror](QHash<QString, iris::Mat4> &out) {
         return mirror->boneWorldTransforms(out);
     });
 }
@@ -142,7 +144,7 @@ void AvatarPreviewScene::frameSubject()
         const iris::AABB aabb = preview::worldBoundingBox(fragment);
         bound = aabb.getMinimalEnclosingSphere();
     }
-    if (bound.radius <= 0.0f) { bound.pos = QVector3D(0, 0, 0); bound.radius = 1.0f; }
+    if (bound.radius <= 0.0f) { bound.pos = iris::Vec3(0, 0, 0); bound.radius = 1.0f; }
 
     mSubjectRadius = bound.radius;
     mPivot = bound.pos;
@@ -189,8 +191,8 @@ void AvatarPreviewScene::updateCameraRot()
     if (!mModel) return;
     auto camera = mModel->camera();
     if (!camera) return;
-    const auto rot = QQuaternion::fromEulerAngles(mPitch, mYaw, 0);
-    const auto localPos = rot.rotatedVector(QVector3D(0, 0, 1));
+    const auto rot = iris::Quat::fromEulerAngles(mPitch, mYaw, 0);
+    const auto localPos = rot.rotatedVector(iris::Vec3(0, 0, 1));
     camera->setLocalPos(mPivot + localPos * mDistFromPivot);
     camera->setLocalRot(rot);
     camera->update(0);
@@ -216,7 +218,7 @@ void AvatarPreviewScene::mouseMove(int dx, int dy)
     if (mMiddleDown && mModel && mModel->camera()) {
         const float dragSpeed = 0.002f * qMax(mSubjectRadius, 1.0f);
         auto dir = mModel->camera()->getLocalRot().rotatedVector(
-            QVector3D(dx * dragSpeed, -dy * dragSpeed, 0));
+            iris::Vec3(dx * dragSpeed, -dy * dragSpeed, 0));
         mPivot += dir;
     }
     updateCameraRot();

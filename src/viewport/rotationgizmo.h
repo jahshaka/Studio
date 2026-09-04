@@ -13,9 +13,10 @@ For more information see the LICENSE file
 #define ROTATIONGIZMO_H
 
 //#include "gizmoinstance.h"
-#include <QQuaternion>
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "viewport/gizmo.h"
-#include <QMatrix4x4>
 
 class RotationHandle : public GizmoHandle
 {
@@ -23,8 +24,8 @@ public:
 	Gizmo* gizmo;
 
 	GizmoAxis axis;
-	QVector3D handleExtent;// local extent of the gizmo
-	QVector3D plane;// for hit detection
+	iris::Vec3 handleExtent;// local extent of the gizmo
+	iris::Vec3 plane;// for hit detection
 	float handleScale = 0.08f;
 	//float handleRadius = 3.0f;
 	float handleRadius = 1.0f;
@@ -32,9 +33,9 @@ public:
 
 	RotationHandle(Gizmo* gizmo, GizmoAxis axis);
 
-	bool isHit(QVector3D rayPos, QVector3D rayDir);
-	//QVector3D getHitPos(QVector3D rayPos, QVector3D rayDir);
-	bool getHitAngle(QVector3D rayPos, QVector3D rayDir, float& angle);
+	bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
+	//iris::Vec3 getHitPos(iris::Vec3 rayPos, iris::Vec3 rayDir);
+	bool getHitAngle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& angle);
 };
 
 class RotationGizmo : public Gizmo
@@ -48,13 +49,13 @@ class RotationGizmo : public Gizmo
 	RotationHandle* handles[3];
 
 	// initial hit position
-	QVector3D hitPos;
+	iris::Vec3 hitPos;
 	float startAngle;
-	QQuaternion nodeStartRot;
+	iris::Quat nodeStartRot;
 	RotationHandle* draggedHandle;
 	int draggedHandleIndex;
 
-	QMatrix4x4 trans;
+	iris::Mat4 trans;
 	bool dragging;
 public:
 	RotationGizmo();
@@ -62,20 +63,20 @@ public:
 	void loadAssets();
 
 	virtual bool isDragging();
-	virtual void startDragging(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
+	virtual void startDragging(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir);
 	virtual void endDragging();
-	virtual void drag(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir);
+	virtual void drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir);
 
-	virtual bool isHit(QVector3D rayPos, QVector3D rayDir);
+	virtual bool isHit(iris::Vec3 rayPos, iris::Vec3 rayDir);
 
 	// hitPos is the hit position of the hit handle
-	RotationHandle* getHitHandle(QVector3D rayPos, QVector3D rayDir, float& hitAngle);
+	RotationHandle* getHitHandle(iris::Vec3 rayPos, iris::Vec3 rayDir, float& hitAngle);
 
-	QMatrix4x4 getTransform() override;
+	iris::Mat4 getTransform() override;
 	void setTransformSpace(GizmoTransformSpace transformSpace) override;
 	void setSelectedNode(iris::SceneNodePtr node) override;
 public:
-	QVector<GizmoDrawItem> drawItems(QVector3D rayPos, QVector3D rayDir, QVector3D viewDir) override;
+	QVector<GizmoDrawItem> drawItems(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDir) override;
 };
 
 #endif // ROTATIONGIZMO_H

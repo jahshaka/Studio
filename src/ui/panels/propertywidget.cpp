@@ -9,6 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "ui/panels/propertywidget.h"
 #include "ui_propertywidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
@@ -318,8 +320,8 @@ void PropertyWidget::addVector2Property(iris::Property *prop)
 	ui->contentpane->layout()->addWidget(holder);
 	properties.append(vecProp);
 
-	connect(widget, &Widget2D::valueChanged, [=](QVector2D value) {
-		vecProp->value = value;
+	connect(widget, &Widget2D::valueChanged, [=](iris::Vec2 value) {
+		vecProp->value = iris::toQt(value);
 		if (listener) listener->onPropertyChanged(vecProp);
 		emit onPropertyChanged(vecProp);
 	});
@@ -334,8 +336,8 @@ void PropertyWidget::addVector3Property(iris::Property *prop)
 	ui->contentpane->layout()->addWidget(holder);
 	properties.append(vecProp);
 
-	connect(widget, &Widget3D::valueChanged, [=](QVector3D value) {
-		vecProp->value = value;
+	connect(widget, &Widget3D::valueChanged, [=](iris::Vec3 value) {
+		vecProp->value = iris::toQt(value);
 		if (listener) listener->onPropertyChanged(vecProp);
 		emit onPropertyChanged(vecProp);
 	});
@@ -350,8 +352,8 @@ void PropertyWidget::addVector4Property(iris::Property *prop)
 	ui->contentpane->layout()->addWidget(holder);
 	properties.append(vecProp);
 
-	connect(widget, &Widget4D::valueChanged, [=](QVector4D value) {
-		vecProp->value = value;
+	connect(widget, &Widget4D::valueChanged, [=](iris::Vec4 value) {
+		vecProp->value = iris::toQt(value);
 		if (listener) listener->onPropertyChanged(vecProp);
 		emit onPropertyChanged(vecProp);
 	});
@@ -405,8 +407,6 @@ QWidget * PropertyWidget::addWidgetHolder(QString title, QWidget* widget)
 
 	return holder;
 }
-
-
 
 
 void PropertyWidget::setListener(iris::PropertyListener *listener)

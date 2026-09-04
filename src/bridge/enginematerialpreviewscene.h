@@ -12,9 +12,9 @@
 // flat background — this shows engine-rendered. No GL, no Ogre, no QWidget:
 // testable headless with an offscreen View (tests/materialpreview).
 // EngineMaterialPreview wraps it into the Display dock.
+#include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QColor>
-#include <QVector3D>
 #include <Qt>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
@@ -98,7 +98,7 @@ private:
     // Orbit state (OrbitalCameraController in preview mode, rotation speed .5)
     float mYaw = 0, mPitch = 0, mTargetYaw = 0, mTargetPitch = 0;
     float mRotationSpeed = 0.5f;
-    QVector3D mPivot;
+    iris::Vec3 mPivot;
     float mDistFromPivot = 4.0f;
     bool mLeftDown = false, mRightDown = false, mMiddleDown = false;
 };

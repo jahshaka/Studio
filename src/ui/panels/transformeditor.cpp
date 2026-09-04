@@ -9,10 +9,10 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/quat.h"
 #include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QQuaternion>
 
 #include "ui/panels/transformeditor.h"
 #include "ui/controls/dragspinbox.h"
@@ -274,7 +274,7 @@ void TransformEditor::xRotChanged(double value)
     if (!!sceneNode) {
         auto rot = sceneNode->getLocalRot().toEulerAngles();
         rot.setX(value);
-        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(rot));
+        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(rot));
     }
 }
 
@@ -283,7 +283,7 @@ void TransformEditor::yRotChanged(double value)
     if (!!sceneNode) {
         auto rot = sceneNode->getLocalRot().toEulerAngles();
         rot.setY(value);
-        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(rot));
+        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(rot));
     }
 }
 
@@ -292,7 +292,7 @@ void TransformEditor::zRotChanged(double value)
     if (!!sceneNode) {
         auto rot = sceneNode->getLocalRot().toEulerAngles();
         rot.setZ(value);
-        sceneNode->setLocalRot(QQuaternion::fromEulerAngles(rot));
+        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(rot));
     }
 }
 

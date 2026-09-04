@@ -9,10 +9,11 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "scripting/modules/animapi.h"
 
 #include <QColor>
-#include <QVector3D>
 
 #include "scripting/modules/moduleshared.h"
 #include "services/animationedits.h"
@@ -56,7 +57,7 @@ QString trackTypeName(int channels)
 QVariant propertyValueToJs(iris::PropertyType type, const QVariant &value)
 {
     switch (type) {
-    case iris::PropertyType::Vec3:  return vecToJs(value.value<QVector3D>());
+    case iris::PropertyType::Vec3:  return vecToJs(iris::fromQt(value.value<QVector3D>()));
     case iris::PropertyType::Color: return colorToJs(value.value<QColor>());
     default:                        return value;
     }
@@ -322,7 +323,7 @@ bool AnimApi::keyframe(const QString &id, const QString &property, double time, 
     if (raw.isValid() && !raw.isNull()) {
         switch (prop.type) {
         case iris::PropertyType::Vec3:
-            typed = vecFromJs(raw, prop.value.value<QVector3D>());
+            typed = iris::toQt(vecFromJs(raw, iris::fromQt(prop.value.value<QVector3D>())));
             break;
         case iris::PropertyType::Color:
             typed = colorFromJs(raw, prop.value.value<QColor>());
@@ -404,7 +405,7 @@ QVariant AnimApi::sample(const QString &id, const QString &property, double time
 
     const QVariant sampled = animedits::sampleTrack(anim, property, time);
     if (!sampled.isValid()) return QVariant();
-    if (sampled.typeId() == QMetaType::QVector3D) return vecToJs(sampled.value<QVector3D>());
+    if (sampled.typeId() == QMetaType::QVector3D) return vecToJs(iris::fromQt(sampled.value<QVector3D>()));
     if (sampled.typeId() == QMetaType::QColor)    return colorToJs(sampled.value<QColor>());
     return sampled;
 }

@@ -9,10 +9,11 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/vec.h"
 #include "services/animationedits.h"
 
 #include <QColor>
-#include <QVector3D>
 #include <algorithm>
 #include <cmath>
 
@@ -176,7 +177,7 @@ bool setKeyframe(const iris::AnimationPtr &anim, const PropertyInfo &prop,
         putKey(frames[0].keyFrame, time, val.toFloat());
         break;
     case iris::PropertyType::Vec3: {
-        const QVector3D v = val.value<QVector3D>();
+        const iris::Vec3 v = iris::fromQt(val.value<QVector3D>());
         putKey(frames[0].keyFrame, time, v.x());
         putKey(frames[1].keyFrame, time, v.y());
         putKey(frames[2].keyFrame, time, v.z());
@@ -270,9 +271,9 @@ QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, do
     case 1:
         return frames[0].keyFrame->getValueAt(time);
     case 3:
-        return QVector3D(frames[0].keyFrame->getValueAt(time),
-                         frames[1].keyFrame->getValueAt(time),
-                         frames[2].keyFrame->getValueAt(time));
+        return iris::toQt(iris::Vec3(frames[0].keyFrame->getValueAt(time),
+                                     frames[1].keyFrame->getValueAt(time),
+                                     frames[2].keyFrame->getValueAt(time)));
     case 4: {
         // 0..1 channels, clamped: an extrapolating curve can leave the range,
         // and QColor::fromRgb with an out-of-range int is an INVALID colour

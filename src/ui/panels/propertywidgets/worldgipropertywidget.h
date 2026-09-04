@@ -12,8 +12,8 @@ For more information see the LICENSE file
 #ifndef WORLDGIPROPERTYWIDGET_H
 #define WORLDGIPROPERTYWIDGET_H
 
+#include "irisgl/core/math/vec.h"
 #include <QWidget>
-#include <QVector3D>
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
 
@@ -42,9 +42,9 @@ protected slots:
     void onQualityChanged(int row);
     void onLightChanged(int row);
     void onBouncesChanged(float value);
-    void onBoundsMinChanged(QVector3D value);
-    void onBoundsMaxChanged(QVector3D value);
-    void onPccGridChanged(QVector3D value);
+    void onBoundsMinChanged(iris::Vec3 value);
+    void onBoundsMaxChanged(iris::Vec3 value);
+    void onPccGridChanged(iris::Vec3 value);
     void onAutoRefreshChanged(bool value);
 
 private:

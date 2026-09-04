@@ -1,3 +1,4 @@
+#include "irisgl/core/math/vec.h"
 #include "propertywidgetbase.h"
 #include <QLabel>
 #include <QDebug>
@@ -49,12 +50,12 @@ Widget2D::Widget2D() : PropertyWidgetBase()
 
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
-		emit valueChanged(QVector2D(x, y));
+		emit valueChanged(iris::Vec2(x, y));
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		emit valueChanged(QVector2D(x, y));
+		emit valueChanged(iris::Vec2(x, y));
 	});
 }
 
@@ -69,7 +70,6 @@ void Widget2D::setValues(float xValue, float yValue)
 	xSpinBox->setValue(xValue);
 	ySpinBox->setValue(yValue);
 }
-
 
 
 Widget3D::Widget3D() : PropertyWidgetBase()
@@ -102,17 +102,17 @@ Widget3D::Widget3D() : PropertyWidgetBase()
 
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
-		emit valueChanged(QVector3D(x, y, z));
+		emit valueChanged(iris::Vec3(x, y, z));
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		emit valueChanged(QVector3D(x, y, z));
+		emit valueChanged(iris::Vec3(x, y, z));
 	});
 
 	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		z = val;
-		emit valueChanged(QVector3D(x, y, z));
+		emit valueChanged(iris::Vec3(x, y, z));
 	});
 
 }
@@ -169,22 +169,22 @@ Widget4D::Widget4D() : PropertyWidgetBase()
 
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 
 	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		z = val;
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 }
 
@@ -197,7 +197,7 @@ void Widget4D::setXSpinBoxConnection(std::function<void(double val)> func)
 	connect(xSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		x = val;
 		func(val);
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 }
 
@@ -206,7 +206,7 @@ void Widget4D::setYSpinBoxConnection(std::function<void(double val)> func)
 	connect(ySpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		y = val;
 		func(val);
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 }
 
@@ -215,7 +215,7 @@ void Widget4D::setZSpinBoxConnection(std::function<void(double val)> func)
 	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		z = val;
 		func(val);
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 }
 
@@ -225,7 +225,7 @@ void Widget4D::setWSpinBoxConnection(std::function<void(double val)> func)
 	connect(zSpinBox, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged), [=](double val) {
 		w = val;
 		func(val);
-		emit valueChanged(QVector4D(x, y, z, w));
+		emit valueChanged(iris::Vec4(x, y, z, w));
 	});
 }
 
@@ -340,7 +340,6 @@ void WidgetInt::setIntSpinBoxConnection(std::function<void(int val)> func)
 	});
 
 }
-
 
 
 WidgetFloat::WidgetFloat() : PropertyWidgetBase()

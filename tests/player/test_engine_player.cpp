@@ -3,9 +3,10 @@
 // offscreen View. The cube must be visible from the scene camera; then playing
 // the scene with a dynamic physics body must move it (transform) and change the
 // picture (pixels); stopping must restore the transform.
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
-#include <QVector3D>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -98,7 +99,7 @@ int main(int argc, char **argv)
     light->setName("sun");
     light->color = QColor(255, 255, 255);
     light->intensity = 1.0f;
-    light->setLocalRot(QQuaternion::fromEulerAngles(-60, 30, 0));
+    light->setLocalRot(iris::Quat::fromEulerAngles(-60, 30, 0));
     doc->getRootNode()->addChild(light);
 
     auto cube = iris::MeshNode::create();
@@ -110,8 +111,8 @@ int main(int argc, char **argv)
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document (no GL)");
     const float r = cube->getMeshRadius();
     const float s = r > 0.0f ? 1.0f / r : 1.0f;
-    cube->setLocalScale(QVector3D(s, s, s));
-    const QVector3D startPos(0, 2, 0);
+    cube->setLocalScale(iris::Vec3(s, s, s));
+    const iris::Vec3 startPos(0, 2, 0);
     cube->setLocalPos(startPos);
     // A dynamic rigid body: gravity pulls it down once the scene plays.
     cube->isPhysicsBody = true;
@@ -122,7 +123,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(cube);
 
     auto camera = iris::CameraNode::create();
-    camera->setLocalPos(QVector3D(0, 2, 7));
+    camera->setLocalPos(iris::Vec3(0, 2, 7));
     camera->lookAt(startPos);
     camera->angle = 45.0f;
     camera->nearClip = 0.1f;
@@ -148,14 +149,14 @@ int main(int argc, char **argv)
         CHECK(isBackground(at(rest, 2, 2)), "corner is the document's sky colour");
         CHECK(isBackground(at(rest, W / 2, H - 4)), "bottom of the view is sky (nothing there yet)");
         CHECK(!player.isPlaying(), "not playing before play()");
-        const QVector3D before = cube->getLocalPos();
+        const iris::Vec3 before = cube->getLocalPos();
         CHECK((before - startPos).length() < 1e-4f, "stepping while stopped does not move the cube");
 
         // ---- 2. play: physics moves the body, the pixels follow ----
         player.play();
         CHECK(player.isPlaying(), "play() starts the scene");
         Image falling = render(player, *engine, view, 60, 1.0f / 60.0f);   // ~1 s of simulation
-        const QVector3D after = cube->getLocalPos();
+        const iris::Vec3 after = cube->getLocalPos();
         std::printf("    cube y: %.3f -> %.3f after 60 frames\n", double(before.y()), double(after.y()));
         CHECK(after.y() < before.y() - 0.5f, "physics body fell (transform changed)");
         show("cube after 60 frames", falling, W / 2, H / 2);
@@ -167,7 +168,7 @@ int main(int argc, char **argv)
         // ---- 3. stop: transforms restored, picture back to the first frame ----
         player.stop();
         CHECK(!player.isPlaying(), "stop() ends the scene");
-        const QVector3D restored = cube->getLocalPos();
+        const iris::Vec3 restored = cube->getLocalPos();
         CHECK((restored - startPos).length() < 1e-3f, "stop() restores the cube's transform");
         Image again = render(player, *engine, view, 3, 1.0f / 60.0f);
         const int back = maxAbsDiff(rest, again);
@@ -176,9 +177,9 @@ int main(int argc, char **argv)
         CHECK(isMaterial(at(again, W / 2, H / 2)), "cube is back at the centre");
 
         // ---- 4. end(): the scene camera is restored to what begin() saw ----
-        camera->setLocalPos(QVector3D(5, 5, 5));
+        camera->setLocalPos(iris::Vec3(5, 5, 5));
         player.end();
-        CHECK((camera->getLocalPos() - QVector3D(0, 2, 7)).length() < 1e-4f, "end() restores the scene camera transform");
+        CHECK((camera->getLocalPos() - iris::Vec3(0, 2, 7)).length() < 1e-4f, "end() restores the scene camera transform");
 
         player.release();
         CHECK(view->scene() == nullptr, "release() detaches the player scene from the view");

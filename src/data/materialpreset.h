@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #define MATERIALPRESET_H
 
 #include <QColor>
-#include <QVector3D>
 
 struct MaterialPreset
 {

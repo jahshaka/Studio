@@ -9,7 +9,9 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include <QQuaternion>
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "player/playermousecontroller.h"
 #include "viewport/keyboardstate.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -40,12 +42,12 @@ void PlayerMouseController::start()
 
 		// plant viewer to any surface below it
 		auto rayStart = viewer->getGlobalPosition();
-		auto rayEnd = rayStart + QVector3D(0, -1000, 0);
+		auto rayEnd = rayStart + iris::Vec3(0, -1000, 0);
 		QList<iris::PickingResult> results;
 		scene->rayCast(rayStart, rayEnd, results, 0, true);
 
 		// closest point
-		QVector3D closestPoint = rayEnd;
+		iris::Vec3 closestPoint = rayEnd;
 		float closestDist = 1000;
 		if (results.size() > 0) {
 			// find closest one
@@ -60,7 +62,7 @@ void PlayerMouseController::start()
 
 			// todo: should limit snapping distance?
 			if (closestDist < 1000) {
-				viewer->setLocalPos(closestPoint + QVector3D(0, 5.75f * 0.5f, 0));
+				viewer->setLocalPos(closestPoint + iris::Vec3(0, 5.75f * 0.5f, 0));
 			}
 			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(viewer->getGUID());
 			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(viewer);
@@ -116,8 +118,8 @@ void PlayerMouseController::onMouseMove(int dx, int dy)
         // update picking constraint
         if (leftMouseDown && !!pickedNode) {
             if (pickedNode->isPhysicsBody) {
-                scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
-                                                                        iris::PhysicsHelper::btVector3FromQVector3D(this->camera->getGlobalPosition()));
+                scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromVec3(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
+                                                                        iris::PhysicsHelper::btVector3FromVec3(this->camera->getGlobalPosition()));
             }
         }
     } else {
@@ -129,7 +131,7 @@ void PlayerMouseController::onMouseMove(int dx, int dy)
     updateCameraTransform();
 }
 
-QVector3D PlayerMouseController::calculateMouseRay(const QPointF& pos)
+iris::Vec3 PlayerMouseController::calculateMouseRay(const QPointF& pos)
 {
     float x = pos.x();
     float y = pos.y();
@@ -137,20 +139,20 @@ QVector3D PlayerMouseController::calculateMouseRay(const QPointF& pos)
     // viewport -> NDC
     float mousex = (2.0f * x) / this->viewport.width - 1.0f;
     float mousey = (2.0f * y) / this->viewport.height - 1.0f;
-    QVector2D NDC = QVector2D(mousex, -mousey);
+    iris::Vec2 NDC = iris::Vec2(mousex, -mousey);
 
     // NDC -> HCC
-    QVector4D HCC = QVector4D(NDC, -1.0f, 1.0f);
+    iris::Vec4 HCC = iris::Vec4(NDC, -1.0f, 1.0f);
 
     // HCC -> View Space
-    QMatrix4x4 projection_matrix_inverse = this->camera->projMatrix.inverted();
-    QVector4D eye_coords = projection_matrix_inverse * HCC;
-    QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), -1.0f, 0.0f);
+    iris::Mat4 projection_matrix_inverse = this->camera->projMatrix.inverted();
+    iris::Vec4 eye_coords = projection_matrix_inverse * HCC;
+    iris::Vec4 ray_eye = iris::Vec4(eye_coords.x(), eye_coords.y(), -1.0f, 0.0f);
 
     // View Space -> World Space
-    QMatrix4x4 view_matrix_inverse = this->camera->viewMatrix.inverted();
-    QVector4D world_coords = view_matrix_inverse * ray_eye;
-    QVector3D final_ray_coords = QVector3D(world_coords);
+    iris::Mat4 view_matrix_inverse = this->camera->viewMatrix.inverted();
+    iris::Vec4 world_coords = view_matrix_inverse * ray_eye;
+    iris::Vec3 final_ray_coords = iris::Vec3(world_coords);
 
     return final_ray_coords.normalized();
 }
@@ -208,7 +210,7 @@ void PlayerMouseController::doObjectPicking(
     if (pickedNode->isPhysicsBody) {
         scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,
                                                                 pickedNode->getGUID(),
-                                                                iris::PhysicsHelper::btVector3FromQVector3D(hitList.last().hitPoint),
+                                                                iris::PhysicsHelper::btVector3FromVec3(hitList.last().hitPoint),
                                                                 segStart,
                                                                 segEnd);
         this->pickedNode = pickedNode;
@@ -216,8 +218,8 @@ void PlayerMouseController::doObjectPicking(
 }
 
 void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
-                                     const QVector3D& segStart,
-                                     const QVector3D& segEnd,
+                                     const iris::Vec3& segStart,
+                                     const iris::Vec3& segEnd,
                                      QList<PickingResult>& hitList)
 {
     if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
@@ -255,26 +257,26 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
     }
 }
 
-QVector3D PlayerMouseController::screenSpaceToWoldSpace(const QPointF& pos, float depth)
+iris::Vec3 PlayerMouseController::screenSpaceToWoldSpace(const QPointF& pos, float depth)
 {
     float x = pos.x();
     float y = pos.y();
     // viewport -> NDC
     float mousex = (2.0f * x) / this->viewport.width - 1.0f;
     float mousey = (2.0f * y) / this->viewport.height - 1.0f;
-    QVector2D NDC = QVector2D(mousex, -mousey);
+    iris::Vec2 NDC = iris::Vec2(mousex, -mousey);
 
     // NDC -> HCC
-    QVector4D HCC = QVector4D(NDC, depth, 1.0f);
+    iris::Vec4 HCC = iris::Vec4(NDC, depth, 1.0f);
 
     // HCC -> View Space
-    QMatrix4x4 projection_matrix_inverse = this->camera->projMatrix.inverted();
-    QVector4D eye_coords = projection_matrix_inverse * HCC;
-    //QVector4D ray_eye = QVector4D(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
+    iris::Mat4 projection_matrix_inverse = this->camera->projMatrix.inverted();
+    iris::Vec4 eye_coords = projection_matrix_inverse * HCC;
+    //iris::Vec4 ray_eye = iris::Vec4(eye_coords.x(), eye_coords.y(), eye_coords.z(), 0.0f);
 
     // View Space -> World Space
-    QMatrix4x4 view_matrix_inverse = this->camera->viewMatrix.inverted();
-    QVector4D world_coords = view_matrix_inverse * eye_coords;
+    iris::Mat4 view_matrix_inverse = this->camera->viewMatrix.inverted();
+    iris::Vec4 world_coords = view_matrix_inverse * eye_coords;
 
 
     return world_coords.toVector3D() / world_coords.w();
@@ -290,12 +292,12 @@ void PlayerMouseController::updateCameraTransform()
     if (!!viewer && _isPlaying) {
 		camera->setLocalPos(viewer->getGlobalPosition());
 		auto viewMat = viewer->getGlobalTransform().normalMatrix();
-		QQuaternion rot = QQuaternion::fromRotationMatrix(viewMat);
-		camera->setLocalRot(rot * QQuaternion::fromEulerAngles(pitch, yaw, 0));
-		//camera->setLocalRot(QQuaternion::fromEulerAngles(pitch,yaw,0));
+		iris::Quat rot = iris::Quat::fromRotationMatrix(viewMat);
+		camera->setLocalRot(rot * iris::Quat::fromEulerAngles(pitch, yaw, 0));
+		//camera->setLocalRot(iris::Quat::fromEulerAngles(pitch,yaw,0));
 	}
 	else {
-		camera->setLocalRot(QQuaternion::fromEulerAngles(pitch, yaw, 0));
+		camera->setLocalRot(iris::Quat::fromEulerAngles(pitch, yaw, 0));
 	}
     camera->update(0);
 }
@@ -332,10 +334,10 @@ void PlayerMouseController::update(float dt)
         this->doGodMode(dt);
 		return;
     }
-	const QVector3D upVector(0, 1, 0);
-	auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
-	auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
-	auto z = QVector3D::crossProduct(upVector, x).normalized();
+	const iris::Vec3 upVector(0, 1, 0);
+	auto forwardVector = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
+	auto x = iris::Vec3::crossProduct(forwardVector, upVector).normalized();
+	auto z = iris::Vec3::crossProduct(upVector, x).normalized();
 
 	if (!viewer) {
 		auto camPos = camera->getLocalPos();
@@ -380,36 +382,36 @@ void PlayerMouseController::update(float dt)
 
 
 		// lock rot to yaw so user is always right side up
-		auto yawRot = QQuaternion::fromEulerAngles(0, yaw, 0);
+		auto yawRot = iris::Quat::fromEulerAngles(0, yaw, 0);
 		viewer->setLocalRot(yawRot);
 
 		// keyboard movement
-		const QVector3D upVector(0, 1, 0);
+		const iris::Vec3 upVector(0, 1, 0);
 		//not giving proper rotation when not in debug mode
 		//apparently i need to normalize the head rotation quaternion
 		auto rot = yawRot;
 		rot.normalize();
-		auto forwardVector = rot.rotatedVector(QVector3D(0, 0, -1));
-		auto x = QVector3D::crossProduct(forwardVector, upVector).normalized();
-		auto z = QVector3D::crossProduct(upVector, x).normalized();
+		auto forwardVector = rot.rotatedVector(iris::Vec3(0, 0, -1));
+		auto x = iris::Vec3::crossProduct(forwardVector, upVector).normalized();
+		auto z = iris::Vec3::crossProduct(upVector, x).normalized();
 
-		auto newDir = rot.rotatedVector(QVector3D(dirX, 0, dirY)) * 10;
-		scene->getPhysicsEnvironment()->setDirection(QVector2D(newDir.x(), newDir.z()));
+		auto newDir = rot.rotatedVector(iris::Vec3(dirX, 0, dirY)) * 10;
+		scene->getPhysicsEnvironment()->setDirection(iris::Vec2(newDir.x(), newDir.z()));
     }
 
     if (!!pickedNode && pickedNode->isPhysicsBody) {
-        scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromQVector3D(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
-                                                                iris::PhysicsHelper::btVector3FromQVector3D(this->camera->getGlobalPosition()));
+        scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromVec3(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
+                                                                iris::PhysicsHelper::btVector3FromVec3(this->camera->getGlobalPosition()));
     }
 }
 
 void PlayerMouseController::doGodMode(float dt)
 {
     auto linearSpeed = movementSpeed * dt;
-    auto forwardVector = camera->getLocalRot().rotatedVector(QVector3D(0, 0, -1));
-    auto sideVector = camera->getLocalRot().rotatedVector(QVector3D(1, 0, 0));
-    //auto x = QVector3D::crossProduct(forwardVector,upVector).normalized();
-    //auto z = QVector3D::crossProduct(upVector,x).normalized();
+    auto forwardVector = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
+    auto sideVector = camera->getLocalRot().rotatedVector(iris::Vec3(1, 0, 0));
+    //auto x = iris::Vec3::crossProduct(forwardVector,upVector).normalized();
+    //auto z = iris::Vec3::crossProduct(upVector,x).normalized();
 
     auto x = sideVector;
     auto z = forwardVector;

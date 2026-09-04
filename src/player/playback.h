@@ -1,11 +1,12 @@
 #ifndef PLAYBACK_H
 #define PLAYBACK_H
 
-#include <QQuaternion>
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QObject>
 #include <QPointF>
 #include <QSharedPointer>
-#include <QMatrix4x4>
 
 #include "irisgl/irisglfwd.h"
 
@@ -27,15 +28,15 @@ class QKeyEvent;
 
 struct PlayBackNodeTransform
 {
-	QVector3D pos, scale;
-	QQuaternion rot;
+	iris::Vec3 pos, scale;
+	iris::Quat rot;
 
 	PlayBackNodeTransform()
 	{
 
 	}
 
-	PlayBackNodeTransform(QVector3D pos, QQuaternion rot, QVector3D scale):
+	PlayBackNodeTransform(iris::Vec3 pos, iris::Quat rot, iris::Vec3 scale):
 		pos(pos), rot(rot), scale(scale)
 	{
 
@@ -50,7 +51,7 @@ class PlayBack
 	/// document); null in headless tests. Was UiManager::sceneViewWidget.
 	IEditorViewport* editorViewport = nullptr;
 
-	QMatrix4x4 savedCameraMatrix;
+	iris::Mat4 savedCameraMatrix;
 	CameraControllerBase* camController;
 	PlayerMouseController* mouseController;
 

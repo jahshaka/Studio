@@ -12,9 +12,9 @@ For more information see the LICENSE file
 #ifndef ORBITALCAMERACONTROLLER_H
 #define ORBITALCAMERACONTROLLER_H
 
+#include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include <QPoint>
-#include <QVector3D>
 #include <QSharedPointer>
 #include <QKeyEvent>
 //#include "../irisgl/src/core/scenenode.h"
@@ -47,7 +47,7 @@ public:
 
 	IEditorViewport* sceneWidget;
 
-    QVector3D pivot;
+    iris::Vec3 pivot;
     float distFromPivot;
 
 	iris::CameraNodePtr camera;
@@ -82,7 +82,7 @@ public:
 	/// Alt+LMB orbit: the arcball orbits already, so this only re-points the
 	/// pivot at the selection (and re-derives the orbit distance) for the
 	/// duration of the drag.
-	void setAltOrbit(bool active, const QVector3D &pivot) override;
+	void setAltOrbit(bool active, const iris::Vec3 &pivot) override;
 protected:
 	virtual void keyReleaseEvent(QKeyEvent *event);
 };

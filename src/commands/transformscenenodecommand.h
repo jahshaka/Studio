@@ -12,29 +12,30 @@ For more information see the LICENSE file
 #ifndef TRANSFRORMSCENENODECOMMAND_H
 #define TRANSFRORMSCENENODECOMMAND_H
 
-#include <QQuaternion>
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include "commands/studiocommand.h"
-#include <QMatrix4x4>
 #include "irisgl/irisglfwd.h"
 
 class TransformSceneNodeCommand : public StudioCommand
 {
-    //QMatrix4x4 oldTransform;
-    //QMatrix4x4 newTransform;
-	QVector3D oldPos, oldScale;
-	QQuaternion oldRot;
+    //iris::Mat4 oldTransform;
+    //iris::Mat4 newTransform;
+	iris::Vec3 oldPos, oldScale;
+	iris::Quat oldRot;
 
-	QVector3D newPos, newScale;
-	QQuaternion newRot;
+	iris::Vec3 newPos, newScale;
+	iris::Quat newRot;
 
     iris::SceneNodePtr sceneNode;
 public:
 
-    TransformSceneNodeCommand(iris::SceneNodePtr node, QMatrix4x4 localTransform);
-	TransformSceneNodeCommand(iris::SceneNodePtr node, QVector3D pos, QQuaternion rot, QVector3D scale);
+    TransformSceneNodeCommand(iris::SceneNodePtr node, iris::Mat4 localTransform);
+	TransformSceneNodeCommand(iris::SceneNodePtr node, iris::Vec3 pos, iris::Quat rot, iris::Vec3 scale);
 	TransformSceneNodeCommand(iris::SceneNodePtr node,
-							  QVector3D oldPos, QQuaternion oldRot, QVector3D oldScale,
-							  QVector3D newPos, QQuaternion newRot, QVector3D newScale);
+							  iris::Vec3 oldPos, iris::Quat oldRot, iris::Vec3 oldScale,
+							  iris::Vec3 newPos, iris::Quat newRot, iris::Vec3 newScale);
     void undo() override;
     void redo() override;
 };

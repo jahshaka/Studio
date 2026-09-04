@@ -10,6 +10,7 @@
 // database into iris nodes and materials — and hands them to the scene; the
 // mouse orbits. Syncs on EngineRenderDriver::beforeFrame and renders only while
 // the page shows it (View::setEnabled). Never includes Ogre or GL.
+#include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QElapsedTimer>
 #include <QMap>
@@ -42,7 +43,7 @@ public:
     void addNodeToScene(iris::SceneNodePtr sceneNode, QString guid = "", bool viewed = false,
                         bool cache = false, bool isOnGround = true) override;
     void cacheCurrentModel(QString guid) override;
-    void orientCamera(QVector3D pos, QVector3D localRot, int distanceFromPivot) override;
+    void orientCamera(iris::Vec3 pos, iris::Vec3 localRot, int distanceFromPivot) override;
     QJsonObject getSceneProperties() override;
     void loadJafModel(QString path, QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;
     void loadJafMaterial(QString guid, bool firstAdd = true, bool cache = false, bool firstLoad = true) override;

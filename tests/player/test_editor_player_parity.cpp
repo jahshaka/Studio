@@ -26,10 +26,10 @@
 //      pixels.
 //
 // Plus the shape contract itself: playerView->postFx() == editorView->postFx().
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
-#include <QQuaternion>
-#include <QVector3D>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
     light->setName("sun");
     light->color = QColor(255, 255, 255);
     light->intensity = 3.0f;                      // bright enough to clip without a tonemap
-    light->setLocalRot(QQuaternion::fromEulerAngles(-55, 25, 0));
+    light->setLocalRot(iris::Quat::fromEulerAngles(-55, 25, 0));
     doc->getRootNode()->addChild(light);
 
     auto cube = iris::MeshNode::create();
@@ -139,13 +139,13 @@ int main(int argc, char **argv)
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     const float r = cube->getMeshRadius();
     const float s = r > 0.0f ? 1.0f / r : 1.0f;
-    cube->setLocalScale(QVector3D(s, s, s));
-    cube->setLocalPos(QVector3D(0, 1, 0));
+    cube->setLocalScale(iris::Vec3(s, s, s));
+    cube->setLocalPos(iris::Vec3(0, 1, 0));
     doc->getRootNode()->addChild(cube);
 
     auto camera = iris::CameraNode::create();
-    camera->setLocalPos(QVector3D(0, 2, 6));
-    camera->lookAt(QVector3D(0, 1, 0));
+    camera->setLocalPos(iris::Vec3(0, 2, 6));
+    camera->lookAt(iris::Vec3(0, 1, 0));
     camera->angle = 45.0f;
     camera->nearClip = 0.1f;
     camera->farClip = 100.0f;

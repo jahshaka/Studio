@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #ifndef ICAMERACONTROLLER_H
 #define ICAMERACONTROLLER_H
+#include "irisgl/core/math/vec.h"
 #include <QKeyEvent>
 #include <Qt>
 #include <QSharedPointer>
@@ -63,12 +64,12 @@ public:
     /// behaviour when the drag ends). Held-modifier input: deliberately NOT
     /// a ShortcutRegistry entry — the Shortcuts page lists it read-only with
     /// the other held keys.
-    virtual void setAltOrbit(bool active, const QVector3D &pivot);
+    virtual void setAltOrbit(bool active, const iris::Vec3 &pivot);
     bool isAltOrbiting() const { return altOrbit; }
 
 protected:
     bool altOrbit = false;
-    QVector3D altOrbitPivot;
+    iris::Vec3 altOrbitPivot;
 
     QSharedPointer<iris::CameraNode> camera;
 
