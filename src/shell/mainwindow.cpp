@@ -1317,6 +1317,12 @@ void MainWindow::openProjectAsync(bool playMode)
 
 void MainWindow::closeProject()
 {
+    // A tile's close control can fire with no scene open (double-fired close,
+    // or closing while an open never completed): every line below dereferences
+    // `scene`, so the first one crashed on null (crash-1788555267.log,
+    // stopPlayingAmbientMusic at offset 0x320 of a null Scene). Nothing open
+    // means nothing to close.
+    if (!scene) return;
     {
 		scene->stopPlayingAmbientMusic();
         scene->getPhysicsEnvironment()->stopPhysics();
