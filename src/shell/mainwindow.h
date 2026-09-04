@@ -222,7 +222,12 @@ public:
     /// main() has the final word).
     void shutdownBackgroundWork();
 
-    /// Step 5 of the shutdown order (shell/shutdownorder.h): destroys the
+    /// Step 3 of the shutdown order (shell/shutdownorder.h): StudioModule::
+    /// shutdown() on every registered module, while the Engine is still up.
+    /// Tail of shutdownBackgroundWork(), which is itself run-once.
+    void shutdownModules();
+
+    /// Step 6 of the shutdown order (shell/shutdownorder.h): destroys the
     /// child widgets that hold the last shared_ptr<Engine>, so the engine dies
     /// with a name on it and BEFORE closeDatabase(). Called only from
     /// ~MainWindow.

@@ -8,10 +8,16 @@
 // teardown law running there. src/shell/shutdownorder.h is the written order;
 // this is the test that keeps it true.
 //
-// The app prints "[shutdown] step N/7 <name>" from each participant (debug
+// The app prints "[shutdown] step N/8 <name>" from each participant (debug
 // builds). This spawns the REAL binary (the import.shutdown pattern), quits it
-// through app.quit() — the normal close path, so all seven steps run — and
-// asserts the seven steps appear exactly once each, in order.
+// through app.quit() — the normal close path, so all eight steps run — and
+// asserts the eight steps appear exactly once each, in order.
+//
+// Step 3 (Modules) joined the sequence with the deep-audit memory lane:
+// StudioModule::shutdown() is part of the module contract and had zero call
+// sites, so the avatar module's documented "the document model goes before the
+// engine does" guarantee did not hold. It runs BEFORE EngineHostRelease, which
+// is the whole point, and steps 4-8 shifted up by one.
 #include "mcpharness.h"
 
 #include <QRegularExpression>
@@ -69,7 +75,7 @@ int main(int argc, char **argv)
     // ---- the sequence ------------------------------------------------------
     QVector<int> steps;
     QStringList names;
-    QRegularExpression re(QStringLiteral(R"(\[shutdown\] step (\d)/7 ([^\n]*))"));
+    QRegularExpression re(QStringLiteral(R"(\[shutdown\] step (\d)/8 ([^\n]*))"));
     auto it = re.globalMatch(QString::fromUtf8(log));
     while (it.hasNext()) {
         const auto m = it.next();
@@ -79,13 +85,13 @@ int main(int argc, char **argv)
     for (int i = 0; i < steps.size(); ++i)
         std::printf("info: step %d — %s\n", steps.at(i), qUtf8Printable(names.at(i)));
 
-    CHECK(steps.size() == 7, "exactly seven shutdown steps were recorded");
+    CHECK(steps.size() == 8, "exactly eight shutdown steps were recorded");
     bool ordered = true, onceEach = true;
     for (int i = 0; i < steps.size(); ++i) {
         if (steps.at(i) != i + 1) ordered = false;
         if (steps.count(steps.at(i)) != 1) onceEach = false;
     }
-    CHECK(ordered, "the steps ran 1..7 in order");
+    CHECK(ordered, "the steps ran 1..8 in order");
     CHECK(onceEach, "each step ran exactly once");
 
     // The recorder itself complains when the order is violated; a clean run
@@ -93,12 +99,17 @@ int main(int argc, char **argv)
     CHECK(!log.contains("fired again"), "no shutdown step fired twice");
     CHECK(!log.contains("fired AFTER step"), "no shutdown step ran out of order");
 
-    // The load-bearing pair, named: the engine's death is step 5 and the
-    // database closes at step 6. If someone reorders them the app is back to
-    // tearing the engine down against a closed connection.
-    const int engineAt = steps.indexOf(5), dbAt = steps.indexOf(6);
+    // The load-bearing pairs, named. First: the engine's death is step 6 and
+    // the database closes at step 7. If someone reorders them the app is back
+    // to tearing the engine down against a closed connection.
+    const int engineAt = steps.indexOf(6), dbAt = steps.indexOf(7);
     CHECK(engineAt >= 0 && dbAt >= 0 && engineAt < dbAt,
           "the engine-holding widgets are destroyed BEFORE the database closes");
+    // Second: the modules shut down (3) while the engine host is still up (4),
+    // which is the contract AvatarModule::shutdown() documents.
+    const int modulesAt = steps.indexOf(3), hostAt = steps.indexOf(4);
+    CHECK(modulesAt >= 0 && hostAt >= 0 && modulesAt < hostAt,
+          "the modules shut down BEFORE the engine host is released");
     CHECK(!log.contains("the Engine is STILL referenced"),
           "no shared_ptr<Engine> holder outlived the viewports");
 

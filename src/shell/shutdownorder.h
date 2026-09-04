@@ -58,31 +58,44 @@ enum Step {
                             ///  Claude chat, thumbnails, the global pool, the
                             ///  main-thread watchdog. Idempotent (closeEvent AND
                             ///  aboutToQuit both land here)
-    EngineHostRelease = 3,  ///< finalizeAppExit -> EngineHost::shutdown(): render
+    Modules           = 3,  ///< MainWindow::shutdownModules — StudioModule::
+                            ///  shutdown() on every registered module, while the
+                            ///  Engine is still alive. `shutdown()` is part of the
+                            ///  module contract (src/modules/studiomodule.h) and
+                            ///  had ZERO call sites: the avatar module's documented
+                            ///  guarantee ("the document model goes before the
+                            ///  engine does") did not hold, and the module objects
+                            ///  themselves were never deleted (deep audit 2026-09,
+                            ///  area 1). Must run BEFORE EngineHostRelease
+    EngineHostRelease = 4,  ///< finalizeAppExit -> EngineHost::shutdown(): render
                             ///  driver stopped and deleted, shader cache + warm-up
                             ///  set written, the HOST's shared_ptr dropped. Does
                             ///  NOT destroy the Engine — the viewports still hold it
-    WindowBody        = 4,  ///< ~MainWindow body: undoStack->clear() (incident 1),
-                            ///  then the services and the Ui:: struct
-    EngineViews       = 5,  ///< ~MainWindow body: the engine-holding widgets are
+    WindowBody        = 5,  ///< ~MainWindow body: undoStack->clear() (incident 1),
+                            ///  then the modules, the services and the Ui:: struct
+    EngineViews       = 6,  ///< ~MainWindow body: the engine-holding widgets are
                             ///  destroyed HERE, so the last shared_ptr<Engine> drops
                             ///  and ~OgreEngine runs (incident 2) while the database
                             ///  is still open
-    DatabaseClosed    = 6,  ///< ~MainWindow body: db->closeDatabase(), last
-    WidgetTree        = 7,  ///< ~QWidget(MainWindow): whatever step 5 did not reach.
+    DatabaseClosed    = 7,  ///< ~MainWindow body: db->closeDatabase(), last
+    WidgetTree        = 8,  ///< ~QWidget(MainWindow): whatever step 6 did not reach.
                             ///  Nothing here may touch the database or the engine
 };
 
+/// How many steps there are. The recorder prints "step N/kStepCount" and the
+/// app.shutdown_order gate reads that denominator.
+enum { kStepCount = 8 };
+
 /// Records a step: warns if it fires twice or out of order, and prints
-/// "[shutdown] step N/7 <name>" so a spawned-process gate can read the
+/// "[shutdown] step N/8 <name>" so a spawned-process gate can read the
 /// sequence out of the app's own output. No-op in release builds.
 void record(int step, const char *name);
 
-/// Step 7 has no code of its own — it IS ~QWidget(MainWindow) destroying the
-/// child tree, which no destructor body can hook. So the window keeps one of
-/// these as a plain QObject child: QWidget's destructor deletes its children,
-/// this one records the step on its way out, and because step 5 only deletes
-/// child WIDGETS it is still there to do it.
+/// The last step has no code of its own — it IS ~QWidget(MainWindow)
+/// destroying the child tree, which no destructor body can hook. So the window
+/// keeps one of these as a plain QObject child: QWidget's destructor deletes
+/// its children, this one records the step on its way out, and because
+/// EngineViews only deletes child WIDGETS it is still there to do it.
 class WidgetTreeMarker : public QObject
 {
 public:
