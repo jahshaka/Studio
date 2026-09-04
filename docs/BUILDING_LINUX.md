@@ -28,9 +28,10 @@ sudo apt-get install -y libxrandr-dev libxaw7-dev rapidjson-dev libzzip-dev \
 A Vulkan-capable GPU and driver are required (`vulkaninfo` should succeed). CPU-only machines
 can still build and run the test suite via lavapipe (`mesa-vulkan-drivers`).
 
-`libfreetype-dev` is no longer load-bearing: Ogre's Overlay component was the only consumer
-and `irisgl/scripts/build-ogre.sh` now pins `OGRE_BUILD_COMPONENT_OVERLAY=OFF`. It is kept in
-the list because it costs nothing and other packages pull it in anyway. That script pins the
+`libfreetype-dev` is REQUIRED: Ogre's Overlay component consumes it (the stats overlay and
+the engine-drawn loading cover, `SPECS/STATS_OVERLAY_SPEC.md`), and
+`irisgl/scripts/build-ogre.sh` pins `OGRE_BUILD_COMPONENT_OVERLAY=ON` with a loud guard —
+without freetype the configure would otherwise silently drop the component. That script pins the
 **whole** component set explicitly (including `PLANAR_REFLECTIONS=ON`, which Jahshaka links) —
 previously most components rode upstream defaults, two of which were probe-dependent, so two
 boxes could end up with different engine installs from the same commit.
