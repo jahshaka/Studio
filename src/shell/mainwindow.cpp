@@ -3281,9 +3281,16 @@ MainWindow::~MainWindow()
 
     // The modules. They are plain heap objects the shell news up in
     // setupViewPort() and nothing ever deleted them (deep audit 2026-09,
-    // area 1). shutdown() already ran at step 3, with the engine alive; only
-    // the objects are left. Their PAGES belong to the stacked widget and die
-    // with the widget tree.
+    // area 1). shutdown() runs at step 3 on the closeEvent path — but the
+    // --script / --dump-api-docs exits NEVER run steps 1-3 (no closeEvent,
+    // no aboutToQuit), so it must run here too or deleting the avatar module
+    // frees AvatarPreviewModel while AvatarPreviewScene still holds a raw
+    // back-pointer to it: the widget tree's release() then jumps through a
+    // freed std::function (the fix-wave gate's e2e.avatar SEGV, 2026-09-05).
+    // shutdown() is idempotent, so the double call on the closeEvent path is
+    // free. Their PAGES belong to the stacked widget and die with the tree.
+    for (auto *m : modules)
+        if (m) m->shutdown();
     qDeleteAll(modules);
     modules.clear();
     materialsModule = nullptr;
