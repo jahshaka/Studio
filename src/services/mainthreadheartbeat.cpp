@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QTimer>
 
+#include <atomic>
+
 namespace {
 
 struct Probe
@@ -33,6 +35,18 @@ Probe &probe()
     static Probe p;
     return p;
 }
+
+// The off-thread view. A process-wide monotonic reference (started once, never
+// restarted) so a watchdog thread can subtract two readings without touching
+// the QElapsedTimer the UI thread is restarting under it.
+QElapsedTimer &refClock()
+{
+    static QElapsedTimer c = []() { QElapsedTimer t; t.start(); return t; }();
+    return c;
+}
+
+std::atomic<qint64> gLastTickNs { 0 };
+std::atomic<bool>   gRunning { false };
 
 }   // namespace
 
@@ -63,18 +77,31 @@ void start(int intervalMs)
             }
             ++q.ticks;
             q.sinceTick.restart();
+            // Publish LAST: everything above is the UI thread's own
+            // bookkeeping, and the watchdog only cares that a tick happened.
+            gLastTickNs.store(refClock().nsecsElapsed(), std::memory_order_relaxed);
         });
     }
     p.timer->setInterval(p.intervalMs);
     p.sinceTick.start();
+    gLastTickNs.store(refClock().nsecsElapsed(), std::memory_order_relaxed);
+    gRunning.store(true, std::memory_order_relaxed);
     p.timer->start();
 }
 
 void stop()
 {
     Probe &p = probe();
+    // Cleared BEFORE the timer stops: a watchdog polling in between must never
+    // see "running, and the last tick was ages ago" — that is a stall report
+    // for a probe somebody just switched off.
+    gRunning.store(false, std::memory_order_relaxed);
     if (p.timer) p.timer->stop();
 }
+
+qint64 lastTickNs() { return gLastTickNs.load(std::memory_order_relaxed); }
+qint64 nowNs()      { return refClock().nsecsElapsed(); }
+bool isRunningAtomic() { return gRunning.load(std::memory_order_relaxed); }
 
 bool isRunning()
 {

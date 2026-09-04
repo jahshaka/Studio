@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "ui/pages/projectmanager.h"
 #include "services/loadtimeline.h"
 #include "services/mainthreadheartbeat.h"
+#include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
 #include <QDir>
 #include <QFileInfo>
@@ -44,6 +45,20 @@ QVector<VerbInfo> AppApi::verbs() const
         { "heartbeatStats", "app.heartbeatStats() -> {running, intervalMs, ticks, maxGapMs, sinceLastTickMs}",
           "The heartbeat probe's readings (see app.heartbeat). maxGapMs is the longest the UI thread went "
           "without servicing its event loop since the probe started.",
+          Needs::Window },
+        { "watchdogStats", "app.watchdogStats() -> {supported, running, enabled, stallMs, reports, lastStallMs}",
+          "The main-thread watchdog (services/mainthreadwatchdog.h): a thread of our own that polls the "
+          "heartbeat's last-tick atomic and, when the UI thread has not ticked for stallMs, makes THAT thread "
+          "print its own backtrace (a watchdog thread calling backtrace() would photograph itself). 'reports' "
+          "counts the stalls this session reported — at most one per stall, capped and cooled down. A "
+          "DEVELOPMENT-BUILD feature: 'supported' is false in a release build, and a dev build can still turn "
+          "it off with the watchdog_enabled preference or --watchdog=off.",
+          Needs::Window },
+        { "blockUiThread", "app.blockUiThread(ms) -> bool",
+          "Blocks the UI thread for ms milliseconds WITHOUT servicing the event loop — a deliberate freeze, so "
+          "the watchdog and the heartbeat can be tested through the registry instead of through a private "
+          "sleep. Development builds only: returns false and does nothing in a release build. The verb itself "
+          "does not return until the freeze is over, which is the point.",
           Needs::Window },
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, microcodeLoaded, microcodeEntries, hlmsCachesLoaded, "
@@ -97,6 +112,19 @@ bool AppApi::heartbeat(int intervalMs)
 QVariantMap AppApi::heartbeatStats()
 {
     return MainThreadHeartbeat::stats();
+}
+
+QVariantMap AppApi::watchdogStats()
+{
+    return MainThreadWatchdog::stats();
+}
+
+bool AppApi::blockUiThread(int ms)
+{
+    if (!MainThreadWatchdog::isSupported())
+        return fail("app.blockUiThread: development builds only");
+    if (ms <= 0) return fail("app.blockUiThread: a positive duration is required");
+    return MainThreadWatchdog::blockCallingThread(ms);
 }
 
 QVariantMap AppApi::shaderCache()
