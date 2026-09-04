@@ -311,7 +311,7 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
         else releaseItemAndChildren(item);
     }
 	else {
-		long nodeId = item->data(0, Qt::UserRole).toLongLong();
+		qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
 		selectedNode = nodeList[nodeId];
 		emit sceneNodeSelected(selectedNode);
 	}
@@ -323,7 +323,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
     if (!index.isValid()) return;
 
     auto item = ui->sceneTree->itemAt(pos);
-    auto nodeId = (long) item->data(0, Qt::UserRole).toLongLong();
+    auto nodeId = item->data(0, Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
 
 	selectedNode = node;
@@ -535,7 +535,7 @@ void SceneHierarchyWidget::detachFromParent()
 
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
 {
-	long nodeId = item->data(1,Qt::UserRole).toLongLong();
+	qint64 nodeId = item->data(1,Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
 
     if (show) {
@@ -641,7 +641,7 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 
 void SceneHierarchyWidget::hideItemAndChildren(QTreeWidgetItem * item)
 {
-	long nodeId = item->data(0, Qt::UserRole).toLongLong();
+	qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
 	item->setIcon(1, *hiddenIcon);
 	nodeList[nodeId]->hide();
 	item->setData(1, Qt::UserRole, QVariant::fromValue(false));
@@ -653,7 +653,7 @@ void SceneHierarchyWidget::hideItemAndChildren(QTreeWidgetItem * item)
 
 void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
 {
-	long nodeId = item->data(0, Qt::UserRole).toLongLong();
+	qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
 	item->setIcon(1, *visibleIcon);
 	nodeList[nodeId]->show();
 	item->setData(1, Qt::UserRole, QVariant::fromValue(true));
@@ -705,7 +705,7 @@ void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 		*/
 
 		auto childTreeNode = treeNode->child(i);
-		long nodeId = childTreeNode->data(0, Qt::UserRole).toLongLong();
+		qint64 nodeId = childTreeNode->data(0, Qt::UserRole).toLongLong();
 		auto childNode = nodeList[nodeId];
 		refreshAttachmentColors(childNode);
 	}
@@ -713,7 +713,7 @@ void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 
 void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
 {
-    long nodeId = item->data(0, Qt::UserRole).toLongLong();
+    qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
     item->setIcon(2, *disabledIcon);
     nodeList[nodeId]->setPickable(false);
     item->setData(2, Qt::UserRole, QVariant::fromValue(false));
@@ -725,7 +725,7 @@ void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
 
 void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
 {
-    long nodeId = item->data(0, Qt::UserRole).toLongLong();
+    qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
     item->setIcon(2, *pickableIcon);
     nodeList[nodeId]->setPickable(true);
     item->setData(2, Qt::UserRole, QVariant::fromValue(true));
