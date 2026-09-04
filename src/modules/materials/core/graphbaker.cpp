@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "graphbaker.h"
 
+#include "services/filewriteatomic.h"
+
 #include <QColor>
 #include <QCryptographicHash>
 #include <QDebug>
@@ -418,7 +420,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 						p[3] = alphaBaked ? toByte(alphaState->cs->program.evaluate(ctx, scratch).x) : 255;
 					}
 				});
-				image.save(filePath, "PNG");
+				FileWrite::writeFileAtomic(filePath, [&](QFile &f) { return image.save(&f, "PNG"); });
 			}
 			emitMap("baseColorMap", fileName);
 			// the map holds the color; leaving baseColor set would multiply
@@ -467,7 +469,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 						}
 					}
 				});
-				image.save(filePath, "PNG");
+				FileWrite::writeFileAtomic(filePath, [&](QFile &f) { return image.save(&f, "PNG"); });
 			}
 			emitMap(slot.mapKey, fileName);
 			applyMapFactorRules(slot.mapKey);
