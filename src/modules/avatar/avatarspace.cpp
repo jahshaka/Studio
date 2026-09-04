@@ -30,11 +30,9 @@ namespace {
 constexpr float kTile       = 1.0f;   // tile pitch
 constexpr int   kFloorTiles = 10;     // 10x10 (owner spec)
 constexpr int   kWallRows   = 4;      // wall height in tiles
-constexpr float kFace       = 0.92f;  // tile face fraction -> 8cm glowing seam
-constexpr float kLift       = 0.012f; // tiles float this far off the base plane
+constexpr float kFaceFloor  = 0.92f;  // floor tile face fraction -> 8cm grey lines
+constexpr float kFaceWall   = 0.97f;  // wall tile face fraction -> 3cm glow lines
 
-// plane.obj is 2x2 units (-1..+1 in XZ, +Y normal): scale 0.5 == 1 metre.
-constexpr float kPlaneHalf = 0.5f;
 
 iris::MeshNodePtr makePanel(const iris::MeshPtr &mesh, const iris::PbrMaterialPtr &mat,
                             const char *name)
@@ -49,87 +47,52 @@ iris::MeshNodePtr makePanel(const iris::MeshPtr &mesh, const iris::PbrMaterialPt
     return node;
 }
 
-// One wall: the glowing base plane (its emissive face IS the seam light — it
-// shows through the tile gaps) plus rows x cols of matte white tiles floating
-// kLift in front of it. `rot` orients a +Y plane to face INTO the room;
-// `center` is the wall's centre; `right`/`up` span the wall in world space.
-void buildWall(const iris::SceneNodePtr &group, const iris::MeshPtr &mesh,
-               const iris::PbrMaterialPtr &glow, const iris::PbrMaterialPtr &tile,
-               const QQuaternion &rot, const QVector3D &center,
-               const QVector3D &right, const QVector3D &up,
-               const QVector3D &inward)
-{
-    const float w = kFloorTiles * kTile, h = kWallRows * kTile;
-
-    auto base = makePanel(mesh, glow, "avatar-wall-glow");
-    base->setLocalRot(rot);
-    base->setLocalPos(center);
-    base->setLocalScale(QVector3D(w * kPlaneHalf, 1, h * kPlaneHalf));
-    group->addChild(base);
-
-    for (int r = 0; r < kWallRows; ++r) {
-        for (int c = 0; c < kFloorTiles; ++c) {
-            const float x = (c - (kFloorTiles - 1) * 0.5f) * kTile;
-            const float y = (r - (kWallRows - 1) * 0.5f) * kTile;
-            auto t = makePanel(mesh, tile, "avatar-wall-tile");
-            t->setLocalRot(rot);
-            t->setLocalPos(center + right * x + up * y + inward * kLift);
-            t->setLocalScale(QVector3D(kTile * kFace * kPlaneHalf, 1,
-                                       kTile * kFace * kPlaneHalf));
-            group->addChild(t);
-        }
-    }
-}
-
 } // namespace
 
 iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
 {
     if (!scene || !scene->rootNode) return iris::SceneNodePtr();
 
-    // ONE mesh for every panel in the room: sharing the iris::Mesh means the
-    // mirror uploads a single engine mesh for ~270 nodes.
-    auto mesh = iris::Mesh::loadMesh(QStringLiteral(":/content/primitives/plane.obj"));
+    // EVERY piece of the room is an UNROTATED thin cube (cube.obj, 2x2x2 ->
+    // scale 0.5 == 1m). v1 built the walls from rotated planes and the local
+    // scale did not survive the 90-degree roll: the east/west glow planes came
+    // out 10m TALL and 4m wide, jutting through the floor and past the ceiling
+    // (the owner's "white planes at an angle", 2026-09-05). Axis-aligned cubes
+    // cannot have that bug, and their bevelled edges catch the light the way
+    // flat quads never did.
+    auto mesh = iris::Mesh::loadMesh(QStringLiteral(":/content/primitives/cube.obj"));
     if (!mesh) return iris::SceneNodePtr();   // headless tests have no qrc models
 
-    // Five materials, shared by role — five engine datablocks total.
-    auto floorTile = iris::PbrMaterial::create();
-    // Mirror-black is a LIE in this scene: there is no IBL here (R0.5 — no GI,
-    // no sky), and a metal with nothing to reflect renders as a void. A dark
-    // dielectric with a tight gloss reads as the Grid's polished floor while
-    // still taking the ambient + the wall glow.
-    floorTile->setBaseColor(QColor(36, 37, 44));
-    floorTile->setMetallicFactor(0.15f);
-    floorTile->setRoughnessFactor(0.18f);
-    // The faintest self-light: keeps the tile faces legible against the dead-
-    // black seams from every angle, without reading as anything but polish.
-    floorTile->setEmissiveColor(QColor(58, 60, 72));
-    floorTile->setEmissiveIntensity(0.35f);
+    // Materials, shared by role.
+    auto floorTile = iris::PbrMaterial::create();     // BLACK, glossy (owner flip)
+    floorTile->setBaseColor(QColor(6, 6, 9));
+    floorTile->setMetallicFactor(0.1f);
+    floorTile->setRoughnessFactor(0.08f);             // the reflection carries the look
 
-    auto floorSeam = iris::PbrMaterial::create();
-    floorSeam->setBaseColor(QColor(0, 0, 0));           // dead black, NO sheen
-    floorSeam->setMetallicFactor(0.0f);
-    floorSeam->setRoughnessFactor(1.0f);
+    auto floorLines = iris::PbrMaterial::create();    // GREY lines (owner flip)
+    floorLines->setBaseColor(QColor(126, 130, 140));
+    floorLines->setMetallicFactor(0.0f);
+    floorLines->setRoughnessFactor(0.9f);
+    floorLines->setEmissiveColor(QColor(126, 130, 140));
+    floorLines->setEmissiveIntensity(0.22f);          // legible from every angle
 
-    auto wallTile = iris::PbrMaterial::create();
-    wallTile->setBaseColor(QColor(238, 240, 244));
+    auto wallTile = iris::PbrMaterial::create();      // truly WHITE wall tiles
+    wallTile->setBaseColor(QColor(240, 242, 246));
     wallTile->setMetallicFactor(0.0f);
-    wallTile->setRoughnessFactor(0.55f);
-    // A whisper of emissive lifts the white tiles off the ambient floor —
-    // vertical faces get almost nothing from the two directionals.
+    wallTile->setRoughnessFactor(0.6f);
     wallTile->setEmissiveColor(QColor(255, 255, 255));
-    wallTile->setEmissiveIntensity(0.10f);
+    wallTile->setEmissiveIntensity(0.30f);            // verticals get no key light
 
-    auto wallGlow = iris::PbrMaterial::create();        // the Tron seam light
+    auto wallGlow = iris::PbrMaterial::create();      // the seam light, a clean line
     wallGlow->setBaseColor(QColor(255, 255, 255));
-    wallGlow->setEmissiveColor(QColor(223, 232, 255));  // cool white
-    wallGlow->setEmissiveIntensity(2.4f);
+    wallGlow->setEmissiveColor(QColor(228, 236, 255));
+    wallGlow->setEmissiveIntensity(1.6f);
     wallGlow->setRoughnessFactor(1.0f);
 
-    auto ceiling = iris::PbrMaterial::create();         // soft light panel
+    auto ceiling = iris::PbrMaterial::create();       // soft light panel
     ceiling->setBaseColor(QColor(246, 248, 251));
     ceiling->setEmissiveColor(QColor(255, 255, 255));
-    ceiling->setEmissiveIntensity(0.35f);
+    ceiling->setEmissiveIntensity(0.30f);
     ceiling->setRoughnessFactor(0.8f);
 
     auto group = iris::SceneNode::create();
@@ -137,47 +100,65 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     group->setPickable(false);
     group->isBuiltIn = true;
 
-    const float half = kFloorTiles * kTile * 0.5f;      // 5m
-    const float height = kWallRows * kTile;             // 4m
+    const float half   = kFloorTiles * kTile * 0.5f;  // 5m
+    const float height = kWallRows * kTile;           // 4m
+    const float mid    = height * 0.5f;
 
-    // Floor: the seam plane, then the 10x10 mirror-black tiles above it.
+    auto slab = [&](const iris::PbrMaterialPtr &mat, const char *name,
+                    const QVector3D &pos, const QVector3D &halfExtents) {
+        auto node = makePanel(mesh, mat, name);
+        node->setLocalPos(pos);
+        node->setLocalScale(halfExtents);             // cube is 2x2x2: scale = half-extents
+        group->addChild(node);
+        return node;
+    };
+
+    // Floor, inverted construction (owner, 2026-09-05): ONE continuous black
+    // gloss plate — the PLANAR REFLECTOR, so the character and the glowing
+    // walls mirror in it — with the grey grid LINES laid on top as thin
+    // strips. One reflector total (each active plane is a whole extra scene
+    // render; a hundred tile reflectors would be absurd), and the Tron floor
+    // is a continuous mirror anyway.
     {
-        auto seam = makePanel(mesh, floorSeam, "avatar-floor-seams");
-        seam->setLocalScale(QVector3D(half, 1, half));
-        group->addChild(seam);
-
-        for (int r = 0; r < kFloorTiles; ++r) {
-            for (int c = 0; c < kFloorTiles; ++c) {
-                auto t = makePanel(mesh, floorTile, "avatar-floor-tile");
-                t->setLocalPos(QVector3D((c - (kFloorTiles - 1) * 0.5f) * kTile, kLift,
-                                         (r - (kFloorTiles - 1) * 0.5f) * kTile));
-                t->setLocalScale(QVector3D(kTile * kFace * kPlaneHalf, 1,
-                                           kTile * kFace * kPlaneHalf));
-                group->addChild(t);
-            }
+        auto plate = slab(floorTile, "avatar-floor", QVector3D(0, -0.02f, 0),
+                          QVector3D(half, 0.02f, half));
+        plate->setPlanarReflector(true);
+        const float lw = kTile * (1.0f - kFaceFloor) * 0.5f;   // line half-width
+        for (int i = 0; i <= kFloorTiles; ++i) {
+            const float o = (i - kFloorTiles * 0.5f) * kTile;
+            slab(floorLines, "avatar-floor-line", QVector3D(o, 0.0015f, 0),
+                 QVector3D(lw, 0.001f, half));                 // north-south
+            slab(floorLines, "avatar-floor-line", QVector3D(0, 0.0015f, o),
+                 QVector3D(half, 0.001f, lw));                 // east-west
         }
     }
 
-    // Walls. fromEulerAngles pitches the +Y plane upright; each faces inward.
-    const QVector3D X(1, 0, 0), Y(0, 1, 0), Z(0, 0, 1);
-    const float mid = height * 0.5f;
-    buildWall(group, mesh, wallGlow, wallTile, QQuaternion::fromEulerAngles(90, 0, 0),
-              QVector3D(0, mid, -half), X, Y, Z);                       // north, faces +Z
-    buildWall(group, mesh, wallGlow, wallTile, QQuaternion::fromEulerAngles(-90, 0, 0),
-              QVector3D(0, mid, half), X, Y, -Z);                       // south, faces -Z
-    buildWall(group, mesh, wallGlow, wallTile, QQuaternion::fromEulerAngles(0, 0, 90),
-              QVector3D(half, mid, 0), Z, Y, -X);                       // east, faces -X
-    buildWall(group, mesh, wallGlow, wallTile, QQuaternion::fromEulerAngles(0, 0, -90),
-              QVector3D(-half, mid, 0), Z, Y, X);                       // west, faces +X
-
-    // Ceiling: one soft light panel, face down.
-    {
-        auto lid = makePanel(mesh, ceiling, "avatar-ceiling");
-        lid->setLocalRot(QQuaternion::fromEulerAngles(180, 0, 0));
-        lid->setLocalPos(QVector3D(0, height, 0));
-        lid->setLocalScale(QVector3D(half, 1, half));
-        group->addChild(lid);
+    // Walls: a thin glowing slab just OUTSIDE each wall line, then 10x4 white
+    // tiles standing 3cm proud of it; the glow shows only in the 3cm gaps.
+    struct Wall { QVector3D glowPos, glowHalf, axisRight, axisUp; QVector3D tileNormalOffset; QVector3D tileHalf; };
+    const float tw = kTile * kFaceWall * 0.5f;        // tile half-size on the wall
+    const float t  = 0.015f;                          // tile thickness (half)
+    const Wall walls[4] = {
+        { {0, mid, -half - 0.01f}, {half, mid, 0.01f}, {1,0,0}, {0,1,0}, {0, 0,  t}, {tw, tw, t} },   // north
+        { {0, mid,  half + 0.01f}, {half, mid, 0.01f}, {1,0,0}, {0,1,0}, {0, 0, -t}, {tw, tw, t} },   // south
+        { { half + 0.01f, mid, 0}, {0.01f, mid, half}, {0,0,1}, {0,1,0}, {-t, 0, 0}, {t, tw, tw} },   // east
+        { {-half - 0.01f, mid, 0}, {0.01f, mid, half}, {0,0,1}, {0,1,0}, { t, 0, 0}, {t, tw, tw} },   // west
+    };
+    for (const Wall &w : walls) {
+        slab(wallGlow, "avatar-wall-glow", w.glowPos, w.glowHalf);
+        for (int r = 0; r < kWallRows; ++r)
+            for (int c = 0; c < kFloorTiles; ++c) {
+                const float u = (c - (kFloorTiles - 1) * 0.5f) * kTile;
+                const float v = (r - (kWallRows - 1) * 0.5f) * kTile;
+                slab(wallTile, "avatar-wall-tile",
+                     w.glowPos + w.axisRight * u + w.axisUp * v + w.tileNormalOffset,
+                     w.tileHalf);
+            }
     }
+
+    // Ceiling: one soft light slab.
+    slab(ceiling, "avatar-ceiling", QVector3D(0, height + 0.01f, 0),
+         QVector3D(half, 0.01f, half));
 
     scene->rootNode->addChild(group);
     return group;

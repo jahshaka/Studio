@@ -41,6 +41,17 @@ bool AvatarPreviewScene::attach(View *view)
         mScene = engine->createScene("avatarpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.22f, 0.22f, 0.26f));
+        // One planar-reflection slot for the Modern room's floor plate
+        // (AVATAR_SPACE_SPEC). Set ONCE at scene creation — changing the
+        // budget recompiles PBS shaders, and pushing the same value is free.
+        // With no reflector armed (Grid mode, headless) an empty budget slot
+        // costs a render target's memory and nothing per-frame.
+        {
+            PlanarReflectionParams pr;
+            pr.budget = 1;
+            pr.resolution = 512;
+            mScene->setPlanarReflections(pr);
+        }
         mMirror.reset(new SceneMirror(mScene));
         mMirror->setLightWires(false);          // a preview never shows editor wires
         // A PLAIN WHITE ground grid, so the character stands on something
@@ -156,7 +167,12 @@ void AvatarPreviewScene::applyGrid()
     // otherwise show a grid framed for a 1-unit subject, edge-on.
     const float spacing = qMax(mSubjectRadius, 0.25f) * 0.25f;
     mMirror->setGridExtent(spacing * 20.0f);
-    mMirror->setGrid(mModel && mModel->isLoaded(), spacing);
+    // The wireframe grid belongs to GRID mode only: in the Modern room it
+    // draws at y=0 and shows through the floor's line gaps as a ghost ground
+    // (owner sighting, 2026-09-05). sync() re-applies this every frame, so a
+    // spaceMode change needs no extra signal.
+    const bool modern = mModel && mModel->spaceMode() == avatar::SpaceMode::Modern;
+    mMirror->setGrid(mModel && mModel->isLoaded() && !modern, spacing);
 }
 
 void AvatarPreviewScene::applyClipPlanes()
