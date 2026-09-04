@@ -476,6 +476,105 @@ int main()
             chkm3("interop.mat3.back", qe.toRotationMatrix(),
                   iris::fromQt(qe.toRotationMatrix()));
         }
+
+        // ---------------------------------------------------------------------
+        // THE FLAG SWEEP. QMatrix4x4 chooses its arithmetic by what it knows
+        // about itself, and a fast path that only triggers for one flag
+        // combination is invisible to any test that never builds a matrix with
+        // those flags. This one builds every reachable combination and runs the
+        // whole derived-matrix surface over each.
+        //
+        // It exists because normalMatrix()'s ORTHONORMAL path was missed the
+        // first time: every earlier check happened to use a matrix that also
+        // carried Scale, so the copy-the-basis path never ran, the general
+        // solve stood in for it, and the two disagreed by one ulp — which
+        // reached the screen as three changed pixels through
+        // CameraNode::lookAt. Whole-surface-per-flag-class is the fix.
+        // ---------------------------------------------------------------------
+        {
+            const iris::Vec3 tv(a, b, c), sv(e != 0.f ? e : 1.f, f != 0.f ? f : 1.f, g != 0.f ? g : 1.f);
+            const QVector3D qtv(a, b, c), qsv(e != 0.f ? e : 1.f, f != 0.f ? f : 1.f, g != 0.f ? g : 1.f);
+            const float az = ang(rng), ay2 = ang(rng);
+
+            for (int variant = 0; variant < 16; ++variant) {
+                QMatrix4x4 q; iris::Mat4 i;
+                switch (variant) {
+                case 0:  break;                                                   // Identity
+                case 1:  q.translate(qtv); i.translate(tv); break;                // T
+                case 2:  q.scale(qsv); i.scale(sv); break;                        // S
+                case 3:  q.translate(qtv); q.scale(qsv);
+                         i.translate(tv);  i.scale(sv); break;                    // T|S
+                case 4:  q.rotate(az, 0, 0, 1); i.rotate(az, 0, 0, 1); break;     // R2D
+                case 5:  q.translate(qtv); q.rotate(az, 0, 0, 1);
+                         i.translate(tv);  i.rotate(az, 0, 0, 1); break;          // T|R2D
+                case 6:  q.scale(qsv); q.rotate(az, 0, 0, 1);
+                         i.scale(sv);  i.rotate(az, 0, 0, 1); break;              // S|R2D
+                case 7:  q.rotate(ay2, 0, 1, 0); i.rotate(ay2, 0, 1, 0); break;   // R
+                case 8:  q.translate(qtv); q.rotate(ay2, qtv.normalized());
+                         i.translate(tv);  i.rotate(ay2, tv.normalized()); break; // T|R
+                case 9:  q.translate(qtv); q.rotate(ay2, qtv.normalized()); q.scale(qsv);
+                         i.translate(tv);  i.rotate(ay2, tv.normalized());  i.scale(sv); break; // T|S|R
+                case 10: q.perspective(60.f, 1.5f, 0.1f, 500.f);
+                         i.perspective(60.f, 1.5f, 0.1f, 500.f); break;           // P
+                case 11: q(1, 2) = a; i(1, 2) = a; break;                         // General
+                case 12: q.ortho(-2, 2, -1, 1, -50, 50); i.ortho(-2, 2, -1, 1, -50, 50); break;
+                case 13: q.frustum(-1, 1, -1, 1, 0.5f, 90.f);
+                         i.frustum(-1, 1, -1, 1, 0.5f, 90.f); break;
+                case 14: q.lookAt(qtv, qsv, QVector3D(0, 1, 0));
+                         i.lookAt(tv, sv, iris::Vec3(0, 1, 0)); break;
+                case 15: q.viewport(0, 0, 800, 600); i.viewport(0, 0, 800, 600); break;
+                }
+                char tag[48];
+                std::snprintf(tag, sizeof(tag), "flag%d", variant);
+                std::string T(tag);
+                chk((T + ".flags").c_str(), float(q.flags().toInt()), float(i.flags()));
+                chkm((T + ".m").c_str(), q, i);
+                chkm((T + ".inverted").c_str(), q.inverted(), i.inverted());
+                chkm((T + ".transposed").c_str(), q.transposed(), i.transposed());
+                chkm3((T + ".normalMatrix").c_str(), q.normalMatrix(), i.normalMatrix());
+                chk3((T + ".map").c_str(), q.map(qv), i.map(iv));
+                chk3((T + ".mapVector").c_str(), q.mapVector(qv), i.mapVector(iv));
+                chk4((T + ".mapv4").c_str(), q.map(QVector4D(a, b, c, e)), i.map(iris::Vec4(a, b, c, e)));
+                chk((T + ".determinant").c_str(), float(q.determinant()), float(i.determinant()));
+                chk((T + ".isAffine").c_str(), float(q.isAffine()), float(i.isAffine()));
+                chk((T + ".isIdentity").c_str(), float(q.isIdentity()), float(i.isIdentity()));
+                chkq((T + ".fromRotationMatrix").c_str(),
+                     QQuaternion::fromRotationMatrix(q.normalMatrix()),
+                     iris::Quat::fromRotationMatrix(i.normalMatrix()));
+                // and the full CameraNode::lookAt chain, which is what found
+                // the missing path: lookAt -> inverted -> normalMatrix -> quat.
+                {
+                    QMatrix4x4 ql = q; iris::Mat4 il = i;
+                    ql.lookAt(qv, qw, QVector3D(0, 1, 0));
+                    il.lookAt(iv, iw, iris::Vec3(0, 1, 0));
+                    chkm((T + ".lookAt").c_str(), ql, il);
+                    const QMatrix4x4 qli = ql.inverted();
+                    const iris::Mat4 ili = il.inverted();
+                    chkm((T + ".lookAt.inv").c_str(), qli, ili);
+                    chkm3((T + ".lookAt.inv.normal").c_str(), qli.normalMatrix(), ili.normalMatrix());
+                    chkq((T + ".lookAt.decompose").c_str(),
+                         QQuaternion::fromRotationMatrix(qli.normalMatrix()),
+                         iris::Quat::fromRotationMatrix(ili.normalMatrix()));
+                    chk4((T + ".lookAt.col3").c_str(), qli.column(3), ili.column(3));
+                }
+                // and every flag class multiplied by every other
+                for (int other = 0; other < 12; ++other) {
+                    QMatrix4x4 q2; iris::Mat4 i2;
+                    switch (other) {
+                    case 1:  q2.translate(qsv); i2.translate(sv); break;
+                    case 2:  q2.scale(qtv); i2.scale(tv); break;
+                    case 4:  q2.rotate(ay2, 0, 0, 1); i2.rotate(ay2, 0, 0, 1); break;
+                    case 7:  q2.rotate(az, 1, 0, 0); i2.rotate(az, 1, 0, 0); break;
+                    case 10: q2.perspective(35.f, 1.f, 1.f, 90.f);
+                             i2.perspective(35.f, 1.f, 1.f, 90.f); break;
+                    default: continue;
+                    }
+                    chkm((T + ".prod").c_str(), q * q2, i * i2);
+                    chkm((T + ".prod.inv").c_str(), (q * q2).inverted(), (i * i2).inverted());
+                    chkm3((T + ".prod.normal").c_str(), (q * q2).normalMatrix(), (i * i2).normalMatrix());
+                }
+            }
+        }
         // degenerate / near-zero inputs
         {
             QVector3D qz(sml(rng), sml(rng), sml(rng));
