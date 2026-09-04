@@ -2,6 +2,7 @@
 #include "viewport/enginerenderdriver.h"
 #include "data/settingsmanager.h"
 #include "data/constants.h"
+#include "services/loadtimeline.h"
 
 #include <QTimer>
 
@@ -265,6 +266,13 @@ void EngineHost::startShaderCacheWatchdog()
         unsigned compiled = 0, cached = 0, expected = 0;
         mEngine->shaderBuildProgress(compiled, cached, expected);
         const unsigned total = compiled + cached;
+        // NEVER while a world is opening. Writing the cache means serializing
+        // about a megabyte and calling vkGetPipelineCacheData, all on the UI
+        // thread — and the open path's contract is that the window keeps
+        // answering (open.responsive budgets the worst gap at 500 ms). The
+        // ledger already knows when an open is in flight; deferring costs a
+        // second.
+        if (LoadTimeline::isRunning()) { mQuietTicks = 0; return; }
         if (total != mShadersSeen) { mShadersSeen = total; mQuietTicks = 0; return; }
         if (mShadersSeen == mShadersSaved) return;         // nothing new since the last save
         if (++mQuietTicks < 3) return;                     // still inside the burst
