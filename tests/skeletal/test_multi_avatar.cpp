@@ -103,7 +103,7 @@ int main(int argc, char **argv)
         CHECK(!dupMesh->getSkeleton().isNull() &&
                   dupMesh->getSkeleton().data() != orig->getSkeleton().data(),
               "the duplicate owns a separate skeleton");
-        CHECK(dup->children.size() == 1 && dup->children[0]->children.size() == 1,
+        CHECK(dup->children().size() == 1 && dup->children()[0]->children().size() == 1,
               "the duplicate kept its own bone scene nodes");
 
         // The duplicate's rig is a real clone: same names and indices (the

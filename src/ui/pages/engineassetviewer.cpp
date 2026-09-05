@@ -144,7 +144,7 @@ void EngineAssetViewer::cacheCurrentModel(QString guid)
     // AssetViewer::cacheCurrentModel: everything that is not a light.
     auto doc = mScene->document();
     if (doc->rootNode->hasChildren()) {
-        for (auto child : doc->rootNode->children) {
+        for (auto child : doc->rootNode->children()) {
             if (child->sceneNodeType != iris::SceneNodeType::Light && !child->isBuiltIn)
                 mCachedAssets.insert(guid, child);
         }

@@ -83,21 +83,21 @@ static iris::MeshNodePtr findSkinned(const iris::SceneNodePtr &n)
         auto m = n.staticCast<iris::MeshNode>();
         if (!m->getSkeleton().isNull()) return m;
     }
-    for (const auto &c : n->children) if (auto r = findSkinned(c)) return r;
+    for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
     return iris::MeshNodePtr();
 }
 
 static iris::SceneNodePtr findClipHost(const iris::SceneNodePtr &n)
 {
     if (!n->getAnimations().isEmpty()) return n;
-    for (const auto &c : n->children) if (auto r = findClipHost(c)) return r;
+    for (const auto &c : n->children()) if (auto r = findClipHost(c)) return r;
     return iris::SceneNodePtr();
 }
 
 static void collectNames(const iris::SceneNodePtr &n, QStringList &out)
 {
     out.append(n->name);
-    for (const auto &c : n->children) collectNames(c, out);
+    for (const auto &c : n->children()) collectNames(c, out);
 }
 
 /// Rotations are compared through the matrix they build: q and -q are the same

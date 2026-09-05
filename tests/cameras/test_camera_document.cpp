@@ -338,7 +338,7 @@ int main(int argc, char **argv)
               "lookAt leaves the camera where it is");
         // Looking down -Z from +Z at the origin is the identity orientation.
         const iris::Vec3 forward =
-            (cam->globalTransform * iris::Vec4(0, 0, -1, 0)).toVector3D().normalized();
+            (cam->getGlobalTransform() * iris::Vec4(0, 0, -1, 0)).toVector3D().normalized();
         CHECK(near(forward.z(), -1.0f, 1e-3f),
               "and points its -Z axis at the target");
     }

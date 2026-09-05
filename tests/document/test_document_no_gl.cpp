@@ -90,7 +90,7 @@ int main(int argc, char **argv)
     // --- Document traversal works: this is what SceneMirror will walk
     int count = 0;
     std::function<void(iris::SceneNodePtr)> walk = [&](iris::SceneNodePtr n) {
-        ++count; for (auto &c : n->children) walk(c);
+        ++count; for (auto &c : n->children()) walk(c);
     };
     walk(scene->getRootNode());
     CHECK(count == 3, "root + light + mesh = 3 nodes");
@@ -265,21 +265,22 @@ int main(int argc, char **argv)
         refParticles.reset(); refViewer.reset();
     }
 
-    // --- Transform invalidation (deep audit 2026-09, area 3; List B item 4) ---
-    // `transformDirty` and `hasDirtyChildren` were set true in the constructor
-    // and never cleared, so update() recomposed every node's local AND global
-    // transform every frame. They are a real cache now, which means a mutator
-    // that forgets to set a flag leaves a STALE globalTransform — and the
-    // picker, the gizmos and the mirror's selection outline all read that field
-    // directly. Every mutator is asserted here, through update() (which is the
-    // only thing that honours the flags; getGlobalTransform() recomputes
-    // unconditionally and would hide every one of these).
+    // --- Transform propagation through the ONE tree -------------------------
+    // SPECS/SCENEGRAPH_SPEC.md D2: there are no document dirty flags and no
+    // cached matrices any more — a node's world transform is Ogre's, resolved
+    // on demand (Node::_getFullTransformUpdated) for the readers that need one
+    // between frames and by the engine's threaded SIMD pass inside the frame.
+    // The three assertions this block used to carry about CACHE STALENESS (an
+    // idle update leaving a hand-corrupted matrix alone, and setTransformDirty
+    // repairing it) describe a mechanism that no longer exists and are gone
+    // with it; every assertion about what a mutator MEANS is kept, and they now
+    // hold without any update() call at all.
     {
         auto approx = [](const iris::Vec3 &a, const iris::Vec3 &b) {
             return (a - b).length() < 1e-4f;
         };
         auto worldPos = [](const iris::SceneNodePtr &n) {
-            return n->globalTransform.column(3).toVector3D();   // the CACHED value
+            return n->getGlobalTransform().column(3).toVector3D();
         };
 
         auto tScene = iris::Scene::create();
@@ -303,20 +304,16 @@ int main(int argc, char **argv)
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
               "invalidation: moving a parent refreshes the whole subtree below it");
 
-        // Nothing moved: the cache must hold the same answer (and, being a
-        // cache, must not have been recomputed — asserted by the fact that a
-        // deliberately corrupted cache below is NOT repaired by an idle update).
+        // Nothing moved: the same answer, and the value the caller gets back is
+        // a COPY — writing to it cannot corrupt anything (the old
+        // getGlobalTransform() handed out a reference to a member cache and
+        // wrote it from a read; audit F2).
         tScene->update(0.0f);
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
-              "invalidation: an idle update leaves the composed transforms alone");
-        leaf->globalTransform.translate(iris::Vec3(100, 100, 100));
-        tScene->update(0.0f);
-        CHECK(!approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
-              "invalidation: an idle update really does skip the recompute (it IS a cache)");
-        leaf->setTransformDirty();
-        tScene->update(0.0f);
+              "propagation: an idle update changes nothing");
+        leaf->getGlobalTransform().translate(iris::Vec3(100, 100, 100));
         CHECK(approx(worldPos(leaf), iris::Vec3(-4, 5, 0)),
-              "invalidation: ...and marking it dirty repairs it");
+              "propagation: the world transform is a value, not a writable cache");
 
         // Every remaining mutator, each asserted through the cache.
         leaf->setLocalRot(iris::Quat::fromEulerAngles(0, 90, 0));
@@ -338,8 +335,7 @@ int main(int argc, char **argv)
               "invalidation: setLocalTransform()");
 
         // setGlobalPos/setGlobalRot on a node WITH a parent, and on one
-        // without (the root) — the parentless early-returns wrote the field
-        // and set no flag at all.
+        // without (the root).
         leaf->setGlobalPos(iris::Vec3(7, 7, 7));
         tScene->update(0.0f);
         CHECK(approx(worldPos(leaf), iris::Vec3(7, 7, 7)), "invalidation: setGlobalPos() under a parent");
@@ -359,8 +355,8 @@ int main(int argc, char **argv)
         tRoot->setLocalPos(iris::Vec3());
 
         // Reparenting: the world transform changes even when the local one does
-        // not, and insertChild's keepTransform branch writes pos/rot/scale
-        // directly.
+        // not, and insertChild's keepTransform branch re-expresses the world
+        // transform in the new parent's space.
         auto other = iris::SceneNode::create();
         other->setLocalPos(iris::Vec3(0, 0, 20));
         tRoot->addChild(other);
@@ -381,7 +377,7 @@ int main(int argc, char **argv)
         CHECK(approx(worldPos(mid), mid->getLocalPos()),
               "invalidation: removeFromParent() recomposes the orphan");
 
-        // The property-animation path writes pos/rot/scale directly.
+        // The property-animation path (which now goes through the setters).
         {
             auto animated = iris::SceneNode::create();
             tRoot->addChild(animated);
@@ -410,7 +406,7 @@ int main(int argc, char **argv)
             tScene->update(0.0f);
             viewer->setViewScale(4.0f);
             tScene->update(0.0f);
-            CHECK(qFuzzyCompare(viewer->globalTransform.column(0).toVector3D().length(), 4.0f),
+            CHECK(qFuzzyCompare(viewer->getGlobalTransform().column(0).toVector3D().length(), 4.0f),
                   "invalidation: ViewerNode::setViewScale()");
 
             auto cam = iris::CameraNode::create();
@@ -418,7 +414,7 @@ int main(int argc, char **argv)
             cam->update(0.0f);
             cam->lookAt(iris::Vec3(0, 0, 0));
             cam->update(0.0f);
-            const iris::Vec3 fwd = (cam->globalTransform * iris::Vec4(0, 0, -1, 0)).toVector3D();
+            const iris::Vec3 fwd = (cam->getGlobalTransform() * iris::Vec4(0, 0, -1, 0)).toVector3D();
             CHECK(fwd.z() < -0.9f, "invalidation: CameraNode::lookAt()");
         }
 

@@ -375,7 +375,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		action = new QAction(QIcon(), "Make Active Character Controller", this);
 		connect(action, &QAction::triggered, this, [&]() {
 			// Set all other nodes to false, can we remove this for loop eventually?
-			for (auto node : scene->getRootNode()->children) {
+			for (auto node : scene->getRootNode()->children()) {
 				if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
 					node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
 				}
@@ -399,7 +399,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         connect(p2pConstraint, &QAction::triggered, this, [&]() {
             box->addItem("null", "");
 
-            for (auto childNode : rootNode->children) {
+            for (auto childNode : rootNode->children()) {
                 if (childNode->isPhysicsBody && childNode->getGUID() != node->getGUID()) {
                     box->addItem(childNode->getName(), childNode->getGUID());
                 }
@@ -419,7 +419,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
         connect(dof6Constraint, &QAction::triggered, this, [&]() {
             box->addItem("null", "");
 
-            for (auto childNode : rootNode->children) {
+            for (auto childNode : rootNode->children()) {
                 if (childNode->isPhysicsBody && childNode->getGUID() != node->getGUID()) {
                     box->addItem(childNode->getName(), childNode->getGUID());
                 }
@@ -580,7 +580,7 @@ void SceneHierarchyWidget::repopulateTree()
 void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
-    for (auto childNode : sceneNode->children) {
+    for (auto childNode : sceneNode->children()) {
         auto childTreeItem = createTreeItems(childNode);
         parentTreeItem->addChild(childTreeItem);
         nodeList.insert(childNode->getNodeId(), childNode);
@@ -672,7 +672,7 @@ void SceneHierarchyWidget::attachAllChildren(iris::SceneNodePtr node)
 
 void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
 {
-	for (auto child : node->children) {
+	for (auto child : node->children()) {
 		child->setAttached(true);
 		attachAllChildren(child);
 	}
@@ -741,14 +741,14 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
     if (!parentNode) return;
     auto parentTreeItem = treeItemList[parentNode->nodeId];
     auto childItem = createTreeItems(childNode);
-    parentTreeItem->insertChild(parentNode->children.indexOf(childNode),childItem);
+    parentTreeItem->insertChild(parentNode->children().indexOf(childNode),childItem);
 
     // add to lists
     nodeList.insert(childNode->getNodeId(), childNode);
     treeItemList.insert(childNode->getNodeId(), childItem);
 
     // recursively add children
-    for (auto child: childNode->children) insertChild(child);
+    for (auto child: childNode->children()) insertChild(child);
 }
 
 void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)

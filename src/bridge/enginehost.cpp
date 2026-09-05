@@ -1,4 +1,6 @@
 #include "bridge/enginehost.h"
+
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "viewport/enginerenderdriver.h"
 #include "data/settingsmanager.h"
 #include "data/constants.h"
@@ -247,6 +249,13 @@ bool EngineHost::start(QString &error)
     }
     mEngine = std::move(engine);
     mDriver = new EngineRenderDriver(mEngine.get());
+    // THE scene graph (SPECS/SCENEGRAPH_SPEC.md D2): a document node IS an
+    // engine node, so the document needs somewhere to put nodes that are not in
+    // any rendered scene yet. This is the first thing to happen after the engine
+    // exists and BEFORE the first document node — MainWindow's viewport creates
+    // the editor camera inside its own constructor, a few lines later.
+    iris::graph::setStagingScene(
+        reinterpret_cast<iris::graph::SceneHandle>(mEngine->documentGraphScene()));
     return true;
 }
 
@@ -307,5 +316,10 @@ void EngineHost::shutdown()
         delete mDriver;
         mDriver = nullptr;
     }
+    // The document's staging scene manager belongs to the Engine and dies with
+    // it; drop our reference to it first so nothing walks a dead manager. (Every
+    // iris::graph entry point also tests Ogre::Root's liveness, because the
+    // Engine can outlive this call — the viewports hold their own shared_ptr.)
+    iris::graph::setStagingScene(nullptr);
     mEngine.reset();
 }

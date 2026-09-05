@@ -52,7 +52,7 @@ namespace {
 int walkNode(const iris::SceneNodePtr &node, const NodeVisitor &visit)
 {
     QVector<int> childHandles;
-    for (const auto &child : node->children) {
+    for (const auto &child : node->children()) {
         if (!child || shouldSkipForExport(child)) continue;
         const int h = walkNode(child, visit);
         if (h >= 0) childHandles.append(h);
@@ -66,7 +66,7 @@ QVector<int> walkScene(const iris::ScenePtr &scene, const NodeVisitor &visit)
 {
     QVector<int> roots;
     if (!scene || !scene->rootNode) return roots;
-    for (const auto &child : scene->rootNode->children) {
+    for (const auto &child : scene->rootNode->children()) {
         if (!child || shouldSkipForExport(child)) continue;
         const int h = walkNode(child, visit);
         if (h >= 0) roots.append(h);

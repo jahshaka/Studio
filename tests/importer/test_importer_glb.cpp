@@ -303,7 +303,7 @@ int main(int argc, char **argv)
             std::function<iris::SceneNodePtr(iris::SceneNodePtr)> findAnimated =
                 [&](iris::SceneNodePtr n) -> iris::SceneNodePtr {
                     if (n->getAnimation() && n->getAnimation()->hasSkeletalAnimation()) return n;
-                    for (auto &c : n->children) { auto r = findAnimated(c); if (r) return r; }
+                    for (auto &c : n->children()) { auto r = findAnimated(c); if (r) return r; }
                     return iris::SceneNodePtr();
                 };
             auto animated = findAnimated(node);
@@ -399,9 +399,9 @@ int main(int argc, char **argv)
                                     a->getLocalScale().x(), b->getLocalScale().x());
                         return false;
                     }
-                    if (a->children.size() != b->children.size()) return false;
-                    for (int i = 0; i < a->children.size(); ++i)
-                        if (!sameTransforms(a->children[i], b->children[i])) return false;
+                    if (a->children().size() != b->children().size()) return false;
+                    for (int i = 0; i < a->children().size(); ++i)
+                        if (!sameTransforms(a->children()[i], b->children()[i])) return false;
                     return true;
                 };
             CHECK(sameTransforms(first, second), "double import: identical transforms");
@@ -409,7 +409,7 @@ int main(int argc, char **argv)
             std::function<bool(iris::SceneNodePtr)> hasAuthoredScale =
                 [&](iris::SceneNodePtr n) -> bool {
                     if (nearly(n->getLocalScale().x(), 0.0143f, 1e-4f)) return true;
-                    for (auto &c : n->children) if (hasAuthoredScale(c)) return true;
+                    for (auto &c : n->children()) if (hasAuthoredScale(c)) return true;
                     return false;
                 };
             CHECK(hasAuthoredScale(first), "authored root scale 0.0143 survives import");

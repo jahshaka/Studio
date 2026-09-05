@@ -266,7 +266,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
                 meshNode->meshPath = out.meshGuid;
             meshNode->setGUID(out.mainGuid);
         }
-        for (auto &child : n->children) rewrite(child);
+        for (auto &child : n->children()) rewrite(child);
     };
     rewrite(node);
 
@@ -346,7 +346,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
                     }
                 }
             }
-            for (auto &child : n->children) repoint(child);
+            for (auto &child : n->children()) repoint(child);
         };
         repoint(node);
 

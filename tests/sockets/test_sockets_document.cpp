@@ -359,7 +359,7 @@ int main(int argc, char **argv)
 
         auto copy2 = f.arm->duplicate();
         iris::SceneNodePtr copiedCam;
-        for (const auto &child : copy2->children)
+        for (const auto &child : copy2->children())
             if (child->getName() == "headcam") copiedCam = child;
         CHECK(!copiedCam.isNull(), "the copied subtree carries the camera");
         CHECK(copiedCam->socketOwnerGuid == copy2->getGUID(),

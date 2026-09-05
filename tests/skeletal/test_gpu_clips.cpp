@@ -598,7 +598,7 @@ int main(int argc, char **argv)
                         auto m = n.staticCast<iris::MeshNode>();
                         if (!m->getSkeleton().isNull()) return m;
                     }
-                    for (const auto &c : n->children) if (auto r = findSkinned(c)) return r;
+                    for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
                     return iris::MeshNodePtr();
                 };
             auto meshNode = findSkinned(fragment);

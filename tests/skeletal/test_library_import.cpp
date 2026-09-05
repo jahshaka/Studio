@@ -50,19 +50,19 @@ static iris::MeshNodePtr findSkinned(const iris::SceneNodePtr &n)
         auto m = n.staticCast<iris::MeshNode>();
         if (!m->getSkeleton().isNull()) return m;
     }
-    for (const auto &c : n->children) if (auto r = findSkinned(c)) return r;
+    for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
     return iris::MeshNodePtr();
 }
 static iris::SceneNodePtr findClipHost(const iris::SceneNodePtr &n)
 {
     if (!n->getAnimations().isEmpty()) return n;
-    for (const auto &c : n->children) if (auto r = findClipHost(c)) return r;
+    for (const auto &c : n->children()) if (auto r = findClipHost(c)) return r;
     return iris::SceneNodePtr();
 }
 static int countNodes(const iris::SceneNodePtr &n)
 {
     int c = 1;
-    for (const auto &k : n->children) c += countNodes(k);
+    for (const auto &k : n->children()) c += countNodes(k);
     return c;
 }
 
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
         if (prop.isNull()) return 1;
         CHECK(prop->getSceneNodeType() == iris::SceneNodeType::Mesh,
               "an unskinned single-mesh file is STILL one MeshNode (shortcut kept)");
-        CHECK(prop->children.isEmpty(), "... with no child nodes");
+        CHECK(prop->children().isEmpty(), "... with no child nodes");
         CHECK(prop.staticCast<iris::MeshNode>()->getSkeleton().isNull(),
               "... and no skeleton");
 

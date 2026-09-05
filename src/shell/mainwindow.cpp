@@ -1391,7 +1391,7 @@ void MainWindow::closeProject()
         scene->getPhysicsEnvironment()->stopSimulation();
 
         if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty()) {
-            for (const auto &node : scene->getRootNode()->children) {
+            for (const auto &node : scene->getRootNode()->children()) {
                 if (node->isPhysicsBody) {
                     node->setGlobalTransform(scene->getPhysicsEnvironment()->nodeTransforms.value(node->getGUID()));
                 }

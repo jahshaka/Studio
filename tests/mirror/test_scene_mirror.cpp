@@ -1444,14 +1444,14 @@ int main(int argc, char **argv)
         CHECK(mirror.giRefreshCount() == refresh0, "GI idle: the first push is not also a refresh");
 
         // The world transforms the signature is built from, captured once.
-        const iris::Mat4 sun0 = gsun->globalTransform, panel0 = gpanel->globalTransform;
+        const iris::Mat4 sun0 = gsun->getGlobalTransform(), panel0 = gpanel->getGlobalTransform();
 
         bool stable = true;
         for (int f = 0; f < 60; ++f) {
             mirror.sync();
             mirror.applyEnvironment(view, engine.get());
             engine->renderOneFrame();
-            if (!(gsun->globalTransform == sun0) || !(gpanel->globalTransform == panel0)) stable = false;
+            if (!(gsun->getGlobalTransform() == sun0) || !(gpanel->getGlobalTransform() == panel0)) stable = false;
         }
         CHECK(stable, "GI idle: every light's cached globalTransform is bit-identical after 60 frames");
         // ...and the cache agrees with a fresh recompute, so the two writers of

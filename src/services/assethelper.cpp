@@ -140,9 +140,9 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     QJsonArray children = definition["children"].toArray();
     // These will always be in sync since the definition is derived from the mesh
     if (!children.isEmpty()) {
-        for (int i = 0; i < node->children.count(); ++i) {
+        for (int i = 0; i < node->children().count(); ++i) {
             if (!children[i].toObject().isEmpty())
-                updateNodeMaterial(node->children[i], children[i].toObject(), db);
+                updateNodeMaterial(node->children()[i], children[i].toObject(), db);
         }
     }
 }
@@ -187,7 +187,7 @@ QStringList AssetHelper::getChildGuids(const iris::SceneNodePtr &node)
     {
         if (!node->getGUID().isEmpty() && !items.contains(node->getGUID())) items.append(node->getGUID());
         if (node->hasChildren()) {
-            for (const auto &child : node->children) {
+            for (const auto &child : node->children()) {
                 getChildGuids(child, items);
             }
         }
@@ -355,7 +355,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         }
 
         if (node->hasChildren()) {
-            for (auto &child : node->children) {
+            for (auto &child : node->children()) {
                 getUsedTexture(child);
             }
         }
