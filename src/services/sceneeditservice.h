@@ -113,6 +113,14 @@ public:
     /// `ignorePlacement` true keeps the node at the origin instead of the
     /// spawn-in-front-of-the-camera offset addNodeToScene applies.
     iris::ViewerNodePtr addViewer(bool ignorePlacement = false);
+    /// Adds a scene-graph CAMERA (CAMERAS_SPEC §3) — a real node that saves,
+    /// duplicates, deletes and animates like any other, NOT the viewport's
+    /// explorer camera (that one lives on EditorData and is never in the
+    /// graph). Returns the node so callers can report an id; null when there is
+    /// no scene. Undoable through addNodeToScene like every other add;
+    /// `ignorePlacement` true keeps it at the origin instead of the
+    /// spawn-in-front-of-the-editor-camera offset.
+    iris::CameraNodePtr addCamera(bool ignorePlacement = false);
     /// Adds an emitter, optionally stamped from a preset recipe
     /// (PARTICLES_FX2_SPEC §6). Returns the node so callers — the scripting
     /// verb, chiefly — can address what they just made; null when there is no

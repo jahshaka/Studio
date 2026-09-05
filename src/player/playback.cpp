@@ -167,6 +167,12 @@ void PlayBack::playScene()
 	if (_isPlaying) return;
 
 	_isPlaying = true;
+	// The DOCUMENT's play flag (CAMERAS_SPEC D6). It is what
+	// SceneMirror::applyCamera reads to decide whether the scene's active
+	// camera takes the view, and PlayBack is the one place both play paths —
+	// editor play-in-place and the player view — pass through. A PAUSED scene
+	// stays "playing": the shot must not cut back to the explorer on pause.
+	scene->setPlaying(true);
 	saveNodeTransforms();
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->initializePhysicsWorldFromScene(scene->getRootNode());
@@ -203,6 +209,7 @@ void PlayBack::stopScene()
 {
 	_isPlaying = false;
 	_isPaused = false;
+	scene->setPlaying(false);   // back to the explorer (CAMERAS_SPEC D6)
 	mouseController->setPlayState(_isPlaying);
 	scene->getPhysicsEnvironment()->restartPhysics();
 	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());

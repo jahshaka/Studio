@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QtMath>
 
 #include "scripting/modules/moduleshared.h"
+#include "scripting/modules/cameraapi.h"   // camerashared::applySettings / settingsToJs
 #include "commands/reparentscenenodecommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
@@ -26,6 +27,7 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "data/database/database.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 
 using namespace scriptmod;
 
@@ -109,6 +111,30 @@ QVector<VerbInfo> SceneApi::verbs() const
           "from anyone. Scalar rows afterwards go through node.setProperty; the over-life ramps "
           "through particles.setColourKeys / setScaleKeys. NOTE the node's scale does not resize the "
           "spawn volume or the particles: both are numeric (extents, particleScale). Undoable.",
+          Needs::Document },
+        { "addCamera", "scene.addCamera({position?, rotation?, scale?, parent?, settings?}) -> id",
+          "Adds a real scene CAMERA (CAMERAS_SPEC): a node that saves, duplicates, deletes, "
+          "parents and animates like any other, with a lens (vertical FOV or focal length "
+          "through a 36x24 mm sensor), clip planes, aspect + output height, and the focus/DOF "
+          "block. It is NOT the viewport's explorer camera, which is not a scene node at all. "
+          "`settings` is a camera.settings block applied to the new camera in the same undo "
+          "step. Adding a camera does NOT arm it for play — that is scene.setActiveCamera, "
+          "always an explicit choice. Undoable.",
+          Needs::Document },
+        { "cameras", "scene.cameras() -> [{id, name, active, position, rotation, angle, focalLength, ...}]",
+          "Every scene camera, with its full settings block and an `active` flag marking the one "
+          "play renders through. The viewport's explorer camera is not in this list (it is not a "
+          "scene node); editor.camera() reads that one.",
+          Needs::Document },
+        { "setActiveCamera", "scene.setActiveCamera(id | null) -> bool",
+          "Points PLAY at a scene camera: editor Play and the player view render through it "
+          "instead of the free viewer. null (or no argument) clears it. EDITING is unaffected — "
+          "the main viewport stays the explorer. Switching this from a script or an animation "
+          "while playing is a camera cut. Saved with the scene; a camera that is deleted clears "
+          "it rather than leaving play pointed at nothing.",
+          Needs::Document },
+        { "activeCamera", "scene.activeCamera() -> id | null",
+          "The camera play renders through, or null for the free viewer.",
           Needs::Document },
     };
 }
@@ -357,6 +383,91 @@ QString SceneApi::addViewer(const QVariantMap &options)
         return QString();
     }
     return finishAdd(options, QStringLiteral("scene.addViewer"));
+}
+
+QString SceneApi::addCamera(const QVariantMap &options)
+{
+    if (!sceneOrFail()) return QString();
+
+    // `settings` is not a transform option — pull it out before finishAdd sees
+    // the map, and apply it through the camera module so there is exactly ONE
+    // implementation of "write a camera's settings" (and one set of refusals).
+    QVariantMap rest = options;
+    const QVariant settings = normalizeJs(rest.take(QStringLiteral("settings")));
+
+    host.services->selection->select(iris::SceneNodePtr());
+    auto node = host.services->sceneEdit->addCamera(rest.contains("position"));
+    if (!node) {
+        fail(QStringLiteral("scene.addCamera: the camera was not created"));
+        return QString();
+    }
+    const QString id = finishAdd(rest, QStringLiteral("scene.addCamera"));
+    if (id.isEmpty()) return QString();   // finishAdd already threw
+
+    if (settings.isValid() && !settings.isNull()) {
+        if (settings.typeId() != QMetaType::QVariantMap) {
+            fail("scene.addCamera: `settings` is an object — the same block camera.settings takes");
+            return QString();
+        }
+        // THE SAME writer camera.settings uses, refusing the same things in the
+        // same words. The node stays: the add is already on the undo stack and
+        // one Ctrl+Z (or the run's macro) takes the whole thing back — leaving a
+        // half-configured camera behind is better than a silently missing one.
+        const QString error = camerashared::applySettings(
+            node.staticCast<iris::CameraNode>(), settings.toMap(),
+            host.services->sceneEdit->scene(), host.services->undo,
+            QStringLiteral("scene.addCamera"));
+        if (!error.isEmpty()) { fail(error); return QString(); }
+    }
+    return id;
+}
+
+QVariantList SceneApi::cameras()
+{
+    QVariantList out;
+    auto scene = sceneOrFail();
+    if (!scene) return out;
+
+    // Walked from the root rather than read out of Scene::cameras, so the rows
+    // come back in scene-graph order (stable, and what the hierarchy shows)
+    // instead of a QHash's.
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        if (node->getSceneNodeType() == iris::SceneNodeType::Camera) {
+            QVariantMap row = nodeToJs(node);
+            const QVariantMap block =
+                camerashared::settingsToJs(node.staticCast<iris::CameraNode>());
+            for (auto it = block.constBegin(); it != block.constEnd(); ++it)
+                if (!row.contains(it.key())) row[it.key()] = it.value();
+            row["active"] = (scene->getActiveCameraGuid() == node->getGUID());
+            out.append(row);
+        }
+        for (const auto &child : node->children) walk(child);
+    };
+    walk(scene->getRootNode());
+    return out;
+}
+
+bool SceneApi::setActiveCamera(const QVariant &id)
+{
+    auto scene = sceneOrFail();
+    if (!scene) return false;
+
+    const QVariant value = normalizeJs(id);
+    // No argument, null and "" all mean the same thing: back to the free viewer.
+    const QString guid = (!value.isValid() || value.isNull()) ? QString() : value.toString();
+    if (!scene->setActiveCamera(guid))
+        return fail(QStringLiteral("scene.setActiveCamera: '%1' is not a camera in this scene "
+                                   "(scene.cameras() lists them; pass null for the free viewer)")
+                        .arg(guid));
+    return true;
+}
+
+QVariant SceneApi::activeCamera()
+{
+    auto scene = sceneOrFail();
+    if (!scene) return QVariant();
+    const QString guid = scene->getActiveCameraGuid();
+    return guid.isEmpty() ? QVariant() : QVariant(guid);
 }
 
 QString SceneApi::addImagePlane(const QString &textureGuid, const QVariantMap &options)

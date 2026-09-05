@@ -33,11 +33,12 @@ NodeKind classifyNode(const iris::SceneNodePtr &node)
     case iris::SceneNodeType::ParticleSystem: return NodeKind::ParticleSystem;
     case iris::SceneNodeType::Viewer:         return NodeKind::Viewer;
     case iris::SceneNodeType::Decal:          return NodeKind::Decal;
+    // CAMERAS_SPEC phase 1: the CameraNode constructor sets its own type now,
+    // so cameras classify off the enum like every other kind. The dynamic_cast
+    // that used to be needed here is gone.
+    case iris::SceneNodeType::Camera:         return NodeKind::Camera;
     default: break;
     }
-    // CameraNode never writes SceneNodeType::Camera (document quirk — nothing
-    // in irisgl sets it), so the enum reads Empty on cameras forever.
-    if (dynamic_cast<iris::CameraNode *>(node.data())) return NodeKind::Camera;
     return NodeKind::Empty;
 }
 

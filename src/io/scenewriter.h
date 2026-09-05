@@ -86,6 +86,10 @@ public:
     /// Decals (DECALS_SPEC): the IMAGE is stored as a guid, never a path — the
     /// reader resolves it pin-first through the CAS like every other asset.
     static void writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr node);
+    /// Scene-graph cameras (CAMERAS_SPEC §3). Nothing to do with the
+    /// project's `editor.camera` block, which is the viewport's explorer and
+    /// stays exactly where it is.
+    static void writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNodePtr node);
 
 	static QJsonObject jsonColor(QColor color);
 	static QJsonObject jsonVector2(iris::Vec2 vec);

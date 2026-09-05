@@ -973,9 +973,10 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 res.lightCount++;
             }
         } else if (kind == NodeKind::Camera) {
-            // classifyNode uses dynamic_cast, not the type enum: CameraNode
-            // never writes sceneNodeType (document quirk — nothing in irisgl
-            // sets SceneNodeType::Camera), so the enum still reads Empty.
+            // classifyNode reads the type enum for cameras too since
+            // CAMERAS_SPEC phase 1 (the CameraNode constructor sets
+            // SceneNodeType::Camera), so this cast is as safe as every other
+            // kind's in this walk.
             auto *cam = static_cast<iris::CameraNode *>(node.data());
             QJsonObject gc;
             gc["name"] = n["name"];

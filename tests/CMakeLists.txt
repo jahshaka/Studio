@@ -150,3 +150,6 @@ add_subdirectory(samples)
 # The shader cache's container (SHADER_CACHE_SPEC §4.5). AFTER tests/engine:
 # it reuses that directory's JAHSHAKA_ASAN option and its sanitised backend.
 add_subdirectory(shadercache)
+# Scene cameras (CAMERAS_SPEC phase 1): the document half, the play-routing
+# seam in pixels, and the verb + round-trip e2e.
+add_subdirectory(cameras)

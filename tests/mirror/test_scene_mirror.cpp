@@ -771,7 +771,7 @@ int main(int argc, char **argv)
 
         auto decal = iris::DecalNode::create();
         CHECK(decal->getSceneNodeType() == iris::SceneNodeType::Decal,
-              "DecalNode SETS its SceneNodeType (the bug CameraNode never fixed)");
+              "DecalNode SETS its SceneNodeType (as CameraNode does since CAMERAS_SPEC)");
         decal->width = 3.0f; decal->height = 3.0f; decal->depth = 2.0f;
         decal->textureGuid = QStringLiteral("guid-red");
         decal->resolvedTexturePath = redPath;

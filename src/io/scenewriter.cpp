@@ -202,7 +202,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giAutoRefresh"] = scene->giAutoRefresh;
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
-	
+
+    // The camera PLAY renders through (CAMERAS_SPEC D6). A guid into the scene
+    // graph; empty (and absent, in every scene written before cameras existed)
+    // means the free viewer.
+    sceneObj["activeCamera"] = scene->activeCameraGuid;
+
     QJsonObject rootNodeObj;
     writeSceneNode(rootNodeObj,scene->getRootNode());
     sceneObj["rootNode"] = rootNodeObj;
@@ -314,6 +319,13 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         break;
         case iris::SceneNodeType::Decal:
             writeDecalData(sceneNodeObj, sceneNode.staticCast<iris::DecalNode>());
+        break;
+        // CAMERAS_SPEC §3. Reachable only since the CameraNode constructor
+        // started setting its own type: before that a scene-graph camera was
+        // written as an `empty` and reopened as a plain SceneNode, silently
+        // losing the camera.
+        case iris::SceneNodeType::Camera:
+            writeCameraData(sceneNodeObj, sceneNode.staticCast<iris::CameraNode>());
         break;
         default: break;
     }
@@ -784,11 +796,51 @@ void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePt
     sceneNodeObject["visible"] = decalNode->isVisible();
 }
 
+void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNodePtr cameraNode)
+{
+    // The historical projection block, spelled the same way writeEditorData
+    // spells it for the explorer camera.
+    sceneNodeObject["angle"] = cameraNode->angle;          // VERTICAL degrees
+    sceneNodeObject["nearClip"] = cameraNode->nearClip;
+    sceneNodeObject["farClip"] = cameraNode->farClip;
+    sceneNodeObject["aspectRatio"] = cameraNode->aspectRatio;
+    sceneNodeObject["orthogonalSize"] = cameraNode->orthoSize;
+    sceneNodeObject["projectionMode"] =
+        cameraNode->projMode == iris::CameraProjection::Perspective ? "perspective" : "orthogonal";
+
+    // CAMERAS_SPEC §2. The focal length is NOT written: it is a derived view of
+    // `angle` through the sensor, and writing it would create a second source
+    // of truth that a hand-edited file could contradict. authorMode carries
+    // everything the reader needs to show the lens view again.
+    sceneNodeObject["sensorWidth"] = cameraNode->sensorWidth;
+    sceneNodeObject["sensorHeight"] = cameraNode->sensorHeight;
+    sceneNodeObject["authorMode"] =
+        cameraNode->authorMode == iris::CameraAuthorMode::Millimeters ? "mm" : "degrees";
+    sceneNodeObject["constrainAspect"] = cameraNode->constrainAspect;
+    sceneNodeObject["dofEnabled"] = cameraNode->dofEnabled;
+    // Strings, so the enum ints stay free to be reordered — the same rule the
+    // GI and world-mode blocks follow.
+    sceneNodeObject["focusMode"] =
+        cameraNode->focusMode == iris::CameraFocusMode::Track ? "track"
+      : cameraNode->focusMode == iris::CameraFocusMode::Off   ? "off"
+                                                              : "manual";
+    sceneNodeObject["focusDistance"] = cameraNode->focusDistance;
+    sceneNodeObject["focusTarget"] = cameraNode->focusTarget;   // node guid
+    sceneNodeObject["fStop"] = cameraNode->fStop;
+    sceneNodeObject["outputHeight"] = cameraNode->outputHeight;
+    sceneNodeObject["bodyVisible"] = cameraNode->bodyVisible;
+}
+
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
 {
     switch (nodeType) {
         case iris::SceneNodeType::Empty:
             return "empty";
+        // CAMERAS_SPEC §3: the reader's createCamera branch keys on this
+        // string. Before the type-enum fix a camera fell through to the
+        // "empty" default below.
+        case iris::SceneNodeType::Camera:
+            return "camera";
         case iris::SceneNodeType::Light:
             return "light";
         case iris::SceneNodeType::Mesh:

@@ -101,7 +101,8 @@ int main(int argc, char **argv)
     CHECK(classifyNode(cube) == NodeKind::Mesh, "classify mesh");
     CHECK(classifyNode(light) == NodeKind::Light, "classify light");
     CHECK(classifyNode(cam) == NodeKind::Camera,
-          "classify camera via dynamic_cast (the enum reads Empty — document quirk)");
+          "classify camera off the TYPE ENUM (CAMERAS_SPEC phase 1: the CameraNode "
+          "constructor sets it, so the dynamic_cast this walker needed is gone)");
     CHECK(classifyNode(viewer) == NodeKind::Viewer, "classify viewer");
     CHECK(classifyNode(group) == NodeKind::Empty, "classify empty");
 
