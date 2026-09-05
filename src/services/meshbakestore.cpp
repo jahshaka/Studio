@@ -109,19 +109,34 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     // indexed lookup finds it without knowing which asset guid owns the
     // source (a model file is recorded under both the Object and the Mesh
     // member row, and either may be the one that resolved).
+    // NEWEST FIRST, and every candidate row — not `LIMIT 1`. The name is
+    // derived from the SOURCE oid only, so every producer generation of the
+    // same model registers under the identical name; an upgraded library
+    // holds the stale generations in front of the fresh one, and a bare
+    // LIMIT 1 returned the OLDEST row forever: fingerprint mismatch, silent
+    // permanent assimp fallback, and assets.bakeAll could never converge
+    // (its re-bake deduped to the already-present object behind the stale
+    // row). Found by the 2026-09-06 pre-push gate when the sockets merge
+    // bumped the producer id. read() validates the fingerprint, so the scan
+    // stops at the first row that is actually the current generation.
     QSqlQuery query(conn);
     query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
                   "LEFT JOIN files F ON AF.oid = F.oid "
-                  "WHERE AF.role = ? AND AF.name = ? LIMIT 1");
+                  "WHERE AF.role = ? AND AF.name = ? ORDER BY AF.rowid DESC");
     query.addBindValue(iris::MeshBake::casRole());
     query.addBindValue(iris::MeshBake::fileNameFor(sourceOid));
-    if (!query.exec() || !query.next()) return item;
+    if (!query.exec()) return item;
 
-    const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
-                                                       query.value(1).toString());
-    if (!QFileInfo::exists(path)) return item;
-    item.bakePath = path;
-    item.bakeFingerprint = iris::MeshBake::fingerprintFor(sourceOid);
+    const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid);
+    while (query.next()) {
+        const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
+                                                           query.value(1).toString());
+        if (!QFileInfo::exists(path)) continue;
+        if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
+        item.bakePath = path;
+        item.bakeFingerprint = fingerprint;
+        return item;
+    }
     return item;
 }
 
