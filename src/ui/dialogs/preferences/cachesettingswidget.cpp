@@ -75,12 +75,14 @@ CacheSettingsWidget::CacheSettingsWidget(SettingsManager *settings, QWidget *par
     mEnabled->setChecked(mSettings->getValue("shader_cache_enabled", true).toBool());
     layout->addWidget(mEnabled);
 
-    // SHADER_CACHE_SPEC §5. ON by default since ogre-patch 0016
-    // (SHADER_CACHE_AUDIT F3): the warm-up is now a 4x4 CompositorPassWarmUp
-    // rather than a full-resolution frame, so the ~250 ms of unresponsive
-    // window that kept this off is gone. The switch stays for the same reason
-    // every other cache switch does — a machine with a pathological driver has
-    // to be able to say no without a rebuild.
+    // SHADER_CACHE_SPEC §5. ON by default (SHADER_CACHE_AUDIT F3): re-measured
+    // against open.responsive on this build, the warm open's worst UI gap is
+    // 381.8 ms with this on — inside the 500 ms budget, and below the figure
+    // recorded with it OFF, because the self-disarming idle check pays the one
+    // no-op warm-up on the COLD open instead. The reasoning and both sets of
+    // numbers are at the call site in MainWindow's open plan. The switch stays
+    // for the same reason every other cache switch does: a machine with a
+    // pathological driver has to be able to say no without a rebuild.
     if (ThemeManager::classicActive())
         mWarmUpOnOpen = new QCheckBox(tr("Precompile a world's shaders while it opens"), this);
     else {

@@ -37,6 +37,13 @@ namespace {
 
 std::unique_ptr<Engine> gEngine;
 
+/// Which per-scene warm-up ROUTE this run exercises. The engine reads
+/// JAHSHAKA_WARMUP_PASS once, on the first warm-up; the suite runs BOTH ways
+/// (`shadercache.warmup` = the shipped default, `shadercache.warmup_pass` = the
+/// opt-in CompositorPassWarmUp route that ogre-patch 0016 unblocked), so case 6
+/// can assert the DELTA between them instead of asserting one of them twice.
+bool gWarmUpPass = false;
+
 unsigned compiledSoFar() {
     unsigned c = 0, f = 0, e = 0;
     gEngine->shaderBuildProgress(c, f, e);
@@ -63,6 +70,12 @@ Scene *buildScene(const char *name, View *v) {
 }  // namespace
 
 int main() {
+    {
+        const char *v = std::getenv("JAHSHAKA_WARMUP_PASS");
+        gWarmUpPass = v && *v && *v != '0';
+        std::printf("route: %s\n", gWarmUpPass ? "CompositorPassWarmUp (opt-in)"
+                                               : "full-frame (shipped default)");
+    }
     EngineConfig cfg;
     cfg.backend      = Backend::Vulkan;
     cfg.pluginDir    = JAHSHAKA_TEST_PLUGIN_DIR;
@@ -274,18 +287,50 @@ int main() {
         const unsigned afterWarm = compiledSoFar();
         std::printf("    off-camera permutation: the warm-up compiled %u shader(s)\n",
                     afterWarm - before);
-        const char *noPass = std::getenv("JAHSHAKA_WARMUP_NO_PASS");
-        if (noPass && *noPass && *noPass != '0') {
-            // The fallback route, exercised deliberately: it renders the view's
-            // own frame, the cube is culled, and nothing is built. Recorded as
-            // a number rather than skipped, because the DELTA is the finding.
-            std::printf("    (fallback route: this is the number the warm-up pass beats)\n");
-        } else {
+        if (gWarmUpPass) {
             CHECK(afterWarm > before,
                   "the warm-up pass compiled a permutation the camera cannot see");
+        } else {
+            // The DEFAULT route renders the view's own frame, the cube is
+            // culled, and nothing is built. Asserted rather than skipped: that
+            // zero is the measurement the pass route is worth, and if it ever
+            // becomes non-zero the default route has silently changed shape.
+            CHECK(afterWarm == before,
+                  "the default full-frame route does NOT reach it (this is the F2 delta)");
         }
         gEngine->destroyScene(s);
         gEngine->destroyView(v);
+    }
+
+    // ---- 7. REBIND: warm up, close the world, open another, warm up again --
+    //
+    // The editor's shape, and the one that is not covered by any case above:
+    // one View that outlives its scenes (EngineSceneViewport::clearScene keeps
+    // the View and destroys only the Scene). A warm-up per bind is what
+    // `shader_warmup_on_open` does.
+    {
+        View *v = gEngine->createOffscreenView("rebind", 96, 96, Colour(0, 0, 0));
+        CHECK(v != nullptr, "rebind view");
+        for (int round = 0; round < 3 && v; ++round) {
+            char name[32];
+            std::snprintf(name, sizeof name, "rebind-%d", round);
+            Scene *s = gEngine->createScene(name);
+            if (!s) { CHECK(false, "rebind scene"); break; }
+            v->setScene(s);
+            v->setShadows(true);
+            s->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.1f, 0.1f, 0.12f));
+            enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.8f, -0.4f), 3.14159f);
+            enginetest::addTestCube(s, Colour(0.2f + 0.2f * float(round), 0.4f, 0.6f), 0.0f, 0.5f);
+            enginetest::testCameraLookAt(v, Vec3(3.0f, 2.5f, 3.5f), Vec3(0, 0, 0));
+            const bool ok = v->warmUpShaders();
+            gEngine->renderOneFrame();
+            char msg[64];
+            std::snprintf(msg, sizeof msg, "rebind round %d: warm-up then a real frame", round);
+            CHECK(ok, msg);
+            v->setScene(nullptr);
+            gEngine->destroyScene(s);
+        }
+        if (v) gEngine->destroyView(v);
     }
 
     // ---- 4b. no scene: refuse, do not crash -------------------------------

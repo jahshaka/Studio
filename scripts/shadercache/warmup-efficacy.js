@@ -36,8 +36,11 @@ function snapshot(tag) {
         microcode: s.microcodeLoaded,
         hlms: s.hlmsCachesLoaded,
         setBytes: w.sizeBytes,
-        shapeSamples: w.shape.samples,
-        shapeShadows: w.shape.shadows
+        // `shape` and `pipelineCacheReason` arrived with the v2 fix wave; the
+        // guard keeps this script runnable against an older binary, which is
+        // exactly what an A/B measurement needs it to be.
+        shapeSamples: w.shape ? w.shape.samples : -1,
+        shapeShadows: w.shape ? w.shape.shadows : null
     }));
 }
 
@@ -46,12 +49,16 @@ function snapshot(tag) {
 // "what was built before the window".
 snapshot("EFFICACY-GATE");
 
+// EVERY world in the scratch library, opened and CLOSED in turn. Closing each
+// one is the point: the pre-fix code recorded the warm-up set only at shutdown,
+// so a session like this contributed only whatever was still open at quit —
+// which is why a library of two worlds discriminates and a library of one does
+// not.
 var known = project.list();
-if (known.length > 0) {
-    if (!project.open(known[0].guid)) throw new Error("project.open failed");
-    snapshot("EFFICACY-OPEN");
+for (var i = 0; i < known.length; ++i) {
+    if (!project.open(known[i].guid)) throw new Error("project.open failed: " + known[i].name);
+    snapshot("EFFICACY-OPEN-" + known[i].name);
     project.close();
-    snapshot("EFFICACY-CLOSE");
 }
 
 snapshot("EFFICACY-TOTAL");

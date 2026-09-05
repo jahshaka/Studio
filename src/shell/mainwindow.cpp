@@ -1358,26 +1358,31 @@ void MainWindow::openProjectAsync(bool playMode)
 	// compiles. Its own slice and its own event-loop turn, so the window keeps
 	// answering while it runs.
 	//
-	// ON BY DEFAULT since ogre-patch 0016 (SHADER_CACHE_AUDIT F2/F3). The
-	// history matters, because the default flipped on a MEASUREMENT changing,
-	// not on an opinion changing. It used to ship OFF:
+	// ON BY DEFAULT (SHADER_CACHE_AUDIT F3), and the default flipped on a
+	// MEASUREMENT, not on an opinion. It used to ship OFF against these
+	// numbers (open.responsive, Showroom, worst UI-thread gap, ms):
 	//
 	//                        cold open        second open
 	//   without this slice   1691 - 1789      439 - 476
 	//   with it              1723 - 1761      646 - 736      <- the objection
 	//
-	// The cold open was unchanged (those compiles happened either way) but the
-	// second open paid ~250 ms for a warm-up that compiled NOTHING, against an
-	// open.responsive budget of 500 ms with ~25 ms of headroom. That 250 ms was
-	// a full-resolution renderOneFrame, atomic and unsplittable — because the
-	// engine could not use Ogre's CompositorPassWarmUp (it null-dereferenced in
-	// Forward+; the cause and the three-line fix are ogre-patch 0016).
+	// The objection was that the second open pays ~250 ms for a warm-up that
+	// compiles NOTHING, against a 500 ms budget with ~25 ms of headroom.
 	//
-	// With the patch the warm-up is a real PASS_WARM_UP into a 4x4 target, so
-	// the arming open costs milliseconds instead of a frame — and the
-	// self-disarming idle check below (enginesceneviewport.cpp, mWarmUpIdleAt)
-	// still stops it running at all once a warm-up finds nothing to do. The
-	// switch stays in Preferences -> Cache for anyone who wants it off.
+	// RE-MEASURED on this build, same suite, same box: cold 425.7 ms, warm
+	// 381.8 ms — both inside the budget, and the warm one BELOW the
+	// no-warm-up figure above. What changed is not the cost of a warm-up but
+	// where it lands: the self-disarming idle check (enginesceneviewport.cpp,
+	// mWarmUpIdleAt) skips every warm-up after one that compiled nothing, so
+	// the single no-op frame is paid on the COLD open — budgeted at 4000 ms,
+	// and paying those compiles either way — and the warm open pays nothing.
+	//
+	// Note what this route is NOT: Ogre's CompositorPassWarmUp, which renders a
+	// 4x4 target and reaches permutations the camera cannot see. ogre-patch
+	// 0016 makes that route run at all, but a second upstream use-after-free
+	// kills the app on the second world of a session, so it ships behind
+	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
+	// The switch stays in Preferences -> Cache for anyone who wants it off.
 	if (settings->getValue("shader_warmup_on_open", true).toBool()) {
 		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
