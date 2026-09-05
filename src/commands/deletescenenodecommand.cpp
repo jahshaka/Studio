@@ -22,7 +22,11 @@ DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, ir
 {
     this->parentNode = parentNode;
     this->sceneNode = sceneNode;
-    this->position = parentNode->children().indexOf(sceneNode);
+    // siblingIndex(), not children().indexOf(): the accessor reads the position
+    // straight out of the one tree (skipping the engine's own helper children),
+    // where indexOf built a QList of every sibling and refcounted each one to
+    // find a number the node already knows.
+    this->position = sceneNode->siblingIndex();
     this->db = db;
     this->assetGuid = assetGuid;
 }

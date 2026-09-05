@@ -119,21 +119,29 @@ QVector<VerbInfo> NodeApi::verbs() const
           "Whether this object is a planar reflection plane.",
           Needs::Document },
         { "setStatic", "node.setStatic(id, value) -> bool",
-          "Declares that this object NEVER MOVES (SPECS/SCENEGRAPH_SPEC.md §6). A static object "
-          "is skipped entirely by the per-frame transform pass, which is where the scene graph's "
-          "headroom at high node counts comes from — a scene whose scenery is marked static costs "
-          "the engine nothing per frame for that scenery. It is a promise, not a lock: moving a "
-          "static object still works and still shows, it just costs more than moving a dynamic "
-          "one, so mark architecture and props, never anything animated, driven by physics, "
-          "riding a socket or under a gizmo. The flag applies to THIS node only, not its "
-          "children, and it does NOT survive a re-parent (the graph gives a node its new parent's "
-          "class, so mark it AFTER the object is where it belongs). It refuses (and says so) on "
-          "an object the renderer has already given a non-switchable renderable — mark it before "
-          "the object is first drawn. NOT saved with the scene yet: v1 of the graph swap carries "
-          "the flag at runtime only. Not undoable.",
+          "Declares that this object and everything under it NEVER MOVE "
+          "(SPECS/SCENEGRAPH_SPEC.md §6). A static subtree is skipped entirely by the engine's "
+          "per-frame transform AND bounds passes — they run for it only on the frames something "
+          "in it changed — which is where the scene graph's headroom at high node counts comes "
+          "from. Ground, architecture and imported props are marked automatically when they join "
+          "the scene and when a project loads; this verb is the manual override.\n\n"
+          "FOUR RULES, all enforced. (1) It applies to the WHOLE SUBTREE, never to one node: the "
+          "engine gives a child its parent's class and propagates that down, so nothing else is "
+          "expressible. (2) A static object's PARENT must be static, or be the scene root — "
+          "marking something under a moving parent is refused, because it would freeze in place "
+          "when the parent moved. (3) Objects whose renderable cannot change class refuse "
+          "outright: lights, particle systems, decals, cameras, viewers, physics bodies, socket "
+          "riders, animated nodes and skinned characters. (4) MOVING A STATIC OBJECT UNDOES IT — "
+          "the first transform write demotes the subtree and clears the flag, so you can never "
+          "get a wrong picture out of a stale mark, and you never pay a static rebuild per frame "
+          "while dragging.\n\n"
+          "NOT saved with the scene: the classification is re-derived on load from the same "
+          "rules. Not undoable.",
           Needs::Document },
         { "isStatic", "node.isStatic(id) -> bool",
-          "Whether this object is marked as never-moving. See node.setStatic.",
+          "Whether this object is marked as never-moving. This is the ASK; it can be true while "
+          "the graph has refused it (rule 2 or 3 of node.setStatic), which node.setStatic itself "
+          "reports at the time. See node.setStatic.",
           Needs::Document },
         { "physics", "node.physics(id, {type, shape, mass, restitution, friction, damping, collisionMargin}) -> bool",
           "Makes the node a physics body and/or edits its body settings — the Properties panel's "
@@ -252,14 +260,15 @@ bool NodeApi::setStatic(const QString &id, bool value)
     auto node = nodeOrFail(id, QStringLiteral("node.setStatic"));
     if (!node) return false;
     node->setStaticHint(value);
-    // Report what the graph ACTUALLY did rather than what was asked: the
-    // backend refuses the switch for an object whose renderable was created
-    // dynamic (it logs the reason), and a verb that answered true regardless
-    // would be lying about the only thing this call is for.
-    if (node->staticHint() != value)
-        return fail(QStringLiteral("node.setStatic: '%1' would not switch — an object already "
-                                   "drawn cannot change between static and dynamic; mark it "
-                                   "before it is first rendered")
+    // Report what the GRAPH did, not what was asked. The two disagree exactly
+    // when one of node.setStatic's rules refused the change, and a verb that
+    // answered true regardless would be lying about the only thing this call is
+    // for. `isStaticInGraph()` is the outcome; `staticHint()` is the intent.
+    if (node->isStaticInGraph() != value)
+        return fail(QStringLiteral("node.setStatic: '%1' would not switch — a static object's "
+                                   "parent must be static or be the scene root, and lights, "
+                                   "particle systems, decals, cameras, viewers, physics bodies, "
+                                   "socket riders, animated and skinned nodes are never static")
                         .arg(node->getName()));
     return true;
 }

@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenepicking.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -39,43 +40,28 @@ void ScenePicker::screenSegment(iris::CameraNodePtr camera, int w, int h, const 
     segEnd   = unproject(camera, w, h, point,  1.0f);
 }
 
-void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
+void ScenePicker::pickMeshes(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
                              const iris::Vec3 &cameraPos, bool forcePickable, QList<ScenePick> &out)
 {
-    if (!node) return;
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh && (node->isPickable() || forcePickable)) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
-        auto mesh = meshNode->getMesh();
-        if (mesh && mesh->getTriMesh()) {
-            // Segment into the mesh's local space, hits back to world space.
-            const iris::Mat4 inv = meshNode->getGlobalTransform().inverted();
-            const iris::Vec3 a = inv * segStart, b = inv * segEnd;
-            // BROAD PHASE first: the mesh's own bounding sphere, in the same
-            // local space. Without it every ray scanned every triangle of every
-            // mesh in the scene — which V-hold vertex snapping does on every
-            // mouse move (deep audit 2026-09, area 2: "no broad phase in
-            // picking"). iris::Scene::rayCast has always done this; the picker
-            // is the copy that did not.
-            const iris::BoundingSphere sphere = mesh->getBoundingSphere();
-            float t; iris::Vec3 sphereHit;
-            if (iris::IntersectionHelper::raySphereIntersects(a, (b - a).normalized(),
-                                                              sphere.pos, sphere.radius, t, sphereHit)) {
-                QList<iris::TriangleIntersectionResult> results;
-                if (mesh->getTriMesh()->getSegmentIntersections(a, b, results)) {
-                    for (const auto &r : results) {
-                        ScenePick p;
-                        p.node = node;
-                        p.hitPoint = meshNode->getGlobalTransform() * r.hitPoint;
-                        p.distanceFromCameraSqrd = (p.hitPoint - cameraPos).lengthSquared();
-                        p.triangleIndex = r.triangleIndex;
-                        out.append(p);
-                    }
-                }
-            }
-        }
+    // ONE implementation, two entry points (audit F13): the mesh half of this
+    // picker IS iris::picking::raycastMeshes — Ogre's RaySceneQuery broad phase
+    // plus our TriMesh narrow phase — and what stays here is the editor's own
+    // helper spheres below, which have no document geometry to intersect.
+    //
+    // `distanceFromCameraSqrd` is the one difference in shape: this picker
+    // ranks hits from the CAMERA (which is where the user is looking from)
+    // while the document's PickingResult ranks them from the segment's start.
+    // They are the same point for a perspective click and differ for an
+    // orthographic one, which is why the conversion is here and not shared.
+    for (const iris::MeshPick &m :
+         iris::picking::raycastMeshes(scene.data(), segStart, segEnd, 0, forcePickable)) {
+        ScenePick p;
+        p.node = m.node;
+        p.hitPoint = m.hitPoint;
+        p.distanceFromCameraSqrd = (m.hitPoint - cameraPos).lengthSquared();
+        p.triangleIndex = m.triangleIndex;
+        out.append(p);
     }
-    for (const auto &child : node->children())
-        pickMeshes(child, segStart, segEnd, cameraPos, forcePickable, out);
 }
 
 QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
@@ -87,7 +73,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
     QList<ScenePick> hits;
     if (!scene || !scene->getRootNode()) return hits;
     if (refreshTransforms) scene->getRootNode()->update(0.0f);   // fresh global transforms
-    pickMeshes(scene->getRootNode(), segStart, segEnd, cameraPos, forcePickable, hits);
+    pickMeshes(scene, segStart, segEnd, cameraPos, forcePickable, hits);
 
     const float sphereRadius = 0.5f;
     iris::Vec3 rayDir = (segEnd - segStart).normalized();

@@ -376,9 +376,12 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
 	}
 
     QJsonArray childrenArray;
-    for (auto childNode : sceneNode->children()) {
+    const int kids = sceneNode->childCount();
+    for (int i = 0; i < kids; ++i) {
+        iris::SceneNode *child = sceneNode->childAt(i);
+        if (!child) continue;
         QJsonObject childNodeObj;
-        writeSceneNode(childNodeObj, childNode, relative);
+        writeSceneNode(childNodeObj, child->sharedFromThis(), relative);
         childrenArray.append(childNodeObj);
     }
 

@@ -140,9 +140,14 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     QJsonArray children = definition["children"].toArray();
     // These will always be in sync since the definition is derived from the mesh
     if (!children.isEmpty()) {
-        for (int i = 0; i < node->children().count(); ++i) {
+        // ONE list, not one per iteration AND one per index: `node->children()`
+        // materialises a QList and refcounts every child, and this loop called
+        // it twice per step — an O(n^2) rebuild of the sibling list to walk it
+        // once.
+        QList<iris::SceneNodePtr> kids = node->children();
+        for (int i = 0; i < kids.count() && i < children.size(); ++i) {
             if (!children[i].toObject().isEmpty())
-                updateNodeMaterial(node->children()[i], children[i].toObject(), db);
+                updateNodeMaterial(kids[i], children[i].toObject(), db);
         }
     }
 }

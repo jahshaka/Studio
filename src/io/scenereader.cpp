@@ -96,6 +96,12 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
 
     for (auto node : scene->rootNode->children()) {
         node->applyDefaultPose();
+        // SCENE_STATIC, re-derived on load (SCENEGRAPH_SPEC §6): the hint is
+        // not in the file format yet, so the reader applies the same policy the
+        // Add/import paths do once the whole scene is built and at rest. A
+        // loaded world's ground and props therefore cost the engine nothing per
+        // frame until something moves them.
+        node->applyStaticDefaults();
     }
 
     return scene;
