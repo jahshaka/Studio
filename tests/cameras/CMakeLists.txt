@@ -31,13 +31,16 @@ target_include_directories(test_camera_document PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_camera_document PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_camera_document)
 add_test(NAME cameras.document COMMAND test_camera_document
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(cameras.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document")
+jah_no_display(cameras.document)
 
 # ---- cameras.play_routing -------------------------------------------------
 add_executable(test_camera_play_routing test_camera_play_routing.cpp

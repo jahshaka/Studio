@@ -102,13 +102,14 @@ function(jah_tsan_blocked)
     endforeach()
 endfunction()
 
-# THE DOCUMENT-GRAPH INTERIM (SPECS/SCENEGRAPH_SPEC.md §3, v1 -> v2).
+# THE DOCUMENT GRAPH'S ENGINE (SPECS/SCENEGRAPH_SPEC.md D2 / §3b v2).
 #
 # Since the scene-graph swap, an iris:: document node IS an Ogre scene node, so
 # a suite that builds a document needs an ENGINE — even when it renders nothing.
-# v2's NULL render system removes this; until then these suites boot a real
-# (offscreen Vulkan) engine, which is exactly what the spec says the interim
-# looks like and is stated honestly here rather than hidden per-suite.
+# That engine is HEADLESS: RenderSystem_NULL, no display, no driver, no window
+# (tests/support/documentgraph.h). It was a surfaceless VULKAN engine for one
+# release — the v1 interim, which made every document suite need a reachable X
+# server and a GPU; jah_no_display() below is the proof that it no longer does.
 #
 # What it takes: link JahshakaEngine, know where the plugins and Hlms media are,
 # find Ogre's shared libraries at run time, and wait for the media staging.
@@ -121,6 +122,19 @@ function(jah_document_graph _t)
     set_target_properties(${_t} PROPERTIES
         BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
     add_dependencies(${_t} JahshakaEngineMedia)
+endfunction()
+
+# DISPLAY-FREE, ENFORCED (SPECS/SCENEGRAPH_SPEC.md §3b). Strips DISPLAY and
+# WAYLAND_DISPLAY from the test's environment, so a suite that claims to need no
+# graphics stack is RUN without one on every single ctest invocation — including
+# on this box, where a display is always reachable and the claim would otherwise
+# be untested. Apply it to every document/headless suite; never to a suite that
+# renders (they need a display, honestly and permanently).
+function(jah_no_display)
+    foreach(_t IN LISTS ARGV)
+        set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+                     "DISPLAY=unset:;WAYLAND_DISPLAY=unset:")
+    endforeach()
 endfunction()
 
 add_subdirectory(engine)

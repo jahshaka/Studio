@@ -22,3 +22,7 @@ set_tests_properties(api.contract PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     TIMEOUT 120
     LABELS "scripting")
+# `--dump-api-docs` boots the NULL render system (SPECS/SCENEGRAPH_SPEC.md §3b):
+# generating the docs needs the registry and a document, never a pixel. Run with
+# DISPLAY stripped so that stays true.
+jah_no_display(api.contract)

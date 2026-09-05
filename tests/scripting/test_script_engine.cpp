@@ -138,7 +138,11 @@ int main(int argc, char **argv)
 
     // ---- precondition guards ----
     r = engine.evaluate("fake.engineOnly()", "guard.js", false);
-    CHECK(!r.ok && r.error.contains("engine viewport"), "requireEngine throws a JS error (no crash)");
+    // The message names the CAPABILITY, not the platform: since the headless
+    // boot (SCENEGRAPH_SPEC §3b) a --headless run HAS an engine — the NULL
+    // render system — and what these verbs are missing is rendering.
+    CHECK(!r.ok && r.error.contains("no rendering engine is available"),
+          "requireEngine throws a JS error (no crash)");
     r = engine.evaluate("try { fake.projectOnly(); 'not reached' } catch (e) { 'caught:' + e.message }", "guard2.js", false);
     CHECK(r.ok && r.value.toString().startsWith("caught:") && r.value.toString().contains("no project"),
           "requireProject error is catchable in-script");

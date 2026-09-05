@@ -1,20 +1,25 @@
 #pragma once
-// THE v1 INTERIM, in one place (SPECS/SCENEGRAPH_SPEC.md §3 / audit §3.10).
+// THE DOCUMENT-ONLY ENGINE, in one place (SPECS/SCENEGRAPH_SPEC.md §3b, v2).
 //
 // Since the scene-graph swap an `iris::SceneNode` IS an `Ogre::SceneNode`: the
 // document has no transforms, no hierarchy and no storage of its own. So a
 // suite that only builds a DOCUMENT — no rendering, no pixels, no view — still
 // needs an engine to exist, because that is where its nodes live.
 //
-// This boots one offscreen: a real Vulkan engine with a surfaceless window and
-// no view at all. It needs a reachable X display (Ogre's VulkanXcbSupport
-// connects at plugin load) and a Vulkan driver, exactly like every other engine
-// suite; `QT_QPA_PLATFORM=offscreen` still applies, nothing is ever shown.
+// This boots one HEADLESS: `EngineConfig::headless`, i.e. Ogre's NULL render
+// system. It opens no display, needs no GPU and no driver, and creates no
+// window beyond the 1x1 surfaceless one the render system makes for itself.
+// Suites built on it pass with DISPLAY unset — verified in the gate by running
+// them under `env -u DISPLAY`.
 //
-// v2 replaces this with `RenderSystem_NULL`, which the research spike verified
-// works with no display and no GPU at all (spikes/scenegraph-null-rs). When it
-// lands, the fixture keeps its shape and only its render system changes — which
-// is why every suite takes it as one object rather than open-coding a boot.
+// (Until 2026-09-06 this booted Vulkan offscreen — the v1 interim — which meant
+// every document suite still needed a reachable X display and a working driver.
+// The fixture's shape is unchanged because that was always the plan: only the
+// render system moved.)
+//
+// WHAT IT CANNOT DO: render. createView() and createOffscreenView() both refuse
+// with a reason (Types.h EngineConfig::headless). A suite that wants pixels is
+// not a document suite — it boots the real engine like every other engine suite.
 //
 // LIFETIME: declare it FIRST in main(), so it is destroyed LAST. Every document
 // object in the process holds handles into its scene managers.
@@ -33,6 +38,7 @@ public:
     explicit DocumentGraph(const char *logFile = "document-graph-ogre.log")
     {
         jahshaka::engine::EngineConfig cfg;
+        cfg.headless = true;   // RenderSystem_NULL: no display, no device, no window
         cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
         cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
         cfg.logFile = logFile;
@@ -60,8 +66,8 @@ public:
     {
         if (mEngine) return true;
         std::fprintf(stderr,
-                     "FAIL: the document scene graph needs an engine (SCENEGRAPH_SPEC v1 "
-                     "interim) and it would not start: %s\n",
+                     "FAIL: the document scene graph needs an engine (SCENEGRAPH_SPEC D2) and "
+                     "the headless one would not start: %s\n",
                      mError.c_str());
         return false;
     }

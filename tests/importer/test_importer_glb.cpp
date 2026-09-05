@@ -341,10 +341,13 @@ int main(int argc, char **argv)
     Engine *engine = graph.engine();
     CHECK(engine != nullptr, "engine created");
     if (engine) {
-        View *view = engine->createOffscreenView("imp", 64, 64, Colour(0, 0, 1));
+        // NO VIEW. This section only asks the engine to DECODE image files —
+        // nothing here renders or reads a pixel — and the fixture's engine is
+        // headless (RenderSystem_NULL), which refuses views by design. The
+        // Scene alone is what loadTexture needs.
         Scene *s = engine->createScene("imp");
-        view->setScene(s);
-
+        CHECK(s != nullptr, "engine scene created");
+      if (s) {
         QTemporaryDir tmp;
         // Colour PNG bytes under a .jpg name (the historical mislabel).
         {
@@ -374,8 +377,8 @@ int main(int argc, char **argv)
             CHECK(s->loadTexture(honest.toStdString(), true) != 0, "honest file still loads");
         }
 
-        engine->destroyView(view);
         engine->destroyScene(s);
+      }
     }
 
     // ================= 7. double-import root-scale stability =================

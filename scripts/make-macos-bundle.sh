@@ -210,6 +210,24 @@ cp "$OGRE_PREFIX/lib/OGRE-Next/Plugin_ParticleFX2.4.0.dylib" "$CONTENTS/Framewor
     || die "step 6: Plugin_ParticleFX2 not found under $OGRE_PREFIX/lib"
 ln -sfn Plugin_ParticleFX2.4.0.dylib "$CONTENTS/Frameworks/Plugin_ParticleFX2.dylib"
 chmod u+w "$CONTENTS/Frameworks/Plugin_ParticleFX2.4.0.dylib"
+# THE NULL RENDER SYSTEM, dlopen'd the same way (SPECS/SCENEGRAPH_SPEC.md §3b).
+# It is what `--headless --script`, `--headless --mcp-port` and `--dump-api-docs`
+# boot: no display, no Metal, no MoltenVK. Tiny (it renders nothing), and
+# without it those CLI modes cannot start at all in a shipped bundle — a
+# document node IS an engine node now, so "no engine" is not a mode.
+# NOT FATAL if it is missing: a bundle without it is still a perfectly good
+# windowed app, and the mac packaging gate should not fail over a CLI mode.
+for _null in "$OGRE_PREFIX/lib/OGRE-Next/RenderSystem_NULL.4.0.dylib" \
+             "$OGRE_PREFIX/lib/RenderSystem_NULL.4.0.dylib"; do
+    [ -f "$_null" ] || continue
+    cp "$_null" "$CONTENTS/Frameworks/"
+    ln -sfn RenderSystem_NULL.4.0.dylib "$CONTENTS/Frameworks/RenderSystem_NULL.dylib"
+    chmod u+w "$CONTENTS/Frameworks/RenderSystem_NULL.4.0.dylib"
+    break
+done
+[ -f "$CONTENTS/Frameworks/RenderSystem_NULL.4.0.dylib" ] \
+    || echo "   ! RenderSystem_NULL not found under $OGRE_PREFIX/lib — --headless and" \
+            "--dump-api-docs will not work in this bundle"
 cp -L "$VULKAN_SDK/lib/libvulkan.1.dylib" "$CONTENTS/Frameworks/libvulkan.1.dylib"
 cp    "$VULKAN_SDK/lib/libMoltenVK.dylib" "$CONTENTS/Frameworks/libMoltenVK.dylib"
 chmod u+w "$CONTENTS/Frameworks/RenderSystem_Vulkan.4.0.dylib" \

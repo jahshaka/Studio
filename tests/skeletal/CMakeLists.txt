@@ -31,11 +31,14 @@ target_include_directories(test_multi_avatar PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_multi_avatar PRIVATE IrisGL Qt6::Gui)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_multi_avatar)
 add_test(NAME skeletal.multi_avatar COMMAND test_multi_avatar WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.multi_avatar PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
+jah_no_display(skeletal.multi_avatar)
 
 # GPU_SKINNING_SPEC phase 2 / T1, T2, T7: the v1-skeleton translation layer,
 # proved WITHOUT rendering — R1 (bind-pose reconciliation) is the one place this
@@ -90,11 +93,14 @@ target_include_directories(test_library_import PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_library_import PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_library_import PRIVATE IrisGL Qt6::Gui)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_library_import)
 add_test(NAME skeletal.library_import COMMAND test_library_import WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.library_import PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "document")
+jah_no_display(skeletal.library_import)
 
 # ANIMATION_ENGINE_MIGRATION_SPEC M0 / G1 + G4(extract half): the pivot-composing
 # clip extractor, proved against the CURRENT document evaluator on a glTF rig
@@ -111,11 +117,14 @@ target_include_directories(test_clip_extract PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_clip_extract PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_clip_extract PRIVATE IrisGL Qt6::Gui)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_clip_extract)
 add_test(NAME skeletal.clip_extract COMMAND test_clip_extract WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(skeletal.clip_extract PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180 LABELS "document")
+jah_no_display(skeletal.clip_extract)
 
 # ANIMATION_ENGINE_MIGRATION_SPEC gates G2-G6: the clip boundary. Same rig, same
 # clip, same absolute times, driven through the document evaluator and through

@@ -39,6 +39,8 @@ bool ApiModule::requireProject() const
 bool ApiModule::requireEngine() const
 {
     if (host.isEngineReady()) return true;
-    return fail(QStringLiteral("%1: the engine viewport is not available (start with --viewport=engine and a reachable DISPLAY)")
+    return fail(QStringLiteral("%1: this verb renders, and no rendering engine is available "
+                               "(a --headless run boots the NULL render system: document verbs "
+                               "only). Run without --headless, on a machine with a display.")
                     .arg(jsName()));
 }

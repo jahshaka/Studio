@@ -495,3 +495,31 @@ set_tests_properties(scripting.e2e.world_modes PROPERTIES
 # The leak lane (scripts/sanitize.sh lsan): the QJSEngine host only. The
 # scripting.e2e.* suites run the real binary with the engine up and stay out.
 jah_lsan_lane(scripting.engine)
+
+# DISPLAY-FREE, ENFORCED (SPECS/SCENEGRAPH_SPEC.md §3b). Every `--headless`
+# script run boots the NULL render system now: no display connection, no driver,
+# no window. These entries are therefore run with DISPLAY and WAYLAND_DISPLAY
+# REMOVED, which is what turns "document verbs only" from a comment into a test.
+# The suites NOT listed here (full_surface, samples, image_plane, import_render,
+# shader_thumbnail, avatar, skinning, physics, particles, …) render pixels and
+# keep their display requirement, honestly and permanently.
+jah_no_display(
+    scripting.e2e.anim
+    scripting.e2e.drawers
+    scripting.e2e.asset_delete
+    scripting.e2e.mesh_roundtrip
+    scripting.e2e.world_reach
+    scripting.e2e.ai_surface
+    scripting.e2e.scene_query
+    scripting.e2e.introspection
+    scripting.e2e.export_web
+    scripting.e2e.export_raw
+    scripting.e2e.light_bindings
+    scripting.e2e.metadata
+    scripting.e2e.video
+    scripting.e2e.store_root
+    scripting.e2e.import_pipeline
+    scripting.e2e.decals
+    scripting.e2e.image_material
+    scripting.e2e.pinned_reopen
+    scripting.e2e.world_modes)

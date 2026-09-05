@@ -6,8 +6,11 @@
 #    cannot. Not fixable from our side.
 #  * A Vulkan driver. For a no-GPU CI box the same tests pass under lavapipe
 #    (~30 s per test):  VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json
-#  * Backend::Null is deliberately untested: the NULL RenderSystem cannot create
-#    the RTT depth buffer and its readback ticket never sets TextureBox::data.
+#  * ...except test_engine_headless, which boots EngineConfig::headless (the NULL
+#    RenderSystem) and therefore needs NEITHER: it runs with DISPLAY unset. What
+#    it cannot do is render — the NULL RenderSystem cannot create the RTT depth
+#    buffer and its readback ticket never sets TextureBox::data, which is why
+#    headless engines refuse both kinds of View instead of pretending.
 #
 # The teardown defect this suite guards (a MeshPtr outliving Root) reproduced in
 # only 3 of 9 plain runs, so a single green run proves little:
@@ -37,6 +40,26 @@ endfunction()
 
 jahshaka_engine_test(test_engine)
 target_link_libraries(test_engine PRIVATE JahshakaEngine)
+
+# THE HEADLESS BOOT (SPECS/SCENEGRAPH_SPEC.md §3b): EngineConfig::headless, i.e.
+# RenderSystem_NULL. The only suite in the tree that runs with NO DISPLAY AT ALL
+# — ENVIRONMENT_MODIFICATION strips DISPLAY from its environment, so a green run
+# is the proof that document-side work needs no graphics stack. Everything
+# else here (and every pixel suite) still needs a reachable X server and a
+# driver, which is exactly the distinction this suite exists to hold.
+add_executable(test_engine_headless test_engine_headless.cpp)
+set_target_properties(test_engine_headless PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_headless PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_headless PRIVATE JahshakaEngine)
+add_dependencies(test_engine_headless JahshakaEngineMedia)
+add_test(NAME engine.headless COMMAND test_engine_headless
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.headless PROPERTIES TIMEOUT 300 LABELS "document")
+jah_no_display(engine.headless)
 
 # Create/destroy/create in one process — needs the OgreVulkanDevice.cpp patch (OGRE_PLATFORM_DEPS.md).
 add_executable(test_engine_recreate test_engine_recreate.cpp)

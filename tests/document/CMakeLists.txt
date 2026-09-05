@@ -9,12 +9,15 @@ target_include_directories(test_document_no_gl PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_document_no_gl PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_document_no_gl)
 add_test(NAME document.no_gl COMMAND test_document_no_gl
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(document.no_gl PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")
+jah_no_display(document.no_gl)
 
 # The leak lane (scripts/sanitize.sh lsan): the document model itself — every
 # node, mesh, material and animation type constructed and dropped. No Vulkan,

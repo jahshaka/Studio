@@ -212,8 +212,27 @@ bool EngineHost::start(QString &error)
     if (mEngine) return true;
 
     EngineConfig cfg = resolveConfig();
+    // THE HEADLESS DECISION, made once and platform-independently
+    // (SPECS/SCENEGRAPH_SPEC.md §3b, v2). The offscreen QPA platform means
+    // there is no window system to present into — `--headless --script`,
+    // `--headless --mcp-port`, `--dump-api-docs` (CliOptions::applyPlatformPolicy
+    // puts them there) and anything else launched with QT_QPA_PLATFORM=offscreen.
+    // Those runs boot the NULL render system: no display connection, no GPU, no
+    // driver, no window of any kind — and a document scene graph that works
+    // exactly as it does under Vulkan, which is the whole point (a document
+    // node IS an engine node since the scene-graph swap).
+    //
+    // ONE RENDER SYSTEM PER PROCESS (Ogre::Root is a singleton): this is the
+    // only place that choice is made, and it can never be revised later in the
+    // run. A windowed session is Vulkan from boot to exit, exactly as it was
+    // before the swap; an offscreen session is NULL from boot to exit and can
+    // hold no View at all.
+    const bool offscreen = QGuiApplication::platformName() == QLatin1String("offscreen");
+    cfg.headless = offscreen;
 #ifdef Q_OS_MACOS
-    ensureVulkanIcdEnvironment();
+    // The MoltenVK ICD probe is pointless without Vulkan — and a headless run
+    // must not depend on a driver being installed at all.
+    if (!offscreen) ensureVulkanIcdEnvironment();
 #endif
 #ifdef Q_OS_LINUX
     // Ogre has no Wayland backend: its Vulkan path uses VK_KHR_xcb_surface and needs a
@@ -231,14 +250,13 @@ bool EngineHost::start(QString &error)
         }
     } else if (platform == QLatin1String("offscreen")) {
         // OFFSCREEN RUNS START THE ENGINE TOO, since the scene-graph swap
-        // (SPECS/SCENEGRAPH_SPEC.md §3, the v1 interim): a document node IS an
-        // engine node, so `--headless` and `--dump-api-docs` cannot build a
-        // document without one. Nothing is ever shown — the engine runs on a
-        // surfaceless window, exactly as every headless suite does — and no X
-        // connection of Qt's is needed or wanted here. Ogre still needs a
-        // REACHABLE display (its Vulkan xcb support connects at plugin load),
-        // which is the honest cost of the interim; v2's NULL render system
-        // removes it. On-screen views refuse cleanly without a display handle.
+        // (SPECS/SCENEGRAPH_SPEC.md D2): a document node IS an engine node, so
+        // `--headless` and `--dump-api-docs` cannot build a document without
+        // one. They now start the NULL render system (cfg.headless above), so
+        // there is nothing to connect a display to: no X connection of Qt's,
+        // and — unlike the v1 interim, which booted Vulkan surfaceless and
+        // therefore still needed a REACHABLE display for Ogre's XCB support
+        // object — no display at all. These runs work with DISPLAY unset.
         cfg.display = 0;
     } else {
         error = QStringLiteral("The engine requires the xcb platform (running on '%1'). "
@@ -265,6 +283,19 @@ bool EngineHost::start(QString &error)
     // any rendered scene yet. This is the first thing to happen after the engine
     // exists and BEFORE the first document node — MainWindow's viewport creates
     // the editor camera inside its own constructor, a few lines later.
+    //
+    // WHAT THIS COSTS, per boot mode (Engine::documentGraphScene):
+    //   * headless — nothing. The NULL render system made its own 1x1 window at
+    //     boot, so this only registers the Hlms and creates the scene manager.
+    //   * Vulkan — the backend has no render target yet, so it makes a
+    //     surfaceless one to hang the Hlms registration on, ahead of the
+    //     viewport's real window. That is NOT removable from here: the very
+    //     next thing MainWindow does is construct EngineSceneViewport, whose
+    //     constructor creates the editor CameraNode (resetEditorCam) while its
+    //     own View waits for showEvent. Deferring this call would only move the
+    //     surfaceless window a few lines later, to that camera. The ordering
+    //     ends when the viewport creates its View before its camera; the
+    //     engine side is already lazy and ready for it.
     iris::graph::setStagingScene(
         reinterpret_cast<iris::graph::SceneHandle>(mEngine->documentGraphScene()));
     return true;

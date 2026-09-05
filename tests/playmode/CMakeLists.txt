@@ -18,10 +18,13 @@ target_include_directories(test_playmode_lifecycle PRIVATE ${CMAKE_SOURCE_DIR} $
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_playmode_lifecycle PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_playmode_lifecycle)
 add_test(NAME player.lifecycle COMMAND test_playmode_lifecycle
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(player.lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document")
+jah_no_display(player.lifecycle)

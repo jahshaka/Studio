@@ -43,14 +43,17 @@ target_compile_definitions(test_importer_glb PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_importer_glb PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_importer_glb)
 add_dependencies(test_importer_glb JahshakaEngineMedia)
 add_test(NAME importer.glb COMMAND test_importer_glb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.glb PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 600 LABELS "importer")
+jah_no_display(importer.glb)
 
 # FBX importer regression suite (assimp-patches/0001): a skin cluster that
 # references a control point no polygon uses must not abort the importer.
@@ -163,13 +166,16 @@ target_compile_definitions(test_importer_security PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_importer_security PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
-# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
-# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+# This suite builds a DOCUMENT, and a document node is an engine node now
+# (SPECS/SCENEGRAPH_SPEC.md D2), so it boots the HEADLESS engine — NULL render
+# system, no display, no GPU (tests/support/documentgraph.h). jah_no_display
+# below runs it with DISPLAY unset, which is the proof of that claim.
 jah_document_graph(test_importer_security)
 add_test(NAME importer.security COMMAND test_importer_security
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.security PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+jah_no_display(importer.security)
 
 # The leak lane (scripts/sanitize.sh lsan): assimp scenes and the importer's own
 # buffers. Only the two suites that do NOT link the engine — importer.glb and

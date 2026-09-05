@@ -248,7 +248,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		return projectService->isSceneOpen() && !project->getProjectGuid().isEmpty();
 	};
 	scriptHost->engineReady = [this]() {
-		return EngineHost::instance().isRunning() && sceneView->isInitialized();
+		// "READY" MEANS "CAN RENDER", which is not the same as "exists" any
+		// more: since the scene-graph swap a --headless run HAS an engine (the
+		// document graph lives in it) and it is the NULL render system, which
+		// draws nothing and refuses every View. Verbs guarded by requireEngine()
+		// — screenshots, thumbnails, anything reading pixels — must refuse in
+		// those runs exactly as they did before an engine existed there at all,
+		// and assets.import must go on skipping thumbnail generation.
+		auto &engineHost = EngineHost::instance();
+		if (!engineHost.isRunning() || engineHost.engine()->isHeadless()) return false;
+		return sceneView->isInitialized();
 	};
 	scriptHost->macroOpenChanged = [this](bool open) { undoService->setScriptMacroOpen(open); };
 	scriptEngine = new ScriptEngine(*scriptHost, this);
@@ -2466,8 +2475,14 @@ void MainWindow::setupViewPort()
         // viewport: nothing can present into a widget that has no native
         // window, and the document-only stand-in below is what those runs have
         // always used.
-        const bool onScreen = QGuiApplication::platformName() == QLatin1String("xcb");
-        if (host.start(error) && onScreen) {
+        // ASK THE ENGINE, not the platform name. A headless engine (NULL render
+        // system, SPECS/SCENEGRAPH_SPEC.md §3b) can hold no View of any kind, so
+        // it gets the stand-in; anything else renders. Testing for "xcb" here
+        // was a Linux-shaped bug: on macOS the platform is `cocoa` and the
+        // editor would have fallen back to the document-only viewport on a
+        // machine whose on-screen Metal/Vulkan viewport works
+        // (SPECS/MACOS_VIEWPORT_SPEC.md).
+        if (host.start(error) && !host.engine()->isHeadless()) {
             sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
             // Non-owning: step 5 of the shutdown order checks it (see
             // destroyEngineViews / shell/shutdownorder.h).
