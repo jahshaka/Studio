@@ -34,6 +34,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "services/lightbindings.h"
+#include "io/sceneformat.h"
+#include <QJsonObject>
 
 using namespace scriptmod;
 
@@ -48,6 +50,24 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "reparent", "node.reparent(id, parentId) -> bool",
           "Moves the node under a new parent, keeping its world pose; cycles are refused. Undoable.",
+          Needs::Document },
+        { "serialize", "node.serialize(id) -> {node, parent, index, format, version}",
+          "The node AND ITS WHOLE SUBTREE as a document fragment — the same JSON the scene "
+          "file carries for it, plus where it sat (`parent` is the parent's guid, empty for a "
+          "root-level node; `index` is its sibling position). This is COPY: hand the result "
+          "back to node.deserialize to paste it, here or into another project, now or after a "
+          "restart. Assets travel as guids, not bytes, so a fragment pasted into a project that "
+          "does not have the mesh or texture pinned rebuilds with that reference unresolved "
+          "rather than failing. The result is plain JSON — store it, diff it, edit it.",
+          Needs::Document },
+        { "deserialize", "node.deserialize(fragment, parentId, index) -> newId",
+          "PASTE: rebuilds a fragment from node.serialize under `parentId` (empty = the scene "
+          "root) at sibling position `index` (-1 = append), and returns the new node's id. "
+          "Undoable as one entry. The pasted subtree gets FRESH GUIDS — a fragment can be "
+          "pasted into the project it came from, or twice, without two live nodes sharing an "
+          "identity (everything addresses nodes by guid, so that is a document nothing can "
+          "point at). Socket attachments inside the subtree are re-pointed at the copy; an "
+          "owner outside it is left alone, which is the same rule node.duplicate follows.",
           Needs::Document },
         { "transform", "node.transform(id, {position, rotation, scale}) -> {position, rotation, scale}",
           "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable.",
@@ -311,6 +331,59 @@ bool NodeApi::reparent(const QString &id, const QString &parentId)
         return fail("node.reparent: that would create a cycle");
     host.services->undo->push(new ReparentSceneNodeCommand(node, parent));
     return true;
+}
+
+QVariantMap NodeApi::serialize(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.serialize"));
+    if (!node) return QVariantMap();
+
+    const SceneFragment fragment = host.services->sceneEdit->captureFragment(node);
+    if (fragment.isNull()) {
+        fail(QStringLiteral("node.serialize: '%1' produced no fragment").arg(node->getName()));
+        return QVariantMap();
+    }
+    // The session node ids are deliberately NOT reported: they mean nothing
+    // outside this process (SceneFragment documents why they exist at all), and
+    // a script that round-tripped them through JSON would be handing the
+    // rebuild ids that belong to nodes still in the scene.
+    return { { "format", QString::fromLatin1(sceneformat::kFormatId()) },
+             { "version", sceneformat::kVersion },
+             { "node", fragment.node.toVariantMap() },
+             { "parent", fragment.parentGuid },
+             { "index", fragment.siblingIndex } };
+}
+
+QString NodeApi::deserialize(const QVariantMap &fragmentMap, const QString &parentId, int index)
+{
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                              : iris::ScenePtr();
+    if (!scene) { fail(QStringLiteral("node.deserialize: no scene is open")); return QString(); }
+
+    SceneFragment fragment;
+    fragment.node = QJsonObject::fromVariantMap(
+        fragmentMap.value(QStringLiteral("node")).toMap());
+    if (fragment.node.isEmpty()) {
+        fail(QStringLiteral("node.deserialize: the fragment has no 'node' object "
+                            "(pass what node.serialize returned)"));
+        return QString();
+    }
+    fragment.siblingIndex = index;
+
+    // An empty parent id means the scene root — the same spelling the fragment
+    // itself uses for "root level".
+    iris::SceneNodePtr parent;
+    if (!parentId.isEmpty()) {
+        parent = nodeOrFail(parentId, QStringLiteral("node.deserialize"));
+        if (!parent) return QString();
+    }
+
+    auto node = host.services->sceneEdit->insertFragment(fragment, parent, index);
+    if (!node) {
+        fail(QStringLiteral("node.deserialize: the fragment could not be rebuilt"));
+        return QString();
+    }
+    return node->getGUID();
 }
 
 QVariantMap NodeApi::transform(const QString &id, const QVariantMap &change)

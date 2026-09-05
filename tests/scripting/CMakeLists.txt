@@ -43,6 +43,10 @@ endfunction()
 
 add_script_e2e(build_scene e2e_build_scene.js)
 add_script_e2e(undo_macro e2e_undo_macro.js)
+# SCENEGRAPH_SPEC §3 step 4: the v2 scene format's fragment pair
+# (node.serialize/node.deserialize) and the persisted SCENE_STATIC override,
+# driven through the verbs against the real database and a real save/reopen.
+add_script_e2e(fragments e2e_fragments.js)
 # PBR material persistence: container applies (imported-model roots), saved
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
