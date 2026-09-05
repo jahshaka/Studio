@@ -39,6 +39,9 @@ public:
     Q_INVOKABLE bool remove(const QString &id);
     Q_INVOKABLE QString duplicate(const QString &id);
     Q_INVOKABLE bool reparent(const QString &id, const QString &parentId);
+    Q_INVOKABLE QVariantMap serialize(const QString &id);
+    Q_INVOKABLE QString deserialize(const QVariantMap &fragment, const QString &parentId,
+                                    int index = -1);
     Q_INVOKABLE QVariantMap transform(const QString &id, const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariant property(const QString &id, const QString &key);
     Q_INVOKABLE bool setProperty(const QString &id, const QString &key, const QVariant &value);

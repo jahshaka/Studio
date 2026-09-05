@@ -13,9 +13,11 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "io/scenewriter.h"
+#include "io/sceneformat.h"
 
 #include <Qt>
 #include <QVector>
+#include <functional>
 
 #include <QDir>
 #include <QFile>
@@ -91,6 +93,11 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
     staticRelativeBase = dir;
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
+    // THE FORMAT HEADER (src/io/sceneformat.h). `version` above is the APP's
+    // content version and always was; it moves for reasons that have nothing to
+    // do with the shape of this file, which is why a reader could never use it.
+    projectObj["format"] = QString::fromLatin1(sceneformat::kFormatId());
+    projectObj["formatVersion"] = sceneformat::kVersion;
 
     writeScene(projectObj, scene);
 
@@ -265,6 +272,39 @@ void SceneWriter::writeEditorData(QJsonObject& projectObj, EditorData* editorDat
     projectObj["editor"] = editorObj;
 }
 
+SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node, bool relative)
+{
+    SceneFragment fragment;
+    if (!node) return fragment;
+
+    writeSceneNode(fragment.node, node, relative);
+
+    // The ANCHOR. A parent is named by GUID and not by pointer for the same
+    // reason a socket owner is: it survives the node objects being rebuilt, a
+    // dangling one is inert rather than a crash, and it is the only spelling
+    // that means anything once the fragment has been written to a database row.
+    // The scene's ROOT is spelled as an empty guid — its own guid is a
+    // per-document value that a fragment travelling between documents (a paste,
+    // a template) has no business pinning.
+    if (auto parent = node->getParent()) {
+        if (!parent->isRootNode()) fragment.parentGuid = parent->getGUID();
+        fragment.siblingIndex = node->siblingIndex();
+    }
+    // The session ids, PRE-ORDER, in lockstep with the child walk below (this
+    // recursion and writeSceneNode's must stay the same shape — the reader
+    // replays them positionally).
+    std::function<void(const iris::SceneNodePtr &)> collectIds =
+        [&](const iris::SceneNodePtr &n) {
+            fragment.nodeIds.append(n->getNodeId());
+            const int kids = n->childCount();
+            for (int i = 0; i < kids; ++i)
+                if (iris::SceneNode *c = n->childAt(i)) collectIds(c->sharedFromThis());
+        };
+    collectIds(node);
+
+    return fragment;
+}
+
 void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr sceneNode, bool relative)
 {
 	sceneNodeObj["guid"] = sceneNode->getGUID();
@@ -273,21 +313,34 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     sceneNodeObj["type"] = getSceneNodeTypeName(sceneNode->sceneNodeType);
     sceneNodeObj["pickable"] = sceneNode->isPickable();
     sceneNodeObj["pos"] = jsonVector3(sceneNode->getLocalPos());
-    // Rotation, TWICE. "rot" is the historical euler triple and stays exactly
-    // as it was, so an older build still opens a scene this one wrote and every
-    // eye that reads the JSON still sees degrees. "rotQuat" is the same
-    // rotation without the lossy detour: quaternion -> euler -> quaternion is
-    // NOT a fixed point in float, so every save/reopen cycle moved a rotated
+    // ROTATION, ONCE, AS A QUATERNION (format v2 — src/io/sceneformat.h).
+    //
+    // v1 wrote it twice: `rot` as an euler triple and `rotQuat` as the real
+    // thing. The euler spelling is LOSSY — quaternion -> euler -> quaternion is
+    // not a fixed point in float, so every save/reopen cycle moved a rotated
     // node a little further (measured on the default scene's Directional Light:
     // 15.0000019 -> 15.0000038 -> 15.0000057 degrees, one cycle each, linear
-    // and unbounded — found by the reopen-fidelity double round trip,
-    // 2026-09-04). The reader prefers rotQuat when it is there; a blob written
-    // before this key, or by an older build, falls back to "rot" unchanged.
-    const iris::Quat localRot = sceneNode->getLocalRot().normalized();
-    sceneNodeObj["rot"] = jsonVector3(localRot.toEulerAngles());
-    sceneNodeObj["rotQuat"] = jsonQuaternion(localRot);
+    // and unbounded) — and keeping it meant every file carried a second, WRONG
+    // copy of every rotation for a reader that no longer existed.
+    //
+    // `rot` now holds the quaternion (x/y/z/scalar). The reader tells the two
+    // spellings apart by the `scalar` key, which no euler triple has, so the
+    // legacy node objects that still live outside scene files (library Object
+    // asset blobs, written long before this) keep loading exactly as they did.
+    sceneNodeObj["rot"] = jsonQuaternion(sceneNode->getLocalRot().normalized());
     sceneNodeObj["scale"] = jsonVector3(sceneNode->getLocalScale());
 	sceneNodeObj["visible"] = sceneNode->isVisible();
+    // SCENE_STATIC, and ONLY when a human decided it (iris::StaticOverride).
+    // The derived hint is not written: applyStaticDefaults is a greedy policy
+    // that runs on every load, and persisting its output would store a
+    // derivation and freeze today's policy into every document ever saved. An
+    // absent key therefore means "re-derive", which is what every node in every
+    // scene says, and the two present values beat the policy on load.
+    switch (sceneNode->staticOverride()) {
+    case iris::StaticOverride::Static:  sceneNodeObj["static"] = true;  break;
+    case iris::StaticOverride::Dynamic: sceneNodeObj["static"] = false; break;
+    case iris::StaticOverride::None: break;
+    }
     // Written only when TRUE, like the exporter's jah["visible"]: the flag is
     // off on every node in every scene but a handful, and a key on every node
     // in the file for a feature almost nothing uses is noise.
@@ -485,7 +538,10 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 {
     // It's a safe assumption that the filename is safe to use here in queries if need be
 	sceneNodeObject["mesh"]          = meshNode->meshPath;
-	sceneNodeObject["guid"]          = meshNode->getGUID();
+    // `guid` is NOT written here (format v2, rule "one writer per key"):
+    // writeSceneNode has already written the node's guid, and MeshNode::getGUID
+    // IS that guid — this line re-wrote the same key from a second place, which
+    // is a trap waiting for the day the two stop being equal.
     sceneNodeObject["meshIndex"]     = meshNode->meshIndex;
 
     auto cullMode = meshNode->getFaceCullingMode();
@@ -538,14 +594,16 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 
 void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
 {
+    // `visible` is written once, by writeSceneNode (format v2 rule "one writer
+    // per key" — it had four authors in v1 and which one won depended on the
+    // order this switch happened to run in).
     sceneNodeObject.insert("viewScale", viewerNode->getViewScale());
-	sceneNodeObject.insert("visible", viewerNode->isVisible());
 	sceneNodeObject.insert("activeCharacterController", viewerNode->isActiveCharacterController());
 }
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
 {
-    sceneNodeObject["guid"]                 = node->getGUID();
+    // No `guid` and no `visible` here: writeSceneNode owns both (format v2).
     sceneNodeObject["particlesPerSecond"]   = node->particlesPerSecond;
     sceneNodeObject["particleScale"]        = node->particleScale;
     sceneNodeObject["dissipate"]            = node->dissipate;
@@ -555,7 +613,6 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["blendMode"]            = node->useAdditive;
     sceneNodeObject["lifeLength"]           = node->lifeLength;
     sceneNodeObject["speed"]                = node->speed;
-	sceneNodeObject["visible"]				= node->isVisible();
     // An emitter can have no texture (cleared in the property panel): write an
     // empty guid instead of dereferencing null (audit defect #6).
     sceneNodeObject["texture"]              = node->texture
@@ -813,7 +870,6 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["shadowType"] = evalShadowTypeName(shadowMap->shadowType);
     sceneNodeObject["shadowSize"] = shadowMap->resolution;
     sceneNodeObject["shadowBias"] = shadowMap->bias;
-	sceneNodeObject["visible"] = lightNode->isVisible();
 }
 
 void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePtr decalNode)
@@ -829,7 +885,6 @@ void SceneWriter::writeDecalData(QJsonObject& sceneNodeObject, iris::DecalNodePt
     sceneNodeObject["metalness"] = decalNode->metalness;
     sceneNodeObject["roughness"] = decalNode->roughness;
     sceneNodeObject["ignoreAlphaDiffuse"] = decalNode->ignoreAlphaDiffuse;
-    sceneNodeObject["visible"] = decalNode->isVisible();
 }
 
 void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNodePtr cameraNode)

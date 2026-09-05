@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QSharedPointer>
 #include "io/assetiobase.h"
+#include "io/sceneformat.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -116,6 +117,13 @@ public:
      * @return
      */
     iris::SceneNodePtr readSceneNode(QJsonObject &nodeObj);
+
+    /// Rebuilds a subtree captured by SceneWriter::captureFragment, DETACHED —
+    /// the caller decides where it goes (the anchor travels in the fragment).
+    /// Session identities are restored when the fragment carries them, so an
+    /// undo of a delete gives back the same node ids the rest of the process is
+    /// still holding; a paste passes a fragment with none and gets fresh ones.
+    iris::SceneNodePtr readFragment(const SceneFragment &fragment);
 
     void readAnimationData(QJsonObject &nodeObj, iris::SceneNodePtr sceneNode);
 

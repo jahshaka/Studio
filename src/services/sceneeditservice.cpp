@@ -728,7 +728,103 @@ iris::SceneNodePtr SceneEditService::duplicateNode(iris::SceneNodePtr source)
     // Undoable now (SCRIPTING_SPEC §1.2): the add command parents the copy,
     // refreshes the hierarchy and selects it — the manual addChild+repopulate
     // this slot used to do, minus the missing undo entry.
-    undo->push(new AddSceneNodeCommand(source->getParent(), node));
+    //
+    // RIGHT AFTER THE ORIGINAL, not at the end of the parent's children (undo
+    // v1.5): a duplicate that jumps to the bottom of a 200-row outliner is a
+    // duplicate the user has to go and find. The index is also what makes the
+    // undo/redo pair exact — AddSceneNodeCommand restores the slot it was told
+    // about, so redo after undo puts the copy back beside its original instead
+    // of appending it somewhere new.
+    const int after = source->siblingIndex();
+    undo->push(new AddSceneNodeCommand(source->getParent(), node,
+                                       after >= 0 ? after + 1 : -1));
+    return node;
+}
+
+SceneFragment SceneEditService::captureFragment(const iris::SceneNodePtr &node) const
+{
+    if (!node) return SceneFragment();
+    SceneWriter::setProject(project);
+    return SceneWriter::captureFragment(node);
+}
+
+iris::SceneNodePtr SceneEditService::rebuildFragment(const SceneFragment &fragment) const
+{
+    if (fragment.isNull()) return iris::SceneNodePtr();
+    // A reader per rebuild. It is not free (its mesh cache is per instance), but
+    // a long-lived one would hold every mesh a rebuild ever touched for the life
+    // of the service, and a rebuild is a user-scale event — an undo, a paste —
+    // not a loop.
+    SceneReader reader;
+    reader.setDatabaseHandle(db);
+    reader.setProject(project);
+    if (project) reader.setBaseDirectory(project->getProjectFolder());
+    return reader.readFragment(fragment);
+}
+
+namespace {
+
+/// Gives every node of a rebuilt subtree a FRESH guid, and re-points the
+/// references inside the subtree that named the old ones.
+///
+/// A paste is a COPY, and two live nodes on one guid is not a copy — it is a
+/// document that cannot be addressed (the scripting layer resolves by guid, the
+/// active-camera field is a guid, socket owners are guids, and the mesh-bake
+/// rows are keyed on them). The shipped Particles sample carried exactly that
+/// defect for years, from an add path that reused an asset's guid as a node's,
+/// and it had to be re-authored to fix it.
+///
+/// Same rule and same remap as iris::SceneNode::duplicate: an owner INSIDE the
+/// copied subtree becomes the copy's own, an owner outside it keeps its guid
+/// (the "second camera on the same character" case). Physics constraints and a
+/// camera's focus target also name nodes by guid and are NOT remapped here —
+/// duplicate() does not remap them either, and fixing that is one change for
+/// both paths rather than a divergence introduced by this one.
+void regenerateGuids(const iris::SceneNodePtr &root)
+{
+    QHash<QString, QString> guidMap;
+    std::function<void(const iris::SceneNodePtr &)> assign = [&](const iris::SceneNodePtr &n) {
+        const QString fresh = IrisUtils::generateGUID();
+        guidMap.insert(n->getGUID(), fresh);
+        n->setGUID(fresh);
+        const int kids = n->childCount();
+        for (int i = 0; i < kids; ++i)
+            if (iris::SceneNode *c = n->childAt(i)) assign(c->sharedFromThis());
+    };
+    assign(root);
+
+    std::function<void(const iris::SceneNodePtr &)> remap = [&](const iris::SceneNodePtr &n) {
+        if (!n->socketOwnerGuid.isEmpty()) {
+            const auto it = guidMap.constFind(n->socketOwnerGuid);
+            if (it != guidMap.constEnd()) n->socketOwnerGuid = it.value();
+        }
+        const int kids = n->childCount();
+        for (int i = 0; i < kids; ++i)
+            if (iris::SceneNode *c = n->childAt(i)) remap(c->sharedFromThis());
+    };
+    remap(root);
+}
+
+} // namespace
+
+iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragment,
+                                                   iris::SceneNodePtr parent,
+                                                   int index)
+{
+    auto sc = scene();
+    if (!sc) return iris::SceneNodePtr();
+    auto node = rebuildFragment(fragment);
+    if (!node) return iris::SceneNodePtr();
+    // A PASTE, not a restore: fresh identity. (Undo does not come through here
+    // — it calls rebuildFragment directly, because restoring a deleted node
+    // must give back the guid the rest of the document still refers to.)
+    regenerateGuids(node);
+    if (!parent) parent = sc->getRootNode();
+    // The SAME add command every other add uses — one undo entry, the hierarchy
+    // refresh, the selection, and the SCENE_STATIC pass on redo.
+    auto *cmd = new AddSceneNodeCommand(parent, node, index);
+    cmd->setText(QObject::tr("Paste %1").arg(node->getName()));
+    undo->push(cmd);
     return node;
 }
 

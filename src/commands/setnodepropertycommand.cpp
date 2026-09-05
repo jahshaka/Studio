@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "commands/setnodepropertycommand.h"
 
+#include "commands/staticstate.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
@@ -38,6 +39,28 @@ void SetNodePropertyCommand::apply(const QVariant &value)
     if (moved && services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
-void SetNodePropertyCommand::undo() { apply(oldValue); }
+/// True for the three keys that are transform writes in disguise. Everything
+/// else this command carries — a light's intensity, an emitter's speed — cannot
+/// change a SCENE_STATIC classification, and must not pay a subtree walk.
+bool SetNodePropertyCommand::movesTheNode() const
+{
+    return propertyKey == QLatin1String("position")
+           || propertyKey == QLatin1String("rotation")
+           || propertyKey == QLatin1String("scale");
+}
 
-void SetNodePropertyCommand::redo() { apply(newValue); }
+void SetNodePropertyCommand::undo()
+{
+    if (movesTheNode() && staticAfter.isEmpty())
+        staticAfter = structuralundo::captureStatic(sceneNode);
+    apply(oldValue);
+    if (movesTheNode()) structuralundo::restoreStatic(sceneNode, staticBefore);
+}
+
+void SetNodePropertyCommand::redo()
+{
+    if (movesTheNode() && staticBefore.isEmpty())
+        staticBefore = structuralundo::captureStatic(sceneNode);
+    apply(newValue);
+    if (movesTheNode()) structuralundo::restoreStatic(sceneNode, staticAfter);
+}

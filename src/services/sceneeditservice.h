@@ -31,6 +31,7 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"   // ModelTypes
+#include "io/sceneformat.h"
 
 #include <functional>
 
@@ -186,6 +187,32 @@ public:
 
     bool deleteNode(iris::SceneNodePtr node);
     iris::SceneNodePtr duplicateNode(iris::SceneNodePtr node);
+
+    // ---- document fragments (SPECS/SCENEGRAPH_SPEC.md §3 step 4 / v1.5) -----
+    //
+    // A subtree, serialized through exactly the writer and reader the scene
+    // file uses, plus where it belonged. THE service owns the pair because it
+    // is the only thing that holds both the database and the project the
+    // reader needs to resolve a mesh guid to bytes; the structural undo
+    // commands and the `node.serialize`/`node.deserialize` verbs are its
+    // callers, and they must not grow a Database pointer of their own.
+
+    /// The node's subtree as a fragment. Cheap (metadata only — no mesh bytes,
+    /// no textures, no database round trip: assets travel as guids).
+    SceneFragment captureFragment(const iris::SceneNodePtr &node) const;
+
+    /// Rebuilds a captured fragment as a DETACHED subtree — same guids, same
+    /// names, same materials, and the same session node ids when the fragment
+    /// carries them. The caller decides where it goes. Null when the fragment
+    /// is empty or names a node type this build cannot make.
+    iris::SceneNodePtr rebuildFragment(const SceneFragment &fragment) const;
+
+    /// Rebuilds a fragment and attaches it — undoable, as one "Paste" entry,
+    /// through the same AddSceneNodeCommand every other add uses. `parent` null
+    /// means the scene root; `index` -1 appends. Returns the new subtree's root.
+    iris::SceneNodePtr insertFragment(const SceneFragment &fragment,
+                                      iris::SceneNodePtr parent,
+                                      int index = -1);
 
     /// Applies a material preset to the selection. The selection may be a
     /// single mesh OR a container (an imported model roots at an Empty — the

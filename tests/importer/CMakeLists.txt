@@ -27,6 +27,7 @@ add_executable(test_importer_glb test_importer_glb.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp)
 set_target_properties(test_importer_glb PROPERTIES AUTOMOC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
