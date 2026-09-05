@@ -51,6 +51,7 @@
 #include "services/import/assetimportservice.h"
 #include "services/import/importtypes.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -105,6 +106,11 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("importer-security-ogre.log");
+    if (!graph.require()) return 1;
     // An .obj's material is a CustomMaterial built from app/shader_defs/
     // Default.shader, which IrisUtils resolves relative to applicationDirPath.
     // Without it the material has NO properties, so no texture value can be

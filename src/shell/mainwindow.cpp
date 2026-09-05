@@ -2455,13 +2455,20 @@ void MainWindow::setupViewPort()
     {
         auto &host = EngineHost::instance();
         QString error;
-        if (host.start(error)) {
+        // The engine starts even on the offscreen platform now — the document
+        // scene graph IS the engine's (SPECS/SCENEGRAPH_SPEC.md D2), so a
+        // --headless run needs one. What it does NOT get is an on-screen
+        // viewport: nothing can present into a widget that has no native
+        // window, and the document-only stand-in below is what those runs have
+        // always used.
+        const bool onScreen = QGuiApplication::platformName() == QLatin1String("xcb");
+        if (host.start(error) && onScreen) {
             sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
             // Non-owning: step 5 of the shutdown order checks it (see
             // destroyEngineViews / shell/shutdownorder.h).
             mEngineWatch = host.engine();
             host.driver()->start(16);
-        } else {
+        } else if (!error.isEmpty()) {
             qCritical("Engine unavailable (%s): using the headless document-only viewport.",
                       qPrintable(error));
         }

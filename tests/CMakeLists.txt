@@ -102,6 +102,27 @@ function(jah_tsan_blocked)
     endforeach()
 endfunction()
 
+# THE DOCUMENT-GRAPH INTERIM (SPECS/SCENEGRAPH_SPEC.md §3, v1 -> v2).
+#
+# Since the scene-graph swap, an iris:: document node IS an Ogre scene node, so
+# a suite that builds a document needs an ENGINE — even when it renders nothing.
+# v2's NULL render system removes this; until then these suites boot a real
+# (offscreen Vulkan) engine, which is exactly what the spec says the interim
+# looks like and is stated honestly here rather than hidden per-suite.
+#
+# What it takes: link JahshakaEngine, know where the plugins and Hlms media are,
+# find Ogre's shared libraries at run time, and wait for the media staging.
+# tests/support/documentgraph.h is the one line each suite's main() adds.
+function(jah_document_graph _t)
+    target_compile_definitions(${_t} PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_link_libraries(${_t} PRIVATE JahshakaEngine)
+    set_target_properties(${_t} PROPERTIES
+        BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    add_dependencies(${_t} JahshakaEngineMedia)
+endfunction()
+
 add_subdirectory(engine)
 add_subdirectory(document)
 add_subdirectory(math)

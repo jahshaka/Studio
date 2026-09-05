@@ -44,6 +44,7 @@
 // undo/redo bodies live in the app; only the static guard is exercised here).
 #include "commands/reparentscenenodecommand.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -51,6 +52,11 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("document-no-gl-ogre.log");
+    if (!graph.require()) return 1;
     CHECK(QOpenGLContext::currentContext() == nullptr, "precondition: no GL context is current");
 
     // --- Scene: previously loaded a sky mesh and compiled a sky shader in its ctor

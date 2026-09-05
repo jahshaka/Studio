@@ -27,6 +27,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "../skeletal/armrig.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -35,6 +36,11 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("skeletal-multi-avatar-ogre.log");
+    if (!graph.require()) return 1;
     // ---- 1. one mesh asset, two nodes, two different clips ----------------
     auto mesh = armrig::buildArmMesh();
     auto doc = iris::Scene::create();

@@ -43,6 +43,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/import/importflags.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -305,6 +306,11 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("skeletal-clip-extract-ogre.log");
+    if (!graph.require()) return 1;
     QTemporaryDir extract;
 
     CHECK(loadGolden(), "the frozen document-evaluator oracle loads");
