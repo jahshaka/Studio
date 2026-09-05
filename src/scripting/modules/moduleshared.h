@@ -241,14 +241,28 @@ inline QVariantMap propertyRowToJs(iris::Property *prop)
     return row;
 }
 
-/// Depth-first search of the document by GUID.
+/// Node lookup by GUID — behind essentially every node-addressing verb.
+/// O(1) via the scene's guid hash (`Scene::nodes`, maintained by
+/// addNode/removeNode) when the root is scene-bound; the recursive walk is
+/// only the fallback for detached fragments, and iterates childAt() —
+/// children() COSTS AN ALLOCATION AND N ATOMIC INCREMENTS per level
+/// (scenenode.h documents it; scripting audit F8).
 inline iris::SceneNodePtr findNodeByGuid(const iris::SceneNodePtr &node, const QString &guid)
 {
     if (!node) return iris::SceneNodePtr();
     if (node->getGUID() == guid) return node;
-    for (const auto &child : node->children()) {
-        auto hit = findNodeByGuid(child, guid);
+    if (auto sc = node->getScene()) {
+        auto hit = sc->nodes.value(guid);
         if (hit) return hit;
+        // In the hash's domain and absent from it = absent, full stop.
+        return iris::SceneNodePtr();
+    }
+    const int n = node->childCount();
+    for (int i = 0; i < n; ++i) {
+        if (iris::SceneNode *c = node->childAt(i)) {
+            auto hit = findNodeByGuid(c->sharedFromThis(), guid);
+            if (hit) return hit;
+        }
     }
     return iris::SceneNodePtr();
 }

@@ -503,7 +503,22 @@ jah_lsan_lane(scripting.engine)
 # The suites NOT listed here (full_surface, samples, image_plane, import_render,
 # shader_thumbnail, avatar, skinning, physics, particles, …) render pixels and
 # keep their display requirement, honestly and permanently.
+
+# The verb surface's SCENE_STATIC contract + scene.raycast — the 2026-09-05
+# scripting-audit regression net (F1/F2/F4/F7/F12; F3's undo half waits for
+# undo v1.5). Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-static_semantics)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.static_semantics
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_static_semantics.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.static_semantics PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 jah_no_display(
+    scripting.e2e.static_semantics
     scripting.e2e.anim
     scripting.e2e.drawers
     scripting.e2e.asset_delete

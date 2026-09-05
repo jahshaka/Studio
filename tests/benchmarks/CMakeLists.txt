@@ -54,5 +54,12 @@ add_dependencies(bench_scenegraph JahshakaEngineMedia)
 
 add_test(NAME scenegraph.benchmark COMMAND bench_scenegraph --assert
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# RUN_SERIAL: wall-clock measurements — a parallel ctest schedule distorts the
+# scale-1000/200 regress clause into random reds (2026-09-05 gate: the violating
+# metric set differed every run while the gated improve clauses held in all
+# four). Serial keeps ctest's own suites off its back; OTHER processes on the
+# box still can — a red here under external load is retried on a quiet box
+# before it is believed (gate protocol).
 set_tests_properties(scenegraph.benchmark PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 1200 LABELS "benchmark")
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 1200 LABELS "benchmark"
+    RUN_SERIAL TRUE)

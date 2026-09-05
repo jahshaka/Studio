@@ -17,6 +17,9 @@ For more information see the LICENSE file
 #include <QtMath>
 
 #include "scripting/modules/moduleshared.h"
+#include "irisgl/document/scenegraph/scenepicking.h"
+#include <algorithm>
+#include <cmath>
 #include "scripting/modules/cameraapi.h"   // camerashared::applySettings / settingsToJs
 #include "commands/reparentscenenodecommand.h"
 #include "commands/transformscenenodecommand.h"
@@ -58,6 +61,14 @@ QVector<VerbInfo> SceneApi::verbs() const
           Needs::Document },
         { "root", "scene.root() -> id",
           "The scene root's id.",
+          Needs::Document },
+        { "raycast", "scene.raycast(origin, direction, {maxDistance, includeUnpickable}) -> [{id, name, point, distance, triangleIndex}]",
+          "Casts a ray through the document's meshes and returns every triangle-level hit, "
+          "nearest first. `origin` and `direction` are {x,y,z} (direction need not be "
+          "normalized); `maxDistance` defaults to 10000. Honors each node's `pickable` flag "
+          "unless `includeUnpickable` is true, and never returns hidden nodes — the same "
+          "semantics the viewport's click uses. This is the API's click: pair it with "
+          "editor.select(id) to select what a user would have clicked.",
           Needs::Document },
         { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count}) -> id | [id]",
           "Adds a built-in primitive: plane, ground, cone, cube, cylinder, sphere, torus, capsule, "
@@ -266,6 +277,52 @@ QString SceneApi::root()
     return scene ? scene->getRootNode()->getGUID() : QString();
 }
 
+QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction,
+                               const QVariantMap &options)
+{
+    QVariantList out;
+    auto scene = sceneOrFail();
+    if (!scene) return out;
+    if (!origin.isValid() || !direction.isValid()) {
+        fail(QStringLiteral("scene.raycast: origin and direction are required ({x,y,z})"));
+        return out;
+    }
+    const iris::Vec3 a = vecFromJs(origin);
+    iris::Vec3 dir = vecFromJs(direction);
+    if (dir.lengthSquared() <= 0.0f) {
+        fail(QStringLiteral("scene.raycast: direction must be non-zero"));
+        return out;
+    }
+    dir.normalize();
+    const float maxDistance =
+        options.value(QStringLiteral("maxDistance"), 10000.0f).toFloat();
+    const bool includeUnpickable =
+        options.value(QStringLiteral("includeUnpickable"), false).toBool();
+
+    auto hits = iris::picking::raycastMeshes(scene.data(), a, a + dir * maxDistance,
+                                             0, includeUnpickable);
+    std::sort(hits.begin(), hits.end(), [](const iris::MeshPick &l,
+                                           const iris::MeshPick &r) {
+        return l.distanceSqrd < r.distanceSqrd;
+    });
+    out.reserve(hits.size());
+    for (const auto &h : hits) {
+        if (!h.node) continue;
+        QVariantMap m;
+        m.insert(QStringLiteral("id"), h.node->getGUID());
+        m.insert(QStringLiteral("name"), h.node->getName());
+        QVariantMap p;
+        p.insert(QStringLiteral("x"), h.hitPoint.x());
+        p.insert(QStringLiteral("y"), h.hitPoint.y());
+        p.insert(QStringLiteral("z"), h.hitPoint.z());
+        m.insert(QStringLiteral("point"), p);
+        m.insert(QStringLiteral("distance"), std::sqrt(h.distanceSqrd));
+        m.insert(QStringLiteral("triangleIndex"), h.triangleIndex);
+        out.append(m);
+    }
+    return out;
+}
+
 bool SceneApi::applyOptions(const iris::SceneNodePtr &node, const QVariantMap &options, const QString &verb)
 {
     if (options.contains("parent")) {
@@ -297,6 +354,12 @@ QString SceneApi::finishAdd(const QVariantMap &options, const QString &verb)
         return QString();
     }
     if (!applyOptions(node, options, verb)) return QString();
+    // applyOptions' transform/reparent writes fire rule 4 (a transform write
+    // demotes) on a node that was BORN this call — "create at this position"
+    // is placement, not a move, so the static default is re-derived. Without
+    // this, every scripted/MCP-built scene is fully dynamic while the same
+    // adds through the UI keep SCENE_STATIC (scripting audit F1).
+    if (!options.isEmpty()) node->applyStaticDefaults();
     return node->getGUID();
 }
 

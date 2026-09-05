@@ -139,9 +139,11 @@ QVector<VerbInfo> NodeApi::verbs() const
           "rules. Not undoable.",
           Needs::Document },
         { "isStatic", "node.isStatic(id) -> bool",
-          "Whether this object is marked as never-moving. This is the ASK; it can be true while "
-          "the graph has refused it (rule 2 or 3 of node.setStatic), which node.setStatic itself "
-          "reports at the time. See node.setStatic.",
+          "Whether this object actually lives in the static (never-moving) half of the scene "
+          "graph — the OUTCOME, not the ask: a child under a static parent answers true even "
+          "though nobody marked it by name, and a mark the graph refused answers false "
+          "(node.setStatic reports the refusal at the time). Unrelated to "
+          "node.physicsInfo(id).isStatic, which is the physics body type.",
           Needs::Document },
         { "physics", "node.physics(id, {type, shape, mass, restitution, friction, damping, collisionMargin}) -> bool",
           "Makes the node a physics body and/or edits its body settings — the Properties panel's "
@@ -277,7 +279,11 @@ bool NodeApi::isStatic(const QString &id)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.isStatic"));
     if (!node) return false;
-    return node->staticHint();
+    // The OUTCOME, same honesty rule as node.setStatic's return: a child that
+    // inherited static from a static parent answers true (it IS in the static
+    // manager) even though nobody asked for it by name; a hint the graph
+    // refused answers false. The ask surfaces through setStatic's refusal.
+    return node->isStaticInGraph();
 }
 
 bool NodeApi::remove(const QString &id)

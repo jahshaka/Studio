@@ -737,6 +737,10 @@ bool EditorApi::simulate(bool enabled)
 QVariantMap EditorApi::warmUpShaders()
 {
     QVariantMap m;
+    // Declared Needs::Engine — enforce it (a headless HeadlessEditorViewport
+    // satisfies the null-check but has no shaders to warm; the generated
+    // matrix must not lie about this one row).
+    if (!requireEngine()) return m;
     if (!host.viewport) { fail("editor.warmUpShaders: no viewport in this session"); return m; }
     QElapsedTimer t; t.start();
     const unsigned built = host.viewport->warmUpShaders();
@@ -774,8 +778,10 @@ QVariantMap EditorApi::viewportState()
     // The ACTUAL render target, straight from the engine — the one number that
     // can prove a resize reached the swapchain (deep audit area 7 F3).
     const QSize target = host.viewport->renderTargetSize();
-    out.insert("width", target.width());
-    out.insert("height", target.height());
+    // A viewport with no target yet reports QSize() = (-1,-1); the verb's doc
+    // says "in pixels" and the no-viewport branch says 0 — agree with them.
+    out.insert("width", qMax(0, target.width()));
+    out.insert("height", qMax(0, target.height()));
     out.insert("offscreen", host.viewport->isOffscreen());
     return out;
 }
