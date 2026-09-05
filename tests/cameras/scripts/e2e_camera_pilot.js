@@ -134,6 +134,46 @@ assert(editor.pilot(null), "eject without moving");
 assert(editor.undoState().pushes === quiet,
        "a camera that never moved does not put a no-op on the undo stack");
 
+// ---- phase F: ADOPTION MUST NOT WRITE THE CAMERA -------------------------
+// The regression gate for the defect the sockets lane found and this lane fixed
+// (2026-09-06): both camera controllers' setCamera() used to end in
+// updateCameraRot(), writing `Quat::fromEulerAngles(pitch, yaw, 0)` onto the
+// node — so merely HANDING a camera to the viewport zeroed its roll, on the
+// document, permanently. Piloting is the plainest way to hand one over.
+//
+// What is asserted is the distinction, not just the number: adoption (pilot,
+// idle frames, a camera-mode switch, eject) leaves the pose alone; NAVIGATION
+// is still free to level the roll — that is what navigating means.
+var rolled = scene.addCamera({ position: { x: 5, y: 3, z: 5 }, name: "Rolled" });
+assert(node.transform(rolled, { rotation: { x: -15, y: 30, z: 40 } }),
+       "a camera with authored ROLL (z = 40)");
+var rollBefore = node.info(rolled).rotation;
+near(rollBefore.z, 40, 1e-2, "…the document really holds the roll");
+
+assert(editor.pilot(rolled), "pilot it");
+var rollAfter = node.info(rolled).rotation;
+near(rollAfter.x, rollBefore.x, 1e-2, "PILOTING ALONE does not rewrite the camera (x)");
+near(rollAfter.y, rollBefore.y, 1e-2, "…y");
+near(rollAfter.z, rollBefore.z, 1e-2, "…and the ROLL survives adoption");
+
+editor.frame(3);
+rollAfter = node.info(rolled).rotation;
+near(rollAfter.z, rollBefore.z, 1e-2,
+     "…and survives frames of the controller running with nobody navigating");
+
+// The arcball is the other controller, and it used to rewrite the node from
+// (pitch, yaw, 0) + pivot on EVERY frame it was active.
+assert(editor.setCameraMode("orbit"), "switch to the arcball while piloting it");
+editor.frame(3);
+rollAfter = node.info(rolled).rotation;
+near(rollAfter.z, rollBefore.z, 1e-2, "…the arcball does not level it either");
+assert(editor.setCameraMode("free"), "back to the fly camera");
+
+assert(editor.pilot(null), "eject");
+rollAfter = node.info(rolled).rotation;
+near(rollAfter.z, rollBefore.z, 1e-2, "…and ejecting hands it back unrewritten");
+assert(node.remove(rolled), "the probe camera goes away again");
+
 // Leave the preferences as we found them: in a QT_DEBUG build jahsettings.ini
 // lives beside the BINARY, so every suite in this build directory shares it.
 editor.setPip({ enabled: true, size: 0.28 });

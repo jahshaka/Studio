@@ -391,36 +391,22 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     const QString savedActive = scene ? scene->getActiveCameraGuid() : QString();
     if (substituting) scene->setActiveCamera(id);
 
-    // DEFECT WE HAVE TO WORK AROUND (found building this verb, 2026-09-05):
-    // setEditorCamera resyncs the active camera CONTROLLER, and both
-    // controllers' setCamera() end in updateCameraRot(), which WRITES
-    // `Quat::fromEulerAngles(pitch, yaw, 0)` back onto the camera node. So
-    // merely handing a camera to the viewport rewrites its rotation and DROPS
-    // ITS ROLL — on a document node, permanently. That is wrong for any caller,
-    // and fatal here: a camera riding a bone is rolled by the bone.
+    // BORROWING THE VIEWPORT IS NOW SAFE, and this is where that was proved.
+    // Building this verb (2026-09-05) found that setEditorCamera resyncs the
+    // camera CONTROLLER, and both controllers' setCamera() used to end in
+    // updateCameraRot(), which wrote `Quat::fromEulerAngles(pitch, yaw, 0)`
+    // back onto the node — so merely handing a camera to the viewport dropped
+    // its roll, permanently, on a document node. This verb worked around it by
+    // snapshotting and restoring both cameras' poses around the shot.
     //
-    // So both cameras' exact poses are snapshotted and written back: the scene
-    // camera's before the shot (so the shot is of the pose that was asked for),
-    // the editor camera's after (so a screenshot cannot drift the user's
-    // viewport by a euler round trip). The controller's own pitch/yaw end up
-    // re-derived from the restored rotation, i.e. exactly where they started.
-    //
-    // The real fix is a takeCameraScreenshot() on IEditorViewport; it belongs
-    // to whoever next opens src/viewport/ up. Reported, not smuggled.
-    const iris::Vec3 camPos = cam->getLocalPos();
-    const iris::Quat camRot = cam->getLocalRot();
-    const iris::Vec3 editorPos = saved->getLocalPos();
-    const iris::Quat editorRot = saved->getLocalRot();
-
+    // The controllers were fixed instead (2026-09-06): adoption decomposes and
+    // does not write; only navigation input moves a camera
+    // (cameracontrollerbase.h states the contract). The workaround is gone, and
+    // the roll assertions in sockets.e2e and cameras.e2e.pilot are what keep it
+    // from needing to come back.
     host.viewport->setEditorCamera(cam);
-    cam->setLocalPos(camPos);
-    cam->setLocalRot(camRot);
-    cam->update(0.0f);
     const QImage img = host.viewport->takeScreenshot(width, height, postFx);
     host.viewport->setEditorCamera(saved);
-    saved->setLocalPos(editorPos);
-    saved->setLocalRot(editorRot);
-    saved->update(0.0f);
     if (substituting) scene->setActiveCamera(savedActive);
 
     if (img.isNull()) { fail("camera.screenshot: the viewport returned no image"); return out; }

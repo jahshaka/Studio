@@ -41,8 +41,20 @@ CameraNodePtr EditorCameraController::getCamera()
 }
 
 /**
- * Sets camera
- * Reduces the camera's orientation to just the yaw and pitch
+ * Adopts a camera: DECOMPOSE ONLY, never write.
+ *
+ * The controller's state is (yaw, pitch), so adopting a camera means reading
+ * those out of its rotation. It used to end in updateCameraRot(), which writes
+ * `Quat::fromEulerAngles(pitch, yaw, 0)` straight back onto the node — a round
+ * trip that is exact for a roll-free rotation and DESTRUCTIVE for any other.
+ * Merely handing a camera to the viewport therefore zeroed its roll, on the
+ * document node, permanently: fatal for an authored or socketed camera (a
+ * camera riding a bone is rolled by the bone), and camera.screenshot had to
+ * snapshot and restore poses around every shot to survive it.
+ *
+ * So the write is gone. Adoption observes; only NAVIGATION (a drag, a wheel, an
+ * axis-view request) may write the node's pose. For a roll-free camera nothing
+ * changes at all — the write it replaced was a no-op on those.
  */
 void EditorCameraController::setCamera(CameraNodePtr cam)
 {
@@ -50,13 +62,8 @@ void EditorCameraController::setCamera(CameraNodePtr cam)
 
 	orthoZoom = camera->orthoSize;
 
-    auto viewVec = cam->getLocalRot().rotatedVector(iris::Vec3(0,0,-1));//default forward is -z
-    viewVec.normalize();
-
     float roll;
     cam->getLocalRot().getEulerAngles(&pitch,&yaw,&roll);
-
-    this->updateCameraRot();
 }
 
 iris::Vec3 EditorCameraController::getPos()
@@ -167,7 +174,12 @@ void EditorCameraController::onMouseMove(int x,int y)
     camera->translateWorld(tyAxis->value()*z*linearSpeed);
     */
 
-    updateCameraRot();
+    // ONLY the look drag writes the rotation. This used to run on every mouse
+    // move — the viewport has mouse tracking on for gizmo hover, so simply
+    // moving the cursor over the viewport rewrote the camera's rotation from
+    // (pitch, yaw, 0) and levelled any roll it had. The pan branch above
+    // already moved the camera and called update(0); its rotation is unchanged.
+    if (rightMouseDown) updateCameraRot();
 }
 
 void EditorCameraController::setAltOrbit(bool active, const iris::Vec3 &pivot)

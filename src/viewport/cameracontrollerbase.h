@@ -28,6 +28,16 @@ class CameraControllerBase
 public:
     CameraControllerBase();
 
+    /// ADOPT a camera. THE CONTRACT, and it is load-bearing: a controller may
+    /// read whatever it needs out of the camera's pose here (both real ones
+    /// decompose the rotation into yaw/pitch), but it must NOT WRITE THE NODE.
+    /// Adoption happens constantly and invisibly — every project open, every
+    /// pilot/eject, every screenshot that borrows the viewport — and the node
+    /// is the user's DOCUMENT. Writing a pose back through a yaw/pitch round
+    /// trip zeroes roll permanently, which broke socketed and authored cameras
+    /// (fixed 2026-09-06; the regression gates are cameras.e2e.pilot's roll
+    /// case and sockets.e2e's screenshot case). Only real navigation input
+    /// moves a camera.
     virtual void setCamera(iris::CameraNodePtr  cam);
     iris::CameraNodePtr getCamera() { return camera; }
 
