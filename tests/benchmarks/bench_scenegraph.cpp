@@ -133,6 +133,7 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
@@ -354,6 +355,50 @@ struct SynthScene {
     float radius = 10.0f;                       ///< world half-extent, for framing
 };
 
+/// SCENE_STATIC, APPLIED (SPECS/SCENEGRAPH_SPEC.md §6). Until this lane the
+/// static/dynamic tag was intent only — a name prefix nobody acted on, because
+/// v1 had no way to put a subtree in Ogre's static memory manager and keep it
+/// there. Now there is, so the benchmark marks the scene and the (b) metrics
+/// measure a scene that really is 's' static / 'd' dynamic.
+///
+/// HOW MUCH OF THE 80% CAN LAND, and why it is not 80%. Ogre gives a node its
+/// PARENT's memory-manager class on every reparent, and a static node's derived
+/// transform is only refreshed on static dirties — so a static node under a
+/// moving parent freezes at the parent's old world position (OgreNode.h calls
+/// the configuration "probably a bug"). Static therefore has to be
+/// DOWNWARD-CLOSED: a node can only be static if every ancestor is. The
+/// lattice's tag is drawn per node independently (`i % 5 == 0` is dynamic), so
+/// what actually lands is "every node whose whole ancestor chain is 's'" —
+/// ~0.8^(depth+1) of the population, which this function measures and prints
+/// rather than assuming. A real scene classifies the other way round (a static
+/// building, a dynamic character) and keeps far more.
+///
+/// Called TWICE per scale: once after the build, and again before the (b) idle
+/// block — because metric (a') moves every node in the scene, and moving a
+/// static node demotes it by design (rule 4).
+static size_t applyStaticTags(SynthScene &s)
+{
+    size_t marked = 0;
+    // Parents come first: `parentIdx = i / branch - 1 < i` for every i, so a
+    // single ascending pass is topological.
+    for (size_t i = 0; i < s.all.size(); ++i) {
+        const iris::SceneNodePtr &n = s.all[i];
+        const bool wantStatic = !n->getName().startsWith(QLatin1Char('d'));
+        if (wantStatic) {
+            // canBeStatic() first, so an 's' node under a 'd' ancestor is
+            // SKIPPED rather than refused — a refusal is a warning per node,
+            // and there are thousands of them.
+            if (iris::graph::canBeStatic(n->graphNode())) n->setStaticHint(true);
+        } else if (n->isStaticInGraph()) {
+            // It inherited static from a static parent; the tag says it moves.
+            n->setStaticHint(false);
+        }
+    }
+    for (const iris::SceneNodePtr &n : s.all)
+        if (n->isStaticInGraph()) ++marked;
+    return marked;
+}
+
 /// One shared cube + one shared material for every mesh node in the process:
 /// the mirror caches MeshData per iris::Mesh* and datablocks per iris::Material*,
 /// so this is what makes N items cost N items and not N mesh uploads.
@@ -567,8 +612,11 @@ static bool writeResults(const std::string &path, const std::string &gpu,
     cfg["qt"] = QT_VERSION_STR;
     cfg["view"] = "offscreen 320x240, MSAA 1x";
     cfg["static_tag"] = "node name prefix: 's' = static-intent (never moved), "
-                        "'d' = dynamic-intent (moved every iteration); "
-                        "post-swap, every 's' node maps to Ogre SCENE_STATIC";
+                        "'d' = dynamic-intent (moved every iteration). APPLIED since the "
+                        "consumer-conversion lane: every 's' node whose whole ancestor chain "
+                        "is also 's' really sits in Ogre's SCENE_STATIC memory manager "
+                        "(static must be downward-closed — see applyStaticTags). The realised "
+                        "count is in counters static.nodes.<scale>.";
     cfg["mix"] = "80% static-intent / 20% dynamic-intent (index % 5 == 0 is dynamic)";
     root["config"] = cfg;
 
@@ -763,6 +811,27 @@ int main(int argc, char **argv)
         addSingle("e.build_doc", n, buildMs);
         addSingle("e.first_sync", n, firstSyncMs);
 
+        // SCENE_STATIC, applied and REPORTED. Outside every measured region:
+        // the marking itself is authoring-time work (one memory-manager
+        // migration per node), which is exactly what makes the idle ticks
+        // below cheaper. Marked AFTER the first sync so the engine's Items
+        // already exist and switch class with their nodes — the other order
+        // works too (attachMesh reads the node's class), this one exercises
+        // the harder half.
+        {
+            const auto tMark = Clock::now();
+            const size_t marked = applyStaticTags(s);
+            const double markMs = msSince(tMark);
+            std::printf("    SCENE_STATIC: %zu / %d lattice nodes really are in Ogre's static "
+                        "memory manager (%.0f%%), applied in %.1f ms\n",
+                        marked, n, 100.0 * double(marked) / double(n ? n : 1), markMs);
+            gCounters["static.nodes." + std::to_string(n)] = double(marked);
+            gCounters["static.fraction." + std::to_string(n)] =
+                double(marked) / double(n ? n : 1);
+            gCounters["static.apply_ms." + std::to_string(n)] = markMs;
+            CHECK(marked > 0, "SCENE_STATIC: some of the static-intent population landed");
+        }
+
         const LoopBudget bA{ 3, 10, quick ? 12 : 300, quick ? 300.0 : 2000.0 };
 
         // (a) document edit -> engine-visible, on the dynamic 20%.
@@ -803,6 +872,12 @@ int main(int argc, char **argv)
         // Ogre's rolling FrameStats window describes idle frames and not the
         // edit loops above.
         {
+            // Metric (a') above moved EVERY node, and moving a static node
+            // demotes it (rule 4) — so the static population has to be put
+            // back before the idle measurement, or (b) would measure a fully
+            // dynamic scene and report the win as zero.
+            const size_t remarked = applyStaticTags(s);
+            gCounters["static.nodes_idle." + std::to_string(n)] = double(remarked);
             const LoopBudget bIdle{ 5, 90, quick ? 90 : 400, quick ? 400.0 : 2000.0 };
             auto st = runLoop(bIdle, [&](int, Recorder &rec) {
                 const auto t0 = Clock::now();
