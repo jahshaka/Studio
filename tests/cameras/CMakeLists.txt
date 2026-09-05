@@ -97,3 +97,16 @@ set_tests_properties(cameras.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 300)
+
+# ---- cameras.e2e.pilot ----------------------------------------------------
+# Phase 3 (D4/D8) and the phase-2c preview preference, through the verbs, in
+# the real binary. Same scratch-HOME contract as cameras.e2e.
+set(_pilot_home ${CMAKE_CURRENT_BINARY_DIR}/pilot-home)
+file(MAKE_DIRECTORY ${_pilot_home}/run)
+add_test(NAME cameras.e2e.pilot
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_pilot.js
+         WORKING_DIRECTORY ${_pilot_home}/run)
+set_tests_properties(cameras.e2e.pilot PROPERTIES
+    ENVIRONMENT "HOME=${_pilot_home}"
+    LABELS "scripting"
+    TIMEOUT 300)

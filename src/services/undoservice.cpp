@@ -25,6 +25,7 @@ void UndoService::push(QUndoCommand *command)
     // inside push(), and the refresh notifications need the services then.
     if (auto studioCommand = dynamic_cast<StudioCommand *>(command))
         studioCommand->setServices(mServices);
+    ++mPushCount;
     mStack->push(command);
 }
 

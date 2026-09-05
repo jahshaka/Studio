@@ -186,6 +186,9 @@ public:
 	/// views are orthographic) and keeps the toolbar + dropdown checks in
 	/// sync. Returns false for an unknown name.
 	bool applyCameraView(const QString &name);
+	/// Rebuilds the camera switcher's list from the live document
+	/// (CAMERAS_SPEC D4). Connected to the menu's aboutToShow.
+	void rebuildCamerasMenu();
     void switchSpace(WindowSpaces space, bool force = false);
 	void updateTopMenuStates(WindowSpaces activeSpace);
 
@@ -648,6 +651,12 @@ private:
     QToolButton *viewsButton = nullptr;
     QMenu *viewsMenu = nullptr;
     QVector<QAction *> viewsActions;   // checkable, ordered as built
+    /// The CAMERA SWITCHER (CAMERAS_SPEC D4), beside Views: "Viewport" (the
+    /// free explorer) plus every scene camera by name. Rebuilt from the
+    /// document each time it opens — cameras are added, renamed and deleted
+    /// while the menu exists, and a stale list would pilot a dead node.
+    QToolButton *camerasButton = nullptr;
+    QMenu *camerasMenu = nullptr;
     QPushButton *restartBtn;
     QPushButton *playBtn;
     QPushButton *stopBtn;

@@ -56,6 +56,8 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "data/settingsmanager.h"
+#include <QSettings>
 
 
 
@@ -79,6 +81,13 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
     mPlayback->init();                 // GL-free init: physics, animation, controllers
     resetEditorCam();
     setCameraController(mFreeCam);
+    // The selection-preview preferences (CAMERAS_SPEC D3). Read once here
+    // rather than per frame; the Preferences page and editor.setPip write them
+    // back through setPipEnabled/setPipSize.
+    if (QSettings *st = SettingsManager::getDefaultManager()->settings) {
+        mPipEnabled = st->value("camera/pip", true).toBool();
+        mPipSize    = qBound(0.08, st->value("camera/pip_size", 0.28).toDouble(), 0.6);
+    }
     mFrameTimer.start();
     if (mDriver)
         // A lambda, not a direct member connect: syncFrame grew a default
@@ -113,7 +122,7 @@ void EngineSceneViewport::setCameraController(CameraControllerBase *c)
     mCamController = c;
     if (mCamController) {
         mCamController->resetMouseStates();
-        mCamController->setCamera(mEditorCam);
+        mCamController->setCamera(viewCamera());   // the piloted camera while piloting
         mCamController->start();
     }
 }
@@ -143,6 +152,11 @@ bool EngineSceneViewport::setCameraView(const QString &view)
         if (view == QLatin1String(v.name)) { axis = &v; break; }
     const bool persp = (view == QLatin1String("perspective"));
     if (!axis && !persp) return false;   // unknown name: refuse before touching state
+    // Canonical views are the EXPLORER's — its per-view camera memory, its
+    // projection switch. Snapping one while piloting would silently fly the
+    // user's camera to an axis view and overwrite their shot; refuse instead
+    // (eject first, which the dropdown and editor.pilot(null) both do).
+    if (mPilot) return false;
 
     // Save the outgoing view's camera — but not on a re-pick of the current
     // view, which must re-snap (the pre-memory behavior), not restore what
@@ -221,12 +235,12 @@ void EngineSceneViewport::clearViewStates()
 // rotation and leaves the position alone.
 void EngineSceneViewport::resyncCameraController(float orbitDistance)
 {
-    if (!mCamController || !mEditorCam) return;
+    if (!mCamController || !viewCamera()) return;
     if (mCamController == mOrbitCam && mOrbitCam) {
         if (orbitDistance > 0.0f) mOrbitCam->distFromPivot = orbitDistance;
-        mOrbitCam->setCamera(mEditorCam);
+        mOrbitCam->setCamera(viewCamera());
     } else {
-        mCamController->setCamera(mEditorCam);
+        mCamController->setCamera(viewCamera());
     }
 }
 
@@ -234,20 +248,24 @@ void EngineSceneViewport::resyncCameraController(float orbitDistance)
 // "move here, keep looking the same way" is a position on its own.
 bool EngineSceneViewport::setCameraPose(const EditorCameraPose &pose)
 {
-    if (!mEditorCam) return false;
-    if (pose.hasPosition) mEditorCam->setLocalPos(pose.position);
+    // The VIEW camera: while piloting, "place the camera" means the camera the
+    // user is looking through, which is the piloted one — piloting doubles as
+    // placement (CAMERAS_SPEC D8).
+    const iris::CameraNodePtr cam = viewCamera();
+    if (!cam) return false;
+    if (pose.hasPosition) cam->setLocalPos(pose.position);
     if (pose.hasLookAt) {
-        mEditorCam->lookAt(pose.lookAt);
+        cam->lookAt(pose.lookAt);
         // A target beyond the far plane renders as an empty frame and looks
         // like the verb did nothing — grow the plane to contain it, the same
         // adaptation focusOnNode makes (previewframing.h's rationale).
-        const float dist = mEditorCam->getLocalPos().distanceToPoint(pose.lookAt);
-        mEditorCam->farClip = qMax(mEditorCam->farClip, dist * 2.0f);
+        const float dist = cam->getLocalPos().distanceToPoint(pose.lookAt);
+        cam->farClip = qMax(cam->farClip, dist * 2.0f);
     } else if (pose.hasRotation) {
-        mEditorCam->setLocalRot(pose.rotation);
+        cam->setLocalRot(pose.rotation);
     }
-    if (pose.fovDegrees > 0.0f) mEditorCam->angle = pose.fovDegrees;
-    mEditorCam->update(0.0f);
+    if (pose.fovDegrees > 0.0f) cam->angle = pose.fovDegrees;
+    cam->update(0.0f);
     // The arcball keeps its orbit distance; its pivot is re-derived from the
     // new pose inside setCamera().
     resyncCameraController();
@@ -261,7 +279,8 @@ bool EngineSceneViewport::setCameraPose(const EditorCameraPose &pose)
 // also what setCameraView's axis table uses (top = yaw 0, pitch -90).
 bool EngineSceneViewport::frameNode(iris::SceneNodePtr sceneNode, const EditorFraming &framing)
 {
-    if (!sceneNode || !mEditorCam) return false;
+    const iris::CameraNodePtr cam = viewCamera();   // the piloted camera while piloting
+    if (!sceneNode || !cam) return false;
     sceneNode->update(0.0f);
 
     iris::Vec3 target = sceneNode->getGlobalPosition();
@@ -273,23 +292,23 @@ bool EngineSceneViewport::frameNode(iris::SceneNodePtr sceneNode, const EditorFr
     }
     const float dist = framing.distance > 0.0f
                            ? framing.distance
-                           : qMax(1.0f, preview::framingDistance(radius, mEditorCam->angle));
+                           : qMax(1.0f, preview::framingDistance(radius, cam->angle));
 
     // Missing yaw/pitch = "keep looking from where I look now", which makes
     // frameNode(id) the verb form of the F key.
     float pitch = 0.0f, yaw = 0.0f, roll = 0.0f;
-    mEditorCam->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
+    cam->getLocalRot().getEulerAngles(&pitch, &yaw, &roll);
     if (framing.hasYaw) yaw = framing.yawDegrees;
     if (framing.hasPitch) pitch = framing.pitchDegrees;
 
     const iris::Quat rot = iris::Quat::fromEulerAngles(pitch, yaw, 0.0f);
     const iris::Vec3 offset = rot.rotatedVector(iris::Vec3(0, 0, 1));
-    mEditorCam->setLocalPos(target + offset * dist);
-    mEditorCam->setLocalRot(rot);
+    cam->setLocalPos(target + offset * dist);
+    cam->setLocalRot(rot);
     float nearClip, farClip;
     preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
-    mEditorCam->farClip = qMax(mEditorCam->farClip, farClip);
-    mEditorCam->update(0.0f);
+    cam->farClip = qMax(cam->farClip, farClip);
+    cam->update(0.0f);
 
     // The arcball adopts THIS pivot: hand it the distance we framed at and let
     // setCamera() re-derive the pivot, which lands back on `target` exactly
@@ -324,11 +343,12 @@ void EngineSceneViewport::setGizmoTransformToGlobal()
 
 bool EngineSceneViewport::mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const
 {
-    if (!mEditorCam) return false;
-    viewDir = mEditorCam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
+    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    if (!cam) return false;
+    viewDir = cam->getGlobalRotation().rotatedVector(iris::Vec3(0, 0, -1));
     if (!mHaveMouse) return false;
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(mEditorCam, width(), height(), mMousePos, a, b);
+    ScenePicker::screenSegment(cam, width(), height(), mMousePos, a, b);
     rayPos = a; rayDir = (b - a).normalized();
     return true;
 }
@@ -398,10 +418,11 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
                                                 iris::Vec3 *hitPoint, bool forcePickable)
 {
-    if (!mScene || !mEditorCam) return iris::SceneNodePtr();
+    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    if (!mScene || !cam) return iris::SceneNodePtr();
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
-    const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(), forcePickable);
+    ScenePicker::screenSegment(cam, width(), height(), point, a, b);
+    const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(), forcePickable);
     const ScenePick best = ScenePicker::nearest(hits);
     if (hitPoint && best.node) *hitPoint = best.hitPoint;
     return ScenePicker::resolveRootSelection(best.node, mSelectedNode, selectRootObject);
@@ -412,9 +433,10 @@ iris::Vec3 EngineSceneViewport::dropPositionAt(const QPointF &point)
     iris::Vec3 hit;
     if (pickAt(point, false, &hit, true)) return hit;
     // Ground plane (y = 0), like the legacy viewport's sceneFloor.
-    if (!mEditorCam) return iris::Vec3();
+    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    if (!cam) return iris::Vec3();
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(mEditorCam, width(), height(), point, a, b);
+    ScenePicker::screenSegment(cam, width(), height(), point, a, b);
     const iris::Plane floor = iris::IntersectionHelper::computePlaneND(iris::Vec3(100, 0, 100), iris::Vec3(-100, 0, 100), iris::Vec3(-100, 0, -100));
     float t; iris::Vec3 q;
     if (iris::IntersectionHelper::intersectSegmentPlane(a, a + (b - a).normalized() * 1024.0f, floor, t, q)) return q;
@@ -672,6 +694,10 @@ void EngineSceneViewport::keyPressEvent(QKeyEvent *e)
     // Auto-repeat presses would be harmless (the key is already in the held
     // set) but auto-repeat RELEASES would clear it mid-hold — skip both.
     if (e->isAutoRepeat()) return;
+    // EJECT (CAMERAS_SPEC D8). Not a ShortcutRegistry entry: Esc is a viewport
+    // MODE key like V-hold, it only does anything while piloting, and a global
+    // shortcut for it would take Esc away from every dialog in the app.
+    if (e->key() == Qt::Key_Escape && mPilot) { pilotCamera(iris::CameraNodePtr()); return; }
     if (e->key() == Qt::Key_V) mVertexSnapHeld = true;
     if (mCamController) mCamController->onKeyPressed(static_cast<Qt::Key>(e->key()));
 }
@@ -699,16 +725,17 @@ void EngineSceneViewport::focusOutEvent(QFocusEvent *e)
 // live translate drag, so endDragging()'s undo command covers it.
 bool EngineSceneViewport::snapDragToVertexUnderCursor()
 {
-    if (!mSelectedNode || !mScene || !mEditorCam || !mHaveMouse) return false;
+    const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT
+    if (!mSelectedNode || !mScene || !cam || !mHaveMouse) return false;
     iris::Vec3 a, b;
-    ScenePicker::screenSegment(mEditorCam, width(), height(), mMousePos, a, b);
+    ScenePicker::screenSegment(cam, width(), height(), mMousePos, a, b);
     // refreshTransforms = false: this runs on every mouse move inside a live
     // translate drag, and the mirror's sync() already updated the document's
     // global transforms this frame. The update is a full recursive walk.
     // ...and no helper spheres either: V-hold snaps to a TRIANGLE CORNER, so a
     // light, decal or camera origin sphere is noise it would have to filter out
     // of every hit list anyway.
-    const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(),
+    const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(),
                                            true, false, false, false, false, false);
     ScenePick best;
     for (const auto &h : hits) {
@@ -852,7 +879,8 @@ void EngineSceneViewport::clearSelectedNode()
 // never clip away (EDITOR_SHORTCUTS_SPEC §2).
 void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
 {
-    if (!sceneNode || !mEditorCam) return;
+    const iris::CameraNodePtr cam = viewCamera();   // F focuses whatever you fly
+    if (!sceneNode || !cam) return;
     sceneNode->update(0.0f);
 
     iris::Vec3 target = sceneNode->getGlobalPosition();
@@ -862,21 +890,21 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
         target = bounds.getCenter();
         radius = qMax(0.05f, bounds.getSize().length() * 0.5f);
     }
-    const float dist = qMax(1.0f, preview::framingDistance(radius, mEditorCam->angle));
+    const float dist = qMax(1.0f, preview::framingDistance(radius, cam->angle));
 
-    iris::Vec3 dir = (mEditorCam->getGlobalPosition() - target).normalized();
+    iris::Vec3 dir = (cam->getGlobalPosition() - target).normalized();
     if (dir.isNull()) dir = iris::Vec3(0.45f, 0.45f, 0.77f);
-    mEditorCam->setLocalPos(target + dir * dist);
-    mEditorCam->lookAt(target);
+    cam->setLocalPos(target + dir * dist);
+    cam->lookAt(target);
     float nearClip, farClip;
     preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
-    mEditorCam->farClip = qMax(mEditorCam->farClip, farClip);
-    mEditorCam->update(0.0f);
+    cam->farClip = qMax(cam->farClip, farClip);
+    cam->update(0.0f);
 
     // Resync the active controller with the moved camera (free cam re-derives
     // yaw/pitch; the orbital cam re-derives its pivot and orbit distance).
     if (mCamController == mOrbitCam && mOrbitCam) mOrbitCam->focusOnNode(sceneNode);
-    else if (mCamController) mCamController->setCamera(mEditorCam);
+    else if (mCamController) mCamController->setCamera(cam);
 }
 
 void EngineSceneViewport::focusOnSelection()
@@ -945,6 +973,119 @@ void EngineSceneViewport::setEditorData(EditorData *data)
     if (mPlayback && mScene && mEditorCam) mScene->setCamera(mEditorCam);
 }
 
+// ---------------------------------------------------------------------------
+// PILOT MODE (CAMERAS_SPEC D8) and the SELECTION PiP (D3).
+//
+// Piloting is one substitution and a sweep: viewCamera() answers the piloted
+// camera instead of the explorer, and everything that used to read mEditorCam
+// for a PIXEL question — the pick rays, the gizmo's screen size, the orbit
+// pivot, F-focus, the camera pushed to the view, the screenshot camera — now
+// reads that. What still reads mEditorCam is the explorer's own state: the
+// per-view camera memory, resetEditorCam, the EditorData round trip.
+//
+// The flown pose is KEPT on eject (piloting doubles as placement) and lands on
+// the undo stack as ONE command, pushed when piloting ends. A command per
+// mouse event would be correct and useless.
+bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
+{
+    if (camera == mPilot) return true;
+
+    // ---- leaving: one undo command for the whole flight -------------------
+    if (mPilot) {
+        const iris::Vec3 endPos = mPilot->getLocalPos();
+        const iris::Quat endRot = mPilot->getLocalRot();
+        const bool moved = !qFuzzyCompare(endPos.x(), mPilotStartPos.x()) ||
+                           !qFuzzyCompare(endPos.y(), mPilotStartPos.y()) ||
+                           !qFuzzyCompare(endPos.z(), mPilotStartPos.z()) ||
+                           !qFuzzyCompare(endRot.x(), mPilotStartRot.x()) ||
+                           !qFuzzyCompare(endRot.y(), mPilotStartRot.y()) ||
+                           !qFuzzyCompare(endRot.z(), mPilotStartRot.z()) ||
+                           !qFuzzyCompare(endRot.scalar(), mPilotStartRot.scalar());
+        if (moved && mServices && mServices->undo) {
+            // The scale never changes while flying, so both ends carry the
+            // node's current one — TransformSceneNodeCommand wants a full TRS.
+            const iris::Vec3 scale = mPilot->getLocalScale();
+            mServices->undo->push(new TransformSceneNodeCommand(
+                mPilot.staticCast<iris::SceneNode>(),
+                mPilotStartPos, mPilotStartRot, scale, endPos, endRot, scale));
+        }
+        mPilot.reset();
+    }
+
+    // ---- entering ---------------------------------------------------------
+    if (camera) {
+        if (!mScene || !mScene->cameras.contains(camera->getGUID())) return false;
+        mPilot = camera;
+        mPilotStartPos = camera->getLocalPos();
+        mPilotStartRot = camera->getLocalRot();
+    }
+    // The controller must steer the camera the view now renders, and the
+    // orbital one must re-derive its pivot from that camera's pose.
+    resyncCameraController();
+    // The engine's letterbox flag rides the CameraDesc, so it follows on the
+    // next applyCamera; nothing else here has to know about it.
+    return true;
+}
+
+void EngineSceneViewport::setPipEnabled(bool on)
+{
+    if (on == mPipEnabled) return;
+    mPipEnabled = on;
+    if (QSettings *st = SettingsManager::getDefaultManager()->settings)
+        st->setValue("camera/pip", on);
+}
+
+void EngineSceneViewport::setPipSize(double fraction)
+{
+    const double f = qBound(0.08, fraction, 0.6);
+    if (qFuzzyCompare(f, mPipSize)) return;
+    mPipSize = f;
+    if (QSettings *st = SettingsManager::getDefaultManager()->settings)
+        st->setValue("camera/pip_size", f);
+}
+
+// THE SELECTION PREVIEW (D3), pushed once a frame from syncFrame. It exists
+// only while the conditions all hold, and each of them is a decision:
+//   * the preference is on;
+//   * a SCENE CAMERA is selected (the explorer is not a scene node, so it can
+//     never be here);
+//   * it is not the camera being PILOTED — you are already looking through it,
+//     and an inset of your own view is a hall of mirrors;
+//   * helpers are visible (Game View hides it, like every other editor aid)
+//     and the scene is not playing (play is the shot).
+// Anything else pushes a disabled desc, which the engine guarantees is
+// byte-exact — no workspace, no trace.
+void EngineSceneViewport::syncPip()
+{
+    if (!mMirror || !view()) return;
+    iris::CameraNodePtr cam;
+    if (mPipEnabled && !mGameView && !mPlaying) {
+        cam = mSelectedNode.dynamicCast<iris::CameraNode>();
+        if (cam && cam == mPilot) cam.reset();
+    }
+    jahshaka::engine::ViewPipDesc pip;
+    pip.enabled = !cam.isNull();
+    if (pip.enabled) {
+        // Bottom right, with a margin, sized as a fraction of the WIDTH. The
+        // height follows the camera's aspect so the inset is the shape of the
+        // shot rather than a fixed box the shot is letterboxed inside — the
+        // letterbox is for a camera that constrains its aspect, not for the
+        // preference's rounding.
+        const float margin = 0.02f;
+        const float w = float(mPipSize);
+        const float viewAspect = height() ? float(width()) / float(height()) : 1.0f;
+        float camAspect = cam->aspectRatio > 0.01f ? cam->aspectRatio : 16.0f / 9.0f;
+        if (!cam->constrainAspect) camAspect = viewAspect;   // it fills, so preview it filling
+        float h = w * viewAspect / camAspect;
+        if (h > 0.6f) h = 0.6f;
+        pip.left = 1.0f - margin - w;
+        pip.top  = 1.0f - margin * viewAspect - h;
+        pip.width = w;
+        pip.height = h;
+    }
+    mMirror->applyPip(cam, view(), pip);
+}
+
 EditorData *EngineSceneViewport::getEditorData()
 {
     if (!mEditorData) mEditorData = new EditorData();
@@ -978,7 +1119,14 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     // stays — that really is a document-side simulation.
     if (!mPlaying && mScene && mScene->getPhysicsEnvironment()->isSimulating())
         mScene->update(dt);
-    if (mEditorCam) { mEditorCam->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f); }
+    // The VIEW camera's aspect follows the viewport — except a camera that
+    // CONSTRAINS its aspect while being piloted: that number is authored, the
+    // engine letterboxes to it, and overwriting it here would silently rewrite
+    // the user's shot every frame.
+    if (const iris::CameraNodePtr vc = viewCamera()) {
+        if (!(mPilot && vc->constrainAspect))
+            vc->setAspectRatio(height() ? float(width()) / float(height()) : 1.0f);
+    }
     // G (Game View) hides every in-viewport editor helper; play mode hides the
     // grid too (the Unreal look), while the other helpers keep their existing
     // play behaviour.
@@ -1002,7 +1150,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         mMirror->setGrid(mShowGrid && helpers && !mPlaying, SnapSettings::translateSize());
         mMirror->sync();
     }
-    if (mGizmo && mEditorCam && mSelectedNode) mGizmo->updateSize(mEditorCam);
+    if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
     if (mOverlay) {
         iris::Vec3 rayPos, rayDir, viewDir;
         mouseRay(rayPos, rayDir, viewDir);
@@ -1010,7 +1158,8 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     }
     if (mMirror) mMirror->applySky(view());
     if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
-    if (mMirror && mEditorCam) mMirror->applyCamera(mEditorCam, view());
+    if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view());
+    syncPip();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine now, from the
     // backend's own frame-time source, so a dt this viewport applies to the
@@ -1097,7 +1246,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
         // Textured skies are scene geometry and show up regardless.
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);
-        if (mEditorCam) mMirror->applyCamera(mEditorCam, shot);
+        if (viewCamera()) mMirror->applyCamera(viewCamera(), shot);
         // applyEnvironment pushed the scene's post-fx description, which an
         // offscreen view ignores unless it is told otherwise. `postFx` is that
         // opt-in and the only place in the app that sets it: it makes the shot
@@ -1206,6 +1355,19 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
     // Composed HOST-SIDE, and that is the point of ViewOverlayDesc::lines: the
     // most useful number on this row — how long the tick's work took — belongs
     // to EngineRenderDriver, not to Ogre. Rate-limited to ~5 Hz.
+    // ---- the PILOTING banner (CAMERAS_SPEC D8) ----------------------------
+    // Engine-drawn, on the same overlay the stats readout uses, for the reason
+    // the loading cover moved there: the viewport is a NATIVE window with
+    // WA_PaintOnScreen and a null paint engine, so a Qt label over it is a
+    // second native window and a fight (STATS_OVERLAY_SPEC's whole rationale).
+    // Top-left, above the stats rows when both are up.
+    if (mPilot) {
+        d.stats = true;
+        d.corner = jahshaka::engine::OverlayCorner::TopLeft;
+        const QString name = mPilot->getName().isEmpty() ? tr("Camera") : mPilot->getName();
+        d.lines.push_back(tr("Piloting: %1").arg(name).toStdString());
+        d.lines.push_back(tr("Esc or the camera menu to eject").toStdString());
+    }
     if (mShowStats) {
         d.stats = true;
         d.corner = jahshaka::engine::OverlayCorner::TopLeft;
@@ -1428,7 +1590,7 @@ void EngineSceneViewport::primeSceneEnvironment()
         LoadTimeline::Accumulate env(QStringLiteral("engine:applyEnvironment"));
         mMirror->applyEnvironment(view(), mEngine.get());
     }
-    if (mEditorCam) mMirror->applyCamera(mEditorCam, view());
+    if (viewCamera()) mMirror->applyCamera(viewCamera(), view());
 }
 
 unsigned EngineSceneViewport::warmUpShaders()

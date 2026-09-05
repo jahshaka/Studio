@@ -140,6 +140,33 @@ public:
     /// bounds maths with the view direction taken from `framing` instead of
     /// from the current camera. Same controller-resync obligation.
     virtual bool frameNode(iris::SceneNodePtr, const EditorFraming &) { return false; }
+
+    // ---- Pilot mode + the selection PiP (CAMERAS_SPEC D3/D8) --------------
+    /// PILOT a scene camera: the main view renders through it and the
+    /// viewport's own navigation (RMB fly, orbit, F focus, the gizmos' pick
+    /// rays) drives THAT camera's transform instead of the explorer's. Null
+    /// returns to the explorer, leaving the camera wherever it was flown —
+    /// piloting doubles as placement, which is the whole reason it exists.
+    ///
+    /// The move is undoable as ONE step, recorded when piloting ENDS: a
+    /// continuous fly would otherwise push a command per mouse event and bury
+    /// the undo stack.
+    ///
+    /// Returns false for a node that is not a camera of the current scene.
+    /// Optional; headless viewports leave it unimplemented.
+    virtual bool pilotCamera(iris::CameraNodePtr) { return false; }
+    /// The camera being piloted, or null (the explorer).
+    virtual iris::CameraNodePtr pilotedCamera() const { return iris::CameraNodePtr(); }
+
+    /// The selection preview inset: whether it is drawn at all, and how wide
+    /// it is as a FRACTION of the viewport's width (its height follows the
+    /// camera's aspect). Persisted preferences; the inset itself only appears
+    /// while a scene camera is selected and is hidden in Game View, in play,
+    /// and while piloting that same camera.
+    virtual bool pipEnabled() const { return false; }
+    virtual void setPipEnabled(bool) {}
+    virtual double pipSize() const { return 0.0; }
+    virtual void setPipSize(double) {}
     virtual void setEditorData(EditorData *data) = 0;
     virtual EditorData *getEditorData() = 0;
 

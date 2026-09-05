@@ -43,11 +43,17 @@ public:
     Q_INVOKABLE QVariantMap camera();
     Q_INVOKABLE QVariantMap setCamera(const QVariant &pose);
     Q_INVOKABLE QVariantMap frameNode(const QString &id, const QVariant &options = QVariant());
+    Q_INVOKABLE bool pilot(const QVariant &id = QVariant());
+    Q_INVOKABLE QVariant piloting();
+    Q_INVOKABLE bool setViewCamera(const QVariant &id = QVariant());
+    Q_INVOKABLE QVariantMap pip();
+    Q_INVOKABLE QVariantMap setPip(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QString cameraMode();
     Q_INVOKABLE bool setCameraMode(const QString &mode);
     Q_INVOKABLE double snapSize();
     Q_INVOKABLE bool setSnapSize(double size);
     Q_INVOKABLE bool snapToFloor();
+    Q_INVOKABLE QVariantMap undoState();
     Q_INVOKABLE bool undo();
     Q_INVOKABLE bool redo();
     Q_INVOKABLE bool play();

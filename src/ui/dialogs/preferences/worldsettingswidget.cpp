@@ -392,6 +392,50 @@ void WorldSettingsWidget::configureViewport()
 	layout->addWidget(optimizeShadowMeshes, 3, 0);
 	layout->addLayout(shadowMeshLayout, 3, 2);
 
+	// ---- the camera preview inset (CAMERAS_SPEC D3) ----------------------
+	// Two rows, both persisted, both written through IEditorViewport — which
+	// is the SAME path editor.setPip takes, so the verb and the page cannot
+	// drift (SCRIPTING_SPEC §2.3: the UI calls the capability, it does not
+	// reimplement it). The viewport owns the clamping and the persistence.
+	auto pipLabel = new QLabel("Camera Preview :");
+	auto pipSizeLabel = new QLabel("Camera Preview Size :");
+	setSizePolicyForWidgets(pipLabel);
+	setSizePolicyForWidgets(pipSizeLabel);
+	auto pipCheckbox = new QCheckBox;
+	pipCheckbox->setToolTip(
+		"Show a live preview of a scene camera's shot in the bottom-right corner of the "
+		"viewport while that camera is selected. Hidden in Game View, in play, and while "
+		"piloting the camera itself.");
+	auto pipLayout = new QHBoxLayout;
+	pipLayout->setContentsMargins(0, 0, 0, 0);
+	pipLayout->addStretch();
+	pipLayout->addWidget(pipCheckbox);
+	auto pipSpin = new QDoubleSpinBox;
+	pipSpin->setRange(8.0, 60.0);
+	pipSpin->setDecimals(0);
+	pipSpin->setSuffix(" %");
+	pipSpin->setToolTip("How wide the preview is, as a percentage of the viewport's width. "
+	                    "Its height follows the camera's aspect ratio.");
+	StyleSheet::setStyle({ pipLabel, pipSizeLabel, pipCheckbox, pipSpin });
+	layout->addWidget(pipLabel, 4, 0);
+	layout->addLayout(pipLayout, 4, 2);
+	layout->addWidget(pipSizeLabel, 5, 0);
+	layout->addWidget(pipSpin, 5, 2);
+	// The stored values, read the same way the viewport reads them at startup
+	// (the page may open before a viewport exists).
+	pipCheckbox->setChecked(settings->getValue("camera/pip", true).toBool());
+	pipSpin->setValue(qBound(8.0, settings->getValue("camera/pip_size", 0.28).toDouble() * 100.0,
+	                         60.0));
+	connect(pipCheckbox, &QCheckBox::toggled, this, [this](bool on) {
+		settings->setValue("camera/pip", on);
+		if (editorViewport) editorViewport->setPipEnabled(on);
+	});
+	connect(pipSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+	        [this](double percent) {
+		settings->setValue("camera/pip_size", percent / 100.0);
+		if (editorViewport) editorViewport->setPipSize(percent / 100.0);
+	});
+
 	layout->setColumnStretch(1, 50);
 	layout->setRowStretch(layout->rowCount() + 1, 100);
 
