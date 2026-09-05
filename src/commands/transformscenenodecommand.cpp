@@ -15,6 +15,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "commands/transformscenenodecommand.h"
 
+#include "commands/staticstate.h"
+
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/core/math/mathhelper.h"
 #include "services/services.h"
@@ -55,16 +57,27 @@ TransformSceneNodeCommand::TransformSceneNodeCommand(iris::SceneNodePtr node,
 // command with no UI wired, and the notification simply has no listeners.
 void TransformSceneNodeCommand::undo()
 {
+	// What the move left behind, so redo can put THAT back rather than the
+	// pre-move classification (learned here because the first redo is the write
+	// that demotes).
+	if (staticAfter.isEmpty()) staticAfter = structuralundo::captureStatic(sceneNode);
+
 	sceneNode->setLocalPos(oldPos);
 	sceneNode->setLocalRot(oldRot);
 	sceneNode->setLocalScale(oldScale);
+	// AFTER the writes, because each of them demotes again (SCENEGRAPH_SPEC §6
+	// rule 4). This is the whole of scripting-audit F3's transform half.
+	structuralundo::restoreStatic(sceneNode, staticBefore);
 	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
 void TransformSceneNodeCommand::redo()
 {
+	if (staticBefore.isEmpty()) staticBefore = structuralundo::captureStatic(sceneNode);
+
 	sceneNode->setLocalPos(newPos);
 	sceneNode->setLocalRot(newRot);
 	sceneNode->setLocalScale(newScale);
+	structuralundo::restoreStatic(sceneNode, staticAfter);
 	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }

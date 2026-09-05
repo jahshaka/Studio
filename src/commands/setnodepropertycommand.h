@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QString>
 #include <QVariant>
 
+#include "commands/staticstate.h"
 #include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
 
@@ -44,11 +45,20 @@ public:
 
 private:
     void apply(const QVariant &value);
+    bool movesTheNode() const;
 
     iris::SceneNodePtr sceneNode;
     QString propertyKey;
     QVariant oldValue;
     QVariant newValue;
+    /// position/rotation/scale are reflected properties, so this command is a
+    /// transform write too — and a transform write DEMOTES a static subtree
+    /// (SCENEGRAPH_SPEC §6 rule 4). Same capture/restore pair as
+    /// TransformSceneNodeCommand, for the same reason (scripting audit F3).
+    /// Both stay empty for the overwhelming majority of properties, which move
+    /// nothing.
+    structuralundo::StaticState staticBefore;
+    structuralundo::StaticState staticAfter;
 };
 
 #endif // SETNODEPROPERTYCOMMAND_H
