@@ -100,3 +100,31 @@ add_test(NAME avatar.movement COMMAND test_avatar_movement
 set_tests_properties(avatar.movement PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 300 LABELS "avatar")
 jah_no_display(avatar.movement)
+
+# avatar.possession — AVATAR_LOCOMOTION_SPEC Stage 3, gates P1-P6.
+#
+# Possession, the camera-relative routing it decides, the spring-arm follow
+# camera and the `playMode` world setting, through the same real seam
+# avatar.movement uses: iris::Scene -> setPlaying (the possession EDGE) ->
+# Scene::update -> Environment::updateAvatarMovement. Every gate writes the
+# gameplay INPUT STATE (iris::InputSystem, the struct `avatar.input` and the
+# keyboard producer both write) rather than poking a component, which is what
+# makes the headless and the live path one code path.
+#
+# No engine rendering, no display: the document graph's NULL render system is
+# the only engine here, and jah_no_display below proves it.
+add_executable(test_avatar_possession test_avatar_possession.cpp)
+set_target_properties(test_avatar_possession PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_avatar_possession PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_avatar_possession PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_avatar_possession PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_avatar_possession)
+add_test(NAME avatar.possession COMMAND test_avatar_possession
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(avatar.possession PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 300 LABELS "avatar")
+jah_no_display(avatar.possession)

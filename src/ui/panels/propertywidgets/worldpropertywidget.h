@@ -46,6 +46,10 @@ public:
 public slots:
     void onGravityChanged(float value);
     void onAmbientColorChanged(QColor color);
+    /// The AVATAR_LOCOMOTION_SPEC §8.5 world setting. Writes through
+    /// Scene::setPlayMode — the SAME call `scene.playMode(mode)` makes, never a
+    /// parallel implementation of it (the API-first rule).
+    void onPlayModeChanged(int index);
     void onBackgroundAmbienceChanged(int index);
 	void onAmbientMusicVolumeChanged(float volume);
 
@@ -56,6 +60,8 @@ private:
     QAction *gridAction = nullptr;
     ColorValueWidget *ambientColor;
     HFloatSliderWidget *worldGravity;
+    /// The AVATAR_LOCOMOTION_SPEC §8.5 world setting, as a row.
+    ComboBoxWidget *playModeSelector = nullptr;
 	ComboBoxWidget *ambientMusicSelector;
 	HFloatSliderWidget *ambientMusicVolume;
 

@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/input/inputmap.h"
+#include "irisgl/document/input/possession.h"
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
 #include "services/sceneeditservice.h"
@@ -139,6 +140,47 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "no-op. `sprint` is a plain held bool. Returns the resulting state, the same shape "
           "input.state() reports. A real key event afterwards recomputes move/sprint from the "
           "held keys and overwrites what this wrote — last producer wins.",
+          Needs::Document },
+
+        // ---- possession (AVATAR_LOCOMOTION_SPEC §8.4, Stage 3) ------------
+        { "possess", "avatar.possess(nodeId) -> bool",
+          "Hands the gameplay input to ONE avatar — the Unreal model, stripped to what a single "
+          "local player needs: one possession slot per scene, no controller actors, no player "
+          "index. The possessed avatar is the only consumer of the input state, and its move "
+          "intent is rotated by the follow camera's yaw (so 'forward' means 'away from the "
+          "camera'). Possessing B while A is possessed IMPLICITLY UNPOSSESSES A first, which "
+          "also ZEROES A's input — otherwise a W held at the moment of the switch would walk A "
+          "forever. Every unpossessed avatar keeps stepping with zero input, so it idles rather "
+          "than freezing at bind pose. Refused for a node with no avatar component. RUNTIME "
+          "ONLY: which avatar you were driving is never written to the file, and it is dropped "
+          "when play stops. Not undoable — it is play state, not a document edit.",
+          Needs::Document },
+        { "unpossess", "avatar.unpossess() -> bool",
+          "Releases the possessed avatar and zeroes its input; it keeps stepping and idling. "
+          "False (and harmless) when nothing was possessed, which is what makes a redundant "
+          "editor.stop() free.",
+          Needs::Document },
+        { "possessed", "avatar.possessed() -> nodeId | null",
+          "The avatar the input is driving, or null. Also null once that node has been deleted — "
+          "the slot holds a weak reference on purpose.",
+          Needs::Document },
+        { "list", "avatar.list() -> [{id, name, possessed, speed, grounded, mode}]",
+          "Every node in the scene carrying an avatar component, in DOCUMENT ORDER (depth-first "
+          "from the root) — the same order Play's auto-possess is defined against, so list()[0] "
+          "is the avatar scene.playMode('third-person') takes over. `speed`, `grounded` and "
+          "`mode` are the movement component's published state (spec §5). The `state` column "
+          "the spec's table shows is the locomotion state MACHINE's and arrives with it "
+          "(Stage 4); it is deliberately absent rather than faked here.",
+          Needs::Document },
+        { "followCamera", "avatar.followCamera({armLength?, heightOffset?, lateralOffset?, yaw?, pitch?}) -> object",
+          "The spring-arm follow camera (spec §8.5). With no argument it reports the current arm; "
+          "any field writes it. The arm is anchored to the avatar WRAPPER's transform, not to a "
+          "bone: a shoulder bone bobs with every footfall, which is right for over-the-shoulder "
+          "aiming and wrong for a smooth follow. The `shoulder` socket is still what sizes it — "
+          "read ONCE at possess time as the offset reference, never per frame. `yaw`/`pitch` are "
+          "the live angles the Look action drives, in degrees; pitch is clamped to the arm's "
+          "limits. Reports `position` and `rotation` too, which is what makes camera-relative "
+          "movement assertable from a script.",
           Needs::Document },
     };
 }
@@ -754,4 +796,137 @@ QVariantMap AvatarApi::input(const QVariantMap &params)
         { "jump",   s.jump },
         { "sprint", s.sprint },
     };
+}
+
+// ---------------------------------------------------------------------------
+// POSSESSION (AVATAR_LOCOMOTION_SPEC §8.4, Stage 3)
+//
+// Thin by design: the slot, the routing and the follow arm all live on
+// iris::AvatarPossession, which the scene owns — because every property these
+// verbs expose has to be assertable in a headless document run with no window,
+// no engine and no display, and because a page switch must not be able to
+// destroy who you were driving.
+
+iris::AvatarPossession *AvatarApi::possessionOrFail(const char *verb)
+{
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) {
+        record(QStringLiteral("%1: no scene is open").arg(QLatin1String(verb)));
+        return nullptr;
+    }
+    return scene->getPossession();
+}
+
+bool AvatarApi::possess(const QString &nodeId)
+{
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) return record("avatar.possess: no scene is open");
+    auto node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) return record(QStringLiteral("avatar.possess: no node with id '%1'").arg(nodeId));
+    if (!node->hasAvatarComponent())
+        return record(QStringLiteral("avatar.possess: '%1' carries no avatar component "
+                                     "(avatar.spawn installs one; avatar.list lists them)")
+                          .arg(node->getName()));
+    // NOT UNDOABLE, deliberately: possession is play state, the same class as
+    // the play flag itself. An undo stack entry for "you were driving the other
+    // character" would be a document edit that no file ever carries.
+    return scene->getPossession()->possess(node);
+}
+
+bool AvatarApi::unpossess()
+{
+    auto *possession = possessionOrFail("avatar.unpossess");
+    return possession ? possession->unpossess() : false;
+}
+
+QVariant AvatarApi::possessed()
+{
+    auto *possession = possessionOrFail("avatar.possessed");
+    if (!possession) return QVariant();
+    const QString guid = possession->possessedGuid();
+    return guid.isEmpty() ? QVariant() : QVariant(guid);
+}
+
+QVariantList AvatarApi::list()
+{
+    QVariantList out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.list: no scene is open"); return out; }
+    const QString possessedGuid = scene->getPossession()->possessedGuid();
+
+    // DOCUMENT ORDER, depth-first — byte for byte the walk auto-possess and
+    // Environment's avatar registration use, so list()[0] really is the avatar
+    // playMode('third-person') takes over.
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
+        const int kids = node->childCount();
+        for (int i = 0; i < kids; ++i) {
+            iris::SceneNode *raw = node->childAt(i);
+            if (!raw) continue;
+            auto child = raw->sharedFromThis();
+            if (child->hasAvatarComponent()) {
+                const iris::AvatarLocomotionState &s = child->avatar()->state();
+                out.append(QVariantMap{
+                    { "id", child->getGUID() },
+                    { "name", child->getName() },
+                    { "possessed", child->getGUID() == possessedGuid },
+                    { "speed", double(s.speed) },
+                    { "grounded", s.grounded },
+                    { "mode", s.mode == iris::AvatarMovementMode::Walking
+                                  ? QStringLiteral("walking") : QStringLiteral("falling") },
+                });
+            }
+            walk(child);
+        }
+    };
+    walk(scene->getRootNode());
+    return out;
+}
+
+QVariantMap AvatarApi::followCamera(const QVariantMap &values)
+{
+    QVariantMap out;
+    auto *possession = possessionOrFail("avatar.followCamera");
+    if (!possession) return out;
+
+    static const QStringList known = { "armLength", "heightOffset", "lateralOffset",
+                                       "yaw", "pitch" };
+    const QVariantMap in = scriptmod::normalizeJs(values).toMap();
+    for (auto it = in.constBegin(); it != in.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.followCamera: unknown field '%1' (known: %2)")
+                       .arg(it.key(), known.join(", ")));
+            return out;
+        }
+    }
+
+    iris::FollowCameraParams p = possession->follow();
+    auto f = [&in](const char *key, float fallback) {
+        return in.contains(QLatin1String(key)) ? in.value(QLatin1String(key)).toFloat() : fallback;
+    };
+    p.armLength = f("armLength", p.armLength);
+    p.heightOffset = f("heightOffset", p.heightOffset);
+    p.lateralOffset = f("lateralOffset", p.lateralOffset);
+    possession->setFollow(p);
+    if (in.contains(QStringLiteral("yaw"))) possession->setYaw(in.value("yaw").toFloat());
+    if (in.contains(QStringLiteral("pitch"))) possession->setPitch(in.value("pitch").toFloat());
+    // The angles moved, so the arm has: re-derive before reporting, or a caller
+    // that yaws and then reads `position` gets the pose from before its write.
+    possession->updateFollowCamera();
+
+    const iris::FollowCameraParams &r = possession->follow();
+    const iris::Vec3 pos = possession->cameraPosition();
+    const iris::Quat rot = possession->cameraRotation();
+    out["armLength"] = double(r.armLength);
+    out["heightOffset"] = double(r.heightOffset);
+    out["lateralOffset"] = double(r.lateralOffset);
+    out["yaw"] = double(possession->yaw());
+    out["pitch"] = double(possession->pitch());
+    out["position"] = QVariantMap{ { "x", double(pos.x()) }, { "y", double(pos.y()) },
+                                   { "z", double(pos.z()) } };
+    out["rotation"] = QVariantMap{ { "x", double(rot.x()) }, { "y", double(rot.y()) },
+                                   { "z", double(rot.z()) }, { "w", double(rot.scalar()) } };
+    return out;
 }

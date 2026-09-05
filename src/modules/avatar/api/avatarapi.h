@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "scripting/apimodule.h"
 
 namespace avatar { class AvatarPreviewModel; }
+namespace iris { class AvatarPossession; }
 
 class AvatarApi : public ApiModule
 {
@@ -105,7 +106,19 @@ public:
     // test in this program can run headless with no synthetic key events.
     Q_INVOKABLE QVariantMap input(const QVariantMap &params = QVariantMap());
 
+    // ---- possession (AVATAR_LOCOMOTION_SPEC §8.4, Stage 3) ----------------
+    // One slot per scene, shaped like scene.setActiveCamera. Runtime only:
+    // nothing here is serialized and nothing here is undoable — possession is
+    // play state, not a document edit.
+    Q_INVOKABLE bool possess(const QString &nodeId);
+    Q_INVOKABLE bool unpossess();
+    Q_INVOKABLE QVariant possessed();
+    Q_INVOKABLE QVariantList list();
+    Q_INVOKABLE QVariantMap followCamera(const QVariantMap &values = QVariantMap());
+
 private:
+    /// The open scene's possession slot, or null with a message recorded.
+    iris::AvatarPossession *possessionOrFail(const char *verb);
     QVariantMap previewState() const;
     void notifyChanged();
     void notifySubjectChanged();

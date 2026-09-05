@@ -51,6 +51,9 @@ public:
     Q_INVOKABLE QVariantList cameras();
     Q_INVOKABLE bool setActiveCamera(const QVariant &id = QVariant());
     Q_INVOKABLE QVariant activeCamera();
+    /// The per-scene "what does Play do" setting (AVATAR_LOCOMOTION_SPEC §8.5).
+    /// Serialized; the possession it arms is not.
+    Q_INVOKABLE QVariant playMode(const QVariant &mode = QVariant());
 
     // ---- outliner folders (SCENEGRAPH_SPEC §6b) ---------------------------
     Q_INVOKABLE QVariantList folders();

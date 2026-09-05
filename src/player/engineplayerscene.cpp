@@ -114,6 +114,11 @@ void EnginePlayerScene::step(float dt, int width, int height)
     vp.height = height;
     vp.pixelRatioScale = 1.0f;
     mPlayback->update(vp, dt);
+    // The spring-arm follow camera, same call the editor viewport makes and for
+    // the same reason: the document computes the arm, the HOST knows which
+    // camera it renders (AVATAR_LOCOMOTION_SPEC §8.5).
+    if (mDocument && mDocument->getPossession())
+        mDocument->getPossession()->applyToViewCamera(cam);
 
     cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
     if (mMirror) {

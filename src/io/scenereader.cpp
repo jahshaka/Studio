@@ -550,6 +550,16 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // with a camera that does not exist.
     scene->setActiveCamera(sceneObj["activeCamera"].toString());
 
+    // The play mode (AVATAR_LOCOMOTION_SPEC §8.5). Tolerant by design: a key
+    // that is absent (every scene older than Stage 3) or that names a mode this
+    // build does not know leaves the default `explorer` — the behaviour those
+    // scenes already had — rather than refusing to open the file.
+    {
+        iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
+        if (iris::playModeFromName(sceneObj["playMode"].toString(), mode))
+            scene->setPlayMode(mode);
+    }
+
     return scene;
 }
 
