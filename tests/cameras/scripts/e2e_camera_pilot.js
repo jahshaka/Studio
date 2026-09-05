@@ -134,4 +134,8 @@ assert(editor.pilot(null), "eject without moving");
 assert(editor.undoState().pushes === quiet,
        "a camera that never moved does not put a no-op on the undo stack");
 
+// Leave the preferences as we found them: in a QT_DEBUG build jahsettings.ini
+// lives beside the BINARY, so every suite in this build directory shares it.
+editor.setPip({ enabled: true, size: 0.28 });
+
 console.log("cameras.e2e.pilot: all checks passed");
