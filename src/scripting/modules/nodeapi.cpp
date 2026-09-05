@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include "services/planarreflectors.h"
 #include "commands/nodeeditcommand.h"
 #include "commands/reparentscenenodecommand.h"
+#include "commands/scenefoldercommand.h"
 #include "commands/setnodepropertycommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
@@ -117,6 +118,20 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "planarReflector", "node.planarReflector(id) -> bool",
           "Whether this object is a planar reflection plane.",
+          Needs::Document },
+        { "setFolder", "node.setFolder(id, path) -> bool",
+          "Files the node in an OUTLINER FOLDER — node.setFolder(id, \"Props/Kitchen\"); an "
+          "empty path puts it back at the root level. THIS IS NOT A REPARENT and never will be "
+          "(SCENEGRAPH_SPEC §6b): folders are editor organisation, the node keeps the parent, the "
+          "transform and the place in the hierarchy it already had, and the player, the exporters "
+          "and the engine never see a folder at all. The folder is created if it does not exist "
+          "yet, so this cannot fail on a fresh path. NOTE folders organise the ROOT LEVEL of the "
+          "outliner: a node that sits inside a real parent chain still displays under its parent, "
+          "so setting a folder on one records the metadata but changes nothing on screen. "
+          "Undoable.",
+          Needs::Document },
+        { "folder", "node.folder(id) -> path",
+          "Which outliner folder this node is filed under, \"\" for the root level.",
           Needs::Document },
         { "setStatic", "node.setStatic(id, value) -> bool",
           "Declares that this object and everything under it NEVER MOVE "
@@ -253,6 +268,30 @@ bool NodeApi::planarReflector(const QString &id)
     auto node = nodeOrFail(id, QStringLiteral("node.planarReflector"));
     if (!node) return false;
     return node->getPlanarReflector();
+}
+
+bool NodeApi::setFolder(const QString &id, const QString &path)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setFolder"));
+    if (!node) return false;
+    auto scene = node->getScene();
+    if (!scene) return fail("node.setFolder: the node is not in a scene");
+    if (node->isRootNode())
+        return fail("node.setFolder: the world root is not filed in a folder");
+
+    const auto before = scenefolders::snapshot(scene);
+    if (!scenefolders::setNodeFolder(scene, node, path)) return false;
+    if (host.services && host.services->undo)
+        host.services->undo->push(
+            new SceneFolderCommand(QStringLiteral("Move To Folder"), scene, before));
+    return true;
+}
+
+QString NodeApi::folder(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.folder"));
+    if (!node) return QString();
+    return node->getFolderPath();
 }
 
 bool NodeApi::setStatic(const QString &id, bool value)

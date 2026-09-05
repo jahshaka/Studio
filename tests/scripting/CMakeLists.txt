@@ -492,6 +492,21 @@ set_tests_properties(scripting.e2e.world_modes PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# OUTLINER FOLDERS (SCENEGRAPH_SPEC.md §6b): scene.folders/createFolder/
+# renameFolder/removeFolder + node.setFolder/folder. The two LAWS are the point
+# of the suite — filing a node never reparents it, removing a folder never
+# deletes a node — plus one undo step per gesture and the save/reopen round trip
+# through the EDITOR section. Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-folders)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.folders
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_folders.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.folders PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 # The leak lane (scripts/sanitize.sh lsan): the QJSEngine host only. The
 # scripting.e2e.* suites run the real binary with the engine up and stay out.
 jah_lsan_lane(scripting.engine)
@@ -522,4 +537,5 @@ jah_no_display(
     scripting.e2e.decals
     scripting.e2e.image_material
     scripting.e2e.pinned_reopen
-    scripting.e2e.world_modes)
+    scripting.e2e.world_modes
+    scripting.e2e.folders)

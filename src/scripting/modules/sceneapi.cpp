@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "scripting/modules/cameraapi.h"   // camerashared::applySettings / settingsToJs
 #include "commands/reparentscenenodecommand.h"
+#include "commands/scenefoldercommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "shell/mainwindow.h"
 #include "services/sceneeditservice.h"
@@ -135,6 +136,32 @@ QVector<VerbInfo> SceneApi::verbs() const
           Needs::Document },
         { "activeCamera", "scene.activeCamera() -> id | null",
           "The camera play renders through, or null for the free viewer.",
+          Needs::Document },
+        { "folders", "scene.folders() -> [path]",
+          "Every OUTLINER FOLDER in the scene, sorted, ancestors included "
+          "(\"Props\" is listed beside \"Props/Kitchen\"). Folders are EDITOR "
+          "ORGANISATION and nothing else (SCENEGRAPH_SPEC §6b): a folder is not a node, "
+          "has no transform and no place in the hierarchy, and the player, the exporters "
+          "and the engine never see one. Membership is node.setFolder / node.folder; the "
+          "list here also carries folders that are currently EMPTY, which is why it is "
+          "persisted rather than derived. Saved in the project's editor section.",
+          Needs::Document },
+        { "createFolder", "scene.createFolder(path) -> bool",
+          "Creates an empty folder (and any missing ancestors): "
+          "scene.createFolder(\"Props/Kitchen\"). False when the path is empty or the "
+          "folder already exists. Nothing is reparented and no node is touched — "
+          "putting things in it is node.setFolder. Undoable.",
+          Needs::Document },
+        { "renameFolder", "scene.renameFolder(path, newName) -> bool",
+          "Renames the LAST SEGMENT of a folder path, carrying every sub-folder and every "
+          "member with it: renameFolder(\"Props/Kitchen\", \"Galley\") leaves everything "
+          "filed under \"Props/Galley\". newName is a NAME, not a path — a \"/\" in it is "
+          "refused, as is renaming onto a folder that already exists. Undoable.",
+          Needs::Document },
+        { "removeFolder", "scene.removeFolder(path) -> bool",
+          "Deletes a folder. Its members and its sub-folders MOVE UP to the parent path — "
+          "removing a folder NEVER deletes a node, which is the whole point of folders "
+          "being metadata. False when the path names no folder. Undoable.",
           Needs::Document },
     };
 }
@@ -610,4 +637,89 @@ QString SceneApi::addMesh(const QString &path, const QVariantMap &options)
              "  assets.addToScene(p, {position: ...}); // places it (undoable)")
              .arg(path));
     return QString();
+}
+
+
+// ---------------------------------------------------------------------------
+// Outliner folders (SCENEGRAPH_SPEC §6b). Every verb here is a pure metadata
+// edit on the document: no node ever moves in the hierarchy, and nothing
+// reaches the engine. Undo rides one snapshot command per gesture.
+// ---------------------------------------------------------------------------
+
+void SceneApi::recordFolderEdit(const QString &text, const iris::ScenePtr &scene,
+                                const scenefolders::Snapshot &before)
+{
+    if (!host.services || !host.services->undo) return;
+    host.services->undo->push(new SceneFolderCommand(text, scene, before));
+}
+
+QVariantList SceneApi::folders()
+{
+    QVariantList out;
+    auto scene = sceneOrFail();
+    if (!scene) return out;
+    for (const QString &f : scenefolders::all(scene)) out.append(f);
+    return out;
+}
+
+bool SceneApi::createFolder(const QString &path)
+{
+    auto scene = sceneOrFail();
+    if (!scene) return false;
+    const QString p = scenefolders::normalize(path);
+    if (p.isEmpty()) {
+        fail("scene.createFolder: a folder needs a name — scene.createFolder(\"Props/Kitchen\")");
+        return false;
+    }
+    if (scenefolders::exists(scene, p)) {
+        fail(QStringLiteral("scene.createFolder: the folder '%1' already exists").arg(p));
+        return false;
+    }
+    const auto before = scenefolders::snapshot(scene);
+    if (!scenefolders::create(scene, p)) return false;
+    recordFolderEdit(QStringLiteral("Create Folder"), scene, before);
+    return true;
+}
+
+bool SceneApi::renameFolder(const QString &path, const QString &newName)
+{
+    auto scene = sceneOrFail();
+    if (!scene) return false;
+    const QString from = scenefolders::normalize(path);
+    if (from.isEmpty() || !scenefolders::exists(scene, from)) {
+        fail(QStringLiteral("scene.renameFolder: no folder '%1' (scene.folders() lists them)")
+                 .arg(path));
+        return false;
+    }
+    const QString leaf = newName.trimmed();
+    if (leaf.isEmpty() || leaf.contains(QLatin1Char('/')) || leaf.contains(QLatin1Char('\\'))) {
+        fail("scene.renameFolder: newName is a NAME, not a path — it may not contain '/'");
+        return false;
+    }
+    const QString parent = scenefolders::parentOf(from);
+    const QString to = parent.isEmpty() ? leaf : parent + QLatin1Char('/') + leaf;
+    if (to != from && scenefolders::exists(scene, to)) {
+        fail(QStringLiteral("scene.renameFolder: '%1' already exists").arg(to));
+        return false;
+    }
+    const auto before = scenefolders::snapshot(scene);
+    if (!scenefolders::rename(scene, from, leaf)) return false;
+    recordFolderEdit(QStringLiteral("Rename Folder"), scene, before);
+    return true;
+}
+
+bool SceneApi::removeFolder(const QString &path)
+{
+    auto scene = sceneOrFail();
+    if (!scene) return false;
+    const QString from = scenefolders::normalize(path);
+    if (from.isEmpty() || !scenefolders::exists(scene, from)) {
+        fail(QStringLiteral("scene.removeFolder: no folder '%1' (scene.folders() lists them)")
+                 .arg(path));
+        return false;
+    }
+    const auto before = scenefolders::snapshot(scene);
+    if (!scenefolders::remove(scene, from)) return false;
+    recordFolderEdit(QStringLiteral("Remove Folder"), scene, before);
+    return true;
 }

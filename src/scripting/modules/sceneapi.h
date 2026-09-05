@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "scripting/apimodule.h"
+#include "services/scenefolders.h"
 #include "irisgl/irisglfwd.h"
 
 class SceneApi : public ApiModule
@@ -50,9 +51,18 @@ public:
     Q_INVOKABLE bool setActiveCamera(const QVariant &id = QVariant());
     Q_INVOKABLE QVariant activeCamera();
 
+    // ---- outliner folders (SCENEGRAPH_SPEC §6b) ---------------------------
+    Q_INVOKABLE QVariantList folders();
+    Q_INVOKABLE bool createFolder(const QString &path);
+    Q_INVOKABLE bool renameFolder(const QString &path, const QString &newName);
+    Q_INVOKABLE bool removeFolder(const QString &path);
+
 private:
     iris::ScenePtr sceneOrFail();
     QString finishAdd(const QVariantMap &options, const QString &verb);
+    /// Pushes one undo step carrying the folder-state change `before` -> now.
+    void recordFolderEdit(const QString &text, const iris::ScenePtr &scene,
+                          const scenefolders::Snapshot &before);
     bool applyOptions(const iris::SceneNodePtr &node, const QVariantMap &options, const QString &verb);
 };
 

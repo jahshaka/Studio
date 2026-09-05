@@ -23,6 +23,7 @@ For more information see the LICENSE file
 
 #include "io/materialreader.h"
 #include "io/scenereader.h"
+#include "services/scenefolders.h"
 #include "io/assetmanager.h"
 #include "data/guidmanager.h"
 
@@ -91,6 +92,12 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
     auto scene = readScene(projectObj);
 
     if (editorData) *editorData = readEditorData(projectObj);
+    // OUTLINER FOLDERS (SCENEGRAPH_SPEC §6b): read from the EDITOR section,
+    // never from the node blocks. Read UNCONDITIONALLY — a project opened
+    // without an EditorData out-parameter (headless, thumbnails) still has to
+    // come back with its folders, because the next save would otherwise write
+    // an empty list over them.
+    scenefolders::readEditorBlock(projectObj["editor"].toObject(), scene);
 	if (!!postMan)
 		readPostProcessData(projectObj, postMan);
 
