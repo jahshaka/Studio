@@ -1415,12 +1415,20 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
             const bool haveRs = mEngine && mEngine->renderStats(rs);
             const EngineRenderDriver::Stats ds =
                 mDriver ? mDriver->stats() : EngineRenderDriver::Stats{};
-            // Row 1: the loop rate AND what the frame actually cost. Both,
-            // side by side, because the fps half is a measurement of our own
-            // 16 ms timer and is only honest next to the ms half.
-            mStatsLines << QStringLiteral("%1 fps   %2 ms")
-                               .arg(haveRs ? rs.fps : 0.0, 0, 'f', 0)
-                               .arg(ds.workMs, 0, 'f', 1);
+            // Row 1: the loop rate, what the frame actually cost, AND the rate
+            // that cost would allow with no cap — the presented fps half is a
+            // measurement of our own 16 ms timer + vsync and is only honest
+            // next to the other two (owner ask, 2026-09-06: "show real fps
+            // not the capped fps"). workMs can dip near zero on an idle
+            // covered view; the potential readout saturates at 999.
+            {
+                const double potential =
+                    ds.workMs > 1.0 ? 1000.0 / ds.workMs : 999.0;
+                mStatsLines << QStringLiteral("%1 fps   %2 ms   ~%3 uncapped")
+                                   .arg(haveRs ? rs.fps : 0.0, 0, 'f', 0)
+                                   .arg(ds.workMs, 0, 'f', 1)
+                                   .arg(qMin(potential, 999.0), 0, 'f', 0);
+            }
             // Row 2: what the renderer did with the frame.
             mStatsLines << QStringLiteral("%1 draws   %2 tris")
                                .arg(haveRs ? qulonglong(rs.draws) : 0ull)
