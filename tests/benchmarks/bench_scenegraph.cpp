@@ -181,6 +181,19 @@ static constexpr double kRcvMaxReparent = 0.35;
 //   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
 //     "nothing regresses >10% at 1k".
 static constexpr bool   kBaselineComparisonArmed = true;
+// FINDING from the run that armed it (v1 lane, 2026-09-05), recorded because it
+// is the gate's weak point and the next person to see it go red deserves to
+// know: `e.build_doc` and `e.first_sync` are SINGLE-SAMPLE metrics (addSingle,
+// n = 1). They carry no dispersion, so the stability bounds above cannot say
+// whether their measurement is usable — and e.build_doc@1000 was measured at
+// 8.61 / 9.42 / 8.65 / 9.35 ms across four runs of one identical build on a
+// quiet box, a +-9% spread against a +-10% gate. It therefore straddles the
+// verdict line for a metric whose true post-swap value is about +8%: it is the
+// one number here that can fail without anything having changed. The harness's
+// own rule for an unusable measurement applies ("the fix is more iterations or
+// a quieter box, never a looser bound") and is left to whoever owns that call —
+// the alternatives are repeating the document build per scale, or re-recording
+// the baseline post-swap, and both are decisions above this file.
 static constexpr int    kImproveFromScale = 10000;
 static constexpr double kMaxRegressPct    = 10.0;
 
