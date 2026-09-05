@@ -81,14 +81,17 @@ assert(world.get().shadowResolution === 512, "world.get().shadowResolution follo
 assert(world.mode({ mode: "epic" }) === "epic", "world.mode({mode:'epic'})");
 s = world.settings();
 assert(s.msaa.value === 1, "Epic leaves hardware MSAA off: " + s.msaa.valueId);
-assert(s.shadowResolution.value === 4096, "Epic sets a 4096 shadow atlas: " + s.shadowResolution.value);
+// EPIC'S RETUNED ROWS (fps audit F6, perf wave 2026-09-06): the three
+// heavyweights that were not earning their cost. Everything else about Epic is
+// unchanged, which is what the assertions around these pin.
+assert(s.shadowResolution.value === 2048, "Epic sets a 2048 shadow atlas: " + s.shadowResolution.value);
 assert(s.giMode.valueId === "vct", "Epic turns VCT GI on: " + s.giMode.valueId);
-assert(s.shadowFilter.valueId === "verysoft", "Epic uses the softest shadow filter");
+assert(s.shadowFilter.valueId === "soft", "Epic filters shadows with PCF 4x4 (Soft)");
 assert(s.hdr.value === 1 && s.bloom.value === 1, "Epic turns HDR and bloom on");
-assert(s.ssao.valueId === "full", "Epic runs ambient occlusion at full resolution");
+assert(s.ssao.valueId === "half", "Epic runs ambient occlusion at half resolution");
 assert(s.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra");
 assert(world.get().antiAliasing === 1, "the backing field followed Epic too (MSAA stays 1x)");
-assert(world.get().shadowResolution === 4096, "and Epic's shadow atlas landed in the field");
+assert(world.get().shadowResolution === 2048, "and Epic's shadow atlas landed in the field");
 
 // ---- a pin survives a mode switch -------------------------------------------
 var pinned = world.override({ id: "msaa", value: "2x" });

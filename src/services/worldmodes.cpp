@@ -45,6 +45,15 @@ int planarBudgetOf(const iris::ScenePtr &s)
 /// post chain — see that row), and screen-space reflections are DECLARED but not
 /// yet served, the same contract shape planar reflections used before its lane
 /// landed. A row that silently does nothing is worse than a row that says so.
+///
+/// EPIC WAS RETUNED (fps audit F6, perf wave 2026-09-06). Three rows moved and
+/// the reason is the same in all three: they were the tier's per-pixel and
+/// per-frame heavyweights and none of them was carrying its cost in visible
+/// quality — full-res 64-tap SSAO -> half res, a 4096 shadow atlas -> 2048,
+/// PCF 6x6 -> 4x4. HDR, bloom, SMAA Ultra, VCT GI and the planar budget are
+/// UNTOUCHED: Epic is still the tier that turns everything on. Each row carries
+/// its own note; the before/after screenshots that justified it are in the
+/// wave's report.
 QVector<Row> buildRows()
 {
     QVector<Row> out;
@@ -118,9 +127,19 @@ QVector<Row> buildRows()
         r.options = { { QStringLiteral("off"),  QStringLiteral("Off"),        0 },
                       { QStringLiteral("half"), QStringLiteral("Half Res"),   1 },
                       { QStringLiteral("full"), QStringLiteral("Full Res"),   2 } };
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
+        // EPIC IS HALF-RES, NOT FULL (fps audit F6). The shader takes 64 samples
+        // per pixel and that count is not adjustable, so the buffer resolution
+        // is the only lever there is — and at 3440x1440 full-res that is 64
+        // taps across 4.95 Mpx, the single most expensive per-pixel item in
+        // the tier. Ogre's own SSAO sample runs half-res; the AO signal is
+        // low-frequency by nature (it is upsampled and multiplied into ambient,
+        // not sampled as detail), so the visible difference is small and the
+        // frame-time difference is not.
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 1;
         r.cost = QStringLiteral("Contact shadowing in creases and corners. 64 samples per pixel, "
                                 "fixed by the shader — the only lever is the buffer resolution. "
+                                "Full Res is four times the samples of Half Res for a "
+                                "low-frequency signal; Half Res is what the tiers use. "
                                 "Also adds a second colour attachment to the MAIN pass, which is "
                                 "why it is off below High.");
         // One row, two backing fields: the enable flag and the buffer scale.
@@ -214,10 +233,17 @@ QVector<Row> buildRows()
                       { QStringLiteral("1024"), QStringLiteral("1024"), 1024 },
                       { QStringLiteral("2048"), QStringLiteral("2048"), 2048 },
                       { QStringLiteral("4096"), QStringLiteral("4096"), 4096 } };
-        r.tier[0] = 512; r.tier[1] = 1024; r.tier[2] = 2048; r.tier[3] = 4096;
+        // EPIC IS 2048, NOT 4096 (fps audit F6). The atlas is R x 3.5R at 32-bit
+        // depth, so 4096 is ~235 MB of VRAM *and* four times the shadow-pass
+        // fill of 2048 — the whole caster set is rasterised into it every
+        // frame. 2048 is what High already used and what the editor's typical
+        // scene scale actually resolves; the row is still there for anyone who
+        // wants to pin 4096 on a static shot.
+        r.tier[0] = 512; r.tier[1] = 1024; r.tier[2] = 2048; r.tier[3] = 2048;
         r.cost = QStringLiteral("One shadow atlas for the whole scene, R wide by 3.5R tall at "
                                 "32-bit depth: 512 costs ~3.6 MB, 1024 ~14 MB, 2048 ~59 MB, "
-                                "4096 ~235 MB of VRAM.");
+                                "4096 ~235 MB of VRAM — and four times 2048's rasterisation "
+                                "work every frame, which is why no tier asks for it.");
         r.get = [](const iris::ScenePtr &s) { return s->shadowResolution; };
         r.set = [](const iris::ScenePtr &s, int v) { s->shadowResolution = v; };
         out.append(r);
@@ -232,10 +258,15 @@ QVector<Row> buildRows()
                       { QStringLiteral("hard"),     QStringLiteral("Hard"),       0 },
                       { QStringLiteral("soft"),     QStringLiteral("Soft"),       1 },
                       { QStringLiteral("verysoft"), QStringLiteral("Very Soft"),  2 } };
-        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 2;
+        // EPIC IS SOFT (4x4), NOT VERY SOFT (6x6) — fps audit F6. 6x6 is 36
+        // shadow-map taps per shaded pixel against 4x4's 16, more than double,
+        // for a softening step most scenes cannot be shown to need at 2048.
+        r.tier[0] = 0; r.tier[1] = 1; r.tier[2] = 1; r.tier[3] = 1;
         r.cost = QStringLiteral("PCF filter width for every shadowed light: Hard 2x2, Soft 4x4, "
-                                "Very Soft 6x6 taps. Auto uses the softest quality any light in "
-                                "the scene asked for. Takes effect next frame; no rebuild.");
+                                "Very Soft 6x6 taps — 36 taps per shaded pixel against 16, which "
+                                "is why no tier asks for Very Soft. Auto uses the softest quality "
+                                "any light in the scene asked for. Takes effect next frame; no "
+                                "rebuild.");
         r.get = [](const iris::ScenePtr &s) { return s->shadowFilterTier; };
         r.set = [](const iris::ScenePtr &s, int v) { s->shadowFilterTier = v; };
         out.append(r);
