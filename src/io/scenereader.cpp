@@ -23,6 +23,7 @@ For more information see the LICENSE file
 
 #include "io/materialreader.h"
 #include "io/scenereader.h"
+#include "io/sceneformat.h"
 #include "io/assetmanager.h"
 #include "data/guidmanager.h"
 
@@ -87,6 +88,22 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath,
 	useAlternativeLocation = false;
     auto doc = QJsonDocument::fromJson(sceneBlob);
     auto projectObj = doc.object();
+
+    // FORMAT VERSION (src/io/sceneformat.h). v2 is what this build writes; a v1
+    // blob is read as a ONE-WAY CONVERSION — every difference between the two is
+    // an absent key with a documented default, so nothing is lost, and the next
+    // save writes v2. Announced rather than silent: "the file I opened is not
+    // the file I write" is exactly the kind of thing a bug report needs to say.
+    const int version = sceneformat::versionOf(projectObj);
+    if (version < sceneformat::kVersion) {
+        qInfo("SceneReader: converting a v%d scene to v%d on load (SPECS/SCENEGRAPH_SPEC.md "
+              "§3 step 4 — no migration exists and none is needed; the next save writes v%d).",
+              version, sceneformat::kVersion, sceneformat::kVersion);
+    } else if (version > sceneformat::kVersion) {
+        qWarning("SceneReader: this scene was written by a NEWER build (format v%d, this build "
+                 "reads v%d). Unknown keys are ignored; saving will drop them.",
+                 version, sceneformat::kVersion);
+    }
 
     auto scene = readScene(projectObj);
 
@@ -528,6 +545,41 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     return scene;
 }
 
+iris::SceneNodePtr SceneReader::readFragment(const SceneFragment &fragment)
+{
+    if (fragment.isNull()) return iris::SceneNodePtr();
+
+    QJsonObject nodeObj = fragment.node;      // readSceneNode takes a mutable ref
+    auto node = readSceneNode(nodeObj);
+    if (!node) return node;
+
+    // The SESSION identities, replayed positionally over the same pre-order
+    // walk that captured them (src/io/sceneformat.h explains why pre-order and
+    // not a guid map). An empty list means "these are new nodes" — a paste —
+    // and the ids the constructors minted are kept.
+    if (!fragment.nodeIds.isEmpty()) {
+        int i = 0;
+        std::function<void(const iris::SceneNodePtr &)> replay =
+            [&](const iris::SceneNodePtr &n) {
+                if (i < fragment.nodeIds.size()) n->nodeId = fragment.nodeIds[i];
+                ++i;
+                const int kids = n->childCount();
+                for (int c = 0; c < kids; ++c)
+                    if (iris::SceneNode *child = n->childAt(c)) replay(child->sharedFromThis());
+            };
+        replay(node);
+    }
+
+    // The subtree is complete and at rest — the same two passes the reader runs
+    // over a freshly loaded scene, for the same reason (the rest pose clip
+    // translation reads, and the SCENE_STATIC classification). applyStaticDefaults
+    // is deliberately NOT run here: the fragment is not attached to anything yet,
+    // so rule 2 would refuse every node in it. Whoever attaches it runs the pass
+    // (AddSceneNodeCommand::redo does).
+    node->applyDefaultPose();
+    return node;
+}
+
 /**
  * Creates scene node from json data
  * @param nodeObj
@@ -570,6 +622,20 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // emits the key when the user turned casting off, so every scene written
     // before the key existed loads exactly as it did.
     sceneNode->setShadowCastingEnabled(nodeObj["castShadow"].toBool(true));
+    // SCENE_STATIC, the persisted USER OVERRIDE (format v2). Absent — every
+    // node of every scene written before v2, and the overwhelming majority
+    // after it — means "no opinion": the default policy decides, in the
+    // applyStaticDefaults pass that runs once the whole tree is built.
+    //
+    // The RAW setter, not setStaticHint: this node's parent chain does not
+    // exist yet (the reader builds children before it attaches the subtree), so
+    // asking the graph to make it static now would be refused by rule 2 and log
+    // a warning per node. Recording the intent here and letting the pass at the
+    // end of the load act on it is the same thing, in the right order.
+    if (nodeObj.contains(QLatin1String("static")))
+        sceneNode->_setStaticOverride(nodeObj["static"].toBool()
+                                          ? iris::StaticOverride::Static
+                                          : iris::StaticOverride::Dynamic);
     // Socket attachment (CAMERAS_SPEC §5). The RAW setter: the owner is very
     // often read AFTER this node (a camera can precede the character it rides),
     // so nothing here can validate the guid. Scene::addNode registers whatever
@@ -734,25 +800,31 @@ void SceneReader::readSceneNodeTransform(QJsonObject& nodeObj,iris::SceneNodePtr
     auto pos = nodeObj["pos"].toObject();
     if (!pos.isEmpty()) sceneNode->setLocalPos(readVector3(pos));
 
-    // Rotation. "rotQuat" is the node's stored quaternion, written since
-    // 2026-09-04 alongside the historical euler triple, and it is preferred
-    // because it is the only one that ROUND-TRIPS: quaternion -> euler ->
-    // quaternion is not a fixed point in float, so reading the euler back moved
-    // every rotated node a little on every single open (see the note beside the
-    // writer). Absent = a scene written before the key, or by an older build:
-    // read the euler exactly as before.
+    // ROTATION, in either spelling, told apart by the `scalar` key.
+    //
+    // Format v2 writes `rot` as the QUATERNION and writes nothing else (see the
+    // note beside the writer: the euler detour is lossy and moved every rotated
+    // node a little on every single open). `rotQuat` was the transitional key
+    // v1 wrote alongside the euler `rot`, and is still read first because a
+    // project saved by that build is what a developer's library is full of.
+    //
+    // A `rot` with no `scalar` is an EULER TRIPLE, which is what every library
+    // Object asset blob in existence carries (they are node objects too, and
+    // they were written years before this) — those keep loading unchanged.
+    const auto readQuat = [](const QJsonObject &o) {
+        return iris::Quat(float(o["scalar"].toDouble(1.0)),
+                          float(o["x"].toDouble(0.0)),
+                          float(o["y"].toDouble(0.0)),
+                          float(o["z"].toDouble(0.0))).normalized();
+    };
     const QJsonObject rotQuat = nodeObj["rotQuat"].toObject();
+    const QJsonObject rot = nodeObj["rot"].toObject();
     if (!rotQuat.isEmpty()) {
-        sceneNode->setLocalRot(iris::Quat(float(rotQuat["scalar"].toDouble(1.0)),
-                                           float(rotQuat["x"].toDouble(0.0)),
-                                           float(rotQuat["y"].toDouble(0.0)),
-                                           float(rotQuat["z"].toDouble(0.0))).normalized());
-    } else {
-        auto rot = nodeObj["rot"].toObject();
-        if (!rot.isEmpty()) {
-            //the rotation is stored as euler angles
-            sceneNode->setLocalRot(iris::Quat::fromEulerAngles(readVector3(rot)).normalized());
-        }
+        sceneNode->setLocalRot(readQuat(rotQuat));
+    } else if (rot.contains(QLatin1String("scalar"))) {
+        sceneNode->setLocalRot(readQuat(rot));
+    } else if (!rot.isEmpty()) {
+        sceneNode->setLocalRot(iris::Quat::fromEulerAngles(readVector3(rot)).normalized());
     }
 
     auto scale = nodeObj["scale"].toObject();

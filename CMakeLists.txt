@@ -337,6 +337,8 @@ set(SRCS
     src/commands/reparentscenenodecommand.cpp
     src/commands/setnodepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
+    src/commands/structuralundo.cpp
+    src/commands/staticstate.cpp
     src/ui/dialogs/progressdialog.cpp 
     src/ui/dialogs/screenshotwidget.cpp 
     src/ui/pages/projectmanager.cpp 
@@ -563,6 +565,9 @@ set(HEADERS
     src/commands/reparentscenenodecommand.h
     src/commands/setnodepropertycommand.h
     src/commands/nodeeditcommand.h
+    src/commands/structuralundo.h
+    src/commands/staticstate.h
+    src/io/sceneformat.h
     src/ui/dialogs/progressdialog.h 
     src/ui/dialogs/screenshotwidget.h 
     src/ui/pages/projectmanager.h 

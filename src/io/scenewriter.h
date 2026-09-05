@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QSharedPointer>
 #include "io/assetiobase.h"
+#include "io/sceneformat.h"
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -75,6 +76,15 @@ public:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
     void writePostProcessData(QJsonObject& projectObj, iris::PostProcessManagerPtr postMan);
     void writeEditorData(QJsonObject& projectObj, EditorData* ediorData = nullptr);
+
+    /// A SUBTREE plus where it belongs (src/io/sceneformat.h). The unit undo
+    /// v1.5 captures, `node.serialize` returns and a paste rebuilds.
+    ///
+    /// Cheap enough to run on every structural edit: it is a JSON walk over
+    /// metadata the handles already hold — no mesh bytes, no textures, no
+    /// database round trip (materials travel as asset guids exactly as they do
+    /// in a scene file).
+    static SceneFragment captureFragment(const iris::SceneNodePtr &node, bool relative = true);
 
     static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node, bool relative = true);
 	static void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
