@@ -22,18 +22,28 @@
 //      constant the flag happens to switch on.
 //   3. THE MIRROR DOES NOT SELF-REFLECT. This is not a separate case, it is why
 //      assertion 1 can pass at all: the reflection camera sits BELOW the plane
-//      looking up, and the plate is thick, so its underside lies directly
-//      between that camera and the emissive cube. Were the plate not excluded
-//      from its own reflection pass (kNoReflectBit — and note that Ogre's own
-//      sample mask, copied literally, excludes EVERYTHING here), the reflection
-//      would be the underside of the plate and no red could ever reach the
-//      floor. Assertion 3 states it as its own check anyway, by turning the
-//      reflector back on after 2 and re-measuring.
-//   4. Budget clamp: three reflectors, budget 2 => countActiveActors() == 2.
-//   5. Teardown with a live reflector — the ASan copy of this suite is what
+//      looking up, and the plate is thick, so its own slab lies directly
+//      between that camera and the emissive cube. Red on the floor therefore
+//      proves the plate is not painted into its own reflection.
+//
+//      WHAT DOES THE EXCLUDING (this comment claimed the wrong thing until
+//      2026-09-06): NOT a visibility bit of ours. Ogre mirrors the reflection
+//      camera about the actor plane, and because that camera isReflected() the
+//      Hlms enables a GLOBAL CLIP PLANE at the reflection plane itself
+//      (OgreHlms.cpp:3729-3737 + OgreHlmsPbs.cpp:2220-2223) while the scene
+//      manager inverts vertex winding (OgreSceneManager.cpp:1369-1372). The
+//      plate is CLIPPED, not masked. The `~kNoReflectBit` pass mask that used
+//      to sit in OgrePlanar.cpp was a no-op (Ogre's visibility test is
+//      any-bit-set, which cannot express exclusion) and is gone.
+//   4. THE ONE CASE THE CLIP PLANE + WINDING DO NOT COVER — a TWO-SIDED
+//      reflector, which really does fill its own reflection with itself — is
+//      REFUSED at the arm, and the refusal is about the MATERIAL: the same
+//      plate is accepted once the material is single-sided again.
+//   5. Budget clamp: three reflectors, budget 2 => countActiveActors() == 2.
+//   6. Teardown with a live reflector — the ASan copy of this suite is what
 //      catches the dangling HlmsPbs::mPlanarReflections the component's own
 //      destructor leaves behind.
-//   6. A non-plate mesh is REFUSED with a message, not silently accepted.
+//   7. A non-plate mesh is REFUSED with a message, not silently accepted.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -212,6 +222,48 @@ int main()
     CHECK(!engine->lastError().empty(), "the refusal says why");
     std::printf("   refusal message: %s\n", engine->lastError().c_str());
     CHECK(!s->nodePlanarReflector(ball), "the refused node did not become a reflector");
+
+    // ---- 5b. a TWO-SIDED reflector is refused -------------------------------
+    // The regression pin for the one real failure the dead visibility bit was
+    // pretending to cover (defect-verifier, 2026-09-06): self-exclusion is the
+    // reflected camera's clip plane plus INVERTED WINDING, and a CULL_NONE
+    // material has no back faces to cull, so such a mirror paints its whole RTT
+    // with itself. Nothing in Studio wires double-sidedness to a reflector
+    // today — a glTF `doubleSided` import is the plausible trigger — so this
+    // case is what keeps the guard from being deleted as "unreachable".
+    //
+    // Parked far below the floor so it can never move a pixel measured above,
+    // and the material is switched in place so the ONLY difference between the
+    // refusal and the acceptance is two-sidedness.
+    const NodeId twoSided = s->createNode();
+    CHECK(twoSided != 0, "a plate for the two-sided case");
+    {
+        PbrParams p;
+        p.albedo = Colour(1.0f, 1.0f, 1.0f);
+        p.metalness = 1.0f;
+        p.roughness = 0.05f;
+        p.twoSided = true;
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(mat && mesh && s->attachMesh(twoSided, mesh, mat), "…with a two-sided material");
+        enginetest::setNodeScale(s, twoSided, Vec3(3.0f, 0.15f, 3.0f));
+        enginetest::setNodePosition(s, twoSided, Vec3(0.0f, -60.0f, 0.0f));
+
+        CHECK(!s->setNodePlanarReflector(twoSided, true),
+              "a two-sided plate is REFUSED as a reflector");
+        CHECK(engine->lastError().find("two-sided") != std::string::npos,
+              "…and the refusal names two-sidedness as the reason");
+        std::printf("   refusal message: %s\n", engine->lastError().c_str());
+        CHECK(!s->nodePlanarReflector(twoSided), "the refused node did not become a reflector");
+
+        // Same node, same geometry, single-sided material: accepted. This is
+        // what makes the case above a statement about the MATERIAL.
+        p.twoSided = false;
+        CHECK(s->setPbrMaterial(mat, p), "the material is turned single-sided");
+        CHECK(s->setNodePlanarReflector(twoSided, true),
+              "…and the very same plate is then accepted");
+        CHECK(s->setNodePlanarReflector(twoSided, false), "cleared again, leaving the scene as found");
+    }
 
     // ---- 6. reflections in a shadowed pass build and render ------------------
     // The half-resolution shadow node is a separate definition; instantiating it
