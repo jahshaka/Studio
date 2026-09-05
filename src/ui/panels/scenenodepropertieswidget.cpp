@@ -67,18 +67,29 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	worldModesPropView = new WorldModesPropertyWidget();
 	worldModesPropView->setPanelTitle("World Mode");
 	worldModesPropView->expand();
-	// A tier writes THROUGH to the very fields the Anti-Aliasing, Shadows, GI and
-	// Sky sections display, and those sections read their fields only when they
-	// are built. Rebuild them whenever a World Mode edit lands, or they keep
+	// A tier writes THROUGH to the very fields the sibling World sections
+	// display, and those sections read their fields ONLY when they are built.
+	// Rebuild every one of them whenever a World Mode edit lands, or they keep
 	// showing the pre-switch values until the node is reselected.
+	//
+	// DEFECT, owner-reported 2026-09-06 and fixed here: this list used to stop
+	// at Anti-Aliasing / Shadows / Global Illumination — and the SKY section
+	// displays two World Mode rows of its own, "Sky Detail"
+	// (scene->skyBakeResolution) and "Ambient From Sky"
+	// (scene->ambientFromSky). Both are written through by setMode(), neither
+	// was refreshed, so switching Epic -> High changed the document and left
+	// the Sky rows showing the OLD tier. The panel was the only way to see what
+	// a mode did, and for those two rows it was lying. Anything that grows a
+	// world-mode-backed row belongs in this list.
 	connect(worldModesPropView, &WorldModesPropertyWidget::worldSettingsChanged,
 	        this, [this]() {
 		auto sc = scene;
 		if (!sc && !!sceneNode) sc = sceneNode->getScene();
 		if (!sc) return;
-		worldAaPropView->setScene(sc);
-		worldShadowPropView->setScene(sc);
-		worldGiPropView->setScene(sc);
+		if (worldAaPropView)     worldAaPropView->setScene(sc);
+		if (worldShadowPropView) worldShadowPropView->setScene(sc);
+		if (worldGiPropView)     worldGiPropView->setScene(sc);
+		if (worldSkyPropView)    worldSkyPropView->setScene(sc);
 	});
 
 	worldGiPropView = new WorldGiPropertyWidget();
@@ -294,6 +305,10 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
 {
     this->services = services;
     if (transformWidget) transformWidget->setServices(services);
+    // World Mode edits are undoable (WorldModeCommand) — the section needs the
+    // undo stack, and like every other panel here it is built in the CONSTRUCTOR,
+    // which runs before this setter.
+    if (worldModesPropView) worldModesPropView->setServices(services);
     if (skyPropView) skyPropView->eventBus = services ? services->eventBus : nullptr;
 }
 

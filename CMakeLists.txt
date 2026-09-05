@@ -337,6 +337,7 @@ set(SRCS
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp
     src/commands/scenefoldercommand.cpp
+    src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
     src/ui/dialogs/progressdialog.cpp 
@@ -566,6 +567,7 @@ set(HEADERS
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h
     src/commands/scenefoldercommand.h
+    src/commands/worldmodecommand.h
     src/commands/setnodepropertycommand.h
     src/commands/nodeeditcommand.h
     src/ui/dialogs/progressdialog.h 

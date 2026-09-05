@@ -29,6 +29,8 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "services/worldmodes.h"
+#include "services/undoservice.h"
+#include "commands/worldmodecommand.h"
 
 using namespace scriptmod;
 
@@ -85,19 +87,19 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Reads the current world settings.",
           Needs::Document },
         { "mode", "world.mode({mode}) -> string",
-          "The scene's World Mode — the scalability tier every quality row resolves through: low, medium, high, epic, or custom (no tier; the individual settings are the truth). Called with no argument it reads the current mode; with {mode: \"high\"} it applies that tier, writing each row's tier value into the scene EXCEPT rows the user pinned with world.override (pins survive mode switches). Returns the resulting mode.",
+          "The scene's World Mode — the scalability tier every quality row resolves through: low, medium, high, epic, or custom (no tier; the individual settings are the truth). Called with no argument it reads the current mode; with {mode: \"high\"} it applies that tier, writing each row's tier value into the scene EXCEPT rows the user pinned with world.override (pins survive mode switches). Returns the resulting mode. Undoable — one step for the whole tier, however many rows it rewrote.",
           Needs::Document },
         { "settings", "world.settings() -> { rowId: {value, valueId, label, source, tierValue, available} }",
           "Every World Mode row and its RESOLVED value. 'source' is \"override\" (pinned by the user), \"mode\" (from the tier) or \"custom\" (no tier is applied). 'valueId' is the script-facing spelling the override verb takes; 'tierValue' is what the current mode would give the row; 'available' is false for rows declared but not yet implemented by the renderer.",
           Needs::Document },
         { "override", "world.override({id, value}) -> object",
-          "Pins one quality row to a value, whatever the mode says: world.override({id: \"msaa\", value: \"4x\"}). Values may be given as the row's id spelling (\"4x\", \"vct\", \"off\") or as the raw number. The pin survives mode switches until world.clearOverride drops it. Returns the row's new state, as in world.settings().",
+          "Pins one quality row to a value, whatever the mode says: world.override({id: \"msaa\", value: \"4x\"}). Values may be given as the row's id spelling (\"4x\", \"vct\", \"off\") or as the raw number. The pin survives mode switches until world.clearOverride drops it. Returns the row's new state, as in world.settings(). Undoable.",
           Needs::Document },
         { "clearOverride", "world.clearOverride({id}) -> object",
-          "Drops one pinned row and puts the current mode's value back. Returns the row's new state.",
+          "Drops one pinned row and puts the current mode's value back. Returns the row's new state. Undoable.",
           Needs::Document },
         { "clearOverrides", "world.clearOverrides() -> object",
-          "Drops every pinned row and re-applies the current mode. Returns world.settings().",
+          "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
         { "postFx", "world.postFx({exposure, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
           "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them.",
@@ -701,6 +703,13 @@ QVariantMap WorldApi::rowState(const iris::ScenePtr &scene, const worldmodes::Ro
     };
 }
 
+void WorldApi::pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
+                                 const WorldModeCommand::Snapshot &before)
+{
+    if (!host.services || !host.services->undo) return;
+    host.services->undo->push(new WorldModeCommand(text, scene, before));
+}
+
 QString WorldApi::mode(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.mode"));
@@ -714,7 +723,12 @@ QString WorldApi::mode(const QVariantMap &params)
                      .arg(requested, worldmodes::modeNames().join(QStringLiteral(", "))));
             return QString();
         }
+        // A tier switch rewrites thirteen backing fields at once. It was not
+        // undoable at all until 2026-09-06 — Epic -> High was a one-way door in
+        // the panel AND in a script.
+        const auto before = WorldModeCommand::capture(scene);
         worldmodes::setMode(scene, m);
+        pushWorldModeUndo(QStringLiteral("World Mode"), scene, before);
     }
     return worldmodes::modeName(worldmodes::mode(scene));
 }
@@ -759,11 +773,13 @@ QVariantMap WorldApi::override(const QVariantMap &params)
         value = raw.toInt(&ok);
         resolvedValue = ok;
     }
+    const auto before = WorldModeCommand::capture(scene);
     if (!resolvedValue || !worldmodes::setRowValue(scene, id, value)) {
         fail(QStringLiteral("world.override: '%1' is not a valid value for row '%2'")
                  .arg(raw.toString(), id));
         return out;
     }
+    pushWorldModeUndo(QStringLiteral("Pin Quality Row"), scene, before);
     return rowState(scene, *r);
 }
 
@@ -778,7 +794,9 @@ QVariantMap WorldApi::clearOverride(const QVariantMap &params)
         fail(QStringLiteral("world.clearOverride: unknown row '%1'").arg(id));
         return out;
     }
+    const auto before = WorldModeCommand::capture(scene);
     worldmodes::clearOverride(scene, id);
+    pushWorldModeUndo(QStringLiteral("Unpin Quality Row"), scene, before);
     return rowState(scene, *r);
 }
 
@@ -786,7 +804,9 @@ QVariantMap WorldApi::clearOverrides()
 {
     auto scene = sceneOrFail(QStringLiteral("world.clearOverrides"));
     if (!scene) return QVariantMap();
+    const auto before = WorldModeCommand::capture(scene);
     worldmodes::clearOverrides(scene);
+    pushWorldModeUndo(QStringLiteral("Reset Pinned Quality Rows"), scene, before);
     return settings();
 }
 

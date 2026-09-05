@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "scripting/apimodule.h"
+#include "commands/worldmodecommand.h"
 #include "irisgl/irisglfwd.h"
 #include "services/worldmodes.h"
 
@@ -88,6 +89,11 @@ private:
     bool resolveTexture(const QVariant &ref, QString &guidOut, QString &pathOut);
     /// One World Mode row, in the shape world.settings() reports.
     static QVariantMap rowState(const iris::ScenePtr &scene, const worldmodes::Row &r);
+    /// One undo step for one World Mode gesture. See WorldModeCommand — a tier
+    /// switch is thirteen field writes, so the command snapshots the state
+    /// rather than inventing thirteen inverses.
+    void pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
+                           const WorldModeCommand::Snapshot &before);
 };
 
 #endif // SCRIPTING_WORLDAPI_H
