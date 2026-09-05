@@ -40,6 +40,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "export/walkers/scenewalker.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); \
     else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -62,6 +63,11 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("cameras-document-ogre.log");
+    if (!graph.require()) return 1;
     // ---- 1. the type enum -------------------------------------------------
     {
         auto cam = iris::CameraNode::create();
@@ -338,7 +344,7 @@ int main(int argc, char **argv)
               "lookAt leaves the camera where it is");
         // Looking down -Z from +Z at the origin is the identity orientation.
         const iris::Vec3 forward =
-            (cam->globalTransform * iris::Vec4(0, 0, -1, 0)).toVector3D().normalized();
+            (cam->getGlobalTransform() * iris::Vec4(0, 0, -1, 0)).toVector3D().normalized();
         CHECK(near(forward.z(), -1.0f, 1e-3f),
               "and points its -Z axis at the target");
     }

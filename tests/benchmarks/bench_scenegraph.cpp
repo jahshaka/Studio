@@ -173,17 +173,42 @@ static constexpr double kRcvMax = 0.25;   // 1.4826*MAD / median  (quiet-box wor
 static constexpr double kCvMaxReparent  = 1.00;
 static constexpr double kRcvMaxReparent = 0.35;
 
-// THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance).
-// Baseline comparison is implemented below and runs today in report-only mode.
-// TODO(v1 lane, scene-graph core swap): flip this to `true` in the same commit
-// that lands the handle layer, and the gate starts enforcing §6 verbatim:
+// THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance) — ARMED by the v1 lane
+// that landed the handle layer, exactly as this comment promised. The gate now
+// enforces §6 verbatim:
 //   * at scales >= kImproveFromScale, every a.* and b.* metric must IMPROVE
 //     (median lower than the baseline's) — §6 "(a) and (b) improve at 10k+";
 //   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
 //     "nothing regresses >10% at 1k".
-// Nothing else needs writing: compareToBaseline() already computes and prints
-// both verdicts, it simply does not add to `failures` while this is false.
-static constexpr bool   kBaselineComparisonArmed = false;
+static constexpr bool   kBaselineComparisonArmed = true;
+// WHAT THE ARMED GATE SAYS TODAY (v1 lane, 2026-09-05), recorded here because a
+// red gate whose reason is not written down gets tuned by the next person who
+// meets it:
+//
+//   §6's two clauses split. "(a) and (b) improve at 10k+" is met by a wide
+//   margin at every scale (a.* -19% to -37%, b.* -19% to -27%, d.anim_rig
+//   -50%). "Nothing regresses >10% at 1k" FAILS on exactly one metric:
+//   e.build_doc, at +17% (measured over six runs of one identical build:
+//   9.07 / 9.21 / 9.34 / 9.36 / 9.43 / 10.01 ms against a 7.956 ms baseline).
+//
+//   The reason is structural, not a defect: building a document now creates a
+//   real Ogre scene node per document node — ~1.9 us of scene-manager and SoA
+//   machinery where the old graph wrote three C++ members. About 40% of that is
+//   the RE-PARENT (Node::setParent migrates the node between depth levels of
+//   the NodeMemoryManager), which the universal "create it, configure it, THEN
+//   addChild it" call shape forces. Removing that needs deferred realization —
+//   holding a transient TRS on the handle until it has a parent — which is
+//   exactly the second transform store the design deleted, so it is a decision
+//   above this file, not a tweak.
+//
+//   What it costs is also handed straight back: e.first_sync falls by the same
+//   order (the mirror no longer creates a node per document node), so
+//   END-TO-END document build + first sync is flat — 1k +0.8%, 10k +0.6%,
+//   50k -2.2%.
+//
+//   Note also that e.build_doc and e.first_sync are SINGLE-SAMPLE metrics
+//   (addSingle, n = 1): they carry no dispersion, so the stability bounds above
+//   cannot say whether their measurement is usable at all.
 static constexpr int    kImproveFromScale = 10000;
 static constexpr double kMaxRegressPct    = 10.0;
 
@@ -692,6 +717,7 @@ int main(int argc, char **argv)
         const Colour away = img.at(img.width / 2, img.height / 2);
         std::printf("    moved +50x:     centre %3.0f %3.0f %3.0f\n", away.r * 255, away.g * 255, away.b * 255);
         CHECK(away.b > 0.8f && away.r < 0.15f, "the edit reached the rendered frame (background)");
+        mirror.setSource(nullptr);   // unbind before the engine scene dies
         view->setScene(nullptr);
         engine->destroyScene(es);
     }
@@ -817,6 +843,11 @@ int main(int argc, char **argv)
             addMetric("c.reparent_500", n, st["c.reparent_500"], true);
         }
 
+        // UNBIND before the engine scene dies. Since the scene-graph swap the
+        // document's nodes ARE this scene manager's nodes (SCENEGRAPH_SPEC D2),
+        // so destroying it first would leave the document holding dangling
+        // handles. Outside every measured region.
+        mirror.setSource(nullptr);
         view->setScene(nullptr);
         engine->destroyScene(es);
     }
@@ -851,6 +882,7 @@ int main(int argc, char **argv)
             addMetric("d.anim_rig_200_sync", 200, st["d.anim_rig_200_sync"], true);
             addMetric("d.anim_rig_200", 200, st["d.anim_rig_200"], true);
 
+            mirror.setSource(nullptr);   // see the note in the scale loop
             view->setScene(nullptr);
             engine->destroyScene(es);
         } else { std::printf("FAIL: engine scene for the rig\n"); ++failures; }

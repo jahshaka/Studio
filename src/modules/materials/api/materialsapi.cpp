@@ -283,7 +283,7 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
                         }
                     }
                 }
-                for (const auto &child : n->children) walk(child);
+                for (const auto &child : n->children()) walk(child);
             };
         walk(scene->getRootNode());
     }
@@ -463,7 +463,7 @@ bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
     std::function<bool(const iris::SceneNodePtr &)> hasMesh =
         [&hasMesh](const iris::SceneNodePtr &n) -> bool {
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) return true;
-            for (const auto &child : n->children)
+            for (const auto &child : n->children())
                 if (hasMesh(child)) return true;
             return false;
         };

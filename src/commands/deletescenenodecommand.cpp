@@ -22,7 +22,7 @@ DeleteSceneNodeCommand::DeleteSceneNodeCommand(iris::SceneNodePtr parentNode, ir
 {
     this->parentNode = parentNode;
     this->sceneNode = sceneNode;
-    this->position = parentNode->children.indexOf(sceneNode);
+    this->position = parentNode->children().indexOf(sceneNode);
     this->db = db;
     this->assetGuid = assetGuid;
 }

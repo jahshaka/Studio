@@ -1,4 +1,6 @@
 #include "bridge/enginehost.h"
+
+#include "irisgl/document/scenegraph/nodegraph.h"
 #include "viewport/enginerenderdriver.h"
 #include "data/settingsmanager.h"
 #include "data/constants.h"
@@ -218,18 +220,29 @@ bool EngineHost::start(QString &error)
     // real X11 window. main.cpp selects xcb for engine mode; refuse clearly otherwise
     // rather than hand the engine a Wayland handle and crash.
     const QString platform = QGuiApplication::platformName();
-    if (platform != QLatin1String("xcb")) {
+    if (platform == QLatin1String("xcb")) {
+        // Hand the engine OUR X connection. Opening a second connection to the same
+        // windows causes flicker and lets other windows' content bleed into the viewport.
+        if (auto *x11 = qApp->nativeInterface<QNativeInterface::QX11Application>())
+            cfg.display = reinterpret_cast<NativeDisplayHandle>(x11->display());
+        if (!cfg.display) {
+            error = QStringLiteral("Could not obtain the X11 display connection from Qt.");
+            return false;
+        }
+    } else if (platform == QLatin1String("offscreen")) {
+        // OFFSCREEN RUNS START THE ENGINE TOO, since the scene-graph swap
+        // (SPECS/SCENEGRAPH_SPEC.md §3, the v1 interim): a document node IS an
+        // engine node, so `--headless` and `--dump-api-docs` cannot build a
+        // document without one. Nothing is ever shown — the engine runs on a
+        // surfaceless window, exactly as every headless suite does — and no X
+        // connection of Qt's is needed or wanted here. Ogre still needs a
+        // REACHABLE display (its Vulkan xcb support connects at plugin load),
+        // which is the honest cost of the interim; v2's NULL render system
+        // removes it. On-screen views refuse cleanly without a display handle.
+        cfg.display = 0;
+    } else {
         error = QStringLiteral("The engine requires the xcb platform (running on '%1'). "
                                "Relaunch with QT_QPA_PLATFORM=xcb.").arg(platform);
-        return false;
-    }
-
-    // Hand the engine OUR X connection. Opening a second connection to the same
-    // windows causes flicker and lets other windows' content bleed into the viewport.
-    if (auto *x11 = qApp->nativeInterface<QNativeInterface::QX11Application>())
-        cfg.display = reinterpret_cast<NativeDisplayHandle>(x11->display());
-    if (!cfg.display) {
-        error = QStringLiteral("Could not obtain the X11 display connection from Qt.");
         return false;
     }
 #else
@@ -247,6 +260,13 @@ bool EngineHost::start(QString &error)
     }
     mEngine = std::move(engine);
     mDriver = new EngineRenderDriver(mEngine.get());
+    // THE scene graph (SPECS/SCENEGRAPH_SPEC.md D2): a document node IS an
+    // engine node, so the document needs somewhere to put nodes that are not in
+    // any rendered scene yet. This is the first thing to happen after the engine
+    // exists and BEFORE the first document node — MainWindow's viewport creates
+    // the editor camera inside its own constructor, a few lines later.
+    iris::graph::setStagingScene(
+        reinterpret_cast<iris::graph::SceneHandle>(mEngine->documentGraphScene()));
     return true;
 }
 
@@ -307,5 +327,10 @@ void EngineHost::shutdown()
         delete mDriver;
         mDriver = nullptr;
     }
+    // The document's staging scene manager belongs to the Engine and dies with
+    // it; drop our reference to it first so nothing walks a dead manager. (Every
+    // iris::graph entry point also tests Ogre::Root's liveness, because the
+    // Engine can outlive this call — the viewports hold their own shared_ptr.)
+    iris::graph::setStagingScene(nullptr);
     mEngine.reset();
 }

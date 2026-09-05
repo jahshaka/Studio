@@ -17,6 +17,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/scenepicker.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -34,6 +35,11 @@ static iris::MeshNodePtr cubeAt(iris::ScenePtr doc, const iris::Vec3 &pos, const
 int main(int argc, char **argv) {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("picking-document-ogre.log");
+    if (!graph.require()) return 1;
     auto doc = iris::Scene::create();
     auto cam = iris::CameraNode::create();
     cam->setLocalPos(iris::Vec3(0, 0, 6)); cam->lookAt(iris::Vec3(0, 0, 0));

@@ -137,6 +137,13 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set_property(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER AutoMocFolder)
 
+# Ogre-Next must be resolved BEFORE irisgl is added: the document library now
+# owns the scene graph (SPECS/SCENEGRAPH_SPEC.md D2) and its one Ogre-private
+# translation unit — irisgl/document/scenegraph/nodegraph.cpp — links OgreNext.
+# Nothing else changes: this file only defines the OgreNext INTERFACE target and
+# the media/plugin paths.
+include(IncludeOgre)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl)
 
 add_subdirectory_with_folder("Extras" ${CMAKE_CURRENT_SOURCE_DIR}/extras/downloader)
@@ -641,7 +648,6 @@ set(WIDGETS
     src/ui/dialogs/softwareupdatedialog.ui
 )
 
-include(IncludeOgre)
 # The engine abstraction lives in the IrisGL repo (owner decision 2026-08-30:
 # Studio = the app; IrisGL = document + engine). It stays a separate library —
 # the document never links it — and keeps build-linux/engine as its binary dir

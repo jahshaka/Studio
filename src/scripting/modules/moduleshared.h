@@ -246,7 +246,7 @@ inline iris::SceneNodePtr findNodeByGuid(const iris::SceneNodePtr &node, const Q
 {
     if (!node) return iris::SceneNodePtr();
     if (node->getGUID() == guid) return node;
-    for (const auto &child : node->children) {
+    for (const auto &child : node->children()) {
         auto hit = findNodeByGuid(child, guid);
         if (hit) return hit;
     }

@@ -48,7 +48,7 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &s
         auto mesh = meshNode->getMesh();
         if (mesh && mesh->getTriMesh()) {
             // Segment into the mesh's local space, hits back to world space.
-            const iris::Mat4 inv = meshNode->globalTransform.inverted();
+            const iris::Mat4 inv = meshNode->getGlobalTransform().inverted();
             const iris::Vec3 a = inv * segStart, b = inv * segEnd;
             // BROAD PHASE first: the mesh's own bounding sphere, in the same
             // local space. Without it every ray scanned every triangle of every
@@ -65,7 +65,7 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &s
                     for (const auto &r : results) {
                         ScenePick p;
                         p.node = node;
-                        p.hitPoint = meshNode->globalTransform * r.hitPoint;
+                        p.hitPoint = meshNode->getGlobalTransform() * r.hitPoint;
                         p.distanceFromCameraSqrd = (p.hitPoint - cameraPos).lengthSquared();
                         p.triangleIndex = r.triangleIndex;
                         out.append(p);
@@ -74,7 +74,7 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &s
             }
         }
     }
-    for (const auto &child : node->children)
+    for (const auto &child : node->children())
         pickMeshes(child, segStart, segEnd, cameraPos, forcePickable, out);
 }
 

@@ -30,6 +30,7 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/clipextractor.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -50,19 +51,19 @@ static iris::MeshNodePtr findSkinned(const iris::SceneNodePtr &n)
         auto m = n.staticCast<iris::MeshNode>();
         if (!m->getSkeleton().isNull()) return m;
     }
-    for (const auto &c : n->children) if (auto r = findSkinned(c)) return r;
+    for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
     return iris::MeshNodePtr();
 }
 static iris::SceneNodePtr findClipHost(const iris::SceneNodePtr &n)
 {
     if (!n->getAnimations().isEmpty()) return n;
-    for (const auto &c : n->children) if (auto r = findClipHost(c)) return r;
+    for (const auto &c : n->children()) if (auto r = findClipHost(c)) return r;
     return iris::SceneNodePtr();
 }
 static int countNodes(const iris::SceneNodePtr &n)
 {
     int c = 1;
-    for (const auto &k : n->children) c += countNodes(k);
+    for (const auto &k : n->children()) c += countNodes(k);
     return c;
 }
 
@@ -70,6 +71,11 @@ int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("skeletal-library-import-ogre.log");
+    if (!graph.require()) return 1;
     QTemporaryDir extract;
 
     // ---- the rig, through the aiScene overload ----------------------------
@@ -167,7 +173,7 @@ int main(int argc, char **argv)
         if (prop.isNull()) return 1;
         CHECK(prop->getSceneNodeType() == iris::SceneNodeType::Mesh,
               "an unskinned single-mesh file is STILL one MeshNode (shortcut kept)");
-        CHECK(prop->children.isEmpty(), "... with no child nodes");
+        CHECK(prop->children().isEmpty(), "... with no child nodes");
         CHECK(prop.staticCast<iris::MeshNode>()->getSkeleton().isNull(),
               "... and no skeleton");
 

@@ -396,7 +396,7 @@ void AssetWidget::trigger()
 			//	}
 
 			//	if (node->hasChildren()) {
-			//		for (auto &child : node->children) {
+			//		for (auto &child : node->children()) {
 			//			updateNodeValues(child);
 			//		}
 			//	}

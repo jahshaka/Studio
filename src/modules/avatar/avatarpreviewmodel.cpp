@@ -318,7 +318,7 @@ void AvatarPreviewModel::collectRig()
                             boneNames.insert(name);
                 }
             }
-            for (const auto &child : node->children) scanMeshes(child);
+            for (const auto &child : node->children()) scanMeshes(child);
         };
     scanMeshes(mFragment);
     mBoneCount = boneNames.size();
@@ -339,7 +339,7 @@ void AvatarPreviewModel::collectRig()
                 mBoneNodes.append(bone);
                 nextAncestor = node->name;
             }
-            for (const auto &child : node->children) walk(child, nextAncestor);
+            for (const auto &child : node->children()) walk(child, nextAncestor);
         };
     walk(mFragment, QString());
 }
@@ -363,7 +363,7 @@ void AvatarPreviewModel::captureRestPose()
     std::function<void(const iris::SceneNodePtr &)> walk =
         [&](const iris::SceneNodePtr &node) {
             mNodeNames.insert(node->name);
-            for (const auto &child : node->children) walk(child);
+            for (const auto &child : node->children()) walk(child);
         };
     walk(mFragment);
 }
@@ -383,7 +383,7 @@ QString AvatarPreviewModel::rootMotionChannel(const iris::SkeletalAnimationPtr &
         if (it != skel->boneAnimations.constEnd() && !it.value().isNull() &&
             it.value()->posKeys->keys.size() > 1)
             return node->name;
-        for (const auto &child : node->children) queue.append(child.data());
+        for (const auto &child : node->children()) queue.append(child.data());
     }
     return QString();
 }
@@ -579,7 +579,7 @@ void AvatarPreviewModel::applyMeshVisibility()
         [&](const iris::SceneNodePtr &node) {
             if (node->getSceneNodeType() == iris::SceneNodeType::Mesh)
                 node->setVisible(mMeshVisible);
-            for (const auto &child : node->children) apply(child);
+            for (const auto &child : node->children()) apply(child);
         };
     apply(mFragment);
 }

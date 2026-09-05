@@ -9,6 +9,9 @@ target_include_directories(test_scene_picker PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_scene_picker PRIVATE JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_scene_picker PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_scene_picker)
 add_test(NAME picking.document COMMAND test_scene_picker WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(picking.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")
 

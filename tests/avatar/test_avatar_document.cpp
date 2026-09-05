@@ -33,6 +33,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -57,7 +58,7 @@ static iris::SkeletonPtr findSkeleton(const iris::SceneNodePtr &node)
         auto skel = node.staticCast<iris::MeshNode>()->getSkeleton();
         if (!skel.isNull()) return skel;
     }
-    for (const auto &child : node->children)
+    for (const auto &child : node->children())
         if (auto s = findSkeleton(child)) return s;
     return iris::SkeletonPtr();
 }
@@ -67,7 +68,7 @@ static iris::SceneNodePtr findSkinnedNode(const iris::SceneNodePtr &node)
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh &&
         !node.staticCast<iris::MeshNode>()->getSkeleton().isNull())
         return node;
-    for (const auto &child : node->children)
+    for (const auto &child : node->children())
         if (auto n = findSkinnedNode(child)) return n;
     return iris::SceneNodePtr();
 }
@@ -75,7 +76,7 @@ static iris::SceneNodePtr findSkinnedNode(const iris::SceneNodePtr &node)
 static int countNodes(const iris::SceneNodePtr &node)
 {
     int n = 1;
-    for (const auto &child : node->children) n += countNodes(child);
+    for (const auto &child : node->children()) n += countNodes(child);
     return n;
 }
 
@@ -84,6 +85,11 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("avatar-document-ogre.log");
+    if (!graph.require()) return 1;
     // ================= Z1 — ITEM ZERO =================
     // Loaded exactly the way the module loads it (AssetHelper ->
     // MeshNode::loadAsSceneFragment), so this is the real path, not a probe.
@@ -145,7 +151,7 @@ int main(int argc, char **argv)
         if (prop) {
             CHECK(prop->getSceneNodeType() == iris::SceneNodeType::Mesh,
                   "Z2: an unskinned single-mesh file is STILL one MeshNode (shortcut kept)");
-            CHECK(prop->children.isEmpty(), "Z2: ... with no child nodes");
+            CHECK(prop->children().isEmpty(), "Z2: ... with no child nodes");
         }
         auto animated = iris::MeshNode::loadAsSceneFragment(kAnimProp, make, nullptr, nullptr, extract.path());
         CHECK(!animated.isNull() && animated->getSceneNodeType() == iris::SceneNodeType::Mesh,

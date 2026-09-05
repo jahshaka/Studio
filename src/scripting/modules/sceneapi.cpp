@@ -225,14 +225,14 @@ QVariantList SceneApi::nodes(const QVariant &options)
         }
         // A subtree that gets cut off says so, with its size — the whole point
         // of a bounded read is that the caller knows what it did not get.
-        const bool cutOff = (depth >= 0 && level >= depth && !node->children.isEmpty());
+        const bool cutOff = (depth >= 0 && level >= depth && !node->children().isEmpty());
         if (cutOff) {
-            row["childCount"] = node->children.size();
+            row["childCount"] = node->children().size();
             row["truncated"] = true;
         }
         out.append(row);
         if (cutOff) return;
-        for (const auto &child : node->children) walk(child, level + 1);
+        for (const auto &child : node->children()) walk(child, level + 1);
     };
     walk(start, 0);
     return out;
@@ -245,7 +245,7 @@ QVariant SceneApi::find(const QString &name)
     std::function<iris::SceneNodePtr(const iris::SceneNodePtr &)> walk =
         [&](const iris::SceneNodePtr &node) -> iris::SceneNodePtr {
         if (node->getName() == name) return node;
-        for (const auto &child : node->children)
+        for (const auto &child : node->children())
             if (auto hit = walk(child)) return hit;
         return iris::SceneNodePtr();
     };
@@ -441,7 +441,7 @@ QVariantList SceneApi::cameras()
             row["active"] = (scene->getActiveCameraGuid() == node->getGUID());
             out.append(row);
         }
-        for (const auto &child : node->children) walk(child);
+        for (const auto &child : node->children()) walk(child);
     };
     walk(scene->getRootNode());
     return out;

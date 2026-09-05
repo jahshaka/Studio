@@ -4,6 +4,9 @@ build-macos/
 build-macos-rel/
 build-mcp/
 build-tsan/
+# the second, UNSANITIZED configure the scene-graph benchmark's numbers must be
+# taken in (tests/benchmarks/baseline-linux.json's `config` block names it)
+build-bench/
 build-media/
 build/
 

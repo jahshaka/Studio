@@ -43,6 +43,9 @@ target_compile_definitions(test_importer_glb PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_importer_glb PRIVATE IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_importer_glb)
 add_dependencies(test_importer_glb JahshakaEngineMedia)
 add_test(NAME importer.glb COMMAND test_importer_glb
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -160,6 +163,9 @@ target_compile_definitions(test_importer_security PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_importer_security PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_importer_security)
 add_test(NAME importer.security COMMAND test_importer_security
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.security PROPERTIES

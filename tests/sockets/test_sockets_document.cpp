@@ -39,6 +39,7 @@
 
 #include "../skeletal/armrig.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -83,6 +84,11 @@ int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("sockets-document-ogre.log");
+    if (!graph.require()) return 1;
     // ---- A: the socket maths ---------------------------------------------
     std::printf("\n-- A: boneWorld * offset --\n");
     {
@@ -359,7 +365,7 @@ int main(int argc, char **argv)
 
         auto copy2 = f.arm->duplicate();
         iris::SceneNodePtr copiedCam;
-        for (const auto &child : copy2->children)
+        for (const auto &child : copy2->children())
             if (child->getName() == "headcam") copiedCam = child;
         CHECK(!copiedCam.isNull(), "the copied subtree carries the camera");
         CHECK(copiedCam->socketOwnerGuid == copy2->getGUID(),

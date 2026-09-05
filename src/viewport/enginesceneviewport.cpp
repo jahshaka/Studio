@@ -757,7 +757,7 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
         best.triangleIndex >= mesh->getTriMesh()->triangles.size())
         return false;
     const iris::Triangle &tri = mesh->getTriMesh()->triangles[best.triangleIndex];
-    const iris::Mat4 &xf = meshNode->globalTransform;
+    const iris::Mat4 &xf = meshNode->getGlobalTransform();
     const iris::Vec3 corners[3] = { xf * tri.a, xf * tri.b, xf * tri.c };
     iris::Vec3 vertex = corners[0];
     for (int i = 1; i < 3; ++i)

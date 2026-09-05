@@ -31,6 +31,9 @@ target_include_directories(test_camera_document PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_camera_document PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_camera_document)
 add_test(NAME cameras.document COMMAND test_camera_document
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(cameras.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

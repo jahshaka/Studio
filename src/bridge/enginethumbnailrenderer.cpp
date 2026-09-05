@@ -119,7 +119,7 @@ static void collectBoundingSpheres(iris::SceneNodePtr node, QList<iris::Bounding
         auto meshNode = node.staticCast<iris::MeshNode>();
         if (meshNode->getMesh()) spheres.append(meshNode->getTransformedBoundingSphere());
     }
-    for (auto child : node->children) collectBoundingSpheres(child, spheres);
+    for (auto child : node->children()) collectBoundingSpheres(child, spheres);
 }
 
 static void frameCamera(iris::CameraNodePtr cam, iris::SceneNodePtr subject)
@@ -211,7 +211,7 @@ void EngineThumbnailRenderer::previewMaterials(iris::SceneNodePtr node)
         if (mat && mat.dynamicCast<iris::CustomMaterial>())
             meshNode->setMaterial(previewMaterialFor(mat));
     }
-    for (auto child : node->children) previewMaterials(child);
+    for (auto child : node->children()) previewMaterials(child);
 }
 
 QImage EngineThumbnailRenderer::renderNode(iris::SceneNodePtr subject, QSize size)

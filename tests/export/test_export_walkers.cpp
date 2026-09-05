@@ -24,6 +24,7 @@
 #include "export/walkers/meshbufferreader.h"
 #include "export/walkers/materialtexturereader.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg)                                                     \
     do {                                                                     \
@@ -37,6 +38,11 @@ int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("export-walkers-ogre.log");
+    if (!graph.require()) return 1;
     QTemporaryDir tmp;
     CHECK(tmp.isValid(), "temp dir");
 

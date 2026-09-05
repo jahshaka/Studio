@@ -20,6 +20,9 @@ target_include_directories(test_web_export PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_web_export PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_web_export PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_web_export)
 add_test(NAME export.web COMMAND test_web_export
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(export.web PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")
@@ -64,6 +67,9 @@ target_include_directories(test_export_walkers PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_export_walkers PRIVATE IrisGL Qt6::Gui)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_export_walkers)
 add_test(NAME export.walkers COMMAND test_export_walkers
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(export.walkers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "export")

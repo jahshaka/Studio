@@ -9,6 +9,9 @@ target_include_directories(test_document_no_gl PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_document_no_gl PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_document_no_gl)
 add_test(NAME document.no_gl COMMAND test_document_no_gl
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(document.no_gl PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document")

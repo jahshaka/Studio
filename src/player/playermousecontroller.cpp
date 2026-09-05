@@ -231,7 +231,7 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
             auto triMesh = meshNode->getMesh()->getTriMesh();
 
             // transform segment to local space
-            auto invTransform = meshNode->globalTransform.inverted();
+            auto invTransform = meshNode->getGlobalTransform().inverted();
             auto a = invTransform * segStart;
             auto b = invTransform * segEnd;
 
@@ -239,7 +239,7 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
             if (int resultCount = triMesh->getSegmentIntersections(a, b, results)) {
                 for (auto triResult : results) {
                     // convert hit to world space
-                    auto hitPoint = meshNode->globalTransform * triResult.hitPoint;
+                    auto hitPoint = meshNode->getGlobalTransform() * triResult.hitPoint;
 
                     PickingResult pick;
                     pick.hitNode = sceneNode;
@@ -252,7 +252,7 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
         }
     }
 
-    for (auto child : sceneNode->children) {
+    for (auto child : sceneNode->children()) {
         doScenePicking(child, segStart, segEnd, hitList);
     }
 }

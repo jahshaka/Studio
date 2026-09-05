@@ -59,6 +59,7 @@
 #include "services/sceneeditservice.h"
 #include "ui/panels/transformeditor.h"
 
+#include "../support/documentgraph.h"
 // Link stub: TransformSceneNodeCommand (compiled for the panel-echo test)
 // notifies the scene-edit service; the real service drags in the whole editor
 // graph, and this suite never instantiates it.
@@ -84,6 +85,11 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("importer-glb-ogre.log");
+    if (!graph.require()) return 1;
     // ================= 1. magic-byte sniffing =================
     {
         const unsigned char png[] = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
@@ -303,7 +309,7 @@ int main(int argc, char **argv)
             std::function<iris::SceneNodePtr(iris::SceneNodePtr)> findAnimated =
                 [&](iris::SceneNodePtr n) -> iris::SceneNodePtr {
                     if (n->getAnimation() && n->getAnimation()->hasSkeletalAnimation()) return n;
-                    for (auto &c : n->children) { auto r = findAnimated(c); if (r) return r; }
+                    for (auto &c : n->children()) { auto r = findAnimated(c); if (r) return r; }
                     return iris::SceneNodePtr();
                 };
             auto animated = findAnimated(node);
@@ -329,12 +335,10 @@ int main(int argc, char **argv)
     }
 
     // ================= 6 + 7 need the engine / a temp project dir =================
-    EngineConfig cfg;
-    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
-    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
-    cfg.logFile = "test_importer-ogre.log";
-    std::string err;
-    auto engine = Engine::create(cfg, err);
+    // The engine this suite uses is the one the DOCUMENT graph already booted at
+    // the top of main (Ogre::Root is a process singleton — a second
+    // Engine::create aborts), so there is nothing to create here any more.
+    Engine *engine = graph.engine();
     CHECK(engine != nullptr, "engine created");
     if (engine) {
         View *view = engine->createOffscreenView("imp", 64, 64, Colour(0, 0, 1));
@@ -372,7 +376,6 @@ int main(int argc, char **argv)
 
         engine->destroyView(view);
         engine->destroyScene(s);
-        engine.reset();
     }
 
     // ================= 7. double-import root-scale stability =================
@@ -399,9 +402,9 @@ int main(int argc, char **argv)
                                     a->getLocalScale().x(), b->getLocalScale().x());
                         return false;
                     }
-                    if (a->children.size() != b->children.size()) return false;
-                    for (int i = 0; i < a->children.size(); ++i)
-                        if (!sameTransforms(a->children[i], b->children[i])) return false;
+                    if (a->children().size() != b->children().size()) return false;
+                    for (int i = 0; i < a->children().size(); ++i)
+                        if (!sameTransforms(a->children()[i], b->children()[i])) return false;
                     return true;
                 };
             CHECK(sameTransforms(first, second), "double import: identical transforms");
@@ -409,7 +412,7 @@ int main(int argc, char **argv)
             std::function<bool(iris::SceneNodePtr)> hasAuthoredScale =
                 [&](iris::SceneNodePtr n) -> bool {
                     if (nearly(n->getLocalScale().x(), 0.0143f, 1e-4f)) return true;
-                    for (auto &c : n->children) if (hasAuthoredScale(c)) return true;
+                    for (auto &c : n->children()) if (hasAuthoredScale(c)) return true;
                     return false;
                 };
             CHECK(hasAuthoredScale(first), "authored root scale 0.0143 survives import");

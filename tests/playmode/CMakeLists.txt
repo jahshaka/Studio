@@ -18,6 +18,9 @@ target_include_directories(test_playmode_lifecycle PRIVATE ${CMAKE_SOURCE_DIR} $
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_playmode_lifecycle PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_playmode_lifecycle)
 add_test(NAME player.lifecycle COMMAND test_playmode_lifecycle
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(player.lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

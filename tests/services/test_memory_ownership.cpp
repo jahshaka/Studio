@@ -49,6 +49,7 @@
 #include "io/assetmanager.h"
 #include "services/thumbnailmanager.h"
 
+#include "../support/documentgraph.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
     else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -413,6 +414,11 @@ int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
 
+    // v1 INTERIM (SPECS/SCENEGRAPH_SPEC.md §3): a document node IS an engine
+    // node now, so even a document-only suite needs an engine. Declared here,
+    // before anything builds a document, and destroyed last.
+    enginetest::DocumentGraph graph("services-memory-ogre.log");
+    if (!graph.require()) return 1;
     testAssetListOwnership();
     testReplaceAssets();
     testSceneGraphOwnership();

@@ -45,7 +45,7 @@ inline iris::AABB worldBoundingBox(const iris::SceneNodePtr &node)
             }
         }
     }
-    for (const auto &child : node->children) aabb.merge(worldBoundingBox(child));
+    for (const auto &child : node->children()) aabb.merge(worldBoundingBox(child));
     return aabb;
 }
 

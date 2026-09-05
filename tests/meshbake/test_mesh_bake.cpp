@@ -246,10 +246,10 @@ static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneN
             compareMesh(p->getMesh(), b->getMesh(), label + " mesh");
     }
 
-    CHECK(parsed->children.size() == baked->children.size(),
+    CHECK(parsed->children().size() == baked->children().size(),
           qUtf8Printable(label + ": child count"));
-    for (int i = 0; i < qMin(parsed->children.size(), baked->children.size()); ++i)
-        compareFragment(parsed->children[i], baked->children[i],
+    for (int i = 0; i < qMin(parsed->children().size(), baked->children().size()); ++i)
+        compareFragment(parsed->children()[i], baked->children()[i],
                         QStringLiteral("%1/%2").arg(label).arg(i), depth + 1);
 }
 

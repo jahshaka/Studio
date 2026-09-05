@@ -212,7 +212,7 @@ iris::ViewerNodePtr SceneEditService::addViewer(bool ignorePlacement)
     addNodeToScene(node, ignorePlacement);
 
     // Set all other controllers to false
-    for (auto child : scene->getRootNode()->children) {
+    for (auto child : scene->getRootNode()->children()) {
         if (child->getSceneNodeType() == iris::SceneNodeType::Viewer) {
             child.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
         }
@@ -740,7 +740,7 @@ void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &
     if (!node) return;
     if (node->sceneNodeType == iris::SceneNodeType::Mesh)
         out.append(node.staticCast<iris::MeshNode>());
-    for (const auto &child : node->children) collectMeshNodes(child, out);
+    for (const auto &child : node->children()) collectMeshNodes(child, out);
 }
 
 // Builds a fresh material instance from a preset. A PBR preset builds a

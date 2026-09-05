@@ -46,6 +46,9 @@ target_include_directories(test_avatar_document PRIVATE ${CMAKE_SOURCE_DIR} ${CM
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_avatar_document PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_avatar_document PRIVATE IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+# v1 interim: this suite builds a DOCUMENT, and a document node is an engine
+# node now (SPECS/SCENEGRAPH_SPEC.md §3 / tests/support/documentgraph.h).
+jah_document_graph(test_avatar_document)
 add_test(NAME avatar.document COMMAND test_avatar_document WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "avatar")
 
