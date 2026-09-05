@@ -10,6 +10,8 @@
 #include <QtMath>
 
 #include "irisgl/mirror/scenemirror.h"
+#include "bridge/sceneworkerthreads.h"
+#include "bridge/offscreenrenderscope.h"
 #include "viewport/previewframing.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/geometry/aabb.h"
@@ -132,7 +134,8 @@ bool EngineAssetScene::attach(View *view)
     if (mScene && mView != view) {
         if (mView) mView->setScene(nullptr);
     } else if (!mScene) {
-        mScene = engine->createScene("assets-" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        mScene = engine->createScene("assets-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
+                                     sceneworkers::count(sceneworkers::Tier::Preview));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
         mMirror.reset(new SceneMirror(mScene));
@@ -457,6 +460,9 @@ QImage EngineAssetScene::renderImage(int width, int height)
         mMirror->applySky(shot);
         mMirror->applyCamera(mCamera, shot);
     }
+    // The editor does not pay for an asset snapshot (fps audit F5) — see
+    // bridge/offscreenrenderscope.h.
+    OffscreenRenderScope quiet(engine.get());
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     Image img;
     QImage result;

@@ -5,6 +5,8 @@
 
 #include <QShowEvent>
 #include <QMouseEvent>
+#include "bridge/sceneworkerthreads.h"
+#include "bridge/offscreenrenderscope.h"
 #include "viewport/scenepicker.h"
 #include "player/playback.h"
 #include "irisgl/core/viewport.h"
@@ -363,8 +365,12 @@ bool EngineSceneViewport::ensureEngineScene()
 {
     if (mEngineScene) return true;
     if (!mEngine || !view()) return false;
+    // THE scene the user watches at frame rate: it gets the machine's worker
+    // threads, not the engine's historical 2 (fps audit F3,
+    // bridge/sceneworkerthreads.h).
     mEngineScene = mEngine->createScene("editor-" + std::to_string(++mViewSerial) + "-" +
-                                        std::to_string(reinterpret_cast<uintptr_t>(this)));
+                                        std::to_string(reinterpret_cast<uintptr_t>(this)),
+                                        sceneworkers::count(sceneworkers::Tier::Primary));
     if (!mEngineScene) return false;
     mEngineScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
     view()->setScene(mEngineScene);
@@ -1312,6 +1318,11 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
             shot->setPostFx(fx);
         }
     }
+    // A screenshot is an offscreen render of this same scene: without this
+    // the on-screen viewport draws two extra full frames and presents them
+    // (fps audit F5, bridge/offscreenrenderscope.h). The shot view is
+    // offscreen, so it is untouched.
+    OffscreenRenderScope quiet(mEngine.get());
     for (int i = 0; i < 2; ++i) mEngine->renderOneFrame();
     Image img;
     QImage result;
@@ -1434,7 +1445,7 @@ jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
                 mDriver ? mDriver->stats() : EngineRenderDriver::Stats{};
             // Row 1: the loop rate, what the frame actually cost, AND the rate
             // that cost would allow with no cap — the presented fps half is a
-            // measurement of our own 16 ms timer + vsync and is only honest
+            // measurement of our own driver timer + vsync and is only honest
             // next to the other two (owner ask, 2026-09-06: "show real fps
             // not the capped fps"). workMs can dip near zero on an idle
             // covered view; the potential readout saturates at 999.

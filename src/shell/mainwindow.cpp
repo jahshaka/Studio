@@ -62,6 +62,7 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QGuiApplication>
+#include <QScreen>
 #include <QHash>
 #include <QHashIterator>
 #include <QBuffer>
@@ -169,6 +170,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/playbackservice.h"
 #include "services/projectservice.h"
+#include "services/framepacing.h"
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
@@ -486,6 +488,66 @@ iris::ScenePtr MainWindow::createDefaultScene()
 void MainWindow::setSettingsManager(SettingsManager* settings)
 {
     this->settings = settings;
+}
+
+void MainWindow::wireFramePacing()
+{
+    // PANEL-AWARE PACING (fps audit F1, services/framepacing.h). Two inputs:
+    // the persisted mode and the refresh rate of the screen this window is on.
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver) return;
+
+    if (settings) {
+        bool ok = false;
+        const framepacing::Mode m = framepacing::modeFromName(
+            settings->getValue(framepacing::settingsKey(), QString()).toString(), &ok);
+        // An absent or unreadable value is not an error: Display is the default
+        // and writing one back would invent a preference the user never made.
+        if (ok) driver->setPacingMode(m);
+    }
+
+    // "Which screen is this window on" is a QWindow question, and the QWindow
+    // does not exist until the widget is shown — which is AFTER this runs
+    // (setupViewPort is constructor work). So take what is available now
+    // (QWidget::screen(), the primary screen before a show) and hook the
+    // screenChanged signal on the next event-loop turns, once the handle is
+    // there. NOT createWinId(): forcing a native window early in engine mode is
+    // exactly the class of thing AA_DontCreateNativeWidgetSiblings exists to
+    // avoid, and this needs no help from it.
+    hookFramePacingScreenSignal(8);
+    updateFramePacingScreen();
+}
+
+void MainWindow::hookFramePacingScreenSignal(int retriesLeft)
+{
+    if (QWindow *handle = windowHandle()) {
+        connect(handle, &QWindow::screenChanged, this, [this](QScreen *) { updateFramePacingScreen(); });
+        updateFramePacingScreen();   // the real window may sit on another screen
+        return;
+    }
+    if (retriesLeft <= 0) return;   // a session that never shows a window (scripted, headless)
+    QTimer::singleShot(0, this, [this, retriesLeft] { hookFramePacingScreenSignal(retriesLeft - 1); });
+}
+
+void MainWindow::updateFramePacingScreen()
+{
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver) return;
+    QScreen *s = windowHandle() && windowHandle()->screen() ? windowHandle()->screen() : screen();
+    // The rate can change WITHOUT the screen changing (a mode switch, a
+    // variable-refresh panel renegotiating), so the connection follows the
+    // screen and is remade when the window moves.
+    if (s != mPacingScreen) {
+        if (mPacingRefreshConnection) disconnect(mPacingRefreshConnection);
+        mPacingScreen = s;
+        if (s) mPacingRefreshConnection =
+            connect(s, &QScreen::refreshRateChanged, this,
+                    [this](qreal hz) {
+                        if (EngineRenderDriver *d = EngineHost::instance().driver())
+                            d->setRefreshHz(double(hz));
+                    });
+    }
+    driver->setRefreshHz(s ? double(s->refreshRate()) : 0.0);
 }
 
 SettingsManager* MainWindow::getSettingsManager()
@@ -2508,7 +2570,12 @@ void MainWindow::setupViewPort()
             // Non-owning: step 5 of the shutdown order checks it (see
             // destroyEngineViews / shell/shutdownorder.h).
             mEngineWatch = host.engine();
-            host.driver()->start(16);
+            // PANEL-AWARE PACING (fps audit F1): no more literal 16. The driver
+            // derives its interval from the screen the window is on and from
+            // the persisted pacing mode; wireFramePacing() below feeds it both
+            // and keeps feeding it across screen and refresh-rate changes.
+            wireFramePacing();
+            host.driver()->start();
         } else if (!error.isEmpty()) {
             qCritical("Engine unavailable (%s): using the headless document-only viewport.",
                       qPrintable(error));

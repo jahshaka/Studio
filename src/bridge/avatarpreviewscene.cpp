@@ -13,6 +13,8 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "modules/avatar/avatarpreviewmodel.h"
+#include "bridge/sceneworkerthreads.h"
+#include "bridge/offscreenrenderscope.h"
 #include "viewport/boneoverlay.h"
 #include "viewport/previewframing.h"
 
@@ -40,7 +42,8 @@ bool AvatarPreviewScene::attach(View *view)
     if (mScene && mView != view) {
         if (mView) mView->setScene(nullptr);
     } else if (!mScene) {
-        mScene = engine->createScene("avatarpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        mScene = engine->createScene("avatarpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
+                                     sceneworkers::count(sceneworkers::Tier::Preview));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.35f, 0.36f, 0.40f), Colour(0.22f, 0.22f, 0.26f));
         // One planar-reflection slot for the Modern room's floor plate
@@ -282,6 +285,9 @@ void AvatarPreviewScene::resolvePose()
     auto engine = mEngine.lock();
     if (!engine || !mScene || !mView || !mMirror || !mModel) return;
     mMirror->sync();
+    // One frame for a pose read is still a frame of EVERY enabled view
+    // (fps audit F5) — quiet the on-screen ones for it.
+    OffscreenRenderScope quiet(engine.get());
     engine->renderOneFrame();
 }
 
@@ -329,6 +335,8 @@ QImage AvatarPreviewScene::renderImage(int width, int height)
             mMirror->applyCamera(mModel->camera(), shot);
         }
     }
+    // The editor does not pay for an avatar snapshot (fps audit F5).
+    OffscreenRenderScope quiet(engine.get());
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     Image img;
     QImage result;

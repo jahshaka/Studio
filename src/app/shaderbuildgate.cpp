@@ -1,3 +1,4 @@
+#include "bridge/sceneworkerthreads.h"
 #include "app/shaderbuildgate.h"
 
 #include "app/versionsplashscreen.h"
@@ -100,7 +101,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
                                                  Colour(0.0f, 0.0f, 0.0f, 1.0f));
-    Scene *warmScene = warmView ? engine->createScene("startup-warmup") : nullptr;
+    Scene *warmScene = warmView ? engine->createScene(
+                                      "startup-warmup",
+                                      sceneworkers::count(sceneworkers::Tier::Utility))
+                                : nullptr;
     if (warmScene) {
         warmView->setScene(warmScene);
         warmView->setShadows(shape.shadows);

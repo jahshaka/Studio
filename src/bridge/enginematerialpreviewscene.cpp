@@ -1,5 +1,6 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "bridge/sceneworkerthreads.h"
 #include "bridge/enginematerialpreviewscene.h"
 
 #include <cstdint>
@@ -113,7 +114,8 @@ bool EngineMaterialPreviewScene::attach(View *view)
     if (mScene && mView != view) {
         if (mView) mView->setScene(nullptr);
     } else if (!mScene) {
-        mScene = engine->createScene("matpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        mScene = engine->createScene("matpreview-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
+                                     sceneworkers::count(sceneworkers::Tier::Preview));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
         mMirror.reset(new SceneMirror(mScene));

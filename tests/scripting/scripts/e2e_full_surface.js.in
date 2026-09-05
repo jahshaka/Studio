@@ -85,10 +85,11 @@ assert(world.get().antiAliasing === 4, "refused AA call left the setting alone")
 
 // ---- world shadow resolution (VISUAL_PARITY_SPEC item 2, option A) ----
 // RE-BASELINED for the Epic default: a new scene is on Epic, whose shadow row
-// is 4096, so "Auto" is no longer where a fresh scene starts. The verb contract
-// below (set / clamp / read back) is what this section is actually about.
-assert(world.get().shadowResolution === 4096,
-       "a new (Epic) scene starts at a 4096 shadow atlas, got " + world.get().shadowResolution);
+// is 2048 (retuned down from 4096 by the perf wave, fps audit F6), so "Auto" is
+// no longer where a fresh scene starts. The verb contract below (set / clamp /
+// read back) is what this section is actually about.
+assert(world.get().shadowResolution === 2048,
+       "a new (Epic) scene starts at a 2048 shadow atlas, got " + world.get().shadowResolution);
 var sr = world.setShadowResolution(1024);
 assert(sr === 1024, "setShadowResolution(1024) applied (got " + sr + ")");
 assert(world.get().shadowResolution === 1024, "document stores the shadow-resolution override");
