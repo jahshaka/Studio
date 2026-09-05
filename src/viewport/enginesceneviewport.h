@@ -330,6 +330,16 @@ private:
     /// Re-entrancy guard: presentCovered refreshes first, and refreshOverlay
     /// presents on a rising edge.
     bool mPresentingCover = false;
+    /// What the last INLINE covered present actually put on screen, and at what
+    /// target size. Presenting the same thing again costs a full frame of the
+    /// scene and shows the user nothing new.
+    jahshaka::engine::ViewOverlayDesc mLastPresentedCover;
+    unsigned mLastPresentedW = 0, mLastPresentedH = 0;
+    qulonglong mLastPresentedEpoch = 0;
+    /// A MONOTONIC count of frames drawn through this viewport by anybody — the
+    /// driver's ticks, editor.frame(), and presentCovered itself. Deliberately
+    /// not View::framesPresented, which resets on every scene bind.
+    qulonglong mFrameEpoch = 0;
     /// A world is on its way but nothing of it has presented yet. Set by
     /// beginSceneLoad and cleared when the view starts presenting: the state
     /// machine alone cannot tell "no world open" from "a world is loading",

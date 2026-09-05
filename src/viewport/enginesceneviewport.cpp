@@ -85,6 +85,13 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
         // argument (the fixed-dt override) and Qt's new-style connect refuses a
         // slot that takes more arguments than the signal provides.
         connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() {
+            // Every driver tick draws over whatever is on screen — including a
+            // cover this viewport presented inline. presentCovered's dedupe key
+            // needs a MONOTONIC "has anything drawn since" counter, and
+            // View::framesPresented is not one: it RESETS to 0 whenever a scene
+            // is bound, which made a close/reopen of the same world collide with
+            // a previous cover and skip the present that should have raised it.
+            ++mFrameEpoch;
             syncFrame();
             // The cover comes down here, one frame BEHIND the present that
             // earned it: framesPresented counts frames already on screen.
@@ -1048,6 +1055,7 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     if (!mEngine) return;
     for (int i = 0; i < n; ++i) {
         syncFrame(dt);
+        ++mFrameEpoch;
         mEngine->renderOneFrame();
         // The deterministic path bypasses EngineRenderDriver entirely, so it
         // has to drain the engine's error sink itself or a scripted/headless
@@ -1285,6 +1293,44 @@ void EngineSceneViewport::presentCovered(int frames)
     // Nothing to present into: an offscreen fallback view owns no pixels of
     // this widget, and no view at all owns nothing.
     if (!view() || view()->isOffscreen() || !mEngine) return;
+    // AND NOTHING TO PRESENT FOR: a hidden page has no pixels on screen, so a
+    // frame drawn for it is pure UI-THREAD COST — the whole scene is still
+    // rendered under the cover (the overlay pass composites onto a finished
+    // frame; it does not save drawing what it hides). This is the deleted
+    // widget's own contract, in its own words: showNow "does nothing when the
+    // cover is not visible on screen".
+    //
+    // MEASURED, and the reason this line is not merely tidy: without it the
+    // threaded open's beginSceneLoad drew two full frames of a world nobody
+    // could see, on the thread the open is trying not to block, and
+    // open.responsive's warm-open UI gap went from under its 500 ms budget to
+    // 1346 ms. The covered frames that matter are the ones after the page
+    // switch, and switchSpace(EDITOR) -> coverIfNotPresenting draws those.
+    if (!isVisible()) return;
+    // OUR PIXELS ARE ALREADY ON SCREEN. The reveal path calls this THREE times
+    // inside one blocking stretch — showEvent, refreshOverlay's rising edge,
+    // and switchSpace's coverIfNotPresenting — and the second and third have
+    // nothing to add: same cover, same size, and nothing has presented in
+    // between, so what is on screen is exactly what they would draw.
+    //
+    // That matters because a covered frame IS NOT CHEAP: the overlay pass
+    // composites onto a FINISHED frame, so the whole scene is still rendered
+    // under a cover that hides it (STATS_OVERLAY_SPEC §7.6 says so explicitly).
+    // MEASURED: the duplicates put open.responsive's warm-open UI gap at
+    // ~700 ms against a 500 ms budget; deduplicated it sits at ~290 ms, which
+    // is the unmodified base's own number.
+    //
+    // The EPOCH is the load-bearing half of the key. Desc and size alone are
+    // not enough: closing a world and reopening the same one produces an
+    // identical desc, and skipping there left the cover down for the whole
+    // reopen (caught by the xwd capture, not by reasoning). And the epoch has
+    // to be OURS — View::framesPresented resets to 0 on every scene bind, so it
+    // collides across exactly the close/reopen this key exists to distinguish.
+    const jahshaka::engine::ViewOverlayDesc wanted = overlayDesc();
+    if (wanted == mLastPresentedCover && view()->width() == mLastPresentedW &&
+        view()->height() == mLastPresentedH &&
+        mFrameEpoch == mLastPresentedEpoch)
+        return;
     if (mPresentingCover) return;          // refreshOverlay's rising edge, already in hand
     mPresentingCover = true;
     refreshOverlay();
@@ -1296,7 +1342,7 @@ void EngineSceneViewport::presentCovered(int frames)
     // disabled. Enable it for exactly these frames and put it back.
     const bool wasEnabled = view()->isEnabled();
     view()->setEnabled(true);
-    for (int i = 0; i < frames; ++i) mEngine->renderOneFrame();
+    for (int i = 0; i < frames; ++i) { ++mFrameEpoch; mEngine->renderOneFrame(); }
     view()->setEnabled(wasEnabled);
     // A COVERED frame IS NOT A FRAME OF THE WORLD, and presentsSinceBind means
     // exactly that: "how many frames of the world bound right now are on
@@ -1310,6 +1356,10 @@ void EngineSceneViewport::presentCovered(int frames)
     // driver's own ticks while the cover is up DO count, exactly as they always
     // did — that is what eventually reveals the viewport.)
     if (covered) mPresentBaseline = qulonglong(view()->framesPresented());
+    mLastPresentedCover = wanted;
+    mLastPresentedW = view()->width();
+    mLastPresentedH = view()->height();
+    mLastPresentedEpoch = mFrameEpoch;
     mPresentingCover = false;
 }
 
