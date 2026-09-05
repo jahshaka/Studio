@@ -97,6 +97,14 @@
 //                       DISARMED: it reports, it cannot fail the run. v1's lane
 //                       flips kBaselineComparisonArmed (see below).
 //   --scales 1000,10000 override the scale list.
+//   --threads N         worker threads for each SCENE the sweep creates
+//                       (Engine::createScene). 0 = the engine default, which is
+//                       what the gate and every recorded baseline use; any
+//                       other value is a MEASUREMENT run — the barrier cost of
+//                       a pool is real, so "more threads" has to be shown to
+//                       pay at each scale before the app adopts a number
+//                       (fps audit F3; the app's choice lives in
+//                       src/bridge/sceneworkerthreads.h).
 //   --note <text>       free text stored in the recorded file (run conditions).
 //   --quick             short budgets, for editing this file.
 //
@@ -563,6 +571,13 @@ static std::string readCpuModel()
     return "unknown";
 }
 
+/// Worker threads for the benchmark's engine scenes (--threads). 0 = the
+/// engine's own default, which is what every recorded baseline used and what
+/// the ctest gate must keep using — this flag exists to MEASURE the per-scene
+/// pool (fps audit F3, src/bridge/sceneworkerthreads.h decides the app's
+/// numbers), not to change what the gate compares.
+static unsigned gWorkerThreads = 0;
+
 // ---------------------------------------------------------------------------
 // JSON: write the result file, and read a baseline back.
 
@@ -611,6 +626,9 @@ static bool writeResults(const std::string &path, const std::string &gpu,
 #endif
     cfg["qt"] = QT_VERSION_STR;
     cfg["view"] = "offscreen 320x240, MSAA 1x";
+    // 0 = the engine default (2). Recorded because a comparison across
+    // different pool sizes is not a comparison of the same thing.
+    cfg["scene_worker_threads"] = int(gWorkerThreads);
     cfg["static_tag"] = "node name prefix: 's' = static-intent (never moved), "
                         "'d' = dynamic-intent (moved every iteration). APPLIED since the "
                         "consumer-conversion lane: every 's' node whose whole ancestor chain "
@@ -704,13 +722,14 @@ int main(int argc, char **argv)
         else if (a == "--compare" && i + 1 < argc) comparePath = argv[++i];
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else if (a == "--quick") quick = true;
+        else if (a == "--threads" && i + 1 < argc) gWorkerThreads = unsigned(std::stoi(argv[++i]));
         else if (a == "--scales" && i + 1 < argc) {
             scales.clear();
             std::string list = argv[++i], cur;
             for (char c : list + ",") { if (c == ',') { if (!cur.empty()) scales.push_back(std::stoi(cur)); cur.clear(); } else cur += c; }
         } else if (a == "--help") {
             std::printf("bench_scenegraph [--assert] [--record <file>] [--compare <file>] "
-                        "[--scales 1000,10000,50000] [--quick] [--note <text>]\n");
+                        "[--scales 1000,10000,50000] [--quick] [--threads N] [--note <text>]\n");
             return 0;
         }
     }
@@ -782,7 +801,7 @@ int main(int argc, char **argv)
     // ---- the scale sweep: metrics (a), (b), (c) --------------------------
     for (int n : scales) {
         std::printf("\n== scale %d ==\n", n);
-        Scene *es = engine->createScene(("bench" + std::to_string(n)).c_str());
+        Scene *es = engine->createScene(("bench" + std::to_string(n)).c_str(), gWorkerThreads);
         if (!es) { std::printf("FAIL: engine scene for %d\n", n); ++failures; continue; }
         es->setAmbient(Colour(0.35f, 0.35f, 0.35f), Colour(0.2f, 0.2f, 0.2f));
         view->setScene(es);

@@ -1,3 +1,4 @@
+#include "bridge/sceneworkerthreads.h"
 #include "player/engineplayerscene.h"
 
 #include <cstdint>
@@ -33,7 +34,10 @@ bool EnginePlayerScene::attach(View *view)
         // Re-bound to another view (the widget's native window was recreated).
         if (mView) mView->setScene(nullptr);
     } else if (!mScene) {
-        mScene = engine->createScene("player-" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        // On-screen and watched at frame rate, exactly like the editor scene
+        // (fps audit F3, bridge/sceneworkerthreads.h).
+        mScene = engine->createScene("player-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
+                                     sceneworkers::count(sceneworkers::Tier::Primary));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
         mMirror.reset(new SceneMirror(mScene));

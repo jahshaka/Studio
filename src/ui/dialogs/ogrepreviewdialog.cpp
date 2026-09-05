@@ -1,4 +1,5 @@
 #include "ui/dialogs/ogrepreviewdialog.h"
+#include "bridge/sceneworkerthreads.h"
 #include "viewport/engineviewwidget.h"
 #include "viewport/enginerenderdriver.h"
 #include "bridge/enginehost.h"
@@ -202,7 +203,7 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     mEditorView->createView(mEngine, "editor",  Colour(0.10f, 0.11f, 0.14f));
     mEffectsView->createView(mEngine, "effects", Colour(0.16f, 0.12f, 0.10f));
 
-    mEditorScene = mEngine->createScene("editor");
+    mEditorScene = mEngine->createScene("editor", sceneworkers::count(sceneworkers::Tier::Preview));
     if (!mEditorScene) {
         mStatus->setText(tr("Scene creation failed: %1")
                              .arg(QString::fromStdString(mEngine->lastError())));
@@ -212,7 +213,7 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
     addDirectionalLight(mEditorScene, Vec3(-0.55f, -0.7f, -0.45f), 3.14159f);
     mCube = addCube(mEditorScene, Colour(0.85f, 0.35f, 0.15f), 0.85f, 0.25f);
 
-    mEffectsScene = mEngine->createScene("effects");
+    mEffectsScene = mEngine->createScene("effects", sceneworkers::count(sceneworkers::Tier::Preview));
     if (mEffectsScene) {
         mEffectsScene->setAmbient(Colour(0.20f, 0.22f, 0.30f), Colour(0.10f, 0.12f, 0.16f));
         addDirectionalLight(mEffectsScene, Vec3(0.4f, -0.8f, 0.35f), 3.14159f);
@@ -244,7 +245,9 @@ OgrePreviewDialog::OgrePreviewDialog(QWidget *parent) : QDialog(parent)
         }
     });
     if (!driver->isRunning()) {
-        driver->start(16);
+        // Paced by the display like the editor's loop (framepacing.h) — this
+        // dialog shares EngineHost's ONE driver, so it must not pin an interval.
+        driver->start();
         mStartedDriver = true;
     }
 }

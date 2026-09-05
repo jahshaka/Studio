@@ -19,6 +19,8 @@
 #include "irisgl/document/assets/texture2d.h"
 #include <QFileInfo>
 #include "irisgl/mirror/scenemirror.h"
+#include "bridge/sceneworkerthreads.h"
+#include "bridge/offscreenrenderscope.h"
 #include "viewport/previewframing.h"
 
 using namespace jahshaka::engine;
@@ -68,7 +70,9 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
         mView->setEnabled(false);
     }
     if (!mScene) {
-        mScene = engine->createScene("thumbs");
+        // One frame into a small texture, then emptied again: a worker pool
+        // would be pure barrier cost (fps audit F3).
+        mScene = engine->createScene("thumbs", sceneworkers::count(sceneworkers::Tier::Utility));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
         mView->setScene(mScene);
@@ -264,6 +268,11 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     mMirror->applyCamera(camera, mView);
 
     mView->setEnabled(true);
+    // The editor does not pay for a thumbnail (fps audit F5): renderOneFrame
+    // draws every enabled view, so without this each thumbnail also redrew the
+    // whole editor twice and blocked twice on the display's vsync — which is
+    // what made a thumbnail sweep feel like a frozen application.
+    OffscreenRenderScope quiet(engine.get());
     for (int i = 0; i < 2; ++i) engine->renderOneFrame();
     Image img;
     const bool ok = mView->readPixels(img);
