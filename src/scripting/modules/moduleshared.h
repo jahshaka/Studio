@@ -278,6 +278,14 @@ inline QVariantMap nodeToJs(const iris::SceneNodePtr &node)
     m["position"] = vecToJs(node->getLocalPos());
     m["rotation"] = vecToJs(node->getLocalRot().toEulerAngles());
     m["scale"] = vecToJs(node->getLocalScale());
+    // Present ONLY when the node rides a socket (CAMERAS_SPEC §5) — the same
+    // rule the scene writer uses for planarReflector: a key on every row for a
+    // thing almost no node does is noise, and this map is what describe_scene
+    // spends its token budget on. When it IS present it is the answer to "why
+    // does node.transform on this thing not stick?".
+    if (node->isSocketAttached())
+        m["socket"] = QVariantMap{ { "owner", node->socketOwnerGuid },
+                                   { "name", node->socketName } };
     return m;
 }
 

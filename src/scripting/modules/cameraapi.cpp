@@ -19,6 +19,12 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "viewport/ieditorviewport.h"
+
+#include <QColor>
+#include <QDir>
+#include <QFileInfo>
+#include <QImage>
 
 using namespace scriptmod;
 
@@ -210,6 +216,19 @@ QVector<VerbInfo> CameraApi::verbs() const
           "Rotation only — the camera does not move — and +Y is up, so a target directly above "
           "or below the camera is refused rather than yielding a degenerate roll. Undoable.",
           Needs::Document },
+        { "screenshot", "camera.screenshot(id, path, {width?, height?, probes?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
+          "Renders what THIS SCENE CAMERA sees to a PNG — the AI hook of CAMERAS_SPEC \u00a75. It "
+          "goes through the same throwaway OFFSCREEN view editor.screenshot uses, so the user's "
+          "viewport does not move and is not disturbed: an agent can look through an avatar's "
+          "head-socketed camera without taking the editor away from whoever is driving it. "
+          "SIZE comes from the CAMERA unless you override it: `height` defaults to the camera's "
+          "outputHeight and `width` to height x aspectRatio (both clamped to 16..4096). "
+          "`probes` are {x,y} points in normalized 0..1 image coordinates, returned as 5x5 "
+          "averaged colours exactly as editor.screenshot returns them; `postFx` (default false) "
+          "opts the shot into the scene's post chain so it looks like the viewport instead of "
+          "like a neutral readback. A camera riding a SOCKET is resolved on the next synced "
+          "frame, so a script that moves the rig should step editor.frame(1) before shooting.",
+          Needs::Engine },
     };
 }
 
@@ -310,4 +329,138 @@ bool CameraApi::lookAt(const QString &id, const QVariant &target)
         host.services->undo->push(new TransformSceneNodeCommand(
             cam, pos, before, scale, pos, after, scale));
     return true;
+}
+
+// --- camera.screenshot: what THIS camera sees (CAMERAS_SPEC §5) ------------
+//
+// MECHANISM, and why it is not a new viewport method. EngineSceneViewport's
+// screenshot already renders the live engine scene into a THROWAWAY offscreen
+// view and points that view at whatever CameraNode the viewport currently holds
+// (`applyCamera(mEditorCam, shot)`). So the whole of "render through a
+// different camera" is: hand the viewport this camera for the duration of one
+// synchronous call, take the shot, hand back the one it had. Nothing renders in
+// between — there is no event loop turn inside takeScreenshot — so the user's
+// on-screen view never sees the substitution, and the ONE thing that would have
+// leaked (the camera controller's bound camera) is restored by the same
+// setEditorCamera call that restores the pointer.
+//
+// The alternative — a takeCameraScreenshot() on IEditorViewport — is a cleaner
+// signature and is worth doing when the viewport is next opened up; it was not
+// worth taking src/viewport/ hostage for one call in a parallel-lane sprint.
+QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
+                                  const QVariantMap &options)
+{
+    QVariantMap out;
+    auto cam = cameraOrFail(id, QStringLiteral("camera.screenshot"));
+    if (!cam) return out;
+    if (!requireEngine()) return out;
+    if (path.isEmpty()) { fail("camera.screenshot: a file path is required"); return out; }
+
+    static const QStringList known = { "width", "height", "probes", "postFx" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("camera.screenshot: unknown option '%1' — known options are %2")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+
+    // The camera's own output size is the default (CAMERAS_SPEC §2: outputHeight
+    // plus aspectRatio IS the render size), overridable per call.
+    const int camHeight = cam->outputHeight > 0 ? cam->outputHeight : 1080;
+    const float aspect = cam->aspectRatio > 0.0f ? cam->aspectRatio : 1.0f;
+    const int height = qBound(16, options.value(QStringLiteral("height"), camHeight).toInt(), 4096);
+    const int width = qBound(16,
+        options.value(QStringLiteral("width"), qRound(float(height) * aspect)).toInt(), 4096);
+    const bool postFx = options.value(QStringLiteral("postFx"), false).toBool();
+
+    auto saved = host.viewport->editorCamera();
+    if (!saved) {
+        fail("camera.screenshot: this viewport has no camera to borrow — the engine viewport "
+             "is not live");
+        return out;
+    }
+
+    // applyCamera SUBSTITUTES the scene's active camera while the document is
+    // playing (the D6 seam), which would silently photograph a different camera
+    // than the one asked for. Point the active camera at this one for the
+    // duration; nothing else can observe it inside a synchronous call.
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    const bool substituting = scene && scene->isPlaying();
+    const QString savedActive = scene ? scene->getActiveCameraGuid() : QString();
+    if (substituting) scene->setActiveCamera(id);
+
+    // DEFECT WE HAVE TO WORK AROUND (found building this verb, 2026-09-05):
+    // setEditorCamera resyncs the active camera CONTROLLER, and both
+    // controllers' setCamera() end in updateCameraRot(), which WRITES
+    // `Quat::fromEulerAngles(pitch, yaw, 0)` back onto the camera node. So
+    // merely handing a camera to the viewport rewrites its rotation and DROPS
+    // ITS ROLL — on a document node, permanently. That is wrong for any caller,
+    // and fatal here: a camera riding a bone is rolled by the bone.
+    //
+    // So both cameras' exact poses are snapshotted and written back: the scene
+    // camera's before the shot (so the shot is of the pose that was asked for),
+    // the editor camera's after (so a screenshot cannot drift the user's
+    // viewport by a euler round trip). The controller's own pitch/yaw end up
+    // re-derived from the restored rotation, i.e. exactly where they started.
+    //
+    // The real fix is a takeCameraScreenshot() on IEditorViewport; it belongs
+    // to whoever next opens src/viewport/ up. Reported, not smuggled.
+    const iris::Vec3 camPos = cam->getLocalPos();
+    const iris::Quat camRot = cam->getLocalRot();
+    const iris::Vec3 editorPos = saved->getLocalPos();
+    const iris::Quat editorRot = saved->getLocalRot();
+
+    host.viewport->setEditorCamera(cam);
+    cam->setLocalPos(camPos);
+    cam->setLocalRot(camRot);
+    cam->update(0.0f);
+    const QImage img = host.viewport->takeScreenshot(width, height, postFx);
+    host.viewport->setEditorCamera(saved);
+    saved->setLocalPos(editorPos);
+    saved->setLocalRot(editorRot);
+    saved->update(0.0f);
+    if (substituting) scene->setActiveCamera(savedActive);
+
+    if (img.isNull()) { fail("camera.screenshot: the viewport returned no image"); return out; }
+
+    QFileInfo info(path);
+    if (!info.dir().exists()) info.dir().mkpath(".");
+    if (!img.save(path, "PNG")) {
+        fail(QStringLiteral("camera.screenshot: could not save '%1'").arg(path));
+        return out;
+    }
+
+    const QColor center = img.pixelColor(img.width() / 2, img.height() / 2);
+    out["path"] = info.absoluteFilePath();
+    out["width"] = img.width();
+    out["height"] = img.height();
+    out["center"] = QVariantMap{ { "r", center.red() }, { "g", center.green() },
+                                 { "b", center.blue() } };
+
+    // Probes: the same 5x5 average editor.screenshot returns, so an assertion
+    // written against one verb reads identically against the other.
+    QVariantList probeResults;
+    for (const QVariant &p : options.value(QStringLiteral("probes")).toList()) {
+        const QVariantMap pm = normalizeJs(p).toMap();
+        const double px = qBound(0.0, pm.value("x").toDouble(), 1.0);
+        const double py = qBound(0.0, pm.value("y").toDouble(), 1.0);
+        const int ix = qMin(int(px * img.width()), img.width() - 1);
+        const int iy = qMin(int(py * img.height()), img.height() - 1);
+        int r = 0, g = 0, b = 0, n = 0;
+        for (int dy = -2; dy <= 2; ++dy) {
+            for (int dx = -2; dx <= 2; ++dx) {
+                const int x = ix + dx, y = iy + dy;
+                if (x < 0 || y < 0 || x >= img.width() || y >= img.height()) continue;
+                const QColor c = img.pixelColor(x, y);
+                r += c.red(); g += c.green(); b += c.blue(); ++n;
+            }
+        }
+        if (n == 0) n = 1;
+        probeResults.append(QVariantMap{ { "x", ix }, { "y", iy },
+                                         { "r", r / n }, { "g", g / n }, { "b", b / n } });
+    }
+    out["probes"] = probeResults;
+    return out;
 }

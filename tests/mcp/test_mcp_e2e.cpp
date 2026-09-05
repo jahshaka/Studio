@@ -511,6 +511,63 @@ int main(int argc, char **argv)
         CHECK(player.value("isError").toBool(), "view:'player' is refused (editor view only)");
     }
 
+    // ---- screenshot through a SCENE CAMERA (CAMERAS_SPEC §5, the AI hook) --
+    //
+    // `camera` as a STRING is a different promise from `camera` as an object:
+    // the object form places the USER'S viewport camera, this one renders
+    // through a scene camera and leaves the viewport alone. That is what lets
+    // an agent look through an avatar's head-socketed camera while a human is
+    // still driving the editor.
+    {
+        const QJsonObject made = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script",
+                           "var c = scene.addCamera({position:{x:0,y:2,z:8}});"
+                           "camera.lookAt(c, {x:0,y:0,z:0});"
+                           "camera.settings(c, {outputHeight: 90, aspectRatio: 1});"
+                           "c" } }));
+        const QString sceneCam = made.value("result").toString();
+        CHECK(sceneCam.size() > 10, "a scene camera to shoot through");
+        const QString notCam = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "scene.addPrimitive('cube')" } }))
+                                  .value("result").toString();
+
+        const QJsonObject before = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "editor.camera()" } })).value("result").toObject();
+
+        const QJsonObject camShot = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "camera", sceneCam }, { "width", 128 }, { "height", 128 } });
+        QImage camImg;
+        CHECK(shotImage(camShot, camImg), "screenshot camera:'<id>' returns a decodable PNG");
+        CHECK(camImg.width() == 128 && camImg.height() == 128,
+              "…at the size asked for (the tool's width/height override the camera's own)");
+        // The text block is content[1] (the image comes first, so clients that
+        // read only content[0] keep working) — toolText reads content[0].
+        QString camEcho;
+        for (const QJsonValue &v : camShot.value("content").toArray())
+            if (v.toObject().value("type").toString() == QLatin1String("text"))
+                camEcho = v.toObject().value("text").toString();
+        CHECK(camEcho.contains(sceneCam),
+              "…and the text block names the camera it was taken through");
+
+        const QJsonObject after = toolJson(callTool(net, url, token, ++id, "run_script",
+            QJsonObject{ { "script", "editor.camera()" } })).value("result").toObject();
+        const QJsonObject bp = before.value("position").toObject();
+        const QJsonObject ap = after.value("position").toObject();
+        CHECK(qAbs(bp.value("x").toDouble() - ap.value("x").toDouble()) < 1e-4
+                  && qAbs(bp.value("y").toDouble() - ap.value("y").toDouble()) < 1e-4
+                  && qAbs(bp.value("z").toDouble() - ap.value("z").toDouble()) < 1e-4,
+              "shooting through a scene camera did NOT move the user's viewport");
+
+        const QJsonObject bad = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "camera", "not-a-camera-id" } });
+        CHECK(bad.value("isError").toBool(),
+              "a camera id that resolves to nothing comes back as the VERB's error");
+        const QJsonObject notACamera = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "camera", notCam } });
+        CHECK(notACamera.value("isError").toBool(),
+              "…and so does a node that exists but is not a camera");
+    }
+
     // ---- describe_scene include / subtree / depth (lane B #8) -------------
     {
         const QJsonObject built = toolJson(callTool(net, url, token, ++id, "run_script",

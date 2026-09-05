@@ -303,6 +303,17 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     // the repair is document fidelity, not pixels.
     if (!sceneNode->getShadowCastingEnabled()) sceneNodeObj["castShadow"] = false;
 
+    // Socket attachment (CAMERAS_SPEC §5). Written only when the node actually
+    // rides a socket — as with planarReflector/castShadow above, a key on every
+    // node in the file for a thing almost no node does is noise. The SOCKETS
+    // themselves are mesh data and are written by writeMeshData.
+    if (sceneNode->isSocketAttached()) {
+        QJsonObject attachment;
+        attachment["owner"] = sceneNode->socketOwnerGuid;
+        attachment["socket"] = sceneNode->socketName;
+        sceneNodeObj["socketAttachment"] = attachment;
+    }
+
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
@@ -489,6 +500,28 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
             sceneNodeObject["faceCullingMode"] = "none";
             break;
         default: break;
+    }
+
+    // Sockets (CAMERAS_SPEC §5): named attach points on this node's BONES.
+    // Written only when there are any — the vast majority of meshes are not
+    // rigged and can never have one. The offset is TRS, matching the way every
+    // other transform in this file is written, and `rotation` is the quaternion
+    // spelling only: a socket has no historical euler key to stay compatible
+    // with, and euler round-tripping is the drift this format already fixed
+    // once for node rotations.
+    if (!meshNode->getSockets().isEmpty()) {
+        QJsonArray socketArray;
+        for (const iris::Socket &socket : meshNode->getSockets()) {
+            QJsonObject socketObj;
+            socketObj["name"] = socket.name;
+            socketObj["bone"] = socket.boneName;
+            socketObj["position"] = jsonVector3(socket.position);
+            socketObj["rotation"] = jsonQuaternion(socket.rotation.normalized());
+            socketObj["scale"] = jsonVector3(socket.scale);
+            if (socket.builtIn) socketObj["builtIn"] = true;
+            socketArray.append(socketObj);
+        }
+        sceneNodeObject["sockets"] = socketArray;
     }
 
     // todo: check if material actually exists

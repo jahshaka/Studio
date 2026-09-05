@@ -16,6 +16,14 @@ For more information see the LICENSE file
 #include <QFileInfo>
 
 #include "modules/avatar/avatarpreviewmodel.h"
+#include "modules/avatar/avatarsockets.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "scripting/modules/moduleshared.h"
+#include "services/sceneeditservice.h"
+#include "services/services.h"
+#include "services/undoservice.h"
+#include "commands/nodeeditcommand.h"
 
 AvatarApi::AvatarApi(ScriptHost &host, avatar::AvatarPreviewModel *model, QObject *parent)
     : ApiModule(host, parent), mModel(model)
@@ -77,6 +85,22 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "snapshot", "avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the Avatar page's preview scene to a PNG, with the centre pixel and each probe point ({x,y} normalized 0..1) returned so scripts can assert on colours — the way a script (or an MCP session) proves the skeleton-only view from outside the app.",
           Needs::Engine },
+        { "addSockets", "avatar.addSockets(nodeId) -> [{socket, bone, mapped, existed}]",
+          "Installs this module's BUILT-IN sockets on a rigged mesh node in the OPEN SCENE "
+          "(CAMERAS_SPEC D9): `head` for first person — the camera an agent driving the avatar "
+          "sees through — and `shoulder` for third person, mapped from the Mixamo-class bone "
+          "names the module already understands (mixamorig:, Biped's Bip01, VRM's J_Bip, bare "
+          "and _JNT-suffixed spellings; the right shoulder is preferred over the left). "
+          "FAILS SOFT: a rig with no recognizable head simply gets no head socket — the report "
+          "says which built-in mapped to which bone and which did not, instead of throwing. A "
+          "socket the node ALREADY has is left alone (`existed`), so re-installing never "
+          "discards an authored offset. The built-in offsets are IDENTITY: a socket's offset is "
+          "in bone space, and bone axes and world scale differ per rig (a Mixamo character is "
+          "~170 units tall, its glTF export ~1.7), so any hard-coded framing offset would be "
+          "silently wrong on half the files — author it with node.addSocket. This is the one "
+          "avatar verb that touches the editor scene rather than the module's own preview. "
+          "Undoable.",
+          Needs::Document },
     };
 }
 
@@ -377,5 +401,59 @@ QVariantMap AvatarApi::snapshot(const QString &path, int width, int height,
         probeResults.append(QVariantMap{ { "x", px }, { "y", py }, { "r", r }, { "g", g }, { "b", b } });
     }
     if (!probeResults.isEmpty()) out["probes"] = probeResults;
+    return out;
+}
+
+// --- built-in sockets (CAMERAS_SPEC D9) ------------------------------------
+//
+// The ONE verb here that works on the editor scene rather than on the module's
+// own preview document. It lives on `avatar` and not on `node` because what it
+// carries is avatar knowledge — the Mixamo-class bone-name table
+// (avatarsockets.h) — and the node module has no business importing a feature
+// module. The sockets it installs are ordinary generic sockets; everything
+// afterwards (attach, offset, remove) is node.*.
+QVariantList AvatarApi::addSockets(const QString &nodeId)
+{
+    QVariantList out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.addSockets: no scene is open"); return out; }
+    auto node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) {
+        record(QStringLiteral("avatar.addSockets: no node with id '%1'").arg(nodeId));
+        return out;
+    }
+    if (node->getSceneNodeType() != iris::SceneNodeType::Mesh) {
+        record(QStringLiteral("avatar.addSockets: '%1' is not a mesh — sockets live on the "
+                              "BONES of a rigged mesh").arg(node->getName()));
+        return out;
+    }
+    auto mesh = node.staticCast<iris::MeshNode>();
+    if (!mesh->hasSkeleton()) {
+        record(QStringLiteral("avatar.addSockets: '%1' has no rig — nothing to map "
+                              "(node.boneNames lists a node's bones)").arg(node->getName()));
+        return out;
+    }
+
+    const QVector<avatar::sockets::Mapping> report = avatar::sockets::installBuiltIns(mesh);
+
+    // Undo removes exactly the sockets THIS call created — not the ones that
+    // were already there, whose offsets the user may have authored.
+    QStringList created;
+    for (const auto &mapping : report)
+        if (mapping.mapped && !mapping.existed) created.append(mapping.socket);
+    if (!created.isEmpty() && host.services && host.services->undo) {
+        host.services->undo->push(new NodeEditCommand(
+            QStringLiteral("avatar sockets"),
+            [mesh]() { avatar::sockets::installBuiltIns(mesh); },
+            [mesh, created]() { for (const QString &name : created) mesh->removeSocket(name); }));
+    }
+
+    for (const auto &mapping : report) {
+        out.append(QVariantMap{ { "socket", mapping.socket },
+                                { "bone", mapping.bone },
+                                { "mapped", mapping.mapped },
+                                { "existed", mapping.existed } });
+    }
     return out;
 }

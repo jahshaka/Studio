@@ -153,3 +153,7 @@ add_subdirectory(shadercache)
 # Scene cameras (CAMERAS_SPEC phase 1): the document half, the play-routing
 # seam in pixels, and the verb + round-trip e2e.
 add_subdirectory(cameras)
+# Sockets (CAMERAS_SPEC §5 / phase 4, owner decision D9): the socket maths and
+# the avatar bone-name table, the whole engine-pose -> socket -> pixels chain,
+# and the verbs + round trip in the real binary.
+add_subdirectory(sockets)

@@ -564,6 +564,17 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // emits the key when the user turned casting off, so every scene written
     // before the key existed loads exactly as it did.
     sceneNode->setShadowCastingEnabled(nodeObj["castShadow"].toBool(true));
+    // Socket attachment (CAMERAS_SPEC §5). The RAW setter: the owner is very
+    // often read AFTER this node (a camera can precede the character it rides),
+    // so nothing here can validate the guid. Scene::addNode registers whatever
+    // this sets, and SocketResolver skips it silently if it never resolves.
+    {
+        const QJsonObject attachment = nodeObj["socketAttachment"].toObject();
+        const QString owner = attachment["owner"].toString();
+        const QString socket = attachment["socket"].toString();
+        if (!owner.isEmpty() && !socket.isEmpty())
+            sceneNode->setSocketAttachment(owner, socket);
+    }
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();
 
@@ -795,6 +806,35 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
         meshNode->setFaceCullingMode(iris::FaceCullingMode::DefinedInMaterial);
     } else {
         meshNode->setFaceCullingMode(iris::FaceCullingMode::None);
+    }
+
+    // Sockets (CAMERAS_SPEC §5). Read with setSockets rather than addSocket:
+    // addSocket VALIDATES against the rig, and a file must not silently drop a
+    // socket because the mesh failed to load or because a re-import renamed a
+    // bone. A socket naming a bone that is not there resolves to nothing (the
+    // fail-soft rule), stays in the file, and starts working again the moment
+    // the bone comes back.
+    const QJsonArray socketArray = nodeObj["sockets"].toArray();
+    if (!socketArray.isEmpty()) {
+        QList<iris::Socket> sockets;
+        for (const auto &raw : socketArray) {
+            const QJsonObject socketObj = raw.toObject();
+            iris::Socket socket;
+            socket.name = socketObj["name"].toString();
+            socket.boneName = socketObj["bone"].toString();
+            if (socket.name.isEmpty()) continue;
+            socket.position = readVector3(socketObj["position"].toObject());
+            const QJsonObject rot = socketObj["rotation"].toObject();
+            socket.rotation = iris::Quat(float(rot["scalar"].toDouble(1.0)),
+                                         float(rot["x"].toDouble(0.0)),
+                                         float(rot["y"].toDouble(0.0)),
+                                         float(rot["z"].toDouble(0.0))).normalized();
+            if (socketObj.contains("scale"))
+                socket.scale = readVector3(socketObj["scale"].toObject());
+            socket.builtIn = socketObj["builtIn"].toBool(false);
+            sockets.append(socket);
+        }
+        meshNode->setSockets(sockets);
     }
 
     meshNode->applyDefaultPose();

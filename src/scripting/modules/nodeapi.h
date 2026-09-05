@@ -59,6 +59,14 @@ public:
     Q_INVOKABLE bool physics(const QString &id, const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QVariantMap physicsInfo(const QString &id);
 
+    // ---- sockets (CAMERAS_SPEC §5/§6, D9) --------------------------------
+    Q_INVOKABLE QVariantMap addSocket(const QString &id, const QVariantMap &socket);
+    Q_INVOKABLE bool removeSocket(const QString &id, const QString &socketName);
+    Q_INVOKABLE QVariantList sockets(const QString &id);
+    Q_INVOKABLE bool attachToSocket(const QString &id, const QString &ownerId,
+                                    const QString &socketName);
+    Q_INVOKABLE bool detachFromSocket(const QString &id);
+
 private:
     iris::SceneNodePtr nodeOrFail(const QString &id, const QString &verb);
     /// The node's reflected property names, in declaration order. The list the
@@ -67,6 +75,9 @@ private:
     static QStringList propertyKeys(const iris::SceneNodePtr &node);
     iris::LightNodePtr lightOrFail(const QString &id, const QString &verb);
     iris::DecalNodePtr decalOrFail(const QString &id, const QString &verb);
+    /// The MeshNode with this guid, or null with a JS error already thrown —
+    /// the socket verbs' "this thing cannot carry a socket" refusal.
+    iris::MeshNodePtr meshOrFail(const QString &id, const QString &verb);
 
     /// Records an ALREADY-APPLIED node edit on the undo stack (F5). No-op when
     /// the session has no stack (--headless document runs, unit hosts).
