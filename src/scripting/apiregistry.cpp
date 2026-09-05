@@ -254,9 +254,12 @@ QString ApiRegistry::markdown() const
     out += QStringLiteral(
         "Every verb is callable from the script console (Editor, bottom dock), from\n"
         "`./Jahshaka --script file.js`, and headless. The **needs** column is the\n"
-        "headless matrix: *document* verbs run with no engine at all (`--headless`),\n"
-        "*engine* verbs need the engine viewport up (a reachable DISPLAY is enough —\n"
-        "no visible window), *window* verbs are only meaningful with the editor UI.\n\n"
+        "headless matrix: *document* verbs need no VIEWPORT (`--headless`), *engine*\n"
+        "verbs need the engine viewport up, *window* verbs are only meaningful with\n"
+        "the editor UI. Since the scene-graph swap (SPECS/SCENEGRAPH_SPEC.md §3) a\n"
+        "document node IS an engine node, so even a `--headless` run boots the engine\n"
+        "offscreen and therefore needs a reachable DISPLAY — nothing is ever shown.\n"
+        "That requirement goes away with v2's NULL render system.\n\n"
         "Each script run is one undo step (Ctrl+Z reverts the whole script) unless\n"
         "wrapped differently with `editor.beginBatch()`/`editor.endBatch()`.\n"
         "Asset/store operations are NOT undoable — asset mutations are permanent.\n\n");

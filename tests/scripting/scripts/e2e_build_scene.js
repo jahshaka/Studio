@@ -94,6 +94,23 @@ assert(s1.center.r === s2.center.r && s1.center.g === s2.center.g && s1.center.b
 var differs = Math.abs(s1.center.r - 26) > 2 || Math.abs(s1.center.g - 28) > 2 || Math.abs(s1.center.b - 36) > 2;
 assert(differs, "centre pixel (" + s1.center.r + "," + s1.center.g + "," + s1.center.b + ") is not the clear colour");
 
+// ---- SCENE_STATIC: the never-moves hint (SCENEGRAPH_SPEC 6) --------------
+// An empty carries no renderable, so the graph can always switch it; that is
+// the case this pins. A drawn MESH may refuse (its renderable was created
+// dynamic) and the verb says so rather than lying — asserted only for the flag
+// it actually ends up with.
+var stat = scene.addEmpty({ position: { x: 3, y: 0, z: 0 } });
+assert(node.isStatic(stat) === false, "a new node is dynamic");
+assert(node.setStatic(stat, true) === true, "node.setStatic(true) on an empty");
+assert(node.isStatic(stat) === true, "...and it reads back as static");
+// A static node still MOVES; it just costs more. The transform must land.
+node.transform(stat, { position: { x: 7, y: 1, z: 0 } });
+assert(Math.abs(node.transform(stat).position.x - 7) < 1e-3,
+       "a static node still accepts a transform");
+assert(node.setStatic(stat, false) === true, "node.setStatic(false) switches back");
+assert(node.isStatic(stat) === false, "...and it reads back as dynamic");
+assert(node.remove(stat), "node.remove(static probe)");
+
 // ---- error surface: engine guard errors are catchable, bad ids throw ----
 thrown = false;
 try { node.info("no-such-guid"); } catch (e) { thrown = true; assert(("" + e).indexOf("no-such-guid") >= 0, "bad id error names the id"); }

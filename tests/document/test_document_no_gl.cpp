@@ -340,6 +340,48 @@ int main(int argc, char **argv)
         CHECK(approx(worldPos(leaf), iris::Vec3(-2, 2, 2)),
               "invalidation: setLocalTransform()");
 
+        // SCENE_STATIC (SPECS/SCENEGRAPH_SPEC.md §6): "this node never moves".
+        // Static nodes are skipped by the engine's per-frame transform pass,
+        // which is where the swap's headroom at high node counts is. It is a
+        // HINT, not a lock: a static node that does move still resolves
+        // correctly (the graph tells the manager), and that is the half a
+        // naive implementation gets wrong.
+        {
+            auto host = iris::SceneNode::create();
+            tRoot->addChild(host, false);
+            auto stat = iris::SceneNode::create();
+            host->addChild(stat, false);
+            CHECK(!stat->staticHint(), "static: a fresh node is dynamic");
+            stat->setStaticHint(true);
+            CHECK(stat->staticHint(), "static: setStaticHint(true) takes");
+
+            // A static node that DOES move still resolves — the graph tells the
+            // scene manager (notifyStaticDirty), which is the half a naive
+            // implementation gets wrong (statics are otherwise skipped by the
+            // per-frame pass and would answer with a stale world transform).
+            host->setLocalPos(iris::Vec3(5, 0, 0));
+            stat->setLocalPos(iris::Vec3(1, 0, 0));
+            tScene->update(0.0f);
+            CHECK(approx(worldPos(stat), iris::Vec3(6, 0, 0)),
+                  "static: a static node that DOES move still resolves against its parent");
+
+            // THE LIMITATION, pinned rather than hidden: Ogre gives a node its
+            // PARENT's memory-manager class on every re-parent (Node::setParent
+            // migrates the child), so a hint set before the node reaches its
+            // final parent is lost. Mark AFTER parenting.
+            auto other = iris::SceneNode::create();
+            tRoot->addChild(other, false);
+            other->addChild(stat, false);
+            CHECK(!stat->staticHint(),
+                  "static: re-parenting under a dynamic parent CLEARS the hint (Ogre's rule)");
+            stat->setStaticHint(true);
+            CHECK(stat->staticHint(), "static: re-marking after the move takes");
+            stat->setStaticHint(false);
+            CHECK(!stat->staticHint(), "static: and it switches back");
+            other->removeFromParent();
+            host->removeFromParent();
+        }
+
         // setGlobalPos/setGlobalRot on a node WITH a parent, and on one
         // without (the root).
         leaf->setGlobalPos(iris::Vec3(7, 7, 7));
