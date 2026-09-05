@@ -138,6 +138,28 @@ for d in Contents/Resources/app Contents/Resources/scenes Contents/Resources/med
          Contents/MacOS/app Contents/MacOS/scenes Contents/MacOS/media/Hlms/Pbs; do
     [ -e "$BUNDLE/$d" ] && pass "$d" || fail "$d is missing"
 done
+# The overlay font (SPECS/STATS_OVERLAY_SPEC.md §9.3). Staged from the Ogre
+# SOURCE tree at build time, so it is exactly the class of payload a bundle
+# forgets: without it the app still starts, still renders, and silently draws
+# neither the F3 stats readout nor the engine loading cover — the failure is a
+# line in the Ogre log and nothing else.
+#
+# NOTE (Linux-side edit, unverified on the Mac — this lane never ran on it): the
+# macOS half of STATS_OVERLAY_SPEC §7.3 is still OPEN. Ogre's Overlay component
+# is a cmake_dependent_option on FREETYPE_FOUND and the Mac is a no-Homebrew
+# machine by law, so until freetype is found or vendored there, an OVERLAY=ON
+# engine may not exist on that box at all — in which case this row and the
+# libOgreNextOverlay row below are the assertions that say so out loud instead
+# of shipping a bundle whose loading screen never appears.
+FONTDEF="Contents/Resources/media/packs/DebugPack/DebugFont.fontdef"
+[ -e "$BUNDLE/$FONTDEF" ] && pass "$FONTDEF" \
+    || fail "$FONTDEF is missing (overlay font media not staged into the bundle)"
+TTF="Contents/Resources/media/packs/DebugPack/Inconsolata-Bold.ttf"
+[ -e "$BUNDLE/$TTF" ] && pass "$TTF" \
+    || fail "$TTF is missing (the .fontdef names it; a fontdef without its face is dead)"
+OVDYLIB="Contents/Frameworks/libOgreNextOverlay.4.0.dylib"
+[ -e "$BUNDLE/$OVDYLIB" ] && pass "$OVDYLIB" \
+    || fail "$OVDYLIB is missing (engine install built without the Overlay component — freetype?)"
 # codesign refuses to seal data files that are real (non-symlink) entries under
 # Contents/MacOS — that is the failure macdeployqt hit before the trees moved.
 stray=$(/usr/bin/find "$BUNDLE/Contents/MacOS" -maxdepth 1 -mindepth 1 ! -type l ! -name Jahshaka | wc -l | tr -d ' ')

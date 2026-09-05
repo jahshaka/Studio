@@ -247,12 +247,24 @@ void WorldSettingsWidget::outlineColorChanged(QColor color)
 
 void WorldSettingsWidget::showFpsChanged(bool show)
 {
+    // PERSISTED now (STATS_OVERLAY_SPEC.md §5.3 step 3). This checkbox has
+    // existed for years and never wrote its own setting back, so it forgot on
+    // every restart — and the override it called was empty anyway, so there was
+    // nothing to forget. Both halves are fixed together: `show_fps` is the one
+    // stored value behind the checkbox, the F3 key, the View Options row and
+    // editor.setOverlays({stats}).
     showFps = show;
+    settings->setValue("show_fps", show);
     if (editorViewport) editorViewport->setShowFps(show);
 }
 
 void WorldSettingsWidget::setShowPerspectiveLabel(bool show)
 {
+	// ...and persisted too, for the same reason. (The label itself is still an
+	// empty override on both viewports — this row remains a stub, but at least
+	// it is now a stub with its OWN setting instead of one that reads and
+	// writes the FPS checkbox's.)
+	settings->setValue("show_perspective_label", show);
 	if (editorViewport) editorViewport->setShowPerspeciveLabel(show);
 }
 
@@ -521,8 +533,12 @@ void WorldSettingsWidget::configureEditor()
 	fps->setChecked(settings->getValue("show_fps", false).toBool());
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
 	autoUpdates->setChecked(settings->getValue("automatic_updates", true).toBool());
-	// showFps is the persisted "show_fps" setting (SceneViewWidget reads it from there too).
-	viewportProjection->setChecked(editorViewport ? settings->getValue("show_fps", false).toBool() : false);
+	// COPY-PASTE DEFECT, fixed (STATS_OVERLAY_SPEC.md §1.1): the *Show
+	// Perspective Label* checkbox was initialised from "show_fps", so switching
+	// the FPS row on made this one appear checked on the next visit while its
+	// own slot wrote nothing anywhere. It reads its own key now.
+	viewportProjection->setChecked(
+	    settings->getValue("show_perspective_label", false).toBool());
 	
 	// mouse control options
 	QStringList list;

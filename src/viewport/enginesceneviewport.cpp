@@ -2,7 +2,6 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "viewport/enginesceneviewport.h"
-#include "viewport/viewportcover.h"
 
 #include <QShowEvent>
 #include <QMouseEvent>
@@ -58,6 +57,8 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 
+
+
 using namespace jahshaka::engine;
 
 EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
@@ -84,10 +85,17 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
         // argument (the fixed-dt override) and Qt's new-style connect refuses a
         // slot that takes more arguments than the signal provides.
         connect(mDriver, &EngineRenderDriver::beforeFrame, this, [this]() {
+            // Every driver tick draws over whatever is on screen — including a
+            // cover this viewport presented inline. presentCovered's dedupe key
+            // needs a MONOTONIC "has anything drawn since" counter, and
+            // View::framesPresented is not one: it RESETS to 0 whenever a scene
+            // is bound, which made a close/reopen of the same world collide with
+            // a previous cover and skip the present that should have raised it.
+            ++mFrameEpoch;
             syncFrame();
             // The cover comes down here, one frame BEHIND the present that
             // earned it: framesPresented counts frames already on screen.
-            updateCover();
+            refreshOverlay();
         });
 }
 
@@ -352,7 +360,16 @@ void EngineSceneViewport::viewRecreated()
     // otherwise presentsSinceBind() reads a subtraction of a larger number and
     // the cover never comes down again.
     mPresentBaseline = 0;
-    updateCover();
+    refreshOverlay();
+}
+
+void EngineSceneViewport::resizeEvent(QResizeEvent *e)
+{
+    EngineViewWidget::resizeEvent(e);   // records the pending resize on the View
+    // See the header. The two frames presentCovered draws are exactly what is
+    // needed: the first applies the pending resize (the engine defers it to
+    // frame time), the second presents the cover at the new size.
+    if (mCoverUp) presentCovered();
 }
 
 void EngineSceneViewport::showEvent(QShowEvent *e)
@@ -364,8 +381,18 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
                    Colour(0.10f, 0.11f, 0.14f));
     ensureEngineScene();
     // Becoming visible with nothing presented yet is exactly the moment the
-    // stale pixels underneath would show through.
-    updateCover();
+    // stale pixels underneath would show through — and on the FIRST open there
+    // was no View at all until three lines ago, so there is nothing of ours in
+    // that window and the X server is still showing the page we came from.
+    //
+    // MECHANISM M2 (STATS_OVERLAY_SPEC §6.3): present the covered frames HERE,
+    // synchronously, inside the show handler. Qt sends showEvent around the
+    // XMapWindow, so this is the closest analogue there is to the Qt cover's
+    // repaint() — and it is a race with the map rather than an ordering ahead
+    // of it, which is why §6.3 rates it weaker than M1 and stronger than
+    // nothing. presentCovered draws TWO frames, because a Vulkan present is
+    // queued and the first is not yet on screen (M3).
+    presentCovered();
 }
 
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
@@ -749,7 +776,7 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     // A new document scene means no frame of IT has presented yet, even when
     // the engine scene underneath is the same object (close/open reuses it).
     mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
-    updateCover();
+    refreshOverlay();
 }
 
 void EngineSceneViewport::startPlayingScene()
@@ -1028,6 +1055,7 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     if (!mEngine) return;
     for (int i = 0; i < n; ++i) {
         syncFrame(dt);
+        ++mFrameEpoch;
         mEngine->renderOneFrame();
         // The deterministic path bypasses EngineRenderDriver entirely, so it
         // has to drain the engine's error sink itself or a scripted/headless
@@ -1037,7 +1065,7 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     }
     // Scripted stepping is the deterministic path: editor.frame(2) must be
     // enough to take the cover down, exactly as two driver frames would.
-    updateCover();
+    refreshOverlay();
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
@@ -1094,7 +1122,7 @@ void EngineSceneViewport::begin()
     // was last true while a different scene owned the screen.
     if (mMirror) mMirror->invalidateEnvironment();
     if (view()) view()->setEnabled(true);
-    updateCover();
+    refreshOverlay();
 }
 
 void EngineSceneViewport::end()
@@ -1104,14 +1132,28 @@ void EngineSceneViewport::end()
 }
 
 // ---------------------------------------------------------------------------
-// The cover (viewportcover.h): what this viewport looks like while the engine
-// has no frame of the current world on screen.
-
-void EngineSceneViewport::setCover(ViewportCover *cover)
-{
-    mCover = cover;
-    updateCover();
-}
+// The cover: what this viewport looks like while the engine has no frame of the
+// current world on screen.
+//
+// DRAWN BY THE ENGINE since owner decision D2 (STATS_OVERLAY_SPEC.md §6). It
+// used to be ViewportCover — an ordinary Qt widget in the same grid cell as
+// this one which, while it was up, owned its own native X window stacked above
+// this one's by setAttribute(WA_NativeWindow) + raise(). That was the only
+// arrangement that works for a Qt-painted cover on X11, and it was also a
+// standing invitation to the whole X11 stacking-and-input family of defects: an
+// extra surface whose stacking order, map state and input region are managed by
+// nobody in particular, which deliberately swallowed clicks and therefore made
+// the viewport look DEAD rather than covered whenever it was up at the wrong
+// moment.
+//
+// The engine-drawn cover has no second window, no stacking order, no input
+// region and no Qt clock. It is a panel and two text areas in the frame the
+// engine was going to present anyway (irisgl/engine/src/OgreOverlayHud.cpp).
+//
+// WHAT SURVIVED, deliberately: presentationState(), framesPresented(),
+// kPresentsBeforeReveal and the editor.viewportState() verb they feed. The
+// state machine was never the problem — only its output device changed, and
+// scripting.e2e.presentation_state is the unchanged gate that says so.
 
 qulonglong EngineSceneViewport::presentsSinceBind() const
 {
@@ -1138,26 +1180,187 @@ qulonglong EngineSceneViewport::framesPresented() const
     return presentsSinceBind();
 }
 
-void EngineSceneViewport::updateCover()
+void EngineSceneViewport::setShowFps(bool value)
 {
-    if (!mCover) return;
-    // The on-screen View could not be created and we are running on an offscreen
-    // fallback: nothing will ever present into this widget, so the cover is the
-    // permanent state here and it carries the engine's reason. Checked FIRST —
-    // presentationState() would answer "offscreen", which maps to Presenting and
-    // would hide the cover over a region the engine never writes.
-    if (!viewCreationError().isEmpty()) {
-        mCover->setSubtitle(viewCreationError());
-        mCover->setState(ViewportCover::State::Failed);
-        return;
+    if (mShowStats == value) return;
+    mShowStats = value;
+    mStatsLines.clear();
+    mStatsClock.invalidate();   // rebuild the text on the very next refresh
+    refreshOverlay();
+}
+
+jahshaka::engine::ViewOverlayDesc EngineSceneViewport::overlayDesc() const
+{
+    using Cover = jahshaka::engine::ViewOverlayDesc::Cover;
+    jahshaka::engine::ViewOverlayDesc d;
+
+    // ---- the stats readout (STATS_OVERLAY_SPEC §4) -------------------------
+    // Composed HOST-SIDE, and that is the point of ViewOverlayDesc::lines: the
+    // most useful number on this row — how long the tick's work took — belongs
+    // to EngineRenderDriver, not to Ogre. Rate-limited to ~5 Hz.
+    if (mShowStats) {
+        d.stats = true;
+        d.corner = jahshaka::engine::OverlayCorner::TopLeft;
+        if (!mStatsClock.isValid() || mStatsClock.elapsed() >= kStatsRefreshMs) {
+            mStatsClock.restart();
+            mStatsLines.clear();
+            jahshaka::engine::RenderStats rs;
+            const bool haveRs = mEngine && mEngine->renderStats(rs);
+            const EngineRenderDriver::Stats ds =
+                mDriver ? mDriver->stats() : EngineRenderDriver::Stats{};
+            // Row 1: the loop rate AND what the frame actually cost. Both,
+            // side by side, because the fps half is a measurement of our own
+            // 16 ms timer and is only honest next to the ms half.
+            mStatsLines << QStringLiteral("%1 fps   %2 ms")
+                               .arg(haveRs ? rs.fps : 0.0, 0, 'f', 0)
+                               .arg(ds.workMs, 0, 'f', 1);
+            // Row 2: what the renderer did with the frame.
+            mStatsLines << QStringLiteral("%1 draws   %2 tris")
+                               .arg(haveRs ? qulonglong(rs.draws) : 0ull)
+                               .arg(haveRs ? qulonglong(rs.triangles) : 0ull);
+            // Row 3: the honesty row. A loop that is skipping ticks or hitching
+            // is the thing the other two rows cannot tell you about.
+            mStatsLines << QStringLiteral("%1 skipped   %2 slow")
+                               .arg(ds.skipped).arg(ds.slowFrames);
+        }
+        for (const QString &line : mStatsLines) d.lines.push_back(line.toStdString());
+    }
+
+    // A world is on its way. Asked for explicitly by beginSceneLoad rather than
+    // derived, because at that moment the OLD world is still bound (or none is)
+    // and the state machine would answer "presenting" or "noscene".
+    if (mSceneLoadPending) {
+        d.cover = Cover::Loading;
+        d.coverTitle = tr("Loading world…").toStdString();
+        d.coverSubtitle = mLoadingTitle.toStdString();
+        return d;
     }
     const QString state = presentationState();
-    if (state == QLatin1String("loading"))
-        mCover->setState(ViewportCover::State::Loading);
-    else if (state == QLatin1String("noscene"))
-        mCover->setState(ViewportCover::State::NoScene);
-    else
-        mCover->setState(ViewportCover::State::Presenting);
+    if (state == QLatin1String("loading")) {
+        d.cover = Cover::Loading;
+        d.coverTitle = tr("Loading world…").toStdString();
+        d.coverSubtitle = mLoadingTitle.toStdString();
+    } else if (state == QLatin1String("noscene")) {
+        d.cover = Cover::NoScene;
+        d.coverTitle = tr("No world open").toStdString();
+        d.coverSubtitle = tr("Open or create a world from the Desktop").toStdString();
+    }
+    // "presenting" and "offscreen" both mean no cover: the engine owns these
+    // pixels, or it never will and a cover drawn by it could not appear anyway.
+    // The FAILED state has no cover at all any more — by definition nothing
+    // will ever present into a widget whose View could not be created, so an
+    // engine-drawn message there is a contradiction. It is respecced onto the
+    // toast + return-to-Desktop path in MainWindow (STATS_OVERLAY_SPEC §6.4),
+    // driven off viewCreationError().
+    return d;
+}
+
+void EngineSceneViewport::refreshOverlay()
+{
+    if (!view()) return;
+    // Presenting again: the load this viewport was told about is over.
+    if (mSceneLoadPending && mScene && presentsSinceBind() >= kPresentsBeforeReveal)
+        mSceneLoadPending = false;
+    const jahshaka::engine::ViewOverlayDesc desc = overlayDesc();
+    const bool wasUp = mCoverUp;
+    mCoverUp = desc.cover != jahshaka::engine::ViewOverlayDesc::Cover::None;
+    view()->setOverlay(desc);
+
+    // A COVER THAT HAS JUST GONE UP MUST BE PRESENTED TO EXIST — and this is
+    // THE structural difference between the deleted Qt cover and this one.
+    //
+    // ViewportCover was a widget: one repaint put its pixels in the backing
+    // store and they stayed there, for free, however long the UI thread was
+    // then blocked. An engine-drawn cover is only ever the contents of a frame,
+    // so every raise needs a frame, and the moments a cover is raised are
+    // exactly the moments the thread is about to stop drawing them — binding a
+    // new scene (MainWindow::newProject builds and saves one inline), closing a
+    // world, a page switch on the way into a load.
+    //
+    // Measured, not assumed: without this the editor page sat on its own
+    // watermark for ~1 s of a project create where the Qt cover had been up,
+    // and the A/B against the unmodified base is what found it.
+    //
+    // Only on the RISING edge, and never re-entrantly (presentCovered calls
+    // this first). Lowering needs nothing: the next ordinary frame draws the
+    // world, and there is always one — the cover only comes down BECAUSE
+    // frames are being presented.
+    if (mCoverUp && !wasUp && !mPresentingCover) presentCovered();
+}
+
+void EngineSceneViewport::presentCovered(int frames)
+{
+    // Nothing to present into: an offscreen fallback view owns no pixels of
+    // this widget, and no view at all owns nothing.
+    if (!view() || view()->isOffscreen() || !mEngine) return;
+    // AND NOTHING TO PRESENT FOR: a hidden page has no pixels on screen, so a
+    // frame drawn for it is pure UI-THREAD COST — the whole scene is still
+    // rendered under the cover (the overlay pass composites onto a finished
+    // frame; it does not save drawing what it hides). This is the deleted
+    // widget's own contract, in its own words: showNow "does nothing when the
+    // cover is not visible on screen".
+    //
+    // MEASURED, and the reason this line is not merely tidy: without it the
+    // threaded open's beginSceneLoad drew two full frames of a world nobody
+    // could see, on the thread the open is trying not to block, and
+    // open.responsive's warm-open UI gap went from under its 500 ms budget to
+    // 1346 ms. The covered frames that matter are the ones after the page
+    // switch, and switchSpace(EDITOR) -> coverIfNotPresenting draws those.
+    if (!isVisible()) return;
+    // OUR PIXELS ARE ALREADY ON SCREEN. The reveal path calls this THREE times
+    // inside one blocking stretch — showEvent, refreshOverlay's rising edge,
+    // and switchSpace's coverIfNotPresenting — and the second and third have
+    // nothing to add: same cover, same size, and nothing has presented in
+    // between, so what is on screen is exactly what they would draw.
+    //
+    // That matters because a covered frame IS NOT CHEAP: the overlay pass
+    // composites onto a FINISHED frame, so the whole scene is still rendered
+    // under a cover that hides it (STATS_OVERLAY_SPEC §7.6 says so explicitly).
+    // MEASURED: the duplicates put open.responsive's warm-open UI gap at
+    // ~700 ms against a 500 ms budget; deduplicated it sits at ~290 ms, which
+    // is the unmodified base's own number.
+    //
+    // The EPOCH is the load-bearing half of the key. Desc and size alone are
+    // not enough: closing a world and reopening the same one produces an
+    // identical desc, and skipping there left the cover down for the whole
+    // reopen (caught by the xwd capture, not by reasoning). And the epoch has
+    // to be OURS — View::framesPresented resets to 0 on every scene bind, so it
+    // collides across exactly the close/reopen this key exists to distinguish.
+    const jahshaka::engine::ViewOverlayDesc wanted = overlayDesc();
+    if (wanted == mLastPresentedCover && view()->width() == mLastPresentedW &&
+        view()->height() == mLastPresentedH &&
+        mFrameEpoch == mLastPresentedEpoch)
+        return;
+    if (mPresentingCover) return;          // refreshOverlay's rising edge, already in hand
+    mPresentingCover = true;
+    refreshOverlay();
+    const bool covered = view()->overlay().cover !=
+                         jahshaka::engine::ViewOverlayDesc::Cover::None;
+    // The View is enabled by widget VISIBILITY (EngineViewWidget::show/hideEvent)
+    // and the driver skips a tick with nothing enabled — so on the path this
+    // exists for (a page switch, a synchronous open) the view may still be
+    // disabled. Enable it for exactly these frames and put it back.
+    const bool wasEnabled = view()->isEnabled();
+    view()->setEnabled(true);
+    for (int i = 0; i < frames; ++i) { ++mFrameEpoch; mEngine->renderOneFrame(); }
+    view()->setEnabled(wasEnabled);
+    // A COVERED frame IS NOT A FRAME OF THE WORLD, and presentsSinceBind means
+    // exactly that: "how many frames of the world bound right now are on
+    // screen". These frames show the cover, so they are rebased away.
+    //
+    // This is not bookkeeping pedantry — it is the contract
+    // scripting.e2e.presentation_state asserts and the reason the cover comes
+    // down at the right moment: without the rebase, the two frames this method
+    // draws to PUT THE COVER UP would immediately satisfy kPresentsBeforeReveal
+    // and take it straight back down over a world that has not drawn yet. (The
+    // driver's own ticks while the cover is up DO count, exactly as they always
+    // did — that is what eventually reveals the viewport.)
+    if (covered) mPresentBaseline = qulonglong(view()->framesPresented());
+    mLastPresentedCover = wanted;
+    mLastPresentedW = view()->width();
+    mLastPresentedH = view()->height();
+    mLastPresentedEpoch = mFrameEpoch;
+    mPresentingCover = false;
 }
 
 void EngineSceneViewport::beginSceneLoad(const QString &title)
@@ -1165,13 +1368,14 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
     // The world on screen (if any) is about to be replaced: nothing presented
     // from here on belongs to the old one.
     mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
-    if (!mCover) return;
-    mCover->setSubtitle(title);
+    mSceneLoadPending = true;
+    mLoadingTitle = title;
     // Loading, not the computed state: the caller is telling us a world is on
-    // its way, and it is about to block this thread reading it. showNow paints
-    // synchronously so the grey is on screen before that happens — a posted
-    // paint would arrive after the load it exists to cover.
-    mCover->showNow(ViewportCover::State::Loading);
+    // its way, and it is about to block this thread reading it. The Qt cover
+    // called repaint() here for exactly that reason — a posted paint would
+    // arrive after the load it exists to cover. The engine-drawn cover's
+    // equivalent is to draw its frames inline, now, before we return.
+    presentCovered();
 }
 
 void EngineSceneViewport::primeSceneGeometry()
@@ -1263,8 +1467,15 @@ unsigned EngineSceneViewport::warmUpShaders()
 
 void EngineSceneViewport::coverIfNotPresenting()
 {
-    updateCover();
-    if (mCover && mCover->isVisible()) mCover->repaint();
+    // Called right after the editor page is switched to, i.e. right after this
+    // widget's native window was MAPPED. Until the engine presents into it the
+    // X server shows whatever was on that part of the screen before — the page
+    // we just left. So: cover, and present it inline rather than waiting for
+    // the next 16 ms driver tick.
+    //
+    // Already presenting this world? presentCovered's refreshOverlay resolves
+    // to Cover::None and the two frames are just two ordinary frames.
+    presentCovered();
 }
 
 void EngineSceneViewport::cleanup()
@@ -1296,8 +1507,12 @@ void EngineSceneViewport::clearScene()
     mScene.clear();
     mSelectedNode.clear();
     // No world bound: the cover says so (and the next bind starts from here).
+    // Whatever load was in flight is over — a close is not a load, and leaving
+    // the flag set would caption the NoScene cover "Loading world…" for ever.
+    mSceneLoadPending = false;
+    mLoadingTitle.clear();
     mPresentBaseline = view() ? qulonglong(view()->framesPresented()) : 0;
-    updateCover();
+    refreshOverlay();
 }
 
 IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine,

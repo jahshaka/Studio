@@ -19,7 +19,6 @@
 
 class SceneMirror;
 class EngineRenderDriver;
-class ViewportCover;
 class EditorData;
 class Gizmo;
 class TranslationGizmo;
@@ -109,7 +108,16 @@ public:
     void setSelectionWireframe(bool value) override { mSelectionWireframe = value; }
     bool getShowDebugDrawFlags() const override { return mShowDebugDraw; }
     void setShowDebugDrawFlags(bool value) override { mShowDebugDraw = value; }
-    void setShowFps(bool) override {}
+    /// F3 / editor.setOverlays({stats}) / the Preferences checkbox — all three
+    /// arrive here. Was an EMPTY override for the whole life of the engine
+    /// viewport, which is why editor.overlays() used to refuse a `stats` key by
+    /// name: there was nothing behind it (STATS_OVERLAY_SPEC §1.1).
+    ///
+    /// Deliberately NOT hidden by Game View (G) or fullscreen (F11): those hide
+    /// editor HELPERS, and a frame-time readout is a DIAGNOSTIC — "what is my
+    /// frame time in the game view" is the question people actually ask.
+    void setShowFps(bool value) override;
+    bool getShowFps() const override { return mShowStats; }
     void setShowPerspeciveLabel(bool) override {}
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
     QImage takeScreenshot(QSize dimension) override;
@@ -140,14 +148,19 @@ public:
     void cleanup() override;
     void clearScene() override;
 
-    // ---- the loading / no-scene cover (viewportcover.h) ----
-    /// The cover this viewport drives. It is a SIBLING widget (same layout cell,
-    /// never a child — a child of a setUpdatesEnabled(false) widget can never
-    /// repaint), created and owned by whoever builds the editor page. Null in
-    /// sessions that have no cover; every cover call is then a no-op.
-    void setCover(ViewportCover *cover) override;
+    // ---- the loading / no-scene cover, drawn BY THE ENGINE ----
+    // Owner decision D2 (STATS_OVERLAY_SPEC.md §6): the cover used to be a Qt
+    // widget stacked over this one in its own native X window (the deleted
+    // ViewportCover). It is now an overlay panel the engine draws into the same
+    // frame it was going to present anyway — no second window, no stacking
+    // order, no input region, no Qt clock.
     QString presentationState() const override;
     qulonglong framesPresented() const override;
+    /// Bridges EngineViewWidget's own (non-virtual, and on the OTHER base) copy
+    /// onto the interface — C++ does not override across hierarchies, and the
+    /// shell holds an IEditorViewport*.
+    QString viewCreationError() const override
+    { return EngineViewWidget::viewCreationError(); }
     void beginSceneLoad(const QString &title = QString()) override;
     void coverIfNotPresenting() override;
     void primeSceneGeometry() override;
@@ -160,10 +173,29 @@ public:
     /// do. While the count still reads this, another warm-up would be 250 ms of
     /// UI block for zero shaders — see warmUpShaders() for the measurements.
     unsigned mWarmUpIdleAt = kWarmUpAlwaysRun;
-    /// Recomputes the cover's state from the view's present count. Called once
-    /// a frame (before the engine's frame, so it sees the presents already
-    /// made) and at every event that can change the answer.
-    void updateCover();
+    /// Recomputes the engine overlay — cover state AND stats readout — and
+    /// pushes it at the View. Called once a frame (before the engine's frame,
+    /// so it sees the presents already made) and at every event that can change
+    /// the answer. Cheap: an unchanged desc is a no-op inside the engine, and
+    /// no overlay change ever rebuilds a workspace.
+    void refreshOverlay();
+    /// The desc refreshOverlay pushes. Split out so the covered-present helper
+    /// can force the Loading state before the state machine would report it.
+    jahshaka::engine::ViewOverlayDesc overlayDesc() const;
+    /// Presents `frames` frames THROUGH THIS VIEW, right now, synchronously,
+    /// with the overlay already refreshed — the replacement for the Qt cover's
+    /// repaint() (STATS_OVERLAY_SPEC §6.3).
+    ///
+    /// The Qt cover could paint synchronously because it was a Qt widget. An
+    /// engine-drawn cover cannot: the caller is about to block this thread with
+    /// a scene load, and the 16 ms driver tick that would draw the cover is
+    /// queued behind it. So the cover's frames are drawn HERE, inline, exactly
+    /// where repaint() used to be — and TWO of them, because a Vulkan present
+    /// is queued and the first one is not yet on screen (the same reason
+    /// kPresentsBeforeReveal is 2).
+    ///
+    /// Does nothing when there is no on-screen View to present into.
+    void presentCovered(int frames = int(kPresentsBeforeReveal));
     /// Frames presented since the CURRENT world was bound to this viewport.
     /// Not simply View::framesPresented(): a project close/open reuses the
     /// engine scene (MainWindow::closeProject leaves it bound), so the engine's
@@ -191,6 +223,15 @@ public:
 
 protected:
     void showEvent(QShowEvent *) override;
+    /// A RESIZE THROWS THE COVER AWAY, and that is why this override exists.
+    /// The cover lives in a presented frame, and an on-screen resize rebuilds
+    /// the swapchain — the frame that carried it is gone and the region shows
+    /// whatever Qt last put there. A Qt-painted cover never had this problem
+    /// (it just repainted); this is the engine-drawn equivalent, and without it
+    /// the very first layout after the view is created (160x120 -> the real
+    /// size) leaves the editor page on its own watermark for as long as the UI
+    /// thread is busy. Only pays anything while a cover is actually up.
+    void resizeEvent(QResizeEvent *) override;
     void mousePressEvent(QMouseEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
@@ -274,8 +315,38 @@ private:
     Database *mDatabase = nullptr;
     Project *mProject = nullptr;   // the live Project (Phase 4: was Globals::project)
     iris::ScenePtr mScene;
-    /// Not owned (see setCover): a sibling widget in the same layout cell.
-    QPointer<ViewportCover> mCover;
+    /// F3 / editor.setOverlays({stats}) / Preferences show_fps.
+    bool mShowStats = false;
+    /// The readout's text, rebuilt at most every kStatsRefreshMs. A number that
+    /// changes 62 times a second is unreadable, and each rebuild costs a string
+    /// format, a boundary crossing and a TextArea re-layout (§5.1 asks for
+    /// 4-10 Hz; this is 5).
+    mutable QStringList mStatsLines;
+    mutable QElapsedTimer mStatsClock;
+    static constexpr qint64 kStatsRefreshMs = 200;
+    /// Whether the last refreshOverlay left a cover up — the rising edge that
+    /// makes a raise synchronous (see refreshOverlay).
+    bool mCoverUp = false;
+    /// Re-entrancy guard: presentCovered refreshes first, and refreshOverlay
+    /// presents on a rising edge.
+    bool mPresentingCover = false;
+    /// What the last INLINE covered present actually put on screen, and at what
+    /// target size. Presenting the same thing again costs a full frame of the
+    /// scene and shows the user nothing new.
+    jahshaka::engine::ViewOverlayDesc mLastPresentedCover;
+    unsigned mLastPresentedW = 0, mLastPresentedH = 0;
+    qulonglong mLastPresentedEpoch = 0;
+    /// A MONOTONIC count of frames drawn through this viewport by anybody — the
+    /// driver's ticks, editor.frame(), and presentCovered itself. Deliberately
+    /// not View::framesPresented, which resets on every scene bind.
+    qulonglong mFrameEpoch = 0;
+    /// A world is on its way but nothing of it has presented yet. Set by
+    /// beginSceneLoad and cleared when the view starts presenting: the state
+    /// machine alone cannot tell "no world open" from "a world is loading",
+    /// because at beginSceneLoad time the OLD world is still bound (or none is).
+    bool mSceneLoadPending = false;
+    /// The world's name, shown under "Loading world…" — beginSceneLoad's argument.
+    QString mLoadingTitle;
     /// View::framesPresented() at the moment the current world was bound
     /// (setScene/clearScene/beginSceneLoad) — the zero of presentsSinceBind.
     qulonglong mPresentBaseline = 0;

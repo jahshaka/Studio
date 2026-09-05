@@ -55,6 +55,13 @@ add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
 add_script_e2e(editor_controls e2e_editor_controls.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).
 add_script_e2e(desktops e2e_desktops.js)
+# STATS_OVERLAY_SPEC phase 1 — the DATA half of the engine-drawn stats overlay,
+# landed and tested before a pixel of it exists (the API-first rule). Pins the
+# shape of app.renderStats(), the LAZY geometry counters, the invariants between
+# the timing fields, and the driver's new work-per-tick numbers — the honest
+# performance figure this architecture has, which the render loop used to
+# measure and throw away.
+add_script_e2e(render_stats e2e_render_stats.js)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
 add_script_e2e(planar e2e_planar.js)
@@ -80,9 +87,15 @@ set_tests_properties(scripting.e2e.anim PROPERTIES
     TIMEOUT 120)
 
 # The viewport's presentation state machine (editor.viewportState) — what
-# decides whether the editor viewport shows engine frames or its loading cover
-# (src/viewport/viewportcover.h). Gates the desktop-bleed fix, 2026-09-03.
-add_script_e2e(viewport_cover e2e_viewport_cover.js)
+# decides whether the editor viewport shows engine frames or its loading cover.
+# Gates the desktop-bleed fix, 2026-09-03.
+#
+# RENAMED from viewport_cover when the Qt cover widget was deleted (owner
+# decision D2, SPECS/STATS_OVERLAY_SPEC.md §6): this suite never tested the
+# widget, it tests the STATE MACHINE that drives it, which is exactly why its
+# assertions did not change when the cover moved into the engine. That makes it
+# the regression gate for the port.
+add_script_e2e(presentation_state e2e_presentation_state.js)
 # The IBL-cubemap-swap crash guard (2026-09-03): a sky re-bake frees and
 # re-allocates the environment cubemap — usually AT THE SAME ADDRESS — while
 # metallic datablocks, planar reflection passes and offscreen post-fx shots are

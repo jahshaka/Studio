@@ -28,7 +28,6 @@ class Database;
 class Project;
 class EditorData;
 class Gizmo;
-class ViewportCover;
 enum WindowSpaces : int;      // mainwindow.h
 enum class SceneMode;         // playbackservice.h
 
@@ -193,7 +192,12 @@ public:
     virtual void setSelectionWireframe(bool) {}
     virtual bool getShowDebugDrawFlags() const = 0;
     virtual void setShowDebugDrawFlags(bool value) = 0;
+    /// The engine-drawn frame-stats readout (F3, `editor.setOverlays({stats})`,
+    /// the Preferences `show_fps` row — one code path, three doors). SURVIVES
+    /// Game View and fullscreen on purpose: it is a diagnostic, not an editor
+    /// helper (STATS_OVERLAY_SPEC.md D3).
     virtual void setShowFps(bool value) = 0;
+    virtual bool getShowFps() const { return false; }
     virtual void setShowPerspeciveLabel(bool value) = 0;
     virtual QImage takeScreenshot(int width = 1920, int height = 1080) = 0;
     virtual QImage takeScreenshot(QSize dimension) = 0;
@@ -256,7 +260,11 @@ public:
     /// means "use the wall clock" and is identical to renderFrames(n).
     virtual void renderFrames(int n, float dt) { Q_UNUSED(n); Q_UNUSED(dt); }
 
-    // ---- the "nothing is presenting" cover (src/viewport/viewportcover.h) ----
+    // ---- the "nothing is presenting" cover ----
+    // Drawn by the ENGINE since owner decision D2 (STATS_OVERLAY_SPEC.md §6):
+    // the Qt widget that used to do it (ViewportCover, a second native X window
+    // stacked over the viewport's) is gone. The state machine below is
+    // unchanged — only its output device is.
     /// What the viewport is showing RIGHT NOW, as a verb-friendly name:
     ///   "presenting" — the engine's own frames are on screen
     ///   "loading"    — a world is bound but no frame of it has presented yet
@@ -272,19 +280,24 @@ public:
     /// close/open reuses the engine scene, so the engine's own counter does
     /// not restart there.
     virtual qulonglong framesPresented() const { return 0; }
-    /// "A world is about to be loaded into me": puts the loading cover up and
-    /// PAINTS it before returning, so the grey is on screen before the load
-    /// blocks the thread. `title` names the world (shown under the message).
-    /// A no-op for viewports that have no cover.
+    /// "A world is about to be loaded into me": raises the loading cover and
+    /// PRESENTS it before returning, so it is on screen before the load blocks
+    /// the thread. `title` names the world (shown under the message). A no-op
+    /// for viewports with no on-screen render target.
     virtual void beginSceneLoad(const QString &title = QString()) { Q_UNUSED(title); }
-    /// The cover widget this viewport drives (owned by the editor page, not by
-    /// the viewport). Viewports without one ignore it and stay uncovered.
-    virtual void setCover(ViewportCover *) {}
-    /// "Show whatever you have": re-evaluates the cover and, if it is up,
-    /// paints it synchronously. Every route onto the editor page calls this —
-    /// a page switch reveals the viewport's native window, and until the engine
+    /// "Show whatever you have": re-evaluates the cover and presents it
+    /// synchronously. Every route onto the editor page calls this — a page
+    /// switch reveals the viewport's native window, and until the engine
     /// presents into it the X server shows whatever was there before.
     virtual void coverIfNotPresenting() {}
+    /// Why this viewport's ON-SCREEN view could not be created, if it could
+    /// not. Empty is the normal answer. Non-empty means the viewport fell back
+    /// to an offscreen view: everything except the on-screen pixels still
+    /// works, and nothing will EVER present into the widget — which is why the
+    /// shell bounces the user back to the Desktop with a toast rather than
+    /// leaving them on a page that can only ever be blank
+    /// (MainWindow::bounceIfViewportIsDead, STATS_OVERLAY_SPEC §6.4).
+    virtual QString viewCreationError() const { return QString(); }
     /// Pushes the bound document into the renderer NOW, without rendering:
     /// the mesh/material/texture uploads that would otherwise happen on the
     /// first frame after the page switch. Called while the loading page is

@@ -98,7 +98,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // cannot cover is the Hlms permutations, because the Hlms generates a
     // shader per RENDERABLE and the permutation set is a property of the
     // content — guessing at it here would fill the cache with variants nothing
-    // draws. Those belong to the per-scene warm-up under the ViewportCover
+    // draws. Those belong to the per-scene warm-up under the loading cover
     // (SHADER_CACHE_SPEC §5), where the actual datablocks exist.
     for (int i = 0; i < kWarmUpFrames && warmView; ++i) {
         engine->renderOneFrame();

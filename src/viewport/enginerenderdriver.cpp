@@ -57,7 +57,24 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         // scripted verb) must not sit silent just because no viewport is up.
         EngineErrorPump::instance().drain(mEngine);
         const double ms = double(frame.nsecsElapsed()) / 1.0e6;
+        // KEEP the number, do not just threshold it (STATS_OVERLAY_SPEC §4).
+        // This measurement used to be discarded below 100 ms, which threw away
+        // the ONE honest performance figure this architecture has: an FPS
+        // reading here is a measurement of the timer, not of the renderer.
+        // Only RENDERED ticks are banked — a skipped tick costs ~nothing and
+        // would drag the average toward zero while the user sits on a page
+        // with no viewport.
+        if (anythingToDraw) {
+            mWork[mWorkNext] = ms;
+            mWorkNext = (mWorkNext + 1) % kWorkWindow;
+            if (mWorkFilled < kWorkWindow) ++mWorkFilled;
+            double sum = 0.0;
+            for (int i = 0; i < mWorkFilled; ++i) sum += mWork[i];
+            mStats.workMs = sum / mWorkFilled;
+            if (ms > mStats.worstMs) mStats.worstMs = ms;
+        }
         if (ms >= kSlowFrameMs) {
+            ++mStats.slowFrames;
             LoadTimeline::add(QStringLiteral("frame:slow"), ms);
             qWarning("[open-profile] slow frame: %.1f ms (shader/PSO compilation is the "
                      "usual cause on the first frame of a world)", ms);

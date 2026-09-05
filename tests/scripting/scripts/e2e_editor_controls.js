@@ -367,16 +367,20 @@ assert(pixelsMoved, "frameNode changed what the viewport renders (" +
 
 console.log("editor_controls: camera placement verbs verified");
 // ---- overlays (AI_SURFACE_PROGRAM_SPEC lane D #15) ----
-// The View Options rows as a verb pair. Four keys, not five: setShowFps is an
-// empty override in the engine viewport and nothing draws a counter, so an
-// `fps` key would be a silent no-op — which is the defect class this program
-// exists to stop. The read-back object is the assertion.
+// The View Options rows as a verb pair. FIVE keys now: the fifth, `stats`, was
+// refused by name for as long as setShowFps was an empty override and nothing
+// drew a counter — an `fps` key would have been a silent no-op, which is the
+// defect class that program existed to stop. STATS_OVERLAY_SPEC discharged the
+// refusal: the engine draws the readout, so the key exists, and it is called
+// `stats` because it reports frame time, draws and triangles rather than a
+// frame rate. The read-back object is the assertion.
 var ov0 = editor.overlays();
 assert(typeof ov0.grid === "boolean", "overlays().grid is a boolean");
 assert(typeof ov0.lightWires === "boolean", "overlays().lightWires is a boolean");
 assert(typeof ov0.selectionWireframe === "boolean", "overlays().selectionWireframe is a boolean");
+assert(typeof ov0.stats === "boolean", "overlays().stats is a boolean");
 assert(typeof ov0.gameView === "boolean", "overlays().gameView is a boolean");
-assert(ov0.fps === undefined, "there is NO fps key (nothing draws one)");
+assert(ov0.fps === undefined, "the key is 'stats', not 'fps'");
 assert(ov0.grid === true && ov0.lightWires === true, "grid and light wires are on by default");
 assert(ov0.selectionWireframe === false, "selection highlight defaults to the outline");
 
@@ -401,12 +405,29 @@ assert(editor.overlays().grid === true,
 assert(editor.gameView(false), "back out of game view");
 assert(editor.overlays().gameView === false, "and overlays() agrees");
 
+// ---- the stats readout (STATS_OVERLAY_SPEC phase 4) ----
+// Off by default, switchable through the verb, visible in the read-back, and
+// NOT hidden by Game View — that last one is a deliberate exception to the
+// gameView master switch (D3): a frame-time readout is a diagnostic, and "what
+// is my frame time in the game view" is the question people ask.
+assert(ov0.stats === false, "the stats readout is off by default");
+assert(editor.setOverlays({ stats: true }), "setOverlays({stats:true})");
+assert(editor.overlays().stats === true, "stats reads back on");
+editor.frame(4);   // the readout is composed and drawn on real frames
+assert(editor.gameView(true), "into game view with the readout on");
+assert(editor.overlays().stats === true,
+    "the stats readout SURVIVES Game View (it is a diagnostic, not a helper)");
+assert(editor.gameView(false), "back out of game view");
+assert(editor.setOverlays({ stats: false }), "setOverlays({stats:false})");
+assert(editor.overlays().stats === false, "stats reads back off");
+editor.frame(2);
+
 // Refusals: an unknown key and a non-boolean value both fail loudly.
 var fpsRefused = false;
 try { editor.setOverlays({ fps: true }); } catch (e) {
-    fpsRefused = ("" + e).indexOf("no 'fps' overlay") >= 0;
+    fpsRefused = ("" + e).indexOf("'stats', not 'fps'") >= 0;
 }
-assert(fpsRefused, "setOverlays REFUSES the fps key, and says why");
+assert(fpsRefused, "setOverlays refuses 'fps' and names the key that DOES exist");
 var typoRefused = false;
 try { editor.setOverlays({ lightwires: false }); } catch (e) { typoRefused = true; }
 assert(typoRefused, "a mis-cased key is refused rather than ignored");

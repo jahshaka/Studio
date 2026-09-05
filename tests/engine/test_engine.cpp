@@ -2043,6 +2043,207 @@ void dynamic_mesh_shadow_follows_its_pose() {
 
 
 // ---------------------------------------------------------------------------
+// The engine-drawn overlay: the stats readout and the loading cover
+// (STATS_OVERLAY_SPEC.md; the phase-0 proof is spikes/overlay-v1-vulkan).
+//
+// The FIRST test here is the load-bearing one. Under owner decision D2 the
+// cover is raised on EVERY world open, so an overlay that leaked into offscreen
+// views would not be a rare edge — it would put a flat grey panel over every
+// thumbnail, every material preview and every pixel suite in this file. §5.2's
+// guarantee is therefore asserted byte-for-byte, not argued.
+
+/// A byte-exact fingerprint of a readback. FNV-1a over the raw RGBA — the same
+/// shape the overlay spike used to prove "overlays off == no overlays at all".
+unsigned long long pixelHash(const Image &img) {
+    unsigned long long h = 1469598103934665603ull;
+    for (unsigned char v : img.rgba) { h ^= v; h *= 1099511628211ull; }
+    return h;
+}
+
+/// A cover desc that would be impossible to miss if it ever rendered: a full
+/// view of magenta with two lines of text over it.
+ViewOverlayDesc loudCover() {
+    ViewOverlayDesc d;
+    d.cover = ViewOverlayDesc::Cover::Loading;
+    d.coverTitle = "Loading world";
+    d.coverSubtitle = "a name that would be visible";
+    d.coverFill = Colour(1.0f, 0.0f, 1.0f, 1.0f);
+    d.stats = true;
+    d.lines = { "62 fps  4.7 ms", "318 draws  1.24 M tris" };
+    return d;
+}
+
+/// THE NEGATIVE TEST, and it is law: an offscreen view renders the SAME BYTES
+/// with a cover and a stats readout pushed at it as it does with none, unless
+/// it explicitly opted in. Nothing about this is a matter of discipline — the
+/// gate is in one place (OgreView::overlaysAllowed, feeding ChainDesc::overlays
+/// into the single overlay-bearing pass) exactly like the post chain's.
+void hud_overlay_is_ignored_offscreen_unless_asked() {
+    Fixture fx;
+    View *v = fx.view("hud-guard-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("hud-guard-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    render(fx.e, 4); Image plain; REQUIRE(v->readPixels(plain));
+    const unsigned genBefore = v->workspaceGeneration();
+
+    v->setOverlay(loudCover());          // allowOffscreen deliberately NOT set
+    CHECK_MSG(v->workspaceGeneration() == genBefore,
+              "an offscreen view must not even rebuild for an overlay it will ignore: %u -> %u",
+              genBefore, v->workspaceGeneration());
+    render(fx.e, 4); Image covered; REQUIRE(v->readPixels(covered));
+
+    std::printf("    pixelhash  no overlay %016llx   cover+stats refused %016llx\n",
+                pixelHash(plain), pixelHash(covered));
+    CHECK_MSG(plain.rgba == covered.rgba,
+              "BYTE-IDENTICAL or the guarantee is gone: %016llx vs %016llx",
+              pixelHash(plain), pixelHash(covered));
+    // The view still remembers what it was asked for — it just does not act.
+    CHECK(v->overlay().cover == ViewOverlayDesc::Cover::Loading);
+    CHECK(v->overlay().stats);
+}
+
+/// The other half: a negative test that can never fail proves nothing. With
+/// allowOffscreen the SAME desc must change the picture, and change it in the
+/// places it claims to draw — the whole view for the cover, the corner for the
+/// readout.
+void hud_overlay_draws_where_it_says_when_allowed() {
+    Fixture fx;
+    View *v = fx.view("hud-draw-view", 192, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("hud-draw-scene");               REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    render(fx.e, 4); Image plain; REQUIRE(v->readPixels(plain));
+
+    // ---- the cover: opaque, over everything, in its own colour -------------
+    ViewOverlayDesc cover = loudCover();
+    cover.stats = false;                 // the cover alone, so the centre is unambiguous
+    cover.allowOffscreen = true;
+    v->setOverlay(cover);
+    // The ENTITLEMENT is a graph change (the pass def's mIncludeOverlays), so
+    // this one rebuild is expected and is the only one in the feature.
+    render(fx.e, 4); Image withCover; REQUIRE(v->readPixels(withCover));
+    CHECK_MSG(plain.rgba != withCover.rgba, "the cover must change the picture");
+    const Px c = centre(withCover);
+    CHECK_MSG(near(c, cover.coverFill, 6),
+              "the cover fill must own the centre pixel: %d %d %d", c.r, c.g, c.b);
+    // Opaque, not blended: a corner far from any text is the fill too.
+    const Px corner4 = px(withCover, 4, withCover.height - 4);
+    CHECK_MSG(near(corner4, cover.coverFill, 6),
+              "the cover must fill the whole view: %d %d %d", corner4.r, corner4.g, corner4.b);
+    // The cover's TEXT is the one-shot-caption trap's blast radius: a static
+    // caption that never re-flags renders nothing at all, silently. Count
+    // pixels in the title band that are neither the fill nor the scene.
+    size_t titlePixels = 0;
+    for (unsigned y = withCover.height / 2 - 14; y < withCover.height / 2 + 14; ++y)
+        for (unsigned x = 0; x < withCover.width; ++x)
+            if (!near(px(withCover, x, y), cover.coverFill, 24)) ++titlePixels;
+    std::printf("    cover title/subtitle pixels: %zu\n", titlePixels);
+    CHECK_MSG(titlePixels > 40,
+              "the cover's STATIC captions must actually render (the one-shot trap): %zu px",
+              titlePixels);
+
+    // ---- the stats readout: a corner, and only that corner -----------------
+    ViewOverlayDesc stats;
+    stats.stats = true;
+    stats.allowOffscreen = true;
+    stats.corner = OverlayCorner::TopLeft;
+    stats.colour = Colour(1.0f, 0.0f, 0.0f, 1.0f);
+    stats.lines = { "MMMMMMMMMMMM", "MMMMMMMMMMMM" };
+    v->setOverlay(stats);
+    render(fx.e, 4); Image withStats; REQUIRE(v->readPixels(withStats));
+
+    auto differing = [&](unsigned x0, unsigned y0, unsigned x1, unsigned y1) {
+        size_t n = 0;
+        for (unsigned y = y0; y < y1; ++y)
+            for (unsigned x = x0; x < x1; ++x) {
+                const Px a = px(plain, x, y), b = px(withStats, x, y);
+                if (std::abs(a.r - b.r) > 8 || std::abs(a.g - b.g) > 8 ||
+                    std::abs(a.b - b.b) > 8) ++n;
+            }
+        return n;
+    };
+    const size_t topLeft     = differing(0, 0, withStats.width / 2, withStats.height / 2);
+    const size_t bottomRight = differing(withStats.width / 2, withStats.height / 2,
+                                         withStats.width, withStats.height);
+    std::printf("    stats readout: %zu px changed top-left, %zu bottom-right\n",
+                topLeft, bottomRight);
+    CHECK_MSG(topLeft > 60, "the stats readout must draw in its corner: %zu px", topLeft);
+    CHECK_MSG(bottomRight == 0,
+              "the stats readout must touch NOTHING outside its corner: %zu px", bottomRight);
+}
+
+/// Showing and hiding the overlay is element state, never a chain edit — or
+/// every F3 press and every world open would cost a workspace rebuild
+/// (STATS_OVERLAY_SPEC §6.6 test 3). Only the offscreen ENTITLEMENT changes the
+/// graph, and that is a test-only door.
+void hud_overlay_toggle_does_not_rebuild_the_workspace() {
+    Fixture fx;
+    View *v = fx.view("hud-gen-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("hud-gen-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+    ViewOverlayDesc on;
+    on.allowOffscreen = true;            // pay the one entitlement rebuild up front
+    v->setOverlay(on);
+    render(fx.e, 2);
+    const unsigned gen = v->workspaceGeneration();
+
+    for (int i = 0; i < 3; ++i) {
+        ViewOverlayDesc d;
+        d.allowOffscreen = true;
+        d.stats = true;
+        d.lines = { i % 2 ? "a" : "b" };
+        d.cover = i % 2 ? ViewOverlayDesc::Cover::Loading : ViewOverlayDesc::Cover::NoScene;
+        d.coverTitle = i % 2 ? "Loading world" : "No world open";
+        v->setOverlay(d);
+        render(fx.e, 1);
+    }
+    v->setOverlay(on);
+    render(fx.e, 1);
+    CHECK_MSG(v->workspaceGeneration() == gen,
+              "toggling the overlay must not rebuild the workspace: %u -> %u",
+              gen, v->workspaceGeneration());
+}
+
+/// The data half (phase 1). Not "plausible numbers" — the two properties a
+/// caller can actually rely on: the geometry counters are LAZY (off until
+/// somebody asks, which is why the first read is honest about reporting
+/// nothing), and the timings move as frames go by.
+void render_stats_are_live_and_lazily_recorded() {
+    Fixture fx;
+    View *v = fx.view("stats-view", 64, 64, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("stats-scene");             REQUIRE(s);
+    v->setScene(s);
+    populate(s, kOrange);
+    aim(v);
+
+    RenderStats first;
+    CHECK(fx.e->renderStats(first));
+    // The first read may or may not find recording already on — an earlier test
+    // in this process may have asked. What must hold either way: after the read
+    // switched it on and a frame has been drawn, there ARE draws.
+    render(fx.e, 4);
+    RenderStats after;
+    CHECK(fx.e->renderStats(after));
+    CHECK_MSG(after.metricsRecording, "reading renderStats must have enabled recording");
+    std::printf("    %.1f fps  %.2f ms  %llu draws  %llu batches  %llu tris  %llu verts\n",
+                after.fps, after.frameMs, after.draws, after.batches, after.triangles,
+                after.vertices);
+    CHECK_MSG(after.draws > 0, "a frame with a lit cube in it draws something: %llu", after.draws);
+    CHECK_MSG(after.triangles > 0, "…and it has triangles: %llu", after.triangles);
+    CHECK_MSG(after.frameMs > 0.0, "the rolling frame time must be a real number: %f",
+              after.frameMs);
+    CHECK_MSG(after.fps > 0.0, "…and so must the fps derived from it: %f", after.fps);
+    CHECK_MSG(after.worstMs >= after.bestMs,
+              "worst must not be better than best: %f vs %f", after.worstMs, after.bestMs);
+}
+
+
+// ---------------------------------------------------------------------------
 // The post chain (POST_CHAIN_SPEC.md phases 3-7).
 //
 // The chain is an ON-SCREEN feature: offscreen views keep the simple workspace
@@ -2642,6 +2843,10 @@ int main(int argc, char **argv) {
         { "workspace_seam_counts_every_rebuild",    workspace_seam_counts_every_rebuild },
         { "shadow_mesh_optimization_keeps_static_shadows", shadow_mesh_optimization_keeps_static_shadows },
         { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
+        { "hud_overlay_is_ignored_offscreen_unless_asked", hud_overlay_is_ignored_offscreen_unless_asked },
+        { "hud_overlay_draws_where_it_says_when_allowed", hud_overlay_draws_where_it_says_when_allowed },
+        { "hud_overlay_toggle_does_not_rebuild_the_workspace", hud_overlay_toggle_does_not_rebuild_the_workspace },
+        { "render_stats_are_live_and_lazily_recorded", render_stats_are_live_and_lazily_recorded },
         { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
         { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
         { "bloom_bleeds_bright_areas",              bloom_bleeds_bright_areas },

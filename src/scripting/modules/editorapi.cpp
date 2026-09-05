@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/undoservice.h"
 #include "bridge/enginehost.h"
+#include "data/settingsmanager.h"
 
 using namespace scriptmod;
 
@@ -61,21 +62,25 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, gameView}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, gameView}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
-          "highlight style (true = polygon wireframe, false = silhouette outline), `gameView` the "
-          "master switch that hides all of them at once. There is deliberately no `fps` row: "
-          "nothing in the engine viewport draws an FPS counter (setShowFps is an empty override), "
-          "so reporting one would be a number that is never true.",
+          "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
+          "engine-drawn frame-stats readout in the viewport's top-left corner (F3), `gameView` the "
+          "master switch that hides the HELPERS all at once. `stats` is deliberately NOT one of the "
+          "things gameView hides: it is a diagnostic, not an editor helper, and \"what is my frame "
+          "time in the game view\" is the question people actually ask. Read app.renderStats() for "
+          "the numbers themselves — the readout never appears in a screenshot, because screenshots "
+          "render through an offscreen view and the overlay is excluded from those by construction.",
           Needs::Engine },
-        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, gameView}) -> bool",
-          "Turns the viewport's editor helpers on and off — the View Options rows and the G key, "
-          "as one verb. Omitted keys keep their value; an unknown key is REFUSED (a silently "
-          "ignored overlay key is indistinguishable from a broken renderer). `gameView` hides all "
-          "of them at once and is not persisted; `grid` is per-scene; the others are viewport "
-          "state for this session. NOTE the View Options menu's checkmarks do not yet follow a "
-          "script-driven change (same as editor.setCameraMode) — the viewport does.",
+        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, gameView}) -> bool",
+          "Turns the viewport's editor helpers on and off — the View Options rows, the G key and "
+          "the F3 stats readout, as one verb. Omitted keys keep their value; an unknown key is "
+          "REFUSED (a silently ignored overlay key is indistinguishable from a broken renderer). "
+          "`gameView` hides the helpers all at once and is not persisted; `grid` is per-scene; "
+          "`stats` persists as the `show_fps` preference and survives Game View and fullscreen; the "
+          "others are viewport state for this session. NOTE the View Options menu's checkmarks do "
+          "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport does.",
           Needs::Engine },
         { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
           "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes.",
@@ -242,14 +247,21 @@ bool EditorApi::isGameView()
     return host.viewport->isGameView();
 }
 
-// AI_SURFACE_PROGRAM_SPEC lane D #15. Deliberately four keys, not five: the
-// audit asked for `fps` too, but IEditorViewport::setShowFps is an EMPTY
-// override in the engine viewport (enginesceneviewport.h) and nothing anywhere
-// draws a counter — shipping the key would be a new F7-class silent no-op on
-// the exact surface this program exists to clean up. `gameView` rides along
-// because it is the master switch over the other three and already has a verb;
-// having it in the read-back object is what makes the object honest (grid:true
-// while gameView:true means "on, but hidden").
+// AI_SURFACE_PROGRAM_SPEC lane D #15, plus the fifth key it had to refuse.
+//
+// This verb used to ship FOUR keys and turn `fps` down IN PROSE, because
+// IEditorViewport::setShowFps was an empty override and nothing anywhere drew a
+// counter — shipping the key would have been a new silent no-op on the exact
+// surface that program existed to clean up. The refusal was a contract, and
+// STATS_OVERLAY_SPEC.md is the program that discharged it: the engine now draws
+// the readout (irisgl/engine/src/OgreOverlayHud.cpp) and the key is `stats`,
+// not `fps`, because what it shows is frame time, draws and triangles — an FPS
+// number alone would be the least useful row on it (§4).
+//
+// `gameView` rides along because it is the master switch over the three
+// HELPERS and already has a verb; having it in the read-back object is what
+// makes the object honest (grid:true while gameView:true means "on, but
+// hidden"). `stats` is outside that switch on purpose (D3).
 QVariantMap EditorApi::overlays()
 {
     QVariantMap out;
@@ -257,6 +269,7 @@ QVariantMap EditorApi::overlays()
     out["grid"] = host.viewport->getShowGrid();
     out["lightWires"] = host.viewport->getShowLightWires();
     out["selectionWireframe"] = host.viewport->getSelectionWireframe();
+    out["stats"] = host.viewport->getShowFps();
     out["gameView"] = host.viewport->isGameView();
     return out;
 }
@@ -269,12 +282,13 @@ bool EditorApi::setOverlays(const QVariantMap &change)
                     "({grid, lightWires, selectionWireframe, gameView}); "
                     "editor.overlays() reads the current values");
 
-    static const QStringList known = { "grid", "lightWires", "selectionWireframe", "gameView" };
+    static const QStringList known = { "grid", "lightWires", "selectionWireframe",
+                                      "stats", "gameView" };
     for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
         if (!known.contains(it.key()))
             return fail(QStringLiteral("editor.setOverlays: unknown overlay '%1' (known: %2). "
-                                       "There is no 'fps' overlay — the engine viewport draws no "
-                                       "FPS counter.")
+                                       "The frame-stats readout is 'stats', not 'fps' — it shows "
+                                       "frame time, draws and triangles, not just a frame rate.")
                             .arg(it.key(), known.join(", ")));
         // A non-boolean here used to mean "0" everywhere in Qt's variant
         // conversion; on this surface it means the caller guessed the type.
@@ -288,6 +302,14 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     if (change.contains("lightWires")) host.viewport->setShowLightWires(change.value("lightWires").toBool());
     if (change.contains("selectionWireframe"))
         host.viewport->setSelectionWireframe(change.value("selectionWireframe").toBool());
+    if (change.contains("stats")) {
+        const bool on = change.value("stats").toBool();
+        host.viewport->setShowFps(on);
+        // Persisted, unlike the other rows: `stats` is the Preferences
+        // `show_fps` setting, and the checkbox, the F3 key and this verb are one
+        // code path with one stored value (STATS_OVERLAY_SPEC §5.3 step 3).
+        SettingsManager::getDefaultManager()->setValue("show_fps", on);
+    }
     if (change.contains("gameView")) host.viewport->setGameView(change.value("gameView").toBool());
     return true;
 }

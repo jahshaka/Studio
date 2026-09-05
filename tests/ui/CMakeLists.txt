@@ -86,25 +86,12 @@ add_test(NAME ui.property_anim COMMAND test_property_anim
 set_tests_properties(ui.property_anim PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
 
-# ui.viewport_cover — the viewport's "nothing is presenting" cover
-# (src/viewport/viewportcover.h): hidden while the engine presents, and opaque
-# over every pixel of its rect when it is up. The widget half of the
-# desktop-bleed fix (2026-09-03); the state machine that drives it is gated by
-# scripting.e2e.viewport_cover. Pure widget: no engine, no display.
-add_executable(test_viewport_cover test_viewport_cover.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/viewportcover.cpp)
-set_target_properties(test_viewport_cover PROPERTIES
-    AUTOMOC ON
-    CXX_STANDARD 17
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(test_viewport_cover PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_viewport_cover PRIVATE Qt6::Widgets Qt6::Test)
-add_test(NAME ui.viewport_cover COMMAND test_viewport_cover
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(ui.viewport_cover PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+# ui.viewport_cover is GONE with the widget it tested (owner decision D2,
+# SPECS/STATS_OVERLAY_SPEC.md §6): the loading cover is drawn by the engine now,
+# so there is no Qt widget left to unit-test offscreen. What it really guarded —
+# the state machine that decides WHEN a cover is up — was always gated by
+# scripting.e2e (renamed presentation_state), which survives unchanged, and the
+# pixels are gated by test_engine's hud_overlay_* cases.
 
 # ui.media_lazy — Qt Multimedia stays off the startup path
 # (STABILITY_PROGRAM_SPEC Lane 6a). VideoPreviewWidget and iris::Scene both
@@ -171,5 +158,5 @@ endif()
 # ui.material_panel is QUARANTINED (L1 iris::Material properties — 54
 # materials' worth). Its other leak, one QProxyStyle per slider row, was
 # this lane's first fix (hfloatsliderwidget.cpp).
-jah_lsan_lane(ui.property_anim ui.viewport_cover ui.media_lazy)
+jah_lsan_lane(ui.property_anim ui.media_lazy)
 jah_lsan_blocked(ui.material_panel)

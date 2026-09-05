@@ -51,7 +51,10 @@ target_include_directories(OgreNext INTERFACE
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Hlms/Unlit
     # Atmosphere component: its headers include each other by bare name.
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Atmosphere
-    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/PlanarReflections)
+    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/PlanarReflections
+    # Overlay component (STATS_OVERLAY_SPEC D1): the engine-drawn stats readout
+    # and loading cover. Its headers include each other by bare name too.
+    ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Overlay)
 # Plain -I, deliberately NOT SYSTEM: OGRE_BUILD_COMPONENT_PLANAR_REFLECTIONS is
 # #ifdef-ed inside OgreHlmsPbs.h, so the installed OgreBuildSettings.h changes
 # HlmsPbs's member LAYOUT. generateAbiCookie() does not hash component defines,
@@ -61,8 +64,13 @@ target_include_directories(OgreNext INTERFACE
 #
 # Absolute paths, not -l names: link directories do not propagate through a
 # static library's PRIVATE link, so -lOgreNextMain would not resolve in Jahshaka.
+# OgreNextOverlay is in this list on purpose: it is a `cmake_dependent_option`
+# on FREETYPE_FOUND upstream, so `-DOGRE_BUILD_COMPONENT_OVERLAY=ON` on a box
+# without freetype dev files SILENTLY yields OFF and produces a different
+# install. build-ogre.sh greps its configure for the target for the same reason.
+# Failing loudly here is the second half of that guard.
 foreach(_lib OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit OgreNextAtmosphere
-             OgreNextPlanarReflections)
+             OgreNextPlanarReflections OgreNextOverlay)
     # Never trust a cached hit: a changed OGRE_NEXT_PREFIX must re-resolve.
     unset(OGRE_NEXT_${_lib}_LIB CACHE)
     find_library(OGRE_NEXT_${_lib}_LIB NAMES ${_lib}
