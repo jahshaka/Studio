@@ -94,3 +94,17 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(STATUS "app.pacing_undo skipped: needs xdotool, curl, jq and Xvfb")
     endif()
 endif()
+
+# ---- app.scene_switch_after_play -------------------------------------------
+# crash-1788594910 regression gate: switching scenes with play/simulate state
+# still armed must not crash (PlayBack::stopScene + updateSceneAnimation ran
+# against the closed project's torn-down scene). Real binary, scratch HOME.
+set(_ssap_home ${CMAKE_CURRENT_BINARY_DIR}/scene-switch-home)
+file(MAKE_DIRECTORY ${_ssap_home}/run)
+add_test(NAME app.scene_switch_after_play
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_scene_switch_after_play.js
+         WORKING_DIRECTORY ${_ssap_home}/run)
+set_tests_properties(app.scene_switch_after_play PROPERTIES
+    ENVIRONMENT "HOME=${_ssap_home}"
+    LABELS "app"
+    TIMEOUT 300)

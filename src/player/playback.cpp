@@ -209,11 +209,22 @@ void PlayBack::stopScene()
 {
 	_isPlaying = false;
 	_isPaused = false;
+	// A scene switch can arrive with play state still armed against the
+	// PREVIOUS project: closeProject tears the old scene down (cleanup()
+	// drops its root node) without routing through here, and the next
+	// setScene's stopPlayingScene then found scene->getRootNode() null —
+	// restoreNodeTransformations walked ->children on null
+	// (crash-1788594910.log). Every deref below is against a scene that may
+	// be half-dead; guard each, keep the flag resets above unconditional.
+	if (mouseController) mouseController->setPlayState(_isPlaying);
+	if (!scene) { animTime = 0; return; }
 	scene->setPlaying(false);   // back to the explorer (CAMERAS_SPEC D6)
-	mouseController->setPlayState(_isPlaying);
-	scene->getPhysicsEnvironment()->restartPhysics();
-	scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
-	restoreNodeTransforms();// it's important that this is here after physics restore
+	if (auto env = scene->getPhysicsEnvironment()) {
+		env->restartPhysics();
+		env->restoreNodeTransformations(scene->getRootNode());
+	}
+	if (scene->getRootNode())
+		restoreNodeTransforms();// it's important that this is here after physics restore
 
 	animTime = 0;
 }
