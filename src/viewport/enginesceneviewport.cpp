@@ -227,12 +227,16 @@ void EngineSceneViewport::clearViewStates()
     mCameraView = QStringLiteral("perspective");
 }
 
-// The resync every camera mover in this file owes the active controller.
-// OrbitalCameraController::setCamera() DECOMPOSES the camera's rotation into
-// pitch/yaw and then REBUILDS the pose from pivot + orbit distance
-// (updateCameraRot) — which round-trips exactly for a roll-free rotation and
-// silently drops any roll otherwise. The free controller does the same to the
-// rotation and leaves the position alone.
+// The resync every camera mover in this file owes the active controller: the
+// controllers steer with (yaw, pitch) — plus a pivot, for the arcball — and a
+// camera that moved by any other route has to be re-read.
+//
+// It is a READ. Both setCamera()s used to finish by REBUILDING the pose from
+// what they had just decomposed (updateCameraRot), which round-trips exactly
+// for a roll-free rotation and silently destroys any roll otherwise — so
+// adoption alone flattened socketed and authored cameras, permanently, on the
+// document (fixed 2026-09-06; the contract now lives on
+// CameraControllerBase::setCamera). Nothing here writes a camera any more.
 void EngineSceneViewport::resyncCameraController(float orbitDistance)
 {
     if (!mCamController || !viewCamera()) return;

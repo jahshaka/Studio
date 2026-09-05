@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QPoint>
 #include <QSharedPointer>
 #include <QtMath>
+#include <cmath>
 
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -48,7 +49,12 @@ iris::CameraNodePtr OrbitalCameraController::getCamera()
 }
 
 /**
- * Calculates the pivot location and its yaw and pitch
+ * Adopts a camera: derives the pivot and the (yaw, pitch) the arcball steers
+ * with. DECOMPOSE ONLY, never write — see EditorCameraController::setCamera for
+ * the whole rationale (this one used to rebuild the pose from pivot + distance
+ * as well, so it dropped roll AND could shift the camera by a euler round trip).
+ * Nothing is pending afterwards: the targets are matched to the derived angles,
+ * so update() has nothing to lerp and leaves the node alone.
  */
 void OrbitalCameraController::setCamera(iris::CameraNodePtr  cam)
 {
@@ -62,8 +68,7 @@ void OrbitalCameraController::setCamera(iris::CameraNodePtr  cam)
     cam->getLocalRot().getEulerAngles(&pitch,&yaw,&roll);
 	targetYaw = yaw;
 	targetPitch = pitch;
-
-    this->updateCameraRot();
+	navPending = false;
 }
 
 void OrbitalCameraController::setRotationSpeed(float rotationSpeed)
@@ -73,6 +78,11 @@ void OrbitalCameraController::setRotationSpeed(float rotationSpeed)
 
 void OrbitalCameraController::onMouseMove(int x,int y)
 {
+	// Which branch (if any) fired decides whether the node is written at all.
+	// The viewport tracks the mouse for gizmo hover, so onMouseMove arrives on
+	// every cursor move with no button down: writing unconditionally rebuilt
+	// the pose from (pitch, yaw, 0) and levelled any roll the camera had.
+	bool navigated = false;
 	if (previewMode && (leftMouseDown || rightMouseDown)) {
 		// in case lerping is still in progress, match the values with their targets
 		yaw = targetYaw;
@@ -83,6 +93,7 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		// keep pitch and yaw in sync
 		targetYaw = yaw;
 		targetPitch = pitch;
+		navigated = true;
 	}
 	else if (!previewMode && altOrbit && leftMouseDown) {
 		// Alt+LMB orbit: the arcball already orbits — just route Alt+LMB
@@ -94,6 +105,7 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		this->pitch += y * rotationSpeed;
 		targetYaw = yaw;
 		targetPitch = pitch;
+		navigated = true;
 	}
 	else if (!previewMode && rightMouseDown) {
 		// in case lerping is still in progress, match the values with their targets
@@ -106,6 +118,7 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		// keep pitch and yaw in sync
 		targetYaw = yaw;
 		targetPitch = pitch;
+		navigated = true;
 	}
 
     if (middleMouseDown ||
@@ -114,9 +127,10 @@ void OrbitalCameraController::onMouseMove(int x,int y)
         float dragSpeed = 0.01f;
         auto dir = camera->getLocalRot().rotatedVector(iris::Vec3(x*dragSpeed,-y*dragSpeed,0));
         pivot += dir;
+        navigated = true;   // the pivot moved: the camera has to follow it
     }
 
-    updateCameraRot();
+    if (navigated) updateCameraRot();
 }
 
 void OrbitalCameraController::setAltOrbit(bool active, const iris::Vec3 &newPivot)
@@ -164,17 +178,33 @@ void OrbitalCameraController::onMouseWheel(int delta)
 		if (distFromPivot <= 0.1f) distFromPivot = .01f;
 		camera->setOrthagonalZoom(distFromPivot);
 	}else{
-		updateCameraRot();
+		updateCameraRot();   // navigation: the orbit radius changed
 
 	}
 
 }
 
+// The lerp that animates an axis-view snap — and NOTHING ELSE. It used to write
+// the camera on every single frame the arcball was the active controller, which
+// meant a camera the viewport had merely adopted was rebuilt from
+// (pitch, yaw, 0) + pivot 60 times a second: roll levelled, and any pose set by
+// something other than this controller (a socket, an animation, a verb) fought
+// for the node. Now a write needs a NAVIGATION to have asked for it, and the
+// run ends when the lerp arrives.
 void OrbitalCameraController::update(float dt)
 {
+	if (!navPending || !camera) return;
+
 	yaw = lerp(yaw, targetYaw, 0.8);
 	pitch = lerp(pitch, targetPitch, 0.8);
-
+	// The 0.8 lerp only ever approaches its target, so the run needs an end:
+	// within a thousandth of a degree, land exactly on it and stop. (Before,
+	// "stopping" simply meant re-writing the same pose forever.)
+	if (std::abs(yaw - targetYaw) < 1e-3f && std::abs(pitch - targetPitch) < 1e-3f) {
+		yaw = targetYaw;
+		pitch = targetPitch;
+		navPending = false;
+	}
 	updateCameraRot();
 }
 
@@ -201,6 +231,7 @@ void OrbitalCameraController::setAxisView(float yawDeg, float pitchDeg)
 {
 	targetYaw = yawDeg;
 	targetPitch = pitchDeg;
+	navPending = true;   // update()'s lerp is what flies there
 }
 
 void OrbitalCameraController::focusOnNode(iris::SceneNodePtr sceneNode)

@@ -85,6 +85,13 @@ public:
 	void setAltOrbit(bool active, const iris::Vec3 &pivot) override;
 protected:
 	virtual void keyReleaseEvent(QKeyEvent *event);
+
+	/// True while a NAVIGATION the user asked for still has writing to do (a
+	/// drag this frame, or an axis-view snap whose lerp has not landed). It is
+	/// the only thing that lets update() touch the camera node: adopting a
+	/// camera must never rewrite it (setCamera), and the arcball is the active
+	/// controller for whole sessions in which nobody navigates at all.
+	bool navPending = false;
 };
 
 #endif // ORBITALCAMERACONTROLLER_H
