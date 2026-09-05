@@ -925,6 +925,105 @@ void letterbox_fits_the_shot_and_bars_the_rest() {
               pixelHash(plain), pixelHash(restored));
 }
 
+/// THE COMBINATION CAMERAS_SPEC §7.3 explicitly left unspiked: "PiP x post-FX
+/// chain shape". The inset composites onto whatever the chain last wrote to the
+/// target, so it has to work over a tonemapped, bloomed, ambient-occluded,
+/// edge-blended frame as well as over a passthrough one — and the letterbox has
+/// to survive the same chain, because with effects on the scene renders into an
+/// offscreen target and a composite quad copies it to the window (bars and all).
+void pip_and_letterbox_over_the_post_chain() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-post", 128, 128, kBlue);   REQUIRE(v);
+    Scene *s = f.scene("pip-post-scene");            REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    pip::aimMain(v);
+
+    const ViewPipDesc d0 = pip::desc(0.60f, 0.60f, 0.36f, 0.36f);
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;      // the only way an offscreen view gets one
+    fxDesc.hdr = true;
+    fxDesc.bloom = true;
+    fxDesc.ssao = true;
+    fxDesc.smaaPreset = 2;
+    v->setPostFx(fxDesc);
+    render(e, 4);
+    const std::string errBefore = e->lastError();
+    Image ref; REQUIRE(v->readPixels(ref));
+
+    // NOT byte-exact, and MEASURED rather than assumed: the post chain is not
+    // frame-to-frame deterministic. HDR auto-exposure is a temporal filter that
+    // adapts per SECOND of wall clock, so two readbacks of the same STILL scene
+    // taken at different moments already differ across most of the frame — this
+    // run measures the chain against itself first, with no inset at all, and
+    // both numbers below are printed so the comparison is never a guess.
+    //
+    // The magnitude is what makes it a non-event: the drift is ONE OR TWO
+    // levels out of 255, i.e. rounding, not an artefact. So the assertion is on
+    // magnitude, and it is a strong one — an inset that leaked, smeared or
+    // re-tonemapped anything outside its rect could not stay inside 4 levels.
+    render(e, 4);
+    Image ref2; REQUIRE(v->readPixels(ref2));
+    const pip::RectStats drift = pip::compare(ref2, ref, d0, kGreen, 2);
+
+    v->setPip(d0);
+    render(e, 4);
+    Image withPip; REQUIRE(v->readPixels(withPip));
+    const ViewPipDesc &d = d0;
+    const pip::RectStats st = pip::compare(withPip, ref, d, kGreen, 2);
+    CHECK_MSG(st.inside >= st.insideTotal * 90 / 100,
+              "the inset composites over a post-processed frame: %u/%u px",
+              st.inside, st.insideTotal);
+    int maxDelta = 0;
+    {
+        const int x0 = int(d.left * withPip.width), x1 = int((d.left + d.width) * withPip.width);
+        const int y0 = int(d.top * withPip.height), y1 = int((d.top + d.height) * withPip.height);
+        for (int y = 0; y < int(withPip.height); ++y)
+            for (int x = 0; x < int(withPip.width); ++x) {
+                if (x >= x0 - 2 && x <= x1 + 2 && y >= y0 - 2 && y <= y1 + 2) continue;
+                const size_t i = (size_t(y) * withPip.width + x) * 4u;
+                for (int c = 0; c < 3; ++c)
+                    maxDelta = std::max(maxDelta,
+                                        std::abs(int(withPip.rgba[i+c]) - int(ref.rgba[i+c])));
+            }
+    }
+    std::printf("    outside the rect: %u px differ with the inset, %u px differ WITHOUT it "
+                "(the chain's own drift); worst channel delta %d/255\n",
+                st.outsideDiff, drift.outsideDiff, maxDelta);
+    CHECK_MSG(maxDelta <= 4,
+              "the inset changes NOTHING VISIBLE outside its rect over a post-processed frame: "
+              "worst channel delta %d (the chain's own frame-to-frame drift is 1-2)", maxDelta);
+    CHECK_MSG(e->lastError() == errBefore,
+              "no NEW engine error from PiP x post chain: %s", e->lastError().c_str());
+    v->setPip(ViewPipDesc());
+
+    // ---- the letterbox, through the same chain ---------------------------
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 0.0f, 5.0f);
+    v->setCamera(cam);
+    render(e, 4);
+    cam.constrainAspect = true;
+    cam.aspect = 2.0f;
+    v->setCamera(cam);
+    render(e, 4);
+    Image boxed; REQUIRE(v->readPixels(boxed));
+    unsigned barRows = 0;
+    for (unsigned y = 0; y < boxed.height; ++y) {
+        const Px p = px(boxed, 2, y);
+        if (p.r < 12 && p.g < 12 && p.b < 12) ++barRows;
+    }
+    std::printf("    post chain letterbox: %u bar rows of %u\n", barRows, boxed.height);
+    CHECK_MSG(barRows >= boxed.height * 40 / 100 && barRows <= boxed.height * 60 / 100,
+              "a 2:1 shot letterboxes THROUGH the post chain too: %u of %u rows",
+              barRows, boxed.height);
+    CHECK_MSG(e->lastError() == errBefore,
+              "no NEW engine error from letterbox x post chain: %s", e->lastError().c_str());
+    cam.constrainAspect = false;
+    v->setCamera(cam);
+    v->setPostFx(PostFxDesc());
+    render(e, 2);
+}
+
 void teardown_is_clean() {
     // Last test: destroys the process's Engine with everything still registered.
     Engine *e = gEngine.get();
@@ -3313,6 +3412,7 @@ int main(int argc, char **argv) {
         { "pip_letterboxes_to_the_authored_aspect", pip_letterboxes_to_the_authored_aspect },
         { "pip_survives_a_main_workspace_rebuild",  pip_survives_a_main_workspace_rebuild },
         { "letterbox_fits_the_shot_and_bars_the_rest", letterbox_fits_the_shot_and_bars_the_rest },
+        { "pip_and_letterbox_over_the_post_chain",   pip_and_letterbox_over_the_post_chain },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";
