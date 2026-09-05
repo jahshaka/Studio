@@ -87,6 +87,15 @@ public:
     /// The module's built-in head/shoulder sockets, on an editor-scene node
     /// (CAMERAS_SPEC D9). The only verb here that leaves the preview document.
     Q_INVOKABLE QVariantList addSockets(const QString &nodeId);
+
+    // ---- AVATAR_LOCOMOTION_SPEC Stage 2 (§10) ----------------------------
+    //
+    // Editor-SCENE verbs, unlike everything above them: these three address a
+    // node in the open scene by guid, exactly as `addSockets` does.
+    Q_INVOKABLE QString spawn(const QString &assetGuid,
+                              const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap movement(const QString &nodeId);
+    Q_INVOKABLE QVariantMap setMovement(const QString &nodeId, const QVariantMap &values);
     Q_INVOKABLE QVariantMap snapshot(const QString &path, int width = 256, int height = 256,
                                      const QVariantList &probes = QVariantList());
 

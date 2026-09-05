@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QJsonValueRef>
 #include <QJsonDocument>
 
+#include "irisgl/document/physics/avatarmovement.h"
 #include "io/materialreader.h"
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
@@ -662,6 +663,43 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         const QString socket = attachment["socket"].toString();
         if (!owner.isEmpty() && !socket.isEmpty())
             sceneNode->setSocketAttachment(owner, socket);
+    }
+
+    // COLLISION CONTENT (AVATAR_LOCOMOTION_SPEC §6.3 option C). ABSENT means
+    // "the type default", which the constructor already set — on for a mesh,
+    // off for everything else — so every scene written before this flag existed
+    // gets today's behaviour and only an explicit user override is read back.
+    sceneNode->collisionEnabled = nodeObj["collision"].toBool(sceneNode->collisionEnabled);
+
+    // THE AVATAR COMPONENT (AVATAR_LOCOMOTION_SPEC §6). Absent on all but an
+    // avatar wrapper. Every knob falls back to the component's own default, so
+    // a block written by an older build that lacked a key reads as that key's
+    // default rather than as zero — the difference between "this avatar has no
+    // jump" and "this file predates jumpReArm".
+    if (nodeObj.contains(QLatin1String("avatar"))) {
+        const QJsonObject a = nodeObj["avatar"].toObject();
+        auto movement = iris::AvatarMovementPtr(new iris::AvatarMovement());
+        iris::AvatarMovementParams p;
+        p.walkSpeed = float(a["walkSpeed"].toDouble(p.walkSpeed));
+        p.runSpeed = float(a["runSpeed"].toDouble(p.runSpeed));
+        p.maxAcceleration = float(a["maxAcceleration"].toDouble(p.maxAcceleration));
+        p.brakingDeceleration = float(a["brakingDeceleration"].toDouble(p.brakingDeceleration));
+        p.groundFriction = float(a["groundFriction"].toDouble(p.groundFriction));
+        p.jumpVelocity = float(a["jumpVelocity"].toDouble(p.jumpVelocity));
+        p.jumpCount = a["jumpCount"].toInt(p.jumpCount);
+        p.coyoteTime = float(a["coyoteTime"].toDouble(p.coyoteTime));
+        p.jumpReArm = float(a["jumpReArm"].toDouble(p.jumpReArm));
+        p.airControl = float(a["airControl"].toDouble(p.airControl));
+        p.gravityScale = float(a["gravityScale"].toDouble(p.gravityScale));
+        p.maxStepHeight = float(a["maxStepHeight"].toDouble(p.maxStepHeight));
+        p.walkableFloorAngle = float(a["walkableFloorAngle"].toDouble(p.walkableFloorAngle));
+        p.orientRotationToMovement = a["orientRotationToMovement"].toBool(p.orientRotationToMovement);
+        p.rotationRate = float(a["rotationRate"].toDouble(p.rotationRate));
+        p.capsuleAuto = a["capsuleAuto"].toBool(p.capsuleAuto);
+        p.capsuleRadius = float(a["capsuleRadius"].toDouble(p.capsuleRadius));
+        p.capsuleHeight = float(a["capsuleHeight"].toDouble(p.capsuleHeight));
+        movement->setParams(p);
+        sceneNode->setAvatarComponent(movement);
     }
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();

@@ -73,3 +73,30 @@ target_link_libraries(test_avatar_preview PRIVATE IrisGL JahshakaEngine Qt6::Gui
 add_dependencies(test_avatar_preview JahshakaEngineMedia)
 add_test(NAME avatar.preview COMMAND test_avatar_preview WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(avatar.preview PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "avatar")
+
+# avatar.movement — AVATAR_LOCOMOTION_SPEC Stage 2, gates M1-M7.
+#
+# The movement component (§6) through the REAL seam: iris::Scene ->
+# Environment::stepSimulation -> updateAvatarMovement, with static colliders
+# built by the production PhysicsHelper path. No engine rendering, no display:
+# the document graph's NULL render system is the only engine here, and
+# jah_no_display below proves it.
+#
+# It repays the `player.lifecycle` suite Stage 0 removed: M7 asserts the same
+# lifecycle properties (delete mid-play, no stale broadphase entry, no double
+# free) against the component that replaced the 2016 controller.
+add_executable(test_avatar_movement test_avatar_movement.cpp)
+set_target_properties(test_avatar_movement PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_avatar_movement PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_avatar_movement PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_avatar_movement PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_avatar_movement)
+add_test(NAME avatar.movement COMMAND test_avatar_movement
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(avatar.movement PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 300 LABELS "avatar")
+jah_no_display(avatar.movement)

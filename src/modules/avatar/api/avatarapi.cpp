@@ -17,10 +17,14 @@ For more information see the LICENSE file
 
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarsockets.h"
+#include "irisgl/document/physics/avatarmovement.h"
+#include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "scripting/modules/moduleshared.h"
+#include "data/database/database.h"
 #include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "commands/nodeeditcommand.h"
@@ -100,6 +104,29 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "silently wrong on half the files — author it with node.addSocket. This is the one "
           "avatar verb that touches the editor scene rather than the module's own preview. "
           "Undoable.",
+          Needs::Document },
+        { "spawn", "avatar.spawn(assetGuid, {position?, parent?}) -> nodeId",
+          "Instantiates an OBJECT asset from the open project as a playable AVATAR "
+          "(AVATAR_LOCOMOTION_SPEC §6): the same instantiation assets.addToScene does, plus the "
+          "movement component on the wrapper node with its capsule fitted to the mesh bounds, "
+          "plus this module's built-in head/shoulder sockets on the rigged mesh inside it. "
+          "`position` places it; `parent` is a node id to spawn under (default: the scene root). "
+          "Spawning DURING play registers the avatar with the running physics world on the spot "
+          "rather than refusing (spec R6), so a scripted spawn mid-play walks immediately. "
+          "The knobs afterwards are avatar.movement / avatar.setMovement. Undoable.",
+          Needs::Document },
+        { "movement", "avatar.movement(nodeId) -> {walkSpeed, runSpeed, maxAcceleration, brakingDeceleration, groundFriction, jumpVelocity, jumpCount, coyoteTime, jumpReArm, airControl, gravityScale, maxStepHeight, walkableFloorAngle, orientRotationToMovement, rotationRate, capsuleAuto, capsuleRadius, capsuleHeight}",
+          "The movement knobs on an avatar node (spec §6.2). Empty (falsy) for a node that carries "
+          "no avatar component — which is every node but an avatar wrapper.",
+          Needs::Document },
+        { "setMovement", "avatar.setMovement(nodeId, {...}) -> object",
+          "Writes some or all of the movement knobs and returns the RESOLVED set, which is what "
+          "actually took: values are clamped to sane ranges rather than refused (a negative "
+          "walkSpeed becomes 0, walkableFloorAngle is capped at 89 deg so a wall can never read as "
+          "floor, and the capsule is never shorter than a sphere of its own radius). Writing "
+          "capsuleRadius or capsuleHeight clears capsuleAuto — an explicit dimension is a decision, "
+          "and re-deriving it from the mesh would silently discard it. Unknown keys are REFUSED, "
+          "not ignored. Undoable.",
           Needs::Document },
     };
 }
@@ -456,4 +483,229 @@ QVariantList AvatarApi::addSockets(const QString &nodeId)
                                 { "existed", mapping.existed } });
     }
     return out;
+}
+
+
+// ---------------------------------------------------------------------------
+// AVATAR_LOCOMOTION_SPEC Stage 2 — the movement component's verbs (§10).
+
+namespace
+{
+/// The §6.2 knob set as JSON. One place, so `movement` and `setMovement`'s
+/// return value cannot drift apart.
+QVariantMap paramsToJs(const iris::AvatarMovementParams &p)
+{
+    return {
+        { "walkSpeed", p.walkSpeed },
+        { "runSpeed", p.runSpeed },
+        { "maxAcceleration", p.maxAcceleration },
+        { "brakingDeceleration", p.brakingDeceleration },
+        { "groundFriction", p.groundFriction },
+        { "jumpVelocity", p.jumpVelocity },
+        { "jumpCount", p.jumpCount },
+        { "coyoteTime", p.coyoteTime },
+        { "jumpReArm", p.jumpReArm },
+        { "airControl", p.airControl },
+        { "gravityScale", p.gravityScale },
+        { "maxStepHeight", p.maxStepHeight },
+        { "walkableFloorAngle", p.walkableFloorAngle },
+        { "orientRotationToMovement", p.orientRotationToMovement },
+        { "rotationRate", p.rotationRate },
+        { "capsuleAuto", p.capsuleAuto },
+        { "capsuleRadius", p.capsuleRadius },
+        { "capsuleHeight", p.capsuleHeight },
+    };
+}
+
+const QStringList &knobNames()
+{
+    static const QStringList names = {
+        "walkSpeed", "runSpeed", "maxAcceleration", "brakingDeceleration", "groundFriction",
+        "jumpVelocity", "jumpCount", "coyoteTime", "jumpReArm", "airControl", "gravityScale",
+        "maxStepHeight", "walkableFloorAngle", "orientRotationToMovement", "rotationRate",
+        "capsuleAuto", "capsuleRadius", "capsuleHeight"
+    };
+    return names;
+}
+
+/// The rigged mesh inside an imported character, or null. The sockets go on the
+/// BONES of that mesh; the movement component goes on the wrapper above it.
+iris::MeshNodePtr findRiggedMesh(const iris::SceneNodePtr &node)
+{
+    if (!node) return iris::MeshNodePtr();
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto mesh = node.staticCast<iris::MeshNode>();
+        if (mesh->hasSkeleton()) return mesh;
+    }
+    const int kids = node->childCount();
+    for (int i = 0; i < kids; ++i) {
+        if (iris::SceneNode *c = node->childAt(i)) {
+            auto hit = findRiggedMesh(c->sharedFromThis());
+            if (hit) return hit;
+        }
+    }
+    return iris::MeshNodePtr();
+}
+}   // namespace
+
+QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
+{
+    if (!host.db || !host.services || !host.services->sceneEdit || !host.services->selection) {
+        record("avatar.spawn: not available in this session");
+        return QString();
+    }
+    if (!requireProject()) return QString();
+
+    static const QStringList known = { "position", "parent" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.spawn: unknown option '%1' (known: %2)")
+                       .arg(it.key(), known.join(", ")));
+            return QString();
+        }
+    }
+
+    const auto assetRow = host.db->fetchAsset(assetGuid);
+    if (assetRow.guid.isEmpty() || assetRow.type != static_cast<int>(ModelTypes::Object)) {
+        record(QStringLiteral("avatar.spawn: '%1' is not an object asset").arg(assetGuid));
+        return QString();
+    }
+
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) { record("avatar.spawn: no scene is open"); return QString(); }
+
+    iris::SceneNodePtr parent;
+    if (options.contains("parent")) {
+        parent = scriptmod::findNodeByGuid(scene->getRootNode(), options.value("parent").toString());
+        if (!parent) {
+            record(QStringLiteral("avatar.spawn: no node with id '%1' to parent under")
+                       .arg(options.value("parent").toString()));
+            return QString();
+        }
+    }
+
+    // ONE instantiation route (ASSET_PIPELINE_SPEC): the same call
+    // assets.addToScene makes. An avatar is not a second kind of import.
+    const bool hasPosition = options.contains("position");
+    host.services->selection->select(iris::SceneNodePtr());
+    host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
+                                              scriptmod::vecFromJs(options.value("position")),
+                                              assetGuid, assetRow.name);
+    auto node = host.services->selection->selected();
+    if (!node) {
+        record("avatar.spawn: the asset could not be instantiated");
+        return QString();
+    }
+    // Reparenting keeps the world pose (addChild's default), so a
+    // `parent` option cannot silently teleport the character.
+    if (parent) parent->addChild(node);
+
+    // The COMPONENT goes on the wrapper the import produced — the node the
+    // movement writes a transform to — and the SOCKETS go on the rigged mesh
+    // inside it, which may be the same node or several levels down.
+    auto movement = iris::AvatarMovementPtr(new iris::AvatarMovement());
+    node->setAvatarComponent(movement);
+    movement->fitCapsuleToNode(node);
+    if (auto mesh = findRiggedMesh(node)) avatar::sockets::installBuiltIns(mesh);
+
+    // R6, ANSWERED: an avatar spawned WHILE PLAYING registers with the running
+    // world on the spot rather than being refused. Refusing would have meant a
+    // script could not spawn a character into a running game at all, and the
+    // registration is one call because the component owns nothing in the world.
+    if (auto env = scene->getPhysicsEnvironment())
+        if (env->isSimulating()) env->addAvatarToWorld(node);
+
+    if (host.services->undo) {
+        auto weak = node.toWeakRef();
+        host.services->undo->push(new NodeEditCommand(
+            QStringLiteral("avatar component"),
+            [weak, movement]() { if (auto n = weak.toStrongRef()) n->setAvatarComponent(movement); },
+            [weak]() { if (auto n = weak.toStrongRef()) n->setAvatarComponent(iris::AvatarMovementPtr()); }));
+    }
+    return node->getGUID();
+}
+
+QVariantMap AvatarApi::movement(const QString &nodeId)
+{
+    QVariantMap out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.movement: no scene is open"); return out; }
+    auto node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) {
+        record(QStringLiteral("avatar.movement: no node with id '%1'").arg(nodeId));
+        return out;
+    }
+    if (!node->hasAvatarComponent()) return out;   // not an avatar: empty, not an error
+    return paramsToJs(node->avatar()->params());
+}
+
+QVariantMap AvatarApi::setMovement(const QString &nodeId, const QVariantMap &values)
+{
+    QVariantMap out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.setMovement: no scene is open"); return out; }
+    auto node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) {
+        record(QStringLiteral("avatar.setMovement: no node with id '%1'").arg(nodeId));
+        return out;
+    }
+    if (!node->hasAvatarComponent()) {
+        record(QStringLiteral("avatar.setMovement: '%1' carries no avatar component "
+                              "(avatar.spawn installs one)").arg(node->getName()));
+        return out;
+    }
+
+    const QVariantMap in = scriptmod::normalizeJs(values).toMap();
+    for (auto it = in.constBegin(); it != in.constEnd(); ++it) {
+        if (!knobNames().contains(it.key())) {
+            record(QStringLiteral("avatar.setMovement: unknown knob '%1' (known: %2)")
+                       .arg(it.key(), knobNames().join(", ")));
+            return out;
+        }
+    }
+
+    auto *movement = node->avatar();
+    const iris::AvatarMovementParams before = movement->params();
+    iris::AvatarMovementParams p = before;
+
+    auto f = [&in](const char *key, float fallback) {
+        return in.contains(QLatin1String(key)) ? in.value(QLatin1String(key)).toFloat() : fallback;
+    };
+    p.walkSpeed = f("walkSpeed", p.walkSpeed);
+    p.runSpeed = f("runSpeed", p.runSpeed);
+    p.maxAcceleration = f("maxAcceleration", p.maxAcceleration);
+    p.brakingDeceleration = f("brakingDeceleration", p.brakingDeceleration);
+    p.groundFriction = f("groundFriction", p.groundFriction);
+    p.jumpVelocity = f("jumpVelocity", p.jumpVelocity);
+    if (in.contains("jumpCount")) p.jumpCount = in.value("jumpCount").toInt();
+    p.coyoteTime = f("coyoteTime", p.coyoteTime);
+    p.jumpReArm = f("jumpReArm", p.jumpReArm);
+    p.airControl = f("airControl", p.airControl);
+    p.gravityScale = f("gravityScale", p.gravityScale);
+    p.maxStepHeight = f("maxStepHeight", p.maxStepHeight);
+    p.walkableFloorAngle = f("walkableFloorAngle", p.walkableFloorAngle);
+    if (in.contains("orientRotationToMovement"))
+        p.orientRotationToMovement = in.value("orientRotationToMovement").toBool();
+    p.rotationRate = f("rotationRate", p.rotationRate);
+    // An EXPLICIT dimension is a decision: it clears the auto-fit, or the next
+    // spawn/load would silently derive over it. An explicit `capsuleAuto` is
+    // applied AFTER, so a caller that asks for both dimensions and auto in one
+    // call gets auto — the later, more specific statement of intent wins.
+    if (in.contains("capsuleRadius")) { p.capsuleRadius = in.value("capsuleRadius").toFloat(); p.capsuleAuto = false; }
+    if (in.contains("capsuleHeight")) { p.capsuleHeight = in.value("capsuleHeight").toFloat(); p.capsuleAuto = false; }
+    if (in.contains("capsuleAuto")) p.capsuleAuto = in.value("capsuleAuto").toBool();
+
+    movement->setParams(p);
+    const iris::AvatarMovementParams after = movement->params();
+
+    if (host.services && host.services->undo) {
+        auto weak = node.toWeakRef();
+        host.services->undo->push(new NodeEditCommand(
+            QStringLiteral("avatar movement"),
+            [weak, after]() { if (auto n = weak.toStrongRef()) if (auto *m = n->avatar()) m->setParams(after); },
+            [weak, before]() { if (auto n = weak.toStrongRef()) if (auto *m = n->avatar()) m->setParams(before); }));
+    }
+    return paramsToJs(after);
 }

@@ -4,8 +4,11 @@
 // scratch HOME), which is the only way a script — or an MCP session — can
 // prove the skeleton-only view.
 //
-// Note what is NOT here: no project is created, no asset imported, no scene
-// touched. Part 0 is a viewer.
+// Part 0 (the viewer half, everything down to "---- clear ----") creates no
+// project, imports no asset and touches no scene. The AVATAR_LOCOMOTION Stage 2
+// section at the bottom does — it is the API-first half of the movement
+// component, and it needs a real project, a real library asset and a real
+// save/reopen to prove the serialization.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -182,5 +185,119 @@ assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
 // ---- clear ----
 assert(avatar.clearPreview(), "avatar.clearPreview()");
 assert(!avatar.preview(), "nothing is loaded again");
+
+// ===========================================================================
+// AVATAR_LOCOMOTION_SPEC Stage 2 — the movement component's verbs (§10),
+// driven from outside the app against a REAL project, a REAL library asset and
+// the production instantiation route. The physics of the component is gated by
+// the avatar.movement suite; what is proved here is the API-first half: the
+// verbs exist, they are undoable, they refuse what they should, and the knobs
+// SURVIVE A SAVE AND REOPEN (the src/io serialization).
+//
+// Everything above this line is Part 0, the viewer, and needs no project. This
+// section creates one, which is why it comes last.
+// ===========================================================================
+
+var proj = project.create("locomotion-" + Date.now());
+assert(proj && proj.length > 0, "project.create -> " + proj);
+
+var rigGuid = assets.import(RIG);
+assert(rigGuid.length > 10, "assets.import(rig2.glb) -> " + rigGuid);
+assert(assets.addToProject(rigGuid) === rigGuid, "assets.addToProject");
+
+// ---- avatar.spawn ----
+var avatarId = avatar.spawn(rigGuid, { position: { x: 0, y: 0, z: 0 } });
+assert(avatarId && avatarId.length > 10, "avatar.spawn -> " + avatarId);
+
+var knobs = avatar.movement(avatarId);
+console.log("avatar.movement: " + JSON.stringify(knobs));
+assert(!!knobs && knobs.walkSpeed === 2, "avatar.movement reports the §6.2 defaults (walkSpeed 2)");
+assert(knobs.runSpeed === 5.5, "... runSpeed 5.5");
+assert(knobs.jumpCount === 1 && knobs.coyoteTime > 0.11 && knobs.coyoteTime < 0.13,
+       "... jumpCount 1, coyoteTime 0.12");
+assert(knobs.orientRotationToMovement === true, "... orient-to-movement on");
+// R4: the capsule is FITTED to the character's bounds, not left at the default.
+assert(knobs.capsuleAuto === true, "... and the capsule auto-fitted");
+assert(knobs.capsuleHeight > 0 && knobs.capsuleRadius > 0,
+       "... to real dimensions: r=" + knobs.capsuleRadius + " h=" + knobs.capsuleHeight);
+
+// The spawn installed the module's built-in sockets on the rigged mesh inside.
+var socketed = 0;
+var spawned = scene.nodes({ subtree: avatarId });
+for (var si = 0; si < spawned.length; ++si)
+    if (spawned[si].type === "mesh")     // node.sockets throws on anything else
+        socketed += node.sockets(spawned[si].id).length;
+console.log("sockets under the spawned avatar: " + socketed);
+
+// An ordinary node carries no component, and says so by being empty rather
+// than by throwing.
+var rootId = scene.root();
+var none = avatar.movement(rootId);
+assert(!none || Object.keys(none).length === 0,
+       "avatar.movement on a non-avatar node is empty, not an error");
+
+// ---- avatar.setMovement: partial writes, clamping, refusals ----
+var out = avatar.setMovement(avatarId, { walkSpeed: 3.25, jumpVelocity: 9 });
+assert(out.walkSpeed === 3.25 && out.jumpVelocity === 9, "avatar.setMovement writes the knobs");
+assert(out.runSpeed === 5.5, "... and leaves the ones it was not given alone (partial write)");
+
+var clamped = avatar.setMovement(avatarId, { walkSpeed: -4, airControl: 8, walkableFloorAngle: 120 });
+console.log("clamped: " + JSON.stringify({ w: clamped.walkSpeed, a: clamped.airControl,
+                                           f: clamped.walkableFloorAngle }));
+assert(clamped.walkSpeed === 0, "... a negative walkSpeed clamps to 0 rather than being refused");
+assert(clamped.airControl === 1, "... airControl clamps to 1");
+assert(clamped.walkableFloorAngle === 89, "... walkableFloorAngle caps at 89, never 90");
+
+// An explicit capsule dimension is a DECISION and clears the auto-fit.
+var manual = avatar.setMovement(avatarId, { capsuleRadius: 0.42 });
+assert(Math.abs(manual.capsuleRadius - 0.42) < 1e-5, "... an explicit capsuleRadius takes");
+assert(manual.capsuleAuto === false, "... and clears capsuleAuto");
+
+var refused = false;
+try { avatar.setMovement(avatarId, { wlakSpeed: 3 }); } catch (e) { refused = true; }
+assert(refused, "avatar.setMovement REFUSES an unknown knob rather than swallowing it");
+
+// Put it back to something recognisable for the round trip.
+var pinned = avatar.setMovement(avatarId, {
+    walkSpeed: 3.5, runSpeed: 7.25, jumpVelocity: 8.5, jumpCount: 2,
+    maxStepHeight: 0.55, walkableFloorAngle: 52, rotationRate: 300,
+    orientRotationToMovement: false, capsuleRadius: 0.35, capsuleHeight: 1.95
+});
+assert(pinned.jumpCount === 2, "the round-trip values are in place");
+
+// ---- node.setCollision (§6.3 option C) ----
+var groundId = scene.find("Ground");
+assert(groundId, "the default scene's Ground is there");
+assert(node.collision(groundId) === true, "node.collision: a MESH defaults to collidable");
+assert(node.collision(rootId) === false, "... and a non-mesh node does not");
+assert(node.setCollision(groundId, false), "node.setCollision(false)");
+assert(node.collision(groundId) === false, "... takes");
+
+// ---- SAVE, CLOSE, REOPEN: the src/io serialization round trip ----
+assert(project.save(), "project.save");
+assert(project.close(), "project.close");
+// BY GUID, not by name: the scratch HOME persists between ctest runs, so a
+// name lookup starts matching several projects on the second run.
+assert(project.open(proj), "project.open reopens it");
+
+// The node keeps its guid across the save, so the same id addresses it.
+var after = avatar.movement(avatarId);
+console.log("after reopen: " + JSON.stringify(after));
+assert(!!after && Object.keys(after).length > 0,
+       "the AVATAR COMPONENT survived the save/reopen (it is a serialized component block)");
+assert(after.walkSpeed === 3.5 && after.runSpeed === 7.25, "... walkSpeed/runSpeed round-tripped");
+assert(after.jumpVelocity === 8.5 && after.jumpCount === 2, "... jumpVelocity/jumpCount");
+assert(Math.abs(after.maxStepHeight - 0.55) < 1e-5 &&
+       Math.abs(after.walkableFloorAngle - 52) < 1e-4, "... maxStepHeight/walkableFloorAngle");
+assert(after.orientRotationToMovement === false && Math.abs(after.rotationRate - 300) < 1e-4,
+       "... orientRotationToMovement/rotationRate");
+assert(after.capsuleAuto === false &&
+       Math.abs(after.capsuleRadius - 0.35) < 1e-5 &&
+       Math.abs(after.capsuleHeight - 1.95) < 1e-5,
+       "... and the capsule, including capsuleAuto being OFF");
+
+var groundAfter = scene.find("Ground");
+assert(node.collision(groundAfter) === false,
+       "the COLLISION flag round-tripped too (written only when the user overrode the default)");
 
 console.log("e2e_avatar: OK");

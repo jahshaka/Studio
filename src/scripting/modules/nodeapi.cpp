@@ -139,6 +139,19 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "planarReflector", "node.planarReflector(id) -> bool",
           "Whether this object is a planar reflection plane.",
           Needs::Document },
+        { "setCollision", "node.setCollision(id, enabled) -> bool",
+          "Whether a CHARACTER can walk into this object (AVATAR_LOCOMOTION_SPEC §6.3). ON by "
+          "default for every mesh and off for every other node type, so an imported level is "
+          "solid the moment an avatar is dropped into the scene instead of being walked through. "
+          "It is NOT node.physics: nothing here gets mass, a motion state or a simulated "
+          "transform — the world gets a static triangle-mesh collider that exists only to be "
+          "swept against, and it is built LAZILY, at Play, and only for scenes that actually "
+          "contain an avatar (a scene with no character costs exactly what it always did). A node "
+          "that is already a physics body is left alone: it has a collider already. Undoable.",
+          Needs::Document },
+        { "collision", "node.collision(id) -> bool",
+          "Whether a character can walk into this object.",
+          Needs::Document },
         { "setFolder", "node.setFolder(id, path) -> bool",
           "Files the node in an OUTLINER FOLDER — node.setFolder(id, \"Props/Kitchen\"); an "
           "empty path puts it back at the root level. THIS IS NOT A REPARENT and never will be "
@@ -290,6 +303,25 @@ bool NodeApi::planarReflector(const QString &id)
     auto node = nodeOrFail(id, QStringLiteral("node.planarReflector"));
     if (!node) return false;
     return node->getPlanarReflector();
+}
+
+bool NodeApi::setCollision(const QString &id, bool enabled)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setCollision"));
+    if (!node) return false;
+    const bool was = node->isCollisionEnabled();
+    node->setCollisionEnabled(enabled);
+    recordNodeEdit(QStringLiteral("collision"),
+                   [node, enabled]() { node->setCollisionEnabled(enabled); },
+                   [node, was]() { node->setCollisionEnabled(was); });
+    return true;
+}
+
+bool NodeApi::collision(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.collision"));
+    if (!node) return false;
+    return node->isCollisionEnabled();
 }
 
 bool NodeApi::setFolder(const QString &id, const QString &path)

@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QFile>
 
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/import/model.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/assets/vertexbuffer.h"
@@ -377,6 +378,49 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         attachment["owner"] = sceneNode->socketOwnerGuid;
         attachment["socket"] = sceneNode->socketName;
         sceneNodeObj["socketAttachment"] = attachment;
+    }
+
+    // COLLISION CONTENT (AVATAR_LOCOMOTION_SPEC §6.3 option C). The DEFAULT
+    // depends on the node type — on for a mesh, off for everything else — so
+    // the key is written only when the user disagreed with it, exactly like
+    // `castShadow` above. An absent key therefore means "the type default",
+    // and every scene written before this flag existed loads with it.
+    if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
+        if (!sceneNode->isCollisionEnabled()) sceneNodeObj["collision"] = false;
+    } else if (sceneNode->isCollisionEnabled()) {
+        sceneNodeObj["collision"] = true;
+    }
+
+    // THE AVATAR COMPONENT (AVATAR_LOCOMOTION_SPEC §6). One block, present only
+    // on an avatar wrapper — a component block, not a node type: an avatar is
+    // an ordinary node that CARRIES movement, which is why removing the
+    // component leaves a perfectly good mesh behind and why this is not a
+    // second `SceneNodeType::Viewer` waiting to be removed in five years.
+    if (auto *movement = sceneNode->avatar()) {
+        const auto &p = movement->params();
+        QJsonObject avatarObj;
+        avatarObj["walkSpeed"] = p.walkSpeed;
+        avatarObj["runSpeed"] = p.runSpeed;
+        avatarObj["maxAcceleration"] = p.maxAcceleration;
+        avatarObj["brakingDeceleration"] = p.brakingDeceleration;
+        avatarObj["groundFriction"] = p.groundFriction;
+        avatarObj["jumpVelocity"] = p.jumpVelocity;
+        avatarObj["jumpCount"] = p.jumpCount;
+        avatarObj["coyoteTime"] = p.coyoteTime;
+        avatarObj["jumpReArm"] = p.jumpReArm;
+        avatarObj["airControl"] = p.airControl;
+        avatarObj["gravityScale"] = p.gravityScale;
+        avatarObj["maxStepHeight"] = p.maxStepHeight;
+        avatarObj["walkableFloorAngle"] = p.walkableFloorAngle;
+        avatarObj["orientRotationToMovement"] = p.orientRotationToMovement;
+        avatarObj["rotationRate"] = p.rotationRate;
+        // The capsule: `capsuleAuto` says the dimensions were DERIVED from the
+        // mesh, and they are written anyway so a file opened without its mesh
+        // (a missing asset) still has a sane capsule instead of a default one.
+        avatarObj["capsuleAuto"] = p.capsuleAuto;
+        avatarObj["capsuleRadius"] = p.capsuleRadius;
+        avatarObj["capsuleHeight"] = p.capsuleHeight;
+        sceneNodeObj["avatar"] = avatarObj;
     }
 
     //todo: write data specific to node type
