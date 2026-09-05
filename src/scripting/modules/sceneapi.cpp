@@ -139,6 +139,18 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "activeCamera", "scene.activeCamera() -> id | null",
           "The camera play renders through, or null for the free viewer.",
           Needs::Document },
+        { "playMode", "scene.playMode(mode?) -> 'explorer' | 'third-person' | 'camera'",
+          "What PLAY does with this scene (AVATAR_LOCOMOTION_SPEC §8.5). With no argument it "
+          "reports the current setting. 'explorer' is the free camera with nobody possessed — "
+          "what Play always did. 'third-person' AUTO-POSSESSES the first avatar in the scene "
+          "(document order, depth-first from the root) and installs the spring-arm follow "
+          "camera; a scene with no avatar falls back to the explorer and says so in the log, "
+          "leaving the setting alone so adding a character later just works. 'camera' renders "
+          "through scene.activeCamera with nobody possessed. Saved with the scene. Setting it "
+          "WHILE PLAYING re-arms possession immediately — no stop/start round trip. This is "
+          "deliberately not a World Mode row: world.modeTable is the scalability registry, and "
+          "a gameplay decision has no business following low/medium/high/epic.",
+          Needs::Document },
         { "folders", "scene.folders() -> [path]",
           "Every OUTLINER FOLDER in the scene, sorted, ancestors included "
           "(\"Props\" is listed beside \"Props/Kitchen\"). Folders are EDITOR "
@@ -540,6 +552,24 @@ QVariant SceneApi::activeCamera()
     if (!scene) return QVariant();
     const QString guid = scene->getActiveCameraGuid();
     return guid.isEmpty() ? QVariant() : QVariant(guid);
+}
+
+QVariant SceneApi::playMode(const QVariant &mode)
+{
+    auto scene = sceneOrFail();
+    if (!scene) return QVariant();
+
+    const QVariant value = normalizeJs(mode);
+    if (value.isValid() && !value.isNull() && !value.toString().isEmpty()) {
+        iris::ScenePlayMode parsed = iris::ScenePlayMode::Explorer;
+        if (!iris::playModeFromName(value.toString(), parsed)) {
+            fail(QStringLiteral("scene.playMode: '%1' is not a play mode "
+                                "(known: explorer, third-person, camera)").arg(value.toString()));
+            return QVariant();
+        }
+        scene->setPlayMode(parsed);
+    }
+    return QString::fromLatin1(iris::playModeName(scene->getPlayMode()));
 }
 
 QString SceneApi::addImagePlane(const QString &textureGuid, const QVariantMap &options)

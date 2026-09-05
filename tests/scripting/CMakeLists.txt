@@ -555,6 +555,23 @@ set_tests_properties(scripting.e2e.static_semantics PROPERTIES
     LABELS "scripting"
     TIMEOUT 120)
 
+# AVATAR_LOCOMOTION_SPEC Stage 3 through the VERBS and the REAL play path:
+# possession, camera-relative input, the follow arm, editor.pause, and the two
+# claims the document-level `avatar.possession` suite cannot make — the actual
+# `editor.stop(); editor.stop();` (a HeadlessEditorViewport's play is a no-op,
+# so this needs the engine viewport) and scene.playMode surviving a save and
+# reopen. NOT --headless, deliberately.
+configure_file(scripts/e2e_possession.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-possession)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.possession
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_possession.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.possession PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 jah_no_display(
     scripting.e2e.static_semantics
     scripting.e2e.anim

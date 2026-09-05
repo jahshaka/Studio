@@ -47,6 +47,26 @@ WorldPropertyWidget::WorldPropertyWidget()
         "strength, black = no ambient."));
     showGridToggle = this->addCheckBox("Show Grid", true);
 
+    // WHAT PLAY DOES (AVATAR_LOCOMOTION_SPEC §8.5). It belongs here and not in
+    // the World Mode section: world.modeTable is the SCALABILITY registry
+    // (Low/Medium/High/Epic), and a gameplay decision that followed the quality
+    // tier would be nonsense.
+    playModeSelector = this->addComboBox("Play Mode");
+    playModeSelector->addItem("Explorer", QString::fromLatin1(
+        iris::playModeName(iris::ScenePlayMode::Explorer)));
+    playModeSelector->addItem("Third Person", QString::fromLatin1(
+        iris::playModeName(iris::ScenePlayMode::ThirdPerson)));
+    playModeSelector->addItem("Scene Camera", QString::fromLatin1(
+        iris::playModeName(iris::ScenePlayMode::Camera)));
+    playModeSelector->setToolTip(QStringLiteral(
+        "What pressing Play does with this scene. Explorer is the free camera with nobody "
+        "driving a character — what Play always did. Third Person takes over the first avatar "
+        "in the scene and puts the camera over its shoulder; a scene with no character falls "
+        "back to Explorer and says so in the log. Scene Camera renders through the scene's "
+        "active camera. Saved with the scene."));
+    connect(playModeSelector, SIGNAL(currentIndexChanged(int)),
+            this,             SLOT(onPlayModeChanged(int)));
+
 	ambientMusicSelector = this->addComboBox("Background Ambience");
 	ambientMusicVolume = this->addFloatValueSlider("Volume", 1, 100, 50);
 
@@ -94,6 +114,13 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         ambientColor->setColorValue(scene->ambientColor);
 		worldGravity->setValue(scene->gravity);
 
+        // Show, never write: blocked signals, or building the panel for a
+        // third-person scene would immediately "change" it back to explorer.
+        playModeSelector->getWidget()->blockSignals(true);
+        playModeSelector->setCurrentItemData(
+            QString::fromLatin1(iris::playModeName(scene->getPlayMode())));
+        playModeSelector->getWidget()->blockSignals(false);
+
 		auto musicFilesAvailableFromDatabase = db->fetchAssetsByType(static_cast<int>(ModelTypes::Music), project->getProjectGuid());
 
 		if (musicFilesAvailableFromDatabase.isEmpty()) ambientMusicSelector->hide();
@@ -113,6 +140,15 @@ void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
 	else {
         this->scene.clear();
     }
+}
+
+void WorldPropertyWidget::onPlayModeChanged(int index)
+{
+    Q_UNUSED(index);
+    if (!scene || !playModeSelector) return;
+    iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
+    if (iris::playModeFromName(playModeSelector->getCurrentItemData(), mode))
+        scene->setPlayMode(mode);
 }
 
 void WorldPropertyWidget::onGravityChanged(float value)

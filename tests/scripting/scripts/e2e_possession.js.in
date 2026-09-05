@@ -1,0 +1,243 @@
+// scripting.e2e.possession — AVATAR_LOCOMOTION_SPEC Stage 3 through the VERBS
+// and through the REAL play path.
+//
+// The document-level gates P1-P6 live in the `avatar.possession` suite, which
+// drives iris::Scene directly. This one exists for the two claims that suite
+// CANNOT make, because they are not document claims:
+//
+//   * `editor.stop(); editor.stop();` — the actual verb, which deliberately has
+//     no early-out and runs the whole stop path twice (§8.3 rule 1, gate P6).
+//     A HeadlessEditorViewport's play is a no-op, so this needs the engine
+//     viewport: NOT --headless.
+//   * `scene.playMode` SURVIVES A SAVE AND REOPEN — the serializer half of the
+//     world setting, which only a real project round trip can prove.
+//
+// Everything else here is the verb surface saying the same thing the document
+// gates say, which is the point: `avatar.possess` and the possession object
+// must not be two behaviours.
+
+// NOTE (finding, reported upward): a verb documented as returning `id | null`
+// hands JS an `undefined`, not a `null` — an invalid QVariant is what QJSEngine
+// spells that way. It is registry-wide (scene.activeCamera does the same) and
+// predates this lane, so the asserts below use LOOSE equality, which is also
+// exactly how the spec writes gate P6 ("avatar.possessed() == null").
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+function near(a, b, tol, msg) {
+    assert(Math.abs(a - b) <= tol, msg + " (" + a + " vs " + b + ", tol " + tol + ")");
+}
+
+project.create("possession");
+
+// ---- the world setting, before there is anything to possess ---------------
+
+assert(scene.playMode() === "explorer", "a new scene defaults to 'explorer'");
+assert(scene.playMode("third-person") === "third-person", "scene.playMode('third-person')");
+assert(scene.playMode() === "third-person", "...and it reads back");
+var refused = false;
+try { scene.playMode("cinematic"); } catch (e) { refused = true; }
+assert(refused, "an unknown mode name is refused, not guessed");
+assert(scene.playMode() === "third-person", "...and the refusal changed nothing");
+
+// P4 through the verbs: third-person with NO avatar in the scene. Play must
+// come up in the explorer with nobody possessed rather than doing nothing
+// silently — and the setting must survive so adding a character later works.
+assert(avatar.list().length === 0, "the fresh scene has no avatar");
+
+// THE EXPLORER CAMERA, before anything has played. `editor.camera()` reports
+// the camera the VIEWPORT RENDERS THROUGH, which is the half a document gate
+// cannot make: `Scene::camera` and that camera are not always the same node in
+// this tree (measured — reported upward), so "the document wrote a camera" is
+// not "the view moved". Everything below compares against this pose.
+var camBefore = editor.camera().position;
+console.log("camera before play: " + JSON.stringify(camBefore));
+assert(editor.play(), "editor.play with 'third-person' and no avatar");
+editor.frame(3, 1 / 60);
+assert(editor.playing(), "...it really is playing");
+assert(avatar.possessed() == null, "P4: nobody is possessed — fell back to the explorer");
+assert(scene.playMode() === "third-person", "P4: the setting survived the fallback");
+editor.stop();
+
+// ---- a character, through the ONE import pipeline -------------------------
+
+// TWO DIFFERENT asset files, not one asset twice — and that is a WORKAROUND
+// for a defect this lane found and did NOT cause: instantiating the SAME asset
+// twice produces nodes with IDENTICAL guids (assets.addToScene, and therefore
+// avatar.spawn, hand back the same id for both copies, and every node of the
+// duplicated subtree collides). Reported upward; it belongs to the asset
+// instantiation path, not to possession. When it is fixed, this can go back to
+// one fixture spawned twice.
+var guidA = assets.import("@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb");
+assert(guidA.length > 10, "assets.import(rig2.glb) -> " + guidA);
+assert(assets.addToProject(guidA) === guidA, "the rig joins the project");
+var guidB = assets.import("@SOURCE_DIR@/tests/skeletal/fixtures/pivot_rig.fbx");
+assert(guidB.length > 10, "assets.import(pivot_rig.fbx) -> " + guidB);
+assert(assets.addToProject(guidB) === guidB, "the second rig joins the project");
+
+var avatarA = avatar.spawn(guidA, { position: { x: -3, y: 0, z: 0 } });
+assert(avatarA && avatarA.length > 10, "avatar.spawn -> " + avatarA);
+var avatarB = avatar.spawn(guidB, { position: { x: 3, y: 0, z: 0 } });
+assert(avatarB && avatarB.length > 10, "a second avatar.spawn -> " + avatarB);
+assert(avatarA !== avatarB, "the two avatars are two nodes");
+
+// COLLISION CONTENT OFF for everything but the floor. This suite is about
+// POSSESSION and input routing; sweep-and-slide is `avatar.movement`'s to gate.
+//
+// It is here because of a DEFECT this lane found and did NOT cause, reported
+// upward rather than worked around silently: `Environment::buildCollisionContent`
+// skips an avatar's WRAPPER node but still recurses into its subtree, so the
+// character's OWN mesh becomes a static collider it has to push through — its
+// own comment says "a character must not be a wall to itself", and the walk is
+// one line short of that. Measured on rig2.glb: an avatar spawned at x=0 or
+// x=+/-1 loses ~10% of a second's walk to it, and one spawned at x=+/-3 cannot
+// move AT ALL (its collider's AABB is x+/-0.15, y 0..2, z 0..0 — a zero-thickness
+// quad the capsule starts inside). Turning the avatar's own mesh collider off
+// restores the full 1.9167 u. Stage 2's fix, not this lane's.
+scene.nodes().forEach(function (n) {
+    if (n.type === "mesh" && n.name !== "Ground") node.setCollision(n.id, false);
+});
+
+var listed = avatar.list();
+console.log("avatar.list: " + JSON.stringify(listed));
+assert(listed.length === 2, "avatar.list reports both");
+assert(listed[0].id === avatarA, "avatar.list is in DOCUMENT order — the first spawn is first");
+assert(listed[0].possessed === false && listed[1].possessed === false,
+       "nobody is possessed outside play");
+
+// ---- P1 through the verbs -------------------------------------------------
+
+assert(avatar.possess(avatarB), "avatar.possess(B)");
+assert(avatar.possessed() === avatarB, "avatar.possessed() is B");
+var l2 = avatar.list();
+assert(l2[1].possessed === true && l2[0].possessed === false,
+       "avatar.list marks exactly one avatar possessed");
+assert(avatar.possess(avatarA), "avatar.possess(A) switches");
+assert(avatar.possessed() === avatarA, "avatar.possessed() is A");
+assert(avatar.unpossess(), "avatar.unpossess()");
+assert(avatar.possessed() == null, "avatar.possessed() is null");
+assert(avatar.unpossess() == false, "a second unpossess is false and harmless");
+
+var badRefused = false;
+try { avatar.possess(scene.root()); } catch (e) { badRefused = true; }
+assert(badRefused, "possessing a node with no avatar component is refused");
+
+// ---- P3 through the verbs: play auto-possesses the FIRST avatar ------------
+
+assert(editor.play(), "editor.play with 'third-person' and two avatars");
+editor.frame(5, 1 / 60);
+assert(avatar.possessed() === avatarA,
+       "P3: play auto-possessed the FIRST avatar in document order");
+
+// ---- input reaches exactly the possessed one, camera-relative (P1 + P2) ----
+
+// node.info, not node.transform: transform() is a WRITE verb that happens to
+// report, and calling it here would push an undo command per sample.
+function planarPos(id) {
+    var t = node.info(id);
+    return { x: t.position.x, z: t.position.z };
+}
+function a0x() { return planarPos(avatarA).x; }
+function dist(a, b) {
+    var dx = a.x - b.x, dz = a.z - b.z;
+    return Math.sqrt(dx * dx + dz * dz);
+}
+
+// Face the arm down world -Z so "forward on the stick" is a known direction.
+var arm = avatar.followCamera({ yaw: 0, pitch: 0 });
+console.log("followCamera: " + JSON.stringify(arm));
+assert(Math.abs(arm.yaw) < 0.001, "the follow arm's yaw is 0");
+assert(arm.position !== undefined, "the arm reports where it put the camera");
+
+editor.frame(60, 1 / 60);                       // settle both onto the ground
+var camDuring = editor.camera().position;
+console.log("camera during third-person play: " + JSON.stringify(camDuring));
+assert(Math.abs(camDuring.x - a0x()) < 0.01 && camDuring.z < camBefore.z - 1.0 &&
+       camDuring.y < camBefore.y,
+       "the spring arm took over the camera the viewport RENDERS through " +
+       "(over the character at x=" + a0x().toFixed(2) + ", not the explorer's " +
+       JSON.stringify(camBefore) + ")");
+
+var a0 = planarPos(avatarA), b0 = planarPos(avatarB);
+avatar.input({ move: { x: 0, y: 1 } });
+editor.frame(60, 1 / 60);
+var a1 = planarPos(avatarA), b1 = planarPos(avatarB);
+var aWalked = dist(a1, a0), bWalked = dist(b1, b0);
+console.log("A walked " + aWalked.toFixed(4) + " u, B walked " + bWalked.toFixed(4) + " u");
+assert(aWalked > 1.0, "P1: the possessed avatar walked under avatar.input");
+assert(bWalked < 0.01, "P1: the unpossessed avatar did not move");
+assert(a1.z - a0.z < -1.0 && Math.abs(a1.x - a0.x) < 0.05,
+       "P2: at yaw 0 the stick's forward is world -Z");
+
+// Yaw the arm 90 deg and hold the SAME stick: the motion turns with it.
+avatar.followCamera({ yaw: 90 });
+var a2 = planarPos(avatarA);
+avatar.input({ move: { x: 0, y: 1 } });
+editor.frame(60, 1 / 60);
+var a3 = planarPos(avatarA);
+console.log("after yaw 90: dx " + (a3.x - a2.x).toFixed(4) + " dz " + (a3.z - a2.z).toFixed(4));
+assert(a3.x - a2.x < -1.0 && Math.abs(a3.z - a2.z) < 0.15,
+       "P2: yawing the follow camera 90 deg rotates the motion 90 deg");
+
+// P5 through the verbs: switch with the stick still held.
+avatar.possess(avatarB);
+assert(avatar.possessed() === avatarB, "P5: the switch took");
+var a4 = planarPos(avatarA), b4 = planarPos(avatarB);
+editor.frame(120, 1 / 60);
+var aDrift = dist(planarPos(avatarA), a4), bNow = dist(planarPos(avatarB), b4);
+console.log("after the switch: A drifted " + aDrift.toFixed(4) + " u, B walked " + bNow.toFixed(4) + " u");
+assert(aDrift < 0.2, "P5: the released avatar brakes instead of walking forever");
+assert(bNow > 1.0, "P5: the newly possessed avatar is the one moving");
+
+// ---- editor.pause: frozen, still in play, still possessed -----------------
+
+assert(editor.pause(), "editor.pause()");
+assert(editor.playing() === false, "a paused scene is not RUNNING");
+assert(avatar.possessed() === avatarB, "...but it is still in play mode, and still possessed");
+var frozen = planarPos(avatarB);
+editor.frame(30, 1 / 60);
+assert(dist(planarPos(avatarB), frozen) < 0.001, "the paused scene did not move");
+assert(editor.play(), "editor.play resumes");
+assert(editor.playing(), "...and it is running again");
+assert(avatar.possessed() === avatarB, "...with the same avatar possessed");
+
+// ---- P6: the idempotent stop, through the real verb ------------------------
+
+editor.stop();
+editor.stop();
+assert(avatar.possessed() == null, "P6: possessed() == null after stop(); stop();");
+assert(editor.playing() === false, "P6: playing() == false");
+console.log("ok: P6: editor.stop(); editor.stop(); raised nothing");
+
+// A third stop, and one on a scene that is already stopped.
+editor.stop();
+assert(avatar.possessed() == null, "P6: a third stop is still clean");
+
+// ...and the arm gave the camera back exactly where it found it.
+editor.frame(2, 1 / 60);
+var camAfter = editor.camera().position;
+console.log("camera after stop: " + JSON.stringify(camAfter));
+near(camAfter.x, camBefore.x, 0.001, "the explorer camera's x is restored");
+near(camAfter.y, camBefore.y, 0.001, "the explorer camera's y is restored");
+near(camAfter.z, camBefore.z, 0.001, "the explorer camera's z is restored");
+
+// ---- the serializer half: playMode survives save + reopen -----------------
+
+var pguid = project.list().filter(function (p) { return p.name === "possession"; })[0].guid;
+assert(scene.playMode("third-person") === "third-person", "arm third-person before saving");
+assert(project.save(), "project.save");
+assert(project.close(), "project.close");
+assert(project.open(pguid), "project.open");
+assert(scene.playMode() === "third-person",
+       "scene.playMode SURVIVED the save and reopen (the world setting is serialized)");
+assert(avatar.possessed() == null,
+       "...and possession did NOT — it is runtime state and no file carries it");
+
+assert(scene.playMode("explorer") === "explorer", "back to explorer");
+assert(project.save() && project.close() && project.open(pguid), "save/close/open again");
+assert(scene.playMode() === "explorer", "'explorer' round-trips too");
+
+console.log("e2e_possession: ALL OK");

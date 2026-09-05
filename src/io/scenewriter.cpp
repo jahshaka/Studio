@@ -228,6 +228,12 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // means the free viewer.
     sceneObj["activeCamera"] = scene->activeCameraGuid;
 
+    // What PLAY does with this scene (AVATAR_LOCOMOTION_SPEC §8.5). A stable
+    // string for the same reason giMode is one — the enum ints stay free to be
+    // reordered. Absent (every scene written before Stage 3) reads as
+    // "explorer", which is exactly the behaviour those scenes had.
+    sceneObj["playMode"] = QString::fromLatin1(iris::playModeName(scene->getPlayMode()));
+
     QJsonObject rootNodeObj;
     writeSceneNode(rootNodeObj,scene->getRootNode());
     sceneObj["rootNode"] = rootNodeObj;

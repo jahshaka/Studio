@@ -183,6 +183,13 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Leaves play mode back to editing. Always forces a real stop — safe to call when "
           "already stopped.",
           Needs::Document },
+        { "pause", "editor.pause() -> bool",
+          "Freezes a playing scene where it stands: the document clock stops, the physics world "
+          "and every pre-play transform survive, and editor.play() RESUMES rather than "
+          "restarting. Paused counts as still being in play mode — the shot does not cut back "
+          "to the explorer and a possessed avatar stays possessed — but editor.playing() reads "
+          "false, because it reports whether the scene is RUNNING. A no-op when not playing.",
+          Needs::Document },
         { "playing", "editor.playing() -> bool",
           "Whether the editor viewport is running play-in-place RIGHT NOW — read from the "
           "viewport's own flag, the one its input routing branches on. The regression net "
@@ -732,6 +739,17 @@ bool EditorApi::stop()
     // both calls below are no-ops when already stopped anyway.
     host.services->playback->enterEditMode();
     host.viewport->stopPlayingScene();
+    return true;
+}
+
+bool EditorApi::pause()
+{
+    if (!host.services || !host.services->playback || !host.viewport)
+        return fail("editor: not available in this session");
+    // pauseScene() is guarded all the way down (PlayBack::pause early-returns
+    // unless it is playing and not already paused), so this is idempotent for
+    // the same reason editor.stop() is.
+    host.services->playback->pauseScene();
     return true;
 }
 

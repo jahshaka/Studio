@@ -1138,6 +1138,23 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     } else if (mCamController) {
         mCamController->update(dt);
     }
+    // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5). The arm is COMPUTED in
+    // the document (Scene::update, right after the movement step, so it never
+    // lags the character by a frame); what the document cannot know is which
+    // camera this viewport DRAWS with — `Scene::camera` and `viewCamera()` are
+    // not always the same node in this tree (measured; reported upward). So the
+    // host hands its own camera in, once per frame, after the playback update
+    // and before applyCamera reads it.
+    //
+    // Called whether or not anything is possessed: with nothing possessed it
+    // restores the camera once and then does nothing, which is what returns the
+    // explorer to its exact pre-play pose on stop.
+    //
+    // PILOTING WINS — a user flying a scene camera asked for that shot — and
+    // while piloting the arm is not applied at all, so the eventual restore
+    // still puts the explorer back where play found it.
+    if (mScene && mScene->getPossession() && !mPilot)
+        mScene->getPossession()->applyToViewCamera(viewCamera());
     // Emitters used to be ticked here, one document node at a time, because the
     // document owned a CPU particle simulator. It does not any more
     // (PARTICLES_FX2_SPEC): the engine simulates every particle inside
