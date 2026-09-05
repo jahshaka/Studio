@@ -620,9 +620,18 @@ static void compareToBaseline(const std::string &path)
         if (b <= 0.0) continue;
         const double pct = (now - b) / b * 100.0;
         const bool gated = m.id.compare(0, 2, "a.") == 0 || m.id.compare(0, 2, "b.") == 0;
+        // e.build_doc is EXEMPT from the regress clause — OWNER DECISION,
+        // 2026-09-06 (SCENEGRAPH_SPEC §6a): creating a real engine node per
+        // document node costs ~+17% at 1k over three member writes, end-to-end
+        // build+first_sync is flat-to-better, and "we are all in on ogre...
+        // accept the costs, we can streamline over time." The setParent
+        // depth-migration (~40% of the cost) is the recorded streamlining
+        // candidate. Every other metric keeps the full 10% clause.
+        const bool regressExempt = m.id == "e.build_doc";
         const char *verdict = "     ";
         if (gated && m.scale >= kImproveFromScale && pct >= 0.0) { verdict = "MUST-IMPROVE"; ++violations; }
-        else if (m.scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
+        else if (!regressExempt && m.scale < kImproveFromScale && pct > kMaxRegressPct) { verdict = "REGRESSED>10%"; ++violations; }
+        else if (regressExempt && pct > kMaxRegressPct) { verdict = "accepted-§6a"; }
         std::printf("  %-28s scale=%-6d base=%9.3f now=%9.3f  %+7.1f%%  %s\n",
                     m.id.c_str(), m.scale, b, now, pct, verdict);
     }
