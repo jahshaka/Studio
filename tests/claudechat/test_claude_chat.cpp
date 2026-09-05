@@ -139,9 +139,8 @@ static void testLaunchConfig()
     CHECK(sceneMd.contains("app.engineErrors") && sceneMd.contains("editor.viewportState")
               && sceneMd.contains("editor.frame(") && sceneMd.contains("engineErrors` block"),
           "skills: scene has the DEBUGGING section (engineErrors, viewportState, frame(n,dt))");
-    CHECK(sceneMd.contains("node.physics") && sceneMd.contains("scene.addViewer")
-              && sceneMd.contains("editor.setOverlays"),
-          "skills: scene teaches physics, the viewer and the overlay switches");
+    CHECK(sceneMd.contains("node.physics") && sceneMd.contains("editor.setOverlays"),
+          "skills: scene teaches physics and the overlay switches");
     CHECK(sceneMd.contains("api.help") && sceneMd.contains("api_docs({search"),
           "skills: scene teaches the cold-start lookups");
     CHECK(sceneMd.contains("ground") && sceneMd.contains("count:"),

@@ -24,7 +24,6 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/core/irisutils.h"
 #include "shell/mainwindow.h"
@@ -187,10 +186,6 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     action = new QAction("Camera", this);
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCamera()));
-
-    action = new QAction("Avatar", this);
-    addMenu->addAction(action);
-    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addViewer()));
 
     // Systems
     action = new QAction("Particle System", this);
@@ -785,21 +780,6 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 		menu.addAction(action);
 	}
 
-	if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-		action = new QAction(QIcon(), "Make Active Character Controller", this);
-		connect(action, &QAction::triggered, this, [&]() {
-			// Set all other nodes to false, can we remove this for loop eventually?
-			for (auto node : scene->getRootNode()->children()) {
-				if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-					node.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
-				}
-			}
-
-			node.staticCast<iris::ViewerNode>()->setActiveCharacterController(true);
-		});
-		menu.addAction(action);
-	}
-
     if (node->isPhysicsBody) {
         QMenu *physicsMenu = menu.addMenu("Physics");
         QMenu *addConstraintsMenu = physicsMenu->addMenu("Add Constraint");
@@ -1075,10 +1055,6 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 	else if (node->getSceneNodeType() == iris::SceneNodeType::Empty) {
 		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-average-math-filled-50.png"), QIcon::Normal);
 		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-average-math-filled-50.png"), QIcon::Selected);
-	}
-	else if (node->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-virtual-reality-filled-50.png"), QIcon::Normal);
-		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-virtual-reality-filled-50.png"), QIcon::Selected);
 	}
 	else if (node->getSceneNodeType() == iris::SceneNodeType::Decal) {
 		nodeIcon->addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-picture-50.png"), QIcon::Normal);

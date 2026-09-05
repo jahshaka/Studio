@@ -44,7 +44,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeset.h"
@@ -202,27 +201,6 @@ void SceneEditService::addEmpty()
     addNodeToScene(node);
 }
 
-iris::ViewerNodePtr SceneEditService::addViewer(bool ignorePlacement)
-{
-    auto scene = this->scene();
-    if (!scene) return iris::ViewerNodePtr();
-
-    auto node = iris::ViewerNode::create();
-    node->setName("Avatar");
-    addNodeToScene(node, ignorePlacement);
-
-    // Set all other controllers to false
-    for (auto child : scene->getRootNode()->children()) {
-        if (child->getSceneNodeType() == iris::SceneNodeType::Viewer) {
-            child.staticCast<iris::ViewerNode>()->setActiveCharacterController(false);
-        }
-    }
-
-    node->setActiveCharacterController(true);
-    scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(node);
-    return node;
-}
-
 iris::CameraNodePtr SceneEditService::addCamera(bool ignorePlacement)
 {
     if (!scene()) return iris::CameraNodePtr();
@@ -233,8 +211,8 @@ iris::CameraNodePtr SceneEditService::addCamera(bool ignorePlacement)
     // it takes the normal spawn-in-front-of-the-editor-camera placement. It
     // does NOT become the active camera on creation: what play renders through
     // is an explicit choice (scene.setActiveCamera), never a side effect of an
-    // add — a second camera silently taking the shot is the failure the
-    // viewer-node add has and cameras will not.
+    // add — a second camera silently taking the shot is the failure the old
+    // viewer-node add had and cameras will not.
     addNodeToScene(node, ignorePlacement);
     return node;
 }
@@ -386,6 +364,10 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     reader->setBaseDirectory(project->getProjectFolder());
     iris::SceneNodePtr node = reader->readSceneNode(document);
     delete reader;
+    // The reader returns null for a blob whose root is a node type this build
+    // retired (sceneformat::isRetiredNodeType) — the other three readSceneNode
+    // call sites already checked; this one dereferenced it.
+    if (!node) return;
 
     // rename animation sources to relative paths
     QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
@@ -705,10 +687,6 @@ bool SceneEditService::deleteNode(iris::SceneNodePtr node)
     // TODO - do a deps check here as well
     // TODO - gray/disable delete button if a node isn't removable
     if (node->isRootNode() || !node->isRemovable()) return false;
-
-    if (node->sceneNodeType == iris::SceneNodeType::Viewer) {
-        scene()->getPhysicsEnvironment()->removeCharacterControllerFromWorld(node->getGUID());
-    }
 
     // The command owns the asset-row cleanup: the row is deleted only when the
     // delete becomes permanent, so undo no longer resurrects a node whose DB

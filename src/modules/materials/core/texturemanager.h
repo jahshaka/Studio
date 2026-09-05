@@ -20,7 +20,6 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/import/modelloader.h"
 #include "irisgl/document/animation/animableproperty.h"
 #include "irisgl/document/animation/animation.h"
@@ -28,7 +27,6 @@
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/physics/environment.h"
-#include "irisgl/document/physics/charactercontroller.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/physics/physicsproperties.h"
 #include <QStandardPaths>

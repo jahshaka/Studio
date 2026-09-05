@@ -65,7 +65,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 
 #include "irisgl/document/materials/postprocess.h"
 #include "irisgl/document/materials/postprocessmanager.h"
@@ -514,6 +513,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     for (const auto childObj : children) {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
+        if (!childNode) continue;      // a retired node type — skipped, not attached
         // keepTransform = FALSE, exactly like the nested children below: the
         // node's local TRS is what was just read, and it is already the local
         // transform this parent wants.
@@ -597,12 +597,21 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     iris::SceneNodePtr sceneNode;
 
     QString nodeType = nodeObj["type"].toString("empty");
+
+    // A type this build retired (sceneformat::isRetiredNodeType documents the
+    // contract). SKIP it — and its subtree with it — rather than substituting a
+    // type it never was. Both child loops below tolerate the null this returns.
+    if (sceneformat::isRetiredNodeType(nodeType)) {
+        irisLog(QString("scene reader: skipping '%1', a '%2' node — that node type "
+                        "no longer exists in this build")
+                    .arg(nodeObj["name"].toString(QStringLiteral("<unnamed>")), nodeType));
+        return sceneNode;
+    }
+
     if (nodeType == "mesh") {
         sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "light") {
         sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
-    } else if (nodeType == "viewer") {
-        sceneNode = createViewer(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "particle system") {
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "decal") {
@@ -687,6 +696,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     for (auto childObj : children) {
         auto sceneNodeObj = childObj.toObject();
         auto childNode = readSceneNode(sceneNodeObj);
+        if (!childNode) continue;      // a retired node type — skipped, not attached
         sceneNode->addChild(childNode, false);
     }
 
@@ -1063,16 +1073,6 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
     cameraNode->bodyVisible   = nodeObj["bodyVisible"].toBool(true);
 
     return cameraNode;
-}
-
-iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)
-{
-    auto viewerNode = iris::ViewerNode::create();
-    viewerNode->setViewScale((float)nodeObj["viewScale"].toDouble(1.0f));
-	viewerNode->setVisible(nodeObj["visible"].toBool(true));
-	viewerNode->setActiveCharacterController(nodeObj["activeCharacterController"].toBool(false));
-
-    return viewerNode;
 }
 
 iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeObj)

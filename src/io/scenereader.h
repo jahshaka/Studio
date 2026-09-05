@@ -154,8 +154,6 @@ public:
     /// block is a different thing entirely and is read by readEditorData.
     iris::CameraNodePtr createCamera(QJsonObject &nodeObj);
 
-    iris::ViewerNodePtr createViewer(QJsonObject &nodeObj);
-
 	iris::ParticleSystemNodePtr createParticleSystem(QJsonObject &nodeObj);
 
     iris::LightType getLightTypeFromName(QString lightType);

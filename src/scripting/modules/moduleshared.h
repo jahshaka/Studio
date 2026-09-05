@@ -275,7 +275,6 @@ inline QString nodeTypeName(iris::SceneNodeType type)
     case iris::SceneNodeType::Mesh:           return QStringLiteral("mesh");
     case iris::SceneNodeType::Light:          return QStringLiteral("light");
     case iris::SceneNodeType::Camera:         return QStringLiteral("camera");
-    case iris::SceneNodeType::Viewer:         return QStringLiteral("viewer");
     case iris::SceneNodeType::Decal:          return QStringLiteral("decal");
     }
     return QStringLiteral("unknown");

@@ -32,7 +32,7 @@ public:
                               const QPointF &point, iris::Vec3 &segStart, iris::Vec3 &segEnd);
 
     /// Every hit along the segment, unsorted. Meshes are tested against their
-    /// triangles in local space; lights, viewers, decals and CAMERAS as
+    /// triangles in local space; lights, decals and CAMERAS as
     /// 0.5-unit spheres (none of them has geometry to hit — the icon, the
     /// projector box and the camera body are helpers, and clicking near the
     /// origin marker selects the node).
@@ -50,7 +50,7 @@ public:
     /// snapping calls this on every mouse move.
     static QList<ScenePick> pickAll(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
                                     const iris::Vec3 &cameraPos, bool forcePickable = false,
-                                    bool includeLights = true, bool includeViewers = true,
+                                    bool includeLights = true,
                                     bool includeDecals = true, bool refreshTransforms = true,
                                     bool includeCameras = true);
 

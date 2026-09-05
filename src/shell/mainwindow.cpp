@@ -27,7 +27,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
@@ -139,7 +138,6 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/physics/environment.h"
-#include "irisgl/document/physics/charactercontroller.h"
 #include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "modules/materials/effectspage.h"
@@ -1694,11 +1692,6 @@ void MainWindow::addEmpty()
 void MainWindow::addCamera()
 {
     sceneEditService->addCamera();
-}
-
-void MainWindow::addViewer()
-{
-    sceneEditService->addViewer();
 }
 
 void MainWindow::addParticleSystem()

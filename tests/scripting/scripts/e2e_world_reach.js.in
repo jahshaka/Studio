@@ -5,8 +5,10 @@
 //     close -> reopen -> the node still resolves its geometry. That round trip
 //     is the whole point of the verb: the F1 data loss was invisible until a
 //     reopen, so a verb that claims to replace addMesh has to prove the reopen.
-// #12 scene.addViewer({position}) — the hierarchy panel's Viewer action, with
-//     its character-controller side effect asserted rather than assumed.
+// #12 was scene.addViewer — the 2016 VR-era viewer node. The verb, the node
+//     type and the character controller behind it were REMOVED
+//     (AVATAR_LOCOMOTION_SPEC Stage 0), so the section now gates the removal
+//     itself and the reader's tolerance for an old file that still carries one.
 //
 // Document verbs only -> --headless.
 
@@ -88,29 +90,46 @@ var path = node.property(meshes[0].id, "meshPath");
 assert(path && path.length > 0, "the mesh node carries a meshPath: " + path);
 assert(path !== fixture, "and it is NOT the raw disk path");
 
-// ---- #12: the viewer -------------------------------------------------------
-var viewerId = scene.addViewer({ position: { x: -2, y: 0, z: -3 } });
-assert(viewerId.length > 10, "scene.addViewer -> " + viewerId);
-var viewer = nodeById(viewerId);
-assert(viewer !== null && viewer.type === "viewer", "it is a viewer node");
-assert(viewer.name === "Avatar", "named Avatar, like the panel's action makes it");
-assert(Math.abs(viewer.position.x + 2) < 0.001 &&
-       Math.abs(viewer.position.z + 3) < 0.001,
-       "at the requested position: " + JSON.stringify(viewer.position));
+// ---- #12: the viewer node is GONE, and an old file carrying one still opens --
+// The verb is off the registry entirely (not a verb that fails — absent).
+assert(typeof scene.addViewer === "undefined",
+       "scene.addViewer no longer exists on the scene module");
 
-// The documented side effect: a SECOND viewer takes the controller from the
-// first. activeCharacterController is a reflected property on ViewerNode.
-var viewer2 = scene.addViewer({ position: { x: 5, y: 0, z: 0 } });
-assert(viewer2.length > 10 && viewer2 !== viewerId, "a second viewer -> " + viewer2);
-assert(node.property(viewer2, "activeCharacterController") === true,
-       "the NEW viewer holds the active character controller");
-assert(node.property(viewerId, "activeCharacterController") === false,
-       "and the first one was demoted (the side effect the doc string names)");
+// And the READER's half of the same removal. A blob whose node type is one this
+// build retired must be SKIPPED with a log line, never guessed at and never
+// dereferenced: node.deserialize goes through the very same
+// SceneReader::readSceneNode the scene-file loader uses, so a fragment is the
+// cheapest way to hand the reader an "old file" node.
+var before = scene.nodes().length;
 
-// Without a position it still lands somewhere in front of the camera.
-var viewer3 = scene.addViewer();
-assert(viewer3.length > 10, "scene.addViewer() with no options -> " + viewer3);
-assert(node.remove(viewer3) === true, "and it is a normal, removable node");
+var refusedRoot = caught(function () {
+    node.deserialize({ node: { type: "viewer", name: "Old VR Viewer" } }, "");
+});
+assert(refusedRoot !== null,
+       "a fragment whose ROOT is a retired 'viewer' node is refused: " + refusedRoot);
+assert(scene.nodes().length === before,
+       "and nothing was added to the scene (" + scene.nodes().length + ")");
+
+// The dangerous one: a retired node NESTED under a live parent. Before the
+// tolerant read this was an unguarded addChild of whatever the reader produced.
+var nestedId = node.deserialize({
+    node: {
+        type: "empty", name: "Legacy Group",
+        children: [
+            { type: "viewer", name: "Old VR Viewer 2" },
+            { type: "empty",  name: "Kept Child" }
+        ]
+    }
+}, "");
+assert(nestedId.length > 10, "a fragment with a retired CHILD still rebuilds -> " + nestedId);
+var names = [];
+var afterNodes = scene.nodes();
+for (var ni = 0; ni < afterNodes.length; ++ni) names.push(afterNodes[ni].name);
+assert(names.indexOf("Legacy Group") >= 0, "the live parent came through");
+assert(names.indexOf("Kept Child") >= 0, "and its live sibling came through");
+assert(names.indexOf("Old VR Viewer 2") < 0,
+       "the retired child was SKIPPED, not resurrected as some other type");
+assert(node.remove(nestedId) === true, "and the rebuilt subtree is a normal, removable node");
 
 // ---- the round trip scene.addMesh never had --------------------------------
 assert(project.save() === true, "project.save");
@@ -130,10 +149,6 @@ assert(meshesAfter.length === meshes.length,
 var pathAfter = node.property(meshesAfter[0].id, "meshPath");
 assert(pathAfter === path,
        "AND THE GEOMETRY IDENTITY RESOLVED, unchanged: " + pathAfter);
-
-var viewerAfter = nodeById(viewerId);
-assert(viewerAfter !== null && viewerAfter.type === "viewer",
-       "the viewer survived the reopen too");
 
 // It exports (the archiver walks asset rows — the other half of the F1 story).
 var manifest = project.exportManifest("manifest-out");

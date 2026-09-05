@@ -48,7 +48,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 
 #include "irisgl/document/materials/postprocess.h"
 #include "irisgl/document/materials/postprocessmanager.h"
@@ -388,9 +387,6 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         case iris::SceneNodeType::Light:
             writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
         break;
-        case iris::SceneNodeType::Viewer:
-            writeViewerData(sceneNodeObj, sceneNode.staticCast<iris::ViewerNode>());
-        break;
         case iris::SceneNodeType::ParticleSystem:
             writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
         break;
@@ -603,15 +599,6 @@ void SceneWriter::writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr 
 	//auto matDef = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
 	//qDebug() << QJsonDocument(matDef).toJson(QJsonDocument::Indented);
 	//sceneNodeObject["material"] = meshNode->getMaterial().staticCast<iris::CustomMaterial>()->materialDefinitions;
-}
-
-void SceneWriter::writeViewerData(QJsonObject& sceneNodeObject,iris::ViewerNodePtr viewerNode)
-{
-    // `visible` is written once, by writeSceneNode (format v2 rule "one writer
-    // per key" — it had four authors in v1 and which one won depended on the
-    // order this switch happened to run in).
-    sceneNodeObject.insert("viewScale", viewerNode->getViewScale());
-	sceneNodeObject.insert("activeCharacterController", viewerNode->isActiveCharacterController());
 }
 
 void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node)
@@ -949,8 +936,6 @@ QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)
             return "light";
         case iris::SceneNodeType::Mesh:
             return "mesh";
-        case iris::SceneNodeType::Viewer:
-            return "viewer";
         case iris::SceneNodeType::ParticleSystem:
             return "particle system";
         case iris::SceneNodeType::Decal:

@@ -23,7 +23,7 @@ For more information see the LICENSE file
 //    SceneNodeType::Camera, so cameras read as Empty and had to be recognised
 //    by dynamic_cast. The constructor sets it now; the cast is gone.)
 //  - shouldSkipForExport: SceneNode::exportable is the legacy "include in
-//    model-file export" flag; Light/Camera/Viewer constructors hard-code it
+//    model-file export" flag; Light/Camera constructors hard-code it
 //    false, so honoring it for every type would delete all lights and cameras
 //    from every export. It keeps its historical meaning — an opt-out for MESH
 //    nodes only.
@@ -54,7 +54,6 @@ enum class NodeKind {
     Light,
     Camera,
     ParticleSystem,
-    Viewer,
     Decal
 };
 
@@ -82,7 +81,6 @@ struct SceneInventory
     int lights = 0;
     int cameras = 0;
     int particleSystems = 0;
-    int viewers = 0;
     int decals = 0;
     int empties = 0;
     QVector<iris::Material *> materials;   // unique, discovery order

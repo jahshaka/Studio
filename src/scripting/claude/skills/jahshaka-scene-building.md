@@ -181,10 +181,6 @@ Enums travel as NAMES, never ordinals, and a bad name is refused loudly.
 `editor.simulate(true)` runs the simulation in place; `editor.play()` /
 `editor.stop()` enter and leave play mode.
 
-`scene.addViewer({position})` adds the first-person stand-in ("Avatar").
-**Side effect worth saying out loud: the new viewer TAKES the active character
-controller**, so a second `addViewer` silently demotes the first.
-
 ## World settings
 
 ```js

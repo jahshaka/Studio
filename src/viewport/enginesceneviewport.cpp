@@ -741,7 +741,7 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
     // light, decal or camera origin sphere is noise it would have to filter out
     // of every hit list anyway.
     const auto hits = ScenePicker::pickAll(mScene, a, b, cam->getGlobalPosition(),
-                                           true, false, false, false, false, false);
+                                           true, false, false, false, false);
     ScenePick best;
     for (const auto &h : hits) {
         if (!h.node || h.triangleIndex < 0) continue;
@@ -1773,7 +1773,7 @@ bool EngineSceneViewport::snapSelectionToFloor()
     const iris::Vec3 end = start + iris::Vec3(0.0f, -10000.0f, 0.0f);
     // Meshes only: this looks for the SURFACE under the selection (End = drop to
     // floor), and a light or camera origin sphere is not a floor.
-    const auto hits = ScenePicker::pickAll(mScene, start, end, start, true, false, false,
+    const auto hits = ScenePicker::pickAll(mScene, start, end, start, true, false,
                                            false, true, false);
     float targetY = 0.0f;                       // fallback: the y = 0 plane
     bool found = false;

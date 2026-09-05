@@ -171,7 +171,9 @@ set_tests_properties(scripting.e2e.mesh_roundtrip PROPERTIES
     TIMEOUT 180)
 
 # AI_SURFACE_PROGRAM_SPEC lane D #7 + #12: assets.importAndPlace — the correct
-# import in ONE call — and scene.addViewer. The round trip scene.addMesh never
+# import in ONE call — and, where #12 used to gate scene.addViewer, the REMOVAL
+# of that verb and the reader's tolerance for an old file that still carries a
+# `viewer` node (AVATAR_LOCOMOTION_SPEC Stage 0). The round trip scene.addMesh never
 # had (place -> save -> close -> reopen -> the geometry identity still
 # resolves) is the reason this suite exists. Document verbs only -> --headless;
 # fixture paths configured in.

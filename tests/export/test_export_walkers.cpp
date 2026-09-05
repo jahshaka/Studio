@@ -15,7 +15,6 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/texture2d.h"
@@ -53,7 +52,6 @@ int main(int argc, char **argv)
     //  ├─ hidden (mesh, exportable = false)  -> skipped
     //  ├─ point light
     //  ├─ camera
-    //  ├─ viewer
     //  └─ group (empty)
     auto scene = iris::Scene::create();
 
@@ -95,10 +93,6 @@ int main(int argc, char **argv)
     cam->setName("camera");
     scene->rootNode->addChild(cam);
 
-    auto viewer = iris::ViewerNode::create();
-    viewer->setName("viewer");
-    scene->rootNode->addChild(viewer);
-
     auto group = iris::SceneNode::create();
     group->setName("group");
     scene->rootNode->addChild(group);
@@ -109,7 +103,6 @@ int main(int argc, char **argv)
     CHECK(classifyNode(cam) == NodeKind::Camera,
           "classify camera off the TYPE ENUM (CAMERAS_SPEC phase 1: the CameraNode "
           "constructor sets it, so the dynamic_cast this walker needed is gone)");
-    CHECK(classifyNode(viewer) == NodeKind::Viewer, "classify viewer");
     CHECK(classifyNode(group) == NodeKind::Empty, "classify empty");
 
     // ---- skip semantics ----
@@ -129,13 +122,13 @@ int main(int argc, char **argv)
             if (node->getName() == "cube") cubeChildHandles = childHandles;
             return handle++;
         });
-        CHECK(visited.size() == 6, "6 nodes visited (root and skipped mesh excluded)");
+        CHECK(visited.size() == 5, "5 nodes visited (root and skipped mesh excluded)");
         CHECK(!visited.contains("hidden"), "hidden mesh not visited");
         CHECK(visited.indexOf("childCube") < visited.indexOf("cube"),
               "post-order: child visited before parent");
         CHECK(cubeChildHandles.size() == 1 && cubeChildHandles.first() == 100,
               "parent receives its child's handle");
-        CHECK(roots.size() == 5, "5 root handles (cube, light, camera, viewer, group)");
+        CHECK(roots.size() == 4, "4 root handles (cube, light, camera, group)");
         CHECK(!roots.contains(100), "child handle is not a root handle");
     }
 
@@ -153,11 +146,10 @@ int main(int argc, char **argv)
     // ---- inventory ----
     {
         const SceneInventory inv = collectInventory(scene);
-        CHECK(inv.totalNodes == 6, "inventory total = 6");
+        CHECK(inv.totalNodes == 5, "inventory total = 5");
         CHECK(inv.meshNodes == 2, "inventory meshes = 2 (skipped mesh excluded)");
         CHECK(inv.lights == 1, "inventory lights = 1");
         CHECK(inv.cameras == 1, "inventory cameras = 1");
-        CHECK(inv.viewers == 1, "inventory viewers = 1");
         CHECK(inv.empties == 1, "inventory empties = 1");
         CHECK(inv.materials.size() == 1, "shared material counted once");
         CHECK(inv.textureSources.contains(roughPath), "roughness map in texture sources");
