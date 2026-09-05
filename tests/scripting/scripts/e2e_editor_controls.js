@@ -410,7 +410,14 @@ assert(editor.overlays().gameView === false, "and overlays() agrees");
 // NOT hidden by Game View — that last one is a deliberate exception to the
 // gameView master switch (D3): a frame-time readout is a diagnostic, and "what
 // is my frame time in the game view" is the question people ask.
-assert(ov0.stats === false, "the stats readout is off by default");
+// `stats` is backed by the persisted `show_fps` preference, and in QT_DEBUG
+// the settings file lives at applicationDirPath — SHARED with interactive
+// runs, so a developer who left the readout on would fail a "default"
+// assertion here (2026-09-05 gate). Reset explicitly and assert the reset;
+// the true default-value contract belongs to the per-test data-root override
+// (WINDOWS_BUILD_SPEC), not to this suite.
+assert(editor.setOverlays({ stats: false }), "reset the persisted stats preference");
+assert(editor.overlays().stats === false, "the stats readout is off after the reset");
 assert(editor.setOverlays({ stats: true }), "setOverlays({stats:true})");
 assert(editor.overlays().stats === true, "stats reads back on");
 editor.frame(4);   // the readout is composed and drawn on real frames
