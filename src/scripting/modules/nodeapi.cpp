@@ -70,8 +70,11 @@ QVector<VerbInfo> NodeApi::verbs() const
           "(IES profile, area mask, decal image) are not rows here — node.setLightProfile, "
           "node.setLightTexture and node.setDecalTexture own them.",
           Needs::Document },
-        { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale}",
-          "Everything scene.nodes() reports, for one node.",
+        { "info", "node.info(id) -> {id, name, type, parent, position, rotation, scale, socket?}",
+          "Everything scene.nodes() reports, for one node. `socket` is present only while the "
+          "node RIDES a socket ({owner, name}, CAMERAS_SPEC \u00a75) — which is also the answer "
+          "to \"why does node.transform on this thing not stick?\", because a socketed node's "
+          "transform is rewritten every frame.",
           Needs::Document },
         { "boneNames", "node.boneNames(id) -> [string]",
           "The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged.",
@@ -137,6 +140,44 @@ QVector<VerbInfo> NodeApi::verbs() const
           "mass 0. `constraints` is the COUNT of inter-node constraints on this node — those have "
           "their own UI path and no verb yet (AI_SURFACE_PROGRAM_SPEC owner row D4a), and "
           "node.physics never touches them.",
+          Needs::Document },
+        { "addSocket", "node.addSocket(id, {name, bone, position?, rotation?, scale?}) -> {name, bone, position, rotation, scale, builtIn, resolves}",
+          "Adds a SOCKET — a named attach point on one BONE of a rigged mesh "
+          "(CAMERAS_SPEC §5). Anything attached to it (node.attachToSocket) then rides that "
+          "bone as it animates: a camera on `head` is first person, a camera on `shoulder` is "
+          "third person, a sword on `hand` is a sword in a hand. `bone` must name a bone this "
+          "node's rig actually has (node.boneNames lists them) — an unrigged mesh, a light, a "
+          "camera or a wrong bone name is REFUSED, because a socket that silently attaches to "
+          "nothing is indistinguishable from one that works until the rig moves. "
+          "position/rotation/scale are the offset FROM the bone, in bone space (rotation takes "
+          "either a quaternion {x,y,z,scalar} or euler degrees {x,y,z}); omitted, the socket sits "
+          "exactly on the bone. Names are unique per node. Undoable.",
+          Needs::Document },
+        { "removeSocket", "node.removeSocket(id, name) -> bool",
+          "Deletes a socket. Anything riding it STOPS MOVING and keeps its last pose — it is not "
+          "detached, so re-adding a socket of the same name picks the riders straight back up "
+          "(and node.sockets on the rider's owner is where a dangling one shows). Undoable.",
+          Needs::Document },
+        { "sockets", "node.sockets(id) -> [{name, bone, position, rotation, scale, builtIn, resolves, riders}]",
+          "Every socket on this node, in the order they were added. `builtIn` marks the ones the "
+          "avatar module installed from its bone-name table rather than the user. `resolves` is "
+          "false when the socket names a bone the node's CURRENT rig does not have — the "
+          "re-import-renamed-a-bone case, which is deliberately not an error anywhere: the socket "
+          "stays in the file and starts working again if the bone comes back. `riders` counts the "
+          "nodes attached to it right now.",
+          Needs::Document },
+        { "attachToSocket", "node.attachToSocket(id, ownerId, socketName) -> bool",
+          "Makes `id` ride `ownerId`'s socket: from the next frame its world transform is "
+          "`boneWorld * socketOffset`, rewritten every frame, so node.transform on it is "
+          "overwritten until it is detached. The node keeps its place in the hierarchy — this is "
+          "NOT a reparent. Refused when the owner does not exist, is not a mesh, has no such "
+          "socket, or lies inside the attached node's own subtree (which would make the socket "
+          "drive its own owner). Undoable.",
+          Needs::Document },
+        { "detachFromSocket", "node.detachFromSocket(id) -> bool",
+          "Stops driving the node from a socket. It keeps the pose it was last resolved to, so "
+          "detaching is also how you place something WHERE a bone was. False when it was not "
+          "attached. Undoable.",
           Needs::Document },
     };
 }
@@ -766,5 +807,180 @@ bool NodeApi::physics(const QString &id, const QVariantMap &change)
     recordNodeEdit(QStringLiteral("physics"),
                    [node, next, nextIsBody, apply]() { apply(node, next, nextIsBody); },
                    [node, was, wasBody, apply]() { apply(node, was, wasBody); });
+    return true;
+}
+
+// --- sockets (CAMERAS_SPEC §5/§6, owner decision D9) -----------------------
+//
+// The document owns everything here: MeshNode holds the socket list and
+// validates a bone name against its OWN rig; iris::Scene owns the attachment
+// (it is the only thing that can resolve a guid) and SocketResolver drives the
+// attached nodes each frame from the pose the engine last computed. These verbs
+// are a thin, undoable skin over exactly that — no socket logic lives in this
+// file, which is what lets tests/sockets assert the maths with no app at all.
+
+iris::MeshNodePtr NodeApi::meshOrFail(const QString &id, const QString &verb)
+{
+    auto node = nodeOrFail(id, verb);
+    if (!node) return iris::MeshNodePtr();
+    if (node->getSceneNodeType() != iris::SceneNodeType::Mesh) {
+        fail(QStringLiteral("%1: '%2' is not a mesh — sockets live on the BONES of a rigged "
+                            "mesh, so only one of those can carry them")
+                 .arg(verb, node->getName()));
+        return iris::MeshNodePtr();
+    }
+    return node.staticCast<iris::MeshNode>();
+}
+
+static QVariantMap socketToJs(const iris::Socket &socket, const iris::MeshNodePtr &owner,
+                              const iris::ScenePtr &scene)
+{
+    QVariantMap out;
+    out["name"] = socket.name;
+    out["bone"] = socket.boneName;
+    out["position"] = vecToJs(socket.position);
+    out["rotation"] = QVariantMap{ { "x", socket.rotation.x() }, { "y", socket.rotation.y() },
+                                   { "z", socket.rotation.z() }, { "scalar", socket.rotation.scalar() } };
+    out["scale"] = vecToJs(socket.scale);
+    out["builtIn"] = socket.builtIn;
+    // "Does this socket still name a real bone?" — the re-import-renamed-a-bone
+    // case, reported and never thrown (see the fail-soft rule in socket.h).
+    out["resolves"] = owner && owner->hasBone(socket.boneName);
+    int riders = 0;
+    if (scene && owner) {
+        const auto it = scene->socketAttachments.constFind(owner->getGUID());
+        if (it != scene->socketAttachments.constEnd())
+            for (const auto &rider : it.value())
+                if (!rider.isNull() && rider->socketName == socket.name) ++riders;
+    }
+    out["riders"] = riders;
+    return out;
+}
+
+QVariantMap NodeApi::addSocket(const QString &id, const QVariantMap &params)
+{
+    QVariantMap out;
+    auto mesh = meshOrFail(id, QStringLiteral("node.addSocket"));
+    if (!mesh) return out;
+
+    static const QStringList known = { "name", "bone", "position", "rotation", "scale", "builtIn" };
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            fail(QStringLiteral("node.addSocket: unknown option '%1' — known options are %2")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+
+    iris::Socket socket;
+    socket.name = params.value(QStringLiteral("name")).toString();
+    socket.boneName = params.value(QStringLiteral("bone")).toString();
+    socket.position = vecFromJs(params.value(QStringLiteral("position")), iris::Vec3(0, 0, 0));
+    bool rotOk = true;
+    if (params.contains(QStringLiteral("rotation")))
+        socket.rotation = quatFromJs(params.value(QStringLiteral("rotation")), iris::Quat(), &rotOk);
+    if (!rotOk) {
+        fail(QStringLiteral("node.addSocket: rotation must be a quaternion {x,y,z,scalar} or "
+                            "euler degrees {x,y,z}"));
+        return out;
+    }
+    socket.scale = vecFromJs(params.value(QStringLiteral("scale")), iris::Vec3(1, 1, 1));
+    socket.builtIn = params.value(QStringLiteral("builtIn"), false).toBool();
+
+    QString error;
+    if (!mesh->addSocket(socket, &error)) {
+        fail(QStringLiteral("node.addSocket: %1").arg(error));
+        return out;
+    }
+    const QString socketName = socket.name;
+    recordNodeEdit(QStringLiteral("add socket"),
+                   [mesh, socket]() { if (!mesh->findSocket(socket.name)) mesh->addSocket(socket); },
+                   [mesh, socketName]() { mesh->removeSocket(socketName); });
+
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    return socketToJs(*mesh->findSocket(socketName), mesh, scene);
+}
+
+bool NodeApi::removeSocket(const QString &id, const QString &socketName)
+{
+    auto mesh = meshOrFail(id, QStringLiteral("node.removeSocket"));
+    if (!mesh) return false;
+    const iris::Socket *existing = mesh->findSocket(socketName);
+    if (!existing)
+        return fail(QStringLiteral("node.removeSocket: '%1' has no socket named '%2'")
+                        .arg(mesh->getName(), socketName));
+    const iris::Socket copy = *existing;
+    mesh->removeSocket(socketName);
+    recordNodeEdit(QStringLiteral("remove socket"),
+                   [mesh, socketName]() { mesh->removeSocket(socketName); },
+                   [mesh, copy]() { if (!mesh->findSocket(copy.name)) mesh->addSocket(copy); });
+    return true;
+}
+
+QVariantList NodeApi::sockets(const QString &id)
+{
+    QVariantList out;
+    auto mesh = meshOrFail(id, QStringLiteral("node.sockets"));
+    if (!mesh) return out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    for (const iris::Socket &socket : mesh->getSockets())
+        out.append(socketToJs(socket, mesh, scene));
+    return out;
+}
+
+bool NodeApi::attachToSocket(const QString &id, const QString &ownerId, const QString &socketName)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.attachToSocket"));
+    if (!node) return false;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) return fail(QStringLiteral("node.attachToSocket: no scene is open"));
+
+    const QString wasOwner = node->socketOwnerGuid;
+    const QString wasSocket = node->socketName;
+    // The pose the node holds right now, so an undo puts it back where it was
+    // instead of leaving it frozen on the bone it was resolved to.
+    const iris::Vec3 wasPos = node->getLocalPos();
+    const iris::Quat wasRot = node->getLocalRot();
+
+    QString error;
+    if (!scene->attachToSocket(node, ownerId, socketName, &error))
+        return fail(QStringLiteral("node.attachToSocket: %1").arg(error));
+
+    recordNodeEdit(QStringLiteral("attach to socket"),
+                   [scene, node, ownerId, socketName]() {
+                       scene->attachToSocket(node, ownerId, socketName);
+                   },
+                   [scene, node, wasOwner, wasSocket, wasPos, wasRot]() {
+                       scene->detachFromSocket(node);
+                       if (!wasOwner.isEmpty() && !wasSocket.isEmpty())
+                           scene->attachToSocket(node, wasOwner, wasSocket);
+                       else {
+                           node->setLocalPos(wasPos);
+                           node->setLocalRot(wasRot);
+                       }
+                   });
+    return true;
+}
+
+bool NodeApi::detachFromSocket(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.detachFromSocket"));
+    if (!node) return false;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) return fail(QStringLiteral("node.detachFromSocket: no scene is open"));
+    const QString wasOwner = node->socketOwnerGuid;
+    const QString wasSocket = node->socketName;
+    if (!scene->detachFromSocket(node))
+        return fail(QStringLiteral("node.detachFromSocket: '%1' is not riding a socket")
+                        .arg(node->getName()));
+    recordNodeEdit(QStringLiteral("detach from socket"),
+                   [scene, node]() { scene->detachFromSocket(node); },
+                   [scene, node, wasOwner, wasSocket]() {
+                       scene->attachToSocket(node, wasOwner, wasSocket);
+                   });
     return true;
 }

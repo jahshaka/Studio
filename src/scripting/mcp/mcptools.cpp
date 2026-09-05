@@ -12,7 +12,9 @@ For more information see the LICENSE file
 #include "scripting/mcp/mcptools.h"
 
 #include <QBuffer>
+#include <QFile>
 #include <QImage>
+#include <QTemporaryDir>
 #include <QJsonDocument>
 #include <QStringList>
 #include <QUndoStack>
@@ -204,7 +206,12 @@ QJsonArray McpTools::listTools() const
           "editor.setCamera / editor.frameNode, called for you, and they MOVE THE USER'S "
           "VIEWPORT (there is no separate screenshot camera). The resulting pose is "
           "always echoed in a text block beside the image, so you can see where the shot "
-          "was taken from and take the next one relative to it." },
+          "was taken from and take the next one relative to it.\n"
+          "`camera` AS A STRING is the opposite: it is the id of a real SCENE CAMERA "
+          "(describe_scene lists them, scene.addCamera makes them) and the shot is taken "
+          "THROUGH that camera without moving the user's viewport at all. That is how you "
+          "see what an avatar sees — attach a camera to a rig's `head` socket "
+          "(node.attachToSocket) and shoot through it." },
         { "inputSchema", QJsonObject{
             { "type", "object" },
             { "properties", QJsonObject{
@@ -215,10 +222,12 @@ QJsonArray McpTools::listTools() const
                 { "width", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 800)." } } },
                 { "height", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 600)." } } },
                 { "camera", QJsonObject{
-                    { "type", "object" },
-                    { "description", "Place the editor camera first — editor.setCamera's argument: "
-                                     "{position?:{x,y,z}, lookAt?:{x,y,z} | rotation?:{x,y,z,scalar}, "
-                                     "fov?}. Mutually exclusive with frameNode." } } },
+                    { "description", "EITHER an object — editor.setCamera's argument, which places "
+                                     "the USER'S viewport camera first: {position?:{x,y,z}, "
+                                     "lookAt?:{x,y,z} | rotation?:{x,y,z,scalar}, fov?} — OR a "
+                                     "STRING, the id of a scene camera to shoot through, which "
+                                     "leaves the user's viewport exactly where it was. Mutually "
+                                     "exclusive with frameNode." } } },
                 { "frameNode", QJsonObject{
                     { "type", "object" },
                     { "description", "Frame a node first — editor.frameNode: {id (required), yaw?, "
@@ -475,6 +484,46 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
     const bool hasFrameNode = args.contains(QLatin1String("frameNode"));
     if (hasCamera && hasFrameNode)
         return textResult(QStringLiteral("screenshot: pass EITHER camera or frameNode, not both"), true);
+
+    // A STRING `camera` is a SCENE camera id (CAMERAS_SPEC §5's AI hook), which
+    // is a different verb and a different promise: camera.screenshot renders
+    // through that node's offscreen view and never touches the user's viewport.
+    // It writes a file (that is what the verb does), so the bytes come back off
+    // disk from a scratch dir that dies with this call.
+    if (hasCamera && args.value(QLatin1String("camera")).isString()) {
+        const QString cameraId = args.value(QLatin1String("camera")).toString();
+        QTemporaryDir scratch;
+        if (!scratch.isValid())
+            return textResult(QStringLiteral("screenshot: could not create a scratch directory"), true);
+        const QString file = scratch.filePath(QStringLiteral("camera.png"));
+        const bool postFxShot = args.value(QLatin1String("postFx")).toBool(true);
+        const QByteArray quoted =
+            QJsonDocument(QJsonArray{ cameraId, file }).toJson(QJsonDocument::Compact);
+        const QString expr = QStringLiteral("camera.screenshot(%1[0], %1[1], {width: %2, height: %3, postFx: %4})")
+                                 .arg(QString::fromUtf8(quoted))
+                                 .arg(width).arg(height)
+                                 .arg(postFxShot ? QStringLiteral("true") : QStringLiteral("false"));
+        // The deterministic frame FIRST: a socketed camera is placed by the
+        // mirror's socket pass, which only runs inside a sync.
+        host.viewport->renderFrames(2);
+        const ScriptResult shot = mEngine->evaluate(expr, QStringLiteral("<screenshot>"), false);
+        if (!shot.ok)
+            return textResult(QStringLiteral("screenshot: %1").arg(shot.error), true);
+        QFile png(file);
+        if (!png.open(QIODevice::ReadOnly))
+            return textResult(QStringLiteral("screenshot: the camera render produced no file"), true);
+        const QByteArray bytes = png.readAll();
+        QJsonObject echo = QJsonDocument::fromVariant(shot.value).object();
+        echo.remove(QStringLiteral("path"));    // a scratch path is noise to the caller
+        echo["camera"] = cameraId;
+        return QJsonObject{ { "content", QJsonArray{
+            QJsonObject{ { "type", "image" }, { "data", QString::fromLatin1(bytes.toBase64()) },
+                         { "mimeType", "image/png" } },
+            QJsonObject{ { "type", "text" },
+                         { "text", QStringLiteral("shot through scene camera %1: %2")
+                                       .arg(cameraId, QString::fromUtf8(
+                                           QJsonDocument(echo).toJson(QJsonDocument::Compact))) } } } } };
+    }
 
     QString poseExpr = QStringLiteral("editor.camera()");
     if (hasCamera) {

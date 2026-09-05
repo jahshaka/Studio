@@ -84,6 +84,9 @@ public:
     Q_INVOKABLE bool setTime(double seconds);
     Q_INVOKABLE double time();
     Q_INVOKABLE QVariantList bones();
+    /// The module's built-in head/shoulder sockets, on an editor-scene node
+    /// (CAMERAS_SPEC D9). The only verb here that leaves the preview document.
+    Q_INVOKABLE QVariantList addSockets(const QString &nodeId);
     Q_INVOKABLE QVariantMap snapshot(const QString &path, int width = 256, int height = 256,
                                      const QVariantList &probes = QVariantList());
 

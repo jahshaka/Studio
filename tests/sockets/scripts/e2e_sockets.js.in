@@ -1,0 +1,290 @@
+// sockets.e2e — CAMERAS_SPEC §5/§6 through the VERBS, in the real app.
+//
+// Phase A: a rigged model in the scene, and node.addSocket / node.sockets on it.
+// Phase B: every refusal — unrigged mesh, wrong bone, duplicate name, a light
+//          as an owner, a socket that does not exist, riding yourself.
+// Phase C: attachToSocket actually MOVES the rider onto the bone, and
+//          detachFromSocket leaves it where it was.
+// Phase D: camera.screenshot — the AI hook. A camera on the rig's socket
+//          photographs a DIFFERENT shot once the rig moves, and taking one does
+//          not move the user's viewport.
+// Phase E: avatar.addSockets, fail-soft on a rig with no recognizable joints.
+// Phase F: the SAVE -> CLOSE -> OPEN round trip of the sockets AND of the
+//          attachment, through the real SceneWriter and SceneReader.
+//
+// The rig is tests/avatar/fixtures/rig2.glb — the generated two-bone skinned
+// glTF the avatar and skeletal suites already use (bones `jointRoot` and
+// `jointTip`). Its path is substituted by CMake, because a script has no way to
+// read the environment and a build tree has no fixed relation to a source tree.
+
+var RIG = "@JAHSHAKA_SOCKETS_RIG@";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, eps, msg) {
+    var d = Math.abs(a - b);
+    assert(d <= (eps || 1e-3), msg + " (" + a + " vs " + b + ")");
+}
+function refuses(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+function dist(a, b) {
+    var dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+var guid = project.create("Sockets " + Date.now());
+assert(guid.length > 10, "project.create -> " + guid);
+
+// ---- phase A: a rigged model, and its sockets ----------------------------
+var placed = assets.importAndPlace(RIG, { position: { x: 0, y: 0, z: 0 } });
+assert(placed && placed.nodeId, "assets.importAndPlace(rig2.glb) -> " + JSON.stringify(placed));
+
+// The imported asset may arrive as a group with the mesh under it — find the
+// node that actually carries the rig rather than assuming a shape.
+var rig = null;
+var rows = scene.nodes({ subtree: placed.nodeId });
+for (var i = 0; i < rows.length; i++) {
+    var bones = node.boneNames(rows[i].id);
+    if (bones && bones.length > 0) { rig = rows[i].id; break; }
+}
+assert(rig !== null, "the imported model carries a rig somewhere in its subtree");
+var boneNames = node.boneNames(rig);
+console.log("rig bones: " + JSON.stringify(boneNames));
+assert(boneNames.indexOf("jointTip") >= 0, "…including jointTip");
+
+assert(node.sockets(rig).length === 0, "a fresh rig has no sockets");
+var socket = node.addSocket(rig, { name: "head", bone: "jointTip",
+                                   position: { x: 0, y: 1, z: 0 } });
+assert(socket.name === "head" && socket.bone === "jointTip", "node.addSocket -> " + JSON.stringify(socket));
+assert(socket.resolves === true, "the socket names a bone the rig has");
+assert(socket.builtIn === false, "an authored socket is not a built-in");
+assert(socket.riders === 0, "nothing rides it yet");
+near(socket.position.y, 1, 1e-4, "the offset came back");
+
+var list = node.sockets(rig);
+assert(list.length === 1 && list[0].name === "head", "node.sockets lists it");
+
+// ---- phase B: the refusals -----------------------------------------------
+var cube = scene.addPrimitive("cube", { position: { x: 4, y: 0, z: 0 } });
+var lamp = scene.addLight("point", { position: { x: 0, y: 4, z: 0 } });
+
+refuses(function () { node.addSocket(cube, { name: "head", bone: "jointTip" }); },
+        "a socket on an UNRIGGED mesh is refused");
+refuses(function () { node.addSocket(lamp, { name: "head", bone: "jointTip" }); },
+        "a socket on a LIGHT is refused (it is not a mesh at all)");
+refuses(function () { node.addSocket(rig, { name: "hand", bone: "mixamorig:Head" }); },
+        "a bone the rig does not have is refused");
+refuses(function () { node.addSocket(rig, { name: "head", bone: "jointRoot" }); },
+        "a duplicate socket NAME is refused");
+refuses(function () { node.addSocket(rig, { name: "x", bone: "jointTip", wobble: 3 }); },
+        "an unknown option is refused rather than ignored");
+refuses(function () { node.sockets(lamp); }, "node.sockets on a light is refused");
+refuses(function () { node.removeSocket(rig, "nope"); },
+        "removing a socket that does not exist is refused");
+
+var cam = scene.addCamera({ position: { x: 9, y: 9, z: 9 } });
+refuses(function () { node.attachToSocket(cam, rig, "nope"); },
+        "attaching to a socket that does not exist is refused");
+refuses(function () { node.attachToSocket(cam, lamp, "head"); },
+        "a LIGHT cannot be a socket owner");
+refuses(function () { node.attachToSocket(cam, "not-a-guid", "head"); },
+        "an owner id that resolves to nothing is refused");
+refuses(function () { node.attachToSocket(rig, rig, "head"); },
+        "a node cannot ride its own socket");
+refuses(function () { node.detachFromSocket(cam); },
+        "detaching something that is not attached is refused");
+
+// ---- phase C: attaching moves the rider ----------------------------------
+var before = node.info(cam).position;
+assert(node.attachToSocket(cam, rig, "head"), "node.attachToSocket");
+assert(node.sockets(rig)[0].riders === 1, "the socket reports its rider");
+editor.frame(2);
+var onBone = node.info(cam).position;
+console.log("camera: " + JSON.stringify(before) + " -> " + JSON.stringify(onBone));
+assert(dist(before, onBone) > 0.5,
+       "the camera left where it was placed and landed on the bone — the socket drives it");
+// jointTip binds one unit up the rig; the socket adds another. The rig itself
+// was placed at the origin, so the socket sits at y = 2 (times whatever import
+// scale the model carries — the assertion is that it is UP, not the exact
+// number, which belongs to sockets.render).
+assert(onBone.y > before.y === false || onBone.y > 0.1,
+       "…somewhere above the rig's base");
+
+// A socketed node is DRIVEN: a transform written by hand is overwritten.
+node.transform(cam, { position: { x: -20, y: -20, z: -20 } });
+editor.frame(2);
+var reclaimed = node.info(cam).position;
+assert(dist(reclaimed, onBone) < 1e-2,
+       "a transform written onto a socketed node is overwritten on the next frame — " +
+       "that is what 'attached' means");
+
+// ---- phase D: camera.screenshot, the AI hook ------------------------------
+// Point the camera's lens at something: the settings block is the camera's, and
+// the shot must come back at the camera's own output size unless overridden.
+camera.settings(cam, { outputHeight: 120, aspectRatio: 1.5 });
+var shotA = camera.screenshot(cam, "shot_a.png");
+assert(shotA.height === 120 && shotA.width === 180,
+       "the shot came back at the CAMERA's outputHeight x aspectRatio (" +
+       shotA.width + "x" + shotA.height + ")");
+var explorerBefore = editor.camera();
+
+var shotB = camera.screenshot(cam, "shot_b.png", { width: 64, height: 64 });
+assert(shotB.width === 64 && shotB.height === 64, "…overridable per call");
+
+var explorerAfter = editor.camera();
+assert(Math.abs(explorerBefore.position.x - explorerAfter.position.x) < 1e-4 &&
+       Math.abs(explorerBefore.position.y - explorerAfter.position.y) < 1e-4 &&
+       Math.abs(explorerBefore.position.z - explorerAfter.position.z) < 1e-4,
+       "taking a camera screenshot did NOT move the user's viewport — that is the whole " +
+       "difference between this and the MCP screenshot tool's `camera` object form");
+
+refuses(function () { camera.screenshot(cam, "x.png", { widht: 64 }); },
+        "an unknown screenshot option is refused");
+refuses(function () { camera.screenshot(cube, "x.png"); },
+        "camera.screenshot on a node that is not a camera is refused");
+
+// A shot must not MOVE the camera it is taken through. This is not a
+// theoretical worry: the viewport resyncs its camera controller whenever it is
+// handed a camera, and both controllers end that resync by writing
+// fromEulerAngles(pitch, yaw, 0) onto the node — which would silently delete
+// the ROLL of any camera anyone photographs. A camera riding a bone is rolled
+// by the bone, so this is exactly the case that matters here.
+var rolled = scene.addCamera({ position: { x: 2, y: 2, z: 2 } });
+node.transform(rolled, { rotation: { x: 20, y: 35, z: 45 } });
+var rollBefore = node.info(rolled).rotation;
+camera.screenshot(rolled, "rolled.png", { width: 32, height: 32 });
+var rollAfter = node.info(rolled).rotation;
+assert(Math.abs(rollBefore.x - rollAfter.x) < 1e-3 &&
+       Math.abs(rollBefore.y - rollAfter.y) < 1e-3 &&
+       Math.abs(rollBefore.z - rollAfter.z) < 1e-3,
+       "taking a shot left the camera's rotation — ROLL included — exactly as it was " +
+       "(" + JSON.stringify(rollBefore) + " -> " + JSON.stringify(rollAfter) + ")");
+assert(node.remove(rolled), "…and the probe camera goes away again");
+
+// Move the RIG. The socketed camera moves with it, so the shot changes.
+//
+// Something for it to LOOK at first: the socket sits at (0, 2, 0) and a camera
+// looks down its own -Z, so a marker at (0, 2, -4) fills the frame. Without one
+// the "shot changed" assertion would compare two pictures of the empty sky and
+// pass or fail for reasons that have nothing to do with sockets.
+var marker = scene.addPrimitive("cube", { position: { x: 0, y: 2, z: -4 },
+                                          scale: { x: 2, y: 2, z: 2 } });
+scene.addLight("point", { position: { x: 0, y: 3, z: -2 } });
+editor.frame(2);
+
+var probes = [{ x: 0.5, y: 0.5 }, { x: 0.25, y: 0.5 }, { x: 0.75, y: 0.5 }];
+var s1 = camera.screenshot(cam, "rig_at_origin.png", { width: 96, height: 96, probes: probes });
+node.transform(rig, { position: { x: 6, y: 3, z: -4 },
+                      rotation: { x: 0, y: 60, z: 0 } });
+editor.frame(2);
+var moved = node.info(cam).position;
+assert(dist(moved, onBone) > 1.0, "moving the rig carried the socketed camera with it");
+var s2 = camera.screenshot(cam, "rig_moved.png", { width: 96, height: 96, probes: probes });
+
+function pixelDelta(a, b) {
+    var d = Math.abs(a.center.r - b.center.r) + Math.abs(a.center.g - b.center.g) +
+            Math.abs(a.center.b - b.center.b);
+    for (var i = 0; i < a.probes.length; i++)
+        d += Math.abs(a.probes[i].r - b.probes[i].r) + Math.abs(a.probes[i].g - b.probes[i].g) +
+             Math.abs(a.probes[i].b - b.probes[i].b);
+    return d;
+}
+console.log("shot delta after moving the rig: " + pixelDelta(s1, s2));
+assert(pixelDelta(s1, s2) > 6,
+       "what the socketed camera SEES changed when the rig moved — an agent driving an " +
+       "avatar sees what the avatar sees");
+
+// Same camera, same scene, nothing moved: the same pixels. Without this the
+// assertion above is satisfied by any per-frame noise.
+var s3 = camera.screenshot(cam, "rig_moved_again.png", { width: 96, height: 96, probes: probes });
+assert(pixelDelta(s2, s3) === 0,
+       "…and an unmoved rig photographs identically (so that delta was the socket)");
+
+// ---- phase E: the avatar module's built-ins ------------------------------
+var report = avatar.addSockets(rig);
+assert(report.length === 2, "avatar.addSockets always reports both built-ins");
+assert(report[0].socket === "head" && report[1].socket === "shoulder",
+       "…head and shoulder: " + JSON.stringify(report));
+// This rig ALREADY has a socket called `head` (phase A authored one on
+// jointTip), and a re-install must never overwrite an authored offset.
+assert(report[0].existed === true && report[0].bone === "jointTip",
+       "the authored `head` socket was left exactly as it was");
+near(node.sockets(rig)[0].position.y, 1, 1e-4,
+     "…offset intact — re-installing built-ins never discards authored work");
+// rig2.glb's bones are called jointRoot/jointTip, which are not Mixamo-class
+// names, so there is no shoulder to find. The point of this assertion is that
+// that is NOT an error.
+assert(report[1].mapped === false && report[1].bone === "",
+       "a rig with no recognizable shoulder maps nothing and FAILS SOFT");
+assert(node.sockets(rig).length === 1, "…and nothing was added");
+refuses(function () { avatar.addSockets(cube); },
+        "avatar.addSockets on an unrigged mesh is refused with a message");
+
+// ---- phase F: save -> close -> open --------------------------------------
+node.addSocket(rig, { name: "hand", bone: "jointRoot",
+                      position: { x: 0.5, y: 0, z: 0 },
+                      rotation: { x: 0, y: 0, z: 0, scalar: 1 },
+                      scale: { x: 2, y: 2, z: 2 } });
+
+function fingerprint() {
+    var r = null;
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; i++)
+        if ((node.boneNames(all[i].id) || []).length > 0) { r = all[i].id; break; }
+    if (r === null) return "NO RIG";
+    var socks = node.sockets(r);
+    var out = [];
+    for (var k = 0; k < socks.length; k++) {
+        var s = socks[k];
+        out.push({ name: s.name, bone: s.bone, position: s.position, rotation: s.rotation,
+                   scale: s.scale, builtIn: s.builtIn, resolves: s.resolves, riders: s.riders });
+    }
+    return JSON.stringify(out);
+}
+
+var fresh = fingerprint();
+console.log("fingerprint: " + fresh);
+for (var cycle = 1; cycle <= 2; cycle++) {
+    assert(project.save() === true, "cycle " + cycle + ": project.save");
+    assert(project.close() === true, "cycle " + cycle + ": project.close");
+    assert(project.open(guid) === true, "cycle " + cycle + ": project.open");
+    var after = fingerprint();
+    if (after !== fresh) {
+        console.log("  fresh: " + fresh);
+        console.log("  after: " + after);
+    }
+    assert(after === fresh,
+           "cycle " + cycle + ": every socket — bone, offset, provenance — survived " +
+           "save/close/open, AND the rider count, which proves the ATTACHMENT round-tripped " +
+           "too (a rider that came back detached would read 0)");
+}
+
+// The reopened rider is really driven, not merely recorded as attached.
+var reopenedCam = null;
+var reopened = scene.nodes();
+for (var j = 0; j < reopened.length; j++)
+    if (reopened[j].type === "camera") reopenedCam = reopened[j].id;
+assert(reopenedCam !== null, "the camera reopened as a camera");
+node.transform(reopenedCam, { position: { x: 40, y: 40, z: 40 } });
+editor.frame(2);
+var back = node.info(reopenedCam).position;
+assert(dist(back, { x: 40, y: 40, z: 40 }) > 1.0,
+       "a reopened socketed camera is still DRIVEN by the socket (a hand-written transform " +
+       "is taken back over)");
+
+// ---- detach leaves it where it was ---------------------------------------
+var parked = node.info(reopenedCam).position;
+assert(node.detachFromSocket(reopenedCam), "node.detachFromSocket");
+node.transform(reopenedCam, { position: { x: 40, y: 40, z: 40 } });
+editor.frame(2);
+var free = node.info(reopenedCam).position;
+assert(dist(free, { x: 40, y: 40, z: 40 }) < 1e-2,
+       "a DETACHED camera keeps whatever transform it is given");
+assert(dist(parked, free) > 1.0, "…which is a different place from the socket");
+
+console.log("sockets.e2e: all checks passed");

@@ -197,6 +197,7 @@ set(SRCS
     src/modules/avatar/avatarpage.cpp
     src/modules/avatar/avatarpreviewmodel.cpp
     src/modules/avatar/avatarspace.cpp
+    src/modules/avatar/avatarsockets.cpp
     src/modules/avatar/api/avatarapi.cpp
     src/bridge/avatarpreviewscene.cpp
     src/bridge/avatarpreview.cpp
@@ -429,6 +430,7 @@ set(HEADERS
     src/modules/avatar/avatarpage.h
     src/modules/avatar/avatarpreviewmodel.h
     src/modules/avatar/avatarpreviewwidget.h
+    src/modules/avatar/avatarsockets.h
     src/modules/avatar/api/avatarapi.h
     src/bridge/avatarpreviewscene.h
     src/bridge/avatarpreview.h

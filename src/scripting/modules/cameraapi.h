@@ -30,10 +30,16 @@ For more information see the LICENSE file
 //     camera at a target (a point or another node), which no property write
 //     can do.
 //
-// The pilot/dropdown verbs (editor.pilot, editor.setViewCamera), the socket
-// verbs and screenshot({camera}) are LATER PHASES of the same spec and are
-// deliberately absent — a verb that exists but does nothing is worse than one
-// that does not exist.
+//   * screenshot — CAMERAS_SPEC §5's AI hook: render what THIS camera sees,
+//     offscreen, without moving the user's viewport. It lives here and not as
+//     an option on editor.screenshot because it is camera-scoped: everything it
+//     needs (the lens, the output size) is on the camera node, and the editor
+//     view is not involved in the answer at all.
+//
+// The pilot/dropdown verbs (editor.pilot, editor.setViewCamera) are a LATER
+// PHASE of the same spec and are deliberately absent — a verb that exists but
+// does nothing is worse than one that does not exist. The socket verbs are
+// node.* (sockets are generic; a camera is only their most interesting rider).
 
 #include <QStringList>
 #include <QVariantMap>
@@ -78,6 +84,8 @@ public:
 
     Q_INVOKABLE QVariantMap settings(const QString &id, const QVariant &options = QVariant());
     Q_INVOKABLE bool lookAt(const QString &id, const QVariant &target);
+    Q_INVOKABLE QVariantMap screenshot(const QString &id, const QString &path,
+                                       const QVariantMap &options = QVariantMap());
 
 private:
     /// The scene camera with this guid, or null with a JS error already thrown.
