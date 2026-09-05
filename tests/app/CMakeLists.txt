@@ -108,3 +108,16 @@ set_tests_properties(app.scene_switch_after_play PROPERTIES
     ENVIRONMENT "HOME=${_ssap_home}"
     LABELS "app"
     TIMEOUT 300)
+
+# ---- app.selection_outline --------------------------------------------------
+# The isBuiltIn outline-suppression regression gate (2026-09-06): selecting an
+# Add-menu primitive must draw the outline; selecting the ground must not.
+set(_selo_home ${CMAKE_CURRENT_BINARY_DIR}/selection-outline-home)
+file(MAKE_DIRECTORY ${_selo_home}/run)
+add_test(NAME app.selection_outline
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_selection_outline.js
+         WORKING_DIRECTORY ${_selo_home}/run)
+set_tests_properties(app.selection_outline PROPERTIES
+    ENVIRONMENT "HOME=${_selo_home}"
+    LABELS "app"
+    TIMEOUT 300)

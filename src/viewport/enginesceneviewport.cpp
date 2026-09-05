@@ -1144,11 +1144,21 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         mMirror->setCameraBodies(helpers && !mPlaying);
         mMirror->setHighlightWireframe(mSelectionWireframe);
         // No selection outline for the World root (the whole scene would glow)
-        // or for the built-in ground plane — owner ask 2026-08-31. Selection,
-        // gizmo and property panel still work on both.
+        // or for the built-in ground PLANE — owner ask 2026-08-31. The first
+        // implementation tested `isBuiltIn`, which every Add-menu primitive
+        // carries (addBuiltinPrimitive sets it on cubes, spheres, capsules —
+        // and the sample scenes are assembled from exactly those), so every
+        // primitive silently lost its outline while selection/gizmo/panel kept
+        // working (2026-09-06 sighting; cost a day of misattributed reports).
+        // The exclusion is the GROUND MESH specifically, nothing wider.
         iris::SceneNodePtr highlight = helpers ? mSelectedNode : iris::SceneNodePtr();
-        if (highlight && ((mScene && highlight == mScene->getRootNode()) || highlight->isBuiltIn))
+        if (highlight && mScene && highlight == mScene->getRootNode())
             highlight.reset();
+        if (highlight && highlight->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+            const auto mn = highlight.staticCast<iris::MeshNode>();
+            if (mn->isBuiltIn && mn->meshPath == QStringLiteral(":/models/ground.obj"))
+                highlight.reset();
+        }
         mMirror->setHighlightedNode(highlight);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
         mMirror->setGrid(mShowGrid && helpers && !mPlaying, SnapSettings::translateSize());

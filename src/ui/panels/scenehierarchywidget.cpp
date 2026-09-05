@@ -166,6 +166,13 @@ void SceneHierarchyWidget::setMainWindow(MainWindow *mainWin)
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addEmpty()));
 
+    // Scene cameras (CAMERAS_SPEC phase 1) — the verb existed before this row
+    // did; a capability with no UI entry point is invisible to most users
+    // (owner sighting 2026-09-06).
+    action = new QAction("Camera", this);
+    addMenu->addAction(action);
+    connect(action, SIGNAL(triggered()), mainWindow, SLOT(addCamera()));
+
     action = new QAction("Avatar", this);
     addMenu->addAction(action);
     connect(action, SIGNAL(triggered()), mainWindow, SLOT(addViewer()));

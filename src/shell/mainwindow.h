@@ -403,6 +403,7 @@ public slots:
     void addSteps();
     void addGear();
     void addEmpty();
+    void addCamera();
     void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
     void addPrimitiveObject(const QString &guid);

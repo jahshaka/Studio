@@ -1655,6 +1655,11 @@ void MainWindow::addEmpty()
     sceneEditService->addEmpty();
 }
 
+void MainWindow::addCamera()
+{
+    sceneEditService->addCamera();
+}
+
 void MainWindow::addViewer()
 {
     sceneEditService->addViewer();
