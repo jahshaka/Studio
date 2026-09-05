@@ -181,19 +181,34 @@ static constexpr double kRcvMaxReparent = 0.35;
 //   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
 //     "nothing regresses >10% at 1k".
 static constexpr bool   kBaselineComparisonArmed = true;
-// FINDING from the run that armed it (v1 lane, 2026-09-05), recorded because it
-// is the gate's weak point and the next person to see it go red deserves to
-// know: `e.build_doc` and `e.first_sync` are SINGLE-SAMPLE metrics (addSingle,
-// n = 1). They carry no dispersion, so the stability bounds above cannot say
-// whether their measurement is usable — and e.build_doc@1000 was measured at
-// 8.61 / 9.42 / 8.65 / 9.35 ms across four runs of one identical build on a
-// quiet box, a +-9% spread against a +-10% gate. It therefore straddles the
-// verdict line for a metric whose true post-swap value is about +8%: it is the
-// one number here that can fail without anything having changed. The harness's
-// own rule for an unusable measurement applies ("the fix is more iterations or
-// a quieter box, never a looser bound") and is left to whoever owns that call —
-// the alternatives are repeating the document build per scale, or re-recording
-// the baseline post-swap, and both are decisions above this file.
+// WHAT THE ARMED GATE SAYS TODAY (v1 lane, 2026-09-05), recorded here because a
+// red gate whose reason is not written down gets tuned by the next person who
+// meets it:
+//
+//   §6's two clauses split. "(a) and (b) improve at 10k+" is met by a wide
+//   margin at every scale (a.* -19% to -37%, b.* -19% to -27%, d.anim_rig
+//   -50%). "Nothing regresses >10% at 1k" FAILS on exactly one metric:
+//   e.build_doc, at +17% (measured over six runs of one identical build:
+//   9.07 / 9.21 / 9.34 / 9.36 / 9.43 / 10.01 ms against a 7.956 ms baseline).
+//
+//   The reason is structural, not a defect: building a document now creates a
+//   real Ogre scene node per document node — ~1.9 us of scene-manager and SoA
+//   machinery where the old graph wrote three C++ members. About 40% of that is
+//   the RE-PARENT (Node::setParent migrates the node between depth levels of
+//   the NodeMemoryManager), which the universal "create it, configure it, THEN
+//   addChild it" call shape forces. Removing that needs deferred realization —
+//   holding a transient TRS on the handle until it has a parent — which is
+//   exactly the second transform store the design deleted, so it is a decision
+//   above this file, not a tweak.
+//
+//   What it costs is also handed straight back: e.first_sync falls by the same
+//   order (the mirror no longer creates a node per document node), so
+//   END-TO-END document build + first sync is flat — 1k +0.8%, 10k +0.6%,
+//   50k -2.2%.
+//
+//   Note also that e.build_doc and e.first_sync are SINGLE-SAMPLE metrics
+//   (addSingle, n = 1): they carry no dispersion, so the stability bounds above
+//   cannot say whether their measurement is usable at all.
 static constexpr int    kImproveFromScale = 10000;
 static constexpr double kMaxRegressPct    = 10.0;
 
