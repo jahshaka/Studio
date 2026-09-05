@@ -468,6 +468,80 @@ void msaa_runtime_toggle_and_clamping() {
     CHECK_MSG(v->sampleCount() == 4, "resize kept 4x, got %u", v->sampleCount());
 }
 
+/// CAMERAS_SPEC §7.3 correction 1, half one — the OVERLAY pass under MSAA.
+///
+/// The chain's final "Jahshaka overlays" scene pass is the pass whose colour
+/// store action decides what an MSAA target ends up containing (chain::
+/// kMultiWorkspaceStore). Three actions are available and only one is right for
+/// a target that MAY have a second workspace after it:
+///   * StoreOrResolve  — resolves and DISCARDS the samples. Correct here, wrong
+///                       the moment a PiP workspace Loads the target after it
+///                       (the spike measured 198k destroyed pixels at 4x).
+///   * Store           — keeps the samples and never resolves: BLACK FRAME.
+///   * StoreAndMultisampleResolve — both. What the chain now sets.
+///
+/// This test is the "not black, still correct" half: an on-top overlay
+/// renderable (unlit, depth-test off = kOverlayRenderQueue, i.e. drawn ONLY by
+/// that final pass) must survive the resolve at 1x, 2x and 4x, and the ordinary
+/// depth-tested geometry underneath must survive with it. It cannot tell
+/// StoreOrResolve from StoreAndMultisampleResolve — nothing with one workspace
+/// can. The DISCRIMINATING assertion needs a SECOND workspace on the target,
+/// which is the picture-in-picture inset — phase 2c of the same spec section,
+/// where it lands as pip_over_msaa_keeps_the_main_frame.
+void msaa_overlay_pass_resolves_at_every_sample_count() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("aa-overlay", 96, 96, kBlue);
+    REQUIRE(v);
+    Scene *s = f.scene("aa-overlay-scene");
+    REQUIRE(s);
+    // Depth-tested body in the middle...
+    REQUIRE(msaa::addUnlitCube(s, kOrange));
+    // ...and an always-on-top marker parked to the left of it, small enough
+    // that nothing else can be mistaken for it.
+    const NodeId marker = s->createNode();
+    REQUIRE(marker);
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    const MaterialId onTop = s->createUnlitMaterial(kGreen, /*depthTest*/ false, false);
+    REQUIRE(mesh && onTop);
+    REQUIRE(s->attachMesh(marker, mesh, onTop));
+    enginetest::setNodePosition(s, marker, Vec3(-1.6f, 0.0f, 0.0f));
+    enginetest::setNodeScale(s, marker, Vec3(0.5f, 0.5f, 0.5f));
+    CHECK(v->setScene(s));
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 4.5f), Vec3(-0.4f, 0.0f, 0.0f));
+    // Where the marker lands, found once at 1x and then held fixed: a sample
+    // count must not move geometry.
+    unsigned mx = 0, my = 0;
+    for (const unsigned samples : { 1u, 2u, 4u }) {
+        v->setSampleCount(samples);
+        render(e, 3);
+        const unsigned achieved = v->sampleCount();
+        Image img;
+        REQUIRE(v->readPixels(img));
+        if (samples == 1u) {
+            // Locate the marker's centre of mass at 1x.
+            unsigned long long sx = 0, sy = 0, n = 0;
+            for (unsigned y = 0; y < img.height; ++y)
+                for (unsigned x = 0; x < img.width; ++x)
+                    if (near(px(img, x, y), kGreen, 12)) { sx += x; sy += y; ++n; }
+            REQUIRE(n > 20);
+            mx = unsigned(sx / n); my = unsigned(sy / n);
+            std::printf("    on-top marker at %ux%u (%llu px)\n", mx, my, n);
+        }
+        CHECK_MSG(near(centre(img), kOrange),
+                  "%ux (achieved %u): the depth-tested body must survive the resolve",
+                  samples, achieved);
+        CHECK_MSG(near(corner(img), kBlue),
+                  "%ux (achieved %u): the background must survive the resolve (a plain "
+                  "Store never resolves and the whole frame goes black)",
+                  samples, achieved);
+        CHECK_MSG(near(px(img, mx, my), kGreen, 12),
+                  "%ux (achieved %u): the overlay-queue marker must survive the resolve",
+                  samples, achieved);
+    }
+    v->setSampleCount(1);
+    render(e, 2);
+}
+
 void teardown_is_clean() {
     // Last test: destroys the process's Engine with everything still registered.
     Engine *e = gEngine.get();
@@ -2840,6 +2914,8 @@ int main(int argc, char **argv) {
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
         { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },
+        { "msaa_overlay_pass_resolves_at_every_sample_count",
+                                                    msaa_overlay_pass_resolves_at_every_sample_count },
         { "workspace_seam_counts_every_rebuild",    workspace_seam_counts_every_rebuild },
         { "shadow_mesh_optimization_keeps_static_shadows", shadow_mesh_optimization_keeps_static_shadows },
         { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
