@@ -32,9 +32,16 @@ public:
                               const QPointF &point, iris::Vec3 &segStart, iris::Vec3 &segEnd);
 
     /// Every hit along the segment, unsorted. Meshes are tested against their
-    /// triangles in local space; lights, viewers and decals as 0.5-unit spheres
-    /// (a decal has no geometry to hit — its projector box is a helper, and
-    /// clicking anywhere near the origin marker selects it).
+    /// triangles in local space; lights, viewers, decals and CAMERAS as
+    /// 0.5-unit spheres (none of them has geometry to hit — the icon, the
+    /// projector box and the camera body are helpers, and clicking near the
+    /// origin marker selects the node).
+    ///
+    /// Cameras join that list in CAMERAS_SPEC phase 2b, on the same route the
+    /// light icons take: the body the engine draws is engine-side only, so
+    /// document picking cannot see it and hits the node's origin sphere
+    /// instead. The body is authored around the origin (its case spans
+    /// z = -0.3..0.3), so the sphere is under the pixels the user aims at.
     ///
     /// `refreshTransforms` runs the document's global-transform update first.
     /// Callers that already ran it this frame — anything inside a live drag,
@@ -44,7 +51,8 @@ public:
     static QList<ScenePick> pickAll(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
                                     const iris::Vec3 &cameraPos, bool forcePickable = false,
                                     bool includeLights = true, bool includeViewers = true,
-                                    bool includeDecals = true, bool refreshTransforms = true);
+                                    bool includeDecals = true, bool refreshTransforms = true,
+                                    bool includeCameras = true);
 
     /// The nearest hit, or a null node.
     static ScenePick nearest(const QList<ScenePick> &hits);

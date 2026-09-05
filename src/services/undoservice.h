@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #ifndef UNDOSERVICE_H
 #define UNDOSERVICE_H
 
+#include <QtGlobal>
+
 // UndoService — the undo spine (APP_ARCHITECTURE_AUDIT §3.3).
 //
 // Owns the app's QUndoStack policy: pushing commands, the script-macro guard
@@ -48,6 +50,16 @@ public:
     bool isDirty() const;
     int  count() const;
 
+    /// How many commands have EVER been pushed through this service.
+    ///
+    /// Not derivable from the stack: while a macro is open — and a script run
+    /// is one, always — QUndoStack::count() does not move, because the pushed
+    /// commands become children of the macro. So "did that action record an
+    /// undo step?" is unanswerable from the stack inside a script, which is the
+    /// only place tests can ask it. Same class of diagnostic (and the same
+    /// reason) as SceneMirror's GI push counters. Never falls.
+    quint64 pushCount() const { return mPushCount; }
+
     /// True while a script run's one-undo-step macro is open.
     bool isScriptMacroOpen() const { return mScriptMacroOpen; }
     void setScriptMacroOpen(bool open) { mScriptMacroOpen = open; }
@@ -64,6 +76,7 @@ private:
     QUndoStack *mStack = nullptr;
     StudioServices *mServices = nullptr;
     bool mScriptMacroOpen = false;
+    quint64 mPushCount = 0;
     int  mSavedCount = 0;
 };
 

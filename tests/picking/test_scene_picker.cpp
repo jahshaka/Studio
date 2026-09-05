@@ -123,6 +123,36 @@ int main(int argc, char **argv) {
     doc->getRootNode()->removeChild(decal);
     CHECK(doc->decals.isEmpty(), "removing the node clears Scene::decals");
 
+    // scene CAMERAS pick as spheres too (CAMERAS_SPEC phase 2b): the body and
+    // frustum the engine draws are engine-side only, so document picking aims
+    // at the node's origin — which is where the body is authored around.
+    auto shot = iris::CameraNode::create();
+    shot->setName("Shot A");
+    shot->setLocalPos(iris::Vec3(-2.5f, 0, 0));
+    doc->getRootNode()->addChild(shot);
+    // (the viewport's own `cam` is a scene child here too, so count by guid)
+    CHECK(doc->cameras.contains(shot->getGUID()),
+          "Scene::cameras sees the node (SceneNodeType::Camera is set)");
+    ScenePicker::screenSegment(cam, W, H, QPointF(W / 2, H / 2), a, b);
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
+    bool camHit = false; for (auto &h : hits) if (h.node == shot) camHit = true;
+    CHECK(!camHit, "camera off the ray is not hit");
+    shot->setLocalPos(iris::Vec3(0, 0, 2.5f));       // between camera and cube
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
+    CHECK(ScenePicker::nearest(hits).node == shot, "camera sphere on the ray is nearest");
+    CHECK(ScenePicker::nearest(hits).triangleIndex == -1, "camera hits carry no triangle index");
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, true, true, true, true, false);
+    CHECK(ScenePicker::nearest(hits).node == front, "cameras can be excluded");
+    // ...and the camera the ray was CAST FROM is never a hit, or piloting one
+    // (phase 3) would select it on every click.
+    shot->setLocalPos(cam->getGlobalPosition());
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
+    bool selfHit = false; for (auto &h : hits) if (h.node == shot) selfHit = true;
+    CHECK(!selfHit, "a camera sitting on the viewer's own eye is not pickable");
+    doc->getRootNode()->removeChild(shot);
+    CHECK(!doc->cameras.contains(shot->getGUID()),
+          "removing the node clears it from Scene::cameras");
+
     // root-vs-child rule
     auto holder = iris::SceneNode::create();
     doc->getRootNode()->addChild(holder);

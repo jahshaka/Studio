@@ -75,6 +75,14 @@ public:
     void setEditorData(EditorData *data) override;
     EditorData *getEditorData() override;
 
+    // ---- Pilot mode + the selection PiP (CAMERAS_SPEC D3/D8) --------------
+    bool pilotCamera(iris::CameraNodePtr camera) override;
+    iris::CameraNodePtr pilotedCamera() const override { return mPilot; }
+    bool pipEnabled() const override { return mPipEnabled; }
+    void setPipEnabled(bool on) override;
+    double pipSize() const override { return mPipSize; }
+    void setPipSize(double fraction) override;
+
     void setWindowSpace(WindowSpaces) override {}
     void setSceneMode(SceneMode) override {}
     void enterEditorMode() override {}
@@ -265,6 +273,9 @@ private:
         float orthoSize = 10.0f;      // ortho zoom (CameraNode::orthoSize)
         float distFromPivot = 15.0f;  // orbital controller's orbit distance
     };
+    /// Pushes the selection preview inset for this frame (CAMERAS_SPEC D3).
+    /// Called once per syncFrame, right after the camera push.
+    void syncPip();
     /// Snapshot the current camera under the CURRENT view's key (mCameraView).
     void saveViewState();
     /// Restore `view`'s saved camera, resyncing the active controller.
@@ -355,6 +366,25 @@ private:
     /// (F on a node), else the world origin.
     iris::Vec3 mLastOrbitPivot;
     iris::CameraNodePtr mEditorCam;
+    /// THE CAMERA THIS VIEWPORT IS DRIVING (CAMERAS_SPEC D8). The explorer,
+    /// unless a scene camera is being piloted — and then everything that used
+    /// to say mEditorCam has to say this instead, or the pick rays, the orbit
+    /// pivot and F-focus would all be computed from a camera nobody is looking
+    /// through. That sweep is what phase 3 is; every remaining mEditorCam here
+    /// is deliberate (the explorer's own state: per-view memory, resets, the
+    /// EditorData round trip).
+    iris::CameraNodePtr viewCamera() const { return mPilot ? mPilot : mEditorCam; }
+    iris::CameraNodePtr mPilot;
+    /// The piloted camera's transform when piloting STARTED, so ejecting can
+    /// push ONE undo command for the whole flight (a per-mouse-event command
+    /// would bury the stack).
+    iris::Vec3 mPilotStartPos;
+    iris::Quat mPilotStartRot;
+    /// Preferences (persisted): the selection preview inset and its width as a
+    /// fraction of the viewport. Defaults match CAMERAS_SPEC D3 — on, and a bit
+    /// under a third of the width, bottom-right.
+    bool   mPipEnabled = true;
+    double mPipSize = 0.28;
     EditorData *mEditorData = nullptr;
     bool mShowLightWires = true;
     bool mShowGrid = true;              // per-scene (EditorData), default ON

@@ -103,6 +103,15 @@ bool near(const Px &p, const Colour &c, int tol = 8) {
            std::abs(p.b - int(std::lround(c.b * 255))) <= tol;
 }
 Px centre(const Image &img) { return px(img, img.width / 2, img.height / 2); }
+
+/// A byte-exact fingerprint of a readback. FNV-1a over the raw RGBA — the same
+/// shape the overlay spike used to prove "overlays off == no overlays at all".
+unsigned long long pixelHash(const Image &img) {
+    unsigned long long h = 1469598103934665603ull;
+    for (unsigned char v : img.rgba) { h ^= v; h *= 1099511628211ull; }
+    return h;
+}
+
 Px corner(const Image &img) { return px(img, 2, 2); }
 
 /// The spike's scene: lit metallic cube, camera looking at it from (2.2,1.8,2.6).
@@ -466,6 +475,553 @@ void msaa_runtime_toggle_and_clamping() {
     v->resize(48, 48);
     render(e);
     CHECK_MSG(v->sampleCount() == 4, "resize kept 4x, got %u", v->sampleCount());
+}
+
+/// CAMERAS_SPEC §7.3 correction 1, half one — the OVERLAY pass under MSAA.
+///
+/// The chain's final "Jahshaka overlays" scene pass is the pass whose colour
+/// store action decides what an MSAA target ends up containing (chain::
+/// kMultiWorkspaceStore). Three actions are available and only one is right for
+/// a target that MAY have a second workspace after it:
+///   * StoreOrResolve  — resolves and DISCARDS the samples. Correct here, wrong
+///                       the moment a PiP workspace Loads the target after it
+///                       (the spike measured 198k destroyed pixels at 4x).
+///   * Store           — keeps the samples and never resolves: BLACK FRAME.
+///   * StoreAndMultisampleResolve — both. What the chain now sets.
+///
+/// This test is the "not black, still correct" half: an on-top overlay
+/// renderable (unlit, depth-test off = kOverlayRenderQueue, i.e. drawn ONLY by
+/// that final pass) must survive the resolve at 1x, 2x and 4x, and the ordinary
+/// depth-tested geometry underneath must survive with it. It cannot tell
+/// StoreOrResolve from StoreAndMultisampleResolve — nothing with one workspace
+/// can. The DISCRIMINATING assertion is pip_over_msaa_keeps_the_main_frame
+/// (below), which is why the fix and the PiP share a spec section.
+void msaa_overlay_pass_resolves_at_every_sample_count() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("aa-overlay", 96, 96, kBlue);
+    REQUIRE(v);
+    Scene *s = f.scene("aa-overlay-scene");
+    REQUIRE(s);
+    // Depth-tested body in the middle...
+    REQUIRE(msaa::addUnlitCube(s, kOrange));
+    // ...and an always-on-top marker parked to the left of it, small enough
+    // that nothing else can be mistaken for it.
+    const NodeId marker = s->createNode();
+    REQUIRE(marker);
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    const MaterialId onTop = s->createUnlitMaterial(kGreen, /*depthTest*/ false, false);
+    REQUIRE(mesh && onTop);
+    REQUIRE(s->attachMesh(marker, mesh, onTop));
+    enginetest::setNodePosition(s, marker, Vec3(-1.6f, 0.0f, 0.0f));
+    enginetest::setNodeScale(s, marker, Vec3(0.5f, 0.5f, 0.5f));
+    CHECK(v->setScene(s));
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 4.5f), Vec3(-0.4f, 0.0f, 0.0f));
+    // Where the marker lands, found once at 1x and then held fixed: a sample
+    // count must not move geometry.
+    unsigned mx = 0, my = 0;
+    for (const unsigned samples : { 1u, 2u, 4u }) {
+        v->setSampleCount(samples);
+        render(e, 3);
+        const unsigned achieved = v->sampleCount();
+        Image img;
+        REQUIRE(v->readPixels(img));
+        if (samples == 1u) {
+            // Locate the marker's centre of mass at 1x.
+            unsigned long long sx = 0, sy = 0, n = 0;
+            for (unsigned y = 0; y < img.height; ++y)
+                for (unsigned x = 0; x < img.width; ++x)
+                    if (near(px(img, x, y), kGreen, 12)) { sx += x; sy += y; ++n; }
+            REQUIRE(n > 20);
+            mx = unsigned(sx / n); my = unsigned(sy / n);
+            std::printf("    on-top marker at %ux%u (%llu px)\n", mx, my, n);
+        }
+        CHECK_MSG(near(centre(img), kOrange),
+                  "%ux (achieved %u): the depth-tested body must survive the resolve",
+                  samples, achieved);
+        CHECK_MSG(near(corner(img), kBlue),
+                  "%ux (achieved %u): the background must survive the resolve (a plain "
+                  "Store never resolves and the whole frame goes black)",
+                  samples, achieved);
+        CHECK_MSG(near(px(img, mx, my), kGreen, 12),
+                  "%ux (achieved %u): the overlay-queue marker must survive the resolve",
+                  samples, achieved);
+    }
+    v->setSampleCount(1);
+    render(e, 2);
+}
+
+// ---- The picture-in-picture inset (CAMERAS_SPEC §7.7, phase 2c) -----------
+//
+// The scene is the spike's, deliberately: an ORANGE cube the main camera looks
+// at from +Z, and a GREEN wall a hundred units away on +X that only the inset
+// camera can see. Both unlit, so every pixel is one of three exact colours and
+// the rect's boundary can be asserted to the pixel.
+namespace pip {
+
+struct Scenery { NodeId cube = 0, wall = 0; };
+
+Scenery build(Scene *s) {
+    Scenery sc;
+    sc.cube = msaa::addUnlitCube(s, kOrange);
+    sc.wall = msaa::addUnlitCube(s, kGreen);
+    if (!sc.cube || !sc.wall) return Scenery();
+    enginetest::setNodePosition(s, sc.wall, Vec3(100.0f, 0.0f, 0.0f));
+    enginetest::setNodeScale(s, sc.wall, Vec3(60.0f, 60.0f, 1.0f));
+    return sc;
+}
+void aimMain(View *v) { enginetest::testCameraLookAt(v, Vec3(0, 0, 5), Vec3(0, 0, 0)); }
+CameraDesc insetCamera() {
+    // Straight at the wall from 6 units out: the wall is 60x60, so it fills the
+    // inset whatever its aspect.
+    CameraDesc c;
+    c.position = Vec3(100.0f, 0.0f, 6.0f);   // identity orientation looks down -Z
+    return c;
+}
+ViewPipDesc desc(float l, float t, float w, float h) {
+    ViewPipDesc d;
+    d.enabled = true;
+    d.allowOffscreen = true;      // offscreen views are the only testable ones
+    d.camera = insetCamera();
+    d.left = l; d.top = t; d.width = w; d.height = h;
+    return d;
+}
+/// Pixels of `img` inside the rect that are `c`, and the count of pixels
+/// OUTSIDE it that differ from the reference — the two numbers every assertion
+/// below is made of. `slack` keeps the rect's own boundary row/column out of
+/// the outside count (a viewport edge lands on a pixel boundary only when the
+/// rect divides the size exactly).
+struct RectStats { unsigned inside = 0, insideTotal = 0, outsideDiff = 0; };
+RectStats compare(const Image &img, const Image &ref, const ViewPipDesc &d,
+                  const Colour &c, int slack = 1) {
+    RectStats st;
+    const int x0 = int(d.left * img.width), y0 = int(d.top * img.height);
+    const int x1 = int((d.left + d.width) * img.width);
+    const int y1 = int((d.top + d.height) * img.height);
+    for (int y = 0; y < int(img.height); ++y)
+        for (int x = 0; x < int(img.width); ++x) {
+            const bool in = x >= x0 && x < x1 && y >= y0 && y < y1;
+            if (in) { ++st.insideTotal; if (near(px(img, x, y), c, 12)) ++st.inside; continue; }
+            const bool nearEdge = x >= x0 - slack && x <= x1 + slack &&
+                                  y >= y0 - slack && y <= y1 + slack;
+            if (nearEdge) continue;
+            const size_t i = (size_t(y) * img.width + x) * 4u;
+            if (img.rgba[i] != ref.rgba[i] || img.rgba[i+1] != ref.rgba[i+1] ||
+                img.rgba[i+2] != ref.rgba[i+2] || img.rgba[i+3] != ref.rgba[i+3]) ++st.outsideDiff;
+        }
+    return st;
+}
+}  // namespace pip
+
+/// THE DETERMINISM LAW (CAMERAS_SPEC §7.7), same shape as the post-fx and HUD
+/// gates: an offscreen view that was never given allowOffscreen must render
+/// BYTE-IDENTICALLY with an inset requested and with none — and must not even
+/// build a workspace for one.
+void pip_is_ignored_offscreen_unless_asked() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-guard", 96, 96, kBlue);   REQUIRE(v);
+    Scene *s = f.scene("pip-guard-scene");          REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).cube);
+    pip::aimMain(v);
+    render(e, 3);
+    Image plain; REQUIRE(v->readPixels(plain));
+    const unsigned genBefore = v->workspaceGeneration();
+
+    ViewPipDesc d = pip::desc(0.6f, 0.6f, 0.35f, 0.35f);
+    d.allowOffscreen = false;                       // deliberately NOT opted in
+    v->setPip(d);
+    CHECK_MSG(v->workspaceGeneration() == genBefore,
+              "an offscreen view must not build anything for an inset it will ignore: %u -> %u",
+              genBefore, v->workspaceGeneration());
+    render(e, 3);
+    Image refused; REQUIRE(v->readPixels(refused));
+    std::printf("    pixelhash  no pip %016llx   pip refused %016llx\n",
+                pixelHash(plain), pixelHash(refused));
+    CHECK_MSG(plain.rgba == refused.rgba,
+              "BYTE-IDENTICAL or the guarantee is gone: %016llx vs %016llx",
+              pixelHash(plain), pixelHash(refused));
+    // The view still remembers what it was asked for — it just does not act.
+    CHECK(v->pip().enabled);
+}
+
+/// The other half: with allowOffscreen the SAME desc must composite a second
+/// camera into exactly the rect it names, and change NOTHING outside it.
+void pip_composites_a_second_camera_into_the_rect() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-basic", 128, 128, kBlue);  REQUIRE(v);
+    Scene *s = f.scene("pip-basic-scene");           REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    pip::aimMain(v);
+    render(e, 3);
+    Image ref; REQUIRE(v->readPixels(ref));
+    CHECK(near(centre(ref), kOrange));
+    CHECK(near(corner(ref), kBlue));
+
+    const ViewPipDesc d = pip::desc(0.60f, 0.60f, 0.36f, 0.36f);
+    v->setPip(d);
+    render(e, 3);
+    Image withPip; REQUIRE(v->readPixels(withPip));
+    pip::RectStats st = pip::compare(withPip, ref, d, kGreen);
+    CHECK_MSG(st.inside >= st.insideTotal * 95 / 100,
+              "the inset must own its rect: %u/%u px are the wall", st.inside, st.insideTotal);
+    CHECK_MSG(st.outsideDiff == 0,
+              "the main frame outside the rect must be BYTE-IDENTICAL: %u px differ",
+              st.outsideDiff);
+    std::printf("    inset %u/%u px, outside diff %u\n", st.inside, st.insideTotal, st.outsideDiff);
+
+    // MOVING it is a live viewport modifier, never a rebuild (spike T3).
+    const unsigned gen = v->workspaceGeneration();
+    ViewPipDesc moved = d;
+    moved.left = 0.04f; moved.top = 0.04f;
+    v->setPip(moved);
+    CHECK_MSG(v->workspaceGeneration() == gen,
+              "moving the inset must not rebuild the workspace: %u -> %u",
+              gen, v->workspaceGeneration());
+    render(e, 3);
+    Image movedImg; REQUIRE(v->readPixels(movedImg));
+    st = pip::compare(movedImg, ref, moved, kGreen);
+    CHECK_MSG(st.inside >= st.insideTotal * 95 / 100,
+              "the moved inset must own its new rect: %u/%u", st.inside, st.insideTotal);
+    CHECK_MSG(st.outsideDiff == 0, "moved: %u px differ outside", st.outsideDiff);
+
+    // ...and turning it off must restore the frame byte-for-byte.
+    ViewPipDesc off = d; off.enabled = false;
+    v->setPip(off);
+    render(e, 3);
+    Image restored; REQUIRE(v->readPixels(restored));
+    CHECK_MSG(ref.rgba == restored.rgba,
+              "an inset switched off must leave NO trace: %016llx vs %016llx",
+              pixelHash(ref), pixelHash(restored));
+}
+
+/// CAMERAS_SPEC §7.3 correction 1, the DISCRIMINATING half of the store-action
+/// fix (see msaa_overlay_pass_resolves_at_every_sample_count for the other).
+///
+/// With the chain's final pass on StoreOrResolve — the compositor default, and
+/// what this tree shipped until phase 2a — the inset's Load reads an attachment
+/// whose samples were resolved away, and the WHOLE FRAME outside the inset is
+/// destroyed (the spike measured 198,000 differing pixels at 4x, the image
+/// going white). This is the assertion that would fail.
+void pip_over_msaa_keeps_the_main_frame() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-msaa", 128, 128, kBlue);   REQUIRE(v);
+    Scene *s = f.scene("pip-msaa-scene");            REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    pip::aimMain(v);
+    v->setSampleCount(4);
+    render(e, 3);
+    const unsigned achieved = v->sampleCount();
+    CHECK_MSG(achieved == 4, "4x is Vulkan-mandatory; achieved %u", achieved);
+    Image ref; REQUIRE(v->readPixels(ref));
+    CHECK(near(centre(ref), kOrange));
+    CHECK(near(corner(ref), kBlue));
+
+    const ViewPipDesc d = pip::desc(0.58f, 0.58f, 0.38f, 0.38f);
+    v->setPip(d);
+    render(e, 3);
+    Image withPip; REQUIRE(v->readPixels(withPip));
+    const pip::RectStats st = pip::compare(withPip, ref, d, kGreen, 2);
+    CHECK_MSG(st.inside >= st.insideTotal * 95 / 100,
+              "%ux: the inset must own its rect: %u/%u", achieved, st.inside, st.insideTotal);
+    CHECK_MSG(st.outsideDiff == 0,
+              "%ux: THE STORE-ACTION GATE — the inset must not destroy the resolved main "
+              "frame: %u px differ outside the rect", achieved, st.outsideDiff);
+    std::printf("    msaa %ux: inset %u/%u px, outside diff %u\n",
+                achieved, st.inside, st.insideTotal, st.outsideDiff);
+    v->setPip(ViewPipDesc());
+    v->setSampleCount(1);
+    render(e, 2);
+}
+
+/// LETTERBOX (CAMERAS_SPEC §7.4): with constrainAspect the inset draws the
+/// camera's authored shape centred in its rect, and the remainder is the
+/// inset's background — not a stretched image, and not the main frame showing
+/// through.
+void pip_letterboxes_to_the_authored_aspect() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-letterbox", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = f.scene("pip-letterbox-scene");          REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    pip::aimMain(v);
+    render(e, 3);
+    Image ref; REQUIRE(v->readPixels(ref));
+
+    // A SQUARE rect (0.4 x 0.4 of a square view) with a 2:1 camera: the drawn
+    // band must be half the rect's height, centred, with bars above and below.
+    ViewPipDesc d = pip::desc(0.30f, 0.30f, 0.40f, 0.40f);
+    d.background = Colour(1.0f, 0.0f, 1.0f, 1.0f);   // magenta bars: unmistakable
+    d.camera.constrainAspect = true;
+    d.camera.aspect = 2.0f;
+    v->setPip(d);
+    render(e, 3);
+    Image img; REQUIRE(v->readPixels(img));
+
+    const int x0 = int(d.left * img.width), x1 = int((d.left + d.width) * img.width);
+    const int y0 = int(d.top * img.height), y1 = int((d.top + d.height) * img.height);
+    const int cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    // Middle of the rect: the shot.
+    CHECK_MSG(near(px(img, unsigned(cx), unsigned(cy)), kGreen, 12),
+              "the middle band must be the inset's image");
+    // A quarter of the way down from the rect's top, and up from its bottom:
+    // bars (the band is half the height, so those rows are outside it).
+    const unsigned barTop = unsigned(y0 + (y1 - y0) / 8);
+    const unsigned barBot = unsigned(y1 - (y1 - y0) / 8);
+    CHECK_MSG(near(px(img, unsigned(cx), barTop), d.background, 12),
+              "top bar must be the inset background, got %d %d %d",
+              px(img, unsigned(cx), barTop).r, px(img, unsigned(cx), barTop).g,
+              px(img, unsigned(cx), barTop).b);
+    CHECK_MSG(near(px(img, unsigned(cx), barBot), d.background, 12),
+              "bottom bar must be the inset background, got %d %d %d",
+              px(img, unsigned(cx), barBot).r, px(img, unsigned(cx), barBot).g,
+              px(img, unsigned(cx), barBot).b);
+    // Count the band: half the rect's rows, give or take rounding.
+    unsigned bandRows = 0;
+    for (int y = y0; y < y1; ++y)
+        if (near(px(img, unsigned(cx), unsigned(y)), kGreen, 12)) ++bandRows;
+    const unsigned rows = unsigned(y1 - y0);
+    CHECK_MSG(bandRows >= rows * 45 / 100 && bandRows <= rows * 55 / 100,
+              "a 2:1 shot in a square rect fills half its height: %u of %u rows",
+              bandRows, rows);
+    std::printf("    letterbox: %u of %u rows are the shot\n", bandRows, rows);
+    // The frame outside the rect is still untouched.
+    const pip::RectStats st = pip::compare(img, ref, d, kGreen);
+    CHECK_MSG(st.outsideDiff == 0, "letterboxed inset changed %u px outside its rect",
+              st.outsideDiff);
+}
+
+/// The ordering trap (CAMERAS_SPEC §7.2, spike T2): the inset's workspace must
+/// be re-appended after ANY rebuild of the main one, or the main pass paints
+/// straight over it and the frame hashes exactly like no inset at all — a
+/// failure with no error, no warning and no validation message.
+void pip_survives_a_main_workspace_rebuild() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-order", 128, 128, kBlue);  REQUIRE(v);
+    Scene *s = f.scene("pip-order-scene");           REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    pip::aimMain(v);
+    const ViewPipDesc d = pip::desc(0.60f, 0.60f, 0.36f, 0.36f);
+    v->setPip(d);
+    render(e, 3);
+    Image before; REQUIRE(v->readPixels(before));
+    CHECK(near(px(before, unsigned(0.78f * before.width), unsigned(0.78f * before.height)), kGreen, 12));
+
+    // setShadows is a definition rebuild: detach, rebuild the chain, re-attach
+    // — the exact sequence that used to leave the inset first in the list.
+    const unsigned gen = v->workspaceGeneration();
+    v->setShadows(true);
+    v->setShadows(false);
+    CHECK_MSG(v->workspaceGeneration() >= gen + 2, "two rebuilds expected, %u -> %u",
+              gen, v->workspaceGeneration());
+    render(e, 3);
+    Image after; REQUIRE(v->readPixels(after));
+    const pip::RectStats st = pip::compare(after, before, d, kGreen);
+    CHECK_MSG(st.inside >= st.insideTotal * 95 / 100,
+              "after a main-workspace rebuild the inset must still be on top: %u/%u",
+              st.inside, st.insideTotal);
+    CHECK_MSG(st.outsideDiff == 0, "%u px differ outside the rect after the rebuild",
+              st.outsideDiff);
+}
+
+/// LETTERBOX (CAMERAS_SPEC §7.4): a camera that constrains its aspect is drawn
+/// in the largest rectangle of that shape the target can hold, centred, with
+/// black bars in the remainder — and it is NOT stretched into them.
+///
+/// The stretch half is the one that matters, and it is measured, not asserted
+/// by inspection: a world-space SQUARE is rendered by a 2:1 camera into a
+/// square view. Constrained, its pixels must be as wide as they are tall.
+/// Unconstrained, the same camera in the same view renders it half as tall as
+/// it is wide — which is exactly the distortion the letterbox exists to
+/// prevent, and the control that proves the test can fail.
+void letterbox_fits_the_shot_and_bars_the_rest() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("letterbox", 128, 128, kBlue);   REQUIRE(v);
+    Scene *s = f.scene("letterbox-scene");            REQUIRE(s);
+    CHECK(v->setScene(s));
+    // A unit cube seen face-on from +Z: its silhouette is a square.
+    REQUIRE(msaa::addUnlitCube(s, kOrange));
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 0.0f, 4.0f);            // identity: looks down -Z
+    v->setCamera(cam);
+    const unsigned genBefore = v->workspaceGeneration();
+    render(e, 3);
+    Image plain; REQUIRE(v->readPixels(plain));
+
+    const auto extent = [](const Image &img, unsigned &wOut, unsigned &hOut) {
+        int x0 = 1 << 20, x1 = -1, y0 = 1 << 20, y1 = -1;
+        for (unsigned y = 0; y < img.height; ++y)
+            for (unsigned x = 0; x < img.width; ++x)
+                if (near(px(img, x, y), kOrange, 24)) {
+                    x0 = std::min(x0, int(x)); x1 = std::max(x1, int(x));
+                    y0 = std::min(y0, int(y)); y1 = std::max(y1, int(y));
+                }
+        wOut = x1 >= x0 ? unsigned(x1 - x0 + 1) : 0u;
+        hOut = y1 >= y0 ? unsigned(y1 - y0 + 1) : 0u;
+    };
+    unsigned pw = 0, ph = 0; extent(plain, pw, ph);
+    std::printf("    unconstrained: the square renders %ux%u px\n", pw, ph);
+    CHECK_MSG(pw > 8 && ph > 8, "the cube is on screen at all (%ux%u)", pw, ph);
+    CHECK_MSG(pw == ph, "with no constraint a square is square in a square view (%ux%u)", pw, ph);
+
+    // ---- 2:1 with no constraint: the control, i.e. the DISTORTION ---------
+    cam.aspect = 2.0f;
+    cam.constrainAspect = false;
+    v->setCamera(cam);
+    render(e, 3);
+    Image stretched; REQUIRE(v->readPixels(stretched));
+    unsigned sw = 0, sh = 0; extent(stretched, sw, sh);
+    CHECK_MSG(stretched.rgba == plain.rgba,
+              "an UNCONSTRAINED aspect is inert — the camera follows the target, as it always "
+              "has (%ux%u vs %ux%u)", sw, sh, pw, ph);
+    CHECK_MSG(v->workspaceGeneration() == genBefore,
+              "and it rebuilds nothing: %u -> %u", genBefore, v->workspaceGeneration());
+
+    // ---- 2:1 CONSTRAINED --------------------------------------------------
+    cam.constrainAspect = true;
+    v->setCamera(cam);
+    render(e, 3);
+    Image boxed; REQUIRE(v->readPixels(boxed));
+    unsigned bw = 0, bh = 0; extent(boxed, bw, bh);
+    std::printf("    constrained 2:1: the square renders %ux%u px\n", bw, bh);
+    CHECK_MSG(bw > 8 && bh > 8, "the shot is still on screen (%ux%u)", bw, bh);
+    CHECK_MSG(bw >= bh - 1 && bw <= bh + 1,
+              "THE POINT: a world square stays square inside the letterbox (%ux%u)", bw, bh);
+    CHECK_MSG(bh < ph,
+              "…and the shot is SMALLER than the unconstrained one, because it now has to fit "
+              "a 2:1 rectangle into a square view (%u vs %u rows)", bh, ph);
+
+    // The bars: black, top and bottom, in a square view with a 2:1 camera the
+    // band is half the height.
+    const unsigned mid = boxed.width / 2;
+    CHECK_MSG(px(boxed, mid, 2).r < 12 && px(boxed, mid, 2).g < 12 && px(boxed, mid, 2).b < 12,
+              "the top bar is black, not the background: %d %d %d",
+              px(boxed, mid, 2).r, px(boxed, mid, 2).g, px(boxed, mid, 2).b);
+    CHECK_MSG(near(px(boxed, mid, boxed.height / 2), kOrange, 24),
+              "the middle of the view is still the shot");
+    unsigned barRows = 0, blueRows = 0;
+    for (unsigned y = 0; y < boxed.height; ++y) {
+        const Px p = px(boxed, 2, y);            // a column outside the cube
+        if (p.r < 12 && p.g < 12 && p.b < 12) ++barRows;
+        else if (near(p, kBlue, 12)) ++blueRows;
+    }
+    std::printf("    bars %u rows, background %u rows of %u\n", barRows, blueRows, boxed.height);
+    CHECK_MSG(barRows >= boxed.height * 45 / 100 && barRows <= boxed.height * 55 / 100,
+              "a 2:1 shot in a square view leaves half the rows as bars: %u of %u",
+              barRows, boxed.height);
+    CHECK_MSG(blueRows >= boxed.height * 45 / 100,
+              "…and the other half is the view's own background, not more black: %u of %u",
+              blueRows, boxed.height);
+
+    // ---- off again: byte-identical to before ------------------------------
+    cam.constrainAspect = false;
+    v->setCamera(cam);
+    render(e, 3);
+    Image restored; REQUIRE(v->readPixels(restored));
+    CHECK_MSG(plain.rgba == restored.rgba,
+              "un-constraining restores the frame byte-for-byte: %016llx vs %016llx",
+              pixelHash(plain), pixelHash(restored));
+}
+
+/// THE COMBINATION CAMERAS_SPEC §7.3 explicitly left unspiked: "PiP x post-FX
+/// chain shape". The inset composites onto whatever the chain last wrote to the
+/// target, so it has to work over a tonemapped, bloomed, ambient-occluded,
+/// edge-blended frame as well as over a passthrough one — and the letterbox has
+/// to survive the same chain, because with effects on the scene renders into an
+/// offscreen target and a composite quad copies it to the window (bars and all).
+void pip_and_letterbox_over_the_post_chain() {
+    Fixture f; Engine *e = f.e;
+    View *v = f.view("pip-post", 128, 128, kBlue);   REQUIRE(v);
+    Scene *s = f.scene("pip-post-scene");            REQUIRE(s);
+    CHECK(v->setScene(s));
+    REQUIRE(pip::build(s).wall);
+    pip::aimMain(v);
+
+    const ViewPipDesc d0 = pip::desc(0.60f, 0.60f, 0.36f, 0.36f);
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;      // the only way an offscreen view gets one
+    fxDesc.hdr = true;
+    fxDesc.bloom = true;
+    fxDesc.ssao = true;
+    fxDesc.smaaPreset = 2;
+    v->setPostFx(fxDesc);
+    render(e, 4);
+    const std::string errBefore = e->lastError();
+    Image ref; REQUIRE(v->readPixels(ref));
+
+    // NOT byte-exact, and MEASURED rather than assumed: the post chain is not
+    // frame-to-frame deterministic. HDR auto-exposure is a temporal filter that
+    // adapts per SECOND of wall clock, so two readbacks of the same STILL scene
+    // taken at different moments already differ across most of the frame — this
+    // run measures the chain against itself first, with no inset at all, and
+    // both numbers below are printed so the comparison is never a guess.
+    //
+    // The magnitude is what makes it a non-event: the drift is ONE OR TWO
+    // levels out of 255, i.e. rounding, not an artefact. So the assertion is on
+    // magnitude, and it is a strong one — an inset that leaked, smeared or
+    // re-tonemapped anything outside its rect could not stay inside 4 levels.
+    render(e, 4);
+    Image ref2; REQUIRE(v->readPixels(ref2));
+    const pip::RectStats drift = pip::compare(ref2, ref, d0, kGreen, 2);
+
+    v->setPip(d0);
+    render(e, 4);
+    Image withPip; REQUIRE(v->readPixels(withPip));
+    const ViewPipDesc &d = d0;
+    const pip::RectStats st = pip::compare(withPip, ref, d, kGreen, 2);
+    CHECK_MSG(st.inside >= st.insideTotal * 90 / 100,
+              "the inset composites over a post-processed frame: %u/%u px",
+              st.inside, st.insideTotal);
+    int maxDelta = 0;
+    {
+        const int x0 = int(d.left * withPip.width), x1 = int((d.left + d.width) * withPip.width);
+        const int y0 = int(d.top * withPip.height), y1 = int((d.top + d.height) * withPip.height);
+        for (int y = 0; y < int(withPip.height); ++y)
+            for (int x = 0; x < int(withPip.width); ++x) {
+                if (x >= x0 - 2 && x <= x1 + 2 && y >= y0 - 2 && y <= y1 + 2) continue;
+                const size_t i = (size_t(y) * withPip.width + x) * 4u;
+                for (int c = 0; c < 3; ++c)
+                    maxDelta = std::max(maxDelta,
+                                        std::abs(int(withPip.rgba[i+c]) - int(ref.rgba[i+c])));
+            }
+    }
+    std::printf("    outside the rect: %u px differ with the inset, %u px differ WITHOUT it "
+                "(the chain's own drift); worst channel delta %d/255\n",
+                st.outsideDiff, drift.outsideDiff, maxDelta);
+    CHECK_MSG(maxDelta <= 4,
+              "the inset changes NOTHING VISIBLE outside its rect over a post-processed frame: "
+              "worst channel delta %d (the chain's own frame-to-frame drift is 1-2)", maxDelta);
+    CHECK_MSG(e->lastError() == errBefore,
+              "no NEW engine error from PiP x post chain: %s", e->lastError().c_str());
+    v->setPip(ViewPipDesc());
+
+    // ---- the letterbox, through the same chain ---------------------------
+    CameraDesc cam;
+    cam.position = Vec3(0.0f, 0.0f, 5.0f);
+    v->setCamera(cam);
+    render(e, 4);
+    cam.constrainAspect = true;
+    cam.aspect = 2.0f;
+    v->setCamera(cam);
+    render(e, 4);
+    Image boxed; REQUIRE(v->readPixels(boxed));
+    unsigned barRows = 0;
+    for (unsigned y = 0; y < boxed.height; ++y) {
+        const Px p = px(boxed, 2, y);
+        if (p.r < 12 && p.g < 12 && p.b < 12) ++barRows;
+    }
+    std::printf("    post chain letterbox: %u bar rows of %u\n", barRows, boxed.height);
+    CHECK_MSG(barRows >= boxed.height * 40 / 100 && barRows <= boxed.height * 60 / 100,
+              "a 2:1 shot letterboxes THROUGH the post chain too: %u of %u rows",
+              barRows, boxed.height);
+    CHECK_MSG(e->lastError() == errBefore,
+              "no NEW engine error from letterbox x post chain: %s", e->lastError().c_str());
+    cam.constrainAspect = false;
+    v->setCamera(cam);
+    v->setPostFx(PostFxDesc());
+    render(e, 2);
 }
 
 void teardown_is_clean() {
@@ -2052,14 +2608,6 @@ void dynamic_mesh_shadow_follows_its_pose() {
 // thumbnail, every material preview and every pixel suite in this file. §5.2's
 // guarantee is therefore asserted byte-for-byte, not argued.
 
-/// A byte-exact fingerprint of a readback. FNV-1a over the raw RGBA — the same
-/// shape the overlay spike used to prove "overlays off == no overlays at all".
-unsigned long long pixelHash(const Image &img) {
-    unsigned long long h = 1469598103934665603ull;
-    for (unsigned char v : img.rgba) { h ^= v; h *= 1099511628211ull; }
-    return h;
-}
-
 /// A cover desc that would be impossible to miss if it ever rendered: a full
 /// view of magenta with two lines of text over it.
 ViewOverlayDesc loudCover() {
@@ -2840,6 +3388,8 @@ int main(int argc, char **argv) {
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
         { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },
+        { "msaa_overlay_pass_resolves_at_every_sample_count",
+                                                    msaa_overlay_pass_resolves_at_every_sample_count },
         { "workspace_seam_counts_every_rebuild",    workspace_seam_counts_every_rebuild },
         { "shadow_mesh_optimization_keeps_static_shadows", shadow_mesh_optimization_keeps_static_shadows },
         { "dynamic_mesh_shadow_follows_its_pose",   dynamic_mesh_shadow_follows_its_pose },
@@ -2855,6 +3405,14 @@ int main(int argc, char **argv) {
         { "refraction_bends_the_background",        refraction_bends_the_background },
         { "postfx_epic_shape_with_msaa",            postfx_epic_shape_with_msaa },
         { "sky_stays_smooth_under_the_post_chain",  sky_stays_smooth_under_the_post_chain },
+        { "pip_is_ignored_offscreen_unless_asked",  pip_is_ignored_offscreen_unless_asked },
+        { "pip_composites_a_second_camera_into_the_rect",
+                                                    pip_composites_a_second_camera_into_the_rect },
+        { "pip_over_msaa_keeps_the_main_frame",     pip_over_msaa_keeps_the_main_frame },
+        { "pip_letterboxes_to_the_authored_aspect", pip_letterboxes_to_the_authored_aspect },
+        { "pip_survives_a_main_workspace_rebuild",  pip_survives_a_main_workspace_rebuild },
+        { "letterbox_fits_the_shot_and_bars_the_rest", letterbox_fits_the_shot_and_bars_the_rest },
+        { "pip_and_letterbox_over_the_post_chain",   pip_and_letterbox_over_the_post_chain },
         { "teardown_is_clean",                      teardown_is_clean },
     };
     const std::string filter = argc > 1 ? argv[1] : "";

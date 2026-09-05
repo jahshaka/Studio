@@ -114,6 +114,38 @@ QVector<VerbInfo> EditorApi::verbs() const
           "degenerates, and where the camera flips under its subject) and `distance` to 0.01..100000. Returns the resulting "
           "pose plus the `target` it framed. Selection is untouched.",
           Needs::Engine },
+        { "pilot", "editor.pilot(id | null) -> bool",
+          "PILOTS a scene camera (CAMERAS_SPEC D8): the main viewport renders through it and the "
+          "viewport's own navigation — RMB fly, orbit, F focus, the gizmos' pick rays — drives THAT "
+          "camera's transform instead of the explorer's. Null (or no argument) ejects and returns to "
+          "the explorer, leaving the camera wherever it was flown: piloting doubles as placement. The "
+          "whole flight lands on the undo stack as ONE step, pushed when piloting ends. While "
+          "piloting, a camera that constrains its aspect letterboxes the main view, the selection "
+          "preview inset for that same camera is hidden (you are already looking through it), and "
+          "editor.setView is refused — canonical views belong to the explorer. Esc ejects in the "
+          "editor. Refuses a node that is not a camera of the current scene.",
+          Needs::Engine },
+        { "piloting", "editor.piloting() -> id | null",
+          "The camera being piloted, or null when the viewport is the free explorer.",
+          Needs::Engine },
+        { "setViewCamera", "editor.setViewCamera(id | \"viewport\") -> bool",
+          "The viewport toolbar's camera dropdown, as a verb: \"viewport\" (or null) is the explorer, "
+          "a camera id pilots that camera. Exactly editor.pilot with the dropdown's vocabulary — the "
+          "two are one mechanism, and this is the name the UI speaks.",
+          Needs::Engine },
+        { "pip", "editor.pip() -> {enabled, size, camera}",
+          "The selection preview inset (CAMERAS_SPEC D3): `enabled` the preference (persisted), "
+          "`size` its width as a fraction of the viewport (0.08-0.6, persisted), and `camera` the "
+          "camera it is showing RIGHT NOW or null. The inset appears bottom-right while a scene "
+          "camera is selected and is hidden in Game View, in play, and while piloting that same "
+          "camera — so `camera` can be null while `enabled` is true.",
+          Needs::Engine },
+        { "setPip", "editor.setPip({enabled?, size?}) -> {enabled, size, camera}",
+          "Writes the selection-preview preferences and returns the state that resulted (the same "
+          "shape editor.pip() reports). Both keys are optional and both persist; an unknown key is "
+          "REFUSED. `size` is clamped to 0.08-0.6. This is the Preferences row's own path — the UI "
+          "calls this verb.",
+          Needs::Engine },
         { "cameraMode", "editor.cameraMode() -> \"free\" | \"orbit\"",
           "The active camera controller: \"free\" (fly camera) or \"orbit\" (arcball).",
           Needs::Engine },
@@ -129,6 +161,15 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "snapToFloor", "editor.snapToFloor() -> bool",
           "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
           Needs::Engine },
+        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes}",
+          "The undo stack, for scripts that need to assert that an action was RECORDED rather "
+          "than merely performed. `count`/`index` are the stack's own; `macroOpen` is true inside "
+          "a script run. Read `pushes` — the total number of commands ever pushed — to bracket an "
+          "action: a script run is ONE open macro, so editor.undo() cannot reach anything the run "
+          "did AND `count` does not move while it is open (pushed commands become children of the "
+          "macro). `pushes` is the only honest answer to \"did that record an undo step?\" from "
+          "inside a script.",
+          Needs::Document },
         { "undo", "editor.undo() -> bool",
           "Undoes the last completed undo step. Inside a script the run's own macro is still open, so this reaches the step before the script.",
           Needs::Document },
@@ -322,8 +363,15 @@ bool EditorApi::setView(const QString &view)
     // (headless --script runs).
     const bool ok = host.mainWindow ? host.mainWindow->applyCameraView(view)
                                     : host.viewport->setCameraView(view);
-    if (!ok)
+    if (!ok) {
+        // Two ways to fail, and telling them apart is the whole difference
+        // between "you typed it wrong" and "you are flying a camera"
+        // (CAMERAS_SPEC D8: canonical views belong to the explorer).
+        if (host.viewport->pilotedCamera())
+            return fail("editor.setView: the viewport is PILOTING a camera — canonical views "
+                        "belong to the free explorer. editor.pilot(null) ejects first.");
         return fail("editor.setView: unknown view — use top/bottom/left/right/front/back/perspective");
+    }
     return true;
 }
 
@@ -505,6 +553,82 @@ QVariantMap EditorApi::frameNode(const QString &id, const QVariant &optionsArg)
     return out;
 }
 
+// ---------------------------------------------------------------------------
+// Pilot mode and the selection preview (CAMERAS_SPEC D3/D8, §6).
+
+bool EditorApi::pilot(const QVariant &id)
+{
+    if (!requireEngine()) return false;
+    const QVariant v = normalizeJs(id);
+    const QString guid = v.toString();
+    if (!v.isValid() || v.isNull() || guid.isEmpty()) {
+        host.viewport->pilotCamera(iris::CameraNodePtr());
+        return true;
+    }
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) return fail("editor.pilot: no scene is open");
+    auto cam = scene->cameras.value(guid);
+    if (!cam)
+        return fail(QStringLiteral("editor.pilot: '%1' is not a camera in this scene "
+                                   "(scene.cameras() lists them)").arg(guid));
+    if (!host.viewport->pilotCamera(cam))
+        return fail(QStringLiteral("editor.pilot: this viewport cannot pilot '%1'").arg(guid));
+    return true;
+}
+
+QVariant EditorApi::piloting()
+{
+    if (!requireEngine()) return QVariant();
+    auto cam = host.viewport->pilotedCamera();
+    return cam ? QVariant(cam->getGUID()) : QVariant();
+}
+
+bool EditorApi::setViewCamera(const QVariant &id)
+{
+    if (!requireEngine()) return false;
+    const QVariant v = normalizeJs(id);
+    const QString name = v.toString();
+    // "viewport" is the dropdown's word for the explorer; so is null.
+    if (!v.isValid() || v.isNull() || name.isEmpty() || name == QLatin1String("viewport"))
+        return pilot(QVariant());
+    return pilot(name);
+}
+
+QVariantMap EditorApi::pip()
+{
+    QVariantMap out;
+    if (!requireEngine()) return out;
+    out["enabled"] = host.viewport->pipEnabled();
+    out["size"]    = host.viewport->pipSize();
+    // What it is SHOWING, which is not the same question: the inset only
+    // appears while a scene camera is selected and not being piloted.
+    QVariant showing;
+    if (host.viewport->pipEnabled() && !host.viewport->isGameView() &&
+        host.services && host.services->selection) {
+        auto sel = host.services->selection->selected();
+        auto cam = sel ? sel.dynamicCast<iris::CameraNode>() : iris::CameraNodePtr();
+        if (cam && cam != host.viewport->pilotedCamera()) showing = cam->getGUID();
+    }
+    out["camera"] = showing;
+    return out;
+}
+
+QVariantMap EditorApi::setPip(const QVariantMap &change)
+{
+    if (!requireEngine()) return QVariantMap();
+    static const QStringList known = { "enabled", "size" };
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        if (known.contains(it.key())) continue;
+        fail(QStringLiteral("editor.setPip: unknown key '%1' (known: %2)")
+                 .arg(it.key(), known.join(", ")));
+        return QVariantMap();
+    }
+    if (change.contains("enabled")) host.viewport->setPipEnabled(change.value("enabled").toBool());
+    if (change.contains("size"))    host.viewport->setPipSize(change.value("size").toDouble());
+    return pip();
+}
+
 QString EditorApi::cameraMode()
 {
     if (!requireEngine()) return QString();
@@ -547,6 +671,24 @@ bool EditorApi::snapToFloor()
     if (!host.services || !host.services->selection || !host.services->selection->selected())
         return fail("editor.snapToFloor: nothing is selected");
     return host.viewport->snapSelectionToFloor();
+}
+
+QVariantMap EditorApi::undoState()
+{
+    QVariantMap out;
+    if (!host.services || !host.services->undo) return out;
+    QUndoStack *stack = host.services->undo->stack();
+    if (!stack) return out;
+    out["count"]     = stack->count();
+    out["index"]     = stack->index();
+    out["canUndo"]   = stack->canUndo();
+    out["canRedo"]   = stack->canRedo();
+    // canUndo() is false while a macro is being composed (QUndoStack refuses to
+    // undo into one), and a script run IS a macro — so this is the flag that
+    // explains why editor.undo() cannot reach the run's own steps.
+    out["macroOpen"] = host.services->undo->isScriptMacroOpen();
+    out["pushes"]    = QVariant::fromValue(qulonglong(host.services->undo->pushCount()));
+    return out;
 }
 
 bool EditorApi::undo()

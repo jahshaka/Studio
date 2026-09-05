@@ -2275,6 +2275,23 @@ void MainWindow::setupViewPort()
     viewsButton->setText("Views ");
     viewsButton->setPopupMode(QToolButton::InstantPopup);
 
+    // Camera ▾ — the switcher (CAMERAS_SPEC D4): the Viewport (explorer) plus
+    // every scene camera by name. Choosing a camera PILOTS it; choosing
+    // Viewport ejects. It is rebuilt on every open rather than kept in sync,
+    // because the list is the document's and the document changes underneath it
+    // (a camera added, renamed, deleted, a whole world closed) — and a stale
+    // entry would hand the viewport a dangling node.
+    camerasButton = new QToolButton;
+    camerasButton->setStyleSheet("padding: 0 8px 0 0; margin: 0");
+    camerasMenu = new QMenu;
+    camerasMenu->setStyleSheet(StyleSheet::QMenuFlat());
+    connect(camerasMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildCamerasMenu);
+    camerasButton->setMenu(camerasMenu);
+    camerasButton->setText("Camera ");
+    camerasButton->setPopupMode(QToolButton::InstantPopup);
+    camerasButton->setToolTip(tr("Render the viewport through the free explorer or a scene camera "
+                                 "(choosing a camera pilots it)"));
+
     connect(screenShotBtn, SIGNAL(pressed()), this, SLOT(takeScreenshot()));
 
     QVariantMap options;
@@ -2303,6 +2320,7 @@ void MainWindow::setupViewPort()
 	controlBarLayout->addWidget(cameraView);
     controlBarLayout->addWidget(wireFramesButton);
     controlBarLayout->addWidget(viewsButton);
+    controlBarLayout->addWidget(camerasButton);
     controlBarLayout->addStretch();
     controlBarLayout->addWidget(playSceneBtn);
     controlBarLayout->addSpacing(2);
@@ -2320,6 +2338,7 @@ void MainWindow::setupViewPort()
         for (QWidget *chromeBtn :
              std::initializer_list<QWidget *>{ screenShotBtn, cameraView,
                                                wireFramesButton, viewsButton,
+                                               camerasButton,
                                                playSceneBtn, playSimBtn })
             chromeBtn->setStyleSheet(ThemeManager::chromeButtonSheet());
     }
@@ -3574,6 +3593,57 @@ void MainWindow::applyPlayModeUi()
     options.insert("color", QColor(231, 76, 60));
     options.insert("color-active", QColor(231, 76, 60));
     playSceneBtn->setIcon(fontIcons->icon(fa::stop, options));
+}
+
+// The camera switcher's list (CAMERAS_SPEC D4). Built on every open from the
+// live document; the checkmark shows what the viewport is actually rendering
+// through, which is the piloted camera or the explorer.
+void MainWindow::rebuildCamerasMenu()
+{
+    if (!camerasMenu) return;
+    camerasMenu->clear();
+    auto group = new QActionGroup(camerasMenu);
+    group->setExclusive(true);
+
+    const iris::CameraNodePtr piloted = sceneView ? sceneView->pilotedCamera()
+                                                  : iris::CameraNodePtr();
+    QAction *explorer = camerasMenu->addAction(tr("Viewport"));
+    explorer->setCheckable(true);
+    explorer->setChecked(piloted.isNull());
+    group->addAction(explorer);
+    connect(explorer, &QAction::triggered, this,
+            [this]() { if (sceneView) sceneView->pilotCamera(iris::CameraNodePtr()); });
+
+    auto scene = sceneView ? sceneView->getScene() : iris::ScenePtr();
+    if (!scene || scene->cameras.isEmpty()) {
+        QAction *none = camerasMenu->addAction(tr("No scene cameras"));
+        none->setEnabled(false);
+        return;
+    }
+    camerasMenu->addSeparator();
+    // By NAME, and stable: a QHash's order is not, and a menu that reshuffles
+    // between opens is unusable.
+    QVector<iris::CameraNodePtr> cameras;
+    for (const auto &cam : scene->cameras) if (cam) cameras.push_back(cam);
+    std::sort(cameras.begin(), cameras.end(),
+              [](const iris::CameraNodePtr &a, const iris::CameraNodePtr &b) {
+                  if (a->getName() != b->getName()) return a->getName() < b->getName();
+                  return a->getGUID() < b->getGUID();
+              });
+    for (const iris::CameraNodePtr &cam : cameras) {
+        QAction *action = camerasMenu->addAction(
+            cam->getName().isEmpty() ? tr("Camera") : cam->getName());
+        action->setCheckable(true);
+        action->setChecked(piloted == cam);
+        group->addAction(action);
+        const QString guid = cam->getGUID();
+        connect(action, &QAction::triggered, this, [this, guid]() {
+            if (!sceneView) return;
+            auto sc = sceneView->getScene();
+            if (!sc) return;
+            if (auto target = sc->cameras.value(guid)) sceneView->pilotCamera(target);
+        });
+    }
 }
 
 bool MainWindow::applyCameraView(const QString &name)
