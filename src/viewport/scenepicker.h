@@ -66,7 +66,10 @@ public:
                                                    bool selectRootObject);
 
 private:
-    static void pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &a, const iris::Vec3 &b,
+    /// Delegates to iris::picking::raycastMeshes — the ONE segment/mesh
+    /// implementation (Ogre RaySceneQuery broad phase + our TriMesh narrow
+    /// phase); this converts its hits to the picker's camera-relative ranking.
+    static void pickMeshes(iris::ScenePtr scene, const iris::Vec3 &a, const iris::Vec3 &b,
                            const iris::Vec3 &cameraPos, bool forcePickable, QList<ScenePick> &out);
 };
 

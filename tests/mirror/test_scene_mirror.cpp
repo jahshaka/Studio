@@ -33,6 +33,8 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
+#include "irisgl/document/scenegraph/scenepicking.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -1494,6 +1496,120 @@ int main(int argc, char **argv)
         mirror.applyEnvironment(view, engine.get());
         engine->renderOneFrame();
         mirror.setLightWires(false);
+    }
+
+    // ---- PICKING: the broad phase really is the engine's ------------------
+    // SCENEGRAPH_SPEC §2. `iris::picking::raycastMeshes` is the ONE
+    // segment/mesh implementation behind both Scene::rayCast and Studio's
+    // ScenePicker (audit F13). Its broad phase is Ogre's RaySceneQuery when the
+    // engine holds the scene's geometry, and the document's own bounds walk
+    // when it does not — this pins BOTH, and that they agree.
+    {
+        auto pdoc = iris::Scene::create();
+        auto cube = iris::MeshNode::create();
+        cube->setMesh(":assets/models/cube.obj");
+        cube->setMaterial(iris::PbrMaterial::create());
+        cube->setName("pick-cube");
+        cube->setLocalPos(iris::Vec3(0, 0, 0));
+        pdoc->getRootNode()->addChild(cube, false);
+
+        const iris::Vec3 a(0, 0, 20), b(0, 0, -20);
+
+        // (1) NOT mirrored yet: no engine geometry for this document, so the
+        // fallback broad phase answers — and it must still hit.
+        auto pre = iris::picking::raycastMeshes(pdoc.data(), a, b);
+        CHECK(!iris::picking::lastUsedEngineBroadPhase(),
+              "picking: an unmirrored document uses the document broad phase");
+        CHECK(!pre.isEmpty() && pre.first().node == cube,
+              "picking: ...and still finds the cube, with a triangle index");
+        CHECK(!pre.isEmpty() && pre.first().triangleIndex >= 0,
+              "picking: the fallback path reports a triangle index");
+
+        // (2) mirrored: the Items exist, so RaySceneQuery is the broad phase.
+        SceneMirror pmirror(target);
+        pmirror.setSource(pdoc);
+        pmirror.sync();
+        engine->renderOneFrame();   // query AABBs come from the last updateSceneGraph
+        auto post = iris::picking::raycastMeshes(pdoc.data(), a, b);
+        CHECK(iris::picking::lastUsedEngineBroadPhase(),
+              "picking: a mirrored document uses Ogre's RaySceneQuery broad phase");
+        CHECK(!post.isEmpty() && post.first().node == cube,
+              "picking: the engine broad phase finds the same cube");
+        CHECK(!post.isEmpty() && post.first().triangleIndex >= 0,
+              "picking: ...and the triangle narrow phase is still ours");
+
+        // A ray that misses finds nothing through either phase.
+        const iris::Vec3 mA(50, 50, 20), mB(50, 50, -20);
+        CHECK(iris::picking::raycastMeshes(pdoc.data(), mA, mB).isEmpty(),
+              "picking: a ray past the geometry hits nothing");
+
+        // `pickable` is honoured exactly: the flag reaches the Item as an Ogre
+        // QUERY FLAG (the mirror pushes it) and is re-checked on the candidate.
+        cube->setPickable(false);
+        pmirror.sync();
+        engine->renderOneFrame();
+        CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b).isEmpty(),
+              "picking: an unpickable node is not a hit");
+        CHECK(!iris::picking::raycastMeshes(pdoc.data(), a, b, 0, true).isEmpty(),
+              "picking: ...unless the caller asks for unpickable nodes too");
+        cube->setPickable(true);
+
+        // pickingGroups stays an ALL-test on the candidates (Ogre's mask is an
+        // ANY-test and cannot express it).
+        cube->pickingGroups = 0x3;
+        pmirror.sync();
+        CHECK(!iris::picking::raycastMeshes(pdoc.data(), a, b, 0x1).isEmpty(),
+              "picking: pickingGroups 0x3 satisfies a 0x1 mask");
+        CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b, 0x4).isEmpty(),
+              "picking: ...and not a 0x4 one");
+        cube->pickingGroups = 0;
+
+        pmirror.setSource(nullptr);
+    }
+
+    // ---- SCENE_STATIC through the mirror ----------------------------------
+    // SCENEGRAPH_SPEC §6 rule 3: the engine creates a node's Item in the NODE's
+    // memory-manager class, because SceneNode::attachObject throws when the two
+    // disagree. Marked BEFORE the mirror attaches, and again after, since both
+    // orders happen in the editor.
+    {
+        auto sdoc = iris::Scene::create();
+        auto pre = iris::MeshNode::create();
+        pre->setMesh(":assets/models/cube.obj");
+        pre->setMaterial(iris::PbrMaterial::create());
+        pre->setName("static-before-attach");
+        sdoc->getRootNode()->addChild(pre, false);
+        pre->setStaticHint(true);
+        CHECK(pre->isStaticInGraph(), "static: marked before the mirror ever saw it");
+
+        auto post = iris::MeshNode::create();
+        post->setMesh(":assets/models/cube.obj");
+        post->setMaterial(iris::PbrMaterial::create());
+        post->setName("static-after-attach");
+        post->setLocalPos(iris::Vec3(3, 0, 0));
+        sdoc->getRootNode()->addChild(post, false);
+
+        SceneMirror smirror(target);
+        smirror.setSource(sdoc);
+        smirror.sync();
+        engine->renderOneFrame();
+        CHECK(smirror.engineNode(pre.data()) != 0 && smirror.engineNode(post.data()) != 0,
+              "static: both nodes reached the engine");
+
+        // Now switch one that ALREADY has an Item: the Item has to travel.
+        post->setStaticHint(true);
+        CHECK(post->isStaticInGraph(),
+              "static: a node with a live Item still switches (the Item goes with it)");
+        smirror.sync();
+        engine->renderOneFrame();
+
+        // ...and moving it puts both node and Item back (rule 4).
+        post->setLocalPos(iris::Vec3(4, 0, 0));
+        CHECK(!post->isStaticInGraph(), "static: the move demoted it again");
+        smirror.sync();
+        engine->renderOneFrame();
+        CHECK(true, "static: the scene still renders after both switches");
+        smirror.setSource(nullptr);
     }
 
     mirror.setSource(nullptr);

@@ -252,9 +252,10 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
         }
     }
 
-    for (auto child : sceneNode->children()) {
-        doScenePicking(child, segStart, segEnd, hitList);
-    }
+    const int kids = sceneNode->childCount();
+    for (int i = 0; i < kids; ++i)
+        if (iris::SceneNode *c = sceneNode->childAt(i))
+            doScenePicking(c->sharedFromThis(), segStart, segEnd, hitList);
 }
 
 iris::Vec3 PlayerMouseController::screenSpaceToWoldSpace(const QPointF& pos, float depth)

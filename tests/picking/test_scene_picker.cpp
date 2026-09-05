@@ -16,6 +16,7 @@
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/scenepicker.h"
+#include "irisgl/document/scenegraph/scenepicking.h"
 
 #include "../support/documentgraph.h"
 static int failures = 0;
@@ -53,6 +54,14 @@ int main(int argc, char **argv) {
     ScenePicker::screenSegment(cam, W, H, QPointF(W / 2, H / 2), a, b);
     auto hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
     CHECK(!hits.isEmpty(), "centre ray hits the cube");
+    // THE FALLBACK BROAD PHASE, pinned where it is actually exercised
+    // (SCENEGRAPH_SPEC §2): this suite builds a document nobody mirrors, so the
+    // engine holds none of its geometry and Ogre's RaySceneQuery would answer
+    // nothing. Everything below therefore characterises the document-side
+    // broad phase; mirror.document_to_engine pins the engine one and that the
+    // two agree.
+    CHECK(!iris::picking::lastUsedEngineBroadPhase(),
+          "an unmirrored document picks through the document broad phase");
     CHECK(ScenePicker::nearest(hits).node == front, "nearest hit is the cube");
     std::printf("    hit point %.2f %.2f %.2f (front face z should be ~+1)\n",
                 ScenePicker::nearest(hits).hitPoint.x(), ScenePicker::nearest(hits).hitPoint.y(), ScenePicker::nearest(hits).hitPoint.z());
