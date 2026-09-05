@@ -587,7 +587,11 @@ void SceneHierarchyWidget::repopulateTree()
 void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
-    for (auto childNode : sceneNode->children()) {
+    const int kids = sceneNode->childCount();
+    for (int i = 0; i < kids; ++i) {
+        iris::SceneNode *raw = sceneNode->childAt(i);
+        if (!raw) continue;
+        const iris::SceneNodePtr childNode = raw->sharedFromThis();
         auto childTreeItem = createTreeItems(childNode);
         parentTreeItem->addChild(childTreeItem);
         nodeList.insert(childNode->getNodeId(), childNode);
@@ -679,9 +683,12 @@ void SceneHierarchyWidget::attachAllChildren(iris::SceneNodePtr node)
 
 void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
 {
-	for (auto child : node->children()) {
+	const int kids = node->childCount();
+	for (int i = 0; i < kids; ++i) {
+		iris::SceneNode *child = node->childAt(i);
+		if (!child) continue;
 		child->setAttached(true);
-		attachAllChildren(child);
+		attachAllChildren(child->sharedFromThis());
 	}
 }
 
@@ -748,7 +755,7 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
     if (!parentNode) return;
     auto parentTreeItem = treeItemList[parentNode->nodeId];
     auto childItem = createTreeItems(childNode);
-    parentTreeItem->insertChild(parentNode->children().indexOf(childNode),childItem);
+    parentTreeItem->insertChild(childNode->siblingIndex(), childItem);
 
     // add to lists
     nodeList.insert(childNode->getNodeId(), childNode);

@@ -225,14 +225,19 @@ QVariantList SceneApi::nodes(const QVariant &options)
         }
         // A subtree that gets cut off says so, with its size — the whole point
         // of a bounded read is that the caller knows what it did not get.
-        const bool cutOff = (depth >= 0 && level >= depth && !node->children().isEmpty());
+        // childCount()/childAt(), not children(): the old shape called
+        // children() up to THREE times per node — each one a QList and a
+        // refcount per child — to answer two questions and then walk.
+        const int kids = node->childCount();
+        const bool cutOff = (depth >= 0 && level >= depth && kids > 0);
         if (cutOff) {
-            row["childCount"] = node->children().size();
+            row["childCount"] = kids;
             row["truncated"] = true;
         }
         out.append(row);
         if (cutOff) return;
-        for (const auto &child : node->children()) walk(child, level + 1);
+        for (int i = 0; i < kids; ++i)
+            if (iris::SceneNode *c = node->childAt(i)) walk(c->sharedFromThis(), level + 1);
     };
     walk(start, 0);
     return out;
@@ -245,8 +250,10 @@ QVariant SceneApi::find(const QString &name)
     std::function<iris::SceneNodePtr(const iris::SceneNodePtr &)> walk =
         [&](const iris::SceneNodePtr &node) -> iris::SceneNodePtr {
         if (node->getName() == name) return node;
-        for (const auto &child : node->children())
-            if (auto hit = walk(child)) return hit;
+        const int kids = node->childCount();
+        for (int i = 0; i < kids; ++i)
+            if (iris::SceneNode *c = node->childAt(i))
+                if (auto hit = walk(c->sharedFromThis())) return hit;
         return iris::SceneNodePtr();
     };
     auto hit = walk(scene->getRootNode());
@@ -441,7 +448,9 @@ QVariantList SceneApi::cameras()
             row["active"] = (scene->getActiveCameraGuid() == node->getGUID());
             out.append(row);
         }
-        for (const auto &child : node->children()) walk(child);
+        const int kids = node->childCount();
+        for (int i = 0; i < kids; ++i)
+            if (iris::SceneNode *c = node->childAt(i)) walk(c->sharedFromThis());
     };
     walk(scene->getRootNode());
     return out;

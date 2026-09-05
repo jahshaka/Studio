@@ -51,10 +51,17 @@ namespace {
 
 int walkNode(const iris::SceneNodePtr &node, const NodeVisitor &visit)
 {
+    // childCount()/childAt(): the walk reads the one tree directly instead of
+    // building a QList of shared pointers per node (SCENEGRAPH_SPEC §3 step 5).
     QVector<int> childHandles;
-    for (const auto &child : node->children()) {
-        if (!child || shouldSkipForExport(child)) continue;
-        const int h = walkNode(child, visit);
+    const int kids = node->childCount();
+    childHandles.reserve(kids);
+    for (int i = 0; i < kids; ++i) {
+        iris::SceneNode *child = node->childAt(i);
+        if (!child) continue;
+        const iris::SceneNodePtr ptr = child->sharedFromThis();
+        if (shouldSkipForExport(ptr)) continue;
+        const int h = walkNode(ptr, visit);
         if (h >= 0) childHandles.append(h);
     }
     return visit(node, childHandles);
@@ -66,9 +73,13 @@ QVector<int> walkScene(const iris::ScenePtr &scene, const NodeVisitor &visit)
 {
     QVector<int> roots;
     if (!scene || !scene->rootNode) return roots;
-    for (const auto &child : scene->rootNode->children()) {
-        if (!child || shouldSkipForExport(child)) continue;
-        const int h = walkNode(child, visit);
+    const int kids = scene->rootNode->childCount();
+    for (int i = 0; i < kids; ++i) {
+        iris::SceneNode *child = scene->rootNode->childAt(i);
+        if (!child) continue;
+        const iris::SceneNodePtr ptr = child->sharedFromThis();
+        if (shouldSkipForExport(ptr)) continue;
+        const int h = walkNode(ptr, visit);
         if (h >= 0) roots.append(h);
     }
     return roots;
