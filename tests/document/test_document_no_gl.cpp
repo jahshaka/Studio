@@ -340,45 +340,106 @@ int main(int argc, char **argv)
         CHECK(approx(worldPos(leaf), iris::Vec3(-2, 2, 2)),
               "invalidation: setLocalTransform()");
 
-        // SCENE_STATIC (SPECS/SCENEGRAPH_SPEC.md §6): "this node never moves".
-        // Static nodes are skipped by the engine's per-frame transform pass,
-        // which is where the swap's headroom at high node counts is. It is a
-        // HINT, not a lock: a static node that does move still resolves
-        // correctly (the graph tells the manager), and that is the half a
-        // naive implementation gets wrong.
+        // SCENE_STATIC (SPECS/SCENEGRAPH_SPEC.md §6), the four rules in
+        // nodegraph.h, each pinned. This is the whole of the swap's per-frame
+        // headroom: Ogre's transform and bounds passes skip the static memory
+        // manager entirely on frames nothing in it changed.
         {
+            // RULE 2 — a static node's parent must be static or be the scene
+            // ROOT. `host` hangs off the root, so it may be static; `stat`
+            // under a DYNAMIC host may not.
             auto host = iris::SceneNode::create();
             tRoot->addChild(host, false);
             auto stat = iris::SceneNode::create();
             host->addChild(stat, false);
             CHECK(!stat->staticHint(), "static: a fresh node is dynamic");
             stat->setStaticHint(true);
-            CHECK(stat->staticHint(), "static: setStaticHint(true) takes");
+            CHECK(!stat->isStaticInGraph(),
+                  "static: refused under a dynamic parent (rule 2 — it would freeze there)");
+            stat->_clearStaticHint();
 
-            // A static node that DOES move still resolves — the graph tells the
-            // scene manager (notifyStaticDirty), which is the half a naive
-            // implementation gets wrong (statics are otherwise skipped by the
-            // per-frame pass and would answer with a stale world transform).
+            CHECK(host->isStaticEligible(), "static: a plain empty is eligible");
+            host->setStaticHint(true);
+            CHECK(host->isStaticInGraph(), "static: a child of the scene root may be static");
+
+            // RULE 1 — static is a SUBTREE property: marking `host` took its
+            // whole subtree with it, because Ogre gives a child its parent's
+            // memory-manager class and propagates that down on every reparent.
+            CHECK(stat->isStaticInGraph(), "static: the whole subtree went with it (rule 1)");
+
+            // ...and a static subtree still resolves its world transforms.
+            host->setStaticHint(false);
             host->setLocalPos(iris::Vec3(5, 0, 0));
+            host->setStaticHint(true);
+            stat->setStaticHint(false);
             stat->setLocalPos(iris::Vec3(1, 0, 0));
+            stat->setStaticHint(true);
             tScene->update(0.0f);
             CHECK(approx(worldPos(stat), iris::Vec3(6, 0, 0)),
-                  "static: a static node that DOES move still resolves against its parent");
+                  "static: a static subtree resolves against its parent");
 
-            // THE LIMITATION, pinned rather than hidden: Ogre gives a node its
-            // PARENT's memory-manager class on every re-parent (Node::setParent
-            // migrates the child), so a hint set before the node reaches its
-            // final parent is lost. Mark AFTER parenting.
-            auto other = iris::SceneNode::create();
-            tRoot->addChild(other, false);
-            other->addChild(stat, false);
-            CHECK(!stat->staticHint(),
-                  "static: re-parenting under a dynamic parent CLEARS the hint (Ogre's rule)");
-            stat->setStaticHint(true);
-            CHECK(stat->staticHint(), "static: re-marking after the move takes");
-            stat->setStaticHint(false);
-            CHECK(!stat->staticHint(), "static: and it switches back");
-            other->removeFromParent();
+            // RULE 4 — MOVING A STATIC NODE PROMOTES IT, and clears the hint.
+            // (v1 answered a static move with notifyStaticDirty, which costs a
+            // whole static pass on the next frame — every frame, for a node
+            // being dragged.)
+            stat->setLocalPos(iris::Vec3(2, 0, 0));
+            CHECK(!stat->isStaticInGraph() && !stat->staticHint(),
+                  "static: a transform write demotes the node and clears the hint (rule 4)");
+            tScene->update(0.0f);
+            CHECK(approx(worldPos(stat), iris::Vec3(7, 0, 0)),
+                  "static: ...and the moved node lands where it was put");
+
+            // RULE 3 / eligibility — node kinds whose engine attachment cannot
+            // change memory-manager class refuse the hint outright.
+            auto lamp = iris::LightNode::create();
+            tRoot->addChild(lamp, false);
+            CHECK(!lamp->isStaticEligible(), "static: a light is never eligible");
+            lamp->setStaticHint(true);
+            CHECK(!lamp->staticHint() && !lamp->isStaticInGraph(),
+                  "static: setStaticHint on a light changes nothing");
+            lamp->removeFromParent();
+
+            // Eligibility also refuses anything that is going to move: a
+            // physics body, a socket rider, an animated node.
+            auto body = iris::SceneNode::create();
+            tRoot->addChild(body, false);
+            body->isPhysicsBody = true;
+            CHECK(!body->isStaticEligible(), "static: a physics body is never eligible");
+            body->isPhysicsBody = false;
+            body->setSocketAttachment("owner-guid", "head");
+            CHECK(!body->isStaticEligible(), "static: a socket rider is never eligible");
+            body->setSocketAttachment(QString(), QString());
+            CHECK(body->isStaticEligible(), "static: ...and eligible again once neither holds");
+            body->removeFromParent();
+
+            // THE DEFAULT POLICY: applyStaticDefaults marks a whole freshly
+            // added branch wherever rule 2 and eligibility allow.
+            auto branch = iris::SceneNode::create();
+            auto twig = iris::SceneNode::create();
+            branch->addChild(twig, false);
+            tRoot->addChild(branch, false);
+            CHECK(!branch->isStaticInGraph(), "static: a freshly added branch is dynamic");
+            branch->applyStaticDefaults();
+            CHECK(branch->isStaticInGraph() && twig->isStaticInGraph(),
+                  "static: applyStaticDefaults marks the whole eligible branch");
+
+            // ...and an INELIGIBLE node inside it is SKIPPED, not a veto: one
+            // lamp in a building must not deny the building its classification.
+            auto lampBranch = iris::SceneNode::create();
+            auto innerLamp = iris::LightNode::create();
+            auto sibling = iris::SceneNode::create();
+            lampBranch->addChild(innerLamp, false);
+            lampBranch->addChild(sibling, false);
+            tRoot->addChild(lampBranch, false);
+            lampBranch->applyStaticDefaults();
+            CHECK(lampBranch->isStaticInGraph() && sibling->isStaticInGraph(),
+                  "static: a light inside a branch does not veto the branch");
+            CHECK(!innerLamp->isStaticInGraph(),
+                  "static: ...and the light itself stays dynamic");
+            lampBranch->removeFromParent();
+            branch->removeFromParent();
+
+            host->setStaticHint(false);
             host->removeFromParent();
         }
 

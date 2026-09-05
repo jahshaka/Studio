@@ -34,6 +34,12 @@ void AddSceneNodeCommand::undo()
 void AddSceneNodeCommand::redo()
 {
     parentNode->addChild(sceneNode, false);
+    // SCENE_STATIC (SCENEGRAPH_SPEC §6): a subtree that has just joined the
+    // tree is at rest and its parent chain is known, which is the only moment
+    // the default can be applied. THIS is the funnel every add/import goes
+    // through, and it runs on redo too — an undone-then-redone add gets the
+    // same classification as the original.
+    sceneNode->applyStaticDefaults();
     if (services && services->sceneEdit) services->sceneEdit->notifyNodeInserted(sceneNode);
     if (services && services->selection) services->selection->select(sceneNode);
 }

@@ -662,6 +662,10 @@ void SceneEditService::addNodeToActiveNode(iris::SceneNodePtr sceneNode)
     } else {
         scene->getRootNode()->addChild(sceneNode);
     }
+    // SCENE_STATIC (SCENEGRAPH_SPEC §6), after the node is in the tree — a
+    // node's static class depends on its parent's, so this cannot be decided
+    // before it has one. Moving it later takes it back out, automatically.
+    sceneNode->applyStaticDefaults();
 
     emit hierarchyChanged();
 }
