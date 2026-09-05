@@ -14,9 +14,13 @@ For more information see the LICENSE file
 
 #include <QMenu>
 #include <QMimeData>
+#include <QInputDialog>
 #include <QTreeWidgetItem>
+#include <QUndoStack>
 
 #include "commands/reparentscenenodecommand.h"
+#include "commands/scenefoldercommand.h"
+#include "services/scenefolders.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -63,8 +67,11 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 	connect(ui->sceneTree,	SIGNAL(itemClicked(QTreeWidgetItem*, int)),
 			this,			SLOT(treeItemSelected(QTreeWidgetItem*, int)));
 
-    // Make items draggable and droppable
-    ui->sceneTree->setSelectionMode(QAbstractItemView::SingleSelection);
+    // Multi-select (SCENEGRAPH_SPEC §6b): shift/ctrl picks a SET, which is what
+    // "folder-ise these five objects" and "delete these five objects" need. The
+    // LAST row selected still drives the properties panel and the gizmo — that
+    // is treeSelectionChanged(), which reads currentItem() rather than the set.
+    ui->sceneTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     ui->sceneTree->setDragEnabled(true);
     ui->sceneTree->viewport()->setAcceptDrops(true);
     ui->sceneTree->setDropIndicatorShown(false);
@@ -75,6 +82,14 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
 
     connect(ui->sceneTree,	SIGNAL(customContextMenuRequested(const QPoint&)),
 			this,			SLOT(sceneTreeCustomContextMenu(const QPoint&)));
+
+    // Keyboard navigation and shift-select have to drive the properties panel
+    // too — itemClicked alone only ever saw the mouse.
+    connect(ui->sceneTree, &QTreeWidget::itemSelectionChanged,
+            this, &SceneHierarchyWidget::treeSelectionChanged);
+
+    connect(ui->folderBtn, &QPushButton::clicked,
+            this, &SceneHierarchyWidget::newFolderFromSelection);
 
 	// We do QIcon::Selected manually to remove an annoying default highlight for selected icons
 	visibleIcon = new QIcon;
@@ -193,10 +208,64 @@ void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> scene
     selectedNode = sceneNode;
 
     if (!!sceneNode) {
-        auto item = treeItemList[sceneNode->getNodeId()];
+        auto item = treeItemList.value(sceneNode->getNodeId());
+        if (!item) return;
+        // The panel drives the viewport and the viewport drives the panel. With
+        // the tree on ExtendedSelection, setCurrentItem now raises
+        // itemSelectionChanged, so without this guard a pick in the viewport
+        // would bounce straight back out as a selection the viewport just made.
+        suppressSelectionSignal = true;
         ui->sceneTree->setCurrentItem(item);
+        suppressSelectionSignal = false;
 		ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(), QAbstractItemView::PositionAtCenter);
     }
+}
+
+bool SceneHierarchyWidget::isFolderItem(const QTreeWidgetItem *item)
+{
+    return item && !item->data(0, kFolderRole).toString().isEmpty();
+}
+
+QString SceneHierarchyWidget::folderPathOf(const QTreeWidgetItem *item)
+{
+    return item ? item->data(0, kFolderRole).toString() : QString();
+}
+
+QList<iris::SceneNodePtr> SceneHierarchyWidget::selectedNodes() const
+{
+    QList<iris::SceneNodePtr> out;
+    const auto rows = ui->sceneTree->selectedItems();
+    for (QTreeWidgetItem *row : rows) {
+        if (isFolderItem(row)) continue;
+        const auto node = nodeList.value(row->data(0, Qt::UserRole).toLongLong());
+        if (!!node && !out.contains(node)) out.append(node);
+    }
+    return out;
+}
+
+bool SceneHierarchyWidget::isFolderable(const iris::SceneNodePtr &node) const
+{
+    // Folders organise the ROOT LEVEL of the outliner (§6b, Unreal semantics):
+    // a node that hangs off another node is displayed under its parent, so
+    // filing it would record metadata nothing ever shows. Refused, visibly,
+    // rather than silently accepted.
+    if (!node || !scene) return false;
+    auto root = scene->getRootNode();
+    return !!root && node != root && node->getParent() == root;
+}
+
+void SceneHierarchyWidget::treeSelectionChanged()
+{
+    if (suppressSelectionSignal) return;
+    auto *current = ui->sceneTree->currentItem();
+    // A folder row carries no node: the properties panel keeps showing whatever
+    // it had rather than going blank, which is what selecting a container does
+    // everywhere else in the app.
+    if (!current || isFolderItem(current)) return;
+    const auto node = nodeList.value(current->data(0, Qt::UserRole).toLongLong());
+    if (!node || node == selectedNode) return;
+    selectedNode = node;
+    emit sceneNodeSelected(selectedNode);
 }
 
 bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
@@ -206,12 +275,18 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     // Qt routes in must never move the current selection), descendant targets
     // are refused (they would create a parent cycle — infinite recursion in
     // getGlobalTransform), and the reparent goes through the undo stack.
-    // @TODO, handle multiple items later on
+    //
+    // TWO drops share this tree since folders landed (SCENEGRAPH_SPEC §6b):
+    // dropping ON A NODE row still reparents, exactly as before; dropping on a
+    // FOLDER row, or BETWEEN root-level rows, is a folderPath metadata edit that
+    // never touches the hierarchy. dropHintAt() is the single place that decides
+    // which, and it also feeds the drop indicator so the two read differently on
+    // screen before the mouse is released.
     static const char *kTreeMime = "application/x-qabstractitemmodeldatalist";
 
     if (event->type() == QEvent::DragEnter) {
         auto evt = static_cast<QDragEnterEvent*>(event);
-        lastDraggedHiearchyItemSrc.clear();
+        lastDraggedNodes.clear();
         const bool internal = evt->source() == ui->sceneTree ||
                               evt->source() == ui->sceneTree->viewport();
         // ASSET BIN -> DECAL is the ONE foreign drag this tree accepts
@@ -220,13 +295,14 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         if (!internal && evt->mimeData() && evt->mimeData()->hasFormat(kTreeMime))
             evt->acceptProposedAction();
         if (internal && evt->mimeData() && evt->mimeData()->hasFormat(kTreeMime)) {
-            // The drag starts on the pressed item, which the press made current.
-            auto selected = ui->sceneTree->selectedItems();
-            if (selected.size() > 0) {
-                long itemId = selected[0]->data(0, Qt::UserRole).toLongLong();
-                lastDraggedHiearchyItemSrc = nodeList.value(itemId);
-            }
+            // The drag carries the WHOLE selection now, not just the pressed
+            // row (the old single-node member is gone with it).
+            lastDraggedNodes = selectedNodes();
         }
+    }
+
+    if (event->type() == QEvent::DragLeave) {
+        ui->sceneTree->clearDropHint();
     }
 
     if (event->type() == QEvent::DragMove) {
@@ -243,12 +319,24 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
                 return true;
             }
         }
+        if (internal && !lastDraggedNodes.isEmpty()) {
+            QTreeWidgetItem *row = nullptr;
+            const auto hint = dropHintAt(lastDraggedNodes, evt->position().toPoint(), &row, nullptr);
+            ui->sceneTree->setDropHint(hint, row);
+            if (hint != SceneTreeWidget::DropHint::None) {
+                evt->acceptProposedAction();
+                return true;
+            }
+            evt->ignore();
+            return true;
+        }
     }
 
     if (event->type() == QEvent::Drop) {
         auto dropEventPtr = static_cast<QDropEvent*>(event);
-        auto dragged = lastDraggedHiearchyItemSrc;
-        lastDraggedHiearchyItemSrc.clear();
+        ui->sceneTree->clearDropHint();
+        auto dragged = lastDraggedNodes;
+        lastDraggedNodes.clear();
 
         const bool internal = dropEventPtr->source() == ui->sceneTree ||
                               dropEventPtr->source() == ui->sceneTree->viewport();
@@ -274,28 +362,62 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
         }
 
         if (!internal || !dropEventPtr->mimeData() ||
-            !dropEventPtr->mimeData()->hasFormat(kTreeMime) || !dragged) {
+            !dropEventPtr->mimeData()->hasFormat(kTreeMime) || dragged.isEmpty()) {
             dropEventPtr->setDropAction(Qt::IgnoreAction);
             dropEventPtr->ignore();
             return true;   // consume: a foreign drag must not touch the tree
         }
 
-        QTreeWidgetItem *droppedIndex =
-            ui->sceneTree->itemAt(dropEventPtr->pos().x(), dropEventPtr->pos().y());
-        iris::SceneNodePtr target;
-        if (droppedIndex)
-            target = nodeList.value(droppedIndex->data(0, Qt::UserRole).toLongLong());
+        QTreeWidgetItem *row = nullptr;
+        QString folder;
+        const auto hint = dropHintAt(dragged, dropEventPtr->position().toPoint(), &row, &folder);
 
-        // Refuse: no target row, dropping on the current parent (no-op), or any
-        // target that is the dragged node itself / one of its descendants.
-        if (!target || target == dragged->getParent() ||
-            ReparentSceneNodeCommand::wouldCreateCycle(dragged, target)) {
+        // FOLDER DROPS are metadata only — one snapshot command, one undo step,
+        // and NOT ONE NODE MOVES IN THE HIERARCHY (§6b LAW).
+        if (hint == SceneTreeWidget::DropHint::IntoFolder ||
+            hint == SceneTreeWidget::DropHint::ToRoot) {
+            QList<iris::SceneNodePtr> movable;
+            for (const auto &n : dragged) if (isFolderable(n)) movable.append(n);
+            moveNodesToFolder(movable, folder);
+            dropEventPtr->setDropAction(Qt::IgnoreAction);
+            dropEventPtr->accept();
+            return true;
+        }
+
+        iris::SceneNodePtr target;
+        if (row && !isFolderItem(row))
+            target = nodeList.value(row->data(0, Qt::UserRole).toLongLong());
+
+        if (hint != SceneTreeWidget::DropHint::Reparent || !target) {
             dropEventPtr->setDropAction(Qt::IgnoreAction);
             dropEventPtr->ignore();
             return true;
         }
 
-        if (mainWindow) mainWindow->studioServices()->undo->push(new ReparentSceneNodeCommand(dragged, target));
+        // REPARENT, unchanged in every respect except that it now moves the
+        // whole selection. Each node is re-checked against the same two guards
+        // (already-the-parent, cycle) — a multi-selection can easily contain
+        // both a legal and an illegal member.
+        QList<iris::SceneNodePtr> moves;
+        for (const auto &n : dragged) {
+            if (!n || n == target) continue;
+            if (n->getParent() == target) continue;
+            if (ReparentSceneNodeCommand::wouldCreateCycle(n, target)) continue;
+            moves.append(n);
+        }
+        if (moves.isEmpty() || !mainWindow) {
+            dropEventPtr->setDropAction(Qt::IgnoreAction);
+            dropEventPtr->ignore();
+            return true;
+        }
+
+        auto *undo = mainWindow->studioServices()->undo;
+        // One GESTURE is one undo step even when it moved five objects.
+        const bool macro = moves.size() > 1 && undo->stack();
+        if (macro) undo->stack()->beginMacro(tr("Reparent Objects"));
+        for (const auto &n : moves) undo->push(new ReparentSceneNodeCommand(n, target));
+        if (macro) undo->stack()->endMacro();
+
         // The command repopulated the tree from the document. Consume the event
         // so QTreeWidget's own InternalMove does not run on the rebuilt tree.
         dropEventPtr->setDropAction(Qt::IgnoreAction);
@@ -306,8 +428,225 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     return QObject::eventFilter(watched, event);
 }
 
+// ---------------------------------------------------------------------------
+// Outliner folders (SCENEGRAPH_SPEC §6b)
+// ---------------------------------------------------------------------------
+
+SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::SceneNodePtr> &dragged,
+                                                           const QPoint &pos,
+                                                           QTreeWidgetItem **rowOut,
+                                                           QString *folderOut) const
+{
+    using Hint = SceneTreeWidget::DropHint;
+    if (rowOut) *rowOut = nullptr;
+    if (folderOut) folderOut->clear();
+    if (!scene) return Hint::None;
+
+    QTreeWidgetItem *row = ui->sceneTree->itemAt(pos);
+
+    // Empty space under the last row: back to the root level.
+    if (!row) {
+        for (const auto &n : dragged) if (isFolderable(n)) return Hint::ToRoot;
+        return Hint::None;
+    }
+    if (rowOut) *rowOut = row;
+
+    if (isFolderItem(row)) {
+        // Onto a folder: file everything filable there.
+        for (const auto &n : dragged) if (isFolderable(n)) {
+            if (folderOut) *folderOut = folderPathOf(row);
+            return Hint::IntoFolder;
+        }
+        if (rowOut) *rowOut = nullptr;
+        return Hint::None;
+    }
+
+    const auto target = nodeList.value(row->data(0, Qt::UserRole).toLongLong());
+    if (!target) { if (rowOut) *rowOut = nullptr; return Hint::None; }
+
+    // BETWEEN root-level rows: the top and bottom quarter of a row that is
+    // itself at the root level of the outliner means "put it beside this", i.e.
+    // into the same folder this row is in. This is the gesture Unreal's
+    // outliner has and the reason folders can be reached without aiming at the
+    // folder header itself.
+    const QRect rect = ui->sceneTree->visualItemRect(row);
+    const bool edge = rect.isValid() && rect.height() >= 8 &&
+                      (pos.y() - rect.top() < rect.height() / 4 ||
+                       rect.bottom() - pos.y() < rect.height() / 4);
+    if (edge && isFolderable(target)) {
+        for (const auto &n : dragged) if (isFolderable(n) && n != target) {
+            if (folderOut) *folderOut = scenefolders::normalize(target->folderPath);
+            return Hint::ToRoot;   // "beside", drawn as a line — the folder is in folderOut
+        }
+    }
+
+    // Onto the WORLD row: for a nested node this is the existing reparent to
+    // the root node; for a root-level node it means "leave the folder".
+    if (target == scene->getRootNode()) {
+        bool anyNested = false, anyFiled = false;
+        for (const auto &n : dragged) {
+            if (!n) continue;
+            if (n->getParent() != scene->getRootNode()) anyNested = true;
+            else if (!n->folderPath.isEmpty()) anyFiled = true;
+        }
+        if (anyNested) return Hint::Reparent;
+        if (anyFiled) return Hint::ToRoot;
+        if (rowOut) *rowOut = nullptr;
+        return Hint::None;
+    }
+
+    // Onto a node row: the existing reparent, if any dragged node may go there.
+    for (const auto &n : dragged) {
+        if (!n || n == target) continue;
+        if (n->getParent() == target) continue;
+        if (ReparentSceneNodeCommand::wouldCreateCycle(n, target)) continue;
+        return Hint::Reparent;
+    }
+    if (rowOut) *rowOut = nullptr;
+    return Hint::None;
+}
+
+void SceneHierarchyWidget::runFolderEdit(const QString &text, const std::function<bool()> &fn)
+{
+    if (!scene || !fn) return;
+    const auto before = scenefolders::snapshot(scene);
+    if (!fn()) return;
+    repopulateTree();
+    if (mainWindow && mainWindow->studioServices() && mainWindow->studioServices()->undo) {
+        auto *cmd = new SceneFolderCommand(text, scene, before);
+        cmd->setPanel(this);
+        mainWindow->studioServices()->undo->push(cmd);
+    }
+}
+
+void SceneHierarchyWidget::moveNodesToFolder(const QList<iris::SceneNodePtr> &nodes,
+                                             const QString &path)
+{
+    if (nodes.isEmpty()) return;
+    const QString target = scenefolders::normalize(path);
+    runFolderEdit(target.isEmpty() ? tr("Move To Root") : tr("Move To Folder"), [&]() {
+        bool changed = false;
+        for (const auto &n : nodes) {
+            if (!isFolderable(n)) continue;
+            if (scenefolders::normalize(n->folderPath) == target) continue;
+            scenefolders::setNodeFolder(scene, n, target);
+            changed = true;
+        }
+        return changed;
+    });
+}
+
+QString SceneHierarchyWidget::askFolderName(const QString &title, const QString &initial)
+{
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, title, tr("Folder name"),
+                                               QLineEdit::Normal, initial, &ok);
+    return ok ? name.trimmed() : QString();
+}
+
+void SceneHierarchyWidget::newFolderFromSelection()
+{
+    if (!scene) return;
+    const auto selection = selectedNodes();
+    QList<iris::SceneNodePtr> members;
+    for (const auto &n : selection) if (isFolderable(n)) members.append(n);
+
+    // The new folder is created NEXT TO whatever the selection is already in,
+    // so folder-ising things that live in "Props" gives "Props/<new>".
+    QString parent;
+    if (!members.isEmpty()) parent = scenefolders::normalize(members.first()->folderPath);
+
+    const QString name = askFolderName(members.isEmpty() ? tr("New Folder")
+                                                         : tr("Group In New Folder"),
+                                       tr("New Folder"));
+    if (name.isEmpty()) return;
+    const QString leaf = scenefolders::normalize(name);
+    if (leaf.isEmpty() || leaf.contains(QLatin1Char('/'))) return;
+    const QString path = parent.isEmpty() ? leaf : parent + QLatin1Char('/') + leaf;
+
+    runFolderEdit(tr("New Folder"), [&]() {
+        if (!scenefolders::exists(scene, path)) scenefolders::create(scene, path);
+        // The selection is FILED, never reparented (§6b LAW).
+        for (const auto &n : members) scenefolders::setNodeFolder(scene, n, path);
+        return true;
+    });
+
+    if (auto *row = folderItemList.value(path)) {
+        ui->sceneTree->setCurrentItem(row);
+        ui->sceneTree->scrollToItem(row);
+    }
+}
+
+void SceneHierarchyWidget::buildMoveToMenu(QMenu *parent, const QList<iris::SceneNodePtr> &nodes)
+{
+    QMenu *moveTo = parent->addMenu(tr("Move to"));
+    moveTo->setStyleSheet(StyleSheet::QMenuDarkPadded());
+
+    QList<iris::SceneNodePtr> filable;
+    for (const auto &n : nodes) if (isFolderable(n)) filable.append(n);
+    moveTo->setEnabled(!filable.isEmpty());
+    if (filable.isEmpty()) {
+        // Say WHY rather than offering a menu that would do nothing: folders
+        // organise the root level, and these nodes hang off another node.
+        moveTo->setToolTip(tr("Folders organise root-level objects; these are "
+                              "children of another object."));
+        return;
+    }
+
+    QAction *root = moveTo->addAction(tr("Root"));
+    connect(root, &QAction::triggered, this, [this, filable]() {
+        moveNodesToFolder(filable, QString());
+    });
+    moveTo->addSeparator();
+
+    for (const QString &path : scenefolders::all(scene)) {
+        QAction *a = moveTo->addAction(path);
+        connect(a, &QAction::triggered, this, [this, filable, path]() {
+            moveNodesToFolder(filable, path);
+        });
+    }
+    moveTo->addSeparator();
+    QAction *fresh = moveTo->addAction(tr("New Folder…"));
+    connect(fresh, &QAction::triggered, this, [this, filable]() {
+        const QString name = askFolderName(tr("New Folder"), tr("New Folder"));
+        if (name.isEmpty()) return;
+        const QString leaf = scenefolders::normalize(name);
+        if (leaf.isEmpty() || leaf.contains(QLatin1Char('/'))) return;
+        moveNodesToFolder(filable, leaf);
+    });
+}
+
+QTreeWidgetItem *SceneHierarchyWidget::folderItemFor(const QString &path)
+{
+    const QString p = scenefolders::normalize(path);
+    if (p.isEmpty()) return treeItemList.value(scene->getRootNode()->getNodeId());
+    if (auto *existing = folderItemList.value(p)) return existing;
+
+    QTreeWidgetItem *parent = folderItemFor(scenefolders::parentOf(p));
+    if (!parent) return nullptr;
+
+    auto *item = new QTreeWidgetItem();
+    item->setText(0, scenefolders::leafOf(p));
+    item->setData(0, kFolderRole, p);
+    // Selectable and renamable, NOT draggable: a folder is not a thing you can
+    // drop on something else, it is a thing you drop things into.
+    item->setFlags((item->flags() | Qt::ItemIsEditable | Qt::ItemIsDropEnabled) &
+                   ~Qt::ItemIsDragEnabled);
+    QIcon icon;
+    icon.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-folder-72.png"), QIcon::Normal);
+    icon.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-folder-72.png"), QIcon::Selected);
+    item->setIcon(0, icon);
+    parent->addChild(item);
+    folderItemList.insert(p, item);
+    return item;
+}
+
 void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 {
+    // A folder row has no node behind it: the eye and lock columns would look
+    // up nodeList[0] and dereference a null shared pointer.
+    if (isFolderItem(item)) return;
+
 	// Our icons are in the second column
 	if (column == 1) {
 		if (item->data(1, Qt::UserRole).toBool()) hideItemAndChildren(item);
@@ -318,8 +657,14 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
         else releaseItemAndChildren(item);
     }
 	else {
+		// itemSelectionChanged has usually already reported this row (it fires
+		// on the press, before the click). Re-emitting would rebuild the whole
+		// properties panel a second time for one click, so only the case that
+		// signal cannot see — a click on the ALREADY current row — lands here.
 		qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-		selectedNode = nodeList[nodeId];
+		const auto node = nodeList.value(nodeId);
+		if (!node || node == selectedNode) return;
+		selectedNode = node;
 		emit sceneNodeSelected(selectedNode);
 	}
 }
@@ -327,18 +672,80 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
 void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
 {
     QModelIndex index = ui->sceneTree->indexAt(pos);
-    if (!index.isValid()) return;
+    auto item = index.isValid() ? ui->sceneTree->itemAt(pos) : nullptr;
 
-    auto item = ui->sceneTree->itemAt(pos);
+    // THE ROW MENU (SCENEGRAPH_SPEC §6b). Built as a real, extensible menu on
+    // the tree — this is the designated home for future row actions, so every
+    // entry below is added the same way and nothing here is a one-off.
+
+    // ---- empty space: the folder actions that need no row ------------------
+    if (!item) {
+        if (!scene) return;
+        QMenu menu;
+        menu.setStyleSheet(StyleSheet::QMenuDarkPadded());
+        QAction *newFolder = menu.addAction(tr("New Folder…"));
+        connect(newFolder, &QAction::triggered, this,
+                &SceneHierarchyWidget::newFolderFromSelection);
+        menu.exec(ui->sceneTree->mapToGlobal(pos));
+        return;
+    }
+
+    // ---- a FOLDER row ------------------------------------------------------
+    if (isFolderItem(item)) {
+        const QString path = folderPathOf(item);
+        QMenu menu;
+        menu.setStyleSheet(StyleSheet::QMenuDarkPadded());
+
+        QAction *rename = menu.addAction(tr("Rename"));
+        connect(rename, &QAction::triggered, this, [this, item]() {
+            ui->sceneTree->editItem(item);
+        });
+
+        QAction *sub = menu.addAction(tr("New Subfolder…"));
+        connect(sub, &QAction::triggered, this, [this, path]() {
+            const QString name = askFolderName(tr("New Subfolder"), tr("New Folder"));
+            if (name.isEmpty()) return;
+            const QString leaf = scenefolders::normalize(name);
+            if (leaf.isEmpty() || leaf.contains(QLatin1Char('/'))) return;
+            runFolderEdit(tr("New Folder"), [&]() {
+                return scenefolders::create(scene, path + QLatin1Char('/') + leaf);
+            });
+        });
+
+        menu.addSeparator();
+        QAction *del = menu.addAction(tr("Delete Folder"));
+        del->setToolTip(tr("Deletes the folder only — its contents move up a level."));
+        connect(del, &QAction::triggered, this, [this, path]() {
+            runFolderEdit(tr("Remove Folder"), [&]() {
+                return scenefolders::remove(scene, path);
+            });
+        });
+
+        menu.exec(ui->sceneTree->mapToGlobal(pos));
+        return;
+    }
+
     auto nodeId = item->data(0, Qt::UserRole).toLongLong();
-    auto node = nodeList[nodeId];
+    auto node = nodeList.value(nodeId);
+    if (!node) return;
 
 	selectedNode = node;
+
+    // The menu acts on the SELECTION when the right-clicked row is part of it,
+    // and on the clicked row alone otherwise — the behaviour every file manager
+    // has, and the reason right-clicking one of five selected objects can file
+    // all five.
+    QList<iris::SceneNodePtr> targets = selectedNodes();
+    if (!targets.contains(node)) targets = { node };
 
     QMenu menu;
 	menu.setStyleSheet(StyleSheet::QMenuDarkPadded());
 
     QAction* action;
+
+    // FIRST RESIDENT: Move to ▸ (owner, 2026-09-06).
+    buildMoveToMenu(&menu, targets);
+    menu.addSeparator();
 
     action = new QAction(QIcon(), "Rename", this);
     connect(action, &QAction::triggered, this, [&]() { ui->sceneTree->editItem(item); });
@@ -542,6 +949,10 @@ void SceneHierarchyWidget::detachFromParent()
 
 void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
 {
+	if (isFolderItem(item)) {
+		for (int i = 0; i < item->childCount(); i++) showHideNode(item->child(i), show);
+		return;
+	}
 	qint64 nodeId = item->data(1,Qt::UserRole).toLongLong();
     auto node = nodeList[nodeId];
 
@@ -558,7 +969,23 @@ void SceneHierarchyWidget::showHideNode(QTreeWidgetItem* item, bool show)
 
 void SceneHierarchyWidget::repopulateTree()
 {
+    if (!scene) return;
     auto rootNode = scene->getRootNode();
+    if (!rootNode) return;
+
+    // Remember which folders the user had closed: a folder tree that springs
+    // fully open on every edit is unusable, and this function runs on every
+    // add, delete, reparent and folder gesture.
+    QStringList wereCollapsed = collapsedFolders;
+    for (auto it = folderItemList.constBegin(); it != folderItemList.constEnd(); ++it) {
+        if (it.value() && !it.value()->isExpanded()) {
+            if (!wereCollapsed.contains(it.key())) wereCollapsed.append(it.key());
+        } else {
+            wereCollapsed.removeAll(it.key());
+        }
+    }
+    collapsedFolders = wereCollapsed;
+
     auto rootTreeItem = new QTreeWidgetItem();
 
 	QIcon *hiddenIcon = new QIcon;
@@ -572,28 +999,48 @@ void SceneHierarchyWidget::repopulateTree()
     // populate tree
     nodeList.clear();
     treeItemList.clear();
+    folderItemList.clear();
 
     nodeList.insert(rootNode->getNodeId(), rootNode);
     treeItemList.insert(rootNode->getNodeId(), rootTreeItem);
+
+    // FOLDER ROWS FIRST, so that every folder exists (including the empty ones
+    // that only the scene's explicit list knows about) before anything is filed
+    // into it, and so folders sort above the loose objects at each level.
+    for (const QString &path : scenefolders::all(scene)) folderItemFor(path);
 
     populateTree(rootTreeItem, rootNode);
 
     ui->sceneTree->clear();
     ui->sceneTree->addTopLevelItem(rootTreeItem);
     ui->sceneTree->expandItem(rootTreeItem);
+    for (auto it = folderItemList.constBegin(); it != folderItemList.constEnd(); ++it)
+        if (it.value()) it.value()->setExpanded(!collapsedFolders.contains(it.key()));
     //ui->sceneTree->expandAll();
 }
 
 void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
                                         QSharedPointer<iris::SceneNode> sceneNode)
 {
+    // Folders group the ROOT LEVEL only (§6b): a child of the world root is
+    // shown under its folder row, everything deeper is shown under its parent
+    // exactly as it always was. The two trees are orthogonal, so this is the
+    // ONE place folders touch the layout.
+    const bool rootLevel = scene && sceneNode == scene->getRootNode();
+
     const int kids = sceneNode->childCount();
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *raw = sceneNode->childAt(i);
         if (!raw) continue;
         const iris::SceneNodePtr childNode = raw->sharedFromThis();
         auto childTreeItem = createTreeItems(childNode);
-        parentTreeItem->addChild(childTreeItem);
+        QTreeWidgetItem *host = parentTreeItem;
+        if (rootLevel) {
+            const QString folder = scenefolders::normalize(childNode->folderPath);
+            if (!folder.isEmpty())
+                if (auto *folderRow = folderItemFor(folder)) host = folderRow;
+        }
+        host->addChild(childTreeItem);
         nodeList.insert(childNode->getNodeId(), childNode);
         treeItemList.insert(childNode->getNodeId(), childTreeItem);
         populateTree(childTreeItem, childNode);
@@ -652,6 +1099,12 @@ QTreeWidgetItem *SceneHierarchyWidget::createTreeItems(iris::SceneNodePtr node)
 
 void SceneHierarchyWidget::hideItemAndChildren(QTreeWidgetItem * item)
 {
+	// A folder row carries no node — recurse THROUGH it, never into
+	// nodeList[0] (a null shared pointer waiting to be dereferenced).
+	if (isFolderItem(item)) {
+		for (int i = 0; i < item->childCount(); i++) hideItemAndChildren(item->child(i));
+		return;
+	}
 	qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
 	item->setIcon(1, *hiddenIcon);
 	nodeList[nodeId]->hide();
@@ -664,6 +1117,12 @@ void SceneHierarchyWidget::hideItemAndChildren(QTreeWidgetItem * item)
 
 void SceneHierarchyWidget::showItemAndChildren(QTreeWidgetItem * item)
 {
+	// A folder row carries no node — recurse THROUGH it, never into
+	// nodeList[0] (a null shared pointer waiting to be dereferenced).
+	if (isFolderItem(item)) {
+		for (int i = 0; i < item->childCount(); i++) showItemAndChildren(item->child(i));
+		return;
+	}
 	qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
 	item->setIcon(1, *visibleIcon);
 	nodeList[nodeId]->show();
@@ -704,7 +1163,8 @@ void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 	auto nodeScene = node->getScene();
 	if (!nodeScene) return;
 	auto rootNode = nodeScene->getRootNode();
-	auto treeNode = treeItemList[node->getNodeId()];
+	auto treeNode = treeItemList.value(node->getNodeId());
+	if (!treeNode) return;
     treeNode->setForeground(0, QBrush(QColor(255, 255, 255, 255)));
 	if (node->isAttached() &&
 		node->getParent() != rootNode) {
@@ -719,14 +1179,24 @@ void SceneHierarchyWidget::refreshAttachmentColors(iris::SceneNodePtr node)
 		*/
 
 		auto childTreeNode = treeNode->child(i);
+		// Folder rows sit between the world row and its objects; they have no
+		// node and no colour of their own.
+		if (isFolderItem(childTreeNode)) continue;
 		qint64 nodeId = childTreeNode->data(0, Qt::UserRole).toLongLong();
-		auto childNode = nodeList[nodeId];
+		auto childNode = nodeList.value(nodeId);
+		if (!childNode) continue;
 		refreshAttachmentColors(childNode);
 	}
 }
 
 void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
 {
+    // A folder row carries no node — recurse THROUGH it, never into
+    // nodeList[0] (a null shared pointer waiting to be dereferenced).
+    if (isFolderItem(item)) {
+        for (int i = 0; i < item->childCount(); i++) lockItemAndChildren(item->child(i));
+        return;
+    }
     qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
     item->setIcon(2, *disabledIcon);
     nodeList[nodeId]->setPickable(false);
@@ -739,6 +1209,12 @@ void SceneHierarchyWidget::lockItemAndChildren(QTreeWidgetItem *item)
 
 void SceneHierarchyWidget::releaseItemAndChildren(QTreeWidgetItem *item)
 {
+    // A folder row carries no node — recurse THROUGH it, never into
+    // nodeList[0] (a null shared pointer waiting to be dereferenced).
+    if (isFolderItem(item)) {
+        for (int i = 0; i < item->childCount(); i++) releaseItemAndChildren(item->child(i));
+        return;
+    }
     qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
     item->setIcon(2, *pickableIcon);
     nodeList[nodeId]->setPickable(true);
@@ -753,9 +1229,28 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
 {
     auto parentNode = childNode->getParent();
     if (!parentNode) return;
-    auto parentTreeItem = treeItemList[parentNode->nodeId];
+    auto parentTreeItem = treeItemList.value(parentNode->nodeId);
+    if (!parentTreeItem) return;
+    // A root-level node that carries a folder belongs under the folder ROW, not
+    // under the world row (§6b) — this is the incremental twin of populateTree.
+    if (scene && parentNode == scene->getRootNode()) {
+        const QString folder = scenefolders::normalize(childNode->folderPath);
+        if (!folder.isEmpty())
+            if (auto *folderRow = folderItemFor(folder)) parentTreeItem = folderRow;
+    }
     auto childItem = createTreeItems(childNode);
-    parentTreeItem->insertChild(childNode->siblingIndex(), childItem);
+    // Folder rows share a level with the objects, and they come first — so a
+    // DOCUMENT sibling index is not a ROW index at the root level any more.
+    // Skip past the folder rows and clamp: with no folders this is exactly the
+    // old insertChild(siblingIndex), and with folders a new object lands after
+    // them rather than above them.
+    int firstObjectRow = 0;
+    while (firstObjectRow < parentTreeItem->childCount() &&
+           isFolderItem(parentTreeItem->child(firstObjectRow)))
+        ++firstObjectRow;
+    const int at = qBound(firstObjectRow, firstObjectRow + childNode->siblingIndex(),
+                          parentTreeItem->childCount());
+    parentTreeItem->insertChild(at, childItem);
 
     // add to lists
     nodeList.insert(childNode->getNodeId(), childNode);
@@ -768,7 +1263,8 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
 void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
 {
     // remove from heirarchy
-    auto nodeTreeItem = treeItemList[childNode->nodeId];
+    auto nodeTreeItem = treeItemList.value(childNode->nodeId);
+    if (!nodeTreeItem || !nodeTreeItem->parent()) return;
     nodeTreeItem->parent()->removeChild(nodeTreeItem);
 
     // remove from lists
@@ -778,8 +1274,32 @@ void SceneHierarchyWidget::removeChild(iris::SceneNodePtr childNode)
 
 void SceneHierarchyWidget::OnLstItemsCommitData(QWidget *listItem)
 {
-    QString newName = qobject_cast<QLineEdit*>(listItem)->text();
-    if (!newName.isEmpty() && selectedNode) selectedNode->setName(newName);
+    auto *editor = qobject_cast<QLineEdit*>(listItem);
+    if (!editor) return;
+    const QString newName = editor->text().trimmed();
+    if (newName.isEmpty()) return;
+
+    // Inline rename serves BOTH row kinds now. The edited row is the current
+    // one (Qt makes it current to open the editor), which is also the only way
+    // to tell a folder rename from a node rename — commitData carries the
+    // editor widget, not the item.
+    auto *item = ui->sceneTree->currentItem();
+    if (isFolderItem(item)) {
+        const QString path = folderPathOf(item);
+        const QString leaf = scenefolders::normalize(newName);
+        // Put the row's text back to the stored leaf: the rename below rebuilds
+        // the tree from the document, so whatever the editor left behind on
+        // this (about to be deleted) item is irrelevant — except when the
+        // rename is REFUSED, where the row must not keep the rejected name.
+        item->setText(0, scenefolders::leafOf(path));
+        if (leaf.isEmpty() || leaf.contains(QLatin1Char('/'))) return;
+        runFolderEdit(tr("Rename Folder"), [&]() {
+            return scenefolders::rename(scene, path, leaf);
+        });
+        return;
+    }
+
+    if (selectedNode) selectedNode->setName(newName);
 }
 
 QTreeWidget * SceneHierarchyWidget::getWidget()

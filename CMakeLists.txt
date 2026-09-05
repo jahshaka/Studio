@@ -272,6 +272,7 @@ set(SRCS
     src/ui/panels/transformeditor.cpp 
     src/ui/controls/dragspinbox.cpp 
     src/ui/panels/scenehierarchywidget.cpp 
+    src/ui/panels/scenetreewidget.cpp
     src/viewport/cameracontrollerbase.cpp 
     src/viewport/gizmo.cpp
     src/viewport/snapsettings.cpp
@@ -495,6 +496,7 @@ set(HEADERS
     src/ui/panels/transformeditor.h 
     src/ui/controls/dragspinbox.h 
     src/ui/panels/scenehierarchywidget.h 
+    src/ui/panels/scenetreewidget.h
     src/viewport/orbitalcameracontroller.h 
     src/viewport/cameracontrollerbase.h 
     src/ui/panels/presets/skypresets.h 

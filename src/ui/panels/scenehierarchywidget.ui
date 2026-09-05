@@ -19,7 +19,7 @@
 	border-top: 1px solid #111;
 }
 
-#addBtn, #deleteBtn {
+#addBtn, #deleteBtn, #folderBtn {
 	padding: 4px;
 }
 
@@ -27,7 +27,7 @@
 	border: 0;
 }
 
-#deleteBtn {
+#deleteBtn, #folderBtn {
 	border-left: 1px solid #333;
 }
 
@@ -167,6 +167,28 @@ QTreeWidget::item:hover {
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="folderBtn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>96</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Group the selected objects in a new outliner folder (nothing is reparented). With nothing selected, creates an empty folder.</string>
+        </property>
+        <property name="text">
+         <string>Folder</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -183,7 +205,7 @@ QTreeWidget::item:hover {
     </widget>
    </item>
    <item>
-    <widget class="QTreeWidget" name="sceneTree">
+    <widget class="SceneTreeWidget" name="sceneTree">
      <property name="styleSheet">
       <string notr="true">outline: none</string>
      </property>
@@ -230,6 +252,13 @@ QTreeWidget::item:hover {
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SceneTreeWidget</class>
+   <extends>QTreeWidget</extends>
+   <header>ui/panels/scenetreewidget.h</header>
+  </customwidget>
+ </customwidgets>
  <resources>
   <include location="../../app/icons.qrc"/>
  </resources>
