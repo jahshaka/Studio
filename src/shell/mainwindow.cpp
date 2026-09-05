@@ -1263,6 +1263,12 @@ void MainWindow::openProject(bool playMode)
 	// silently on the very first open, when no render view exists yet.
 	LoadTimeline::mark(QStringLiteral("primeSceneSync"));
 	sceneView->primeSceneSync();
+	// The synchronous open's half of the F1a recording. No warm-up slice here
+	// on purpose — the sync path has no cover to hide one behind — but the
+	// RECORD is cheap (a memory-manager walk, no GPU work) and the next
+	// launch's warm-up is only as good as the sets it was given.
+	LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
+	sceneView->recordWarmUpSet();
 	openStageReveal(playMode);
 }
 
@@ -1352,32 +1358,48 @@ void MainWindow::openProjectAsync(bool playMode)
 	// compiles. Its own slice and its own event-loop turn, so the window keeps
 	// answering while it runs.
 	//
-	// OFF BY DEFAULT, and the reason is a measurement, not caution. On this box,
-	// open.responsive against the Showroom (worst UI-thread gap, ms):
+	// ON BY DEFAULT (SHADER_CACHE_AUDIT F3), and the default flipped on a
+	// MEASUREMENT, not on an opinion. It used to ship OFF against these
+	// numbers (open.responsive, Showroom, worst UI-thread gap, ms):
 	//
 	//                        cold open        second open
 	//   without this slice   1691 - 1789      439 - 476
-	//   with it              1723 - 1761      646 - 736
+	//   with it              1723 - 1761      646 - 736      <- the objection
 	//
-	// The cold open — the one this exists for — is UNCHANGED: those compiles
-	// happened either way, and the gap there is dominated by other stages. But
-	// the second open pays ~250 ms more, and the responsiveness budget the lane
-	// contract pins is 500 ms with about 25 ms of headroom. That 250 ms is a
-	// single renderOneFrame, which is atomic — it cannot be split across event
-	// loop turns, and rendering the warm-up through a smaller target would build
-	// a DIFFERENT chain's shaders, i.e. the wrong ones.
+	// The objection was that the second open pays ~250 ms for a warm-up that
+	// compiles NOTHING, against a 500 ms budget with ~25 ms of headroom.
 	//
-	// So the capability ships and the policy does not: Preferences -> Cache
-	// turns it on, editor.warmUpShaders() runs it on demand, and whether it
-	// becomes the default is a decision about that 500 ms budget rather than
-	// something this code should assume.
-	if (settings->getValue("shader_warmup_on_open", false).toBool()) {
+	// RE-MEASURED on this build, same suite, same box: cold 425.7 ms, warm
+	// 381.8 ms — both inside the budget, and the warm one BELOW the
+	// no-warm-up figure above. What changed is not the cost of a warm-up but
+	// where it lands: the self-disarming idle check (enginesceneviewport.cpp,
+	// mWarmUpIdleAt) skips every warm-up after one that compiled nothing, so
+	// the single no-op frame is paid on the COLD open — budgeted at 4000 ms,
+	// and paying those compiles either way — and the warm open pays nothing.
+	//
+	// Note what this route is NOT: Ogre's CompositorPassWarmUp, which renders a
+	// 4x4 target and reaches permutations the camera cannot see. ogre-patch
+	// 0016 makes that route run at all, but a second upstream use-after-free
+	// kills the app on the second world of a session, so it ships behind
+	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
+	// The switch stays in Preferences -> Cache for anyone who wants it off.
+	if (settings->getValue("shader_warmup_on_open", true).toBool()) {
 		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
 			const unsigned built = sceneView->warmUpShaders();
 			if (built) qInfo("scene open: precompiled %u shader(s) behind the cover", built);
 		} });
 	}
+	// WRITE THE WORLD DOWN for the next launch (SHADER_CACHE_AUDIT F1a). Behind
+	// the cover, in its own event-loop turn, and AFTER the geometry and
+	// environment pushes — the recording reads each renderable's Hlms hash and
+	// vertex declaration, both of which exist as soon as the mirror has bound
+	// the datablocks. Unconditional: the recorded set is what makes the NEXT
+	// startup warm, so it must not be gated on this session's precache setting.
+	slices.append({ QStringLiteral("Precompiling shaders…"), 96, [this]() {
+		LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
+		sceneView->recordWarmUpSet();
+	} });
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { openStageReveal(playMode); } });
 

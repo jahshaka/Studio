@@ -75,12 +75,14 @@ CacheSettingsWidget::CacheSettingsWidget(SettingsManager *settings, QWidget *par
     mEnabled->setChecked(mSettings->getValue("shader_cache_enabled", true).toBool());
     layout->addWidget(mEnabled);
 
-    // SHADER_CACHE_SPEC §5. Off by default: it removes the hitch on the first
-    // frames of a freshly-opened world, and it costs ~250 ms of unresponsive
-    // window on every open after the first in a session (measured against the
-    // Showroom; the numbers and the reasoning are at the call site in
-    // MainWindow's open plan). Whether that is a good trade is a judgement
-    // about a specific machine, which is why it is a switch and not a default.
+    // SHADER_CACHE_SPEC §5. ON by default (SHADER_CACHE_AUDIT F3): re-measured
+    // against open.responsive on this build, the warm open's worst UI gap is
+    // 381.8 ms with this on — inside the 500 ms budget, and below the figure
+    // recorded with it OFF, because the self-disarming idle check pays the one
+    // no-op warm-up on the COLD open instead. The reasoning and both sets of
+    // numbers are at the call site in MainWindow's open plan. The switch stays
+    // for the same reason every other cache switch does: a machine with a
+    // pathological driver has to be able to say no without a rebuild.
     if (ThemeManager::classicActive())
         mWarmUpOnOpen = new QCheckBox(tr("Precompile a world's shaders while it opens"), this);
     else {
@@ -88,10 +90,10 @@ CacheSettingsWidget::CacheSettingsWidget(SettingsManager *settings, QWidget *par
         sw->setText(tr("Precompile a world's shaders while it opens"));
         mWarmUpOnOpen = sw;
     }
-    mWarmUpOnOpen->setChecked(mSettings->getValue("shader_warmup_on_open", false).toBool());
+    mWarmUpOnOpen->setChecked(mSettings->getValue("shader_warmup_on_open", true).toBool());
     mWarmUpOnOpen->setToolTip(tr(
         "Builds the shaders a world needs behind the loading screen instead of on the first "
-        "frames you see. Opening takes longer; the first seconds after it are smoother."));
+        "frames you see — including the ones for objects the camera cannot see yet."));
     layout->addWidget(mWarmUpOnOpen);
 
     auto *form = new QFormLayout;

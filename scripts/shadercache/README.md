@@ -111,3 +111,108 @@ A cold open without the cache spends 2.3 seconds unable to answer the window,
 because that is where the world's shaders get compiled. With the cache it is
 under half a second. That is a bigger user-visible win than the 1.1 s of startup,
 and it was not what the program set out to buy.
+
+---
+
+## The v2 fix wave (2026-09-06) — re-measured, because the old numbers changed meaning
+
+`SHADER_CACHE_AUDIT.md` F1 found two independent defects in the warm-up: the
+recorded permutation set was written only at shutdown, and it was replayed into
+an empty, lightless, shadowless, 1x offscreen scene. F1(c) asked for the stale
+"empty scene is better" measurement to be re-taken, because it was taken against
+the unrecorded set and the wrong-pass-shape argument changes what it means.
+
+### The tool
+
+`scripts/shadercache/warmup-efficacy.js`, run through this directory's bench
+harness (or by hand with `HOME` and `XDG_CACHE_HOME` pinned into a scratch
+tree). It prints `EFFICACY-GATE` at the start of the script — i.e. **what had
+been built by the time the window existed** — and `EFFICACY-TOTAL` at the end,
+so `gate / total` is the fraction of a session's shader work that happened
+behind the splash. Everything outside it is a compile the user could have seen.
+
+### F1(c), re-taken: old warm-up versus new
+
+This box, RTX 4080 SUPER, Debug+ASan build, scratch `HOME`, `--script`, a
+library holding **two** worlds (Showroom + Matcaps) opened and CLOSED in turn.
+Two worlds is what discriminates: with only one, the shutdown-only recording
+happens to capture it and the two builds are within noise (98% either way).
+Both columns are the SHIPPED per-scene warm-up route (re-taken after the
+`CompositorPassWarmUp` route was switched to opt-in; the numbers did not move).
+
+| launch | build | wall | gate built / session total | compiled AFTER the gate | `warmup.set` |
+|---|---|---|---|---|---|
+| 1 cold | old | 11.6 s | 70 / 103 | 22 | 0 B during the run |
+| 1 cold | **new** | 10.4 s | 70 / 105 | 24 | **517 B, written during the OPEN** |
+| 2 warm | old | 7.98 s | 105 / 117 | **6 compiled** | 427 B |
+| 2 warm | **new** | 7.79 s | 109 / 119 | **4 compiled** | 701 B |
+| 3 warm | old | 6.80 s | 113 / 117 (96.6%) | 0 compiled | **251 B — it SHRANK** |
+| 3 warm | **new** | 6.80 s | 115 / 119 (96.6%) | 0 compiled | 812 B |
+
+What to read off it:
+
+1. **The empty-scene argument is dead, and it was never the big term.** Giving
+   the warm view the editor's pass shape (shadows, a shadow-casting directional,
+   the achieved sample count) costs ~130 ms of extra gate time on the first warm
+   launch and two extra permutations, and it stops the replay building
+   zero-light/no-shadow variants nothing draws. The old comment's "the quad
+   added permutations the app never uses" was measured against a replay that had
+   nothing to replay.
+2. **The set stops forgetting.** The old recording SHRANK across sessions
+   (427 → 251 bytes) because only worlds still open at quit were in it. The new
+   one is written on every open and every close and grows with the library.
+3. **Wall time is unchanged.** This is not a speed fix; it is a *when* fix. The
+   number that moved is "shaders compiled after the window appeared" on the
+   first warm launch: 6 → 4.
+4. **The first-ever launch pays two more permutations** (105 vs 103 session
+   total, 24 vs 22 compiled after the gate). Those are the lit and shadow-caster
+   variants of the warm view itself, and they are variants the editor's own pass
+   uses — which is the whole point of matching the pass shape. Stated rather
+   than buried: on a machine that never opens a world twice, the fix costs two
+   shaders and buys nothing.
+
+### F3, re-measured: the per-scene precache defaults ON now
+
+`open.responsive`, Showroom, worst UI-thread gap:
+
+| | cold open | warm open |
+|---|---|---|
+| the figures that kept it OFF | 1723 – 1761 ms | 646 – 736 ms |
+| **this build, precache ON** | **425.7 ms** | **381.8 ms** |
+
+The warm open is now *below* the number recorded with the precache off
+(439 – 476 ms), and the reason is the self-disarming idle check that was
+already written: the one no-op warm-up is paid on the COLD open — which is
+budgeted at 4000 ms and pays those compiles either way — and every open after
+it is skipped. The 500 ms razor is not touched.
+
+### F2, measured — and why the route it unblocks still ships OFF
+
+Case 6 of the warm-up suite, run both ways (`shadercache.warmup` = the shipped
+default, `shadercache.warmup_pass` = `JAHSHAKA_WARMUP_PASS=1`). A cutout cube
+parked 40 units behind the camera, a material family nothing else in the
+process has built:
+
+| route | shaders compiled by `View::warmUpShaders()` |
+|---|---|
+| `CompositorPassWarmUp` (opt-in) | **2** |
+| full-frame (shipped default) | **0** |
+
+`SceneManager::warmUpShaders` runs no frustum test, so the pass sweeps every
+render queue and every object regardless of where the camera is looking. That
+is the whole prize, and ogre-patch 0016 is what makes the route run at all:
+with the patch reversed and the engine rebuilt, the suite **SEGVs** on its very
+first `warmUpShaders()` in `ForwardPlusBase::getGridBuffer` — the crash the
+audit predicted, reproduced and removed.
+
+**But there is a second one behind it, and it is a use-after-free.** Driven over
+MCP on an Xvfb display, under gdb: the cold open is fine, and the SECOND world
+opened in the session dies in `ParallelHlmsCompileQueue::warmUpSerial`
+(`OgreRenderQueue.cpp:1333`) with `renderable->getDatablock()` null and the
+request's `movableObject` unreadable — collected requests naming objects from a
+world that has been destroyed. Nothing clears the pending request list when the
+scene that filled it goes away, and neither `RenderQueue::warmUpShaders`
+(`:1169`) nor `warmUpSerial` (`:1332`) null-checks. It does **not** reproduce
+offscreen (the suite's case 7 rebinds three worlds on one view and survives),
+which is why the route is default-off rather than test-gated: a suite would not
+have caught it. Fixing it is a second patch and a second lane.

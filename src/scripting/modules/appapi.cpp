@@ -64,14 +64,20 @@ QVector<VerbInfo> AppApi::verbs() const
           "does not return until the freeze is over, which is the point.",
           Needs::Window },
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
-                         "pipelineCacheLoaded, microcodeLoaded, microcodeEntries, hlmsCachesLoaded, "
+                         "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
+                         "microcodeEntries, hlmsCachesLoaded, "
                          "compiledThisRun, loadedThisRun, expectedShaders, lastSaved}",
           "The persistent shader cache (SHADER_CACHE_SPEC.md): what is on disk and what this run "
           "did with it. compiledThisRun counts shaders the compiler actually built; loadedThisRun "
           "counts shaders served straight from the cache, so a warm launch shows the second number "
-          "high and the first near zero. expectedShaders is what the last saved run needed in "
-          "total — the startup progress counter's denominator, 0 before any cache has been "
-          "written. The counters work whether or not the cache itself is enabled.",
+          "high and the first near zero. expectedShaders is what the LAST RUN needed in total — "
+          "the startup progress counter's denominator, 0 before any cache has been written. "
+          "pipelineCacheLoaded means the DRIVER accepted the pipeline blob, not merely that we "
+          "offered it one: pipelineCacheReason says which of absent / accepted / outdated / "
+          "rejected / silent happened ('outdated' is the ordinary cost of a driver update; "
+          "'silent' means the render system has the broken-pipeline-cache workaround on and this "
+          "layer does nothing at all on this device). The counters work whether or not the cache "
+          "itself is enabled.",
           Needs::Engine },
         { "clearShaderCache", "app.clearShaderCache() -> bool",
           "Deletes every cached shader artifact. The running session is unaffected (its shaders are "
@@ -83,7 +89,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "quit. A no-op returning true when nothing new has been compiled. Mostly for tests: the "
           "app saves on its own.",
           Needs::Engine },
-        { "warmUpSet", "app.warmUpSet(action?) -> {path, exists, sizeBytes, recorded?, saved?, built?}",
+        { "warmUpSet", "app.warmUpSet(action?) -> {path, exists, enabled, sizeBytes, "
+                       "shape:{samples, shadows}, recorded?, saved?, built?}",
           "The recorded warm-up set (SHADER_CACHE_SPEC.md §2.7b) — this machine's list of the "
           "shader permutations previous sessions actually used. Not shaders and not SPIR-V: a list "
           "of vertex formats, render queues and one representative material each, which is why it "
@@ -91,8 +98,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "With no argument it reports. 'record' adds every live scene to the set and writes it; "
           "'apply' replays it, compiling every permutation against degenerate 4-vertex buffers so "
           "nothing is loaded from disk, and reports how many shaders that built. The app records on "
-          "quit and applies at startup on its own; these are for tests and for recording a set "
-          "deliberately from a scene built for the purpose.",
+          "every world OPEN and CLOSE and again on quit, and applies at startup, on its own; these "
+          "are for tests and for recording a set deliberately from a scene built for the purpose. "
+          "'enabled' mirrors the shader-cache preference — with the cache off nothing is recorded "
+          "or replayed automatically, because the set lives in the cache directory and is derived "
+          "data of the same kind. 'shape' is the PASS the last session's editor drew with (MSAA "
+          "sample count and whether shadows were on); the startup warm-up view is built to match, "
+          "because a permutation depends on the pass as much as on the renderable.",
           Needs::Engine },
         { "engineErrors", "app.engineErrors(reset?) -> {drains, recorded, suppressed, entries:[{message, count, suppressed, firstMs, lastMs}]}",
           "What the renderer refused to do, and did not otherwise tell anyone. The engine swallows "
@@ -191,6 +203,7 @@ QVariantMap AppApi::shaderCache()
     m["sizeBytes"]           = QVariant::fromValue(qulonglong(s.sizeBytes));
     m["files"]               = s.files;
     m["pipelineCacheLoaded"] = s.pipelineCacheLoaded;
+    m["pipelineCacheReason"] = QString::fromStdString(s.pipelineCacheReason);
     m["microcodeLoaded"]     = s.microcodeLoaded;
     m["microcodeEntries"]    = s.microcodeEntries;
     m["hlmsCachesLoaded"]    = s.hlmsCachesLoaded;
@@ -248,6 +261,17 @@ QVariantMap AppApi::warmUpSet(const QString &action)
     const QFileInfo info(path);
     m["exists"] = info.exists();
     m["sizeBytes"] = QVariant::fromValue(qulonglong(info.exists() ? info.size() : 0));
+    // The two things a caller needs to reason about the AUTOMATIC recording and
+    // replay, both of which used to be invisible: whether they happen at all
+    // (audit F12 — they used to happen even with the cache off) and what pass
+    // shape the startup replay will use (audit F1b — it used to be an empty,
+    // lightless, shadowless 1x scene whatever the editor drew).
+    m["enabled"] = EngineHost::shaderCacheEnabled();
+    const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
+    QVariantMap shapeMap;
+    shapeMap["samples"] = shape.samples;
+    shapeMap["shadows"] = shape.shadows;
+    m["shape"] = shapeMap;
     return m;
 }
 

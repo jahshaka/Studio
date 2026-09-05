@@ -27,6 +27,7 @@
 #include <QJsonObject>
 #include <QDir>
 #include "data/constants.h"
+#include "bridge/enginehost.h"
 #include "shell/mainwindow.h"
 #include "data/project.h"
 #include "data/database/database.h"
@@ -1649,6 +1650,35 @@ unsigned EngineSceneViewport::warmUpShaders()
     return after - before;
 }
 
+void EngineSceneViewport::recordWarmUpSet()
+{
+    // WHY THIS RUNS WHERE IT RUNS (audit F1a + spec §7.9).
+    //
+    // The audit asked for a recording "after the first rendered frame of an
+    // open". The mechanism says a frame is not what it needs: Ogre's
+    // VertexFormatWarmUpStorage::analyze walks the scene's object memory
+    // managers and reads each renderable's VAO declaration and Hlms hash
+    // (OgreVertexFormatWarmUp.cpp:112-156), and the Hlms hash is assigned when
+    // the DATABLOCK is bound, not when anything is drawn. So everything the
+    // recording wants exists the moment SceneMirror has pushed the world —
+    // which is on the open path, BEHIND the cover, where the spec's own
+    // interaction note wants this work to live rather than after the reveal.
+    //
+    // Recording per world (rather than only at quit) is the whole fix: Ogre's
+    // storage ACCUMULATES and de-duplicates by {Hlms hash, render queue}, so
+    // recording every world as it goes IS the merged set — and a world that was
+    // closed before the app quit used to be in no set at all.
+    if (!mEngine || !mEngineScene) return;
+    if (View *v = view()) {
+        // Remember the shape THIS pass has, for the next launch's warm-up view
+        // to match. sampleCount() is the ACHIEVED count (the driver may clamp
+        // below what the scene asked for) — matching what was requested would
+        // build variants this machine cannot render.
+        EngineHost::rememberWarmUpShape({ v->sampleCount(), v->shadows() });
+    }
+    EngineHost::instance().recordWarmUpSetNow();
+}
+
 void EngineSceneViewport::coverIfNotPresenting()
 {
     // Called right after the editor page is switched to, i.e. right after this
@@ -1679,6 +1709,14 @@ void EngineSceneViewport::clearScene()
     // mActive is deliberately NOT cleared here: syncFrame's members are all
     // null-guarded, and clearing it would leave the viewport silently frozen
     // if no space switch follows (mActive belongs to begin()/end()).
+    // WRITE THE WORLD DOWN BEFORE IT GOES (audit F1a). This is the scene-close
+    // half of the recording, and it is the half that was missing entirely:
+    // recordWarmUpSet had exactly two callers, EngineHost::shutdown and the
+    // verb, so a world the user opened, worked in and CLOSED contributed
+    // nothing to the next launch's warm-up. The engine scene is still alive at
+    // this point in the teardown, which is the only reason this line can be
+    // here and not three lines down.
+    recordWarmUpSet();
     if (mOverlay) { mOverlay->clear(); mOverlay.reset(); }
     if (mMirror) { mMirror->setSource(nullptr); mMirror.reset(); }
     if (view()) {

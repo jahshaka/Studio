@@ -81,25 +81,57 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // The shaders survive their view: the Hlms shader cache and the microcode
     // map are process-wide, so the editor's real views reuse everything built
     // here (and everything loaded from disk before it).
+    // THE WARM VIEW MUST HAVE THE EDITOR'S PASS SHAPE (audit F1b).
+    //
+    // This used to be a 32x32 view over an EMPTY scene with no lights, no
+    // shadows and 1x MSAA, and the recorded set was replayed into it. That is
+    // the wrong world twice over: Hlms permutations are a function of the PASS
+    // as much as of the renderable — shadows change the shader, and the sample
+    // count is literally a shader property (HlmsBaseProp::MsaaSamples, set from
+    // the target's sample description at OgreHlms.cpp:3771, consumed at :2919).
+    // So the replay compiled zero-light / no-shadow / 1x variants the editor
+    // never draws, cached them, and counted them into expectedShaders — the
+    // splash denominator — as shaders somebody wanted.
+    //
+    // EngineHost::warmUpShape() is what the last session's editor view actually
+    // used (recorded on the open path beside the warm-up set itself), so this
+    // is measured rather than guessed. A first-ever launch gets the defaults
+    // and is no worse off than the old code.
+    const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
                                                  Colour(0.0f, 0.0f, 0.0f, 1.0f));
     Scene *warmScene = warmView ? engine->createScene("startup-warmup") : nullptr;
-    if (warmScene) warmView->setScene(warmScene);
-    // The scene stays EMPTY, deliberately. Measured, both ways:
-    //
-    //   empty scene           41 of the session's 66 shaders build here (62%)
-    //   + a lit shadowed quad 44 of 68 (65%) — because the quad ALSO added two
-    //                         Hlms permutations of its own that the app never
-    //                         uses, and cached them.
-    //
-    // What the empty warm-up covers is everything PROCESS-WIDE: Hlms
-    // registration, all 41 low-level material scripts (sky, DPSM, depth utils,
-    // copy/resolve, ESM, HDR, SSAO, SMAA) and the compositor chain. What it
-    // cannot cover is the Hlms permutations, because the Hlms generates a
-    // shader per RENDERABLE and the permutation set is a property of the
-    // content — guessing at it here would fill the cache with variants nothing
-    // draws. Those belong to the per-scene warm-up under the loading cover
-    // (SHADER_CACHE_SPEC §5), where the actual datablocks exist.
+    if (warmScene) {
+        warmView->setScene(warmScene);
+        warmView->setShadows(shape.shadows);
+        if (shape.samples > 1) warmView->setSampleCount(shape.samples);
+        // A REPRESENTATIVE LIGHT RIG, not a lit scene: one shadow-casting
+        // directional plus ambient is the smallest thing that makes the pass
+        // hash look like the editor's (it is also exactly what
+        // tests/shadercache/test_warm_up.cpp builds for the same reason). No
+        // geometry — the recorded set brings its own degenerate renderables,
+        // and anything else here would compile permutations nothing draws,
+        // which is the defect being fixed.
+        warmScene->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.1f, 0.1f, 0.12f));
+        const NodeId sun = warmScene->createNode();
+        if (sun) {
+            // A light points down its node's -Y (the engine's convention), and
+            // the identity orientation already aims it straight down — which is
+            // all this needs. No transform, no rotation maths.
+            LightDesc l;
+            l.type = LightType::Directional;
+            l.colour = Colour(1.0f, 1.0f, 1.0f);
+            l.intensity = 1.0f;
+            l.castShadows = shape.shadows;
+            warmScene->setLight(sun, l);
+        }
+    }
+    // What this covers is everything PROCESS-WIDE: Hlms registration, all the
+    // low-level material scripts (sky, DPSM, depth utils, copy/resolve, ESM,
+    // HDR, SSAO, SMAA) and the compositor chain. What it cannot cover on its
+    // own is the Hlms permutations — the Hlms generates a shader per RENDERABLE
+    // and the permutation set is a property of the CONTENT. Those come from the
+    // recorded set below, replayed into this correctly-shaped pass.
     for (int i = 0; i < kWarmUpFrames && warmView; ++i) {
         engine->renderOneFrame();
         poll();
@@ -115,7 +147,11 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // This is what the process-wide warm-up above cannot do on its own: Hlms
     // shaders are per RENDERABLE, so guessing at them from an empty scene is
     // impossible — but REMEMBERING them from last time is not.
-    if (warmScene) {
+    //
+    // GATED ON THE CACHE SETTING (audit F12): the set lives in the cache
+    // directory and is derived data of exactly the same kind, so "keep compiled
+    // shaders between launches: off" has to mean this too.
+    if (warmScene && EngineHost::shaderCacheEnabled()) {
         const QString setPath = EngineHost::warmUpSetPath();
         if (!setPath.isEmpty() && QFileInfo::exists(setPath)) {
             const unsigned built =

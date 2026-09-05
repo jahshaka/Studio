@@ -105,7 +105,22 @@ int main(int argc, char **argv)
     // The script also asserted save -> files, clear -> no files; it prints its
     // own ok:/FAIL: lines, which the exit code folds in.
     CHECK(cold.value("afterSaveFiles").toInt() > 0, "app.saveShaderCache() wrote files");
-    CHECK(cold.value("afterClearFiles").toInt() == 0, "app.clearShaderCache() removed them");
+    // EXACTLY ONE FILE SURVIVES A CLEAR, AND IT IS THE LOCK (audit F10).
+    //
+    // This used to assert 0, because clearShaderCacheOnDisk() called
+    // removeRecursively() and took `cache.lock` with everything else. Deleting
+    // a locked file releases nothing on Linux: this session keeps its fcntl
+    // lock on an unlinked inode, the next process creates a fresh cache.lock,
+    // locks THAT, and two processes both believe they are the single writer.
+    // So the number is 1, and 1 is the assertion — 0 would mean the regression
+    // is back, and 2 would mean something else survived that should not have.
+    CHECK(cold.value("afterClearFiles").toInt() == 1,
+          "app.clearShaderCache() removed every cache file and kept only the writer lock");
+    // The warm-up set's reporting surface (F1b/F12).
+    CHECK(cold.value("warmUpEnabled").toBool(),
+          "app.warmUpSet() reports the automatic record/replay armed with the cache on");
+    CHECK(cold.value("warmUpShapeSamples").toInt() >= 1,
+          "app.warmUpSet() reports the pass shape the startup warm-up will match");
 
     // ---- run 2: warm ------------------------------------------------------
     // Run 1 cleared its own cache at the end, then quit — and the clean-quit
