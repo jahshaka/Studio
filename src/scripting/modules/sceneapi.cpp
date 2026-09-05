@@ -85,15 +85,6 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "addEmpty", "scene.addEmpty({position, parent}) -> id",
           "Adds an empty group node. Undoable.",
           Needs::Document },
-        { "addViewer", "scene.addViewer({position, rotation, scale, parent}) -> id",
-          "Adds a viewer node — the hierarchy panel's \"Viewer\" action, named \"Avatar\". A viewer "
-          "is the scene's first-person stand-in: SIDE EFFECT, and it is not optional — the new "
-          "viewer TAKES the active character controller (every other viewer in the scene is "
-          "deactivated) and registers itself with the physics world, so a second addViewer "
-          "silently demotes the first. Without {position} the node spawns in front of the editor "
-          "camera like every other add. This verb only creates the node; nothing walks or drives "
-          "it until play mode builds its controller. Undoable.",
-          Needs::Document },
         { "addMesh", "scene.addMesh(path, {position, ...}) -> REFUSED",
           "REMOVED — this verb always fails. It used to parse a mesh file straight into the "
           "scene, which wrote the DISK PATH where the reader expects an asset guid: the node "
@@ -462,24 +453,6 @@ QString SceneApi::addEmpty(const QVariantMap &options)
     host.services->selection->select(iris::SceneNodePtr());
     host.services->sceneEdit->addEmpty();
     return finishAdd(options, QStringLiteral("scene.addEmpty"));
-}
-
-// AI_SURFACE_PROGRAM_SPEC lane D #12. The service used to return void, which
-// is the whole reason this verb could not exist; it now hands the node back so
-// a scene-less call fails loudly instead of reporting whatever happened to be
-// selected. `ignorePlacement` keeps the node at the origin when the caller
-// gave a position — applyOptions then puts it exactly there, in one transform
-// command, rather than moving it twice.
-QString SceneApi::addViewer(const QVariantMap &options)
-{
-    if (!sceneOrFail()) return QString();
-    host.services->selection->select(iris::SceneNodePtr());
-    auto node = host.services->sceneEdit->addViewer(options.contains("position"));
-    if (!node) {
-        fail(QStringLiteral("scene.addViewer: the viewer was not created"));
-        return QString();
-    }
-    return finishAdd(options, QStringLiteral("scene.addViewer"));
 }
 
 QString SceneApi::addCamera(const QVariantMap &options)

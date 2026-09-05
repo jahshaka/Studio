@@ -10,9 +10,7 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/physics/environment.h"
-#include "irisgl/document/physics/charactercontroller.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/physics/physicsproperties.h"
 #include "player/playermousecontroller.h"
@@ -82,14 +80,6 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 		animTime += dt;
 		scene->updateSceneAnimation(animTime);
 		scene->update(dt);
-
-		auto activeViewer = scene->getActiveVrViewer();
-		if (_isPlaying && !!activeViewer && activeViewer->isActiveCharacterController()) {
-			// The controller can be gone (viewer removed mid-play); the document
-			// flag alone never guaranteed one exists.
-			if (auto *controller = scene->getPhysicsEnvironment()->getActiveCharacterController())
-				activeViewer->setGlobalTransform(controller->getTransform());
-		}
 	}
 
 	camController->postUpdate(dt);
@@ -202,7 +192,7 @@ void PlayBack::resume()
 	mouseController->setPlayState(true);
 	scene->getPhysicsEnvironment()->simulatePhysics();
 	// NOT camController->start(): it captures the camera transform to restore on
-	// stop, and re-planting the viewer would re-add its character controller.
+	// stop, so calling it here would pin the restore point to the pause pose.
 }
 
 void PlayBack::stopScene()
@@ -241,12 +231,6 @@ void PlayBack::keyPressEvent(QKeyEvent *event)
 	KeyboardState::keyStates[event->key()] = true;
 	camController->onKeyPressed((Qt::Key)event->key());
 
-	//scene->getPhysicsEnvironment()->onKeyPressed((Qt::Key)event->key());
-	if (KeyboardState::isKeyDown(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 1; }
-	if (KeyboardState::isKeyDown(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 1; }
 }
 
 void PlayBack::keyReleaseEvent(QKeyEvent *event)
@@ -254,11 +238,4 @@ void PlayBack::keyReleaseEvent(QKeyEvent *event)
 	KeyboardState::keyStates[event->key()] = false;
 	camController->onKeyReleased((Qt::Key)event->key());
 	//camController->keyReleaseEvent(event);
-
-	//scene->getPhysicsEnvironment()->keyReleaseEvent((Qt::Key)event->key());
-	if (KeyboardState::isKeyUp(Qt::Key_W)) { scene->getPhysicsEnvironment()->walkForward = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_S)) { scene->getPhysicsEnvironment()->walkBackward = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_A)) { scene->getPhysicsEnvironment()->walkLeft = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_D)) { scene->getPhysicsEnvironment()->walkRight = 0; }
-	if (KeyboardState::isKeyUp(Qt::Key_Space)) { scene->getPhysicsEnvironment()->jump = 0; }
 }

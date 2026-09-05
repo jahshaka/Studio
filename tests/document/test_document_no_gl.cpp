@@ -29,7 +29,6 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
@@ -43,6 +42,8 @@
 // The reparent command's cycle guard is header-only document logic (its
 // undo/redo bodies live in the app; only the static guard is exercised here).
 #include "commands/reparentscenenodecommand.h"
+// The scene FILE format's retired-node-type table (header-only, no reader).
+#include "io/sceneformat.h"
 
 #include "../support/documentgraph.h"
 static int failures = 0;
@@ -259,16 +260,8 @@ int main(int argc, char **argv)
         roundTrip(refParticles, "blendMode", false, "ParticleSystemNode");
         readOnly(refParticles, "texture", QString("/some/other.png"), "ParticleSystemNode");
 
-        // ViewerNode
-        auto refViewer = iris::ViewerNode::create();
-        advertises(refViewer, { "viewScale", "activeCharacterController" }, "ViewerNode");
-        roundTrip(refViewer, "viewScale", 3.5f, "ViewerNode");
-        roundTrip(refViewer, "activeCharacterController", true, "ViewerNode");
-        CHECK(qFuzzyCompare(refViewer->getLocalScale().x(), 3.5f),
-              "ViewerNode: viewScale also drives the node scale (its own setter)");
-
         plain.reset(); refLight.reset(); refMesh.reset(); refCam.reset();
-        refParticles.reset(); refViewer.reset();
+        refParticles.reset();
     }
 
     // --- Transform propagation through the ONE tree -------------------------
@@ -507,17 +500,10 @@ int main(int argc, char **argv)
                   "invalidation: the property-animation path marks the node dirty");
         }
 
-        // ViewerNode::setViewScale and CameraNode::lookAt both write the node's
-        // TRS directly instead of going through the setters.
+        // CameraNode::lookAt writes the node's TRS directly instead of going
+        // through the setters. (ViewerNode::setViewScale was the other one; the
+        // node type was removed by AVATAR_LOCOMOTION_SPEC Stage 0.)
         {
-            auto viewer = iris::ViewerNode::create();
-            tRoot->addChild(viewer.staticCast<iris::SceneNode>());
-            tScene->update(0.0f);
-            viewer->setViewScale(4.0f);
-            tScene->update(0.0f);
-            CHECK(qFuzzyCompare(viewer->getGlobalTransform().column(0).toVector3D().length(), 4.0f),
-                  "invalidation: ViewerNode::setViewScale()");
-
             auto cam = iris::CameraNode::create();
             cam->setLocalPos(iris::Vec3(0, 0, 5));
             cam->update(0.0f);
@@ -528,6 +514,37 @@ int main(int argc, char **argv)
         }
 
         tScene->cleanup();
+    }
+
+    // --- Retired node types (AVATAR_LOCOMOTION_SPEC Stage 0) ---------------
+    // `viewer` (iris::ViewerNode) was removed with its 2016 character
+    // controller. A file written by an older build can still carry one, and the
+    // reader's contract for such a node is SKIP + log, never "guess a
+    // substitute type" and never a crash — sceneformat::isRetiredNodeType is
+    // the table it keys on, and SceneReader::readSceneNode returns null for a
+    // match (both of its child loops, plus all four external call sites, take
+    // the null).
+    {
+        CHECK(sceneformat::isRetiredNodeType(QStringLiteral("viewer")),
+              "format: 'viewer' is a RETIRED node type -> the reader skips it");
+
+        // Every type string the writer still emits must NOT be retired: a typo
+        // in that table would silently delete every node of a live type from
+        // every file that is opened.
+        const char *live[] = { "empty", "mesh", "light", "camera",
+                               "particle system", "decal" };
+        bool anyLiveRetired = false;
+        for (const char *t : live)
+            if (sceneformat::isRetiredNodeType(QString::fromLatin1(t))) anyLiveRetired = true;
+        CHECK(!anyLiveRetired,
+              "format: no LIVE node type string is in the retired table");
+
+        // An UNRECOGNISED type is not the same thing: it keeps the format's
+        // long-standing tolerance and reads as an Empty placeholder.
+        CHECK(!sceneformat::isRetiredNodeType(QStringLiteral("something-newer")),
+              "format: an unknown type is not 'retired' (it still reads as empty)");
+        CHECK(!sceneformat::isRetiredNodeType(QString()),
+              "format: an absent type string is not 'retired'");
     }
 
     // --- Teardown with no GL must not crash either

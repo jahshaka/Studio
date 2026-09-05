@@ -36,7 +36,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
@@ -1020,8 +1019,6 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 if (!img.isNull()) p["texture"] = imageToDataUri(img, false);
             }
             jah["particles"] = p;
-        } else if (kind == NodeKind::Viewer) {
-            jah["viewpoint"] = true;
         } else if (kind == NodeKind::Decal) {
             // DECALS_SPEC §7 — DATA ONLY, DELIBERATELY NOT RENDERED.
             // three.js' DecalGeometry is a different technique entirely: it

@@ -18,7 +18,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/core/geometry/trimesh.h"
@@ -26,58 +25,8 @@ For more information see the LICENSE file
 #include "irisgl/core/geometry/trimesh.h"
 
 
-void PlayerMouseController::setViewer(const iris::ViewerNodePtr &value)
-{
-    viewer = value;
-}
-
 void PlayerMouseController::start()
 {
-	// reset viewer since a new one could be added since scene
-	// was set and playing
-	this->setViewer(scene->getActiveVrViewer());
-
-    if (!!viewer) {
-		viewer->hide();
-
-		// plant viewer to any surface below it
-		auto rayStart = viewer->getGlobalPosition();
-		auto rayEnd = rayStart + iris::Vec3(0, -1000, 0);
-		QList<iris::PickingResult> results;
-		scene->rayCast(rayStart, rayEnd, results, 0, true);
-
-		// closest point
-		iris::Vec3 closestPoint = rayEnd;
-		float closestDist = 1000;
-		if (results.size() > 0) {
-			// find closest one
-			for (const auto result : results) {
-				auto dist = result.hitPoint.distanceToPoint(closestPoint);
-				if (dist < closestDist)
-				{
-					closestDist = dist;
-					closestPoint = result.hitPoint;
-				}
-			}
-
-			// todo: should limit snapping distance?
-			if (closestDist < 1000) {
-				viewer->setLocalPos(closestPoint + iris::Vec3(0, 5.75f * 0.5f, 0));
-			}
-			scene->getPhysicsEnvironment()->removeCharacterControllerFromWorld(viewer->getGUID());
-			scene->getPhysicsEnvironment()->addCharacterControllerToWorldUsingNode(viewer);
-
-			// set rot to viewer's default transform
-			camera->setLocalTransform(viewer->getGlobalTransform());
-
-		}
-		else {
-			// set rot to viewer's default transform
-			camera->setLocalTransform(viewer->getGlobalTransform());
-		}
-        
-    }
-
     // capture cam transform
     camPos = camera->getLocalPos();
     camRot = camera->getLocalRot();
@@ -89,22 +38,12 @@ void PlayerMouseController::start()
 
 void PlayerMouseController::end()
 {
-    //clearViewer();
-	if (!!viewer)
-		viewer->show();
-
 	if (shouldRestoreCameraTransform) {
 		// restore cam transform
 		camera->setLocalPos(camPos);
 		camera->setLocalRot(camRot);
 	}
 	camera->update(0);
-}
-
-void PlayerMouseController::clearViewer()
-{
-    viewer->show();
-    viewer.clear();
 }
 
 void PlayerMouseController::setRestoreCameraTransform(bool shouldRestore)
@@ -290,16 +229,7 @@ void PlayerMouseController::setViewport(const iris::Viewport &viewport)
 
 void PlayerMouseController::updateCameraTransform()
 {
-    if (!!viewer && _isPlaying) {
-		camera->setLocalPos(viewer->getGlobalPosition());
-		auto viewMat = viewer->getGlobalTransform().normalMatrix();
-		iris::Quat rot = iris::Quat::fromRotationMatrix(viewMat);
-		camera->setLocalRot(rot * iris::Quat::fromEulerAngles(pitch, yaw, 0));
-		//camera->setLocalRot(iris::Quat::fromEulerAngles(pitch,yaw,0));
-	}
-	else {
-		camera->setLocalRot(iris::Quat::fromEulerAngles(pitch, yaw, 0));
-	}
+	camera->setLocalRot(iris::Quat::fromEulerAngles(pitch, yaw, 0));
     camera->update(0);
 }
 
@@ -325,7 +255,6 @@ void PlayerMouseController::setCamera(iris::CameraNodePtr cam)
 void PlayerMouseController::setScene(iris::ScenePtr scene)
 {
 	this->scene = scene;
-	this->setViewer(scene->getActiveVrViewer());
 }
 
 void PlayerMouseController::update(float dt)
@@ -340,65 +269,29 @@ void PlayerMouseController::update(float dt)
 	auto x = iris::Vec3::crossProduct(forwardVector, upVector).normalized();
 	auto z = iris::Vec3::crossProduct(upVector, x).normalized();
 
-	if (!viewer) {
-		auto camPos = camera->getLocalPos();
-		// left
-		if (KeyboardState::isKeyDown(Qt::Key_Left))
-			camPos -= x * linearSpeed;
+	// Arrow-key fly, in play mode. The other half of this branch drove the
+	// removed viewer node's character controller (AVATAR_LOCOMOTION_SPEC
+	// Stage 0); piloted movement comes back as its own component in Stage 2.
+	auto camPos = camera->getLocalPos();
+	// left
+	if (KeyboardState::isKeyDown(Qt::Key_Left))
+		camPos -= x * linearSpeed;
 
-		// right
-		if (KeyboardState::isKeyDown(Qt::Key_Right))
-			camPos += x * linearSpeed;
+	// right
+	if (KeyboardState::isKeyDown(Qt::Key_Right))
+		camPos += x * linearSpeed;
 
-		// up
-		if (KeyboardState::isKeyDown(Qt::Key_Up))
-			camPos += z * linearSpeed;
+	// up
+	if (KeyboardState::isKeyDown(Qt::Key_Up))
+		camPos += z * linearSpeed;
 
-		// down
-		if (KeyboardState::isKeyDown(Qt::Key_Down))
-			camPos -= z * linearSpeed;
+	// down
+	if (KeyboardState::isKeyDown(Qt::Key_Down))
+		camPos -= z * linearSpeed;
 
-		camera->setLocalPos(camPos);
+	camera->setLocalPos(camPos);
 
-		updateCameraTransform();
-	}
-	else {
-
-		float dirX = 0;
-		float dirY = 0;
-		if (KeyboardState::isKeyDown(Qt::Key_Left))
-			dirX -= linearSpeed;
-
-		// right
-		if (KeyboardState::isKeyDown(Qt::Key_Right))
-			dirX += linearSpeed;
-
-		// up
-		if (KeyboardState::isKeyDown(Qt::Key_Up))
-			dirY -= linearSpeed;
-
-		// down
-		if (KeyboardState::isKeyDown(Qt::Key_Down))
-			dirY += linearSpeed;
-
-
-		// lock rot to yaw so user is always right side up
-		auto yawRot = iris::Quat::fromEulerAngles(0, yaw, 0);
-		viewer->setLocalRot(yawRot);
-
-		// keyboard movement
-		const iris::Vec3 upVector(0, 1, 0);
-		//not giving proper rotation when not in debug mode
-		//apparently i need to normalize the head rotation quaternion
-		auto rot = yawRot;
-		rot.normalize();
-		auto forwardVector = rot.rotatedVector(iris::Vec3(0, 0, -1));
-		auto x = iris::Vec3::crossProduct(forwardVector, upVector).normalized();
-		auto z = iris::Vec3::crossProduct(upVector, x).normalized();
-
-		auto newDir = rot.rotatedVector(iris::Vec3(dirX, 0, dirY)) * 10;
-		scene->getPhysicsEnvironment()->setDirection(iris::Vec2(newDir.x(), newDir.z()));
-    }
+	updateCameraTransform();
 
     if (!!pickedNode && pickedNode->isPhysicsBody) {
         scene->getPhysicsEnvironment()->updatePickingConstraint(iris::PickingHandleType::MouseButton, iris::PhysicsHelper::btVector3FromVec3(calculateMouseRay(QPointF(mouseX, mouseY)) * 1024),
@@ -440,8 +333,8 @@ void PlayerMouseController::doGodMode(float dt)
 
 void PlayerMouseController::postUpdate(float dt)
 {
-	if (!!viewer) {
-		updateCameraTransform();
-		//camera->setLocalTransform(viewer->getGlobalTransform());
-	}
+	// Nothing to do: this only ever re-pushed the removed viewer node's
+	// transform onto the camera (AVATAR_LOCOMOTION_SPEC Stage 0). update()
+	// already calls updateCameraTransform for the free-fly path.
+	Q_UNUSED(dt);
 }

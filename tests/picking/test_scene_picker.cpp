@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
     decal->setLocalPos(iris::Vec3(0, 0, 2.5f));      // between camera and cube
     hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
     CHECK(ScenePicker::nearest(hits).node == decal, "decal sphere on the ray is nearest");
-    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, true, true, false);
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, true, false);
     CHECK(ScenePicker::nearest(hits).node == front, "decals can be excluded");
     doc->getRootNode()->removeChild(decal);
     CHECK(doc->decals.isEmpty(), "removing the node clears Scene::decals");
@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
     hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition());
     CHECK(ScenePicker::nearest(hits).node == shot, "camera sphere on the ray is nearest");
     CHECK(ScenePicker::nearest(hits).triangleIndex == -1, "camera hits carry no triangle index");
-    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, true, true, true, true, false);
+    hits = ScenePicker::pickAll(doc, a, b, cam->getGlobalPosition(), false, true, true, true, false);
     CHECK(ScenePicker::nearest(hits).node == front, "cameras can be excluded");
     // ...and the camera the ray was CAST FROM is never a hit, or piloting one
     // (phase 3) would select it on every click.

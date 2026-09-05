@@ -95,6 +95,27 @@ inline int versionOf(const QJsonObject &projectObj)
     return v > 0 ? v : 1;
 }
 
+/// A node `type` string that older blobs can carry but that this build no
+/// longer has a class for.
+///
+/// READER CONTRACT: skip the node — return null, log the name, and do not
+/// attach it or anything under it. NOT the same as an UNKNOWN type: an
+/// unrecognised string still reads as an Empty (the v1-tolerance the format has
+/// always had), because it may well be a type a newer build writes and this one
+/// should preserve the placeholder for. A RETIRED type is different — we know
+/// exactly what it was and we know the machinery behind it is gone.
+///
+/// The only entry is `viewer` (iris::ViewerNode, the 2016 VR-era first-person
+/// stand-in). It was removed with its btKinematicCharacterController wrapper in
+/// AVATAR_LOCOMOTION_SPEC Stage 0; none of the six shipped samples contains
+/// one, and the app ships as a NEW app with no user-data migration — so an old
+/// developer project carrying one has to open, minus that node, rather than
+/// crash or resurrect a type with no behaviour behind it.
+inline bool isRetiredNodeType(const QString &type)
+{
+    return type == QLatin1String("viewer");
+}
+
 } // namespace sceneformat
 
 /// A SUBTREE, plus where in the document it belongs.

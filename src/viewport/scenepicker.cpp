@@ -10,7 +10,6 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
-#include "irisgl/document/scenegraph/viewernode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/core/geometry/trimesh.h"
@@ -66,7 +65,7 @@ void ScenePicker::pickMeshes(iris::ScenePtr scene, const iris::Vec3 &segStart, c
 
 QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
                                       const iris::Vec3 &cameraPos, bool forcePickable,
-                                      bool includeLights, bool includeViewers,
+                                      bool includeLights,
                                       bool includeDecals, bool refreshTransforms,
                                       bool includeCameras)
 {
@@ -126,17 +125,6 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
             if (iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, centre,
                                                               sphereRadius, t, hitPoint)) {
                 ScenePick p; p.node = camera.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
-                p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
-                hits.append(p);
-            }
-        }
-    }
-    if (includeViewers) {
-        for (auto &viewer : scene->viewers) {
-            if (viewer->isPickable() &&
-                iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, viewer->getGlobalPosition(),
-                                                              sphereRadius, t, hitPoint)) {
-                ScenePick p; p.node = viewer.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
                 p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
                 hits.append(p);
             }

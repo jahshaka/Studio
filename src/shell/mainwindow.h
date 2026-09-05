@@ -404,7 +404,6 @@ public slots:
     void addGear();
     void addEmpty();
     void addCamera();
-    void addViewer();
     void addMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3());
     void addPrimitiveObject(const QString &guid);
 	void addMaterialMesh(const QString &path = "", bool ignore = false, iris::Vec3 position = iris::Vec3(), const QString &guid = QString(), const QString &name = QString());

@@ -19,6 +19,10 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/physics/physicsproperties.h"
+#include "irisgl/document/physics/environment.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/core/geometry/trimesh.h"
+#include "irisgl/core/viewport.h"
 #include "jahshaka/engine/Engine.h"
 #include "player/engineplayerscene.h"
 #include "player/playback.h"
@@ -56,6 +60,232 @@ static Image render(EnginePlayerScene &player, Engine &engine, View *view, int f
     Image img;
     view->readPixels(img);
     return img;
+}
+
+
+// ---------------------------------------------------------------------------
+// MIGRATED from the deleted `player.lifecycle` suite (AVATAR_LOCOMOTION_SPEC
+// Stage 0). That suite had five cases; three were about the ViewerNode /
+// CharacterController machinery Stage 0 removes and died with it. These two are
+// NOT — they guard two separately verified defects that have nothing to do with
+// viewers — so they moved here, to the other suite that links PlayBack and the
+// physics Environment, rather than being thrown away with the file.
+// ---------------------------------------------------------------------------
+
+static iris::MeshNodePtr lifecycleBody(const iris::Vec3 &pos, float mass)
+{
+    auto node = iris::MeshNode::create();
+    node->setName("body");
+    node->setLocalPos(pos);
+    node->setLocalScale(iris::Vec3(2, 2, 2));
+    node->setLocalRot(iris::Quat::fromEulerAngles(0, 30, 0));
+    node->isPhysicsBody = true;
+    node->physicsProperty.type = iris::PhysicsType::RigidBody;
+    // A sphere needs no mesh data, so this case stays free of asset loading.
+    node->physicsProperty.shape = iris::PhysicsCollisionShape::Sphere;
+    node->physicsProperty.isStatic = false;
+    node->physicsProperty.objectMass = mass;
+    return node;
+}
+
+/// A mesh node carrying real triangle data, so the mesh-backed collision shapes
+/// (ConvexHull / TriangleMesh / Compound) can be built without loading an asset.
+static iris::MeshNodePtr lifecycleMeshBody(iris::PhysicsCollisionShape shape, int triangles = 64)
+{
+    auto mesh = iris::Mesh::create();
+    mesh->triMesh = new iris::TriMesh();
+    for (int i = 0; i < triangles; ++i) {
+        const float t = float(i);
+        mesh->triMesh->addTriangle(iris::Vec3(t, 0, 0), iris::Vec3(0, t, 0), iris::Vec3(0, 0, t));
+    }
+
+    auto node = iris::MeshNode::create();
+    node->setName("meshbody");
+    node->setMesh(mesh);
+    node->setLocalPos(iris::Vec3(0, 5, 0));
+    node->isPhysicsBody = true;
+    node->physicsProperty.type = iris::PhysicsType::RigidBody;
+    node->physicsProperty.shape = shape;
+    node->physicsProperty.isStatic = false;
+    node->physicsProperty.objectMass = 1.0f;
+    return node;
+}
+
+static bool lifecycleSameTransform(const iris::SceneNodePtr &node, const iris::Vec3 &pos,
+                                   const iris::Quat &rot, const iris::Vec3 &scale)
+{
+    return (node->getLocalPos() - pos).length() < 1e-4f &&
+           (node->getLocalRot() - rot).length() < 1e-4f &&
+           (node->getLocalScale() - scale).length() < 1e-4f;
+}
+
+// ------------------------------------------------- deep audit 2026-09, F3 --
+// Every collision shape, every compound child and every btTriangleMesh built
+// for a rigid body used to leak on each play/stop cycle: storeCollisionShape()
+// had ZERO call sites, so destroyPhysicsWorld's "delete collision shapes" loop
+// iterated an array nothing ever filled. The Environment owns them now, and
+// the counts are the proof: they rise with the bodies and fall to zero with
+// the world, cycle after cycle, without accumulating.
+static void testCollisionShapeOwnership()
+{
+    std::printf("\n-- collision shapes are owned by the world, and die with it --\n");
+    auto scene = iris::Scene::create();
+    auto root = scene->getRootNode();
+
+    root->addChild(lifecycleBody(iris::Vec3(0, 10, 0), 1.0f));                     // sphere: 1 shape
+    root->addChild(lifecycleMeshBody(iris::PhysicsCollisionShape::ConvexHull));   // 1 shape
+    root->addChild(lifecycleMeshBody(iris::PhysicsCollisionShape::TriangleMesh)); // 1 shape + 1 interface
+
+    // A compound whose children are mesh nodes: 1 compound + 3 children, and
+    // one triangle-mesh interface behind every one of them.
+    auto compound = lifecycleMeshBody(iris::PhysicsCollisionShape::Compound);
+    for (int i = 0; i < 2; ++i) {
+        auto part = lifecycleMeshBody(iris::PhysicsCollisionShape::TriangleMesh);
+        // Parts of a compound are geometry, not bodies of their own — the
+        // recursion in initializePhysicsWorldFromScene would give each its own
+        // rigid body otherwise.
+        part->isPhysicsBody = false;
+        compound->addChild(part);
+    }
+    root->addChild(compound);
+
+    auto env = scene->getPhysicsEnvironment();
+    env->initializePhysicsWorldFromScene(root);
+
+    const int shapes = env->ownedShapeCount();
+    const int interfaces = env->ownedMeshInterfaceCount();
+    std::printf("    after build: %d shapes, %d mesh interfaces, %d bodies\n",
+                shapes, interfaces, env->hashBodies.size());
+    CHECK(env->hashBodies.size() == 4, "four rigid bodies were built");
+    CHECK(shapes >= 4, "the world owns at least one collision shape per body");
+    CHECK(shapes > 4, "...and the compound's child shapes on top of that");
+    CHECK(interfaces >= 3, "the triangle-mesh interfaces are owned too");
+
+    // ---- the cycle. Rebuilding must not accumulate. ----
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        env->restartPhysics();
+        CHECK(env->ownedShapeCount() == 0 && env->ownedMeshInterfaceCount() == 0,
+              cycle == 0 ? "restartPhysics released every shape and interface" : "...and again");
+        env->initializePhysicsWorldFromScene(root);
+        if (env->ownedShapeCount() != shapes || env->ownedMeshInterfaceCount() != interfaces) {
+            std::printf("FAIL: cycle %d rebuilt %d shapes / %d interfaces (expected %d / %d)\n",
+                        cycle, env->ownedShapeCount(), env->ownedMeshInterfaceCount(),
+                        shapes, interfaces);
+            ++failures;
+        }
+    }
+    CHECK(env->ownedShapeCount() == shapes && env->ownedMeshInterfaceCount() == interfaces,
+          "five play/stop cycles rebuild the SAME number of shapes — no unbounded growth");
+
+    // Stepping the rebuilt world proves the shapes the bodies point at are the
+    // live ones (a recycled address from a freed shape would fault here).
+    env->simulatePhysics();
+    for (int i = 0; i < 30; ++i) env->stepSimulation(1.0f / 60.0f);
+    CHECK(true, "the rebuilt world steps cleanly");
+
+    env->destroyPhysicsWorld();
+    CHECK(env->ownedShapeCount() == 0, "destroyPhysicsWorld leaves no shape behind");
+    CHECK(env->ownedMeshInterfaceCount() == 0, "...and no mesh interface either");
+    env->createPhysicsWorld();   // the Environment destructor expects a world
+}
+
+// --------------------------------------------------------------------------
+// pause only cleared the viewport's flag, so resuming re-entered playScene():
+// the animation clock reset, the mid-play pose was saved over the pre-play
+// originals, and a second copy of every rigid body was added to the world.
+static void testPlayPauseResumeStop()
+{
+    std::printf("\n-- play / pause / resume / stop --\n");
+    auto scene = iris::Scene::create();
+    auto root = scene->getRootNode();
+
+    const iris::Vec3 startPos(0, 10, 0);
+    auto body = lifecycleBody(startPos, 1.0f);
+    root->addChild(body);
+    const iris::Quat startRot = body->getLocalRot();
+    const iris::Vec3 startScale = body->getLocalScale();
+
+    auto camera = iris::CameraNode::create();
+    camera->setLocalPos(iris::Vec3(0, 2, 10));
+    scene->setCamera(camera);
+    scene->update(0);
+
+    PlayBack playback;
+    playback.init();
+    playback.setScene(scene);
+
+    iris::Viewport vp;
+    vp.width = 64;
+    vp.height = 64;
+    vp.pixelRatioScale = 1.0f;
+    auto step = [&](int frames) { for (int i = 0; i < frames; ++i) playback.update(vp, 1.0f / 60.0f); };
+    auto objects = [&] { return scene->getPhysicsEnvironment()->getWorld()->getNumCollisionObjects(); };
+
+    CHECK(!playback.isScenePlaying() && !playback.isScenePaused(), "starts stopped");
+
+    playback.playScene();
+    CHECK(playback.isScenePlaying(), "playScene() plays");
+    CHECK(!playback.isScenePaused(), "and is not paused");
+    const int playingObjects = objects();
+    const int playingBodies = scene->getPhysicsEnvironment()->hashBodies.size();
+    CHECK(playingBodies == 1, "one rigid body in the played world");
+
+    step(30);
+    const iris::Vec3 fell = body->getLocalPos();
+    CHECK(fell.y() < startPos.y() - 0.05f, "the body falls while playing");
+
+    // ---- pause: frozen, and nothing added ----
+    playback.pause();
+    CHECK(playback.isScenePaused(), "pause() pauses");
+    CHECK(playback.isScenePlaying(), "a paused scene is still IN play mode");
+    const iris::Vec3 atPause = body->getLocalPos();
+    step(30);
+    CHECK((body->getLocalPos() - atPause).length() < 1e-6f, "a paused scene is frozen");
+    CHECK(objects() == playingObjects, "pausing adds nothing to the physics world");
+
+    // ---- resume: through the same entry point the viewport uses ----
+    playback.playScene();
+    CHECK(!playback.isScenePaused(), "playScene() on a paused scene resumes it");
+    CHECK(playback.isScenePlaying(), "still playing");
+    CHECK(objects() == playingObjects, "resume does NOT re-initialize the physics world");
+    CHECK(scene->getPhysicsEnvironment()->hashBodies.size() == playingBodies,
+          "resume adds no duplicate rigid body");
+    step(30);
+    CHECK(body->getLocalPos().y() < atPause.y() - 0.05f, "resume continues the simulation");
+
+    // ---- three more cycles: still no duplicates ----
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        playback.pause();
+        playback.playScene();
+        step(5);
+    }
+    CHECK(objects() == playingObjects, "three pause/resume cycles duplicate nothing in the world");
+    CHECK(scene->getPhysicsEnvironment()->hashBodies.size() == playingBodies,
+          "three pause/resume cycles duplicate no rigid body");
+
+    // A stray second playScene() while already playing must be a no-op too.
+    const iris::Vec3 beforeRePlay = body->getLocalPos();
+    playback.playScene();
+    CHECK(objects() == playingObjects, "playScene() while already playing changes nothing");
+    CHECK((body->getLocalPos() - beforeRePlay).length() < 1e-6f, "and does not move the document");
+
+    // ---- stop: the ORIGINAL pre-play transform comes back ----
+    playback.stopScene();
+    CHECK(!playback.isScenePlaying() && !playback.isScenePaused(), "stopScene() stops");
+    std::printf("    body y: start %.3f, at pause %.3f, restored %.3f\n",
+                double(startPos.y()), double(atPause.y()), double(body->getLocalPos().y()));
+    CHECK(lifecycleSameTransform(body, startPos, startRot, startScale),
+          "stop restores the ORIGINAL pre-play transform (not the pose at the last resume)");
+
+    // ---- and the whole cycle runs again from a clean world ----
+    playback.playScene();
+    CHECK(objects() == playingObjects, "replaying builds the same world, not a bigger one");
+    step(10);
+    playback.pause();
+    playback.stopScene();
+    CHECK(lifecycleSameTransform(body, startPos, startRot, startScale),
+          "stop from PAUSED also restores the original");
+    CHECK(!playback.isScenePaused(), "and clears the paused state");
 }
 
 int main(int argc, char **argv)
@@ -184,6 +414,12 @@ int main(int argc, char **argv)
         player.release();
         CHECK(view->scene() == nullptr, "release() detaches the player scene from the view");
     }
+
+    // The two cases inherited from the deleted player.lifecycle suite. Document
+    // + Bullet only, but they run here because a document node is an engine
+    // node (SCENEGRAPH_SPEC D2) and this is where PlayBack is already linked.
+    testCollisionShapeOwnership();
+    testPlayPauseResumeStop();
 
     engine->destroyView(view);
     engine->destroyView(editorView);

@@ -31,7 +31,6 @@ NodeKind classifyNode(const iris::SceneNodePtr &node)
     case iris::SceneNodeType::Mesh:           return NodeKind::Mesh;
     case iris::SceneNodeType::Light:          return NodeKind::Light;
     case iris::SceneNodeType::ParticleSystem: return NodeKind::ParticleSystem;
-    case iris::SceneNodeType::Viewer:         return NodeKind::Viewer;
     case iris::SceneNodeType::Decal:          return NodeKind::Decal;
     // CAMERAS_SPEC phase 1: the CameraNode constructor sets its own type now,
     // so cameras classify off the enum like every other kind. The dynamic_cast
@@ -117,7 +116,6 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
             if (ps->texture) addTextureSource(ps->texture->source);
             break;
         }
-        case NodeKind::Viewer:         ++inv.viewers; break;
         case NodeKind::Decal: {
             ++inv.decals;
             // A decal's image is a real texture dependency: packaging and the
