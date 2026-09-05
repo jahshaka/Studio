@@ -193,6 +193,11 @@ public:
     virtual void startPlayingScene() = 0;
     virtual void pausePlayingScene() = 0;
     virtual void stopPlayingScene() = 0;
+    /// The viewport's OWN play flag — the one its event handlers branch on.
+    /// This is the truth; PlaybackService's copy delegates here (the two flags
+    /// desynced once, 2026-09-05, and every editor click went to the player
+    /// controller). Verb surface: editor.playing().
+    virtual bool isPlaying() const = 0;
     virtual void startPhysicsSimulation() = 0;
     virtual void restartPhysicsSimulation() = 0;
     virtual void stopPhysicsSimulation() = 0;

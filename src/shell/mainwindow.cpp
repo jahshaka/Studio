@@ -1462,6 +1462,11 @@ void MainWindow::closeProject()
 
 	if (currentSpace == WindowSpaces::DESKTOP) {
 		deselectViewports();
+		// Closing FROM the desktop skips switchSpace (already there), which is
+		// the only caller of updateTopMenuStates — so Player/Editor stayed
+		// white and enabled with no scene open (owner, 2026-09-05). Re-style
+		// explicitly: the scene-open flag just went false.
+		updateTopMenuStates(WindowSpaces::DESKTOP);
 		return;
 	}
 

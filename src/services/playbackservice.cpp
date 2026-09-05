@@ -13,10 +13,22 @@ For more information see the LICENSE file
 
 #include "viewport/ieditorviewport.h"
 
+bool PlaybackService::isPlaying() const
+{
+    return viewport ? viewport->isPlaying() : playing;
+}
+
 void PlaybackService::enterEditMode()
 {
     playing = false;
     mode = SceneMode::EditMode;
+    // The viewport's own flag is the one its event handlers branch on: without
+    // this, entering the editor after play-in-place left mPlaying true and the
+    // viewport routed EVERY mouse and key event to the player controller —
+    // which has no selection path — forever ("can't click anything in a loaded
+    // scene", 2026-09-05). Every other transition in this class already drives
+    // the viewport; this was the one that didn't.
+    if (viewport) viewport->stopPlayingScene();
     emit editModeEntered();
 }
 
@@ -24,6 +36,9 @@ void PlaybackService::enterPlayMode()
 {
     playing = true;
     mode = SceneMode::PlayMode;
+    // Deliberately NOT symmetric: no startPlayingScene() here. switchSpace's
+    // PLAYER case starts the player page's own playback; starting play-in-place
+    // on the EDITOR viewport as well would have two drivers on one document.
     emit playModeEntered();
 }
 

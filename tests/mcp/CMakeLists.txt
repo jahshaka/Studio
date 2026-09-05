@@ -33,9 +33,18 @@ target_compile_definitions(test_mcp_e2e PRIVATE
 
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-mcp)
 file(MAKE_DIRECTORY ${_home}/run)
+# A FRESH home per run. The home used to persist across ctest invocations and
+# accumulate ~15 assets per run; after enough gates the browse_assets row this
+# suite asserts on fell below the tool's 12-row default and the suite went
+# red on nothing (found by the 2026-09-05 gate). The setup fixture wipes it.
+add_test(NAME mcp.e2e.fresh_home
+         COMMAND sh -c "rm -rf '${_home}' && mkdir -p '${_home}/run'")
+set_tests_properties(mcp.e2e.fresh_home PROPERTIES
+    FIXTURES_SETUP mcpFreshHome LABELS "mcp")
 add_test(NAME mcp.e2e COMMAND test_mcp_e2e
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(mcp.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home}"
+    FIXTURES_REQUIRED mcpFreshHome
     LABELS "mcp"
     TIMEOUT 240)

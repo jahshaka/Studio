@@ -16,10 +16,21 @@ function assert(cond, msg) {
 
 var zips = "@JAH_SAMPLES_DIR@/";
 
-function roundTrip(name) {
+// Import-if-absent + open by guid: the scratch home persists across ctest
+// runs, so an unconditional import piles up same-named projects and an open
+// BY NAME then refuses as ambiguous (found by the 2026-09-05 gate — the
+// suite passed exactly once per clean home).
+function ensureProject(name) {
+    var existing = project.list().filter(function (p) { return p.name === name; });
+    if (existing.length > 0) return existing[0].guid;
     var r = project.importArchive(zips + name + ".zip");
     assert(r && r.guid, name + " archive imported");
-    assert(project.open(name), name + " opened");
+    return r.guid;
+}
+
+function roundTrip(name) {
+    var guid = ensureProject(name);
+    assert(project.open(guid), name + " opened");
     var editorNodes = scene.nodes().length;
     assert(editorNodes > 1, name + ": document has " + editorNodes + " nodes");
 
@@ -35,6 +46,10 @@ function roundTrip(name) {
     app.space("editor");
     editor.frame(10);
     assert(scene.nodes().length === editorNodes, name + ": editor space, document intact");
+    // The stuck-play regression net (2026-09-05): after play + a space round
+    // trip the viewport's own play flag must be OFF, or every editor click is
+    // routed to the player controller and selection is dead.
+    assert(editor.playing() === false, name + ": viewport is really out of play after the round trip");
 
     // and once more each way — the re-take path in both directions.
     app.space("player");

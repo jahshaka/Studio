@@ -47,7 +47,10 @@ public:
     void enterEditMode();
     void enterPlayMode();
 
-    bool isPlaying() const { return playing; }
+    /// Delegates to the viewport's own flag — the one the event handlers
+    /// branch on. The service's `playing` member survives only for the
+    /// viewport-less window between construction and setViewport.
+    bool isPlaying() const;
     void setPlaying(bool p) { playing = p; }
     SceneMode sceneMode() const { return mode; }
     void setSceneMode(SceneMode m) { mode = m; }

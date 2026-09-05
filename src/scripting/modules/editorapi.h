@@ -58,6 +58,7 @@ public:
     Q_INVOKABLE bool redo();
     Q_INVOKABLE bool play();
     Q_INVOKABLE bool stop();
+    Q_INVOKABLE bool playing();
     Q_INVOKABLE bool simulate(bool enabled = true);
     Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
     Q_INVOKABLE QVariantMap warmUpShaders();

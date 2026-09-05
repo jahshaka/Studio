@@ -88,6 +88,7 @@ public:
     void startPlayingScene() override {}
     void pausePlayingScene() override {}
     void stopPlayingScene() override {}
+    bool isPlaying() const override { return false; }   // play is a no-op here
     void startPhysicsSimulation() override {}
     void restartPhysicsSimulation() override {}
     void stopPhysicsSimulation() override {}

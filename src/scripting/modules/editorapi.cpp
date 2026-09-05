@@ -180,7 +180,14 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Enters play mode (PlayBack drives physics, animations and controllers in place).",
           Needs::Document },
         { "stop", "editor.stop() -> bool",
-          "Leaves play mode back to editing.",
+          "Leaves play mode back to editing. Always forces a real stop — safe to call when "
+          "already stopped.",
+          Needs::Document },
+        { "playing", "editor.playing() -> bool",
+          "Whether the editor viewport is running play-in-place RIGHT NOW — read from the "
+          "viewport's own flag, the one its input routing branches on. The regression net "
+          "for the 2026-09-05 stuck-play defect (input routed to the player controller "
+          "after a space round trip).",
           Needs::Document },
         { "simulate", "editor.simulate(enabled=true) -> bool",
           "Starts/stops the in-place physics simulation without entering play mode.",
@@ -719,10 +726,19 @@ bool EditorApi::stop()
 {
     if (!host.services || !host.services->playback || !host.viewport)
         return fail("editor: not available in this session");
-    if (!host.services->playback->isPlaying()) return true;
+    // No isPlaying() early-out: a script must ALWAYS be able to force a real
+    // stop. The old guard read a flag that could desync from the viewport's
+    // own (2026-09-05), making the stuck state unrecoverable from here — and
+    // both calls below are no-ops when already stopped anyway.
     host.services->playback->enterEditMode();
     host.viewport->stopPlayingScene();
     return true;
+}
+
+bool EditorApi::playing()
+{
+    if (!host.services || !host.services->playback) return false;
+    return host.services->playback->isPlaying();
 }
 
 bool EditorApi::simulate(bool enabled)

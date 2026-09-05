@@ -99,7 +99,7 @@ public:
     void startPlayingScene() override;            // play in place: PlayBack drives the document
     void pausePlayingScene() override;
     void stopPlayingScene() override;
-    bool isPlaying() const { return mPlaying; }
+    bool isPlaying() const override { return mPlaying; }
     void startPhysicsSimulation() override;    // simulate in place: steps the document's
     void restartPhysicsSimulation() override;  // physics world without entering play mode
     void stopPhysicsSimulation() override;
