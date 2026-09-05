@@ -93,10 +93,23 @@ void handler(int sig, siginfo_t *info, void *) {
 }  // namespace
 
 void installCrashHandler() {
+    // An alternate stack so a MAIN-THREAD fault with no stack headroom (deep
+    // recursion) can still write its log. sigaltstack is per-thread: engine
+    // worker threads do not get one here (SA_ONSTACK is then inert and
+    // harmless), so a worker fault with a drowned stack can still produce a
+    // 0-byte log — seen once on 2026-09-05; the debugger is the fallback there.
+    // Fixed size: glibc's SIGSTKSZ is sysconf-based (not a constant) since 2.34.
+    static char altStack[64 * 1024];
+    stack_t ss;
+    ss.ss_sp = altStack;
+    ss.ss_size = sizeof(altStack);
+    ss.ss_flags = 0;
+    sigaltstack(&ss, nullptr);
+
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = handler;
-    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
     for (int sig : { SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL })
         sigaction(sig, &sa, &gPrev[sig]);

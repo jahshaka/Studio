@@ -1,0 +1,50 @@
+// scripting.e2e.space_switch — the player↔editor round trip on the two scenes
+// that exposed the graph-ownership defect (2026-09-05 smoke test): Particles
+// (a particle-system definition read positions off nodes another mirror's bind
+// had just destroyed — worker-thread fault) and Showroom (the planar pass, same
+// family). The player page owns a SECOND engine scene whose mirror pushes the
+// SAME document as the editor's, so every space switch migrates the document's
+// graph between managers; this suite is the coverage the 155/155 gate lacked —
+// no other test switches spaces on a particles or planar scene.
+//
+// Engine + window path — NOT headless (app.space needs the real pages).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var zips = "@JAH_SAMPLES_DIR@/";
+
+function roundTrip(name) {
+    var r = project.importArchive(zips + name + ".zip");
+    assert(r && r.guid, name + " archive imported");
+    assert(project.open(name), name + " opened");
+    var editorNodes = scene.nodes().length;
+    assert(editorNodes > 1, name + ": document has " + editorNodes + " nodes");
+
+    // player: present frames, actually play (particles/planar update), present.
+    app.space("player");
+    editor.frame(20);
+    editor.play();
+    editor.frame(40);
+    console.log("ok: " + name + " played in the player space");
+
+    // THE crash line: back to the editor while the player's engine objects
+    // still exist. The previous owner must evacuate before the graph migrates.
+    app.space("editor");
+    editor.frame(10);
+    assert(scene.nodes().length === editorNodes, name + ": editor space, document intact");
+
+    // and once more each way — the re-take path in both directions.
+    app.space("player");
+    editor.frame(10);
+    app.space("editor");
+    editor.frame(10);
+    assert(scene.nodes().length === editorNodes, name + ": second round trip intact");
+    console.log("ok: " + name + " survived two player-editor round trips");
+}
+
+roundTrip("Particles");
+roundTrip("Showroom");
+console.log("space_switch: all assertions passed");

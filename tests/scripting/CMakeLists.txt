@@ -523,6 +523,23 @@ jah_lsan_lane(scripting.engine)
 # shader_thumbnail, avatar, skinning, physics, particles, …) render pixels and
 # keep their display requirement, honestly and permanently.
 
+
+# The player-editor space round trip on the two scenes that exposed the
+# graph-ownership defect (2026-09-05): particle systems and the planar pass
+# reading nodes another mirror's bind had destroyed. Engine + window, real
+# pages -> needs a display.
+set(JAH_SAMPLES_DIR ${CMAKE_BINARY_DIR}/bin/scenes)
+configure_file(scripts/e2e_space_switch.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space_switch)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.space_switch
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_space_switch.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.space_switch PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 # The verb surface's SCENE_STATIC contract + scene.raycast — the 2026-09-05
 # scripting-audit regression net (F1/F2/F4/F7/F12; F3's undo half waits for
 # undo v1.5). Document verbs only -> --headless.
