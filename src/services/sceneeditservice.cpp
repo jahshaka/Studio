@@ -38,6 +38,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
+
+namespace { void regenerateGuids(const iris::SceneNodePtr &root); }
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -368,6 +370,14 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     // retired (sceneformat::isRetiredNodeType) — the other three readSceneNode
     // call sites already checked; this one dereferenced it.
     if (!node) return;
+
+    // FRESH IDENTITY per instantiation. The blob stores the guids it was
+    // authored with, so instantiating the same asset twice produced two live
+    // subtrees SHARING every guid — Scene::nodes (guid-keyed), findNodeByGuid,
+    // sockets and undo all break on the second copy (found by the Stage 3
+    // lane: avatar.spawn of a second character collided with the first).
+    // Same remap the paste path (insertFragment) uses.
+    regenerateGuids(node);
 
     // rename animation sources to relative paths
     QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
