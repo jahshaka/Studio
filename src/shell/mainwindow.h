@@ -344,6 +344,12 @@ public:
         return lightNode;
     }
 
+    /// Rewrites the four read-only Gameplay rows in the Shortcut Registry from
+    /// the live InputMap (AVATAR_LOCOMOTION_SPEC §8.2). Called at setup and
+    /// again whenever `input.bind` changes a binding — public for that one
+    /// caller; everything else goes through the registry's own API.
+    void refreshGameplayShortcutRows();
+
 private:
 
     // menus

@@ -111,6 +111,11 @@ public:
 
 	void keyPressEvent(QKeyEvent *event);
 	void keyReleaseEvent(QKeyEvent *event);
+
+	/// Drops the gameplay input state (held keys, the Jump latch, the mouse
+	/// look accumulator). Called on play start, on stop and on focus loss —
+	/// idempotent, so a redundant stop costs nothing (§8.3 rule 1).
+	void clearInputState();
 };
 
 #endif //PLAYBACK_H

@@ -9,6 +9,7 @@
 #include "player/playback.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/physics/environment.h"
+#include "irisgl/document/input/inputmap.h"
 #include "viewport/translationgizmo.h"
 #include "viewport/rotationgizmo.h"
 #include "viewport/scalegizmo.h"
@@ -718,8 +719,11 @@ void EngineSceneViewport::keyReleaseEvent(QKeyEvent *e)
 void EngineSceneViewport::focusOutEvent(QFocusEvent *e)
 {
     // Keys released while another widget has focus never reach us — drop the
-    // held set so fly keys cannot stick down.
+    // held set so fly keys cannot stick down. The same argument applies to the
+    // gameplay input state (AVATAR_LOCOMOTION_SPEC §8.2): a W released over
+    // another widget would walk the possessed avatar forever.
     if (mCamController) mCamController->clearKeys();
+    iris::InputSystem::instance().clearKeys();
     mVertexSnapHeld = false;
     EngineViewWidget::focusOutEvent(e);
 }
@@ -772,20 +776,38 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
 
 bool EngineSceneViewport::event(QEvent *e)
 {
-    // The Unreal rule: while the right mouse button is held in free-camera
-    // mode, W/A/S/D/Q/E belong to the fly camera — accept the ShortcutOverride
-    // so the window-wide W/E/R gizmo shortcuts don't fire and the raw key
-    // events reach keyPressEvent instead (EDITOR_SHORTCUTS_SPEC §2).
-    if (e->type() == QEvent::ShortcutOverride && mCamController == mFreeCam &&
-        mFreeCam && mFreeCam->isFlying()) {
+    if (e->type() == QEvent::ShortcutOverride) {
         const int key = static_cast<QKeyEvent *>(e)->key();
-        switch (key) {
-        case Qt::Key_W: case Qt::Key_A: case Qt::Key_S: case Qt::Key_D:
-        case Qt::Key_Q: case Qt::Key_E: case Qt::Key_Shift:
+        // THE PLAY-MODE KEY PATH (AVATAR_LOCOMOTION_SPEC §8.3). While the scene
+        // is playing, every key the InputMap binds belongs to the game, not to
+        // the editor: `tool.translate` is on W and `tool.cycle` is on Space,
+        // both Qt::WindowShortcut, so without this W silently switched the
+        // gizmo mode instead of walking and Space cycled it instead of jumping.
+        // Keyed on mPlaying — the SAME member keyPressEvent branches on and the
+        // one IEditorViewport::isPlaying()/editor.playing() reports, so the
+        // override and the routing can never disagree.
+        //
+        // Only while playing: when the scene is stopped the gizmo shortcuts are
+        // untouched, which is the whole contract the shortcuts.registry gate
+        // asserts.
+        if (iris::gameplayClaimsKey(mPlaying, key)) {
             e->accept();
             return true;
-        default:
-            break;
+        }
+        // The Unreal rule: while the right mouse button is held in free-camera
+        // mode, W/A/S/D/Q/E belong to the fly camera — accept the
+        // ShortcutOverride so the window-wide W/E/R gizmo shortcuts don't fire
+        // and the raw key events reach keyPressEvent instead
+        // (EDITOR_SHORTCUTS_SPEC §2).
+        if (mCamController == mFreeCam && mFreeCam && mFreeCam->isFlying()) {
+            switch (key) {
+            case Qt::Key_W: case Qt::Key_A: case Qt::Key_S: case Qt::Key_D:
+            case Qt::Key_Q: case Qt::Key_E: case Qt::Key_Shift:
+                e->accept();
+                return true;
+            default:
+                break;
+            }
         }
     }
     return EngineViewWidget::event(e);

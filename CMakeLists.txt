@@ -196,6 +196,7 @@ set(SRCS
     src/scripting/modules/particlesapi.cpp
     src/scripting/modules/animapi.cpp
     src/scripting/modules/cameraapi.cpp
+    src/scripting/modules/inputapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp

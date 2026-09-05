@@ -90,6 +90,12 @@ public:
     Q_INVOKABLE QVariantMap snapshot(const QString &path, int width = 256, int height = 256,
                                      const QVariantList &probes = QVariantList());
 
+    // ---- locomotion input (AVATAR_LOCOMOTION_SPEC §8.2, Stage 1) ----------
+    // The SCRIPTED input producer. It writes the same iris::InputState the
+    // keyboard producer writes, which is the whole reason every locomotion
+    // test in this program can run headless with no synthetic key events.
+    Q_INVOKABLE QVariantMap input(const QVariantMap &params = QVariantMap());
+
 private:
     QVariantMap previewState() const;
     void notifyChanged();

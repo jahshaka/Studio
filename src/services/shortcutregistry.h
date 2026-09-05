@@ -66,6 +66,13 @@ public:
     void addFixed(const QString &id, const QString &label, const QString &category,
                   const QString &displayText);
 
+    /// Re-labels an existing fixed row. The gameplay rows
+    /// (AVATAR_LOCOMOTION_SPEC §8.2) mirror the InputMap's live bindings, and
+    /// `input.bind` can change those at runtime — without this the Preferences
+    /// table would show the defaults forever. Refused (false) for an unknown id
+    /// or a remappable row (whose text is its QKeySequence, not a string).
+    bool setFixedText(const QString &id, const QString &displayText);
+
     /// Rebinds `id` (empty = unbind). Refuses (false) an unknown/fixed id or a
     /// sequence already used by another entry — `conflictId` then names it.
     bool setBinding(const QString &id, const QKeySequence &sequence,

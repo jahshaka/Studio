@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "modules/avatar/avatarsockets.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/input/inputmap.h"
 #include "scripting/modules/moduleshared.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
@@ -100,6 +101,17 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "silently wrong on half the files — author it with node.addSocket. This is the one "
           "avatar verb that touches the editor scene rather than the module's own preview. "
           "Undoable.",
+          Needs::Document },
+        { "input", "avatar.input({move:{x,y}, look:{x,y}, jump, sprint}) -> {move, look, jump, sprint}",
+          "Writes the gameplay input state directly — the SCRIPTED producer, and the reason "
+          "locomotion can be tested with no window and no synthetic key events. Every field is "
+          "optional and an absent field is left alone. `move` is raw intent (camera-relative "
+          "rotation is possession's job) and is clamped to the unit disc. `jump:true` SETS the "
+          "one-shot latch and never clears it — clearing is the movement step's job, so a script "
+          "cannot silently swallow a pending jump; `jump:false` is therefore not a clear, it is a "
+          "no-op. `sprint` is a plain held bool. Returns the resulting state, the same shape "
+          "input.state() reports. A real key event afterwards recomputes move/sprint from the "
+          "held keys and overwrites what this wrote — last producer wins.",
           Needs::Document },
     };
 }
@@ -456,4 +468,39 @@ QVariantList AvatarApi::addSockets(const QString &nodeId)
                                 { "existed", mapping.existed } });
     }
     return out;
+}
+
+// The scripted input producer (AVATAR_LOCOMOTION_SPEC §8.2). It lives on the
+// `avatar` module rather than on `input` because it drives a character, not a
+// binding: `input.*` is the MAP (what a key means), this is the STATE (what
+// the player is doing right now). Stage 3's possession decides which avatar
+// the state reaches; until then it is the state itself that is observable.
+QVariantMap AvatarApi::input(const QVariantMap &params)
+{
+    auto &sys = iris::InputSystem::instance();
+    if (params.contains(QStringLiteral("move"))) {
+        const QVariantMap m = params.value(QStringLiteral("move")).toMap();
+        sys.setMove(float(m.value(QStringLiteral("x")).toDouble()),
+                    float(m.value(QStringLiteral("y")).toDouble()));
+    }
+    if (params.contains(QStringLiteral("look"))) {
+        const QVariantMap m = params.value(QStringLiteral("look")).toMap();
+        sys.setLook(float(m.value(QStringLiteral("x")).toDouble()),
+                    float(m.value(QStringLiteral("y")).toDouble()));
+    }
+    if (params.contains(QStringLiteral("sprint")))
+        sys.setSprint(params.value(QStringLiteral("sprint")).toBool());
+    // A one-shot LATCH: true arms it, false is a NO-OP. Clearing belongs to the
+    // consumer (the movement component's step), so a script that passes
+    // {jump:false} on the frame after {jump:true} cannot swallow the jump.
+    if (params.value(QStringLiteral("jump")).toBool())
+        sys.requestJump();
+
+    const iris::InputState &s = sys.state();
+    return QVariantMap{
+        { "move",   QVariantMap{ { "x", double(s.move.x) }, { "y", double(s.move.y) } } },
+        { "look",   QVariantMap{ { "x", double(s.look.x) }, { "y", double(s.look.y) } } },
+        { "jump",   s.jump },
+        { "sprint", s.sprint },
+    };
 }

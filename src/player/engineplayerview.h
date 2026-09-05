@@ -54,6 +54,10 @@ protected:
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
     void focusOutEvent(QFocusEvent *) override;
+    /// Withholds the bound gameplay keys from the window shortcuts while the
+    /// player page is playing (AVATAR_LOCOMOTION_SPEC §8.3). NEW in Stage 1 —
+    /// this class had no event() override before.
+    bool event(QEvent *) override;
 
 private:
     /// The editor viewport's camera, when there is one: the play camera is the
