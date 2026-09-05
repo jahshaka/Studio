@@ -26,7 +26,9 @@ For more information see the LICENSE file
 #include <QMessageBox>
 #include <QProcess>
 
+#include "services/framepacing.h"
 #include "services/shortcutregistry.h"
+#include "viewport/enginerenderdriver.h"
 #include "bridge/enginehost.h"
 
 #include "data/database/database.h"
@@ -434,6 +436,50 @@ void WorldSettingsWidget::configureViewport()
 	        [this](double percent) {
 		settings->setValue("camera/pip_size", percent / 100.0);
 		if (editorViewport) editorViewport->setPipSize(percent / 100.0);
+	});
+
+	// ---- frame pacing (fps audit F1) -------------------------------------
+	// THE SAME CAPABILITY app.pacing() drives: both call
+	// EngineRenderDriver::setPacingMode and both write the one persisted key
+	// (services/framepacing.h) — the page does not reimplement anything
+	// (SCRIPTING_SPEC §2.3).
+	auto pacingLabel = new QLabel("Frame Pacing :");
+	setSizePolicyForWidgets(pacingLabel);
+	auto pacingCombo = new QComboBox;
+	for (const QString &name : framepacing::modeNames()) {
+		bool ok = false;
+		const framepacing::Mode m = framepacing::modeFromName(name, &ok);
+		if (ok) pacingCombo->addItem(framepacing::modeLabel(m), name);
+	}
+	pacingCombo->setToolTip(
+		"How fast the viewport is allowed to redraw. 'Display refresh rate' paces the loop "
+		"from the screen it is on and keeps vertical sync on — tear-free, and no longer "
+		"capped at 62 fps on a faster panel. 'Unlimited' removes the wait and turns vsync "
+		"off: frames go out as fast as they are made, with tearing. Changing this rebuilds "
+		"the viewport's swapchain, so expect one dropped frame.");
+	StyleSheet::setStyle({ pacingLabel, pacingCombo });
+	layout->addWidget(pacingLabel, 6, 0);
+	layout->addWidget(pacingCombo, 6, 2);
+	{
+		bool ok = false;
+		const framepacing::Mode stored = framepacing::modeFromName(
+			settings->getValue(framepacing::settingsKey(), QString()).toString(), &ok);
+		// The live driver is the truth when there is one — a script may have
+		// changed the mode since the value was written.
+		const framepacing::Mode current =
+			EngineHost::instance().driver() ? EngineHost::instance().driver()->pacingMode()
+			                                : (ok ? stored : framepacing::Mode::Display);
+		const int idx = pacingCombo->findData(framepacing::modeName(current));
+		if (idx >= 0) pacingCombo->setCurrentIndex(idx);
+	}
+	connect(pacingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+	        [this, pacingCombo](int idx) {
+		bool ok = false;
+		const framepacing::Mode m =
+			framepacing::modeFromName(pacingCombo->itemData(idx).toString(), &ok);
+		if (!ok) return;
+		settings->setValue(framepacing::settingsKey(), framepacing::modeName(m));
+		if (EngineRenderDriver *d = EngineHost::instance().driver()) d->setPacingMode(m);
 	});
 
 	layout->setColumnStretch(1, 50);

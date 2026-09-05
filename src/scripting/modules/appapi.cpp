@@ -22,6 +22,8 @@ For more information see the LICENSE file
 #include "services/mainthreadwatchdog.h"
 #include "bridge/enginehost.h"
 #include "viewport/enginerenderdriver.h"
+#include "services/framepacing.h"
+#include "data/settingsmanager.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -125,13 +127,27 @@ QVector<VerbInfo> AppApi::verbs() const
           "is the engine's live answer to the same question the loop asks each tick. Note the scripted "
           "stepping verb editor.frame(n) bypasses the driver entirely, so it moves none of these. "
           "`workMs` is THE HONEST PERFORMANCE NUMBER on this architecture and the reason to prefer it "
-          "over any FPS reading: the loop is a fixed 16 ms timer, so a healthy editor reports ~62 fps "
-          "whatever the scene costs, and only starts dropping once the budget is already blown. workMs "
+          "over any FPS reading: the loop is a TIMER (paced from the display since the perf wave — see "
+          "app.pacing), so a healthy editor reports whatever that timer allows whatever the scene "
+          "costs, and only starts dropping once the budget is already blown. workMs "
           "is how long the frame's work actually took, averaged over the last ~60 rendered ticks; "
           "`worstMs` is the worst single tick since startup and `slowFrames` counts the ticks that "
           "crossed the 100 ms hitch threshold (the ones that also log `[open-profile] slow frame`). "
           "Read app.renderStats() beside this for the renderer's own view of the same frames.",
           Needs::Document },
+        { "pacing", "app.pacing(mode?) -> {mode, modes, intervalMs, refreshHz, vsync, running}",
+          "How fast the ONE render loop is allowed to tick, and whether the frame waits for the "
+          "display (fps audit F1; services/framepacing.h). 'display' (the default) derives the "
+          "timer interval from the refresh rate of the screen the window is on and keeps vsync on, "
+          "so the ceiling is the panel's rate instead of the 62.5 fps a hardcoded 16 ms timer used "
+          "to impose; 'unlimited' runs the loop with no wait and vsync OFF, which tears and is the "
+          "only honest way to measure what the renderer can actually do. Passing a mode sets it "
+          "(and rebuilds each on-screen window's swapchain, so it is a deliberate action, not "
+          "something to do per frame); passing nothing just reports. 'intervalMs' is what the timer "
+          "is really running at — 0 in unlimited — and 'refreshHz' is what the host last told the "
+          "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
+          "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
+          Needs::Window },
         { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
@@ -139,7 +155,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "The timings come from Ogre's own FrameStats, which our render loop feeds: `fps`/`frameMs` are "
           "the rolling average, `lastMs` the latest (noisy) sample, `p95Ms`/`p99Ms` the percentiles, "
           "`bestMs`/`worstMs` the extremes. READ THE HONESTY NOTE ON app.frameStats: `fps` here measures "
-          "the loop's 16 ms timer, not the renderer's headroom — frameStats().workMs is the number that "
+          "the loop's timer (and vsync), not the renderer's headroom — frameStats().workMs is the number that "
           "diagnoses anything. The geometry counters are the FRAME's totals, not one view's (Ogre "
           "snapshots them per camera at the end of that camera's pass, so with two on-screen views the "
           "second includes the first). They are LAZY: recording costs integer adds per draw call and is "
@@ -360,6 +376,37 @@ QVariantMap AppApi::frameStats()
     out.insert("slowFrames", QVariant::fromValue(s.slowFrames));
     auto engine = EngineHost::instance().engine();
     out.insert("enabledViews", engine ? engine->hasEnabledViews() : false);
+    return out;
+}
+
+QVariantMap AppApi::pacing(const QString &mode)
+{
+    // No engine guard, like frameStats: "there is no loop" is a legitimate
+    // answer, and the persisted preference is readable either way.
+    QVariantMap out;
+    EngineRenderDriver *driver = EngineHost::instance().driver();
+    if (!driver) { fail("app.pacing: no render loop in this session"); return out; }
+    if (!mode.isEmpty()) {
+        bool ok = false;
+        const framepacing::Mode m = framepacing::modeFromName(mode, &ok);
+        if (!ok) {
+            fail(QStringLiteral("app.pacing: unknown mode '%1' (expected %2)")
+                     .arg(mode, framepacing::modeNames().join(QStringLiteral(", "))));
+            return out;
+        }
+        driver->setPacingMode(m);
+        // Persisted here rather than in the driver: the driver is a render
+        // loop, and the settings file belongs to the shell. Preferences writes
+        // the same key (services/framepacing.h::settingsKey).
+        if (SettingsManager *s = SettingsManager::getDefaultManager())
+            s->setValue(framepacing::settingsKey(), framepacing::modeName(m));
+    }
+    out.insert("mode", framepacing::modeName(driver->pacingMode()));
+    out.insert("modes", framepacing::modeNames());
+    out.insert("intervalMs", driver->intervalMs());
+    out.insert("refreshHz", driver->refreshHz());
+    out.insert("vsync", framepacing::vsyncFor(driver->pacingMode()));
+    out.insert("running", driver->isRunning());
     return out;
 }
 

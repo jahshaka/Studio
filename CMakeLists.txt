@@ -237,6 +237,7 @@ set(SRCS
     src/services/import/importbatchrunner.cpp
     src/services/projectassets.cpp
     src/services/engineerrorpump.cpp
+    src/services/framepacing.cpp
     src/services/loadtimeline.cpp
     src/services/meshbakestore.cpp
     src/services/mainthreadheartbeat.cpp
