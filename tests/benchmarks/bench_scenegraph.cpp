@@ -173,17 +173,14 @@ static constexpr double kRcvMax = 0.25;   // 1.4826*MAD / median  (quiet-box wor
 static constexpr double kCvMaxReparent  = 1.00;
 static constexpr double kRcvMaxReparent = 0.35;
 
-// THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance).
-// Baseline comparison is implemented below and runs today in report-only mode.
-// TODO(v1 lane, scene-graph core swap): flip this to `true` in the same commit
-// that lands the handle layer, and the gate starts enforcing §6 verbatim:
+// THE V1 HOOK (SPECS/SCENEGRAPH_SPEC.md §6 acceptance) — ARMED by the v1 lane
+// that landed the handle layer, exactly as this comment promised. The gate now
+// enforces §6 verbatim:
 //   * at scales >= kImproveFromScale, every a.* and b.* metric must IMPROVE
 //     (median lower than the baseline's) — §6 "(a) and (b) improve at 10k+";
 //   * at scale 1000, no metric may regress by more than kMaxRegressPct — §6
 //     "nothing regresses >10% at 1k".
-// Nothing else needs writing: compareToBaseline() already computes and prints
-// both verdicts, it simply does not add to `failures` while this is false.
-static constexpr bool   kBaselineComparisonArmed = false;
+static constexpr bool   kBaselineComparisonArmed = true;
 static constexpr int    kImproveFromScale = 10000;
 static constexpr double kMaxRegressPct    = 10.0;
 
@@ -692,6 +689,7 @@ int main(int argc, char **argv)
         const Colour away = img.at(img.width / 2, img.height / 2);
         std::printf("    moved +50x:     centre %3.0f %3.0f %3.0f\n", away.r * 255, away.g * 255, away.b * 255);
         CHECK(away.b > 0.8f && away.r < 0.15f, "the edit reached the rendered frame (background)");
+        mirror.setSource(nullptr);   // unbind before the engine scene dies
         view->setScene(nullptr);
         engine->destroyScene(es);
     }
@@ -817,6 +815,11 @@ int main(int argc, char **argv)
             addMetric("c.reparent_500", n, st["c.reparent_500"], true);
         }
 
+        // UNBIND before the engine scene dies. Since the scene-graph swap the
+        // document's nodes ARE this scene manager's nodes (SCENEGRAPH_SPEC D2),
+        // so destroying it first would leave the document holding dangling
+        // handles. Outside every measured region.
+        mirror.setSource(nullptr);
         view->setScene(nullptr);
         engine->destroyScene(es);
     }
@@ -851,6 +854,7 @@ int main(int argc, char **argv)
             addMetric("d.anim_rig_200_sync", 200, st["d.anim_rig_200_sync"], true);
             addMetric("d.anim_rig_200", 200, st["d.anim_rig_200"], true);
 
+            mirror.setSource(nullptr);   // see the note in the scale loop
             view->setScene(nullptr);
             engine->destroyScene(es);
         } else { std::printf("FAIL: engine scene for the rig\n"); ++failures; }
