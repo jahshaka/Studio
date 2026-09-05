@@ -142,6 +142,9 @@ public:
     iris::LightNodePtr createLight(QJsonObject &nodeObj);
     /// Decals (DECALS_SPEC): the stored guid resolves pin-first through the CAS.
     iris::DecalNodePtr createDecal(QJsonObject &nodeObj);
+    /// Scene-graph cameras (CAMERAS_SPEC §3). The project's `editor.camera`
+    /// block is a different thing entirely and is read by readEditorData.
+    iris::CameraNodePtr createCamera(QJsonObject &nodeObj);
 
     iris::ViewerNodePtr createViewer(QJsonObject &nodeObj);
 

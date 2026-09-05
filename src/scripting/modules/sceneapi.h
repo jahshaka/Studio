@@ -45,6 +45,10 @@ public:
     Q_INVOKABLE QString addImagePlane(const QString &textureGuid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addDecal(const QString &textureGuid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QString addParticles(const QString &preset = QString(), const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString addCamera(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantList cameras();
+    Q_INVOKABLE bool setActiveCamera(const QVariant &id = QVariant());
+    Q_INVOKABLE QVariant activeCamera();
 
 private:
     iris::ScenePtr sceneOrFail();

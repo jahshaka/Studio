@@ -511,6 +511,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->getRootNode()->addChild(childNode, false);
     }
 
+    // The active camera (CAMERAS_SPEC D6) is read AFTER the tree, because
+    // Scene::setActiveCamera validates the guid against the cameras the walk
+    // just registered. A guid that no longer resolves — a camera deleted by
+    // hand out of the file, or a scene from a build where the guid meant
+    // something else — falls back to the free viewer instead of arming play
+    // with a camera that does not exist.
+    scene->setActiveCamera(sceneObj["activeCamera"].toString());
+
     return scene;
 }
 
@@ -534,6 +542,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
     } else if (nodeType == "decal") {
         sceneNode = createDecal(nodeObj).staticCast<iris::SceneNode>();
+    } else if (nodeType == "camera") {
+        sceneNode = createCamera(nodeObj).staticCast<iris::SceneNode>();
     } else {
         sceneNode = iris::SceneNode::create();
     }
@@ -888,6 +898,46 @@ iris::DecalNodePtr SceneReader::createDecal(QJsonObject& nodeObj)
     decalNode->resolvedEmissivePath = resolveAssetPath(decalNode->emissiveGuid);
 
     return decalNode;
+}
+
+iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
+{
+    auto cameraNode = iris::CameraNode::create();
+
+    // The projection block. Defaults are the CameraNode constructor's own, so a
+    // file missing a key loads the same camera the Add menu makes.
+    cameraNode->angle       = (float) nodeObj["angle"].toDouble(45.0);
+    cameraNode->nearClip    = (float) nodeObj["nearClip"].toDouble(0.1);
+    cameraNode->farClip     = (float) nodeObj["farClip"].toDouble(500.0);
+    cameraNode->aspectRatio = (float) nodeObj["aspectRatio"].toDouble(1.0);
+    cameraNode->setOrthagonalZoom((float) nodeObj["orthogonalSize"].toDouble(10.0));
+    cameraNode->setProjection(nodeObj["projectionMode"].toString("perspective") == "orthogonal"
+                                  ? iris::CameraProjection::Orthogonal
+                                  : iris::CameraProjection::Perspective);
+
+    // CAMERAS_SPEC §2. The sensor is set through the raw fields, not
+    // setSensorSize: the angle above is the authored truth and must not be
+    // re-derived from a focal length the file does not carry.
+    const float sw = (float) nodeObj["sensorWidth"].toDouble(36.0);
+    const float sh = (float) nodeObj["sensorHeight"].toDouble(24.0);
+    if (sw > 0.0f) cameraNode->sensorWidth = sw;
+    if (sh > 0.0f) cameraNode->sensorHeight = sh;
+    cameraNode->authorMode = nodeObj["authorMode"].toString("degrees") == QLatin1String("mm")
+                                 ? iris::CameraAuthorMode::Millimeters
+                                 : iris::CameraAuthorMode::Degrees;
+    cameraNode->constrainAspect = nodeObj["constrainAspect"].toBool(false);
+    cameraNode->dofEnabled      = nodeObj["dofEnabled"].toBool(false);
+    const QString focusMode = nodeObj["focusMode"].toString("manual");
+    cameraNode->focusMode = focusMode == QLatin1String("track") ? iris::CameraFocusMode::Track
+                          : focusMode == QLatin1String("off")   ? iris::CameraFocusMode::Off
+                                                                : iris::CameraFocusMode::Manual;
+    cameraNode->focusDistance = std::max(0.0f, (float) nodeObj["focusDistance"].toDouble(10.0));
+    cameraNode->focusTarget   = nodeObj["focusTarget"].toString();
+    cameraNode->fStop         = std::max(0.0f, (float) nodeObj["fStop"].toDouble(2.8));
+    cameraNode->outputHeight  = qBound(1, nodeObj["outputHeight"].toInt(1080), 16384);
+    cameraNode->bodyVisible   = nodeObj["bodyVisible"].toBool(true);
+
+    return cameraNode;
 }
 
 iris::ViewerNodePtr SceneReader::createViewer(QJsonObject& nodeObj)

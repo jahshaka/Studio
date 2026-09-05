@@ -189,6 +189,7 @@ set(SRCS
     src/scripting/modules/assetsapi.cpp
     src/scripting/modules/particlesapi.cpp
     src/scripting/modules/animapi.cpp
+    src/scripting/modules/cameraapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
@@ -419,6 +420,7 @@ set(HEADERS
     src/scripting/modules/worldapi.h
     src/scripting/modules/particlesapi.h
     src/scripting/modules/animapi.h
+    src/scripting/modules/cameraapi.h
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h

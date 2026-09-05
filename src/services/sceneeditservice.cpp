@@ -223,6 +223,22 @@ iris::ViewerNodePtr SceneEditService::addViewer(bool ignorePlacement)
     return node;
 }
 
+iris::CameraNodePtr SceneEditService::addCamera(bool ignorePlacement)
+{
+    if (!scene()) return iris::CameraNodePtr();
+
+    auto node = iris::CameraNode::create();
+    node->setName("Camera");
+    // A scene camera is a document object the user places, points and keys, so
+    // it takes the normal spawn-in-front-of-the-editor-camera placement. It
+    // does NOT become the active camera on creation: what play renders through
+    // is an explicit choice (scene.setActiveCamera), never a side effect of an
+    // add — a second camera silently stealing the shot is the failure the
+    // viewer-node add has and cameras will not.
+    addNodeToScene(node, ignorePlacement);
+    return node;
+}
+
 iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePreset preset)
 {
     if (!scene()) return iris::ParticleSystemNodePtr();

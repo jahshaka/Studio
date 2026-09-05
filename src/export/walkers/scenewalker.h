@@ -18,9 +18,10 @@ For more information see the LICENSE file
 // exporter (glTF today; .jaf, USD later) drives ONE traversal with ONE set of
 // document quirks encoded once:
 //
-//  - classifyNode: CameraNode NEVER sets SceneNodeType::Camera (nothing in
-//    irisgl assigns it — the enum reads Empty on cameras forever), so cameras
-//    are classified by dynamic_cast, never by the enum.
+//  - classifyNode: every kind, cameras included, comes off the type enum.
+//    (Until CAMERAS_SPEC phase 1 the CameraNode constructor did not set
+//    SceneNodeType::Camera, so cameras read as Empty and had to be recognised
+//    by dynamic_cast. The constructor sets it now; the cast is gone.)
 //  - shouldSkipForExport: SceneNode::exportable is the legacy "include in
 //    model-file export" flag; Light/Camera/Viewer constructors hard-code it
 //    false, so honoring it for every type would delete all lights and cameras
