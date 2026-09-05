@@ -451,3 +451,84 @@ assert(editor.setOverlays({ grid: true, lightWires: true, selectionWireframe: fa
     "overlays restored");
 
 console.log("editor_controls: overlays verified");
+
+// ---- gameplay input (AVATAR_LOCOMOTION_SPEC §8.2/§10, Stage 1) ----
+// The API-first half: every verb the input layer ships, driven in the REAL app
+// before any UI reads it. The behaviour of the layer itself is the input.actions
+// suite's; what this proves is that the verbs are registered, reach the same
+// singleton the keyboard producer writes, and refuse what they must.
+//
+// CAUTION, and the reason this section ends the way it does: input.bind
+// PERSISTS, and in a QT_DEBUG build jahsettings.ini lives at applicationDirPath
+// — SHARED with interactive runs. Everything below is restored explicitly.
+// Defensive FIRST, not only last: this suite runs against a jahsettings.ini it
+// shares with interactive runs, and a previous run that died mid-section would
+// otherwise leave rebound rows that make every "defaults" assertion below lie.
+assert(input.resetBindings(), "start from the shipped bindings");
+var actions = input.bindings();
+assert(actions.length === 4, "input.bindings lists exactly four actions");
+var byName = {};
+for (var i = 0; i < actions.length; ++i) byName[actions[i].action] = actions[i];
+assert(byName.Move && byName.Look && byName.Jump && byName.Sprint,
+    "the four actions are Move, Look, Jump, Sprint");
+assert(byName.Move.type === "axis2d" && byName.Jump.type === "button",
+    "Move is an axis, Jump is a button");
+assert(byName.Jump.latched === true && byName.Sprint.latched === false,
+    "Jump is the latched action, Sprint is held");
+assert(byName.Look.mouse === true && byName.Look.keys.length === 0,
+    "Look is the mouse, with no keys by default");
+assert(byName.Move.keys.join(",") === "W,S,A,D", "Move defaults to W/S/A/D");
+assert(byName.Jump.keys.join(",") === "Space", "Jump defaults to Space (the owner's ask)");
+assert(byName.Sprint.keys.join(",") === "Shift", "Sprint defaults to Shift");
+assert(byName.Move.display === "W / S / A / D", "the Preferences display text is generated");
+
+var st = input.state();
+assert(st.move.x === 0 && st.move.y === 0 && st.jump === false && st.sprint === false,
+    "input.state starts at rest");
+
+// avatar.input — the scripted producer, and the whole reason locomotion is
+// testable headless.
+var driven = avatar.input({ move: { x: 0, y: 1 }, sprint: true });
+assert(driven.move.y === 1 && driven.sprint === true, "avatar.input writes move + sprint");
+assert(input.state().move.y === 1, "…and input.state sees the same singleton");
+var clamped = avatar.input({ move: { x: 3, y: 4 } });
+assert(near(clamped.move.x, 0.6) && near(clamped.move.y, 0.8),
+    "a script's move is clamped to the unit disc (3,4 -> 0.6,0.8)");
+assert(avatar.input({ jump: true }).jump === true, "avatar.input latches a jump");
+assert(input.state().jump === true, "the latch is pending until a consumer takes it");
+assert(avatar.input({ jump: false }).jump === true,
+    "jump:false is a NO-OP — a script cannot swallow a pending jump");
+avatar.input({ move: { x: 0, y: 0 }, sprint: false });
+assert(input.state().move.y === 0 && input.state().sprint === false, "the state zeroes again");
+
+// Rebinding: conflict-reported, atomic, persisted.
+var conflict = "";
+try { input.bind("Sprint", "W"); } catch (e) { conflict = "" + e; }
+assert(conflict.indexOf("Move") >= 0 && conflict.indexOf("W") >= 0,
+    "input.bind names the action AND the key it collides with");
+assert(input.bindings()[3].keys.join(",") === "Shift", "the refused bind changed nothing");
+var badAction = false;
+try { input.bind("Crouch", "C"); } catch (e) { badAction = ("" + e).indexOf("closed") >= 0; }
+assert(badAction, "an action outside the closed set is refused, and the message says so");
+var badKey = false;
+try { input.bind("Jump", "Nonsense"); } catch (e) { badKey = true; }
+assert(badKey, "a key name that names no key is refused");
+var axisAsString = false;
+try { input.bind("Move", "W"); } catch (e) { axisAsString = true; }
+assert(axisAsString, "an axis action refuses a single-key binding and says what it wants");
+
+assert(input.bind("Jump", "Return"), "Jump rebound to Return");
+assert(input.bindings()[2].keys.join(",") === "Return", "the rebind reads back");
+assert(input.bind("Move", { up: "Up", down: "Down", left: "Left", right: "Right" }),
+    "Move rebound to the arrow keys");
+assert(input.bindings()[0].keys.join(",") === "Up,Down,Left,Right", "the axis rebind reads back");
+assert(input.bindings()[0].display === "Up / Down / Left / Right",
+    "the Preferences row follows the rebind");
+
+// Restore — and the reset must leave NO override rows behind, so the shared
+// settings file this ran against is byte-for-byte what it was.
+assert(input.resetBindings(), "input.resetBindings()");
+assert(input.bindings()[0].keys.join(",") === "W,S,A,D", "Move is back to W/S/A/D");
+assert(input.bindings()[2].keys.join(",") === "Space", "Jump is back to Space");
+
+console.log("editor_controls: gameplay input verbs verified");

@@ -14,6 +14,7 @@
 #include "viewport/keyboardstate.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/input/inputmap.h"
 
 using namespace jahshaka::engine;
 
@@ -145,6 +146,26 @@ void EnginePlayerView::keyReleaseEvent(QKeyEvent *e)
 void EnginePlayerView::focusOutEvent(QFocusEvent *)
 {
     KeyboardState::reset();
+    // A gameplay key released while another widget had focus never reaches us.
+    iris::InputSystem::instance().clearKeys();
+}
+
+// THE PLAY-MODE KEY PATH, player-page half (AVATAR_LOCOMOTION_SPEC §8.3).
+// ADDED, not amended: this class had no event() override at all, so every
+// window-scoped shortcut in MainWindow's registry ate its key before
+// keyPressEvent ran — Space in particular, which is `tool.cycle` and is
+// page-routed rather than editor-guarded. The editor viewport's override is
+// the model; the predicate here is isScenePlaying() (the player page's own
+// play flag), so a stopped player page leaves the shortcuts exactly as they
+// are today.
+bool EnginePlayerView::event(QEvent *e)
+{
+    if (e->type() == QEvent::ShortcutOverride && mScene &&
+        iris::gameplayClaimsKey(mScene->isPlaying(), static_cast<QKeyEvent *>(e)->key())) {
+        e->accept();
+        return true;
+    }
+    return EngineViewWidget::event(e);
 }
 
 EnginePlayerView *createEnginePlayerView(const std::shared_ptr<Engine> &engine,

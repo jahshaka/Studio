@@ -13,6 +13,7 @@
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/physics/physicsproperties.h"
+#include "irisgl/document/input/inputmap.h"
 #include "player/playermousecontroller.h"
 #include "viewport/keyboardstate.h"
 
@@ -122,6 +123,11 @@ void PlayBack::mouseMoveEvent(QMouseEvent * evt)
 	QPointF localPos = evt->localPos();
 	QPointF dir = localPos - prevMousePos;
 
+	// The Look producer. Raw pixel delta, accumulated until a consumer drains
+	// it (consumeLook) — sensitivity and camera-relative meaning belong to
+	// possession (Stage 3), not to the producer.
+	iris::InputSystem::instance().mouseMoved(float(dir.x()), float(dir.y()));
+
     if (camController != nullptr) {
         camController->setMousePos(static_cast<int>(localPos.x()), static_cast<int>(localPos.y()));
 		camController->onMouseMove(-dir.x(), -dir.y());
@@ -157,6 +163,10 @@ void PlayBack::playScene()
 	if (_isPlaying) return;
 
 	_isPlaying = true;
+	// Start from a clean input state: a key already down when Play was pressed
+	// produced no press edge here, so counting it would walk the character
+	// from frame one with nothing the user can release to stop it.
+	clearInputState();
 	// The DOCUMENT's play flag (CAMERAS_SPEC D6). It is what
 	// SceneMirror::applyCamera reads to decide whether the scene's active
 	// camera takes the view, and PlayBack is the one place both play paths —
@@ -199,6 +209,10 @@ void PlayBack::stopScene()
 {
 	_isPlaying = false;
 	_isPaused = false;
+	// IDEMPOTENT by construction (§8.3 rule 1): clearKeys() on an already-clear
+	// state is a no-op, so `editor.stop(); editor.stop();` costs nothing and
+	// cannot fault. Everything below this line is guarded for the same reason.
+	clearInputState();
 	// A scene switch can arrive with play state still armed against the
 	// PREVIOUS project: closeProject tears the old scene down (cleanup()
 	// drops its root node) without routing through here, and the next
@@ -226,9 +240,21 @@ PlayerMouseController * PlayBack::getMouseController() const
 
 
 
+// The KEYBOARD PRODUCER (AVATAR_LOCOMOTION_SPEC §8.2/§8.3). This is the single
+// plug point both play paths pass through: the editor viewport forwards every
+// key here while mPlaying (enginesceneviewport.cpp), and EnginePlayerView
+// forwards unconditionally. Anything that needs a key in play mode taps in
+// HERE and nowhere else.
+//
+// Auto-repeat is dropped before the InputSystem sees it: an auto-repeat press
+// would re-latch Jump under a held key, and an auto-repeat RELEASE would clear
+// the held set mid-hold (the same rule EngineSceneViewport::keyPressEvent
+// already applies to the fly camera).
 void PlayBack::keyPressEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = true;
+	if (!event->isAutoRepeat())
+		iris::InputSystem::instance().keyPressed(event->key());
 	camController->onKeyPressed((Qt::Key)event->key());
 
 }
@@ -236,6 +262,13 @@ void PlayBack::keyPressEvent(QKeyEvent *event)
 void PlayBack::keyReleaseEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = false;
+	if (!event->isAutoRepeat())
+		iris::InputSystem::instance().keyReleased(event->key());
 	camController->onKeyReleased((Qt::Key)event->key());
 	//camController->keyReleaseEvent(event);
+}
+
+void PlayBack::clearInputState()
+{
+	iris::InputSystem::instance().clearKeys();
 }

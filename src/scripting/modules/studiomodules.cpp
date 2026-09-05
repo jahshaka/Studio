@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "scripting/modules/cameraapi.h"
 #include "scripting/modules/desktopapi.h"
 #include "scripting/modules/editorapi.h"
+#include "scripting/modules/inputapi.h"
 #include "scripting/modules/nodeapi.h"
 #include "scripting/modules/particlesapi.h"
 #include "scripting/modules/projectapi.h"
@@ -40,6 +41,10 @@ void registerStudioModules(ScriptEngine &engine)
     // Scene cameras (CAMERAS_SPEC §6). Appended, so the registry order every
     // generated doc and tool schema already has stays unchanged.
     engine.addModule(new CameraApi(host));
+    // Gameplay input (AVATAR_LOCOMOTION_SPEC §8.2). Appended for the same
+    // reason CameraApi was: the registry order every generated doc and tool
+    // schema already has stays unchanged.
+    engine.addModule(new InputApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

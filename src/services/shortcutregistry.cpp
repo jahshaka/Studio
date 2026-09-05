@@ -68,6 +68,16 @@ void ShortcutRegistry::addFixed(const QString &id, const QString &label, const Q
     mEntries.append(e);
 }
 
+bool ShortcutRegistry::setFixedText(const QString &id, const QString &displayText)
+{
+    const int idx = indexOf(id);
+    if (idx < 0 || mEntries[idx].fixedText.isEmpty() || displayText.isEmpty()) return false;
+    if (mEntries[idx].fixedText == displayText) return true;
+    mEntries[idx].fixedText = displayText;
+    emit bindingsChanged();
+    return true;
+}
+
 bool ShortcutRegistry::setBinding(const QString &id, const QKeySequence &sequence,
                                   QString *conflictId)
 {

@@ -138,6 +138,7 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/physics/environment.h"
+#include "irisgl/document/input/inputmap.h"
 #include "irisgl/thirdparty/bullet3/src/btBulletDynamicsCommon.h"
 
 #include "modules/materials/effectspage.h"
@@ -2945,6 +2946,30 @@ void MainWindow::setupShortcuts()
                     return;
                 this->switchSpace(previousSpace);
             });
+
+    // ---- gameplay (AVATAR_LOCOMOTION_SPEC §8.2) ----
+    // FIXED rows on purpose. These four are not QShortcuts and must never
+    // become any: they are HELD, combined and polled (W+A is a diagonal, Shift
+    // is a modifier held for seconds), they only exist while the scene is
+    // playing, and a QShortcut on W is exactly what stops W from reaching play
+    // mode today. The rebindable half lives in the InputMap — `input.bind`
+    // writes it and refreshGameplayShortcutRows() re-labels these rows.
+    iris::InputSystem::instance().setSettings(settings->settings);
+    reg.addFixed("gameplay.move",   "Move (play mode)",   "Gameplay", "W / S / A / D");
+    reg.addFixed("gameplay.look",   "Look (play mode)",   "Gameplay", "Mouse");
+    reg.addFixed("gameplay.jump",   "Jump (play mode)",   "Gameplay", "Space");
+    reg.addFixed("gameplay.sprint", "Sprint (play mode)", "Gameplay", "Shift");
+    refreshGameplayShortcutRows();
+}
+
+void MainWindow::refreshGameplayShortcutRows()
+{
+    if (!shortcutRegistry) return;
+    const iris::InputMap &map = iris::InputSystem::instance().map();
+    shortcutRegistry->setFixedText("gameplay.move",   map.displayText(iris::InputAction::Move));
+    shortcutRegistry->setFixedText("gameplay.look",   map.displayText(iris::InputAction::Look));
+    shortcutRegistry->setFixedText("gameplay.jump",   map.displayText(iris::InputAction::Jump));
+    shortcutRegistry->setFixedText("gameplay.sprint", map.displayText(iris::InputAction::Sprint));
 }
 
 // [ / ]: steps the ACTIVE gizmo's snap size through its step list — the
