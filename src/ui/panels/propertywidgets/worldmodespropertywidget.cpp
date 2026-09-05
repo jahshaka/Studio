@@ -13,6 +13,9 @@ For more information see the LICENSE file
 
 #include "irisgl/document/scenegraph/scene.h"
 
+#include "commands/worldmodecommand.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "services/worldmodes.h"
 #include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
@@ -20,6 +23,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 
 #include <QComboBox>
+#include <QPointer>
 
 namespace {
 /// "Epic" reads better than "epic" in a combo.
@@ -108,8 +112,9 @@ void WorldModesPropertyWidget::rebuild()
             connect(box, &CheckBoxWidget::valueChanged, this, [this, index](bool on) {
                 const auto &table = worldmodes::rows();
                 if (!scene || index >= table.size()) return;
-                worldmodes::setRowValue(scene, table[index].id, on ? 1 : 0);
-                applied();
+                const QString id = table[index].id;
+                runUndoable(tr("Set %1").arg(table[index].label),
+                            [this, id, on]() { worldmodes::setRowValue(scene, id, on ? 1 : 0); });
             });
             rowControls.append(box);
             continue;
@@ -144,8 +149,8 @@ void WorldModesPropertyWidget::rebuild()
         reset->setToolTip(QStringLiteral("Drops every pinned row (*) and re-applies the mode."));
         connect(reset, &CheckBoxWidget::valueChanged, this, [this](bool on) {
             if (!on || !scene) return;
-            worldmodes::clearOverrides(scene);
-            applied();
+            runUndoable(tr("Reset Pinned Quality Rows"),
+                        [this]() { worldmodes::clearOverrides(scene); });
         });
     }
 }
@@ -163,6 +168,24 @@ void WorldModesPropertyWidget::applied()
     emit worldSettingsChanged();
 }
 
+void WorldModesPropertyWidget::runUndoable(const QString &text,
+                                           const std::function<void()> &edit)
+{
+    if (!scene || !edit) return;
+    const auto before = WorldModeCommand::capture(scene);
+    edit();
+    applied();
+    if (services && services->undo) {
+        auto *cmd = new WorldModeCommand(text, scene, before);
+        // An undo has to repaint the panel it came from, exactly like the edit
+        // did — the rows ARE the state, so restoring the state without
+        // rebuilding them would leave the panel lying a second time.
+        QPointer<WorldModesPropertyWidget> self(this);
+        cmd->setRefresh([self]() { if (self) self->applied(); });
+        services->undo->push(cmd);
+    }
+}
+
 void WorldModesPropertyWidget::onModeChanged(int row)
 {
     if (!scene) return;
@@ -171,8 +194,8 @@ void WorldModesPropertyWidget::onModeChanged(int row)
     bool ok = false;
     const worldmodes::Mode m = worldmodes::modeFromName(names[row], &ok);
     if (!ok) return;
-    worldmodes::setMode(scene, m);
-    applied();
+    runUndoable(tr("World Mode: %1").arg(titled(names[row])),
+                [this, m]() { worldmodes::setMode(scene, m); });
 }
 
 void WorldModesPropertyWidget::onRowChanged(int)
@@ -189,6 +212,7 @@ void WorldModesPropertyWidget::onRowChanged(int)
     bool ok = false;
     const int value = box->currentData().toInt(&ok);
     if (!ok) return;
-    worldmodes::setRowValue(scene, table[index].id, value);
-    applied();
+    const QString id = table[index].id;
+    runUndoable(tr("Set %1").arg(table[index].label),
+                [this, id, value]() { worldmodes::setRowValue(scene, id, value); });
 }

@@ -20,6 +20,10 @@ For more information see the LICENSE file
 #include <QTreeWidget>
 #include <QLineEdit>
 #include <QStyledItemDelegate>
+#include <QStringList>
+#include <functional>
+
+#include "ui/panels/scenetreewidget.h"
 
 #include <qcombobox.h>
 #include "irisgl/irisglfwd.h"
@@ -130,15 +134,38 @@ public:
 	void selectNode(QString nodeId);
 
     /// Rebuilds the whole tree from the document. Public for the undo commands
-    /// (reparent) that change the document's hierarchy behind the widget's back.
+    /// (reparent, folder edits) that change the document behind the widget's back.
     void repopulateTree();
+
+    // ---- OUTLINER FOLDERS (SCENEGRAPH_SPEC §6b) ---------------------------
+    //
+    // A folder is a ROW, never a node: it has no guid, no transform and no
+    // place in the scene hierarchy, and the only thing that makes a row a
+    // folder is that it carries kFolderRole. Node rows carry a nodeId in
+    // Qt::UserRole exactly as they always did, so every existing walk keeps
+    // working — as long as it SKIPS rows that answer isFolderItem(), which is
+    // the one new rule in this file (a folder row's nodeId reads back as 0, and
+    // nodeList[0] is a null node pointer waiting to be dereferenced).
+    static constexpr int kFolderRole = Qt::UserRole + 10;
+    static bool isFolderItem(const QTreeWidgetItem *item);
+    static QString folderPathOf(const QTreeWidgetItem *item);
+
+    /// The nodes currently selected, in tree order, folder rows excluded.
+    /// Multi-select drives folder-ising and delete; the LAST selected row is
+    /// what drives the properties panel and the gizmo (§6b).
+    QList<iris::SceneNodePtr> selectedNodes() const;
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
 
 protected slots:
     void treeItemSelected(QTreeWidgetItem *item, int column);
+    void treeSelectionChanged();
     void sceneTreeCustomContextMenu(const QPoint &);
+
+    /// Toolbar folder button: a folder from the current multi-selection, or an
+    /// empty folder when nothing is selected. NEVER reparents (§6b LAW).
+    void newFolderFromSelection();
 
     void constraintsPicked(int constraintGuidToIndex, iris::PhysicsConstraintType type);
 
@@ -153,6 +180,33 @@ protected slots:
 	void detachFromParent();
 
 private:
+    // ---- folders ----------------------------------------------------------
+    iris::ScenePtr documentScene() const { return scene; }
+    /// Applies `fn` (a folder edit on the scene) as ONE undo step and rebuilds.
+    void runFolderEdit(const QString &text, const std::function<bool()> &fn);
+    /// Files every node in `nodes` under `path` as one undo step.
+    void moveNodesToFolder(const QList<iris::SceneNodePtr> &nodes, const QString &path);
+    /// Builds (or finds) the row for a folder path, creating ancestors.
+    QTreeWidgetItem *folderItemFor(const QString &path);
+    /// Asks for a folder name; empty return = cancelled.
+    QString askFolderName(const QString &title, const QString &initial);
+    /// The "Move to ▸" submenu — every folder, New Folder…, and Root.
+    void buildMoveToMenu(QMenu *parent, const QList<iris::SceneNodePtr> &nodes);
+    /// Can this node be FILED at all? Folders organise the root level, so only
+    /// a direct child of the world root can be in one (§6b, Unreal semantics).
+    bool isFolderable(const iris::SceneNodePtr &node) const;
+    /// What a drop of `dragged` at `pos` would do, and on which row.
+    ///
+    /// The dragged set is a PARAMETER and not the member on purpose: the drop
+    /// handler has to take its own copy and clear the member before it does
+    /// anything else (a drop that repopulates the tree must not leave a stale
+    /// selection behind), and reading the member here silently answered "None"
+    /// for every drop — caught on the Xvfb rig, 2026-09-06, by a folder drop
+    /// that changed nothing.
+    SceneTreeWidget::DropHint dropHintAt(const QList<iris::SceneNodePtr> &dragged,
+                                         const QPoint &pos, QTreeWidgetItem **rowOut,
+                                         QString *folderOut) const;
+
 	void showHideNode(QTreeWidgetItem* item, bool show);
     void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
 
@@ -164,7 +218,17 @@ private:
     QMap<qint64, QSharedPointer<iris::SceneNode>> nodeList;
     QMap<qint64, QTreeWidgetItem*> treeItemList;
 
-    QSharedPointer<iris::SceneNode> lastDraggedHiearchyItemSrc;
+    /// The dragged selection, captured on DragEnter. Multi-select made this a
+    /// LIST — the single-node member it replaced could only ever move the first
+    /// row of a selection.
+    QList<iris::SceneNodePtr> lastDraggedNodes;
+    /// Folder path -> its row. Rebuilt by repopulateTree.
+    QHash<QString, QTreeWidgetItem*> folderItemList;
+    /// Guards setSelectedNode() against re-emitting the selection it was just
+    /// given (the panel drives the viewport and the viewport drives the panel).
+    bool suppressSelectionSignal = false;
+    /// Folder rows that were collapsed, so a repopulate does not expand them all.
+    QStringList collapsedFolders;
 
 	void hideItemAndChildren(QTreeWidgetItem* item);
 	void showItemAndChildren(QTreeWidgetItem* item);

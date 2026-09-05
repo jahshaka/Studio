@@ -272,6 +272,7 @@ set(SRCS
     src/ui/panels/transformeditor.cpp 
     src/ui/controls/dragspinbox.cpp 
     src/ui/panels/scenehierarchywidget.cpp 
+    src/ui/panels/scenetreewidget.cpp
     src/viewport/cameracontrollerbase.cpp 
     src/viewport/gizmo.cpp
     src/viewport/snapsettings.cpp
@@ -335,6 +336,8 @@ set(SRCS
     src/commands/addscenenodecommand.cpp
     src/commands/deletescenenodecommand.cpp
     src/commands/reparentscenenodecommand.cpp
+    src/commands/scenefoldercommand.cpp
+    src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
     src/commands/structuralundo.cpp
@@ -485,6 +488,7 @@ set(HEADERS
     src/services/selectionservice.h
     src/services/shortcutregistry.h
     src/services/worldmodes.h
+    src/services/scenefolders.h
     src/services/planarreflectors.h
     src/services/animationedits.h
     src/services/playbackservice.h
@@ -495,6 +499,7 @@ set(HEADERS
     src/ui/panels/transformeditor.h 
     src/ui/controls/dragspinbox.h 
     src/ui/panels/scenehierarchywidget.h 
+    src/ui/panels/scenetreewidget.h
     src/viewport/orbitalcameracontroller.h 
     src/viewport/cameracontrollerbase.h 
     src/ui/panels/presets/skypresets.h 
@@ -563,6 +568,8 @@ set(HEADERS
     src/commands/addscenenodecommand.h
     src/commands/deletescenenodecommand.h
     src/commands/reparentscenenodecommand.h
+    src/commands/scenefoldercommand.h
+    src/commands/worldmodecommand.h
     src/commands/setnodepropertycommand.h
     src/commands/nodeeditcommand.h
     src/commands/structuralundo.h

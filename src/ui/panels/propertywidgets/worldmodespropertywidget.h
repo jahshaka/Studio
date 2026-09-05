@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QVector>
 #include <QWidget>
+#include <functional>
 
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/irisglfwd.h"
@@ -21,6 +22,7 @@ For more information see the LICENSE file
 class ComboBoxWidget;
 class CheckBoxWidget;
 class IEditorViewport;
+struct StudioServices;
 
 /**
  * World-panel "World Mode" section (POST_CHAIN_SPEC.md §9.6) — the per-scene
@@ -45,6 +47,8 @@ public:
     void setScene(QSharedPointer<iris::Scene> scene);
     /// The live viewport, so an edit is applied immediately. Nullable.
     void setSceneView(IEditorViewport *sceneView);
+    /// The services aggregate, for the undo stack. Nullable (headless hosts).
+    void setServices(StudioServices *services) { this->services = services; }
 
 signals:
     /// A World Mode edit wrote through to the backing fields the sibling World
@@ -58,9 +62,14 @@ protected slots:
 private:
     void rebuild();
     void applied();
+    /// Runs `edit` as ONE undo step over the whole World Mode state. Picking a
+    /// tier rewrites thirteen backing fields; a per-row inverse would be
+    /// thirteen chances to get it wrong (see WorldModeCommand).
+    void runUndoable(const QString &text, const std::function<void()> &edit);
 
     QSharedPointer<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
+    StudioServices *services = nullptr;
     ComboBoxWidget *modeSelector = nullptr;
     /// Parallel to the registry order: the control for each row, or null when
     /// the row was rendered as a plain label (unavailable rows).

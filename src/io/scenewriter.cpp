@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "io/scenewriter.h"
 #include "io/sceneformat.h"
+#include "services/scenefolders.h"
 
 #include <Qt>
 #include <QVector>
@@ -103,6 +104,18 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
 
     if (editorData != nullptr) {
         writeEditorData(projectObj, editorData);
+    }
+
+    // OUTLINER FOLDERS (SCENEGRAPH_SPEC §6b) ride the EDITOR section, beside
+    // editor.camera — they are editor organisation, so the node format and the
+    // scene format carry nothing about them. Written HERE and not inside
+    // writeEditorData because folders live on the SCENE, which that function
+    // has no reason to know about, and because a project saved with no
+    // EditorData (every headless/script save) must still keep its folders.
+    {
+        QJsonObject editorObj = projectObj["editor"].toObject();
+        scenefolders::writeEditorBlock(editorObj, scene);
+        projectObj["editor"] = editorObj;
     }
 
     if (!!postMan) {

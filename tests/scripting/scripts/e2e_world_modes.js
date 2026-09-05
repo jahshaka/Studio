@@ -159,4 +159,36 @@ assert(s.msaa.value === 8 && s.msaa.source === "override",
        "the pin survived too: " + s.msaa.valueId + " / " + s.msaa.source);
 assert(s.shadowResolution.value === 2048, "and the tier-driven rows came back unchanged");
 
+// ---- a tier switch is ONE undo step, and it is reversible ------------------
+// The owner-reported defect of 2026-09-06 had two halves. This is the second:
+// switching Epic -> High rewrites thirteen backing fields and, until
+// WorldModeCommand, recorded NOTHING — the tier dropdown was a one-way door.
+// (The first half was a UI-refresh bug in the World panel and is not reachable
+// from a script; see SceneNodePropertiesWidget's worldSettingsChanged handler.)
+function pushes() { return editor.undoState().pushes; }
+
+world.clearOverrides();
+world.mode({ mode: "epic" });
+var epic = world.settings();
+var beforePushes = pushes();
+world.mode({ mode: "low" });
+assert(pushes() === beforePushes + 1,
+       "a tier switch records exactly ONE undo step, not one per row");
+var low = world.settings();
+assert(low.shadowResolution.value !== epic.shadowResolution.value,
+       "Low really did move the rows: " + epic.shadowResolution.value +
+       " -> " + low.shadowResolution.value);
+
+beforePushes = pushes();
+world.override({ id: "msaa", value: "4x" });
+assert(pushes() === beforePushes + 1, "world.override records one undo step");
+beforePushes = pushes();
+world.clearOverride({ id: "msaa" });
+assert(pushes() === beforePushes + 1, "world.clearOverride records one undo step");
+beforePushes = pushes();
+world.clearOverrides();
+assert(pushes() === beforePushes + 1, "world.clearOverrides records one undo step");
+
+world.mode({ mode: "high" });
+
 console.log("e2e_world_modes: ALL OK");
