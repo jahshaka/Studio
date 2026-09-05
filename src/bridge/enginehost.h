@@ -40,6 +40,38 @@ public:
     /// dies with it — it is derived data too, and re-recording costs one
     /// session.
     static QString warmUpSetPath();
+    /// The `shader_cache_enabled` preference, in one place. Everything that
+    /// writes into the cache DIRECTORY has to ask — including the warm-up set,
+    /// which lives there but is not part of the cache the engine loads (audit
+    /// F12: it was recorded and replayed even with the feature switched off,
+    /// because warmUpSetPath() derives from shaderCacheDirectory() and that is
+    /// computed whether or not the setting says yes).
+    static bool shaderCacheEnabled();
+    /// Records the live scenes' shader permutations into the warm-up set and
+    /// writes it, if the cache is enabled. Called on a scene close and once
+    /// after a world's first rendered frame — NOT only at shutdown, which is
+    /// what made the owner's recorded set 203 bytes (audit F1a): Ogre's storage
+    /// accumulates and de-duplicates, so recording as you go IS the merged set,
+    /// but a world closed before quit was never in it at all.
+    /// Cheap and idempotent; false when there was nothing to record.
+    bool recordWarmUpSetNow();
+    /// THE PASS SHAPE the last session's editor actually drew with.
+    ///
+    /// Hlms permutations are a function of the PASS, not only the renderable:
+    /// shadows change the shader, and MSAA sample count is literally a shader
+    /// property (HlmsBaseProp::MsaaSamples, set from the target's sample
+    /// description). So replaying a recorded set into a lightless, shadowless,
+    /// 1x offscreen scene compiles variants the editor never draws — and caches
+    /// them, inflating the splash denominator with shaders nobody wants (audit
+    /// F1b). The startup gate reads this to build a warm view with the right
+    /// shape; a first-ever launch gets the defaults below and is no worse off
+    /// than before.
+    struct WarmUpShape {
+        unsigned samples = 1;      ///< achieved MSAA count of the editor's on-screen view
+        bool     shadows = true;   ///< the editor's default, and the expensive variant
+    };
+    static WarmUpShape warmUpShape();
+    static void rememberWarmUpShape(const WarmUpShape &shape);
     /// Starts the burst-settle save watchdog: once shaders have been compiled
     /// and then NOT compiled for a few seconds, the cache is written. Without
     /// it a crash (or a pkill, which this codebase's history is full of) throws

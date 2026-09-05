@@ -1263,6 +1263,12 @@ void MainWindow::openProject(bool playMode)
 	// silently on the very first open, when no render view exists yet.
 	LoadTimeline::mark(QStringLiteral("primeSceneSync"));
 	sceneView->primeSceneSync();
+	// The synchronous open's half of the F1a recording. No warm-up slice here
+	// on purpose — the sync path has no cover to hide one behind — but the
+	// RECORD is cheap (a memory-manager walk, no GPU work) and the next
+	// launch's warm-up is only as good as the sets it was given.
+	LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
+	sceneView->recordWarmUpSet();
 	openStageReveal(playMode);
 }
 
@@ -1352,32 +1358,43 @@ void MainWindow::openProjectAsync(bool playMode)
 	// compiles. Its own slice and its own event-loop turn, so the window keeps
 	// answering while it runs.
 	//
-	// OFF BY DEFAULT, and the reason is a measurement, not caution. On this box,
-	// open.responsive against the Showroom (worst UI-thread gap, ms):
+	// ON BY DEFAULT since ogre-patch 0016 (SHADER_CACHE_AUDIT F2/F3). The
+	// history matters, because the default flipped on a MEASUREMENT changing,
+	// not on an opinion changing. It used to ship OFF:
 	//
 	//                        cold open        second open
 	//   without this slice   1691 - 1789      439 - 476
-	//   with it              1723 - 1761      646 - 736
+	//   with it              1723 - 1761      646 - 736      <- the objection
 	//
-	// The cold open — the one this exists for — is UNCHANGED: those compiles
-	// happened either way, and the gap there is dominated by other stages. But
-	// the second open pays ~250 ms more, and the responsiveness budget the lane
-	// contract pins is 500 ms with about 25 ms of headroom. That 250 ms is a
-	// single renderOneFrame, which is atomic — it cannot be split across event
-	// loop turns, and rendering the warm-up through a smaller target would build
-	// a DIFFERENT chain's shaders, i.e. the wrong ones.
+	// The cold open was unchanged (those compiles happened either way) but the
+	// second open paid ~250 ms for a warm-up that compiled NOTHING, against an
+	// open.responsive budget of 500 ms with ~25 ms of headroom. That 250 ms was
+	// a full-resolution renderOneFrame, atomic and unsplittable — because the
+	// engine could not use Ogre's CompositorPassWarmUp (it null-dereferenced in
+	// Forward+; the cause and the three-line fix are ogre-patch 0016).
 	//
-	// So the capability ships and the policy does not: Preferences -> Cache
-	// turns it on, editor.warmUpShaders() runs it on demand, and whether it
-	// becomes the default is a decision about that 500 ms budget rather than
-	// something this code should assume.
-	if (settings->getValue("shader_warmup_on_open", false).toBool()) {
+	// With the patch the warm-up is a real PASS_WARM_UP into a 4x4 target, so
+	// the arming open costs milliseconds instead of a frame — and the
+	// self-disarming idle check below (enginesceneviewport.cpp, mWarmUpIdleAt)
+	// still stops it running at all once a warm-up finds nothing to do. The
+	// switch stays in Preferences -> Cache for anyone who wants it off.
+	if (settings->getValue("shader_warmup_on_open", true).toBool()) {
 		slices.append({ QStringLiteral("Precompiling shaders…"), 95, [this]() {
 			LoadTimeline::mark(QStringLiteral("warmUpShaders"));
 			const unsigned built = sceneView->warmUpShaders();
 			if (built) qInfo("scene open: precompiled %u shader(s) behind the cover", built);
 		} });
 	}
+	// WRITE THE WORLD DOWN for the next launch (SHADER_CACHE_AUDIT F1a). Behind
+	// the cover, in its own event-loop turn, and AFTER the geometry and
+	// environment pushes — the recording reads each renderable's Hlms hash and
+	// vertex declaration, both of which exist as soon as the mirror has bound
+	// the datablocks. Unconditional: the recorded set is what makes the NEXT
+	// startup warm, so it must not be gated on this session's precache setting.
+	slices.append({ QStringLiteral("Precompiling shaders…"), 96, [this]() {
+		LoadTimeline::mark(QStringLiteral("recordWarmUpSet"));
+		sceneView->recordWarmUpSet();
+	} });
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { openStageReveal(playMode); } });
 

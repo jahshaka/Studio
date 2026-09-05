@@ -165,7 +165,7 @@ EngineConfig EngineHost::resolveConfig()
     //
     // The setting exists so a machine with a broken driver cache can turn the
     // feature off without a rebuild; the default is on.
-    if (SettingsManager::getDefaultManager()->getValue("shader_cache_enabled", true).toBool()) {
+    if (shaderCacheEnabled()) {
         const QString dataDir = shaderCacheDirectory();
         if (!dataDir.isEmpty()) cfg.shaderCacheDir = dataDir.toStdString();
     }
@@ -196,15 +196,41 @@ QString EngineHost::warmUpSetPath()
     return dir.isEmpty() ? QString() : QDir(dir).filePath(QStringLiteral("warmup.set"));
 }
 
+bool EngineHost::shaderCacheEnabled()
+{
+    return SettingsManager::getDefaultManager()->getValue("shader_cache_enabled", true).toBool();
+}
+
 bool EngineHost::clearShaderCacheOnDisk()
 {
     const QString dir = shaderCacheDirectory();
     if (dir.isEmpty()) return false;
     QDir d(dir);
     if (!d.exists()) return true;
-    // removeRecursively, not rmdir: the directory is entirely ours and entirely
-    // derived. The next launch rebuilds it.
-    return d.removeRecursively();
+    // EVERY FILE, BUT NOT THE LOCK (audit F10).
+    //
+    // This used to be removeRecursively(), which takes the directory and
+    // everything in it — including `cache.lock`, whose fd the running engine is
+    // holding an fcntl write lock on. Deleting a locked file does not fail on
+    // Linux and does not release anything: the holder keeps its lock on an
+    // unlinked inode, the next process creates a NEW cache.lock, locks that,
+    // and both of them believe they are the single writer. Two writers is the
+    // one invariant the container has no defence against.
+    //
+    // So: unlink the contents and leave the lock and the directory standing,
+    // which is exactly what ShaderCache::wipe() does engine-side
+    // (OgreShaderCache.cpp, `name == kLockFile` continue). Keeping the
+    // directory is a bonus — the clean-quit save that follows a mid-session
+    // clear used to have to recreate it.
+    bool ok = true;
+    const QFileInfoList entries =
+        d.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden);
+    for (const QFileInfo &fi : entries) {
+        if (fi.fileName() == QLatin1String("cache.lock")) continue;
+        if (fi.isDir()) ok = QDir(fi.absoluteFilePath()).removeRecursively() && ok;
+        else            ok = QFile::remove(fi.absoluteFilePath()) && ok;
+    }
+    return ok;
 }
 
 bool EngineHost::start(QString &error)
@@ -301,6 +327,41 @@ bool EngineHost::start(QString &error)
     return true;
 }
 
+EngineHost::WarmUpShape EngineHost::warmUpShape()
+{
+    WarmUpShape s;
+    SettingsManager *sm = SettingsManager::getDefaultManager();
+    s.samples = unsigned(qBound(1, sm->getValue("shader_warmup_samples", 1).toInt(), 16));
+    s.shadows = sm->getValue("shader_warmup_shadows", true).toBool();
+    return s;
+}
+
+void EngineHost::rememberWarmUpShape(const WarmUpShape &shape)
+{
+    SettingsManager *sm = SettingsManager::getDefaultManager();
+    // Written only on change: this runs on the open path and setValue reaches
+    // QSettings, which syncs to disk.
+    const WarmUpShape had = warmUpShape();
+    if (had.samples != shape.samples) sm->setValue("shader_warmup_samples", int(shape.samples));
+    if (had.shadows != shape.shadows) sm->setValue("shader_warmup_shadows", shape.shadows);
+}
+
+bool EngineHost::recordWarmUpSetNow()
+{
+    if (!mEngine) return false;
+    // GATED ON THE SETTING (audit F12). warmUpSetPath() derives from
+    // shaderCacheDirectory(), which is computed regardless of the preference —
+    // only `cfg.shaderCacheDir` was gated — so with the cache switched off the
+    // app still wrote a warmup.set into the cache directory and still replayed
+    // it at the next startup. "Off" has to mean off.
+    if (!shaderCacheEnabled()) return false;
+    const QString setPath = warmUpSetPath();
+    if (setPath.isEmpty()) return false;
+    if (!mEngine->recordWarmUpSet()) return false;   // no live scenes: nothing to say
+    QDir().mkpath(QFileInfo(setPath).absolutePath());
+    return mEngine->saveWarmUpSet(setPath.toStdString());
+}
+
 void EngineHost::startShaderCacheWatchdog()
 {
     if (mCacheWatchdog || !mEngine) return;
@@ -341,13 +402,12 @@ void EngineHost::shutdown()
     // lets the next startup compile everything this session needed without
     // loading one mesh, skeleton or texture. Recording every live scene here is
     // the whole "merge the recordings" step — the engine's storage accumulates.
-    if (mEngine) {
-        const QString setPath = warmUpSetPath();
-        if (!setPath.isEmpty() && mEngine->recordWarmUpSet()) {
-            QDir().mkpath(QFileInfo(setPath).absolutePath());
-            mEngine->saveWarmUpSet(setPath.toStdString());
-        }
-    }
+    //
+    // This is no longer the ONLY caller (audit F1a): scene close and the first
+    // rendered frame of an open record too, so a world the user opened, looked
+    // at and closed before quitting is in the set. This one stays because it is
+    // the only point that catches a scene still open at quit.
+    recordWarmUpSetNow();
     // THE clean-quit save (SHADER_CACHE_SPEC §4.4). The engine's destructor
     // saves too, but a viewport that still holds the shared_ptr can defer that
     // destructor past Qt's own teardown — this is the point we can prove runs,

@@ -346,6 +346,19 @@ public:
     /// the number of shaders built (0 when there was nothing to do, or when
     /// this viewport has no engine). LENGTHENS a cold open by design.
     virtual unsigned warmUpShaders() { return 0; }
+    /// Writes down which shader permutations THIS world uses, for the next
+    /// launch's startup warm-up to replay (SHADER_CACHE_SPEC.md §2.7b, audit
+    /// F1a). Also remembers the PASS SHAPE the editor is drawing this world
+    /// with — shadows on/off and the achieved MSAA sample count — because the
+    /// permutations a replay builds depend on the pass as much as on the
+    /// renderable, and the startup gate has no other way to know.
+    ///
+    /// Called on the open path (behind the cover, once the mirror has pushed
+    /// geometry and environment) and again when a world is CLOSED — the second
+    /// is what the shutdown-only recording missed, and why the owner's recorded
+    /// set was 203 bytes. Cheap: it walks the scene's object memory managers
+    /// and touches no GPU resource. No-op with no engine or no world.
+    virtual void recordWarmUpSet() {}
 
     // ---- lifecycle ----
     virtual void begin() = 0;

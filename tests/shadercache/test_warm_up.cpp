@@ -226,6 +226,68 @@ int main() {
         std::remove(setFile);
     }
 
+    // ---- 6. THE F2 ACCEPTANCE CASE: the warm-up pass reaches what the -------
+    //         camera CANNOT SEE.
+    //
+    // This is the whole reason CompositorPassWarmUp is worth a patch to Ogre
+    // (0016, SHADER_CACHE_AUDIT F2). The old route was "render the view's own
+    // frame behind the cover", which compiles exactly what the frustum cull
+    // leaves standing — so a world whose uncompiled permutation is behind the
+    // camera still hitches the moment the user turns around.
+    //
+    // SceneManager::warmUpShaders (the WARM_UP_SHADERS worker,
+    // OgreSceneManager.cpp:2568) runs NO frustum test at all — only the
+    // visibility-flag test — so a warm-up pass collects every object in the
+    // requested render queues wherever it happens to be. The assertion:
+    //
+    //   put a material family NOTHING in this process has built on an object
+    //   parked far behind the camera, warm up, and the count must move.
+    //
+    // With JAHSHAKA_WARMUP_NO_PASS=1 (the fallback route) this case compiles
+    // ZERO — which is the measurement, and why the env var exists.
+    {
+        View *v = gEngine->createOffscreenView("offscreen-perm", 96, 96, Colour(0, 0, 0));
+        Scene *s = gEngine->createScene("offscreen-perm");
+        CHECK(v && s, "off-camera view + scene");
+        v->setScene(s);
+        v->setShadows(true);
+        s->setAmbient(Colour(0.3f, 0.3f, 0.35f), Colour(0.1f, 0.1f, 0.12f));
+        enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.8f, -0.4f), 3.14159f);
+        // BEHIND the camera and 40 units away: outside the frustum by a mile.
+        // Cutout is an alpha-TEST shader (a distinct HlmsPbs permutation, not a
+        // different uniform) and no case above has built one.
+        {
+            const NodeId n = s->createNode();
+            const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+            PbrParams p;
+            p.albedo = Colour(0.5f, 0.7f, 0.3f);
+            p.alphaMode = PbrAlphaMode::Cutout;
+            p.alphaCutoff = 0.5f;
+            const MaterialId m = s->createPbrMaterial(p);
+            CHECK(n && mesh && m && s->attachMesh(n, mesh, m), "a cutout cube behind the camera");
+            enginetest::setNodePosition(s, n, Vec3(0.0f, 0.0f, -40.0f));
+        }
+        enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 3.0f), Vec3(0.0f, 0.0f, 8.0f));
+
+        const unsigned before = compiledSoFar();
+        CHECK(v->warmUpShaders(), "warmUpShaders() on the off-camera scene");
+        const unsigned afterWarm = compiledSoFar();
+        std::printf("    off-camera permutation: the warm-up compiled %u shader(s)\n",
+                    afterWarm - before);
+        const char *noPass = std::getenv("JAHSHAKA_WARMUP_NO_PASS");
+        if (noPass && *noPass && *noPass != '0') {
+            // The fallback route, exercised deliberately: it renders the view's
+            // own frame, the cube is culled, and nothing is built. Recorded as
+            // a number rather than skipped, because the DELTA is the finding.
+            std::printf("    (fallback route: this is the number the warm-up pass beats)\n");
+        } else {
+            CHECK(afterWarm > before,
+                  "the warm-up pass compiled a permutation the camera cannot see");
+        }
+        gEngine->destroyScene(s);
+        gEngine->destroyView(v);
+    }
+
     // ---- 4b. no scene: refuse, do not crash -------------------------------
     {
         View *v = gEngine->createOffscreenView("bare", 32, 32, Colour(0, 0, 0));

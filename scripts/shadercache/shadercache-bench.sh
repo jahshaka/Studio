@@ -54,7 +54,10 @@ mkdir -p "$outdir"/{home,cache,run}
 # --- the probes -------------------------------------------------------------
 preload=""; probe_env=()
 if [ "$probe" = 1 ]; then
-  rs="$(ls -1 "${OGRE_NEXT_PREFIX:-$HOME/Developer/engines/ogre-next-install}"/lib/OGRE-Next/RenderSystem_Vulkan.so 2>/dev/null | head -1)"
+  # PER-TREE INSTALL (ARCHITECTURE.md §3a): the shared ~/Developer/engines
+  # prefix is retired, and a probe preloading the wrong tree's render system
+  # measures a different engine than the binary is running.
+  rs="$(ls -1 "${OGRE_NEXT_PREFIX:-$root/irisgl/thirdparty/ogre-next-install}"/lib/OGRE-Next/RenderSystem_Vulkan.so 2>/dev/null | head -1)"
   cc -O2 -fPIC -shared -o "$outdir/vkprobe.so"  "$here/vkprobe.c"    -ldl || exit 1
   c++ -O2 -fPIC -shared -o "$outdir/ogreprobe.so" "$here/ogreprobe.cpp" -ldl || exit 1
   preload="$outdir/vkprobe.so $outdir/ogreprobe.so"

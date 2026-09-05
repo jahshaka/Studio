@@ -255,6 +255,146 @@ static void manifest_missing() {
 }
 
 // ---------------------------------------------------------------------------
+// 7. THE DENOMINATOR IS LAST-RUN, NOT ALL-TIME (audit F6).
+//
+// `expectedShaders` is the splash's "Building shaders 34/68" denominator and
+// shaderbuildgate.h promises it is "how many shaders the last saved run
+// needed". It was written with std::max, so one heavy session pinned it
+// forever: every launch afterwards counted up to a number it could not reach
+// and stopped ("61/76 forever").
+//
+// Driven by planting an absurd count in the manifest and forcing one more save.
+// Under std::max the 99999 survives; under last-run it is replaced by a number
+// the run can actually reach.
+static void denominator_is_last_run() {
+    wipeDir();
+    runCycle("seed");
+
+    const std::string manifest = gCacheDir + "/cache-manifest.txt";
+    std::vector<char> bytes;
+    CHECK(readFile(manifest, bytes), "F6: the manifest exists");
+    std::string text(bytes.begin(), bytes.end());
+    const size_t at = text.find("shaders ");
+    CHECK(at != std::string::npos, "F6: the manifest carries a shader count");
+    if (at == std::string::npos) return;
+    const size_t eol = text.find('\n', at);
+    text.replace(at, eol - at, "shaders 99999");
+    writeFile(manifest, std::vector<char>(text.begin(), text.end()));
+
+    // A cycle that LOADS that manifest (so mExpectedShaders starts at 99999)
+    // and then writes one back. clearShaderCache() is what forces the write:
+    // a warm run is not "dirty" — nothing new compiled — so without it the save
+    // is a no-op and the manifest keeps whatever it had.
+    ShaderCacheStats after;
+    {
+        std::string error;
+        auto e = Engine::create(cacheConfig(), error);
+        CHECK(!!e, "F6: the engine started against the doctored manifest");
+        if (!e) return;
+        View *v = e->createOffscreenView("view", 64, 64, Colour(0.0f, 0.0f, 0.0f));
+        Scene *s = v ? e->createScene("scene") : nullptr;
+        if (v && s) { v->setScene(s); for (int i = 0; i < 3; ++i) e->renderOneFrame(); }
+        // AFTER the first view, not after Engine::create: the cache is loaded
+        // lazily from ensureHlms(), which the first View is what triggers.
+        CHECK(e->shaderCacheStats().expectedShaders == 99999u,
+              "F6: the planted denominator was read back from the manifest");
+        e->clearShaderCache();     // forces the next save to write
+        e->saveShaderCache();
+        after = e->shaderCacheStats();
+        if (s) e->destroyScene(s);
+        if (v) e->destroyView(v);
+    }
+    std::printf("    [F6] expected=%u compiled=%u loaded=%u\n",
+                after.expectedShaders, after.compiledThisRun, after.loadedThisRun);
+    CHECK(after.expectedShaders != 99999u,
+          "F6: the save REPLACED the all-time high-water mark");
+    CHECK(after.expectedShaders == after.compiledThisRun + after.loadedThisRun,
+          "F6: the denominator is exactly what THIS run built or served");
+}
+
+// ---------------------------------------------------------------------------
+// 8. pipelineCacheLoaded MEANS THE DRIVER TOOK IT (audit F7).
+//
+// `RenderSystem::loadPipelineCache` is void: a blob the driver rejects (wrong
+// vendor/device/driver version/UUID, or a bad payload hash — all checked inside
+// OgreVulkanRenderSystem::loadPipelineCache) is refused with nothing but a log
+// line. The old code set the flag whenever it had BYTES, so it reported "the
+// pipeline layer loaded" on every driver update, forever.
+//
+// Constructed without corrupting anything our own container would reject: copy
+// the MICROCODE file over pipeline.cache and give pipeline.cache the microcode
+// file's manifest size and hash. Our verification passes (the bytes match the
+// manifest exactly); Ogre's does not (no 'VKPC' magic). That is precisely the
+// state "the container is fine, the driver said no" — and it is pure text
+// surgery on the manifest, so the test needs no hash function of its own.
+static void pipeline_layer_reports_acceptance() {
+    wipeDir();
+    const ShaderCacheStats cold = runCycle("seed");
+    CHECK(cold.pipelineCacheReason == "absent",
+          "F7: a cold run reports the pipeline layer ABSENT, not rejected");
+
+    const ShaderCacheStats warm = runCycle("warm-before-swap");
+    CHECK(warm.pipelineCacheLoaded && warm.pipelineCacheReason == "accepted",
+          "F7: a genuine warm run reports the driver ACCEPTED the blob");
+
+    const std::string manifest = gCacheDir + "/cache-manifest.txt";
+    std::vector<char> mbytes, micro;
+    if (!readFile(manifest, mbytes) || !readFile(gCacheDir + "/microcode.cache", micro)) {
+        CHECK(false, "F7: could not read the manifest and microcode file");
+        return;
+    }
+    // Lift the microcode line's "<bytes> <hash>" and stamp it onto the pipeline
+    // line, then make pipeline.cache actually be those bytes.
+    std::string text(mbytes.begin(), mbytes.end());
+    const size_t mAt = text.find("file microcode.cache ");
+    const size_t pAt = text.find("file pipeline.cache ");
+    if (mAt == std::string::npos || pAt == std::string::npos) {
+        CHECK(false, "F7: the manifest lists both files");
+        return;
+    }
+    const std::string microTail = text.substr(mAt + 21, text.find('\n', mAt) - (mAt + 21));
+    const size_t pEol = text.find('\n', pAt);
+    text.replace(pAt, pEol - pAt, "file pipeline.cache " + microTail);
+    writeFile(manifest, std::vector<char>(text.begin(), text.end()));
+    writeFile(gCacheDir + "/pipeline.cache", micro);
+
+    const ShaderCacheStats after = runCycle("driver-rejects-pipeline");
+    std::printf("    [F7] pipelineLoaded=%d reason=%s microcodeLoaded=%d\n",
+                after.pipelineCacheLoaded ? 1 : 0, after.pipelineCacheReason.c_str(),
+                after.microcodeLoaded ? 1 : 0);
+    CHECK(!after.pipelineCacheLoaded,
+          "F7: a blob the driver REFUSED is not reported as loaded");
+    CHECK(after.pipelineCacheReason == "outdated" || after.pipelineCacheReason == "rejected",
+          "F7: and the reason says which refusal it was");
+    CHECK(after.microcodeLoaded,
+          "F7: the OTHER layers still loaded — one rejected layer is not a cold run");
+}
+
+// ---------------------------------------------------------------------------
+// 9. THE LOG SAYS WHICH FILE (audit F11).
+//
+// "Loading HlmsDiskCache from " with an empty tail is the log line that started
+// the whole caching audit: Ogre logs `dataStream->getName()` and our
+// MemoryDataStreams had no name. On a support log, "which cache directory did
+// this session read" has to be answerable.
+static void streams_are_named() {
+    wipeDir();
+    runCycle("seed");
+    runCycle("warm-for-log");
+
+    std::vector<char> log;
+    if (!readFile("test_shader_cache-ogre.log", log)) {
+        CHECK(false, "F11: the Ogre log exists");
+        return;
+    }
+    const std::string text(log.begin(), log.end());
+    CHECK(text.find("Loading HlmsDiskCache from " + gCacheDir + "/hlms.") != std::string::npos,
+          "F11: the Hlms load names the file it read, with its full path");
+    CHECK(text.find("Loading HlmsDiskCache from \n") == std::string::npos,
+          "F11: and no load line has an empty tail any more");
+}
+
+// ---------------------------------------------------------------------------
 // 6. Two processes at once.
 //
 // Two Jahshaka processes are routine (the editor plus a scripted run; the gate
@@ -317,6 +457,10 @@ int main(int argc, char **argv) {
     std::printf("[ RUN  ] fingerprint_mismatch\n");  fingerprint_mismatch();
     std::printf("[ RUN  ] manifest_missing\n");      manifest_missing();
     std::printf("[ RUN  ] concurrent_processes\n");  concurrent_processes(argv[0]);
+    // The caching-audit fix wave (SHADER_CACHE_AUDIT.md F6/F7/F11).
+    std::printf("[ RUN  ] denominator_is_last_run\n");          denominator_is_last_run();
+    std::printf("[ RUN  ] pipeline_layer_reports_acceptance\n"); pipeline_layer_reports_acceptance();
+    std::printf("[ RUN  ] streams_are_named\n");                streams_are_named();
 
     std::printf("%d check(s), %d failure(s)\n", gChecks, gFailures);
     return gFailures ? 1 : 0;
