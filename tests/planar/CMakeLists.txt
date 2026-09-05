@@ -4,7 +4,7 @@
 # (reachable DISPLAY, Vulkan driver or lavapipe).
 #
 # The ASan copy is not optional decoration here: ~PlanarReflections leaves
-# HlmsPbs::mPlanarReflections dangling and keeps raw Renderable pointers, so the
+# HlmsPbs::mPlanarReflections stale and keeps raw Renderable pointers, so the
 # teardown case at the end of the suite is exactly the shape a sanitiser catches
 # and a plain run does not.
 function(jahshaka_planar_test target)

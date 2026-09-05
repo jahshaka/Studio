@@ -292,7 +292,7 @@ static void testSceneGraphOwnership()
     }
     CHECK(closed.allExpired(), "and it goes when the last ScenePtr does");
 
-    // ---- a node held past its scene is safe, not dangling ----
+    // ---- a node held past its scene is safe, not stale ----
     {
         iris::SceneNodePtr survivor;
         QWeakPointer<iris::Scene> sceneWatch;
@@ -308,7 +308,7 @@ static void testSceneGraphOwnership()
         }
         CHECK(sceneWatch.isNull(), "the scene died even though one of its nodes is still held");
         CHECK(survivor->getScene().isNull(),
-              "the orphan's getScene() is null, not a dangling pointer");
+              "the orphan's getScene() is null, not a stale pointer");
         CHECK(survivor->getParent().isNull(), "...and so is its getParent()");
         CHECK(!survivor->hasScene() && !survivor->hasParent(),
               "hasScene()/hasParent() report the expiry too");

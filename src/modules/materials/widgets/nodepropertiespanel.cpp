@@ -224,7 +224,7 @@ void NodePropertiesPanel::setScene(GraphNodeScene* scene)
 		if (model == mNode && !mUpdating)
 			refreshFromNode();
 	});
-	// a deleted node must not leave a dangling editor behind
+	// a deleted node must not leave a stale editor behind
 	connect(mScene, &GraphNodeScene::nodeRemoved, this, [this](GraphNode*) {
 		if (mNode != nullptr && mGraph != nullptr && !mGraph->nodes.contains(mNode->id))
 			showNode(nullptr);

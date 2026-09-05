@@ -233,7 +233,7 @@ iris::CameraNodePtr SceneEditService::addCamera(bool ignorePlacement)
     // it takes the normal spawn-in-front-of-the-editor-camera placement. It
     // does NOT become the active camera on creation: what play renders through
     // is an explicit choice (scene.setActiveCamera), never a side effect of an
-    // add — a second camera silently stealing the shot is the failure the
+    // add — a second camera silently taking the shot is the failure the
     // viewer-node add has and cameras will not.
     addNodeToScene(node, ignorePlacement);
     return node;
@@ -938,7 +938,7 @@ void SceneEditService::applyMaterialPreset(const MaterialPreset &preset, iris::S
     // Copy the preset's textures into the project and register them FIRST:
     // writeSceneNodeMaterial stores textures as asset guids resolved by file
     // name, so serializing before these rows existed left the saved material
-    // asset with dangling texture references (the reapplied texture vanished).
+    // asset with stale texture references (the reapplied texture vanished).
     QStringList textureGuids;
     for (const auto &prop : mat->properties) {
         if (prop->type == iris::PropertyType::Texture) {

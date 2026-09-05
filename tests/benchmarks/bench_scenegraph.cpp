@@ -929,7 +929,7 @@ int main(int argc, char **argv)
 
         // UNBIND before the engine scene dies. Since the scene-graph swap the
         // document's nodes ARE this scene manager's nodes (SCENEGRAPH_SPEC D2),
-        // so destroying it first would leave the document holding dangling
+        // so destroying it first would leave the document holding stale
         // handles. Outside every measured region.
         mirror.setSource(nullptr);
         view->setScene(nullptr);

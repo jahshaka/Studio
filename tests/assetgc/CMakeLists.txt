@@ -1,4 +1,4 @@
-# THE STORE GC's adversarial suite (deep audit 2026-09, area 6). A fixture
+# THE STORE GC's skeptical suite (deep audit 2026-09, area 6). A fixture
 # store seeded with every orphan class AND a live look-alike for each: the
 # dry run must report exactly the orphans, the real run must remove exactly
 # them, and every live artifact must come back byte-for-byte — including the

@@ -28,7 +28,7 @@
 //   - lane C #2: api_docs({verb}) returns one row, api_docs({search}) a
 //     bounded set, both orders of magnitude under the full dump
 //   - lane C #5: run_script echoes the engineErrors recorded during THAT run,
-//     without stealing them from app.engineErrors()
+//     without taking them from app.engineErrors()
 //   - lane C #6: browse_assets returns rows + decodable thumbnail images
 //     inside its documented budget
 //   - every tool name is reachable through the chat dock's server-anchored
@@ -966,7 +966,7 @@ int main(int argc, char **argv)
         const QJsonObject pump = QJsonDocument::fromJson(
             after.value("result").toString().toUtf8()).object();
         CHECK(pump.value("recorded").toInt() > recordedBefore,
-              "the pump's cumulative record grew (the echo did not steal it)");
+              "the pump's cumulative record grew (the echo did not take it)");
         bool stillThere = false;
         for (const QJsonValue &e : pump.value("entries").toArray())
             for (const QJsonValue &mine : errors)

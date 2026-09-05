@@ -44,6 +44,6 @@ set_tests_properties(app.watchdog_stall PROPERTIES
     TIMEOUT 300 LABELS "shutdown")
 
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog
-# are pure thread-interaction contracts, and shutdown is where use-after-free
+# are pure thread-interaction contracts, and shutdown is where read-after-destroy
 # across threads traditionally hides.
 jah_tsan_blocked(app.shutdown_order app.watchdog_stall)   # spawn the app

@@ -104,7 +104,7 @@ void ThumbnailGenerator::processOneEngineRequest()
     // Deliver from the event loop, not from inside this tick: receivers may block
     // (a save dialog) and must never re-enter the renderer. The payload travels
     // BY VALUE — there are two receivers and neither may own it (see
-    // ThumbnailResult in the header for the use-after-free this replaced).
+    // ThumbnailResult in the header for the read-after-destroy this replaced).
     QMetaObject::invokeMethod(this, [this, result] { emit thumbnailComplete(result); },
                               Qt::QueuedConnection);
 }

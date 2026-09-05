@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "data/database/database.h"
 
-// Forward declaration only: including mainwindow.h at header scope poisoned
+// Forward declaration only: including mainwindow.h at header scope broke
 // every includer with the whole shell (audit §7.4); the panels hold a pointer.
 class MainWindow;
 

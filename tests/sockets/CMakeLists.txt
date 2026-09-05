@@ -2,7 +2,7 @@
 #
 # sockets.document  the socket maths against hand-computed matrices, the
 #                   bind-pose fallback (no engine at all), every refusal, the
-#                   dangling cases, duplication, the scene's attachment
+#                   stale cases, duplication, the scene's attachment
 #                   registry, and the avatar module's bone-name table. Pure
 #                   iris:: + avatarsockets.cpp, offscreen.
 # sockets.render    the same thing through the WHOLE chain — engine pose ->

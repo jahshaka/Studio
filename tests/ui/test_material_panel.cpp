@@ -295,9 +295,9 @@ static void testRowsDisplayTheMaterialValues()
 static void testStaleRowMemoryStillDisplays()
 {
     void *mem = ::operator new(sizeof(HFloatSliderWidget));
-    const float poison = 1.0f;
+    const float fillPattern = 1.0f;
     for (size_t i = 0; i + sizeof(float) <= sizeof(HFloatSliderWidget); i += sizeof(float))
-        memcpy(static_cast<char *>(mem) + i, &poison, sizeof(float));
+        memcpy(static_cast<char *>(mem) + i, &fillPattern, sizeof(float));
 
     auto *row = new (mem) HFloatSliderWidget();
     row->setRange(0.0f, 1.0f);          // exactly what addFloatValueSlider does

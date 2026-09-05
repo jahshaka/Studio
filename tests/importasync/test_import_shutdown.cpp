@@ -6,7 +6,7 @@
 // closed — and it only ever hide()s, which never fires lastWindowClosed, so
 // exec() idled forever with an orphaned "loading" dialog on the desktop.
 // Independently, the worker's Qt::BlockingQueuedConnection commit hop could
-// only be woken by destroying the runner (a use-after-free race), and a
+// only be woken by destroying the runner (a read-after-destroy race), and a
 // surviving worker deadlocked QThreadPool's exit-time wait.
 //
 // This test spawns the REAL binary (like mcp.e2e), drives it over MCP:

@@ -120,7 +120,7 @@ void TestEngineViewWinId::rebuildsWhenTheNativeWindowIsReplaced()
     QVERIFY2(second != nullptr, "the view was not rebuilt after the window changed");
     // NOT `second != first`: `first` is freed by the rebuild, and glibc happily
     // hands the SAME address back for the new View — the pointer-inequality
-    // check compared a dangling pointer against a fresh allocation and failed
+    // check compared a stale pointer against a fresh allocation and failed
     // spuriously whenever the allocator reused the block (deterministic under
     // plain glibc, 4/4 green under ASan's quarantine — wave-1 gate, 2026-09-05).
     // The rebuild is proven by the winId change above plus the behavioural

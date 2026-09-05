@@ -313,7 +313,7 @@ void SkyPropertyWidget::setSkyAlongWithProperties(const QString &guid, iris::Sky
 	skyTypeChanged(static_cast<int>(skyType));
 }
 
-// Let's hijack this event and use it to update the asset in the db (iKlsR)
+// Let's repurpose this event and use it to update the asset in the db (iKlsR)
 void SkyPropertyWidget::hideEvent(QHideEvent *event)
 {
 	Q_UNUSED(event)

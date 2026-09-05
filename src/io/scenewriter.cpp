@@ -294,7 +294,7 @@ SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node, bool 
 
     // The ANCHOR. A parent is named by GUID and not by pointer for the same
     // reason a socket owner is: it survives the node objects being rebuilt, a
-    // dangling one is inert rather than a crash, and it is the only spelling
+    // stale one is inert rather than a crash, and it is the only spelling
     // that means anything once the fragment has been written to a database row.
     // The scene's ROOT is spelled as an empty guid — its own guid is a
     // per-document value that a fragment travelling between documents (a paste,

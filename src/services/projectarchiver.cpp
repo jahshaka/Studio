@@ -545,7 +545,7 @@ bool ProjectArchiver::shutdownArchives(int msTimeout)
     // A SNAPSHOT of guarded pointers: waitForDone pumps the event loop, and an
     // archiver can be deleted (its owner page destroyed, a slice finishing)
     // while we are inside it — which would both invalidate sLive's indices and
-    // leave us holding a dangling raw pointer.
+    // leave us holding a stale raw pointer.
     QVector<QPointer<ProjectArchiver>> live;
     for (ProjectArchiver *archiver : sLive) live.append(QPointer<ProjectArchiver>(archiver));
     for (const QPointer<ProjectArchiver> &archiver : live)

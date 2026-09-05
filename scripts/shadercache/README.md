@@ -205,7 +205,7 @@ with the patch reversed and the engine rebuilt, the suite **SEGVs** on its very
 first `warmUpShaders()` in `ForwardPlusBase::getGridBuffer` — the crash the
 audit predicted, reproduced and removed.
 
-**But there is a second one behind it, and it is a use-after-free.** Driven over
+**But there is a second one behind it, and it is a read-after-destroy.** Driven over
 MCP on an Xvfb display, under gdb: the cold open is fine, and the SECOND world
 opened in the session dies in `ParallelHlmsCompileQueue::warmUpSerial`
 (`OgreRenderQueue.cpp:1333`) with `renderable->getDatablock()` null and the

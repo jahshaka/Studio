@@ -192,7 +192,7 @@ int main()
     // Regression (owner crash, "double free or corruption" on scene switch):
     // Ogre::InstantRadiosity caches mesh data by raw VAO pointer and images by
     // TextureGpu*; destroying meshes/textures while IR is enabled left those
-    // caches dangling. The engine now flags and flushes them at frame time.
+    // caches stale. The engine now flags and flushes them at frame time.
     {
         GiParams irAgain;
         irAgain.mode = GiMode::InstantRadiosity;

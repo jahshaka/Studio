@@ -39,7 +39,7 @@ set_tests_properties(engine.particles_pfx2 PROPERTIES
 # The same suite over the SANITISED copy of the backend (tests/engine defines
 # JahshakaEngineAsan; tests/ adds engine before particles). Particle definitions
 # outlive their nodes by design and their datablocks are destroyed after the
-# SceneManager — exactly the shape of lifecycle that hides use-after-free, so it
+# SceneManager — exactly the shape of lifecycle that hides read-after-destroy, so it
 # gets the same treatment the engine suite gets.
 if(JAHSHAKA_ASAN)
     add_executable(test_particles_pfx2_asan test_particles_pfx2.cpp)

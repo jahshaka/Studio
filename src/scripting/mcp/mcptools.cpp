@@ -323,7 +323,7 @@ QJsonObject McpTools::runScript(const QJsonObject &args)
     //
     // A DIFF, not a snapshot, and deliberately DRAIN-NEUTRAL: report() is
     // const and cumulative, so taking it twice and subtracting the per-message
-    // counts steals nothing the pump would have logged and does not disturb
+    // counts takes nothing the pump would have logged and does not disturb
     // app.engineErrors(reset) for anyone else. (A `reset` here would be the
     // bug: the next reader would find the failure gone.)
     const QVariantMap errorsBefore = EngineErrorPump::instance().report();

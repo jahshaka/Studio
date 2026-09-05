@@ -20,7 +20,7 @@
 // attempted here.
 //
 // NEVER enables GI: HlmsPbs's VCT/PCC binding is process-wide, so a preview
-// scene that turned it on would steal it from the editor scene (R0.5).
+// scene that turned it on would take it from the editor scene (R0.5).
 #include "irisgl/core/math/vec.h"
 #include <memory>
 #include <QColor>

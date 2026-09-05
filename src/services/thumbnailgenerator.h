@@ -54,7 +54,7 @@ struct ThumbnailRequest
 /// It used to be a heap `ThumbnailResult*` the receiver was expected to
 /// delete — with TWO receivers connected to the one signal (AssetWidget and
 /// the materials module's EffectsPage). AssetWidget deleted it at the end of
-/// its slot, EffectsPage then dereferenced the freed object: a use-after-free
+/// its slot, EffectsPage then dereferenced the freed object: a read-after-destroy
 /// decided by connection order, and the likely root of "shader thumbnails
 /// sometimes don't save" (deep audit 2026-09, area 3). AssetWidget also
 /// leaked it outright on the save-dialog cancel path. A value type removes

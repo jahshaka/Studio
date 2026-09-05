@@ -627,7 +627,7 @@ void ClaudeChatWindow::addImage(const QByteArray &imageData, const QString &mime
     view->setCursor(Qt::PointingHandCursor);
     view->setToolTip(tr("%1×%2 — click for full size").arg(pixmap.width()).arg(pixmap.height()));
     // Full size opens in its own top-level label, owned by nothing else so it
-    // closes with the app (and never steals the popup's geometry key).
+    // closes with the app (and never takes the popup's geometry key).
     view->installEventFilter(this);
     view->setProperty("claudeFullPixmap", pixmap);
 

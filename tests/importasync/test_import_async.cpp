@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 
         PreparedImport prepared;
         QThread *workerThread = nullptr;
-        QSemaphore startedSem;   // waitForFinished may steal a NOT-YET-STARTED
+        QSemaphore startedSem;   // waitForFinished may take a NOT-YET-STARTED
                                  // task and run it inline — force a real start
         QFuture<void> future = QtConcurrent::run([&]() {
             startedSem.release();

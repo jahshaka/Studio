@@ -221,10 +221,10 @@ static void testCharacterControllerLifecycle()
           "removal takes the ghost object out of the world");
     CHECK(env->characterControllers.isEmpty(), "the controller is gone from the hash");
     CHECK(env->getActiveCharacterController() == nullptr,
-          "the active controller pointer does not dangle");
+          "the active controller pointer does not go stale");
 
     // Stepping now walks the world's action list and broadphase: with the freed
-    // controller still registered this is a use-after-free (ASan catches it).
+    // controller still registered this is a read-after-destroy (ASan catches it).
     env->simulatePhysics();
     for (int i = 0; i < 30; ++i) env->stepSimulation(1.0f / 60.0f);
     CHECK(true, "the world steps cleanly after a controller was removed");
@@ -267,7 +267,7 @@ static void testViewerRemoval()
     // Removing the ACTIVE viewer promotes a remaining one.
     auto v4 = iris::ViewerNode::create();
     root->addChild(v4);
-    CHECK(scene->getActiveVrViewer() == v1, "a newly added viewer does not steal the active slot");
+    CHECK(scene->getActiveVrViewer() == v1, "a newly added viewer does not take the active slot");
     scene->removeNode(v1);
     CHECK(scene->viewers.count() == 1, "the active viewer left the viewer list");
     CHECK(scene->getActiveVrViewer() == v4, "the remaining viewer becomes active");

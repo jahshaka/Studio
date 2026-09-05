@@ -218,7 +218,7 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "removeSocket", "node.removeSocket(id, name) -> bool",
           "Deletes a socket. Anything riding it STOPS MOVING and keeps its last pose — it is not "
           "detached, so re-adding a socket of the same name picks the riders straight back up "
-          "(and node.sockets on the rider's owner is where a dangling one shows). Undoable.",
+          "(and node.sockets on the rider's owner is where a stale one shows). Undoable.",
           Needs::Document },
         { "sockets", "node.sockets(id) -> [{name, bone, position, rotation, scale, builtIn, resolves, riders}]",
           "Every socket on this node, in the order they were added. `builtIn` marks the ones the "

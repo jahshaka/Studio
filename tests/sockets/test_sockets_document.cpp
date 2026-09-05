@@ -10,7 +10,7 @@
 //   A  the socket maths: boneWorld * offset, resolved onto the attached node,
 //      against a hand-computed expectation
 //   B  the bind-pose fallback — a host with no engine still resolves sockets
-//   C  refusals and dangling: unrigged mesh, wrong bone, duplicate name, a
+//   C  refusals and stale: unrigged mesh, wrong bone, duplicate name, a
 //      non-mesh owner, a socket that does not exist, a cycle, and the
 //      re-import-renamed-a-bone case (fail soft, counted, never thrown)
 //   D  duplication: sockets travel with a copied node, and a copied SUBTREE
@@ -228,7 +228,7 @@ int main(int argc, char **argv)
               "the rider sits on the BIND pose of the bone (arm at y=5, tip +1)");
     }
 
-    // ---- C: refusals and dangling ----------------------------------------
+    // ---- C: refusals and stale ----------------------------------------
     std::printf("\n-- C: refusals --\n");
     {
         Fixture f = makeFixture();
@@ -292,7 +292,7 @@ int main(int argc, char **argv)
               "…nor itself");
     }
 
-    // C2: the dangling cases — a renamed bone, a removed socket, a deleted
+    // C2: the stale cases — a renamed bone, a removed socket, a deleted
     // owner. None of them throws; all of them simply stop moving the rider.
     {
         Fixture f = makeFixture();
@@ -313,7 +313,7 @@ int main(int argc, char **argv)
         f.arm->getSkeleton()->boneMap.insert("jointRoot", 0);
         f.arm->getSkeleton()->boneMap.insert("mixamorig:Head", 1);
         CHECK(resolver.resolve(f.scene.data()) == 0, "a renamed bone moves nothing");
-        CHECK(resolver.lastDangling() == 1, "…and is COUNTED as dangling");
+        CHECK(resolver.lastDangling() == 1, "…and is COUNTED as stale");
         CHECK(nearVec(f.camera->getGlobalPosition(), placed),
               "…leaving the rider exactly where it was, never at the origin");
 
@@ -325,7 +325,7 @@ int main(int argc, char **argv)
         CHECK(resolver.resolve(f.scene.data()) == 1, "the bone is back, so the rider moves again");
         CHECK(f.arm->removeSocket("head"), "the socket is removed");
         CHECK(resolver.resolve(f.scene.data()) == 0 && resolver.lastDangling() == 1,
-              "a removed socket dangles rather than detaching its rider");
+              "a removed socket goes stale rather than detaching its rider");
         CHECK(f.camera->isSocketAttached(),
               "…the attachment RECORD survives, so re-adding the socket picks it back up");
         f.arm->addSocket(socket);
@@ -334,7 +334,7 @@ int main(int argc, char **argv)
         // The owner is deleted. Same rule.
         f.scene->getRootNode()->removeChild(f.arm);
         CHECK(resolver.resolve(f.scene.data()) == 0 && resolver.lastDangling() == 1,
-              "a deleted owner dangles; the rider keeps its pose");
+              "a deleted owner goes stale; the rider keeps its pose");
     }
 
     // ---- D: duplication ---------------------------------------------------

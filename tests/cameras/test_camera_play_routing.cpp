@@ -11,7 +11,7 @@
 //
 //   * EDITING is unchanged. With an active camera set and the scene NOT
 //     playing, the view is still the explorer's. This is the assertion that
-//     stops phase 1 from stealing the main viewport (pilot mode is phase 3).
+//     stops phase 1 from taking the main viewport (pilot mode is phase 3).
 //   * PLAYING routes. Flip the document's play flag and the same applyCamera
 //     call renders the active camera's shot instead.
 //   * Clearing the active camera hands the view back.
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
     mirror.applyCamera(editorCam, view);
     frame(img); show("active camera set, EDITING", img);
     CHECK(!isBlue(centre(img)),
-          "EDITING still renders the explorer's view — an active camera must not steal the "
+          "EDITING still renders the explorer's view — an active camera must not take the "
           "main viewport (that is phase 3's pilot mode, not this)");
 
     // ---- 3. play routes through the active camera -------------------------

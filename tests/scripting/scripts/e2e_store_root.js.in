@@ -27,7 +27,7 @@ function assetByGuid(guid) {
     return null;
 }
 
-// ---- defensive reset (a failed earlier run must not poison this one) ----
+// ---- defensive reset (a failed earlier run must not break this one) ----
 assets.setStoreRoot("", {});
 
 try {

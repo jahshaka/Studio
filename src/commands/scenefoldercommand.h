@@ -64,7 +64,7 @@ private:
     scenefolders::Snapshot mAfter;
     /// QPointer, not a raw one: the command outlives the gesture and the panel
     /// is a child widget — an undo after a teardown must be inert, not a
-    /// dangling call.
+    /// stale call.
     QPointer<SceneHierarchyWidget> mPanel;
     bool mFirstRedo = true;
 };

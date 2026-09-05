@@ -1379,7 +1379,7 @@ void MainWindow::openProjectAsync(bool playMode)
 	//
 	// Note what this route is NOT: Ogre's CompositorPassWarmUp, which renders a
 	// 4x4 target and reaches permutations the camera cannot see. ogre-patch
-	// 0016 makes that route run at all, but a second upstream use-after-free
+	// 0016 makes that route run at all, but a second upstream read-after-destroy
 	// kills the app on the second world of a session, so it ships behind
 	// JAHSHAKA_WARMUP_PASS=1 (the crash is documented in OgreChain.cpp).
 	// The switch stays in Preferences -> Cache for anyone who wants it off.
@@ -2316,7 +2316,7 @@ void MainWindow::setupViewPort()
     // Viewport ejects. It is rebuilt on every open rather than kept in sync,
     // because the list is the document's and the document changes underneath it
     // (a camera added, renamed, deleted, a whole world closed) — and a stale
-    // entry would hand the viewport a dangling node.
+    // entry would hand the viewport a stale node.
     camerasButton = new QToolButton;
     camerasButton->setStyleSheet("padding: 0 8px 0 0; margin: 0");
     camerasMenu = new QMenu;
@@ -3487,7 +3487,7 @@ void MainWindow::destroyEngineViews()
         if (!w.isNull()) delete w.data();
 
     // Everything below points into that tree. Nothing runs after this except
-    // closeDatabase(), but a dangling `sceneView` is the kind of thing a later
+    // closeDatabase(), but a stale `sceneView` is the kind of thing a later
     // edit trips over.
     sceneView = nullptr;
     playerView = nullptr;

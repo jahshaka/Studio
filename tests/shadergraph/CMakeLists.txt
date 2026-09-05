@@ -35,7 +35,7 @@ target_link_libraries(test_pbr_evaluator PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt
 add_test(NAME shadergraph.pbr_evaluator COMMAND test_pbr_evaluator WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.pbr_evaluator PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
 
-# Node-library regressions (2026-08-31 audit): Truncate-poisoned saves load,
+# Node-library regressions (2026-08-31 audit): Truncate-broke saves load,
 # bare PropertyNode doesn't crash, vector constants keep fractions, drawer
 # names are node titles. Same slice as test_pbr_evaluator plus the full
 # LibraryV1 registry and every node family it constructs.

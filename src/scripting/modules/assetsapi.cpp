@@ -740,7 +740,7 @@ QVariantMap AssetsApi::exportRaw(const QString &guid, const QString &dir, const 
     QVector<RawExporter::AssetInfo> infos;
     for (const QString &g : guids) {
         const auto rec = host.db->fetchAsset(g);
-        if (rec.guid.isEmpty()) continue;   // dangling dependency edge — skip, not fatal
+        if (rec.guid.isEmpty()) continue;   // stale dependency edge — skip, not fatal
         RawExporter::AssetInfo info;
         info.guid = rec.guid;
         info.name = rec.name;

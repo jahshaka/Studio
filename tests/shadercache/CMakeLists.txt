@@ -88,7 +88,7 @@ set_tests_properties(shadercache.warmup PROPERTIES TIMEOUT 600 LABELS "shadercac
 # Ogre's CompositorPassWarmUp usable at all — without it the very first
 # View::warmUpShaders() SEGVs in ForwardPlusBase::getGridBuffer, which is the
 # crash this patch exists to remove and which this run is the proof of. The
-# route ships OFF (a second, unfixed upstream use-after-free bites on the second
+# route ships OFF (a second, unfixed upstream read-after-destroy bites on the second
 # world opened in a real editor session — see the comment in OgreChain.cpp), so
 # this twin is what keeps the code honest and measures what it buys: case 6
 # compiles a permutation parked behind the camera here and zero in the default

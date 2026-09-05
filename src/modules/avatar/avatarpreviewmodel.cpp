@@ -97,7 +97,7 @@ void AvatarPreviewModel::buildDocument()
 {
     // The lighting rig of the other previews (a warm key, a cool fill), no
     // shadows, no floor and — R0.5 — never any GI: HlmsPbs's VCT/PCC binding
-    // is process-wide, so a preview scene that enabled it would steal the
+    // is process-wide, so a preview scene that enabled it would take the
     // binding from the editor scene.
     mDocument = iris::Scene::create();
     mDocument->shadowEnabled = false;

@@ -41,7 +41,7 @@
 //      plate is accepted once the material is single-sided again.
 //   5. Budget clamp: three reflectors, budget 2 => countActiveActors() == 2.
 //   6. Teardown with a live reflector — the ASan copy of this suite is what
-//      catches the dangling HlmsPbs::mPlanarReflections the component's own
+//      catches the stale HlmsPbs::mPlanarReflections the component's own
 //      destructor leaves behind.
 //   7. A non-plate mesh is REFUSED with a message, not silently accepted.
 #include "jahshaka/engine/Engine.h"
