@@ -25,7 +25,13 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$REPO_ROOT/build-macos-rel}"
 [[ "$BUILD_DIR" = /* ]] || BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
 QT_DIR="${QT_DIR:-$HOME/Qt/6.11.2/macos}"
-OGRE_PREFIX="${OGRE_PREFIX:-$(dirname "$REPO_ROOT")/engines/ogre-next-install}"
+# Per-tree engine first (ARCHITECTURE.md §3a, 2026-09-06), legacy shared
+# workspace prefix as fallback for a not-yet-migrated Mac checkout.
+if [ -d "$REPO_ROOT/irisgl/thirdparty/ogre-next-install/lib" ]; then
+    OGRE_PREFIX="${OGRE_PREFIX:-$REPO_ROOT/irisgl/thirdparty/ogre-next-install}"
+else
+    OGRE_PREFIX="${OGRE_PREFIX:-$(dirname "$REPO_ROOT")/engines/ogre-next-install}"
+fi
 DIST="${DIST:-$REPO_ROOT/dist}"
 [[ "$DIST" = /* ]] || DIST="$REPO_ROOT/$DIST"
 APP_VERSION="${APP_VERSION:-0.9.0}"
