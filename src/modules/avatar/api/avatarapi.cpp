@@ -128,6 +128,7 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "capsuleRadius or capsuleHeight clears capsuleAuto — an explicit dimension is a decision, "
           "and re-deriving it from the mesh would silently discard it. Unknown keys are REFUSED, "
           "not ignored. Undoable.",
+          Needs::Document },
         { "input", "avatar.input({move:{x,y}, look:{x,y}, jump, sprint}) -> {move, look, jump, sprint}",
           "Writes the gameplay input state directly — the SCRIPTED producer, and the reason "
           "locomotion can be tested with no window and no synthetic key events. Every field is "
