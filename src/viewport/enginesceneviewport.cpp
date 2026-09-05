@@ -705,8 +705,11 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
     // refreshTransforms = false: this runs on every mouse move inside a live
     // translate drag, and the mirror's sync() already updated the document's
     // global transforms this frame. The update is a full recursive walk.
+    // ...and no helper spheres either: V-hold snaps to a TRIANGLE CORNER, so a
+    // light, decal or camera origin sphere is noise it would have to filter out
+    // of every hit list anyway.
     const auto hits = ScenePicker::pickAll(mScene, a, b, mEditorCam->getGlobalPosition(),
-                                           true, false, false, true, false);
+                                           true, false, false, false, false, false);
     ScenePick best;
     for (const auto &h : hits) {
         if (!h.node || h.triangleIndex < 0) continue;
@@ -982,6 +985,11 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     const bool helpers = !mGameView;
     if (mMirror) {
         mMirror->setLightWires(mShowLightWires && helpers);
+        // Camera bodies + frustum wires (CAMERAS_SPEC D2). Same "editor helper"
+        // rule as the light wires — G (Game View) and play hide them — but a
+        // separate toggle, because they are a different object and the View
+        // Options row for light wires must not silently govern cameras.
+        mMirror->setCameraBodies(helpers && !mPlaying);
         mMirror->setHighlightWireframe(mSelectionWireframe);
         // No selection outline for the World root (the whole scene would glow)
         // or for the built-in ground plane — owner ask 2026-08-31. Selection,
@@ -1549,7 +1557,10 @@ bool EngineSceneViewport::snapSelectionToFloor()
     // meshes can never be the hit.
     const iris::Vec3 start(centre.x(), bottom - 0.001f, centre.z());
     const iris::Vec3 end = start + iris::Vec3(0.0f, -10000.0f, 0.0f);
-    const auto hits = ScenePicker::pickAll(mScene, start, end, start, true, false, false);
+    // Meshes only: this looks for the SURFACE under the selection (End = drop to
+    // floor), and a light or camera origin sphere is not a floor.
+    const auto hits = ScenePicker::pickAll(mScene, start, end, start, true, false, false,
+                                           false, true, false);
     float targetY = 0.0f;                       // fallback: the y = 0 plane
     bool found = false;
     for (const auto &h : hits) {

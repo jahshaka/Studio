@@ -81,7 +81,8 @@ void ScenePicker::pickMeshes(const iris::SceneNodePtr &node, const iris::Vec3 &s
 QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &segStart, const iris::Vec3 &segEnd,
                                       const iris::Vec3 &cameraPos, bool forcePickable,
                                       bool includeLights, bool includeViewers,
-                                      bool includeDecals, bool refreshTransforms)
+                                      bool includeDecals, bool refreshTransforms,
+                                      bool includeCameras)
 {
     QList<ScenePick> hits;
     if (!scene || !scene->getRootNode()) return hits;
@@ -108,6 +109,37 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
                 iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, decal->getGlobalPosition(),
                                                               sphereRadius, t, hitPoint)) {
                 ScenePick p; p.node = decal.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
+                p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
+                hits.append(p);
+            }
+        }
+    }
+    if (includeCameras) {
+        // CAMERAS_SPEC phase 2b: the body is drawn engine-side, so this is the
+        // hit test for it — the same origin sphere lights and decals use, plus
+        // one rule they do not need.
+        //
+        // TWO RULES a light or a decal does not need, because nobody parks one
+        // of those on the viewer's eye:
+        //
+        //  1. YOU CANNOT PICK THE CAMERA YOU ARE LOOKING THROUGH. `cameraPos`
+        //     is the eye the segment was cast from, so a scene camera sitting
+        //     there IS that eye — piloting it (CAMERAS_SPEC phase 3), or a
+        //     preview rendered through it. Without this, every single click
+        //     while piloting would select the piloted camera instead of the
+        //     scene in front of it, and an orthographic view would pick its own
+        //     camera on every centre click (its ray starts a hundred units
+        //     BEHIND the eye, so an in-front test cannot catch that one).
+        //  2. Nothing behind the ray's start is a hit. raySphereIntersects does
+        //     not require the sphere to be ahead of the origin.
+        for (auto &camera : scene->cameras) {
+            if (!camera || !camera->isPickable()) continue;
+            const iris::Vec3 centre = camera->getGlobalPosition();
+            if ((centre - cameraPos).lengthSquared() < sphereRadius * sphereRadius) continue;
+            if (iris::Vec3::dotProduct(centre - segStart, rayDir) < 0.0f) continue;
+            if (iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, centre,
+                                                              sphereRadius, t, hitPoint)) {
+                ScenePick p; p.node = camera.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
                 p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
                 hits.append(p);
             }
