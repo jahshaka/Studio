@@ -31,14 +31,26 @@ public:
     static QString findChromiumBrowser();
 
     /// Launches `indexHtml` in a kiosk-style `--app` window of the detected
-    /// browser, isolated from the user's profile via --user-data-dir inside
-    /// the export folder. Returns the owned QProcess (parented to `parent`;
-    /// caller terminates it to close the preview), or nullptr when no
-    /// Chromium-family browser exists.
+    /// browser, isolated from the user's profile via a --user-data-dir that is
+    /// UNIQUE PER RUN and lives in the OS temp location — never in the export
+    /// folder, which is the published deliverable, and never at a fixed path,
+    /// which lets an older Chrome singleton-capture the launch (PUBLISH_AUDIT
+    /// #3). The directory is removed when the process finishes. Returns the
+    /// owned QProcess (parented to `parent`; caller terminates it to close the
+    /// preview), or nullptr when no Chromium-family browser exists OR the
+    /// browser failed to start within a short grace period — a returned
+    /// process really did start.
     static QProcess *launchKiosk(const QString &indexHtml, QObject *parent);
 
     /// The floor: open in the default browser via QDesktopServices.
     static bool openInBrowser(const QString &indexHtml);
+
+    /// A fresh, never-before-used Chrome profile directory for ONE preview run
+    /// (the path only — nothing is created here). Public so a suite can assert
+    /// the two properties that matter without spawning a browser: it is unique
+    /// per call, and it lives in the OS temp location rather than inside the
+    /// export folder.
+    static QString newProfileDir();
 };
 
 #endif // PREVIEWLAUNCHER_H
