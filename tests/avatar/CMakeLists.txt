@@ -17,6 +17,25 @@
 # assimp allowlist, and those sections are what keeps that option honest.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia)
 
+# beta_mannequin.dae — the DEFAULT AVATAR fixture: Mixamo's Beta character
+# (full standard Mixamo skeleton, bare joint names) with its baked dance clip
+# stripped so the body is neutral. GENERATED here rather than checked in: the
+# ~5 MB of bytes already ship inside scenes/"Skeletal Animation.zip", and
+# fixtures/make_beta_mannequin.py derives the clipless .dae from that archive.
+# Consumed by scripting.e2e.mannequin (path substituted over there) and by
+# anyone who wants a real humanoid to spawn.
+set(JAHSHAKA_MANNEQUIN_DAE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/beta_mannequin.dae"
+    CACHE INTERNAL "generated animation-free Mixamo Beta avatar fixture")
+add_custom_command(OUTPUT "${JAHSHAKA_MANNEQUIN_DAE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/fixtures"
+    COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/make_beta_mannequin.py"
+            "${CMAKE_SOURCE_DIR}" "${JAHSHAKA_MANNEQUIN_DAE}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/make_beta_mannequin.py"
+            "${CMAKE_SOURCE_DIR}/scenes/Skeletal Animation.zip"
+    COMMENT "Deriving beta_mannequin.dae (animation-free Mixamo Beta) from the sample archive"
+    VERBATIM)
+add_custom_target(beta_mannequin ALL DEPENDS "${JAHSHAKA_MANNEQUIN_DAE}")
+
 # assethelper.cpp's link closure — the module's load route (D0.1 A) goes
 # through it. Same set tests/assetmeta links.
 set(AVATAR_LOAD_SOURCES

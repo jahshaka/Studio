@@ -1,0 +1,98 @@
+// scripting.e2e.mannequin — the DEFAULT AVATAR fixture is a real humanoid.
+//
+// beta_mannequin.dae is GENERATED at build time (tests/avatar/fixtures/
+// make_beta_mannequin.py) from the shipped Skeletal Animation sample: Mixamo's
+// "Beta" character, full ~65-joint standard Mixamo skeleton with BARE joint
+// names, centimeter units, and — the whole point — its baked dance clip
+// STRIPPED. This suite is the contract for that fixture:
+//
+//   1. it imports and spawns as an avatar,
+//   2. the bare-named Mixamo skeleton RESOLVES (the positive complement of
+//      sockets.e2e's rig2 fail-soft case, which proves only the negative),
+//   3. the cm unit scale was honored — a ~1.7 m human, not a 170 m one,
+//   4. it is NEUTRAL: zero clips, zero locomotion roles bound, an empty
+//      state machine — nothing to loop, nothing to spin (the rig2 lesson:
+//      its bend-test clip named "Idle" auto-bound and looped forever).
+//
+// Every verb is Needs::Document -> --headless.
+
+var RIG = "@JAHSHAKA_MANNEQUIN_DAE@";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+project.create("mannequin");
+
+// ---- 1. import + spawn ----------------------------------------------------
+var guid = assets.import(RIG);
+assert(guid.length > 10, "assets.import(beta_mannequin.dae) -> " + guid);
+assert(assets.addToProject(guid) === guid, "the mannequin joins the project");
+
+var av = avatar.spawn(guid, { position: { x: 0, y: 0, z: 0 } });
+assert(av && av.length > 10, "avatar.spawn -> " + av);
+
+// ---- 2. the Mixamo skeleton resolves --------------------------------------
+// Beta ships as THREE skinned mesh pieces (limbs/torso/joints), each bound to
+// a SUBSET of the one skeleton — so the full joint count is the UNION across
+// the rig-carrying nodes, and sockets go on the richest piece.
+var rig = null, rigBones = 0;
+var union = {}, unionCount = 0;
+var rows = scene.nodes({ subtree: av });
+for (var i = 0; i < rows.length; i++) {
+    var b = node.boneNames(rows[i].id);
+    if (!b || b.length === 0) continue;
+    if (b.length > rigBones) { rig = rows[i].id; rigBones = b.length; }
+    for (var j = 0; j < b.length; j++)
+        if (!union[b[j]]) { union[b[j]] = true; unionCount++; }
+}
+assert(rig !== null, "the spawned avatar carries a rig in its subtree");
+
+var bones = Object.keys(union);
+// 53 of the rig's ~65 joints carry skin weights — the _End effectors and
+// fingertip leaves influence no vertices, so the controllers omit them.
+assert(unionCount >= 50, "a full Mixamo skeleton (" + unionCount + " skinned joints across "
+       + "the pieces >= 50)");
+var expect = ["Hips", "Spine2", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"];
+for (var e = 0; e < expect.length; e++)
+    assert(bones.indexOf(expect[e]) >= 0, "joint present: " + expect[e]);
+
+// Bare names must canonicalize: the built-in socket sweep, which FAILED SOFT
+// on rig2's jointRoot/jointTip, must actually MAP on this rig. addSockets
+// maps against the bones of the ONE piece it is called on, so aim it at the
+// piece that carries the head chain (the limbs piece legitimately maps 0).
+var headRig = null;
+for (var h = 0; h < rows.length; h++) {
+    var hb = node.boneNames(rows[h].id);
+    if (hb && hb.indexOf("Head") >= 0) { headRig = rows[h].id; break; }
+}
+assert(headRig !== null, "a skinned piece carries the Head joint");
+var report = avatar.addSockets(headRig);
+var mapped = 0;
+for (var s = 0; s < report.length; s++) if (report[s].mapped) mapped++;
+console.log("addSockets mapped " + mapped + "/" + report.length + ": " + JSON.stringify(report));
+assert(mapped >= 1, "bare Mixamo names canonicalize — the head socket maps (" + mapped + " mapped)");
+
+// ---- 3. centimeter units were honored -------------------------------------
+// Ray straight down from 10 m above the origin: the first hit is the top of
+// the head. Mixamo Beta stands ~1.7-1.9 m; a missed unit scale reads ~170.
+var hits = scene.raycast({ x: 0, y: 10, z: 0 }, { x: 0, y: -1, z: 0 });
+assert(hits.length >= 1, "a ray down through the mannequin hits it");
+var top = hits[0].point.y;
+assert(top > 1.2 && top < 2.2,
+       "head top at y=" + top.toFixed(3) + " m — cm unit scale honored (1.2 < y < 2.2)");
+
+// ---- 4. neutral: no clips, no roles, no machine ---------------------------
+var roles = avatar.clipRoles(av);
+console.log("avatar.clipRoles: " + JSON.stringify(roles));
+assert(roles.clips.length === 0, "the animation strip held: ZERO clips survive import");
+assert(!roles.idle && !roles.walk && !roles.run,
+       "no locomotion role auto-bound on a clipless body");
+
+var asset = avatar.locomotionAsset(av);
+console.log("avatar.locomotionAsset: " + JSON.stringify(asset));
+assert(asset.states.length === 0,
+       "the default asset degrades to an EMPTY machine — nothing loops, nothing spins");
+
+console.log("mannequin: all assertions passed");
