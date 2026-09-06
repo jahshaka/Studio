@@ -15,9 +15,18 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QDir>
 #include <QFileInfo>
+#include <QSet>
+#include <QSqlDatabase>
+#include <functional>
+
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
 
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarsockets.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/skeletalanimation.h"
+#include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/animation/locomotion.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/physics/environment.h"
@@ -27,6 +36,11 @@ For more information see the LICENSE file
 #include "irisgl/document/input/possession.h"
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
+#include "data/project.h"
+#include "services/assetcas.h"
+#include "services/assetservice.h"
+#include "services/assetstorepaths.h"
+#include "services/projectassets.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
@@ -114,16 +128,40 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "avatar verb that touches the editor scene rather than the module's own preview. "
           "Undoable.",
           Needs::Document },
-        { "spawn", "avatar.spawn(assetGuid, {position?, parent?}) -> nodeId",
+        { "spawn", "avatar.spawn(assetGuid, {position?, parent?, clips?, locomotionAsset?}) -> nodeId",
           "Instantiates an OBJECT asset from the open project as a playable AVATAR "
           "(AVATAR_LOCOMOTION_SPEC §6): the same instantiation assets.addToScene does, plus the "
           "movement component on the wrapper node with its capsule fitted (in WORLD metres) to "
           "the character's geometry, plus this module's built-in head/shoulder sockets, each "
           "installed on whichever skinned piece inside the character actually carries its bone. "
           "`position` places it; `parent` is a node id to spawn under (default: the scene root). "
+          "`clips` is a list of animation files or asset guids applied POST-SPAWN through "
+          "avatar.loadClip's exact path (import, pin, attach, re-match the roles), and "
+          "`locomotionAsset` is avatar.setLocomotionAsset's argument applied after them — a "
+          "whole playable character in ONE call. Either option refusing does not undo the "
+          "spawn: the character is already in the scene and the message says what did not land. "
           "Spawning DURING play registers the avatar with the running physics world on the spot "
           "rather than refusing (spec R6), so a scripted spawn mid-play walks immediately. "
           "The knobs afterwards are avatar.movement / avatar.setMovement. Undoable.",
+          Needs::Document },
+        { "loadClip", "avatar.loadClip(nodeId, pathOrAssetGuid, {name?}) -> {asset, file, node, added, clips:[name], match:{channels, boneChannels, matched}}",
+          "Loads an animation clip onto an avatar in the OPEN SCENE — the Mixamo workflow (one "
+          "character download, then one file per animation), for the scene rather than for the "
+          "Avatar page's preview. A PATH goes through the ONE import pipeline and becomes a real "
+          "library asset PINNED to the project, which is what makes the clip survive a reopen "
+          "and ride project.exportArchive; an ASSET GUID reuses the row that is already there. "
+          "The clip is then attached to the character's clip set and "
+          "AvatarLocomotion::refreshClips re-matches the roles on the spot, so a character "
+          "spawned with no clips is driving a real state machine one call later — a file whose "
+          "name says walk binds the walk role with no authoring at all. Accepts both Mixamo "
+          "export shapes: with-skin (its mesh is ignored) and animation-only (zero meshes, which "
+          "every mesh loader rejects). Clip names follow the preview's rule — a junk name "
+          "('mixamo.com') becomes the FILE's base name — and `name` overrides it outright. "
+          "REFUSES a clip that animates a different rig (the clip->bone join is by name, so a "
+          "foreign clip would attach and move nothing): the message names the bones that do not "
+          "exist on this character. The file must be a format the library imports (fbx, dae, "
+          "glb, gltf, obj, ply, stl) — a mocap .bvh has no importer, so it cannot become an "
+          "asset and is the Avatar page's preview-only path (avatar.loadAnimation). Undoable.",
           Needs::Document },
         { "movement", "avatar.movement(nodeId) -> {walkSpeed, runSpeed, maxAcceleration, brakingDeceleration, groundFriction, jumpVelocity, jumpCount, coyoteTime, jumpReArm, airControl, gravityScale, maxStepHeight, walkableFloorAngle, orientRotationToMovement, rotationRate, capsuleAuto, capsuleRadius, capsuleHeight}",
           "The movement knobs on an avatar node (spec §6.2). Empty (falsy) for a node that carries "
@@ -691,7 +729,7 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     }
     if (!requireProject()) return QString();
 
-    static const QStringList known = { "position", "parent" };
+    static const QStringList known = { "position", "parent", "clips", "locomotionAsset" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (!known.contains(it.key())) {
             record(QStringLiteral("avatar.spawn: unknown option '%1' (known: %2)")
@@ -783,7 +821,364 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
                 }
             }));
     }
+
+    // F5: the clips and the authored asset, applied POST-SPAWN through exactly
+    // the same paths avatar.loadClip and avatar.setLocomotionAsset use — the
+    // options are a convenience over the verbs, never a second implementation.
+    // A refusal from either half is a refusal of the option, not of the spawn:
+    // the character is already in the scene and undoing it is the caller's
+    // business, so the message says what did not land rather than pretending
+    // the whole call failed.
+    const QVariant rawClips = scriptmod::normalizeJs(options.value(QStringLiteral("clips")));
+    QVariantList clipList;
+    if (rawClips.typeId() == QMetaType::QVariantList) clipList = rawClips.toList();
+    else if (rawClips.isValid() && !rawClips.toString().isEmpty()) clipList << rawClips;
+    for (const QVariant &clip : clipList) {
+        QString absolutePath;
+        const QString clipGuid = resolveClipAsset("avatar.spawn(clips)",
+                                                  clip.toString(), &absolutePath);
+        if (clipGuid.isEmpty()) return node->getGUID();
+        QVariantMap ignored;
+        if (!attachClipsFromFile("avatar.spawn(clips)", node, absolutePath, clipGuid,
+                                 QString(), ignored))
+            return node->getGUID();
+    }
+    if (options.contains(QStringLiteral("locomotionAsset"))) {
+        const QVariant raw = scriptmod::normalizeJs(options.value(QStringLiteral("locomotionAsset")));
+        setLocomotionAsset(node->getGUID(), raw.toMap());
+    }
     return node->getGUID();
+}
+
+// ---------------------------------------------------------------------------
+// avatar.loadClip — the Mixamo workflow for the SCENE (verb-coverage audit F5).
+//
+// THE DESIGN FORK, and which side this is on. A clip could be attached as a
+// loose file reference (fast, and what the Avatar PAGE's preview does) or as a
+// real project asset. It is an ASSET here, on purpose:
+//
+//   * the scene file stores a skeletal clip as {source, name}, and a source
+//     that is a path on the author's disk resolves to nothing on reopen after
+//     the file moves and to nothing at all on another machine;
+//   * project.exportArchive walks the project's ASSET PINS. A clip that is not
+//     an asset is not in the archive, so an exported world walks at bind pose;
+//   * ASSET_PIPELINE_SPEC's rule is ONE import pipeline. A second, clip-shaped
+//     import route is exactly the duplication that spec deleted four of.
+//
+// So: import through AssetImportService (whatever the sniffer says it is — a
+// Mixamo "with skin" download is an Object like any other model), pin it to the
+// project, and reference the STORED bytes. The clip then survives a reopen and
+// rides an archive, and the character's roles re-match on the spot because
+// AvatarLocomotion::refreshClips watches the clip set.
+
+QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAssetGuid,
+                                    QString *absolutePathOut)
+{
+    const QString v = QString::fromLatin1(verb);
+    if (!host.db || !host.services || !host.services->assets || !host.project) {
+        record(QStringLiteral("%1: not available in this session").arg(v));
+        return QString();
+    }
+    if (pathOrAssetGuid.trimmed().isEmpty()) {
+        record(QStringLiteral("%1: a file path or an asset guid is required").arg(v));
+        return QString();
+    }
+
+    // An existing catalog row wins over the filesystem: a guid is never also a
+    // path, and re-importing a file already in the library would mint a second
+    // row for the same bytes.
+    QString guid;
+    if (!host.db->fetchAsset(pathOrAssetGuid).guid.isEmpty()) {
+        guid = pathOrAssetGuid;
+    } else {
+        const QFileInfo info(pathOrAssetGuid);
+        if (!info.exists() || !info.isFile()) {
+            record(QStringLiteral("%1: '%2' is neither an asset guid nor a file")
+                       .arg(v, pathOrAssetGuid));
+            return QString();
+        }
+        // THE ONE PIPELINE. .bvh is deliberately not special-cased: it is in
+        // Constants::ANIMATION_EXTS for the Avatar page's file dialog but has
+        // no importer at all (FileImporter sniffs only Constants::WHITELIST),
+        // so it cannot become an asset and cannot ride a reopen or an archive.
+        // Saying so is better than half-supporting it.
+        const auto imported = host.services->assets->importFile(info.absoluteFilePath());
+        if (!imported.ok()) {
+            record(QStringLiteral("%1: importing '%2' failed: %3")
+                       .arg(v, info.fileName(),
+                            imported.error.isEmpty()
+                                ? QStringLiteral("no importer accepted it (animation clips must be "
+                                                 "a model format: fbx, dae, glb, gltf, obj)")
+                                : imported.error));
+            return QString();
+        }
+        guid = imported.objectGuid;
+    }
+
+    // THE PIN — the whole reason this verb imports at all. Idempotent.
+    const auto pinned = ProjectAssets::addToProject(guid, host.db, host.project,
+                                                    ProjectAssets::AddKind::Direct);
+    if (!pinned.ok()) {
+        record(QStringLiteral("%1: '%2' could not be pinned to the project: %3")
+                   .arg(v, guid, pinned.error));
+        return QString();
+    }
+
+    const QString path = AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                                 host.project->getProjectGuid(), guid);
+    if (path.isEmpty() || !QFileInfo::exists(path)) {
+        record(QStringLiteral("%1: the asset '%2' has no stored bytes to read").arg(v, guid));
+        return QString();
+    }
+    if (absolutePathOut) *absolutePathOut = path;
+    return guid;
+}
+
+namespace {
+
+/// Every SCENE-NODE name in a subtree. That is the join key a skeletal clip
+/// uses (ClipExtractor drives the subtree by node name, exactly as the
+/// document evaluator's `boneAnimations.contains(node->name)` did), so it is
+/// what a clip has to be scored against.
+void collectNodeNames(const iris::SceneNodePtr &node, QSet<QString> &out)
+{
+    if (!node) return;
+    out.insert(node->getName());
+    const int n = node->childCount();
+    for (int i = 0; i < n; ++i)
+        if (auto *child = node->childAt(i)) collectNodeNames(child->sharedFromThis(), out);
+}
+
+/// The node a clip is attached to: the character's EXISTING clip host when it
+/// has one (so the set stays in one place and `collectAvatarClips`, which takes
+/// the first host depth-first, keeps seeing all of them), else the character
+/// wrapper itself — which is an ancestor of every skinned piece, so
+/// SceneMirror::clipHostOf finds it from any of them.
+iris::SceneNodePtr clipHostFor(const iris::SceneNodePtr &character)
+{
+    std::function<iris::SceneNodePtr(const iris::SceneNodePtr &)> find =
+        [&](const iris::SceneNodePtr &n) -> iris::SceneNodePtr {
+        if (!n) return iris::SceneNodePtr();
+        for (const auto &anim : n->getAnimations())
+            if (!anim.isNull() && anim->hasSkeletalAnimation()) return n;
+        const int kids = n->childCount();
+        for (int i = 0; i < kids; ++i)
+            if (auto *c = n->childAt(i))
+                if (auto hit = find(c->sharedFromThis())) return hit;
+        return iris::SceneNodePtr();
+    };
+    auto host = find(character);
+    return host ? host : character;
+}
+
+/// assimp's FBX pivot nodes, which most of a Mixamo clip's channels address.
+bool isPivotChannelName(const QString &name)
+{
+    return name.contains(QStringLiteral("$AssimpFbx$"));
+}
+
+}   // namespace
+
+bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &character,
+                                    const QString &absolutePath, const QString &assetGuid,
+                                    const QString &nameOverride, QVariantMap &out)
+{
+    const QString v = QString::fromLatin1(verb);
+    const QFileInfo info(absolutePath);
+    // Messages name the CATALOG's row, not the file: since the CAS a stored
+    // object's file name is its sha256, and a refusal that quotes 64 hex
+    // characters tells the reader nothing about which file they handed us.
+    const QString rowName = host.db ? host.db->fetchAsset(assetGuid).name : QString();
+    const QString shown = rowName.isEmpty() ? info.fileName() : rowName;
+
+    // NOT the mesh loader: an animation-only export (zero meshes — what Mixamo
+    // hands you for "without skin") is rejected by every mesh path, and this
+    // route wants nothing but the channels anyway. No post-processing flags:
+    // every step of the canonical preset is geometry work, and channel NAMES
+    // come out identical either way (measured, avatarpreviewmodel.cpp).
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(absolutePath.toStdString().c_str(), 0);
+    if (!scene) {
+        record(QStringLiteral("%1: could not read the clip file (%2)")
+                   .arg(v, QString::fromUtf8(importer.GetErrorString())));
+        return false;
+    }
+    if (scene->mNumAnimations == 0) {
+        record(QStringLiteral("%1: '%2' contains no animation").arg(v, shown));
+        return false;
+    }
+    const auto anims = iris::Mesh::extractAnimations(scene, absolutePath);
+
+    QSet<QString> rigNames;
+    collectNodeNames(character, rigNames);
+
+    struct Scored { QString raw; iris::SkeletalAnimationPtr skel;
+                    int channels = 0, boneChannels = 0, matched = 0;
+                    QStringList unmatched; double ratio = 0.0; };
+    QVector<Scored> scored;
+    for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
+        if (it.value().isNull()) continue;
+        Scored s;
+        s.raw = it.key();
+        s.skel = it.value();
+        for (auto ch = s.skel->boneAnimations.constBegin();
+             ch != s.skel->boneAnimations.constEnd(); ++ch) {
+            ++s.channels;
+            if (isPivotChannelName(ch.key())) continue;
+            ++s.boneChannels;
+            if (rigNames.contains(ch.key())) ++s.matched;
+            else if (s.unmatched.size() < 5) s.unmatched.append(ch.key());
+        }
+        s.ratio = s.boneChannels > 0 ? double(s.matched) / double(s.boneChannels) : 0.0;
+        scored.append(s);
+    }
+    if (scored.isEmpty()) {
+        record(QStringLiteral("%1: '%2' contains no animation").arg(v, shown));
+        return false;
+    }
+
+    // Half is the threshold the preview uses and for the same reason: a
+    // same-rig Mixamo clip scores 1.0 and a foreign one scores 0.
+    const double kThreshold = 0.5;
+    int best = 0;
+    for (int i = 1; i < scored.size(); ++i)
+        if (scored[i].ratio > scored[best].ratio) best = i;
+    if (scored[best].ratio < kThreshold) {
+        const auto &r = scored[best];
+        const QString names = r.unmatched.isEmpty() ? QStringLiteral("(pivot channels only)")
+                                                    : r.unmatched.join(QStringLiteral(", "));
+        record(QStringLiteral("%1: '%2' is animating a different rig — %3 of its %4 bones exist "
+                              "in '%5' (no match for %6)")
+                   .arg(v, shown)
+                   .arg(r.matched).arg(r.boneChannels)
+                   .arg(character->getName(), names));
+        return false;
+    }
+
+    auto hostNode = clipHostFor(character);
+    QSet<QString> used;
+    for (const auto &anim : hostNode->getAnimations())
+        if (!anim.isNull()) used.insert(anim->getName());
+
+    QVariantList addedNames;
+    QList<iris::AnimationPtr> added;
+    for (const auto &s : scored) {
+        if (s.ratio < kThreshold) continue;    // a foreign clip in a mixed file
+        auto clip = iris::Animation::createFromSkeletalAnimation(s.skel);
+        if (clip.isNull()) continue;
+        // The same display-name rule the preview uses: every Mixamo clip is
+        // literally called "mixamo.com", so a junk name becomes the FILE's base
+        // name — which is what makes "Walking.fbx" bind the walk role.
+        const QString base = nameOverride.isEmpty()
+                                 ? avatar::AvatarPreviewModel::displayNameFor(
+                                       s.raw, QFileInfo(shown).completeBaseName())
+                                 : nameOverride;
+        QString unique = base;
+        for (int suffix = 2; used.contains(unique); ++suffix)
+            unique = base + QStringLiteral(" %1").arg(suffix);
+        used.insert(unique);
+        clip->setName(unique);
+        // A ZERO-LENGTH clip must not loop (Animation::getSampleTime is a fmod,
+        // so length 0 samples at NaN) — Mixamo ships one in every character
+        // download. Same guard the preview has.
+        clip->calculateAnimationLength();
+        if (!(clip->getLength() > 0.0f)) clip->setLooping(false);
+        hostNode->addAnimation(clip);
+        added.append(clip);
+        addedNames.append(unique);
+    }
+    if (added.isEmpty()) {
+        record(QStringLiteral("%1: '%2' contains no usable clip").arg(v, shown));
+        return false;
+    }
+
+    // The roles re-match on the spot: refreshClips rebuilds the clip table and,
+    // while the shipped default asset is what is installed, re-runs the tolerant
+    // name matcher over it (locomotion.cpp). A character spawned clipless is
+    // therefore driving a real state machine one loadClip later.
+    if (auto *loco = character->locomotion()) {
+        float walk = 2.0f, run = 5.0f;
+        if (auto *movement = character->avatar()) {
+            walk = movement->params().walkSpeed;
+            run = movement->params().runSpeed;
+        }
+        loco->refreshClips(character, walk, run);
+    }
+
+    if (host.services && host.services->undo) {
+        auto weakHost = hostNode.toWeakRef();
+        auto weakChar = character.toWeakRef();
+        const float walk = character->avatar()
+                               ? character->avatar()->params().walkSpeed : 2.0f;
+        const float run = character->avatar()
+                              ? character->avatar()->params().runSpeed : 5.0f;
+        host.services->undo->push(new NodeEditCommand(
+            QStringLiteral("load animation clip"),
+            [weakHost, weakChar, added, walk, run]() {
+                auto n = weakHost.toStrongRef();
+                if (!n) return;
+                for (const auto &clip : added)
+                    if (!n->getAnimations().contains(clip)) n->addAnimation(clip);
+                if (auto c = weakChar.toStrongRef())
+                    if (auto *loco = c->locomotion()) loco->refreshClips(c, walk, run);
+            },
+            [weakHost, weakChar, added, walk, run]() {
+                auto n = weakHost.toStrongRef();
+                if (!n) return;
+                for (const auto &clip : added) n->deleteAnimation(clip);
+                if (auto c = weakChar.toStrongRef())
+                    if (auto *loco = c->locomotion()) loco->refreshClips(c, walk, run);
+            }));
+    }
+
+    out["asset"] = assetGuid;
+    out["file"] = shown;
+    out["node"] = hostNode->getGUID();
+    out["added"] = addedNames.size();
+    out["clips"] = addedNames;
+    out["match"] = QVariantMap{ { "channels", scored[best].channels },
+                                { "boneChannels", scored[best].boneChannels },
+                                { "matched", scored[best].matched } };
+    return true;
+}
+
+QVariantMap AvatarApi::loadClip(const QString &nodeId, const QString &pathOrAssetGuid,
+                                const QVariantMap &options)
+{
+    QVariantMap out;
+    static const QStringList known = { "name" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.loadClip: unknown option '%1' (known: %2)")
+                       .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+    }
+    if (!requireProject()) return out;
+
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.loadClip: no scene is open"); return out; }
+    auto node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) {
+        record(QStringLiteral("avatar.loadClip: no node with id '%1'").arg(nodeId));
+        return out;
+    }
+    if (!node->hasAvatarComponent()) {
+        record(QStringLiteral("avatar.loadClip: '%1' is not an avatar — it carries no avatar "
+                              "component (avatar.spawn installs one; avatar.list lists them)")
+                   .arg(node->getName()));
+        return out;
+    }
+
+    QString absolutePath;
+    const QString guid = resolveClipAsset("avatar.loadClip", pathOrAssetGuid, &absolutePath);
+    if (guid.isEmpty()) return out;
+
+    if (!attachClipsFromFile("avatar.loadClip", node, absolutePath, guid,
+                             options.value(QStringLiteral("name")).toString(), out))
+        return QVariantMap();
+    return out;
 }
 
 QVariantMap AvatarApi::movement(const QString &nodeId)

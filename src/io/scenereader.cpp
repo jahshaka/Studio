@@ -876,7 +876,9 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
         if (animObj.contains("skeletalAnimation")) {
             auto skelAnim = animObj["skeletalAnimation"].toObject();
 
-            auto skel = this->getSkeletalAnimation(skelAnim["source"].toString(), skelAnim["name"].toString());
+            auto skel = this->getSkeletalAnimation(skelAnim["source"].toString(),
+                                                  skelAnim["name"].toString(),
+                                                  skelAnim["guid"].toString());
             animation->setSkeletalAnimation(skel);
         }
 
@@ -1519,9 +1521,24 @@ iris::MeshPtr SceneReader::getMesh(QString filePath, int index)
     return iris::MeshPtr();
 }
 
-iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName)
+iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(QString filePath, QString animName,
+                                                             const QString &assetGuid)
 {
     auto relPath = filePath;
+    // The GUID FIRST when the file carries one (F5). It is the only reference
+    // that survives the store moving: a CAS object's file name is its sha256,
+    // so neither the persisted relative path nor the name-based re-home below
+    // can find it again, and the clip came back null — a character at bind
+    // pose with nothing in the log.
+    QString resolvedByGuid;
+    if (!assetGuid.isEmpty()) resolvedByGuid = resolveAssetPath(assetGuid);
+    if (!resolvedByGuid.isEmpty() && QFileInfo::exists(resolvedByGuid)) {
+        extractAssetsFromAssimpScene(resolvedByGuid);
+        auto byGuid = animations[resolvedByGuid];
+        for (auto anim : byGuid) anim->source = relPath;
+        if (byGuid.contains(animName)) return byGuid[animName];
+        if (byGuid.size() == 1) return byGuid.first();
+    }
     filePath = this->getAbsolutePath(filePath);
     // Pin world: project folders no longer hold asset files, so a persisted
     // scene-relative source usually resolves to nothing. Re-home it through

@@ -96,6 +96,11 @@ public:
     // node in the open scene by guid, exactly as `addSockets` does.
     Q_INVOKABLE QString spawn(const QString &assetGuid,
                               const QVariantMap &options = QVariantMap());
+    /// Loads an animation clip onto a SCENE avatar (verb-coverage audit F5).
+    /// The Mixamo workflow, for the scene rather than the preview page: one
+    /// character asset, then one file per animation.
+    Q_INVOKABLE QVariantMap loadClip(const QString &nodeId, const QString &pathOrAssetGuid,
+                                     const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap movement(const QString &nodeId);
     Q_INVOKABLE QVariantMap setMovement(const QString &nodeId, const QVariantMap &values);
     Q_INVOKABLE QVariantMap snapshot(const QString &path, int width = 256, int height = 256,
@@ -129,6 +134,18 @@ public:
                                  const QString &clipName);
 
 private:
+    /// loadClip's halves, shared with spawn's `clips` option.
+    /// Resolves a path OR an existing asset guid to a PINNED project asset and
+    /// the absolute path of its stored bytes. Empty guid on failure (message
+    /// recorded).
+    QString resolveClipAsset(const char *verb, const QString &pathOrAssetGuid,
+                             QString *absolutePathOut);
+    /// Parses `absolutePath` for skeletal clips, scores them against the
+    /// character's rig and attaches the ones that fit. Fills `out`.
+    bool attachClipsFromFile(const char *verb, const iris::SceneNodePtr &character,
+                             const QString &absolutePath, const QString &assetGuid,
+                             const QString &nameOverride, QVariantMap &out);
+
     /// The node's locomotion component, or null with a message recorded.
     iris::AvatarLocomotion *locomotionOrFail(const char *verb, const QString &nodeId,
                                              iris::SceneNodePtr *nodeOut = nullptr);
