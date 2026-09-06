@@ -70,3 +70,28 @@ set_tests_properties(log.engine PROPERTIES
     TIMEOUT 400
     LABELS "log")
 
+# log.perf — the periodic performance sampler (SESSION_LOG_SPEC §10 phase 4
+# gate). TWO halves in one script: the LINE through --script, and the TIMER
+# under --mcp-port, because a QTimer only fires while an event loop is turning
+# and a --script run never turns one. Its own MCP port (mcp.e2e and
+# app.pacing_undo both take theirs and all three may run in one gate).
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_program(JAH_LOGPERF_CURL curl)
+    find_program(JAH_LOGPERF_JQ jq)
+    if(JAH_LOGPERF_CURL AND JAH_LOGPERF_JQ)
+        set(_lp_home ${CMAKE_CURRENT_BINARY_DIR}/log-perf-home)
+        file(MAKE_DIRECTORY ${_lp_home}/run)
+        add_test(NAME log.perf
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_perf.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_perf.js"
+                         8751
+                 WORKING_DIRECTORY ${_lp_home}/run)
+        set_tests_properties(log.perf PROPERTIES
+            ENVIRONMENT "HOME=${_lp_home}"
+            TIMEOUT 400
+            LABELS "log")
+    else()
+        message(STATUS "log.perf skipped: needs curl and jq")
+    endif()
+endif()

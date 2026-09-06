@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "services/services.h"
 #include "services/jahlog.h"
+#include "services/perfsampler.h"
 
 QVector<VerbInfo> LogApi::verbs() const
 {
@@ -81,6 +82,26 @@ QVector<VerbInfo> LogApi::verbs() const
           "'topRepeats' is the five most repeated warning-and-above messages with their counts, "
           "which is usually where a session's real problem is hiding. 'records' is everything "
           "written this session and 'dropped' how many have aged out of the ring.",
+          Needs::Document },
+        { "perf", "log.perf(seconds?, persist?) -> {seconds, running, defaultSeconds}",
+          "The periodic performance sampler (SESSION_LOG_SPEC §8-R3) — the single feature most "
+          "likely to catch a progressive fps decay. Every `seconds` it reads counters the app "
+          "already maintains (app.frameStats, app.renderStats, app.engineErrors, "
+          "app.heartbeatStats, plus resident memory on Linux) and writes ONE `perf` line. It is a "
+          "TIMER, not a frame hook: it never touches the frame path and costs a handful of struct "
+          "reads per interval. Passing a value re-times it and persists it as "
+          "it; 0 turns it off; passing nothing just reports. The change is NOT persisted unless "
+          "persist=true — same rule as log.level, so a debugging session cannot silently "
+          "reconfigure tomorrow's launch (Preferences > General writes the key). Defaults are 60 s "
+          "in a development build and 300 s in a release one. Reading the resulting series IS the "
+          "diagnosis: rising `work` with flat `draws` means our code got slower, rising "
+          "`draws`/`tris` means the scene grew, rising `rss` with everything else flat means a "
+          "leak.",
+          Needs::Document },
+        { "sample", "log.sample() -> string",
+          "Writes one perf line NOW, whatever the timer is doing, and returns it. The way to "
+          "bracket a suspect operation with two samples instead of waiting for the interval, and "
+          "the way a test gets a line without sleeping for a minute.",
           Needs::Document },
         { "flush", "log.flush() -> bool",
           "Pushes the buffered records to disk now. The log is BUFFERED by design (warnings and "
@@ -189,6 +210,38 @@ QStringList LogApi::since(qint64 marker, const QVariantMap &filter)
 QVariantMap LogApi::counts()
 {
     return JahLog::counts();
+}
+
+QVariantMap LogApi::perf(const QVariant &seconds, bool persist)
+{
+    PerfSampler *sampler = host.services ? host.services->perfSampler : nullptr;
+    QVariantMap out;
+    if (!sampler) { fail("log.perf: no sampler in this session"); return out; }
+    if (seconds.isValid()) {
+        const int s = seconds.toInt();
+        sampler->start(s);
+        // NOT persisted unless asked — the same rule log.level follows and for
+        // the same reason (spec §3.5): a debugging session, or a test, must not
+        // silently reconfigure tomorrow's launch. Preferences -> General writes
+        // the key; this verb only writes it when told to.
+        if (persist)
+            SettingsManager::getDefaultManager()->setValue(
+                QStringLiteral("log/perfSampleSeconds"), s);
+        JAH_LOG(JahLog::perf, Display,
+                s > 0 ? QStringLiteral("perf sampler: every %1 s").arg(s)
+                      : QStringLiteral("perf sampler: off"));
+    }
+    out.insert(QStringLiteral("seconds"), sampler->intervalSeconds());
+    out.insert(QStringLiteral("running"), sampler->isRunning());
+    out.insert(QStringLiteral("defaultSeconds"), PerfSampler::defaultSeconds());
+    return out;
+}
+
+QString LogApi::sample()
+{
+    PerfSampler *sampler = host.services ? host.services->perfSampler : nullptr;
+    if (!sampler) { fail("log.sample: no sampler in this session"); return QString(); }
+    return sampler->sampleNow();
 }
 
 bool LogApi::flush()

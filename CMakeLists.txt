@@ -241,6 +241,7 @@ set(SRCS
     src/services/framepacing.cpp
     src/services/jahlog.cpp
     src/services/sessionmarkers.cpp
+    src/services/perfsampler.cpp
     src/services/sessionheader.cpp
     src/services/loadtimeline.cpp
     src/services/meshbakestore.cpp

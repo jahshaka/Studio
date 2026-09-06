@@ -49,6 +49,8 @@ public:
     Q_INVOKABLE QStringList since(qint64 marker, const QVariantMap &filter = QVariantMap());
     Q_INVOKABLE QVariantMap counts();
     Q_INVOKABLE bool flush();
+    Q_INVOKABLE QVariantMap perf(const QVariant &seconds = QVariant(), bool persist = false);
+    Q_INVOKABLE QString sample();
 };
 
 #endif // SCRIPTING_LOGAPI_H

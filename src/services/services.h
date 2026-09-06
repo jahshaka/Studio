@@ -35,6 +35,7 @@ class ProjectService;
 class SceneEditService;
 class ThumbnailService;
 class AssetService;
+class PerfSampler;
 
 struct StudioServices
 {
@@ -45,6 +46,9 @@ struct StudioServices
     SceneEditService *sceneEdit  = nullptr;
     ThumbnailService *thumbnails = nullptr;
     AssetService     *assets     = nullptr;
+    /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).
+    /// Behind log.perf / log.sample; null in hosts with no shell.
+    PerfSampler      *perfSampler = nullptr;
 
     /// UI event bus (sky-asset updates between panels). Owned by the shell;
     /// was the Globals::eventSubscriber static (Phase 4 injected it).

@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "irisgl/core/logger.h"
 #include "services/jahlog.h"
 #include "services/sessionmarkers.h"
+#include "services/perfsampler.h"
 
 #include "data/guidmanager.h"
 #include "services/thumbnailmanager.h"
@@ -908,6 +909,14 @@ void MainWindow::setupServices()
     services->sceneEdit = sceneEditService;
     services->thumbnails = thumbnailService;
     services->assets = assetService;
+
+    // The perf sampler (SESSION_LOG_SPEC §8-R3). Started HERE, from the
+    // settings, so it is running long before anything the owner does — a
+    // sampler a user has to turn on has already missed the session that
+    // needed it.
+    perfSampler = new PerfSampler(this);
+    services->perfSampler = perfSampler;
+    perfSampler->startFromSettings();
 
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
