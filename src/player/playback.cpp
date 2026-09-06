@@ -40,16 +40,29 @@ void PlayBack::setScene(iris::ScenePtr scene)
 
 void PlayBack::setController(CameraControllerBase * controller)
 {
+	// The scene update() compares against — the shared document when an editor
+	// viewport exists, our own pointer headless. Reading a DIFFERENT scene here
+	// than update() compares against was half of the standing "controller is
+	// driving a different camera" mismatch (session-log lane, 2026-09-06); the
+	// other half was re-binding only on a controller POINTER change while the
+	// editor and the player pages reassign the shared scene's camera under us
+	// (EngineSceneViewport::setScene, EnginePlayerScene::setDocument). Re-sync
+	// whenever the CAMERA moved too, not only the controller.
+	auto liveScene = editorViewport ? editorViewport->getScene() : this->scene;
+	const auto liveCam = (liveScene && liveScene->getCamera()) ? liveScene->getCamera()
+	                                                           : iris::CameraNodePtr();
 	if (controller != camController) {
 		// end old one and begin new one
 		if (camController)
 			camController->end();
 
-		controller->setCamera(scene->getCamera());
+		if (liveCam) controller->setCamera(liveCam);
 
 		controller->start();
 
 		camController = controller;
+	} else if (camController && liveCam && camController->getCamera() != liveCam) {
+		camController->setCamera(liveCam);
 	}
 }
 
