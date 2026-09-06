@@ -903,6 +903,353 @@ static void testS7Determinism()
 }
 
 // ---------------------------------------------------------------------------
+// Stage 5 helpers (S8-S10, S12) — one blend-space state, no transitions.
+//
+// The blend space is the whole subject from here down, so the fixtures below
+// hand it a state machine with NOTHING else in it: one Grounded state, no
+// transitions, no cross-fade. What `speed` does to the weights, the times and
+// the play rate is then the only thing that can move.
+
+struct BlendSample { const char *clip; float position; float authoredSpeed; float length; };
+
+static iris::LocomotionAsset blendSpaceAsset(const QVector<BlendSample> &samples,
+                                             QMap<QString, float> &lengths)
+{
+    iris::LocomotionAsset a;
+    a.name = QStringLiteral("Blend Space");
+    iris::LocomotionStateDef st;
+    st.name = QStringLiteral("Grounded");
+    st.kind = iris::LocomotionSourceKind::BlendSpace;
+    st.loop = true;
+    st.space.syncClips = true;
+    lengths.clear();
+    for (const auto &s : samples) {
+        iris::LocomotionBlendSample b;
+        b.clip = QLatin1String(s.clip);
+        b.position = s.position;
+        b.authoredSpeed = s.authoredSpeed;
+        st.space.samples.append(b);
+        lengths.insert(QLatin1String(s.clip), s.length);
+    }
+    a.states = { st };
+    a.entry = st.name;
+    return a;
+}
+
+/// The published ABSOLUTE time for `clip`, or -1 when it is not in the set.
+static float timeOf(const iris::AvatarLocomotion *loco, const char *clip)
+{
+    for (const auto &w : loco->weights())
+        if (w.clip == QLatin1String(clip)) return w.time;
+    return -1.0f;
+}
+
+// ---------------------------------------------------------------------------
+// S8 — bracketing: exactly one clip at a sample, monotone and continuous between
+
+static void testS8BlendSpaceWeights()
+{
+    section("S8  blend space — one clip at each sample, monotone + continuous between");
+
+    QMap<QString, float> lengths;
+    // idle carries authoredSpeed 0 on purpose (a stationary clip has no authored
+    // speed); the play rate is S10's subject, not this one's.
+    const iris::LocomotionAsset a = blendSpaceAsset(
+        { { "Idle", 0.0f, 0.0f, 2.0f }, { "Walking", 2.0f, 2.0f, 1.0f },
+          { "Slow Run", 5.5f, 5.5f, 0.8f } }, lengths);
+
+    QString err;
+    iris::AvatarLocomotion loco;
+    CHECK(loco.setAsset(a, &err), qUtf8Printable(QStringLiteral("asset installs (%1)").arg(err)));
+
+    const float dt = 1.0f / 60.0f;
+    iris::AvatarLocomotionState p;
+    p.grounded = true;
+
+    // ---- (a) AT each sample position: exactly one clip at weight 1 ----------
+    struct AtSample { float speed; const char *clip; };
+    const AtSample at[] = { { 0.0f, "Idle" }, { 2.0f, "Walking" }, { 5.5f, "Slow Run" } };
+    for (const auto &c : at) {
+        p.speed = c.speed;
+        loco.step(p, lengths, dt);
+        int ones = 0, others = 0;
+        for (const auto &w : loco.weights()) {
+            if (std::fabs(w.weight - 1.0f) < 1e-5f && w.clip == QLatin1String(c.clip)) ++ones;
+            else if (w.weight > 1e-5f) ++others;
+        }
+        CHECK(ones == 1 && others == 0,
+              qUtf8Printable(QStringLiteral("speed %1: EXACTLY '%2' at weight 1, nothing else "
+                                            "(ones=%3 others=%4)")
+                                 .arg(double(c.speed)).arg(QLatin1String(c.clip))
+                                 .arg(ones).arg(others)));
+    }
+
+    // ---- (b) NO EXTRAPOLATION outside the space ----------------------------
+    p.speed = -3.0f;
+    loco.step(p, lengths, dt);
+    CHECK(std::fabs(weightOf(&loco, "Idle") - 1.0f) < 1e-5f,
+          "below the first sample: the first clip at weight 1, clamped, never extrapolated");
+    p.speed = 40.0f;
+    loco.step(p, lengths, dt);
+    CHECK(std::fabs(weightOf(&loco, "Slow Run") - 1.0f) < 1e-5f,
+          "above the last sample: the last clip at weight 1, clamped");
+
+    // ---- (c) a 20-step sweep: monotone, continuous, unit sum ---------------
+    const int kSteps = 20;
+    float prevIdle = 2.0f, prevRun = -1.0f, prevWalk = -1.0f;
+    bool idleDown = true, runUp = true, sums = true, continuous = true, walkUnimodal = true;
+    bool walkFalling = false;
+    float maxJump = 0.0f;
+    for (int i = 0; i <= kSteps; ++i) {
+        p.speed = 5.5f * float(i) / float(kSteps);
+        loco.step(p, lengths, dt);
+        const float wi = std::max(0.0f, weightOf(&loco, "Idle"));
+        const float ww = std::max(0.0f, weightOf(&loco, "Walking"));
+        const float wr = std::max(0.0f, weightOf(&loco, "Slow Run"));
+        if (std::fabs(wi + ww + wr - 1.0f) > 1e-5f) sums = false;
+        if (wi > prevIdle + 1e-5f) idleDown = false;          // idle only ever falls
+        if (wr < prevRun - 1e-5f) runUp = false;              // run only ever rises
+        if (prevWalk >= 0.0f) {
+            // walk rises to 1 at its own sample and falls after: one turning
+            // point, and never a rise once it has started falling.
+            if (ww < prevWalk - 1e-5f) walkFalling = true;
+            else if (ww > prevWalk + 1e-5f && walkFalling) walkUnimodal = false;
+            const float jump = std::max({ std::fabs(wi - prevIdle), std::fabs(ww - prevWalk),
+                                          std::fabs(wr - prevRun) });
+            maxJump = std::max(maxJump, jump);
+            if (jump > 0.2f) continuous = false;
+        }
+        prevIdle = wi; prevWalk = ww; prevRun = wr;
+    }
+    printf("      largest single-step weight change over the sweep: %.4f\n", double(maxJump));
+    CHECK(sums, "every sample's weights sum to 1 (before the engine's per-bone normalization)");
+    CHECK(idleDown, "idle's weight is MONOTONE non-increasing across the sweep");
+    CHECK(runUp, "run's weight is MONOTONE non-decreasing across the sweep");
+    CHECK(walkUnimodal, "walk rises then falls — one turning point, no oscillation");
+    CHECK(continuous, "CONTINUOUS: no single 1/20 speed step moves a weight by more than 0.2");
+}
+
+// ---------------------------------------------------------------------------
+// S9 — clip sync: two clips of different lengths sit at ONE normalized phase
+
+static void testS9ClipSync()
+{
+    section("S9  clip sync — different lengths, one shared normalized phase");
+
+    QMap<QString, float> lengths;
+    // Positions 2 and 4 so speed 3 brackets them at EXACTLY 0.5/0.5; lengths
+    // 1.0 s and 0.6 s so an unsynced pair would drift within one cycle.
+    const iris::LocomotionAsset a = blendSpaceAsset(
+        { { "Walking", 2.0f, 0.0f, 1.0f }, { "Slow Run", 4.0f, 0.0f, 0.6f } }, lengths);
+
+    QString err;
+    iris::AvatarLocomotion loco;
+    CHECK(loco.setAsset(a, &err), qUtf8Printable(QStringLiteral("asset installs (%1)").arg(err)));
+
+    const float dt = 1.0f / 60.0f;
+    iris::AvatarLocomotionState p;
+    p.grounded = true;
+    p.speed = 3.0f;
+
+    loco.step(p, lengths, dt);
+    CHECK(std::fabs(weightOf(&loco, "Walking") - 0.5f) < 1e-5f
+              && std::fabs(weightOf(&loco, "Slow Run") - 0.5f) < 1e-5f,
+          "speed 3 between samples at 2 and 4 is an exact 0.5/0.5 split");
+
+    // AT EVERY SAMPLED TIME, for three full blended cycles. The blended cycle
+    // length is the weighted sum, 0.5*1.0 + 0.5*0.6 = 0.8 s, so 48 steps at
+    // 1/60 is one cycle and the loop below crosses the wrap twice.
+    bool inPhase = true, matchesState = true, advancesAtL = true;
+    float worst = 0.0f;
+    float prevPhase = loco.statePhase();
+    for (int i = 0; i < 150; ++i) {
+        loco.step(p, lengths, dt);
+        const float tw = timeOf(&loco, "Walking");
+        const float tr = timeOf(&loco, "Slow Run");
+        const float phi = loco.statePhase();
+        const float d = std::fabs(tw / 1.0f - tr / 0.6f);
+        worst = std::max(worst, d);
+        if (d > 1e-4f) inPhase = false;
+        if (std::fabs(tw / 1.0f - phi) > 1e-4f) matchesState = false;
+        // ...and the phase advances at dt / L, L being the WEIGHTED length. A
+        // wrap subtracts 1, so compare the wrapped delta.
+        float dphi = phi - prevPhase;
+        if (dphi < 0.0f) dphi += 1.0f;
+        if (std::fabs(dphi - dt / 0.8f) > 1e-4f) advancesAtL = false;
+        prevPhase = phi;
+    }
+    printf("      worst normalized-phase disagreement over 150 steps: %.3e\n", double(worst));
+    CHECK(inPhase, "the 1.0 s and the 0.6 s clip sit at the SAME normalized phase, every step");
+    CHECK(matchesState, "...which is the state's own phase, so nothing derives it twice");
+    CHECK(advancesAtL, "...and the shared phase advances at dt / (weighted cycle length)");
+
+    // A ZERO-LENGTH sample is excluded from L and from sync (§7.3) rather than
+    // dividing by zero — every Mixamo character download ships one.
+    QMap<QString, float> zlengths;
+    const iris::LocomotionAsset z = blendSpaceAsset(
+        { { "mixamo.com", 0.0f, 0.0f, 0.0f }, { "Walking", 2.0f, 0.0f, 1.0f } }, zlengths);
+    iris::AvatarLocomotion zl;
+    CHECK(zl.setAsset(z, &err), qUtf8Printable(QStringLiteral("zero-length asset installs (%1)")
+                                                   .arg(err)));
+    iris::AvatarLocomotionState zp;
+    zp.grounded = true;
+    zp.speed = 1.0f;                       // 0.5/0.5 across the zero-length sample
+    for (int i = 0; i < 30; ++i) zl.step(zp, zlengths, dt);
+    const float zphi = zl.statePhase();
+    CHECK(std::isfinite(zphi) && zphi > 0.0f,
+          qUtf8Printable(QStringLiteral("a zero-length sample does not divide the phase by zero "
+                                        "(phase %1)").arg(double(zphi))));
+    CHECK(std::fabs(timeOf(&zl, "mixamo.com")) < 1e-6f,
+          "...and the zero-length clip is published at time 0, not NaN");
+}
+
+// ---------------------------------------------------------------------------
+// S10 — authoredSpeed: raising runSpeed changes the PLAY RATE, not the
+//       foot-plant distance per cycle
+
+static void testS10PlayRate()
+{
+    section("S10 authoredSpeed — a faster runSpeed changes the rate, not the stride");
+
+    const float dt = 1.0f / 60.0f;
+
+    // The derived rate, MEASURED rather than recomputed: run the machine at a
+    // pure sample (weight 1 on one clip, so L is that clip's own length) and
+    // read the rate back out of how far the phase moved.
+    //
+    //     phase advances by dt * rate / L   =>   rate = dphase * L / dt
+    auto measureRate = [&](float samplePosition, float authoredSpeed, float clipLength,
+                           float speed) {
+        QMap<QString, float> lengths;
+        const iris::LocomotionAsset a = blendSpaceAsset(
+            { { "Idle", 0.0f, 0.0f, 2.0f },
+              { "Slow Run", samplePosition, authoredSpeed, clipLength } }, lengths);
+        QString err;
+        iris::AvatarLocomotion loco;
+        loco.setAsset(a, &err);
+        iris::AvatarLocomotionState p;
+        p.grounded = true;
+        p.speed = speed;
+        loco.step(p, lengths, dt);
+        const float before = loco.statePhase();
+        loco.step(p, lengths, dt);
+        float d = loco.statePhase() - before;
+        if (d < 0.0f) d += 1.0f;
+        return d * clipLength / dt;
+    };
+
+    // The run clip was MEASURED at 5.5 u/s (§7.5 acceptance item 4). At the
+    // speed it was authored for, it plays at exactly 1.0.
+    const float rateAt5_5 = measureRate(5.5f, 5.5f, 0.8f, 5.5f);
+    CHECK(std::fabs(rateAt5_5 - 1.0f) < 1e-3f,
+          qUtf8Printable(QStringLiteral("runSpeed 5.5, clip authored at 5.5 -> play rate 1.000 "
+                                        "(got %1)").arg(double(rateAt5_5))));
+
+    // Now the user raises runSpeed to 8. The SAMPLE moves (it sits at the knob)
+    // but `authoredSpeed` does not — it is a property of the clip, not of the
+    // knob. The rate has to take up the difference.
+    const float rateAt8 = measureRate(8.0f, 5.5f, 0.8f, 8.0f);
+    CHECK(std::fabs(rateAt8 - 8.0f / 5.5f) < 1e-3f,
+          qUtf8Printable(QStringLiteral("runSpeed 8, same clip -> play rate 8/5.5 = 1.4545 "
+                                        "(got %1)").arg(double(rateAt8))));
+
+    // ...and THAT is what keeps the feet planted. Distance covered in one
+    // animation cycle is speed * (L / rate); with the rate scaling, it is
+    // L * authoredSpeed and does not depend on the knob at all.
+    const float stride5_5 = 5.5f * (0.8f / rateAt5_5);
+    const float stride8 = 8.0f * (0.8f / rateAt8);
+    printf("      distance per cycle: at runSpeed 5.5 = %.4f u, at runSpeed 8 = %.4f u\n",
+           double(stride5_5), double(stride8));
+    CHECK(std::fabs(stride5_5 - stride8) < 1e-3f,
+          "the FOOT-PLANT DISTANCE PER CYCLE is unchanged by raising runSpeed");
+
+    // The counterfactual, so the assertion above is not vacuous: an UNMEASURED
+    // clip (authoredSpeed 0 disables rate scaling) keeps rate 1.0 and the stride
+    // grows with the knob — which is the foot slide every user reads as a broken
+    // state machine.
+    const float rateUnmeasured = measureRate(8.0f, 0.0f, 0.8f, 8.0f);
+    CHECK(std::fabs(rateUnmeasured - 1.0f) < 1e-3f,
+          qUtf8Printable(QStringLiteral("an UNMEASURED sample (authoredSpeed 0) keeps rate 1.0 "
+                                        "(got %1)").arg(double(rateUnmeasured))));
+    const float strideUnmeasured = 8.0f * (0.8f / rateUnmeasured);
+    CHECK(strideUnmeasured > stride8 + 1.0f,
+          qUtf8Printable(QStringLiteral("...and its stride grows to %1 u — the slide "
+                                        "authoredSpeed exists to remove")
+                             .arg(double(strideUnmeasured))));
+
+    // The clamp is real and it is [0.5, 2.0]: past it the character out-runs
+    // anything the clip can be stretched into without looking wrong.
+    const float rateHuge = measureRate(30.0f, 5.5f, 0.8f, 30.0f);
+    CHECK(std::fabs(rateHuge - 2.0f) < 1e-3f,
+          qUtf8Printable(QStringLiteral("a 30 u/s knob CLAMPS the rate at 2.0 (got %1)")
+                             .arg(double(rateHuge))));
+    const float rateTiny = measureRate(0.5f, 5.5f, 0.8f, 0.5f);
+    CHECK(std::fabs(rateTiny - 0.5f) < 1e-3f,
+          qUtf8Printable(QStringLiteral("...and a very slow one clamps at 0.5 (got %1)")
+                             .arg(double(rateTiny))));
+}
+
+// ---------------------------------------------------------------------------
+// S12 — two avatars at different phases do not lock-step
+//
+// S7's tail already makes this claim about the PHASE. This section makes it
+// about the thing the mirror actually pushes — the per-clip ABSOLUTE TIMES —
+// and it makes it through the real seam (one scene, one Environment, one
+// Scene::update per step), because "two avatars" is a property of the whole
+// chain and not of one component.
+
+static void testS12NoLockStep()
+{
+    section("S12 two avatars at different phases do not lock-step");
+
+    Rig r = makeScene();
+    addGroundPlane(r);
+    auto n1 = addAvatar(r, canonicalClips(), canonicalLengths(), iris::Vec3(-3, 0, 0));
+    auto n2 = addAvatar(r, canonicalClips(), canonicalLengths(), iris::Vec3(3, 0, 0));
+    startPlay(r);
+
+    frames(r, 20);
+    n1->avatar()->setMoveInput(iris::Vec3(0, 0, -1));
+    frames(r, 90);                       // A has been walking for 1.5 s...
+    n2->avatar()->setMoveInput(iris::Vec3(0, 0, -1));
+    frames(r, 120);                      // ...before B starts, and both settle
+
+    auto *l1 = n1->locomotion();
+    auto *l2 = n2->locomotion();
+    CHECK(l1->currentState() == l2->currentState(),
+          "both avatars are in the SAME state (so the difference is phase, not routing)");
+    CHECK(!l1->weights().isEmpty() && !l2->weights().isEmpty(),
+          "both publish a weight set");
+
+    // The clip both are playing, and the absolute time each is playing it at:
+    // the exact pair of numbers SceneMirror::syncClips turns into two
+    // independent ClipState arrays.
+    bool anyShared = false, allDiffer = true;
+    float worstSame = 1.0f;
+    for (const auto &w1 : l1->weights()) {
+        for (const auto &w2 : l2->weights()) {
+            if (w1.clip != w2.clip || w1.weight <= 1e-4f || w2.weight <= 1e-4f) continue;
+            anyShared = true;
+            const float d = std::fabs(w1.time - w2.time);
+            worstSame = std::min(worstSame, d);
+            if (d < 1e-3f) allDiffer = false;
+            printf("      '%s': A at %.4f s, B at %.4f s\n", qUtf8Printable(w1.clip),
+                   double(w1.time), double(w2.time));
+        }
+    }
+    CHECK(anyShared, "the two avatars share at least one enabled clip (the lock-step risk)");
+    CHECK(allDiffer,
+          "...and each is at its OWN absolute time in it — the clock is PER AVATAR");
+
+    // And they stay apart: a shared clock would converge them, a per-avatar one
+    // holds the offset for as long as the inputs match.
+    frames(r, 120);
+    const float p1 = l1->statePhase(), p2 = l2->statePhase();
+    printf("      after 2 more seconds: phase A %.4f, phase B %.4f\n", double(p1), double(p2));
+    CHECK(std::fabs(p1 - p2) > 1e-3f, "...and they are still apart two seconds later");
+}
+
+// ---------------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
@@ -919,6 +1266,10 @@ int main(int argc, char **argv)
     testS5Refusal();
     testS6RoundTrip();
     testS7Determinism();
+    testS8BlendSpaceWeights();
+    testS9ClipSync();
+    testS10PlayRate();
+    testS12NoLockStep();
 
     printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
            failures == 1 ? "" : "s");

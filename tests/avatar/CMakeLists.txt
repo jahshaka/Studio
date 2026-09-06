@@ -129,7 +129,8 @@ set_tests_properties(avatar.possession PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
     TIMEOUT 300 LABELS "avatar")
 jah_no_display(avatar.possession)
 
-# avatar.locomotion — AVATAR_LOCOMOTION_SPEC Stage 4, gates S1-S7.
+# avatar.locomotion — AVATAR_LOCOMOTION_SPEC Stage 4 (S1-S7) and the
+# document-side half of Stage 5 (S8, S9, S10, S12).
 #
 # The locomotion state machine (§7): the closed condition vocabulary and its
 # parser, first-match-wins evaluation, the cross-fade clock, clip roles and
@@ -160,3 +161,38 @@ add_test(NAME avatar.locomotion COMMAND test_avatar_locomotion
 set_tests_properties(avatar.locomotion PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 300 LABELS "avatar")
 jah_no_display(avatar.locomotion)
+
+# avatar.locomotion_mirror — AVATAR_LOCOMOTION_SPEC Stage 5, gates S11 and S13.
+#
+# The two Stage 5 gates that are claims about the ENGINE rather than about the
+# document, so they need one: S11 (clipBoneWeights reports the per-bone
+# normalization the engine applied to the blend space's raw intent, arriving
+# through SceneMirror::syncClips rather than through a hand-written ClipState
+# array) and S13 (an editor<->player page switch mid-walk — two SceneMirrors on
+# two engine Scenes sharing ONE document, driving the real graph-ownership
+# evacuation protocol, with the phase, the published weights and the per-bone
+# result asserted across both swaps). It also measures R13's rebuild cost, which
+# the spec's §14 records as reasoned and never run.
+#
+# Links IrisGL AND JahshakaEngine, like tests/mirror: it spans the boundary on
+# purpose. Offscreen view, no window; DISPLAY must be reachable (Vulkan), so it
+# gets NO jah_no_display.
+add_executable(test_avatar_locomotion_mirror test_avatar_locomotion_mirror.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_avatar_locomotion_mirror PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_avatar_locomotion_mirror PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_avatar_locomotion_mirror PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_avatar_locomotion_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_avatar_locomotion_mirror JahshakaEngineMedia)
+add_test(NAME avatar.locomotion_mirror COMMAND test_avatar_locomotion_mirror
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(avatar.locomotion_mirror PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 600 LABELS "avatar")
