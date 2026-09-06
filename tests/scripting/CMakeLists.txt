@@ -12,12 +12,20 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Qml)
 add_executable(test_script_engine test_script_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apimodule.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/apiregistry.cpp
-    ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp)
+    ${CMAKE_SOURCE_DIR}/src/scripting/scriptengine.cpp
+    # The session log's script-run record (SESSION_LOG_SPEC §5) is emitted from
+    # ScriptEngine::evaluate, the one entry point the console dock, --script and
+    # MCP run_script all share. JahLog is a LEAF service — Qt plus iris::Logger
+    # and nothing else — so the "core has zero Studio dependencies" property
+    # above still holds in the way that matters: no MainWindow, no engine, no
+    # document, no database.
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp)
 set_target_properties(test_script_engine PROPERTIES AUTOMOC ON)
 target_include_directories(test_script_engine PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/scripting)
-target_link_libraries(test_script_engine PRIVATE Qt6::Widgets Qt6::Qml)
+    ${CMAKE_SOURCE_DIR}/src/scripting
+    ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_script_engine PRIVATE IrisGL Qt6::Widgets Qt6::Qml)
 add_test(NAME scripting.engine COMMAND test_script_engine
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(scripting.engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "scripting")

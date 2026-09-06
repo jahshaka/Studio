@@ -99,6 +99,7 @@ struct StudioServices;
 class UndoService;
 class SelectionService;
 class PlaybackService;
+class SessionMarkers;
 class ProjectService;
 class SceneEditService;
 class ThumbnailService;
@@ -733,6 +734,10 @@ private:
     UndoService *undoService = nullptr;
     SelectionService *selectionService = nullptr;
     PlaybackService *playbackService = nullptr;
+    /// The session log's shell-side event markers (SESSION_LOG_SPEC §5):
+    /// play/stop brackets, space switches, the quit summary and the scene
+    /// stats appended to the open block. Parented, so it dies with the window.
+    SessionMarkers *sessionMarkers = nullptr;
     ProjectService *projectService = nullptr;
     SceneEditService *sceneEditService = nullptr;
     ThumbnailService *thumbnailService = nullptr;

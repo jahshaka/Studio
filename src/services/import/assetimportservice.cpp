@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include <QDir>
 #include <QDirIterator>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -28,6 +29,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimporters.h"
+#include "services/jahlog.h"
 #include "irisgl/core/logger.h"
 
 AssetImportService::AssetImportService(Database *db, Project *project)
@@ -106,9 +108,32 @@ AssetImporterBase *AssetImportService::pickImporter(const ImportRequest &request
 ImportResult AssetImportService::import(const ImportRequest &request,
                                         const ImportProgressFn &progress)
 {
+    // The IMPORT RECORD (SESSION_LOG_SPEC §5). This is the one pipeline
+    // (sniff -> validate -> convert -> store -> register), so one record here
+    // covers every import route the app has.
+    QElapsedTimer clock;
+    clock.start();
     PreparedImport prepared = prepare(request, progress);
-    if (!prepared.ok()) return prepared.result;
-    return commit(prepared, progress);
+    ImportResult out = prepared.ok() ? commit(prepared, progress) : prepared.result;
+
+    const QString source = QFileInfo(request.sourcePath).fileName();
+    if (out.ok()) {
+        JAH_LOG(JahLog::assets, Display,
+                QStringLiteral("import: '%1' -> %2 (%3 object(s), %4 ms)%5")
+                    .arg(source, out.assetGuid)
+                    .arg(out.objectOids.size())
+                    .arg(clock.elapsed())
+                    .arg(out.warnings.isEmpty()
+                             ? QString()
+                             : QStringLiteral(" — %1 warning(s)").arg(out.warnings.size())));
+        for (const QString &w : out.warnings)
+            JAH_LOG(JahLog::assets, Warning, QStringLiteral("import '%1': %2").arg(source, w));
+    } else {
+        JAH_LOG(JahLog::assets, Error,
+                QStringLiteral("import: '%1' FAILED after %2 ms — %3")
+                    .arg(source).arg(clock.elapsed()).arg(out.error));
+    }
+    return out;
 }
 
 PreparedImport AssetImportService::prepare(const ImportRequest &request,

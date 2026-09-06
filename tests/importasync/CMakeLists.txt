@@ -8,6 +8,9 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
 add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
+    # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/importbatchrunner.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/pages/importviewertail.cpp

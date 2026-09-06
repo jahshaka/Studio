@@ -26,6 +26,9 @@ For more information see the LICENSE file
 #include "ui/pages/projectmanager.h"
 #include "services/undoservice.h"
 #include "services/loadtimeline.h"
+#include "services/jahlog.h"
+
+#include <QElapsedTimer>
 
 
 ProjectService::ProjectService(Database *db,
@@ -179,6 +182,11 @@ QStringList ProjectService::plannedModelPaths() const
 // that one is fixed at src/services/assetcas.cpp storeObject.
 bool ProjectService::saveProjectBlob()
 {
+    // The SAVE BLOCK (SESSION_LOG_SPEC §5) is emitted from here, not from the
+    // verb: this is what project.save calls AND what the UI save path calls, so
+    // one record covers both.
+    QElapsedTimer clock;
+    clock.start();
     // The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveOpenScene() this
     // NEVER silently no-ops: the scene lives only in the DB projects table,
     // and a scripted or headless save must actually write it. The thumbnail
@@ -211,6 +219,11 @@ bool ProjectService::saveProjectBlob()
     }
 
     undo->markSaved();
+    JahLog::write(JahLog::scene, ok ? JahLog::Level::Display : JahLog::Level::Error,
+            QStringLiteral("=== SCENE SAVE === '%1' (%2) %3 in %4 ms, blob %5 bytes")
+                .arg(project->getProjectName(), project->getProjectGuid(),
+                     ok ? QStringLiteral("ok") : QStringLiteral("FAILED"))
+                .arg(clock.elapsed()).arg(blob.size()));
     return ok;
 }
 

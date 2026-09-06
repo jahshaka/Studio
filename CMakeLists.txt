@@ -197,6 +197,7 @@ set(SRCS
     src/scripting/modules/animapi.cpp
     src/scripting/modules/cameraapi.cpp
     src/scripting/modules/inputapi.cpp
+    src/scripting/modules/logapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
     src/modules/publish/publishmodule.cpp
@@ -239,6 +240,7 @@ set(SRCS
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp
     src/services/jahlog.cpp
+    src/services/sessionmarkers.cpp
     src/services/sessionheader.cpp
     src/services/loadtimeline.cpp
     src/services/meshbakestore.cpp

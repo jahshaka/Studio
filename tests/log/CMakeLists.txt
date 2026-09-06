@@ -32,3 +32,23 @@ set_tests_properties(log.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 # No display at all: the whole point of the services.core shape.
 jah_no_display(log.core)
 
+# log.events — the verbs and the event markers against the REAL binary
+# (SESSION_LOG_SPEC §10 phase 2 gate). Two halves, both needed: the JS asserts
+# everything readable through log.since/log.tail/log.counts, and the shell
+# wrapper asserts the ARTIFACT — brackets, block order, the ogre sibling, the
+# latest.log pointer and the close summary — which no verb can vouch for.
+#
+# Inherits the session display like the other e2e suites (the engine needs a
+# reachable X display), and takes its OWN HOME so the library DB is fresh.
+set(_le_home ${CMAKE_CURRENT_BINARY_DIR}/log-events-home)
+file(MAKE_DIRECTORY ${_le_home}/run)
+add_test(NAME log.events
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_events.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_events.js"
+         WORKING_DIRECTORY ${_le_home}/run)
+set_tests_properties(log.events PROPERTIES
+    ENVIRONMENT "HOME=${_le_home}"
+    TIMEOUT 300
+    LABELS "log")
+
