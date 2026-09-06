@@ -345,6 +345,10 @@ QVariantMap ProjectApi::previewWeb(const QString &dir)
         return out;
     }
 
+    // mode:"kiosk" now means the browser REALLY started: launchKiosk waits for
+    // the start and returns null when it dies immediately (PUBLISH_AUDIT #11 —
+    // this verb used to report a window that never existed), so the fall-
+    // through below is a real fallback rather than a formality.
     const QString browser = PreviewLauncher::findChromiumBrowser();
     if (!browser.isEmpty() && PreviewLauncher::launchKiosk(indexHtml, this)) {
         out["browser"] = browser;

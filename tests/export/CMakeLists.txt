@@ -59,10 +59,16 @@ endif()
 # Shared export walkers (ASSET_PIPELINE_SPEC §3.3 phase-5 front half):
 # traversal/skip/classification, scene inventory, mesh buffer readers.
 # Document-only — runs offscreen like export.web.
+# gltfexporter.cpp joins the sources for ONE reason (PUBLISH_AUDIT #5): the
+# suite that owns the walkers is where the exported TRS round trip belongs —
+# what the walkers hand out has to survive into the file. iesprofile.cpp is the
+# exporter's only extra link dependency.
 add_executable(test_export_walkers test_export_walkers.cpp
+    ${CMAKE_SOURCE_DIR}/src/export/gltfexporter.cpp
     ${CMAKE_SOURCE_DIR}/src/export/walkers/scenewalker.cpp
     ${CMAKE_SOURCE_DIR}/src/export/walkers/meshbufferreader.cpp
-    ${CMAKE_SOURCE_DIR}/src/export/walkers/materialtexturereader.cpp)
+    ${CMAKE_SOURCE_DIR}/src/export/walkers/materialtexturereader.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp)
 set_target_properties(test_export_walkers PROPERTIES AUTOMOC OFF)
 target_include_directories(test_export_walkers PRIVATE ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src

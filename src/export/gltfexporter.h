@@ -24,7 +24,9 @@ For more information see the LICENSE file
 //   textures (metal/rough channel-packed, roughness remap baked), cameras,
 //   skins + skeletal animations (phase 2).
 //   KHR: lights_punctual (-Y-to--Z orientation shim node), texture_transform,
-//   emissive_strength, transmission (glass).
+//   emissive_strength, transmission (glass AND refractive glass), ior
+//   (refractive glass only — the authored strength also rides
+//   extras.jah.refraction).
 //   extras: sky (gradient baked to an equirect strip, cubemap stitched to
 //   equirect), fog, per-light shadow settings, area lights, particles,
 //   ambient audio, viewpoints, GI mode (informational).

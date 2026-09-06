@@ -6,10 +6,18 @@
 # reproduces the world, and a cancelled import leaves no orphan project — and
 # that quitting mid-archive still terminates cleanly (shutdownArchives).
 find_package(Qt6 REQUIRED COMPONENTS Core Network)
-add_executable(test_archive_responsive test_archive_responsive.cpp)
+# ZipHelper joins the sources so the suite can READ what the archiver wrote
+# (PUBLISH_AUDIT #2: no mesh bake may travel in a .jaf). It is the app's own
+# zip loop — pure QtCore over thirdparty/zip — so the suite stays free of the
+# rest of the app.
+add_executable(test_archive_responsive test_archive_responsive.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/ziphelper.cpp)
 set_target_properties(test_archive_responsive PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(test_archive_responsive PRIVATE Qt6::Core Qt6::Network)
+target_include_directories(test_archive_responsive PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src)
+target_link_libraries(test_archive_responsive PRIVATE Qt6::Core Qt6::Network zip)
 target_compile_definitions(test_archive_responsive PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")

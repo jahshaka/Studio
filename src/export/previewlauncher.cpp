@@ -12,12 +12,14 @@ For more information see the LICENSE file
 #include "export/previewlauncher.h"
 
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QUrl>
+#include <QUuid>
 
 QString PreviewLauncher::findChromiumBrowser()
 {
@@ -51,6 +53,24 @@ QString PreviewLauncher::findChromiumBrowser()
     return QString();
 }
 
+QString PreviewLauncher::newProfileDir()
+{
+    // --user-data-dir keeps the preview isolated from the user's profile and
+    // avoids "Chrome is already running" single-instance ties (audit §7.3).
+    //
+    // It must be UNIQUE PER RUN and OUTSIDE the export folder (PUBLISH_AUDIT
+    // #3). Beside index.html it was two bugs at once: the profile shipped in
+    // the published deliverable (the folder the user uploads), and a shared
+    // fixed path let a previous run's Chrome — live or half-dead — singleton-
+    // capture this launch and merely forward the URL to its own old window,
+    // the exact defect embeddedpreview.cpp already fixed the same way.
+    // Cleanup is on QProcess::finished; a crash leaves at most one directory
+    // in the OS temp location, which the OS reaps.
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+        .filePath(QStringLiteral("jah-preview-profile-") +
+                  QUuid::createUuid().toString(QUuid::Id128).left(12));
+}
+
 QProcess *PreviewLauncher::launchKiosk(const QString &indexHtml, QObject *parent)
 {
     const QString browser = findChromiumBrowser();
@@ -59,9 +79,7 @@ QProcess *PreviewLauncher::launchKiosk(const QString &indexHtml, QObject *parent
     const QFileInfo info(indexHtml);
     if (!info.exists()) return nullptr;
 
-    // --user-data-dir keeps the preview isolated from the user's profile and
-    // avoids "Chrome is already running" single-instance ties (audit §7.3).
-    const QString profileDir = info.absolutePath() + QStringLiteral("/.preview-profile");
+    const QString profileDir = newProfileDir();
     auto *process = new QProcess(parent);
     process->setProgram(browser);
     QStringList args = {
@@ -81,7 +99,22 @@ QProcess *PreviewLauncher::launchKiosk(const QString &indexHtml, QObject *parent
         args.append(QStringLiteral("--ozone-platform=x11"));
 #endif
     process->setArguments(args);
+    QObject::connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                     process, [profileDir](int, QProcess::ExitStatus) {
+                         QDir(profileDir).removeRecursively();
+                     });
     process->start();
+    // The caller is told "a browser is running" — so make that true. start() is
+    // asynchronous and a browser that dies immediately (missing libs, refused
+    // display, bad profile) reported success from here, and previewWeb then
+    // returned mode:"kiosk" for a window nobody ever saw (PUBLISH_AUDIT #11).
+    // 1500 ms is start-up, not page load: Chrome forks its zygote well inside
+    // it, and the caller's fallback (open in the default browser) is cheap.
+    if (!process->waitForStarted(1500)) {
+        QDir(profileDir).removeRecursively();
+        delete process;
+        return nullptr;
+    }
     return process;
 }
 

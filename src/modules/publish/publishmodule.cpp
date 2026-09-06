@@ -372,8 +372,16 @@ void PublishPage::launchCompanion(const QString &indexHtml, const QString &summa
         setStatus(summary + QStringLiteral(" Preview window opened (%1).")
                                 .arg(QFileInfo(PreviewLauncher::findChromiumBrowser()).fileName()));
     } else {
+        // launchKiosk now returns null for TWO reasons — no browser at all, or
+        // one that failed to start (PUBLISH_AUDIT #11) — so say which.
         PreviewLauncher::openInBrowser(indexHtml);
-        setStatus(summary + QStringLiteral(" No Chrome/Chromium found — opened in the default browser."));
+        const QString browser = PreviewLauncher::findChromiumBrowser();
+        setStatus(summary + (browser.isEmpty()
+                                 ? QStringLiteral(" No Chrome/Chromium found — opened in the "
+                                                  "default browser.")
+                                 : QStringLiteral(" %1 would not start — opened in the default "
+                                                  "browser.")
+                                       .arg(QFileInfo(browser).fileName())));
     }
 }
 

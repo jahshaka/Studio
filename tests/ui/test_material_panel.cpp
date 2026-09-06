@@ -54,11 +54,17 @@ static int failures = 0;
 
 namespace {
 
-int propId(const iris::MaterialPtr &mat, const QString &name)
+iris::Property *findProp(const iris::MaterialPtr &mat, const QString &name)
 {
     for (auto *p : mat->properties)
-        if (p->name == name) return p->id;
-    return -1;
+        if (p->name == name) return p;
+    return nullptr;
+}
+
+int propId(const iris::MaterialPtr &mat, const QString &name)
+{
+    auto *p = findProp(mat, name);
+    return p ? p->id : -1;
 }
 
 HFloatSliderWidget *sliderRow(QWidget *panel, int id)
@@ -242,9 +248,18 @@ static void testIntRow()
     if (!row) return;
 
     auto *combo = row->getWidget();
-    CHECK(combo->count() == 6, "int: six blend modes listed");
+    // The combo must cover the property's WHOLE declared range. A mode with no
+    // entry (Refractive was missing one — PUBLISH_AUDIT #4) showed a blank
+    // combo and silently downgraded the material on the next pick, so this is
+    // asserted against maxValue rather than a hard-coded count that can drift
+    // away from PbrMaterial again.
+    const auto *alphaProp = static_cast<const iris::IntProperty *>(
+        findProp(rig.pbr, "alphaMode"));
+    CHECK(alphaProp && combo->count() == alphaProp->maxValue + 1,
+          "int: one entry per declared alpha mode (0..maxValue)");
     CHECK(combo->itemText(4) == "Additive" && combo->itemText(5) == "Modulate",
           "int: Additive/Modulate entries present");
+    CHECK(combo->itemText(6) == "Refractive", "int: Refractive entry present");
 
     const int before = rig.stack.count();
     combo->setCurrentIndex(4);   // Additive
@@ -255,6 +270,14 @@ static void testIntRow()
     CHECK(rig.pbr->alphaMode == 0, "int: undo restores the field");
     rig.undo.redo();
     CHECK(rig.pbr->alphaMode == 4, "int: redo reapplies the field");
+
+    // A refractive pick must SURVIVE. With no entry for it the combo simply had
+    // no index 6 to select, so the mode was unreachable from the panel and any
+    // pick on a refractive material silently downgraded it (PUBLISH_AUDIT #4).
+    combo->setCurrentIndex(6);
+    CHECK(rig.pbr->alphaMode == 6, "int: Refractive is selectable and lands on the material");
+    rig.undo.undo();
+    CHECK(rig.pbr->alphaMode == 4, "int: undo restores the pre-Refractive mode");
 }
 
 // Every float/int row must DISPLAY the material's value the moment the panel
