@@ -651,7 +651,16 @@ void EngineSceneViewport::mousePressEvent(QMouseEvent *e)
 void EngineSceneViewport::mouseMoveEvent(QMouseEvent *e)
 {
     e->accept();
-    if (mPlaying && mPlayback) { mPlayback->mouseMoveEvent(e); return; }
+    if (mPlaying && mPlayback) {
+        // Play-in-place is still THE EDITOR: free mouse-look grabbed the
+        // cursor the instant Play started ("my mouse should not be linked to
+        // play scene" — owner, 2026-09-06). Look only while RMB is held, the
+        // same gesture as the editor fly camera; the dedicated Player page
+        // (EnginePlayerView) keeps unrestricted look — a page you switched to
+        // is a game surface, the editor viewport is not.
+        if (e->buttons() & Qt::RightButton) mPlayback->mouseMoveEvent(e);
+        return;
+    }
     mMousePos = e->position(); mHaveMouse = true;
     const QPointF dir = mMousePos - mPrevMousePos;
     mPrevMousePos = mMousePos;
