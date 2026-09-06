@@ -4,7 +4,7 @@
 # (no window backend yet) and forcing xcb aborts Qt at startup — no env needed.
 # The display comes from the JAH_TEST_DISPLAY cache variable (tests/CMakeLists.txt).
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(JAH_SELFTEST_ENV "DISPLAY=${JAH_TEST_DISPLAY};QT_QPA_PLATFORM=xcb;")
+    set(JAH_SELFTEST_ENV "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;")
 else()
     set(JAH_SELFTEST_ENV "")
 endif()

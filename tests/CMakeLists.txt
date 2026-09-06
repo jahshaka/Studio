@@ -5,9 +5,21 @@
 # and they used to pin ":0" — which on a developer machine means "the owner's
 # live session": a parallel worktree build had no way to run its own gate
 # without opening windows on somebody else's desktop. Configure with
-# -DJAH_TEST_DISPLAY=:NN to point them at an Xvfb of your own. Default unchanged.
-set(JAH_TEST_DISPLAY ":0" CACHE STRING
-    "X display the on-screen test suites run on (Linux only)")
+# -DJAH_TEST_DISPLAY=:NN to point them at an Xvfb of your own.
+#
+# DEFAULT CHANGED 2026-09-06: empty = inherit ctest's own DISPLAY. The old ":0"
+# default meant a plain `ctest` in ANY worktree opened windows on the owner's
+# desktop no matter what DISPLAY the runner exported (three lanes hit it in one
+# day — the per-test ENVIRONMENT pin overrides the process environment). An
+# explicit value still pins; empty follows the environment, which is what every
+# rig-run and every gate actually wants.
+set(JAH_TEST_DISPLAY "" CACHE STRING
+    "X display the on-screen test suites run on (Linux only; empty = inherit DISPLAY)")
+if(JAH_TEST_DISPLAY STREQUAL "")
+    set(JAH_TEST_DISPLAY_ENV "")
+else()
+    set(JAH_TEST_DISPLAY_ENV "DISPLAY=${JAH_TEST_DISPLAY};")
+endif()
 
 # THE SANITIZER LANES (deep audit 2026-09, area 3 finding 4: "no sanitizer has
 # ever seen the app"). Two ctest LABELS, no duplicate test registrations and no

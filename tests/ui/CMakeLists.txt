@@ -149,7 +149,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME ui.engine_view_winid COMMAND test_engine_view_winid
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(ui.engine_view_winid PROPERTIES
-        ENVIRONMENT "DISPLAY=${JAH_TEST_DISPLAY};QT_QPA_PLATFORM=xcb"
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb"
         TIMEOUT 180 LABELS "ui")
 endif()
 
