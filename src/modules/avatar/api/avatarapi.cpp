@@ -93,15 +93,20 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "snapshot", "avatar.snapshot(path, w=256, h=256, probes=[]) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
           "Offscreen render of the Avatar page's preview scene to a PNG, with the centre pixel and each probe point ({x,y} normalized 0..1) returned so scripts can assert on colours — the way a script (or an MCP session) proves the skeleton-only view from outside the app.",
           Needs::Engine },
-        { "addSockets", "avatar.addSockets(nodeId) -> [{socket, bone, mapped, existed}]",
-          "Installs this module's BUILT-IN sockets on a rigged mesh node in the OPEN SCENE "
+        { "addSockets", "avatar.addSockets(nodeId) -> [{socket, bone, mapped, existed, node}]",
+          "Installs this module's BUILT-IN sockets on a character in the OPEN SCENE "
           "(CAMERAS_SPEC D9): `head` for first person — the camera an agent driving the avatar "
           "sees through — and `shoulder` for third person, mapped from the Mixamo-class bone "
           "names the module already understands (mixamorig:, Biped's Bip01, VRM's J_Bip, bare "
           "and _JNT-suffixed spellings; the right shoulder is preferred over the left). "
+          "GIVEN A MESH NODE it maps against that node's own rig; given anything else (a "
+          "character's wrapper — what avatar.spawn returns) it sweeps the SUBTREE and puts each "
+          "socket on the skinned piece whose rig actually has the bone, because a real export is "
+          "several pieces bound to subsets of one skeleton (Mixamo's Beta: the limbs piece has "
+          "neither Head nor Shoulder). `node` in each row is the piece the socket landed on. "
           "FAILS SOFT: a rig with no recognizable head simply gets no head socket — the report "
           "says which built-in mapped to which bone and which did not, instead of throwing. A "
-          "socket the node ALREADY has is left alone (`existed`), so re-installing never "
+          "socket the character ALREADY has is left alone (`existed`), so re-installing never "
           "discards an authored offset. The built-in offsets are IDENTITY: a socket's offset is "
           "in bone space, and bone axes and world scale differ per rig (a Mixamo character is "
           "~170 units tall, its glTF export ~1.7), so any hard-coded framing offset would be "
@@ -112,8 +117,9 @@ QVector<VerbInfo> AvatarApi::verbs() const
         { "spawn", "avatar.spawn(assetGuid, {position?, parent?}) -> nodeId",
           "Instantiates an OBJECT asset from the open project as a playable AVATAR "
           "(AVATAR_LOCOMOTION_SPEC §6): the same instantiation assets.addToScene does, plus the "
-          "movement component on the wrapper node with its capsule fitted to the mesh bounds, "
-          "plus this module's built-in head/shoulder sockets on the rigged mesh inside it. "
+          "movement component on the wrapper node with its capsule fitted (in WORLD metres) to "
+          "the character's geometry, plus this module's built-in head/shoulder sockets, each "
+          "installed on whichever skinned piece inside the character actually carries its bone. "
           "`position` places it; `parent` is a node id to spawn under (default: the scene root). "
           "Spawning DURING play registers the avatar with the running physics world on the spot "
           "rather than refusing (spec R6), so a scripted spawn mid-play walks immediately. "
@@ -549,6 +555,25 @@ QVariantMap AvatarApi::snapshot(const QString &path, int width, int height,
 // (avatarsockets.h) — and the node module has no business importing a feature
 // module. The sockets it installs are ordinary generic sockets; everything
 // afterwards (attach, offset, remove) is node.*.
+namespace
+{
+/// Does anything under (or at) this node carry a rig? Only used to tell a
+/// rig-less subtree ("that is a rock") from a rigged one whose joints simply
+/// do not canonicalize (fail-soft, two unmapped rows).
+bool subtreeHasRig(const iris::SceneNodePtr &node)
+{
+    if (node.isNull()) return false;
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh &&
+        node.staticCast<iris::MeshNode>()->hasSkeleton())
+        return true;
+    const int kids = node->childCount();
+    for (int i = 0; i < kids; ++i)
+        if (iris::SceneNode *c = node->childAt(i))
+            if (subtreeHasRig(c->sharedFromThis())) return true;
+    return false;
+}
+}   // namespace
+
 QVariantList AvatarApi::addSockets(const QString &nodeId)
 {
     QVariantList out;
@@ -560,37 +585,55 @@ QVariantList AvatarApi::addSockets(const QString &nodeId)
         record(QStringLiteral("avatar.addSockets: no node with id '%1'").arg(nodeId));
         return out;
     }
-    if (node->getSceneNodeType() != iris::SceneNodeType::Mesh) {
-        record(QStringLiteral("avatar.addSockets: '%1' is not a mesh — sockets live on the "
-                              "BONES of a rigged mesh").arg(node->getName()));
-        return out;
+    // A MESH node keeps the per-node semantics (its own rig, its own sockets).
+    // Anything else — a character's wrapper, the node avatar.spawn returns — is
+    // treated as the character it is and swept subtree-wide: a real export is
+    // several skinned pieces sharing one skeleton, and which piece carries the
+    // head chain is not something a caller can be asked to know.
+    QVector<avatar::sockets::Mapping> report;
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto mesh = node.staticCast<iris::MeshNode>();
+        if (!mesh->hasSkeleton()) {
+            record(QStringLiteral("avatar.addSockets: '%1' has no rig — nothing to map "
+                                  "(node.boneNames lists a node's bones)").arg(node->getName()));
+            return out;
+        }
+        report = avatar::sockets::installBuiltIns(mesh);
+    } else {
+        report = avatar::sockets::installBuiltInsInSubtree(node);
+        bool anyRig = false;
+        for (const auto &mapping : report) if (mapping.owner) anyRig = true;
+        if (!anyRig && !subtreeHasRig(node)) {
+            record(QStringLiteral("avatar.addSockets: nothing under '%1' has a rig — nothing to "
+                                  "map (node.boneNames lists a node's bones)").arg(node->getName()));
+            return out;
+        }
     }
-    auto mesh = node.staticCast<iris::MeshNode>();
-    if (!mesh->hasSkeleton()) {
-        record(QStringLiteral("avatar.addSockets: '%1' has no rig — nothing to map "
-                              "(node.boneNames lists a node's bones)").arg(node->getName()));
-        return out;
-    }
-
-    const QVector<avatar::sockets::Mapping> report = avatar::sockets::installBuiltIns(mesh);
 
     // Undo removes exactly the sockets THIS call created — not the ones that
-    // were already there, whose offsets the user may have authored.
-    QStringList created;
+    // were already there, whose offsets the user may have authored — and from
+    // the PIECE each landed on, which the subtree sweep chose.
+    QVector<QPair<iris::MeshNodePtr, QString>> created;
     for (const auto &mapping : report)
-        if (mapping.mapped && !mapping.existed) created.append(mapping.socket);
+        if (mapping.mapped && !mapping.existed && mapping.owner)
+            created.append({ mapping.owner, mapping.socket });
     if (!created.isEmpty() && host.services && host.services->undo) {
+        QVector<QPair<iris::MeshNodePtr, iris::Socket>> sockets;
+        for (const auto &row : created)
+            if (const iris::Socket *s = row.first->findSocket(row.second))
+                sockets.append({ row.first, *s });
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("avatar sockets"),
-            [mesh]() { avatar::sockets::installBuiltIns(mesh); },
-            [mesh, created]() { for (const QString &name : created) mesh->removeSocket(name); }));
+            [sockets]() { for (const auto &row : sockets) row.first->addSocket(row.second); },
+            [created]() { for (const auto &row : created) row.first->removeSocket(row.second); }));
     }
 
     for (const auto &mapping : report) {
         out.append(QVariantMap{ { "socket", mapping.socket },
                                 { "bone", mapping.bone },
                                 { "mapped", mapping.mapped },
-                                { "existed", mapping.existed } });
+                                { "existed", mapping.existed },
+                                { "node", mapping.ownerGuid } });
     }
     return out;
 }
@@ -638,24 +681,6 @@ const QStringList &knobNames()
     return names;
 }
 
-/// The rigged mesh inside an imported character, or null. The sockets go on the
-/// BONES of that mesh; the movement component goes on the wrapper above it.
-iris::MeshNodePtr findRiggedMesh(const iris::SceneNodePtr &node)
-{
-    if (!node) return iris::MeshNodePtr();
-    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto mesh = node.staticCast<iris::MeshNode>();
-        if (mesh->hasSkeleton()) return mesh;
-    }
-    const int kids = node->childCount();
-    for (int i = 0; i < kids; ++i) {
-        if (iris::SceneNode *c = node->childAt(i)) {
-            auto hit = findRiggedMesh(c->sharedFromThis());
-            if (hit) return hit;
-        }
-    }
-    return iris::MeshNodePtr();
-}
 }   // namespace
 
 QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
@@ -716,7 +741,12 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     auto movement = iris::AvatarMovementPtr(new iris::AvatarMovement());
     node->setAvatarComponent(movement);
     movement->fitCapsuleToNode(node);
-    if (auto mesh = findRiggedMesh(node)) avatar::sockets::installBuiltIns(mesh);
+    // EVERY skinned piece, not the first one. A Mixamo export is three meshes
+    // bound to subsets of one skeleton, and the first piece depth-first is the
+    // limbs — no Head, no Shoulder — so a first-piece-only install left a
+    // spawned character with zero sockets and no error (and the third-person
+    // camera with no shoulder to take its height from).
+    avatar::sockets::installBuiltInsInSubtree(node);
 
     // THE LOCOMOTION STATE MACHINE (§7, Stage 4), installed at the same moment
     // and on the same node. `refreshClips` reads the character's clips, runs
