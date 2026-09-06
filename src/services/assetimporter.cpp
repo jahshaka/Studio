@@ -37,12 +37,13 @@ AssetImporter::Result AssetImporter::importMesh(const QString &filePath, Databas
 }
 
 AssetImporter::Result AssetImporter::importFile(const QString &filePath, Database *db,
-                                                Project *project, int drawerId)
+                                                Project *project, int drawerId, int typeHint)
 {
     AssetImportService service(db, project);
     ImportRequest request;
     request.sourcePath = filePath;
     request.drawerId = drawerId;
+    request.typeHint = typeHint;
     const ImportResult imported = service.import(request);
 
     Result result;

@@ -1405,7 +1405,7 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection FROM assets WHERE guid = ? ");
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -1421,6 +1421,13 @@ AssetRecord Database::fetchAsset(const QString &guid)
             data.view_filter = query.value(6).toInt();
             data.dateCreated = query.value(7).toDateTime();
             data.collection = query.value(8).toInt();
+            // The tag blob rides along (assets.tags / assets.setTags /
+            // assets.metadata's `tags`): every writer of tags has to preserve
+            // the NAME and every writer of the name has to preserve the TAGS —
+            // updateAssetMetadata writes both columns in one statement — so
+            // "read the row, change one field, write both" needs the row to
+            // actually carry them.
+            data.tags = query.value(9).toByteArray();
             return data;
         }
     }

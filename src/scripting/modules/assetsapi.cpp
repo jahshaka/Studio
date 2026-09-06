@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "services/assetservice.h"
 #include "services/assetmigration.h"
 #include "services/assetstore.h"
+#include "services/assettags.h"
 #include "services/assetstorepaths.h"
 #include "services/meshbakestore.h"
 #include "data/constants.h"
@@ -94,18 +95,38 @@ QString storeFileFor(const QString &guid)
 QVector<VerbInfo> AssetsApi::verbs() const
 {
     return {
-        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, drawer, limit}) -> [{guid, name, type, drawer}]",
+        { "list", "assets.list({scope: 'store'|'project'|'session', type, query, tag, drawer, limit}) -> [{guid, name, type, drawer}]",
           "Store assets (default) or the open project's assets, optionally filtered by type name. A type-filtered project listing sweeps every folder (materials registered under Presets/ included); unfiltered it lists the root folder. drawer is the containing drawer's id (0 = Uncategorized). Scope 'session' lists the live session registrations (the AssetManager entries project open + add-to-project hydrate — what the editor's drag-drop paths look up); drawer is absent there. "
-          "query is a case-insensitive substring match on the asset NAME; drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query — and limit last, so a limited listing is the first N of the filtered set, not a sample of it.",
+          "query is a case-insensitive substring match on the asset NAME; tag keeps only rows carrying that TAG (case-insensitive, exact — assets.setTags writes them, and scope 'session' has none, so a tag filter there is refused); drawer restricts the listing to one drawer id (0 = Uncategorized, refused for scope 'session', which carries no drawer); limit caps how many rows come back (<= 0 means no cap). Filters apply in that order — type, then drawer, then query, then tag — and limit last, so a limited listing is the first N of the filtered set, not a sample of it.",
           Needs::Document },
-        { "metadata", "assets.metadata(guid) -> {guid, name, type, imported, kind, format, fileSize, ...}",
-          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill).",
+        { "metadata", "assets.metadata(guid) -> {guid, name, type, tags, imported, kind, format, fileSize, ...}",
+          "Rich per-type metadata for a store asset. Models: vertices, triangles, meshes, materials, textures; images: width, height; audio (wav): duration (ms), sampleRate, channels, bitsPerSample; video: duration (ms), width, height, frameRate, videoCodec; every kind: format + fileSize. Computed at import since the metadata feature landed; for older rows the first call computes it from the store files and persists it (lazy backfill). "
+          "`tags` is the row's tag list (assets.setTags writes it, assets.list({tag}) filters on it) — always present, an empty array for an untagged asset.",
+          Needs::Document },
+        { "rename", "assets.rename(guid, name) -> bool",
+          "Renames a library asset — the Assets page's name field + Update button, as a verb. "
+          "The row's TAGS are carried through untouched (both live in one write). Renaming "
+          "changes the display name only: the guid every project pin, dependency row and scene "
+          "reference uses is unchanged, so nothing breaks and nothing needs re-pinning. "
+          "Refuses an empty name and an unknown guid. NOT undoable — asset mutations never are "
+          "(SCRIPTING_SPEC \u00a71.6.5).",
+          Needs::Document },
+        { "setTags", "assets.setTags(guid, [tags]) -> [tags]",
+          "Replaces a library asset's tags and returns the list as stored — the Assets page's "
+          "tag field, as a verb. Tags are free text used for FINDING things "
+          "(assets.list({tag: \"kitchen\"})); blanks are dropped and case-insensitive duplicates "
+          "collapse, so the returned list is the truth rather than an echo. Pass an empty array "
+          "to clear them. The asset's NAME is carried through untouched. NOT undoable.",
+          Needs::Document },
+        { "tags", "assets.tags(guid) -> [tags]",
+          "The asset's tags, [] when it has none (also in assets.metadata's read).",
           Needs::Document },
         { "import", "assets.import(path) -> guid",
           "Imports a mesh file (obj, fbx, dae, glb, gltf, ply, stl — Constants::MODEL_EXTS) into the global asset store. NOT undoable.",
           Needs::Document },
-        { "importFile", "assets.importFile(path, drawerId?) -> guid",
-          "Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable.",
+        { "importFile", "assets.importFile(path, drawerId?, {typeHint}) -> guid",
+          "Imports any library-supported file (models, images, audio, video) into the asset store, optionally filed in a drawer. Images/audio/video are headless-safe (video decodes through Qt Multimedia's ffmpeg backend, no display needed). NOT undoable. "
+          "`typeHint` overrides the pipeline's SNIFF with an asset type name (the assets.list vocabulary: object, texture, music, video, file, ...) — for the file whose extension lies, or the one the sniffer will not claim. It is a HINT to the importer selection, not a relabel of the result: a hint the pipeline cannot honour fails rather than filing bytes under the wrong kind. Unknown names are refused with the list.",
           Needs::Document },
         { "drawers", "assets.drawers() -> [{id, name, parent}]",
           "The asset drawers (nested collections). parent -1 = top level; Uncategorized is drawer 0.",
@@ -224,6 +245,18 @@ QVariantList AssetsApi::list(const QVariantMap &options)
     // of this listing, so anything a script cannot ask for is a capability the
     // tool would own alone.
     const QString query = options.value("query").toString().trimmed();
+    // The TAG filter (F3): tags have been a library column and an Assets-page
+    // text field since forever, with nothing on the verb surface able to read
+    // or write one. Resolved per candidate row — it is the last filter applied,
+    // so it only costs a query for rows that survived type/drawer/name.
+    const QString tag = options.value("tag").toString().trimmed();
+    const auto tagMatches = [this, &tag](const QString &guid) {
+        if (tag.isEmpty()) return true;
+        const QStringList tags = assettags::tagsOf(host.db, guid);
+        for (const QString &candidate : tags)
+            if (candidate.compare(tag, Qt::CaseInsensitive) == 0) return true;
+        return false;
+    };
     const bool hasDrawer = options.contains("drawer");
     const int drawerFilter = options.value("drawer", -1).toInt();
     const int limit = options.value("limit", 0).toInt();
@@ -236,6 +269,11 @@ QVariantList AssetsApi::list(const QVariantMap &options)
 
     QVector<AssetRecord> records;
     if (scope == "session") {
+        if (!tag.isEmpty()) {
+            fail("assets.list: scope 'session' carries no tags — the live registrations are "
+                 "not catalog rows. List scope 'store'/'project' to filter by tag");
+            return out;
+        }
         if (hasDrawer) {
             fail("assets.list: scope 'session' carries no drawer — drop the drawer filter "
                  "or list scope 'store'/'project'");
@@ -283,6 +321,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
             for (const auto &record : records) {
                 if (hasDrawer && record.collection != drawerFilter) continue;
                 if (!nameMatches(record.name)) continue;
+                if (!tagMatches(record.guid)) continue;
                 if (full()) break;
                 out.append(QVariantMap{ { "guid", record.guid },
                                         { "name", record.name },
@@ -312,6 +351,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
         if (typeFilter >= 0 && record.type != typeFilter) continue;
         if (hasDrawer && record.collection != drawerFilter) continue;
         if (!nameMatches(record.name)) continue;
+        if (!tagMatches(record.guid)) continue;
         if (full()) break;
         out.append(QVariantMap{ { "guid", record.guid },
                                 { "name", record.name },
@@ -337,8 +377,69 @@ QVariantMap AssetsApi::metadata(const QString &guid)
     out["guid"] = record.guid;
     out["name"] = record.name;
     out["type"] = typeName(record.type);
+    // The tag list belongs in the row's own read (F3): it was a library column
+    // nothing on the verb surface could see, so an asset browser built on
+    // these verbs could not show what the Assets page shows.
+    out["tags"] = QVariant(assettags::parse(record.tags));
     if (record.dateCreated.isValid())
         out["imported"] = record.dateCreated.toString(Qt::ISODate);
+    return out;
+}
+
+bool AssetsApi::rename(const QString &guid, const QString &name)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    const QString wanted = name.trimmed();
+    if (wanted.isEmpty())
+        return fail("assets.rename: a name is required (renaming to '' would leave a row nothing "
+                    "can be found by)");
+    if (host.db->fetchAsset(guid).guid.isEmpty())
+        return fail(QStringLiteral("assets.rename: no asset with guid '%1'").arg(guid));
+    if (!assettags::rename(host.db, guid, wanted))
+        return fail(QStringLiteral("assets.rename: the database refused the rename of '%1'")
+                        .arg(guid));
+    return true;
+}
+
+QVariantList AssetsApi::setTags(const QString &guid, const QVariant &tags)
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("assets.setTags: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    const QVariant value = normalizeJs(tags);
+    QStringList wanted;
+    if (value.typeId() == QMetaType::QVariantList) {
+        for (const QVariant &entry : value.toList()) wanted << entry.toString();
+    } else if (value.typeId() == QMetaType::QString) {
+        // One tag as a bare string is the obvious mistake; taking it is kinder
+        // than refusing, and unambiguous (a tag can never contain a list).
+        wanted << value.toString();
+    } else if (value.isValid() && !value.isNull()) {
+        fail(QStringLiteral("assets.setTags: expects an array of tag strings, got '%1'")
+                 .arg(value.toString()));
+        return out;
+    }
+    if (!assettags::setTags(host.db, guid, wanted)) {
+        fail(QStringLiteral("assets.setTags: the database refused the write for '%1'").arg(guid));
+        return out;
+    }
+    for (const QString &tag : assettags::tagsOf(host.db, guid)) out << tag;
+    return out;
+}
+
+QVariantList AssetsApi::tags(const QString &guid)
+{
+    QVariantList out;
+    if (!host.db) { fail("assets: not available in this session"); return out; }
+    const auto record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("assets.tags: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    for (const QString &tag : assettags::parse(record.tags)) out << tag;
     return out;
 }
 
@@ -355,10 +456,28 @@ QString AssetsApi::import(const QString &path)
     return result.objectGuid;
 }
 
-QString AssetsApi::importFile(const QString &path, int drawerId)
+QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantMap &options)
 {
     if (!host.services || !host.services->assets) { fail("assets: not available in this session"); return QString(); }
-    const auto result = host.services->assets->importFile(path, drawerId);
+    // The pipeline has always had a typeHint on its ImportRequest (the .jaf
+    // and drag-drop paths set it); nothing on the verb surface could reach it
+    // (F18), so a file the sniffer reads wrong had no scripted way in.
+    static const QStringList knownOptions = { QStringLiteral("typeHint") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("assets.importFile"), options,
+                                              knownOptions);
+    if (!refusal.isEmpty()) { fail(refusal); return QString(); }
+    int typeHint = -1;
+    if (options.contains(QStringLiteral("typeHint"))) {
+        const QString hint = options.value(QStringLiteral("typeHint")).toString();
+        typeHint = typeFromName(hint);
+        if (typeHint < 0) {
+            fail(QStringLiteral("assets.importFile: unknown typeHint '%1' (object, mesh, texture, "
+                                "material, sky, music, video, shader, particles, lightprofile, file)")
+                     .arg(hint));
+            return QString();
+        }
+    }
+    const auto result = host.services->assets->importFile(path, drawerId, typeHint);
     if (!result.ok()) {
         fail(QStringLiteral("assets.importFile: %1").arg(result.error));
         return QString();

@@ -120,6 +120,42 @@ assert(faceErr.indexOf("bottom") >= 0, "and the error NAMES the face: " + faceEr
 assert(world.sky("cubemap", { front: tex, back: tex }) === true,
        "an OMITTED face is still fine — absent is not the same as unresolvable");
 
+// ------------------------------------- F6 (2026-09-06): unknown keys REFUSED
+//
+// world.fog / world.shadows / world.gi read the keys they knew and SWALLOWED
+// the rest — the same silent success as above, one layer up: the caller passes
+// `{colour: "#fff"}` or `{resolution: 2048}`, the verb answers true, nothing
+// changes, and the surface looks broken rather than mistyped. Every refusal
+// must also leave the scene EXACTLY as it was.
+assert(world.fog({ enabled: true, density: 0.25 }) === true, "a good fog write is accepted");
+var fogBefore = world.get().fog;
+var fogErr = refuses(function () { world.fog({ colour: "#ffffff" }); },
+                     "F6: world.fog refuses an unknown key");
+assert(fogErr.indexOf("colour") >= 0 && fogErr.indexOf("color") >= 0,
+       "…and the message names the typo AND the keys that exist: " + fogErr);
+var fogAfter = world.get().fog;
+assert(fogAfter.density === fogBefore.density && fogAfter.enabled === fogBefore.enabled,
+       "a refused fog write changed nothing");
+// A mixed call — one good key, one bad — is refused WHOLE: the good half must
+// not land, or a caller cannot tell what state it is in.
+refuses(function () { world.fog({ density: 0.9, heightFallof: 1 }); },
+        "F6: a typo beside a good key still refuses the whole call");
+assert(world.get().fog.density === fogBefore.density,
+       "…and the good half of the refused call did NOT land");
+
+assert(world.shadows({ enabled: true }) === true, "a good shadow write is accepted");
+var shadowErr = refuses(function () { world.shadows({ resolution: 2048 }); },
+                        "F6: world.shadows refuses an unknown key");
+assert(shadowErr.indexOf("setShadowResolution") >= 0,
+       "…and points at the verb that DOES set the resolution: " + shadowErr);
+assert(world.get().shadows === true, "a refused shadow write changed nothing");
+
+assert(world.gi({ mode: "off" }) === true, "a good gi write is accepted");
+refuses(function () { world.gi({ mode: "vct", quality: "high", bouncez: 3 }); },
+        "F6: world.gi refuses an unknown key");
+assert(world.get().gi.mode === "off",
+       "a refused gi write changed nothing — not even the keys it understood");
+
 // -------------------------------------------------------------- persistence
 assert(project.save() === true, "project.save");
 

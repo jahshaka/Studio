@@ -52,13 +52,17 @@ QVector<VerbInfo> WorldApi::verbs() const
           "breakFalloff let bright pixels resist the fog (breakFalloff 0 = pure exponential). "
           "`end` is the retired linear \"fully fogged\" distance, kept as a convenience: setting it "
           "re-derives the density from the start/end pair (density = 2/(start+end), the distance where "
-          "both curves are half fogged). `start` no longer affects rendering on its own.",
+          "both curves are half fogged). `start` no longer affects rendering on its own. "
+          "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
         { "shadows", "world.shadows({enabled}) -> bool",
-          "Toggles shadow rendering.",
+          "Toggles shadow rendering. `enabled` is the only key this verb takes — anything else is "
+          "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
+          "(world.setShadowResolution, node.setProperty on the light).",
           Needs::Document },
         { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh}) -> bool",
-          "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only).",
+          "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
+          "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
         { "antiAliasing", "world.antiAliasing() -> int",
           "Reads the anti-aliasing (MSAA) sample count. With the engine viewport live this is the ACHIEVED count (the driver may clamp the request); otherwise the scene's requested value.",
@@ -171,6 +175,21 @@ bool WorldApi::fog(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.fog"));
     if (!scene) return false;
+    // The three world writers used to swallow every key they did not know
+    // (2026-09-06 verb-coverage audit F6) while their own doc strings promised
+    // the opposite: `world.fog({colour: "#fff"})` answered true and changed
+    // nothing, which on this surface is indistinguishable from a broken
+    // renderer. Every key is checked BEFORE anything is written, so a refused
+    // call changes nothing at all.
+    static const QStringList known = {
+        QStringLiteral("enabled"),       QStringLiteral("color"),
+        QStringLiteral("start"),         QStringLiteral("end"),
+        QStringLiteral("density"),       QStringLiteral("heightDensity"),
+        QStringLiteral("heightFalloff"), QStringLiteral("heightLevel"),
+        QStringLiteral("breakMinBrightness"), QStringLiteral("breakFalloff")
+    };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("world.fog"), params, known);
+    if (!refusal.isEmpty()) return fail(refusal);
     if (params.contains("enabled")) scene->fogEnabled = params.value("enabled").toBool();
     if (params.contains("color")) {
         bool ok = false;
@@ -200,6 +219,12 @@ bool WorldApi::shadows(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.shadows"));
     if (!scene) return false;
+    static const QStringList known = { QStringLiteral("enabled") };
+    const QString refusal = refuseUnknownKeys(
+        QStringLiteral("world.shadows"), params, known,
+        QStringLiteral("Shadow RESOLUTION is world.setShadowResolution; the per-light filter and "
+                       "bias rows are node.setProperty on the light."));
+    if (!refusal.isEmpty()) return fail(refusal);
     if (params.contains("enabled")) scene->shadowEnabled = params.value("enabled").toBool();
     return true;
 }
@@ -208,6 +233,15 @@ bool WorldApi::gi(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.gi"));
     if (!scene) return false;
+
+    static const QStringList known = {
+        QStringLiteral("mode"),      QStringLiteral("quality"),
+        QStringLiteral("bounces"),   QStringLiteral("light"),
+        QStringLiteral("boundsMin"), QStringLiteral("boundsMax"),
+        QStringLiteral("pccGrid"),   QStringLiteral("autoRefresh")
+    };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("world.gi"), params, known);
+    if (!refusal.isEmpty()) return fail(refusal);
 
     if (params.contains("mode")) {
         const QString m = params.value("mode").toString().trimmed().toLower();

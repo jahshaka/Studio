@@ -370,6 +370,13 @@ void EngineSceneViewport::setGizmoTransformToGlobal()
     mScaleGizmo->setTransformSpace(GizmoTransformSpace::Global);
 }
 
+QString EngineSceneViewport::gizmoTransformSpace() const
+{
+    // The three gizmos are always set together, so any one of them answers.
+    return (mTranslateGizmo && mTranslateGizmo->getTransformSpace() == GizmoTransformSpace::Local)
+               ? QStringLiteral("local") : QStringLiteral("global");
+}
+
 bool EngineSceneViewport::mouseRay(iris::Vec3 &rayPos, iris::Vec3 &rayDir, iris::Vec3 &viewDir) const
 {
     const iris::CameraNodePtr cam = viewCamera();   // pick rays follow the PILOT

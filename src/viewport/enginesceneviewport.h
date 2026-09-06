@@ -93,6 +93,7 @@ public:
     void setGizmoScale() override;
     void setGizmoTransformToLocal() override;
     void setGizmoTransformToGlobal() override;
+    QString gizmoTransformSpace() const override;
     Gizmo *activeGizmo() const override { return mGizmo; }
     QString gizmoMode() const override;
 

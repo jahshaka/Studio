@@ -58,9 +58,82 @@ assert(again.triangles === objMeta.triangles && again.fileSize === objMeta.fileS
 assert(assets.refreshThumbnail(png) === true, "refreshThumbnail(image) headless");
 assert(assets.refreshThumbnail(wav) === true, "refreshThumbnail(audio) headless");
 
+// ---- NAME + TAGS (2026-09-06 verb-coverage audit F3) ----
+//
+// Both live in one library row and are written by one statement, so the rule
+// under test is that changing either carries the other through. Before these
+// verbs the tag field existed only on the Assets page, and no script could
+// rename an asset at all.
+assert(pngMeta.tags.length === 0, "a fresh import has no tags");
+assert(assets.tags(png).length === 0, "assets.tags agrees");
+
+// Tags are RUN-UNIQUE: the suite's scratch HOME survives between ctest runs,
+// so a fixed tag would accumulate rows from every previous run.
+var run = "run" + Date.now();
+var kitchenTag = run + "-kitchen";
+var soloTag = run + "-solo";
+
+var tagged = assets.setTags(png, ["Kitchen", "wood", "  ", "kitchen"]);
+assert(tagged.length === 2, "blanks dropped, case-insensitive duplicate collapsed: " +
+       JSON.stringify(tagged));
+assert(tagged[0] === "Kitchen" && tagged[1] === "wood", "the stored list is returned");
+assert(assets.metadata(png).tags.length === 2, "assets.metadata reports the tags too");
+
+assert(assets.rename(png, "Kitchen Tile") === true, "assets.rename");
+assert(assets.metadata(png).name === "Kitchen Tile", "the name changed");
+assert(assets.tags(png).length === 2, "…and the RENAME kept the tags (one write, two fields)");
+
+assert(assets.setTags(png, [soloTag]).length === 1, "tags replaced, not merged");
+assert(assets.metadata(png).name === "Kitchen Tile",
+       "…and the RE-TAG kept the name (the other half of the same rule)");
+
+// The listing filter — the point of having tags at all.
+assert(assets.setTags(wav, [kitchenTag]).length === 1, "tag the wav too");
+var kitchen = assets.list({ tag: kitchenTag });
+assert(kitchen.length === 1 && kitchen[0].guid === wav,
+       "assets.list({tag}) returns only the tagged row: " + JSON.stringify(kitchen));
+assert(assets.list({ tag: kitchenTag.toUpperCase() }).length === 1,
+       "the tag filter is case-insensitive");
+assert(assets.list({ tag: run + "-kitch" }).length === 0,
+       "…and EXACT: a tag filter is not a substring search (that is `query`)");
+assert(assets.list({ tag: kitchenTag, type: "texture" }).length === 0,
+       "tag composes with the other filters");
+assert(assets.list({ tag: soloTag, type: "texture" }).length === 1, "…both ways");
+
+// Clearing.
+assert(assets.setTags(png, []).length === 0, "an empty array clears the tags");
+assert(assets.list({ tag: soloTag }).length === 0, "…and the filter sees it");
+
+// ---- importFile {typeHint} (F18) ----
+// The hint reaches the pipeline's importer SELECTION: a hint the file cannot
+// satisfy fails instead of filing the bytes under the wrong kind.
+var hinted = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/implane_wide.png",
+                               -1, { typeHint: "texture" });
+assert(hinted.length > 10, "importFile with a matching typeHint imports");
+assert(assets.metadata(hinted).type === "texture", "…as the hinted type");
+mustThrow(function () {
+    assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/implane_tall.png", -1,
+                      { typeHint: "music" });
+}, "a typeHint the file cannot satisfy FAILS (never mis-files the bytes)");
+mustThrow(function () {
+    assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/implane_tall.png", -1,
+                      { typeHint: "pancake" });
+}, "an unknown typeHint name is refused");
+mustThrow(function () {
+    assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/implane_tall.png", -1,
+                      { typeHnt: "texture" });
+}, "an unknown option key is refused");
+
 // ---- errors ----
 mustThrow(function () { assets.metadata("no-such-guid"); }, "unknown guid throws");
 mustThrow(function () { assets.refreshThumbnail("no-such-guid"); },
           "refreshThumbnail unknown guid throws");
+mustThrow(function () { assets.rename("no-such-guid", "x"); }, "rename unknown guid throws");
+mustThrow(function () { assets.rename(png, "   "); }, "rename to an empty name is refused");
+mustThrow(function () { assets.setTags("no-such-guid", ["x"]); },
+          "setTags unknown guid throws");
+mustThrow(function () { assets.tags("no-such-guid"); }, "tags unknown guid throws");
+mustThrow(function () { assets.list({ scope: "session", tag: "kitchen" }); },
+          "a tag filter on scope 'session' is refused (registrations carry no tags)");
 
 console.log("e2e metadata: all assertions passed");

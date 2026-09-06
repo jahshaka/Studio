@@ -101,6 +101,8 @@ public:
     QString id() const override { return QStringLiteral("publish"); }
     void initialize(ModuleHost &host) override { this->host = host; }
     QWidget *createPage() override;
+    /// publish.state() — the module's (read-only) verb surface, F14.
+    void registerApi(ScriptEngine &engine) override;
     void shutdown() override {}
 
 private:

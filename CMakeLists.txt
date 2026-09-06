@@ -200,6 +200,7 @@ set(SRCS
     src/scripting/modules/logapi.cpp
     src/modules/materials/api/materialsapi.cpp
     src/modules/materials/materialsmodule.cpp
+    src/modules/publish/publishapi.cpp
     src/modules/publish/publishmodule.cpp
     src/modules/publish/publishrecord.cpp
     src/modules/avatar/avatarmodule.cpp
@@ -443,6 +444,7 @@ set(HEADERS
     src/scripting/modules/assetsapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h
+    src/modules/publish/publishapi.h
     src/modules/publish/publishmodule.h
     src/modules/publish/publishrecord.h
     src/modules/avatar/avatarmodule.h

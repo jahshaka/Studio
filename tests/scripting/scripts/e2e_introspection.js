@@ -134,7 +134,17 @@ assert(cube.position.type === "vec3" && cube.position.value.x === 1,
 assert(cube.name.type === "string" && cube.name.value === "Cube",
        "the name row reads as a string: " + cube.name.value);
 assert(cube.visible.type === "bool" && cube.visible.value === true, "the visible row is a bool");
-assert(cube.faceCullingMode.type === "int", "a mesh adds faceCullingMode as an int");
+// The one ENUM row a node reflects (2026-09-06 verb-coverage audit F18): it is
+// reported as a NAME with the accepted names beside it, not as the document's
+// ordinal — "enums travel as names" is the surface's rule everywhere else.
+assert(cube.faceCullingMode.type === "list",
+       "a mesh's faceCullingMode is an enum row, not a bare int");
+assert(typeof cube.faceCullingMode.value === "string",
+       "…its value is the NAME: " + cube.faceCullingMode.value);
+assert(cube.faceCullingMode.options.length === 4 &&
+       cube.faceCullingMode.options.indexOf("material") >= 0,
+       "…and `options` lists every name it accepts: " +
+       JSON.stringify(cube.faceCullingMode.options));
 assert(!cube.position.hasOwnProperty("min"),
        "position declares no range (absent, NOT reported as 0..0)");
 assert(cube.meshPath.writable === false && cube.meshIndex.writable === false,

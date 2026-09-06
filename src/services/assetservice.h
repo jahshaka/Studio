@@ -41,9 +41,12 @@ public:
     /// Imports any library-supported file (models, images, audio) into the
     /// global asset store, optionally filed in a drawer (ASSET_DRAWERS_SPEC
     /// §3). Images/audio are headless-safe.
-    AssetImporter::Result importFile(const QString &filePath, int drawerId = -1)
+    /// `typeHint` (a ModelTypes value, -1 = sniff from the file) rides through
+    /// to the pipeline's ImportRequest — assets.importFile's {typeHint}.
+    AssetImporter::Result importFile(const QString &filePath, int drawerId = -1,
+                                     int typeHint = -1)
     {
-        return AssetImporter::importFile(filePath, db, project, drawerId);
+        return AssetImporter::importFile(filePath, db, project, drawerId, typeHint);
     }
 
 private:

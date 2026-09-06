@@ -58,15 +58,53 @@ editor.frame(2);   // a frame renders fine with every helper hidden
 assert(editor.gameView(false), "gameView(false)");
 assert(editor.isGameView() === false, "isGameView reads back false");
 
-// ---- snap size (phase C): editor-global, persisted, drives the grid ----
-assert(near(editor.snapSize(), 1.0, 1e-4), "snap size defaults to 1.0");
-assert(editor.setSnapSize(0.5), "setSnapSize(0.5)");
-assert(near(editor.snapSize(), 0.5, 1e-4), "snap size reads back 0.5");
+// ---- snap sizes (phase C): editor-global, persisted, drive the gizmos ----
+// ALL THREE now (2026-09-06 verb-coverage audit F10): the rotate and scale
+// gizmos snap to SnapSettings exactly as the translate one does, and only the
+// [ / ] keys could ever change them. The bare number stays the translate
+// alias — the spelling this verb shipped with, and the one that also moves
+// the ground grid.
+var snaps = editor.snapSize();
+assert(near(snaps.translate, 1.0, 1e-4), "translate snap defaults to 1.0");
+assert(near(snaps.rotate, 10.0, 1e-4), "rotate snap defaults to 10 degrees");
+assert(near(snaps.scale, 0.25, 1e-4), "scale snap defaults to 0.25");
+
+var afterAlias = editor.setSnapSize(0.5);
+assert(near(afterAlias.translate, 0.5, 1e-4), "a bare number is the TRANSLATE alias");
+assert(near(afterAlias.rotate, 10.0, 1e-4) && near(afterAlias.scale, 0.25, 1e-4),
+       "…and leaves the other two alone");
+assert(near(editor.snapSize().translate, 0.5, 1e-4), "translate snap reads back 0.5");
+
+var afterObject = editor.setSnapSize({ rotate: 15, scale: 0.5 });
+assert(near(afterObject.rotate, 15.0, 1e-4) && near(afterObject.scale, 0.5, 1e-4),
+       "the object form writes rotate and scale: " + JSON.stringify(afterObject));
+assert(near(afterObject.translate, 0.5, 1e-4), "…and the omitted key kept its value");
+
+// Clamping is per-size, and the RETURNED object is the truth, not an echo.
+assert(near(editor.setSnapSize({ rotate: 999 }).rotate, 180.0, 1e-4),
+       "rotate clamps at 180 degrees");
+assert(near(editor.setSnapSize({ translate: 1000 }).translate, 100.0, 1e-4),
+       "translate clamps at 100");
+assert(near(editor.setSnapSize({ scale: 0.0001 }).scale, 0.01, 1e-4), "scale clamps at 0.01");
+
 var badSnapRefused = false;
 try { editor.setSnapSize(0); } catch (e) { badSnapRefused = true; }
 assert(badSnapRefused, "setSnapSize(0) refused");
-assert(near(editor.snapSize(), 0.5, 1e-4), "refused set left the value alone");
-assert(editor.setSnapSize(1.0), "snap size restored to 1.0");
+var badRotateRefused = false;
+try { editor.setSnapSize({ rotate: -1 }); } catch (e) { badRotateRefused = true; }
+assert(badRotateRefused, "a negative size in the object form is refused");
+var badSnapKeyRefused = false;
+try { editor.setSnapSize({ rotation: 5 }); } catch (e) { badSnapKeyRefused = true; }
+assert(badSnapKeyRefused, "an unknown snap key is refused (not silently ignored)");
+var emptySnapRefused = false;
+try { editor.setSnapSize({}); } catch (e) { emptySnapRefused = true; }
+assert(emptySnapRefused, "an empty snap change is refused");
+assert(near(editor.snapSize().translate, 100.0, 1e-4),
+       "refused sets left every value alone");
+
+var restored = editor.setSnapSize({ translate: 1.0, rotate: 10, scale: 0.25 });
+assert(near(restored.translate, 1.0, 1e-4) && near(restored.rotate, 10.0, 1e-4) &&
+       near(restored.scale, 0.25, 1e-4), "all three snap sizes restored (they persist)");
 
 // ---- snapToFloor (phase C): the framed cube at y=60 lands on the ground ----
 editor.select(cube);
@@ -450,11 +488,98 @@ try { editor.setOverlays({}); } catch (e) { emptyRefused = true; }
 assert(emptyRefused, "an empty change is refused");
 assert(editor.overlays().grid === true, "and none of the refusals changed anything");
 
+// ---- physicsDebug (2026-09-06 verb-coverage audit F11) ----
+// The SIXTH overlay: View -> Wireframes -> Physics Debug Overlay had a menu
+// item and an IEditorViewport seam and no verb, so the one overlay a script
+// most wants while debugging a simulation was the one it could not reach.
+assert(typeof ov0.physicsDebug === "boolean", "overlays().physicsDebug is a boolean");
+assert(editor.overlays().physicsDebug === false, "the physics drawer is off by default");
+assert(editor.setOverlays({ physicsDebug: true }), "setOverlays({physicsDebug:true})");
+assert(editor.overlays().physicsDebug === true, "physicsDebug reads back on");
+editor.frame(2);   // a frame renders with the debug drawer armed
+assert(editor.setOverlays({ physicsDebug: false }), "setOverlays({physicsDebug:false})");
+assert(editor.overlays().physicsDebug === false, "physicsDebug reads back off");
+
+// The empty-map refusal lists EVERY key, including the two that were missing
+// from it (stats and physicsDebug) — a caller who reads that message must not
+// have to guess.
+var emptyMsg = "";
+try { editor.setOverlays({}); } catch (e) { emptyMsg = "" + e; }
+assert(emptyMsg.indexOf("stats") >= 0 && emptyMsg.indexOf("physicsDebug") >= 0 &&
+       emptyMsg.indexOf("grid") >= 0 && emptyMsg.indexOf("gameView") >= 0,
+       "the empty-map message lists all six keys: " + emptyMsg);
+
 // Restore the defaults for anything running after this script.
 assert(editor.setOverlays({ grid: true, lightWires: true, selectionWireframe: false }),
     "overlays restored");
 
 console.log("editor_controls: overlays verified");
+
+// ---- gizmo transform space (F12) ----
+// The toolbar's globe/cube pair had no verb; the buttons also LIED at startup
+// (they hard-checked Global while every Gizmo is constructed in Local space
+// and nothing reconciled the two — the toolbar now starts on what the gizmos
+// actually are).
+var space0 = editor.gizmoSpace();
+assert(space0 === "local" || space0 === "global", "gizmoSpace() is one of the two: " + space0);
+assert(editor.setGizmoSpace("global"), "setGizmoSpace(global)");
+assert(editor.gizmoSpace() === "global", "gizmoSpace reads back global");
+assert(editor.setGizmoSpace("local"), "setGizmoSpace(local)");
+assert(editor.gizmoSpace() === "local", "gizmoSpace reads back local");
+var badSpace = false;
+try { editor.setGizmoSpace("screen"); } catch (e) { badSpace = true; }
+assert(badSpace, "setGizmoSpace refuses an unknown space");
+assert(editor.gizmoSpace() === "local", "the refused switch changed nothing");
+assert(editor.setGizmoSpace("global"), "back to global");
+
+// ---- immersive fullscreen (F12's other half) ----
+// F11 the KEY had no verb. Called with no argument it READS; with a boolean it
+// sets and returns the state that resulted, so the round trip is one verb.
+assert(editor.fullscreen() === false, "the window is not in immersive fullscreen");
+assert(editor.fullscreen(true) === true, "editor.fullscreen(true) enters and reports it");
+editor.frame(2);   // the viewport keeps rendering with the docks hidden
+assert(editor.fullscreen() === true, "the read agrees");
+assert(editor.fullscreen(true) === true, "setting the state it is already in is a no-op");
+assert(editor.fullscreen(false) === false, "leaving reports the new state");
+assert(editor.fullscreen() === false, "…and the read agrees");
+editor.frame(2);
+var badFullscreen = false;
+try { editor.fullscreen("yes"); } catch (e) { badFullscreen = true; }
+assert(badFullscreen, "a non-boolean is refused (it is not a read either)");
+assert(editor.fullscreen() === false, "the refusal changed nothing");
+
+console.log("editor_controls: gizmo space + fullscreen verified");
+
+// ---- faceCullingMode travels as a NAME (F18) ----
+// The one enum a node reflects. It used to come back as the document's ordinal
+// and take one back, on a surface whose rule is "enums travel as names".
+assert(editor.select(cube), "select the cube for the property read");
+var cull0 = node.property(cube, "faceCullingMode");
+assert(cull0 === "none" || cull0 === "back" || cull0 === "front" || cull0 === "material",
+       "faceCullingMode reads as a NAME, never an ordinal: " + cull0);
+assert(node.setProperty(cube, "faceCullingMode", "back") === true, "set it by name");
+assert(node.property(cube, "faceCullingMode") === "back", "…and it reads back as the name");
+var cullRow = null;
+var rows = node.properties(cube);
+for (var ri = 0; ri < rows.length; ri++) if (rows[ri].name === "faceCullingMode") cullRow = rows[ri];
+assert(cullRow !== null, "node.properties carries the row");
+assert(cullRow.value === "back", "…with the name as its value");
+assert(cullRow.type === "list", "…typed as a list");
+assert(cullRow.options.length === 4 && cullRow.options.indexOf("front") >= 0 &&
+       cullRow.options.indexOf("material") >= 0,
+       "…and OPTIONS listing every accepted name: " + JSON.stringify(cullRow.options));
+var ordinalRefused = false;
+try { node.setProperty(cube, "faceCullingMode", 2); } catch (e) {
+    ordinalRefused = ("" + e).indexOf("NAME") >= 0;
+}
+assert(ordinalRefused, "an ORDINAL is refused, and the message says the enum travels as a name");
+var cullNameRefused = false;
+try { node.setProperty(cube, "faceCullingMode", "sideways"); } catch (e) { cullNameRefused = true; }
+assert(cullNameRefused, "an unknown name is refused");
+assert(node.property(cube, "faceCullingMode") === "back", "neither refusal changed the value");
+assert(node.setProperty(cube, "faceCullingMode", cull0) === true, "restored");
+
+console.log("editor_controls: faceCullingMode names verified");
 
 // ---- gameplay input (AVATAR_LOCOMOTION_SPEC §8.2/§10, Stage 1) ----
 // The API-first half: every verb the input layer ships, driven in the REAL app

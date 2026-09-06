@@ -97,6 +97,56 @@ assert(found, "includeUnpickable reaches it");
 var misses = scene.raycast({ x: 0, y: 500, z: -10 }, { x: 0, y: 0, z: 1 });
 assert(misses.length === 0, "a clean miss returns []");
 
+// ---- F4 (2026-09-06 verb-coverage audit): every hit carries its PICK ROOT ----
+// The verb's doc promised "the semantics the viewport's click uses" while
+// reporting the raw hit node: a click resolves the ATTACHED chain and selects
+// the whole asset, so a scripted raycast + select landed on a sub-mesh where a
+// user's click never does. `rootId` is that answer, from the picker's own rule.
+node.setProperty(target, "pickable", true);
+var plain = scene.raycast({ x: 0, y: 0.5, z: -10 }, { x: 0, y: 0, z: 1 });
+assert(plain.length >= 1, "raycast hits the target again");
+assert(plain[0].rootId === plain[0].id,
+       "an unattached node is its own pick root (rootId === id)");
+
+// The imported-asset shape: a part ATTACHED to its parent. A click there
+// selects the parent, so rootId must climb the attached chain — through TWO
+// levels, because assets nest.
+var assetRoot = scene.addEmpty({ position: { x: 20, y: 0, z: 0 } });
+// Explicit local zero: an empty added with NO position is dropped in front of
+// the camera (a local offset that cancels its parent's), which would move the
+// part off the ray.
+var assetMid = scene.addEmpty({ parent: assetRoot, position: { x: 0, y: 0, z: 0 } });
+var assetPart = scene.addPrimitive("cube", { parent: assetMid, position: { x: 0, y: 0.5, z: 0 } });
+assert(node.attached(assetPart) === false, "a hand-built node is NOT attached by default");
+assert(node.setAttached(assetPart, true) === true, "node.setAttached(part, true)");
+assert(node.setAttached(assetMid, true) === true, "…and its parent group");
+assert(node.attached(assetPart) === true, "node.attached reads back true");
+
+var partHits = scene.raycast({ x: 20, y: 0.5, z: -10 }, { x: 0, y: 0, z: 1 });
+assert(partHits.length >= 1, "the attached part is hit");
+assert(partHits[0].id === assetPart, "…and `id` is still the part the ray hit");
+assert(partHits[0].rootId === assetRoot,
+       "rootId climbs the whole attached chain to the asset root (what a click selects)");
+
+// Detaching makes the part its own object again — same rule, live.
+assert(node.setAttached(assetPart, false) === true, "detach the part");
+var detachedHits = scene.raycast({ x: 20, y: 0.5, z: -10 }, { x: 0, y: 0, z: 1 });
+assert(detachedHits[0].rootId === assetPart, "a detached part is its own pick root");
+
+// The flag is UNDOABLE like every other node flag. A script run IS one open
+// macro, so undo cannot be driven from inside it (e2e_undo_macro documents
+// that) — what IS observable is that the write PUSHED a command instead of
+// editing the document behind the undo stack's back.
+var pushesBefore = editor.undoState().pushes;
+assert(node.setAttached(assetPart, true) === true, "re-attach (undo-record test)");
+assert(editor.undoState().pushes === pushesBefore + 1,
+       "node.setAttached pushed exactly one undo command");
+assert(node.attached(assetPart) === true, "…and the flag is set");
+
+var attachRefused = false;
+try { node.setAttached("no-such-node", true); } catch (e) { attachRefused = true; }
+assert(attachRefused, "node.setAttached refuses an unknown id");
+
 // ---------------------------------------------------------------------------
 // A LOADED SCENE CLASSIFIES LIKE A BUILT ONE (2026-09-06, perf wave B).
 //

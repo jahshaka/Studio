@@ -144,6 +144,9 @@ public:
 	float getGizmoScale();
 
 	virtual void setTransformSpace(GizmoTransformSpace transformSpace);
+	/// The space this gizmo drags in. Read by the viewport for
+	/// editor.gizmoSpace and by the toolbar, which used to guess.
+	GizmoTransformSpace getTransformSpace() const { return transformSpace; }
 	virtual void setSelectedNode(iris::SceneNodePtr node);
 	void clearSelectedNode();
 

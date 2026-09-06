@@ -188,6 +188,10 @@ public:
     virtual void setGizmoScale() = 0;
     virtual void setGizmoTransformToLocal() = 0;
     virtual void setGizmoTransformToGlobal() = 0;
+    /// The gizmos' drag space as the verb surface spells it: "local" |
+    /// "global" (editor.gizmoSpace). Only the engine viewport has gizmos; the
+    /// stand-ins answer with the default.
+    virtual QString gizmoTransformSpace() const { return QStringLiteral("global"); }
 
     // ---- play / physics ----
     virtual void startPlayingScene() = 0;

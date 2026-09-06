@@ -50,8 +50,11 @@ public:
     Q_INVOKABLE QVariantMap setPip(const QVariantMap &change = QVariantMap());
     Q_INVOKABLE QString cameraMode();
     Q_INVOKABLE bool setCameraMode(const QString &mode);
-    Q_INVOKABLE double snapSize();
-    Q_INVOKABLE bool setSnapSize(double size);
+    Q_INVOKABLE QString gizmoSpace();
+    Q_INVOKABLE bool setGizmoSpace(const QString &space);
+    Q_INVOKABLE bool fullscreen(const QVariant &on = QVariant());
+    Q_INVOKABLE QVariantMap snapSize();
+    Q_INVOKABLE QVariantMap setSnapSize(const QVariant &size);
     Q_INVOKABLE bool snapToFloor();
     Q_INVOKABLE QVariantMap undoState();
     Q_INVOKABLE bool undo();

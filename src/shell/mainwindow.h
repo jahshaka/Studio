@@ -489,6 +489,26 @@ public slots:
     void useLocalTransform();
     void useGlobalTransform();
 
+    /// The gizmo transform space as the verb surface spells it: "local" |
+    /// "global" (editor.gizmoSpace / editor.setGizmoSpace, 2026-09-06
+    /// verb-coverage audit F12). Reading goes to the viewport — the gizmos own
+    /// the state — and writing goes through the two slots above so the
+    /// toolbar's Global/Local buttons follow a scripted switch.
+    QString gizmoTransformSpace() const;
+    bool applyGizmoTransformSpace(const QString &space);
+
+    /// The physics debug drawer with the menu's checkmark kept in sync
+    /// (editor.setOverlays({physicsDebug}) — F11). The action's toggled()
+    /// signal drives toggleDebugDrawer, so this is one path, not two.
+    void setPhysicsDebugOverlay(bool on);
+
+    /// Immersive fullscreen (F11 the KEY, editor.fullscreen the verb): the
+    /// window goes fullscreen and the editor space hides its docks and
+    /// toolbar. `setImmersiveFullscreen` is the idempotent form the verb needs
+    /// — toggleImmersiveFullscreen() flips, this one lands on a state.
+    bool isImmersiveFullscreen() const { return immersiveFullscreen; }
+    void setImmersiveFullscreen(bool on);
+
     void updateSceneSettings();
 
     void undo();
@@ -715,6 +735,11 @@ private:
     QAction *actionTranslate;
     QAction *actionRotate;
     QAction *actionScale;
+    /// The toolbar's transform-space pair. Members (they were locals) so a
+    /// scripted editor.setGizmoSpace can leave the buttons telling the truth,
+    /// exactly as actionTranslate/Rotate/Scale do for the gizmo mode.
+    QAction *actionGlobalSpace = nullptr;
+    QAction *actionLocalSpace = nullptr;
 
     AssetModelPanel *assetModelPanel;
     AssetMaterialPanel *assetMaterialPanel;

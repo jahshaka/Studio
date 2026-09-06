@@ -56,8 +56,10 @@ public:
     /// from the image itself / the music icon — and are headless-safe; meshes
     /// delegate to importMesh. `drawerId` files the asset (> 0; else it stays
     /// in Uncategorized). Returns the library guid in Result::objectGuid.
+    /// `typeHint`: a ModelTypes value that overrides the pipeline's sniff
+    /// (-1 = sniff), the ImportRequest field the .jaf/drop paths already set.
     static Result importFile(const QString &filePath, Database *db, Project *project,
-                             int drawerId = -1);
+                             int drawerId = -1, int typeHint = -1);
 };
 
 #endif // SERVICES_ASSETIMPORTER_H
