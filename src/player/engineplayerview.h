@@ -10,6 +10,7 @@
 // only while the page is shown (View::setEnabled). Never includes Ogre or GL.
 #include <memory>
 #include <QElapsedTimer>
+#include "player/iplayerhost.h"
 #include "viewport/engineviewwidget.h"
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
@@ -18,7 +19,7 @@ class EngineRenderDriver;
 class EnginePlayerScene;
 class IEditorViewport;
 
-class EnginePlayerView : public EngineViewWidget
+class EnginePlayerView : public EngineViewWidget, public IPlayerHost
 {
     Q_OBJECT
 public:
@@ -30,9 +31,14 @@ public:
     void setScene(iris::ScenePtr scene);
     void start();
     void end();
-    bool isScenePlaying();
-    void playScene();
-    void stopScene();
+
+    // ---- IPlayerHost (verb-coverage audit F1) ----------------------------
+    bool isScenePlaying() override;
+    void playScene() override;
+    void stopScene() override;
+    bool isPlayerActive() const override { return mActive; }
+    QImage takePlayerScreenshot(int width, int height, bool postFx) override;
+    bool stepPlayerFrames(int n, float dt) override;
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }
 

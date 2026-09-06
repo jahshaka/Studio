@@ -609,6 +609,14 @@ set_tests_properties(scripting.e2e.mannequin PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
+# The PLAYER space's verbs (verb-coverage audit F1): player.play/stop/playing/
+# restart/state driving the real EnginePlayerView through PlayerService, and
+# player.screenshot rendering the player's OWN engine Scene through the
+# document's camera. NOT --headless: a headless run has no player backend at
+# all, which is the one thing player.state().available exists to report.
+add_script_e2e(player_verbs e2e_player_verbs.js)
+set_tests_properties(scripting.e2e.player_verbs PROPERTIES TIMEOUT 300)
+
 # The graph READ/EDIT verbs (verb-coverage audit F2): graph.connections,
 # graph.nodeInfo, graph.removeNode and graph.disconnect over a script graph.
 # Document verbs only -> --headless.

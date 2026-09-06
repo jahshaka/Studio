@@ -13,6 +13,7 @@
 // wraps it.
 #include "irisgl/core/math/mat4.h"
 #include <memory>
+#include <QImage>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -27,6 +28,9 @@ public:
     explicit EnginePlayerScene(const std::shared_ptr<jahshaka::engine::Engine> &engine);
     ~EnginePlayerScene();
 
+    /// Creates the player Scene and its mirror WITHOUT binding a view — what a
+    /// screenshot of a never-shown player page needs. Idempotent.
+    bool ensureScene();
     /// Creates the player Scene and its mirror and binds them to `view` (the View
     /// must already exist: Engine.h, ORDER MATTERS). Idempotent; false if the
     /// engine is gone or the scene could not be created.
@@ -61,6 +65,24 @@ public:
     bool isPlaying() const;
     void play();
     void stop();
+
+    /// What the PLAYER is showing, rendered offscreen at the requested size —
+    /// the same throwaway-view readback EngineSceneViewport::takeScreenshot
+    /// does for the editor, pointed at THIS scene and THIS camera (the
+    /// document's scene camera, which is not the editor's viewpoint).
+    ///
+    /// It exists because the player is a second engine Scene with a second
+    /// mirror: a screenshot of the player taken through the editor viewport
+    /// would photograph the editor's world state (its sky push, its camera,
+    /// its wires) and call it the player. Null QImage when there is nothing to
+    /// render (no engine, no scene, no camera).
+    QImage takeScreenshot(int width, int height, bool postFx);
+
+    /// Steps and renders exactly n frames synchronously (editor.frame's
+    /// pattern for the player): PlayBack + mirror + renderOneFrame. `dt` < 0
+    /// charges wall clock; a fixed dt is what makes a scripted assertion
+    /// deterministic. Does nothing without a bound view.
+    void stepFrames(int n, float dt, int width, int height);
 
 private:
     std::weak_ptr<jahshaka::engine::Engine> mEngine;

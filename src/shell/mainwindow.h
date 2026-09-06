@@ -46,6 +46,7 @@ class StudioModule;
 class MaterialsModule;
 class PublishModule;
 class AvatarModule;
+class PlayerModule;
 
 class QPushButton;
 class QStandardItem;
@@ -99,6 +100,7 @@ struct StudioServices;
 class UndoService;
 class SelectionService;
 class PlaybackService;
+class PlayerService;
 class ProjectService;
 class SceneEditService;
 class ThumbnailService;
@@ -565,6 +567,9 @@ private:
     Ui::MainWindow *ui;
     IEditorViewport* sceneView;
 	PlayerWidget* playerView;
+	/// The player's engine backend, or null in headless runs. Held so
+	/// setupServices can hand it to PlayerService (verb-coverage audit F1).
+	class EnginePlayerView* playerBackend = nullptr;
 
     QStandardItemModel* treeModel;
     QWidget *container;
@@ -726,6 +731,7 @@ private:
 	MaterialsModule *materialsModule = nullptr;
 	PublishModule *publishModule = nullptr;
 	AvatarModule *avatarModule = nullptr;
+	PlayerModule *playerModule = nullptr;
 
     // services (APP_ARCHITECTURE_AUDIT §3.3): constructed in setupServices(),
     // deleted in the dtor. The QObject services are parented to the window.
@@ -733,6 +739,7 @@ private:
     UndoService *undoService = nullptr;
     SelectionService *selectionService = nullptr;
     PlaybackService *playbackService = nullptr;
+    PlayerService *playerService = nullptr;
     ProjectService *projectService = nullptr;
     SceneEditService *sceneEditService = nullptr;
     ThumbnailService *thumbnailService = nullptr;

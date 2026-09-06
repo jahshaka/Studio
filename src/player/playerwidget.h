@@ -27,6 +27,11 @@ public:
 	void begin();
 	void end();
 
+	/// The page as a VIEW over the verbs (verb-coverage audit F1): whoever
+	/// starts the player — this button, a script, an MCP session — the icon
+	/// follows. Wired by the shell to PlayerService::playingChanged.
+	void showPlaying(bool playing);
+
 public slots:
     void onPlayScene();
 };
