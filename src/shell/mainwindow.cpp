@@ -2762,14 +2762,14 @@ void MainWindow::setupToolBar()
 
     toolBar->addSeparator();
 
-    QAction *actionGlobalSpace = new QAction;
+    actionGlobalSpace = new QAction;
     actionGlobalSpace->setObjectName(QStringLiteral("actionGlobalSpace"));
     actionGlobalSpace->setCheckable(true);
 	actionGlobalSpace->setToolTip("Global Space | Move objects relative to the global world");
 	actionGlobalSpace->setIcon(fontIcons->icon(fa::globe, options));
 	toolBar->addAction(actionGlobalSpace);
 
-    QAction *actionLocalSpace = new QAction;
+    actionLocalSpace = new QAction;
     actionLocalSpace->setObjectName(QStringLiteral("actionLocalSpace"));
     actionLocalSpace->setCheckable(true);
 	actionLocalSpace->setToolTip("Local Space | Move objects relative to their transform");
@@ -2810,7 +2810,12 @@ void MainWindow::setupToolBar()
     transformSpaceGroup = new QActionGroup(viewPort);
     transformSpaceGroup->addAction(actionGlobalSpace);
     transformSpaceGroup->addAction(actionLocalSpace);
-    actionGlobalSpace->setChecked(true);
+    // The toolbar starts on whatever the GIZMOS actually are, not on a guess.
+    // It used to hard-check Global while Gizmo's constructor left every gizmo
+    // in LOCAL space and nothing ever reconciled the two — the buttons lied
+    // until the user clicked one (found writing editor.gizmoSpace, F12).
+    if (gizmoTransformSpace() == QLatin1String("local")) actionLocalSpace->setChecked(true);
+    else                                                 actionGlobalSpace->setChecked(true);
 
     connect(actionFreeCamera,   SIGNAL(triggered(bool)), SLOT(useFreeCamera()));
     connect(actionArcballCam,   SIGNAL(triggered(bool)), SLOT(useArcballCam()));
@@ -3658,11 +3663,43 @@ void MainWindow::useArcballCam()
 void MainWindow::useLocalTransform()
 {
     sceneView->setGizmoTransformToLocal();
+    if (actionLocalSpace) actionLocalSpace->setChecked(true);
 }
 
 void MainWindow::useGlobalTransform()
 {
     sceneView->setGizmoTransformToGlobal();
+    if (actionGlobalSpace) actionGlobalSpace->setChecked(true);
+}
+
+QString MainWindow::gizmoTransformSpace() const
+{
+    return sceneView ? sceneView->gizmoTransformSpace() : QStringLiteral("global");
+}
+
+bool MainWindow::applyGizmoTransformSpace(const QString &space)
+{
+    if (space == QLatin1String("local"))       useLocalTransform();
+    else if (space == QLatin1String("global")) useGlobalTransform();
+    else return false;
+    return true;
+}
+
+void MainWindow::setPhysicsDebugOverlay(bool on)
+{
+    // The action's toggled() signal calls toggleDebugDrawer, which is the one
+    // path to the viewport — so setting the checkmark IS setting the overlay.
+    // (A no-op setChecked emits nothing, hence the explicit fallback.)
+    if (physicsCheckAction && physicsCheckAction->isChecked() != on)
+        physicsCheckAction->setChecked(on);
+    else
+        toggleDebugDrawer(on);
+}
+
+void MainWindow::setImmersiveFullscreen(bool on)
+{
+    if (immersiveFullscreen == on) return;
+    toggleImmersiveFullscreen();
 }
 
 void MainWindow::translateGizmo()

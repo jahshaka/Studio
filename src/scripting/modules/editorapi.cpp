@@ -62,25 +62,31 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, gameView}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
-          "engine-drawn frame-stats readout in the viewport's top-left corner (F3), `gameView` the "
+          "engine-drawn frame-stats readout in the viewport's top-left corner (F3), "
+          "`physicsDebug` the Bullet debug drawer (collision shapes and contacts, View → "
+          "Wireframes → Physics Debug Overlay — only ever visible while a simulation runs), "
+          "`gameView` the "
           "master switch that hides the HELPERS all at once. `stats` is deliberately NOT one of the "
           "things gameView hides: it is a diagnostic, not an editor helper, and \"what is my frame "
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction.",
           Needs::Engine },
-        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, gameView}) -> bool",
+        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView}) -> bool",
           "Turns the viewport's editor helpers on and off — the View Options rows, the G key and "
           "the F3 stats readout, as one verb. Omitted keys keep their value; an unknown key is "
           "REFUSED (a silently ignored overlay key is indistinguishable from a broken renderer). "
           "`gameView` hides the helpers all at once and is not persisted; `grid` is per-scene; "
           "`stats` persists as the `show_fps` preference and survives Game View and fullscreen; the "
-          "others are viewport state for this session. NOTE the View Options menu's checkmarks do "
-          "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport does.",
+          "others are viewport state for this session. `physicsDebug` draws the physics world's "
+          "collision shapes, and shows nothing at all until a simulation is running "
+          "(editor.simulate / editor.play). NOTE the View Options menu's checkmarks do "
+          "not yet follow a script-driven change (same as editor.setCameraMode) — the viewport "
+          "does; `physicsDebug` is the exception, its menu checkmark follows.",
           Needs::Engine },
         { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
           "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes.",
@@ -152,11 +158,39 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "setCameraMode", "editor.setCameraMode(\"free\"|\"orbit\") -> bool",
           "Switches the camera controller, like the toolbar's Free Camera / Arc Ball buttons. (The toolbar buttons do not yet reflect a script-driven switch.)",
           Needs::Engine },
-        { "snapSize", "editor.snapSize() -> number",
-          "The translate snap size (world units) — also the ground grid's spacing. Editor-global, persisted.",
+        { "gizmoSpace", "editor.gizmoSpace() -> \"local\" | \"global\"",
+          "Which space the transform gizmos drag in: \"global\" moves along the world axes, "
+          "\"local\" along the selected object's own. The toolbar's globe/cube pair.",
+          Needs::Engine },
+        { "setGizmoSpace", "editor.setGizmoSpace(\"local\"|\"global\") -> bool",
+          "Switches the gizmos' drag space — the toolbar's Global Space / Local Space buttons, "
+          "as a verb, and the buttons follow the switch. Applies to all three gizmos at once "
+          "(they have never had separate spaces). Unknown values are refused.",
+          Needs::Engine },
+        { "fullscreen", "editor.fullscreen(on?) -> bool",
+          "IMMERSIVE FULLSCREEN — the F11 state (EDITOR_SHORTCUTS_SPEC §3): the window goes "
+          "fullscreen and, in the editor space, every dock and the toolbar hide; leaving it "
+          "restores exactly what was visible before, including whether the window was "
+          "maximized. Called with no argument it READS the state; with a boolean it sets it "
+          "and returns the state that resulted — so `editor.fullscreen(true)` then "
+          "`editor.fullscreen()` is the round trip. Idempotent (setting the state it is "
+          "already in does nothing), and NOT the same thing as a maximized window. The stats "
+          "readout deliberately survives it: it is a diagnostic, not an editor helper.",
+          Needs::Window },
+        { "snapSize", "editor.snapSize() -> {translate, rotate, scale}",
+          "ALL THREE snap sizes (EDITOR_SHORTCUTS_SPEC §4), editor-global and persisted: "
+          "`translate` in world units — which is also the ground grid's spacing — `rotate` in "
+          "DEGREES, `scale` as a factor. The gizmos snap to these while Ctrl is held, and "
+          "[ / ] step whichever one the active gizmo uses.",
           Needs::Document },
-        { "setSnapSize", "editor.setSnapSize(size) -> bool",
-          "Sets the translate snap / grid size ([ and ] step it in the viewport). Refuses size <= 0; clamped to 0.01..100.",
+        { "setSnapSize", "editor.setSnapSize(size | {translate, rotate, scale}) -> {translate, rotate, scale}",
+          "Sets any of the three snap sizes and returns all three as they ended up. A BARE "
+          "NUMBER is the translate alias (`editor.setSnapSize(0.5)` — the spelling this verb "
+          "shipped with, and the one that also moves the grid); the object form writes only the "
+          "keys it carries, so `{rotate: 15}` leaves translate and scale alone. An unknown key "
+          "is REFUSED. Each value must be > 0 and is CLAMPED to its own range — translate "
+          "0.01..100, rotate 0.1..180 degrees, scale 0.01..10 — so the returned object is the "
+          "truth, not an echo of the request.",
           Needs::Document },
         { "snapToFloor", "editor.snapToFloor() -> bool",
           "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
@@ -338,6 +372,11 @@ QVariantMap EditorApi::overlays()
     out["lightWires"] = host.viewport->getShowLightWires();
     out["selectionWireframe"] = host.viewport->getSelectionWireframe();
     out["stats"] = host.viewport->getShowFps();
+    // The physics debug drawer (View → Wireframes → Physics Debug Overlay).
+    // It had a menu item, an IEditorViewport seam and no verb at all until the
+    // 2026-09-06 verb-coverage audit (F11) — the last of the wireframe menu's
+    // rows to be script-invisible.
+    out["physicsDebug"] = host.viewport->getShowDebugDrawFlags();
     out["gameView"] = host.viewport->isGameView();
     return out;
 }
@@ -345,13 +384,16 @@ QVariantMap EditorApi::overlays()
 bool EditorApi::setOverlays(const QVariantMap &change)
 {
     if (!requireEngine()) return false;
-    if (change.isEmpty())
-        return fail("editor.setOverlays: nothing to change — pass a map "
-                    "({grid, lightWires, selectionWireframe, gameView}); "
-                    "editor.overlays() reads the current values");
-
+    // The empty-map message used to list FOUR of the keys (F18): a caller who
+    // read it and then guessed "fps" got the refusal below, and a caller who
+    // trusted it never learned `stats` or `physicsDebug` existed.
     static const QStringList known = { "grid", "lightWires", "selectionWireframe",
-                                      "stats", "gameView" };
+                                      "stats", "physicsDebug", "gameView" };
+    if (change.isEmpty())
+        return fail(QStringLiteral("editor.setOverlays: nothing to change — pass a map ({%1}); "
+                                   "editor.overlays() reads the current values")
+                        .arg(known.join(", ")));
+
     for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
         if (!known.contains(it.key()))
             return fail(QStringLiteral("editor.setOverlays: unknown overlay '%1' (known: %2). "
@@ -377,6 +419,14 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         // `show_fps` setting, and the checkbox, the F3 key and this verb are one
         // code path with one stored value (STATS_OVERLAY_SPEC §5.3 step 3).
         SettingsManager::getDefaultManager()->setValue("show_fps", on);
+    }
+    if (change.contains("physicsDebug")) {
+        const bool on = change.value("physicsDebug").toBool();
+        // Through MainWindow when the shell exists so the menu's checkmark
+        // follows a scripted change (the same path the menu item takes);
+        // straight to the viewport otherwise.
+        if (host.mainWindow) host.mainWindow->setPhysicsDebugOverlay(on);
+        else host.viewport->setShowDebugDrawFlags(on);
     }
     if (change.contains("gameView")) host.viewport->setGameView(change.value("gameView").toBool());
     return true;
@@ -679,17 +729,103 @@ bool EditorApi::setCameraMode(const QString &mode)
     return true;
 }
 
-double EditorApi::snapSize()
+QString EditorApi::gizmoSpace()
 {
-    return double(SnapSettings::translateSize());
+    if (!requireEngine()) return QString();
+    return host.viewport->gizmoTransformSpace();
 }
 
-bool EditorApi::setSnapSize(double size)
+bool EditorApi::setGizmoSpace(const QString &space)
 {
-    if (size <= 0.0)
-        return fail("editor.setSnapSize: size must be > 0");
-    SnapSettings::setTranslateSize(float(size));
+    if (!requireEngine()) return false;
+    const QString wanted = space.trimmed().toLower();
+    if (wanted != QLatin1String("local") && wanted != QLatin1String("global"))
+        return fail(QStringLiteral("editor.setGizmoSpace: unknown space '%1' (local|global)")
+                        .arg(space));
+    // Through MainWindow when the shell exists so the toolbar's Global/Local
+    // buttons follow the switch (the same path the buttons themselves take);
+    // straight to the viewport otherwise.
+    if (host.mainWindow) host.mainWindow->applyGizmoTransformSpace(wanted);
+    else if (wanted == QLatin1String("local")) host.viewport->setGizmoTransformToLocal();
+    else host.viewport->setGizmoTransformToGlobal();
     return true;
+}
+
+bool EditorApi::fullscreen(const QVariant &on)
+{
+    if (!host.mainWindow)
+        return fail("editor.fullscreen: this verb needs the editor window (a --script/--headless "
+                    "run has no window to make fullscreen)");
+    const QVariant value = scriptmod::normalizeJs(on);
+    if (value.isValid() && !value.isNull()) {
+        if (value.typeId() != QMetaType::Bool)
+            return fail(QStringLiteral("editor.fullscreen: '%1' is not true or false — call it "
+                                       "with no argument to READ the state")
+                            .arg(value.toString()));
+        host.mainWindow->setImmersiveFullscreen(value.toBool());
+    }
+    return host.mainWindow->isImmersiveFullscreen();
+}
+
+QVariantMap EditorApi::snapSize()
+{
+    return QVariantMap{ { QStringLiteral("translate"), double(SnapSettings::translateSize()) },
+                        { QStringLiteral("rotate"), double(SnapSettings::rotateSize()) },
+                        { QStringLiteral("scale"), double(SnapSettings::scaleSize()) } };
+}
+
+QVariantMap EditorApi::setSnapSize(const QVariant &sizeArg)
+{
+    // Two of the three snap sizes had no verb at all (2026-09-06 verb-coverage
+    // audit F10): the rotate and scale gizmos snap to SnapSettings just as the
+    // translate one does, and only [ / ] in the viewport could change them.
+    // The bare number keeps meaning "translate" — it is the spelling this verb
+    // shipped with, and the one that moves the grid.
+    const QVariant value = scriptmod::normalizeJs(sizeArg);
+    QVariantMap change;
+    if (value.typeId() == QMetaType::QVariantMap) {
+        change = value.toMap();
+        if (change.isEmpty()) {
+            fail("editor.setSnapSize: nothing to change — pass a number (the translate size) "
+                 "or a map ({translate, rotate, scale}); editor.snapSize() reads all three");
+            return QVariantMap();
+        }
+    } else {
+        bool numeric = false;
+        const double number = value.toDouble(&numeric);
+        if (!numeric) {
+            fail(QStringLiteral("editor.setSnapSize: '%1' is neither a size nor a map — pass a "
+                                "number (the translate size) or {translate, rotate, scale}")
+                     .arg(value.toString()));
+            return QVariantMap();
+        }
+        change.insert(QStringLiteral("translate"), number);
+    }
+
+    static const QStringList known = { QStringLiteral("translate"), QStringLiteral("rotate"),
+                                       QStringLiteral("scale") };
+    const QString refusal = scriptmod::refuseUnknownKeys(QStringLiteral("editor.setSnapSize"),
+                                                         change, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+
+    // Validated in full before anything is written: a refused call leaves all
+    // three sizes exactly as they were.
+    for (auto it = change.constBegin(); it != change.constEnd(); ++it) {
+        bool numeric = false;
+        const double size = scriptmod::normalizeJs(it.value()).toDouble(&numeric);
+        if (!numeric || size <= 0.0) {
+            fail(QStringLiteral("editor.setSnapSize: '%1' must be a size > 0, got '%2'")
+                     .arg(it.key(), scriptmod::normalizeJs(it.value()).toString()));
+            return QVariantMap();
+        }
+    }
+    if (change.contains(QStringLiteral("translate")))
+        SnapSettings::setTranslateSize(float(change.value(QStringLiteral("translate")).toDouble()));
+    if (change.contains(QStringLiteral("rotate")))
+        SnapSettings::setRotateSize(float(change.value(QStringLiteral("rotate")).toDouble()));
+    if (change.contains(QStringLiteral("scale")))
+        SnapSettings::setScaleSize(float(change.value(QStringLiteral("scale")).toDouble()));
+    return snapSize();
 }
 
 bool EditorApi::snapToFloor()

@@ -74,12 +74,12 @@ QVector<VerbInfo> NodeApi::verbs() const
           "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable.",
           Needs::Document },
         { "property", "node.property(id, key) -> value",
-          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values.",
+          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. A mesh's `faceCullingMode` comes back as a NAME (\"none\" | \"front\" | \"back\" | \"material\"), never as the document's ordinal.",
           Needs::Document },
         { "setProperty", "node.setProperty(id, key, value) -> bool",
-          "Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Undoable — the write rides the run's undo macro.",
+          "Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Enum rows travel as NAMES: a mesh's `faceCullingMode` takes \"none\" | \"front\" | \"back\" | \"material\" (\"material\" = the material decides, which is the default), and an ordinal is refused with that list. Undoable — the write rides the run's undo macro.",
           Needs::Document },
-        { "properties", "node.properties(id) -> [{name, displayName, type, value, min?, max?, writable}]",
+        { "properties", "node.properties(id) -> [{name, displayName, type, value, min?, max?, options?, writable}]",
           "Every property this node reflects, in the order the document declares them — the "
           "answer to \"what can I set on this thing?\" without guessing a key and burning a turn. "
           "'type' is bool|int|float|vec3|color|texture|string|list; 'value' is the current value "
@@ -87,7 +87,9 @@ QVector<VerbInfo> NodeApi::verbs() const
           "RANGE IS DECLARED — most document rows declare none, and an absent range means "
           "unbounded, not 0..0. 'writable' false means node.setProperty will refuse the row "
           "(a mesh's meshPath/meshIndex, a particle emitter's texture): those need an operation "
-          "reflection cannot do, and have their own verbs. The light and decal ASSET bindings "
+          "reflection cannot do, and have their own verbs. 'options' is present on the ENUM rows "
+          "(today: a mesh's faceCullingMode) and lists the exact names the row accepts — the "
+          "value is one of those names, never an ordinal. The light and decal ASSET bindings "
           "(IES profile, area mask, decal image) are not rows here — node.setLightProfile, "
           "node.setLightTexture and node.setDecalTexture own them.",
           Needs::Document },
@@ -533,6 +535,48 @@ QStringList NodeApi::propertyKeys(const iris::SceneNodePtr &node)
     return keys;
 }
 
+// ---- faceCullingMode: an ENUM travelling as a NAME (F18) -------------------
+//
+// The document stores it as a plain int (iris::FaceCullingMode, meshnode.h)
+// and the reflection row is an IntProperty, so the verb surface used to hand a
+// caller `faceCullingMode: 3` and take an ordinal back — on a surface whose
+// own rule is "enum values travel as NAMES, never ordinals" (node.physics
+// says so in its doc string). The mapping lives HERE, at the verb, because the
+// document layer's row is shared with the properties panel's combo box.
+namespace {
+struct CullName { const char *name; int value; };
+const CullName kCullModes[] = {
+    { "none",     int(iris::FaceCullingMode::None) },
+    { "front",    int(iris::FaceCullingMode::Front) },
+    { "back",     int(iris::FaceCullingMode::Back) },
+    // "DefinedInMaterial" in the document and the panel: the material decides.
+    { "material", int(iris::FaceCullingMode::DefinedInMaterial) },
+};
+
+QString cullModeName(int value)
+{
+    for (const auto &row : kCullModes)
+        if (row.value == value) return QString::fromLatin1(row.name);
+    return QString();
+}
+
+QStringList cullModeNames()
+{
+    QStringList names;
+    for (const auto &row : kCullModes) names << QString::fromLatin1(row.name);
+    return names;
+}
+
+/// -1 when the name is not one of ours.
+int cullModeValue(const QString &name)
+{
+    const QString wanted = name.trimmed().toLower();
+    for (const auto &row : kCullModes)
+        if (wanted == QLatin1String(row.name)) return row.value;
+    return -1;
+}
+} // namespace
+
 QVariant NodeApi::properties(const QString &id)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.properties"));
@@ -547,6 +591,14 @@ QVariant NodeApi::properties(const QString &id)
         // probed by writing the value back: `preset` on a particle emitter
         // re-applies a whole preset, so a probe write would rewrite the node.
         row["writable"] = !prop->readOnly;
+        // The one enum row a node reflects: reported as its NAME plus the list
+        // of names that would be accepted, so a caller never has to guess an
+        // ordinal (F18). node.property/setProperty speak the same names.
+        if (prop->name == QLatin1String("faceCullingMode")) {
+            row["type"] = QStringLiteral("list");
+            row["value"] = cullModeName(row.value(QStringLiteral("value")).toInt());
+            row["options"] = QVariant(cullModeNames());
+        }
         out.append(row);
     }
     qDeleteAll(props);
@@ -563,6 +615,7 @@ QVariant NodeApi::property(const QString &id, const QString &key)
                  .arg(node->getName(), key, propertyKeys(node).join(QStringLiteral(", "))));
         return QVariant();
     }
+    if (key == QLatin1String("faceCullingMode")) return cullModeName(value.toInt());
     switch (value.typeId()) {
     case QMetaType::QVector3D: return vecToJs(iris::fromQt(value.value<QVector3D>()));
     case QMetaType::QColor:    return colorToJs(value.value<QColor>());
@@ -587,6 +640,17 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
                              propertyKeys(node).join(QStringLiteral(", ")), id));
 
     QVariant converted = value;
+    // The enum row goes in as a NAME (F18). An ordinal is REFUSED rather than
+    // quietly accepted: 3 meaning "material" is exactly the kind of thing a
+    // caller gets wrong once and never notices.
+    if (key == QLatin1String("faceCullingMode")) {
+        const int mode = cullModeValue(value.toString());
+        if (mode < 0)
+            return fail(QStringLiteral("node.setProperty: '%1' is not a face culling mode "
+                                       "(%2) — this enum travels as a NAME, never as an ordinal")
+                            .arg(value.toString(), cullModeNames().join(QStringLiteral(", "))));
+        converted = mode;
+    }
     switch (current.typeId()) {
     case QMetaType::QVector3D:
         converted = QVariant::fromValue(iris::toQt(vecFromJs(value, iris::fromQt(current.value<QVector3D>()))));
