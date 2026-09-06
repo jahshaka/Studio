@@ -8,10 +8,12 @@
 #include "irisgl/core/math/vec.h"
 #include <QGuiApplication>
 #include <QColor>
+#include <QDir>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 
 #include <cmath>
@@ -102,6 +104,21 @@ int main(int argc, char **argv)
     additiveMat->setAlpha(0.6f);
     additive->setMaterial(additiveMat);
     scene->rootNode->addChild(additive);
+
+    // refractive glass (alphaMode 6): transmission AND an index of refraction.
+    // It exported as OPAQUE until PUBLISH_AUDIT #1 — the switch below stopped
+    // at 5 and mode 6 fell through to the default arm — so the whole point of
+    // these assertions is that a NEW blend mode can never drift out silently
+    // again: every mode the document declares is checked here.
+    auto refractive = iris::MeshNode::create();
+    refractive->setName("refractive");
+    refractive->setMesh(":assets/models/cube.obj");
+    auto refractiveMat = iris::PbrMaterial::create();
+    refractiveMat->setAlphaMode(6);
+    refractiveMat->setAlpha(0.25f);
+    refractiveMat->setRefractionStrength(0.5f);
+    refractive->setMaterial(refractiveMat);
+    scene->rootNode->addChild(refractive);
 
     auto modulate = iris::MeshNode::create();
     modulate->setName("modulate");
@@ -197,9 +214,9 @@ int main(int argc, char **argv)
     // nodes: 2 meshes + 2 punctual shims + 2 punctual lights... count explicitly:
     // cube, glass, point(+shim), spot(+shim), area(+shim), camera = 9
     const QJsonArray nodes = root["nodes"].toArray();
-    CHECK(nodes.size() == 11, "11 nodes (8 document + 3 orientation shims)");
-    CHECK(root["meshes"].toArray().size() == 4, "4 meshes");
-    CHECK(root["materials"].toArray().size() == 4, "4 materials");
+    CHECK(nodes.size() == 12, "12 nodes (9 document + 3 orientation shims)");
+    CHECK(root["meshes"].toArray().size() == 5, "5 meshes");
+    CHECK(root["materials"].toArray().size() == 5, "5 materials");
 
     // additive/modulate ride extras.jah.blendMode with a BLEND core fallback
     {
@@ -223,6 +240,48 @@ int main(int argc, char **argv)
         CHECK(foundAdditive, "additive material writes extras.jah.blendMode");
         CHECK(foundModulate, "modulate material writes extras.jah.blendMode");
     }
+
+    // EVERY declared alpha mode has an export, and the two transmissive ones
+    // are told apart by the ior extension (PUBLISH_AUDIT #1). This is the
+    // drift guard the audit asked for: a seventh mode that nobody handled in
+    // convertPbrMaterial lands here as OPAQUE and fails.
+    {
+        int glassMats = 0, refractiveMats = 0, opaqueMats = 0;
+        for (const auto &mv : root["materials"].toArray()) {
+            const QJsonObject m = mv.toObject();
+            const QJsonObject ext = m["extensions"].toObject();
+            const bool transmissive = ext.contains("KHR_materials_transmission");
+            const bool hasIor = ext.contains("KHR_materials_ior");
+            if (transmissive && hasIor) {
+                ++refractiveMats;
+                const double tf = ext["KHR_materials_transmission"].toObject()
+                                      ["transmissionFactor"].toDouble();
+                CHECK(std::abs(tf - 0.75) < 1e-4,
+                      "refractive: transmissionFactor = 1 - alpha (alpha 0.25)");
+                // refractionStrength 0.5 -> ior 1.5 (0 is a flat window at 1.0)
+                CHECK(std::abs(ext["KHR_materials_ior"].toObject()["ior"].toDouble() - 1.5) < 1e-4,
+                      "refractive: KHR_materials_ior carries the authored strength");
+                const QJsonObject refr =
+                    m["extras"].toObject()["jah"].toObject()["refraction"].toObject();
+                CHECK(std::abs(refr["strength"].toDouble() - 0.5) < 1e-6,
+                      "refractive: extras.jah.refraction.strength is the authored value");
+                // Transmission is NOT alpha blending: the glTF spec keeps such
+                // a material at alphaMode OPAQUE (the default) and lets the
+                // extension do the work. The bug was the missing extension,
+                // never the missing key — so assert the key stays absent.
+                CHECK(!m.contains("alphaMode"),
+                      "refractive: core alphaMode left at glTF's default (transmission owns it)");
+            } else if (transmissive) {
+                ++glassMats;
+                CHECK(!hasIor, "glass: no ior extension (mode 3 does not bend)");
+            } else if (!m.contains("alphaMode")) {
+                ++opaqueMats;
+            }
+        }
+        CHECK(glassMats == 1, "exactly one plain-glass material exported");
+        CHECK(refractiveMats == 1, "exactly one refractive material exported (was OPAQUE)");
+        CHECK(opaqueMats == 1, "the textured cube is the only opaque material");
+    }
     CHECK(root["cameras"].toArray().size() == 1, "1 camera");
     CHECK(g.lightCount == 3, "3 lights counted");
 
@@ -234,6 +293,7 @@ int main(int argc, char **argv)
     };
     CHECK(hasExt("KHR_lights_punctual"), "KHR_lights_punctual used");
     CHECK(hasExt("KHR_materials_transmission"), "KHR_materials_transmission used (glass)");
+    CHECK(hasExt("KHR_materials_ior"), "KHR_materials_ior used (refractive glass)");
     CHECK(hasExt("KHR_materials_emissive_strength"), "KHR_materials_emissive_strength used");
     CHECK(hasExt("KHR_texture_transform"), "KHR_texture_transform used (textureScale=2)");
 
@@ -536,6 +596,25 @@ int main(int argc, char **argv)
     std::printf("    detected chromium-family browser: %s\n",
                 browser.isEmpty() ? "(none)" : qPrintable(browser));
     CHECK(true, "findChromiumBrowser probed without side effects");
+
+    // The companion preview's Chrome profile (PUBLISH_AUDIT #3). It used to be
+    // a FIXED `.preview-profile` beside index.html: it shipped inside the
+    // published folder, and the fixed path let a previous run's Chrome
+    // singleton-capture the launch and only forward the URL to its old window.
+    // Both properties are checkable without ever spawning a browser.
+    {
+        const QString p1 = PreviewLauncher::newProfileDir();
+        const QString p2 = PreviewLauncher::newProfileDir();
+        CHECK(p1 != p2, "preview profile: unique per run");
+        const QString tempRoot = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+        CHECK(!tempRoot.isEmpty() && p1.startsWith(tempRoot),
+              "preview profile: lives in the OS temp location");
+        CHECK(!QDir(p1).exists(), "preview profile: a path only — nothing created up front");
+        // And the published folder stays clean: no profile of any generation.
+        CHECK(!QDir(outDir).exists(QStringLiteral(".preview-profile")) &&
+                  !p1.startsWith(QDir(outDir).absolutePath()),
+              "preview profile: never inside the exported deliverable");
+    }
 
     std::printf(failures ? "FAILED: %d checks\n" : "ALL OK\n", failures);
     return failures ? 1 : 0;

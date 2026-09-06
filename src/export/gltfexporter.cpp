@@ -415,14 +415,36 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     case 2:
         m["alphaMode"] = "BLEND";
         break;
-    case 3: {
-        // Glass — KHR_materials_transmission: fade diffuse, keep specular, the
-        // same semantics as the engine's PbrAlphaMode::Glass (audit §1).
+    case 3:
+    case 6: {
+        // Glass (3) and Refractive (6) — KHR_materials_transmission: fade
+        // diffuse, keep specular, the same semantics as the engine's
+        // PbrAlphaMode::Glass (audit §1). Refractive is Glass that ALSO bends
+        // what is behind it (Types.h PbrAlphaMode::Refractive), which in glTF
+        // is exactly transmission + an index of refraction — so mode 6 adds
+        // KHR_materials_ior on top. Modes 3 and 6 must never fall through to
+        // the default arm: OPAQUE glass was the bug this case exists to fix
+        // (PUBLISH_AUDIT #1), and export.web asserts both arms.
         c.useExtension("KHR_materials_transmission");
         QJsonObject tr;
         tr["transmissionFactor"] = double(std::min(1.0f, std::max(0.0f, 1.0f - pbr->alpha)));
         QJsonObject ext = m["extensions"].toObject();
         ext["KHR_materials_transmission"] = tr;
+        if (pbr->alphaMode == 6) {
+            // The document's refractionStrength is a 0..1 displacement knob
+            // ("roughly an index-of-refraction knob; 0 is a flat window" —
+            // PbrMaterial::refractionStrength), not a physical IOR. Map it
+            // onto the one number glTF understands so a stock viewer bends
+            // by the authored amount: 0 -> 1.0 (no bending at all, a flat
+            // window, glTF's own default) .. 1 -> 2.0 (heavier than real
+            // glass, which sits near 1.5). The authored value itself still
+            // rides extras.jah.refraction below, so nothing is lost.
+            const float s = std::min(1.0f, std::max(0.0f, pbr->refractionStrength));
+            c.useExtension("KHR_materials_ior");
+            QJsonObject ior;
+            ior["ior"] = double(1.0f + s);
+            ext["KHR_materials_ior"] = ior;
+        }
         m["extensions"] = ext;
         break;
     }
@@ -445,6 +467,15 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     jah["iblIntensity"] = double(pbr->iblIntensity);
     if (pbr->alphaMode == 4) jah["blendMode"] = "additive";
     else if (pbr->alphaMode == 5) jah["blendMode"] = "modulate";
+    if (pbr->alphaMode == 6) {
+        // The authored refraction knob, verbatim and unmapped — the KHR_ior
+        // number above is a lossy projection of it, this is the value the
+        // editor shows. viewer.js reads it to size three.js' `thickness`,
+        // which is what actually makes the surface displace its backdrop.
+        QJsonObject refr;
+        refr["strength"] = double(pbr->refractionStrength);
+        jah["refraction"] = refr;
+    }
     QJsonObject extras; extras["jah"] = jah;
     m["extras"] = extras;
 

@@ -18,6 +18,16 @@ var cube = scene.addPrimitive("cube", { position: { x: 0, y: 1, z: 0 } });
 assert(cube.length > 10, "scene.addPrimitive(cube)");
 var sphere = scene.addPrimitive("sphere", { position: { x: 2, y: 1, z: 0 } });
 assert(sphere.length > 10, "scene.addPrimitive(sphere)");
+// A REFRACTIVE material (alphaMode 6) in the real binary: it exported as plain
+// OPAQUE until PUBLISH_AUDIT #1, because the exporter's blend-mode switch
+// stopped at 5. The proof is in r.extensions below — KHR_materials_ior is
+// written by that arm and by nothing else.
+var glassCube = scene.addPrimitive("cube", { position: { x: -2, y: 1, z: 0 } });
+assert(glassCube.length > 10, "scene.addPrimitive(cube) for the refractive material");
+assert(material.set(glassCube, { alphaMode: 6, alpha: 0.25, refractionStrength: 0.5 }),
+       "material.set alphaMode=6 (refractive) + refractionStrength");
+assert(material.get(glassCube).alphaMode === 6, "the material really is refractive");
+
 var light = scene.addLight("point", { position: { x: 2, y: 3, z: 2 } });
 assert(light.length > 10, "scene.addLight(point)");
 var spot = scene.addLight("spot", { position: { x: 0, y: 4, z: 0 } });
@@ -38,6 +48,10 @@ assert(r.materials >= 1, "exported materials: " + r.materials);
 assert(r.lights >= 2, "exported lights: " + r.lights);
 assert(r.extensions.indexOf("KHR_lights_punctual") >= 0,
        "KHR_lights_punctual present: [" + r.extensions.join(", ") + "]");
+assert(r.extensions.indexOf("KHR_materials_transmission") >= 0,
+       "refractive glass exported as transmission, not opaque");
+assert(r.extensions.indexOf("KHR_materials_ior") >= 0,
+       "refractive glass carries an index of refraction");
 
 // export into an explicit directory too (the verb's dir parameter)
 var r2 = project.exportWeb(r.dir + "-explicit");

@@ -269,6 +269,43 @@
                     o.material.depthWrite = false;
                     o.material.needsUpdate = true;
                 }
+                // Refractive glass (document alphaMode 6, PUBLISH_AUDIT #1).
+                // GLTFLoader already gave us transmission (KHR_materials_
+                // transmission) and ior (KHR_materials_ior) — but three.js
+                // only DISPLACES the backdrop when the material has volume:
+                // getIBLVolumeRefraction offsets the refraction ray by the
+                // ior AND the thickness, so with thickness 0 the surface is
+                // see-through and perfectly flat. Nothing in glTF core says
+                // "thickness" without KHR_materials_volume (which the
+                // document has no field for), so size it here from the
+                // authored strength and the mesh's own extent: a fully
+                // refractive object bends as if it were solid all the way
+                // through, and strength 0 stays a flat window. (A material
+                // shared by meshes of different size takes the last one's
+                // extent — the exporter emits one material per document
+                // material, so that is the authored grouping.)
+                if (mj.refraction && o.material.isMeshPhysicalMaterial) {
+                    var strength = mj.refraction.strength;
+                    if (typeof strength !== "number") strength = 0;
+                    strength = Math.max(0, Math.min(1, strength));
+                    var extent = 1;
+                    if (o.geometry) {
+                        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+                        var bb = o.geometry.boundingBox;
+                        if (bb) {
+                            var sz = bb.getSize(new THREE.Vector3());
+                            extent = (sz.x + sz.y + sz.z) / 3;
+                            if (!(extent > 0)) extent = 1;
+                        }
+                    }
+                    o.material.thickness = strength * extent;
+                    // A transmissive surface must NOT ride the transparent
+                    // queue: three renders transmission from its own backdrop
+                    // target, and a depth-write-disabled blend pass would
+                    // sample a half-drawn scene instead.
+                    o.material.transparent = false;
+                    o.material.needsUpdate = true;
+                }
             }
         });
     }
