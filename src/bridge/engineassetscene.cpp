@@ -12,6 +12,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
+#include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/geometry/aabb.h"
@@ -463,7 +464,9 @@ QImage EngineAssetScene::renderImage(int width, int height)
     // The editor does not pay for an asset snapshot (fps audit F5) — see
     // bridge/offscreenrenderscope.h.
     OffscreenRenderScope quiet(engine.get());
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    // Two frames, plus whatever the texture load-request counter still owes
+    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
+    renderStableFrames(engine.get());
     Image img;
     QImage result;
     if (shot->readPixels(img)) result = toQImage(img);

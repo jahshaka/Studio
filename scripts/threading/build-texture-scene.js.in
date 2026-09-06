@@ -1,0 +1,51 @@
+// build-texture-scene.js — the fixture for the batched-texture-loading A/B
+// (SPECS/THREADING_ADOPTION_SPEC.md G2-c). Run ONCE, into the harness's pinned
+// HOME; every measured run afterwards just opens what this made.
+//
+// THE SCENE, and why each number: 12 cubes, four texture slots each = 48
+// distinct 2048x2048 images, which is comfortably past the spec's "at least 40
+// textures across at least 12 materials". Four SLOTS rather than four cubes per
+// texture because a slot is a separate loadTexture call on the same material —
+// that is the shape a real imported asset has, and it is what makes the mirror
+// walk schedule textures in a burst.
+//
+// THE TEXTURES GO THROUGH THE ASSET STORE (assets.importFile + addToProject),
+// not straight off disk, deliberately: that is the path a user's project takes,
+// it is what the material serializer can round-trip through a save and a
+// reopen, and it means the measured open resolves guids exactly as a real one
+// does. `scene.addMesh`'s removal notice in docs/SCRIPTING.md is the same
+// lesson — a raw disk path in a material does not survive.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+}
+
+var TEXDIR = "@TEXDIR@";
+var CUBES = 12;
+var SLOTS = ["baseColorMap", "normalMap", "roughnessMap", "metallicMap"];
+
+var guid = project.create("TextureAB");
+assert(guid && guid.length > 10, "project.create -> " + guid);
+
+var n = 0;
+for (var c = 0; c < CUBES; ++c) {
+    var id = scene.addPrimitive("cube", {
+        position: { x: (c % 4) * 2.5 - 3.75, y: 0.5, z: Math.floor(c / 4) * 2.5 - 2.5 }
+    });
+    assert(id, "addPrimitive cube " + c);
+    var maps = {};
+    for (var s = 0; s < SLOTS.length; ++s) {
+        var file = TEXDIR + "/abtex_" + (n < 10 ? "0" : "") + n + ".png";
+        var storeGuid = assets.importFile(file);
+        assert(storeGuid && storeGuid.length > 10, "importFile " + file + " -> " + storeGuid);
+        var projGuid = assets.addToProject(storeGuid);
+        assert(projGuid && projGuid.length > 10, "addToProject " + storeGuid);
+        maps[SLOTS[s]] = projGuid;
+        ++n;
+    }
+    assert(material.set(id, maps) === true, "material.set on cube " + c);
+    console.log("cube " + c + ": " + SLOTS.length + " maps bound");
+}
+
+assert(project.save() === true, "project.save");
+console.log("BUILT guid=" + guid + " textures=" + n);

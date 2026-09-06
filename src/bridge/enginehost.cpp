@@ -473,6 +473,15 @@ void EngineHost::shutdown()
     // destructor past Qt's own teardown — this is the point we can prove runs,
     // with the render loop stopped a line below and nothing compiling.
     if (mEngine) mEngine->saveShaderCache();
+    // THE TEXTURE CACHE, beside it and for the same reason
+    // (THREADING_ADOPTION_SPEC.md P2 item 6): resolution/format/pool per texture
+    // path, plus our channel sidecar, so the next launch can reserve the right
+    // pool slice before the streaming worker has decoded anything and can skip
+    // the channel probe entirely. Same directory, same derived-data contract,
+    // same "clear cache" button — its own manifest and its own validity key
+    // (I-5), which deliberately does not name the GPU: a driver update has no
+    // business invalidating a PNG's channel count.
+    if (mEngine) mEngine->saveTextureCache();
     if (mDriver) {
         mDriver->stop();
         delete mDriver;

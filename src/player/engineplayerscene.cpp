@@ -1,4 +1,5 @@
 #include "bridge/offscreenrenderscope.h"
+#include "bridge/stableoffscreenrender.h"
 #include "bridge/sceneworkerthreads.h"
 #include "player/engineplayerscene.h"
 
@@ -215,7 +216,9 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, bool postFx)
     // Quiet the on-screen views for the two forced frames (fps audit F5) —
     // the same scope the editor's screenshot uses.
     OffscreenRenderScope quiet(engine.get());
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    // Plus whatever the texture load-request counter still owes
+    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
+    renderStableFrames(engine.get());
 
     Image img;
     QImage result;

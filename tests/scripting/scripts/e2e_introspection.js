@@ -299,4 +299,46 @@ var worldHelp = api.help("world");
 assert(worldHelp.indexOf("Alias of world.fog") >= 0,
        "each alias's doc string names its twin");
 
+// ---- the engine census's threading rows -------------------------------------
+// SPECS/THREADING_ADOPTION_SPEC.md P5 (stagingScenes), P4(b) D-E
+// (incompletePsoRequests) and P2 (textureStreaming). All three are read-backs
+// whose whole value is that a script can see them; asserting they EXIST and
+// carry the documented shape is what stops a boundary field being added, wired
+// to nothing, and going unnoticed for a release.
+//
+// A HEADLESS session is exactly the right place for the staging row: there is
+// no View, so `scenes` and `updatedScenes` are 0 and the ONLY scene manager the
+// engine holds is the document's staging one. If stagingScenes were folded into
+// `scenes` this assertion could not be written at all.
+var census = app.engineObjects();
+assert(typeof census.stagingScenes === "number",
+       "app.engineObjects() reports stagingScenes");
+assert(census.stagingScenes === 1,
+       "a headless session holds exactly one staging scene manager (got " +
+       census.stagingScenes + ")");
+assert(census.scenes === 0 && census.updatedScenes === 0,
+       "…and no drawn scenes at all, which is what makes the row separate " +
+       "(scenes=" + census.scenes + ", updated=" + census.updatedScenes + ")");
+
+var stats = app.renderStats();
+assert(typeof stats.incompletePsoRequests === "number",
+       "app.renderStats() reports incompletePsoRequests");
+assert(stats.incompletePsoRequests === 0,
+       "…and it is 0, because the per-frame PSO deadline is deliberately off " +
+       "(THREADING_ADOPTION_SPEC D-E: one-shot shader techniques would break)");
+
+var streaming = app.textureStreaming();
+assert(typeof streaming.loadRequests === "number" &&
+       typeof streaming.multiLoadThreads === "number" &&
+       typeof streaming.metadataCacheEntries === "number" &&
+       typeof streaming.channelCacheEntries === "number",
+       "app.textureStreaming() reports the full map");
+assert(streaming.doneStreaming === true,
+       "nothing is in flight in a session that has loaded no textures");
+assert(streaming.multiLoadThreads === 0,
+       "the multiload pool is off under the NULL render system (it would be " +
+       "idle threads), got " + streaming.multiLoadThreads);
+assert(app.waitForTextures().waitedMs === 0,
+       "app.waitForTextures() returns immediately with nothing to wait for");
+
 console.log("PASS: scripting.e2e.introspection");

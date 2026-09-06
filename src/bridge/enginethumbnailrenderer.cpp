@@ -21,6 +21,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
+#include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
 
 using namespace jahshaka::engine;
@@ -72,7 +73,14 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
     if (!mScene) {
         // One frame into a small texture, then emptied again: a worker pool
         // would be pure barrier cost (fps audit F3).
-        mScene = engine->createScene("thumbs", sceneworkers::count(sceneworkers::Tier::Utility));
+        //
+        // NO POOL, not a pool of one (THREADING_ADOPTION_SPEC.md P5). This asked
+        // for Tier::Utility until the hygiene phase, and 1 does not avoid the
+        // barrier — Ogre spawns a thread and pays two syncs per parallel pass to
+        // do the same serial work. Tier::MainThread reaches the backend as a
+        // genuine 0, where mForceMainThread runs every pass inline
+        // (OgreSceneManager.cpp:171, :4705-4717).
+        mScene = engine->createScene("thumbs", sceneworkers::count(sceneworkers::Tier::MainThread));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
         mView->setScene(mScene);
@@ -273,7 +281,12 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // whole editor twice and blocked twice on the display's vsync — which is
     // what made a thumbnail sweep feel like a frozen application.
     OffscreenRenderScope quiet(engine.get());
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    // Two frames, plus however many more the texture load-request counter says
+    // this picture still owes (THREADING_ADOPTION_SPEC.md P2 item 4). Textures
+    // are streamed since P2, so "two frames" alone is no longer a guarantee that
+    // everything the thumbnail draws is resident — see bridge/
+    // stableoffscreenrender.h for upstream's recipe and why the minimum stays 2.
+    renderStableFrames(engine.get());
     Image img;
     const bool ok = mView->readPixels(img);
     mView->setEnabled(false);
