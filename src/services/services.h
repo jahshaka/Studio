@@ -31,6 +31,7 @@ class Subscriber;
 class UndoService;
 class SelectionService;
 class PlaybackService;
+class PlayerService;
 class ProjectService;
 class SceneEditService;
 class ThumbnailService;
@@ -42,6 +43,9 @@ struct StudioServices
     UndoService      *undo       = nullptr;
     SelectionService *selection  = nullptr;
     PlaybackService  *playback   = nullptr;
+    /// The PLAYER SPACE (verb-coverage audit F1) — a different thing from
+    /// `playback`, which is the editor's play-in-place. Null in headless runs.
+    PlayerService    *player     = nullptr;
     ProjectService   *project    = nullptr;
     SceneEditService *sceneEdit  = nullptr;
     ThumbnailService *thumbnails = nullptr;

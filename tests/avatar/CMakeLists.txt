@@ -36,6 +36,25 @@ add_custom_command(OUTPUT "${JAHSHAKA_MANNEQUIN_DAE}"
     VERBATIM)
 add_custom_target(beta_mannequin ALL DEPENDS "${JAHSHAKA_MANNEQUIN_DAE}")
 
+# beta_walk.dae — the other half of the pair (verb-coverage audit F5): the SAME
+# Mixamo Beta export with the BODY stripped instead of the clip, and its
+# animation renamed "Walking". An animation-only file, which is the shape Mixamo
+# hands you for a "without skin" download, and the fixture avatar.loadClip
+# exists for. Generated for the same reason the mannequin is: the bytes already
+# ship inside the sample archive. The two share their joint names by
+# construction, which is the join key a skeletal clip uses.
+set(JAHSHAKA_BETA_WALK_DAE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/beta_walk.dae"
+    CACHE INTERNAL "generated animation-only Mixamo Beta walk clip")
+add_custom_command(OUTPUT "${JAHSHAKA_BETA_WALK_DAE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/fixtures"
+    COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/make_beta_walk.py"
+            "${CMAKE_SOURCE_DIR}" "${JAHSHAKA_BETA_WALK_DAE}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/make_beta_walk.py"
+            "${CMAKE_SOURCE_DIR}/scenes/Skeletal Animation.zip"
+    COMMENT "Deriving beta_walk.dae (animation-only Mixamo Beta walk clip) from the sample archive"
+    VERBATIM)
+add_custom_target(beta_walk ALL DEPENDS "${JAHSHAKA_BETA_WALK_DAE}")
+
 # assethelper.cpp's link closure — the module's load route (D0.1 A) goes
 # through it. Same set tests/assetmeta links.
 set(AVATAR_LOAD_SOURCES

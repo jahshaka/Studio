@@ -31,7 +31,10 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/materials/custommaterial.h"
 
+#include "commands/animationcommands.h"
 #include "services/animationedits.h"
+#include "services/services.h"
+#include "services/undoservice.h"
 #include "ui/panels/timeline/keyframewidget.h"
 #include "ui/panels/timeline/keyframecurvewidget.h"
 #include "ui/panels/timeline/animationwidgetdata.h"
@@ -324,6 +327,16 @@ void AnimationWidget::clearAnimationList()
     ui->animList->clear();
 }
 
+void AnimationWidget::pushEdit(QUndoCommand *command)
+{
+    if (!command) return;
+    if (services && services->undo) {
+        services->undo->push(command);
+        return;
+    }
+    delete command;
+}
+
 void AnimationWidget::removeProperty(QString propertyName)
 {
     if (!!node) {
@@ -331,7 +344,10 @@ void AnimationWidget::removeProperty(QString propertyName)
         // deleted (and on one that never had one) — removeTrack answers false
         // for both. The label row goes either way: if there is a row for a
         // track that is not there, that row is exactly what should not stay.
-        animedits::removeTrack(node->getAnimation(), propertyName);
+        const auto anim = node->getAnimation();
+        const animedits::TrackSnapshot before = animedits::snapshotTrack(anim, propertyName);
+        if (animedits::removeTrack(anim, propertyName))
+            pushEdit(new RemovePropertyCommand(anim, propertyName, before));
         ui->keylabelView->removeProperty(propertyName);
 
         this->repaintViews();
@@ -389,7 +405,9 @@ void AnimationWidget::deleteAnimation()
     // clears the node's ACTIVE animation: SceneNode::deleteAnimation only
     // drops it from the list, and the node went on holding — and keying into
     // — a clip that no longer appeared in the list.
-    animedits::removeAnimation(node, node->getAnimation());
+    const auto doomed = node->getAnimation();
+    if (animedits::removeAnimation(node, doomed))
+        pushEdit(new RemoveAnimationCommand(node, doomed, true));
 
     //refresh ui
     this->setSceneNode(node);
@@ -443,6 +461,9 @@ void AnimationWidget::addPropertyKey(QAction *action)
 
     bool createdTrack = false;
     QString error;
+    // F16: the panel's insert-key button is undoable now, through the SAME
+    // command the anim.keyframe verb pushes.
+    const animedits::TrackSnapshot before = animedits::snapshotTrack(animation, animProp->name);
     if (!animedits::setKeyframe(animation, info, animWidgetData->cursorPosInSeconds,
                                 QVariant(), &createdTrack, &error)) {
         // The menu filter and the writer share one predicate, so a refusal here
@@ -455,6 +476,9 @@ void AnimationWidget::addPropertyKey(QAction *action)
         }
         return;
     }
+
+    pushEdit(new SetKeyframeCommand(animation, animProp->name, before,
+                                    animedits::snapshotTrack(animation, animProp->name)));
 
     if (createdTrack)
         ui->keylabelView->addProperty(animProp->name);

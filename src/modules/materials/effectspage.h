@@ -91,6 +91,15 @@ public:
 	QString selectedGraphNodeId();
 	void deselectGraphNodes();
 
+	// F2 edit bridge for graph.removeNode / graph.disconnect: the removal goes
+	// through the page's UNDO STACK (GraphNodeScene::deleteNodeById /
+	// deleteConnectionById push the same commands the canvas's Delete key
+	// pushes), so graph.undo takes a scripted deletion back exactly as it takes
+	// back a click. False = this page's graph has no such node/connection,
+	// which is the signal the verb uses to fall back to its own script graph.
+	bool removeGraphNode(const QString& nodeId);
+	bool removeGraphConnection(const QString& connectionId);
+
 	// ---- The graph's edit stack ----------------------------------------
 	// THE page's undo stack (`stack` below): every GraphNodeScene this page
 	// creates is given it (createNewScene -> setUndoRedoStack), so node adds,

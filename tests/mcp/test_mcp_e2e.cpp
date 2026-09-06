@@ -506,9 +506,40 @@ int main(int argc, char **argv)
         CHECK(badKey.value("isError").toBool()
                   && toolText(badKey).contains(QLatin1String("unknown key")),
               "a misspelled camera key comes back as the VERB's error, not a silent no-op");
+        // view:"player" (verb-coverage audit F1). It USED to be refused —
+        // "the player view has no offscreen render path and no verb behind
+        // it" — and now there is one: player.screenshot renders the Player
+        // page's own engine Scene through the document's scene camera, and
+        // this tool carries the bytes back exactly as it does for a scene
+        // camera. Nothing else about the player has to be true for it: the
+        // page need never have been shown.
         const QJsonObject player = callTool(net, url, token, ++id, "screenshot",
-            QJsonObject{ { "view", "player" } });
-        CHECK(player.value("isError").toBool(), "view:'player' is refused (editor view only)");
+            QJsonObject{ { "view", "player" }, { "width", 128 }, { "height", 96 } });
+        CHECK(!player.value("isError").toBool(), "view:'player' is captured, not refused");
+        QImage playerImg;
+        CHECK(shotImage(player, playerImg), "the player screenshot decodes as PNG");
+        CHECK(playerImg.width() == 128 && playerImg.height() == 96,
+              "...at the requested size");
+        const QJsonObject playerEcho = shotPose(player);
+        CHECK(playerEcho.value("view").toString() == QLatin1String("player"),
+              "...and the echo says which space it came from");
+        CHECK(playerEcho.value("width").toInt() == 128
+                  && playerEcho.value("height").toInt() == 96,
+              "...and the size the PLAYER actually rendered");
+
+        // Camera placement is EDITOR-only by construction: the player renders
+        // through the document's scene camera and has no viewport camera to
+        // move, so asking for one is a refusal rather than a silently ignored
+        // argument.
+        const QJsonObject playerCam = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "view", "player" },
+                         { "camera", QJsonObject{ { "fov", 60 } } } });
+        CHECK(playerCam.value("isError").toBool(),
+              "camera placement is refused for the player view");
+
+        const QJsonObject nowhere = callTool(net, url, token, ++id, "screenshot",
+            QJsonObject{ { "view", "nowhere" } });
+        CHECK(nowhere.value("isError").toBool(), "an unknown view is still refused");
     }
 
     // ---- screenshot through a SCENE CAMERA (CAMERAS_SPEC §5, the AI hook) --

@@ -605,6 +605,21 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
             // relative sources via getAbsolutePath and re-relativizes after
             // load, so saved scenes converge on the stable relative form.
             QString source = skelAnim->source;
+            // THE ASSET GUID (F5, 2026-09-06): the stable half of the reference.
+            // Since the CAS a stored file's NAME is its sha256, so the reader's
+            // name-based re-home (fetchAssetGUIDByName) can never find the
+            // catalog row for a clip that came from the store — a project whose
+            // store had moved lost every externally loaded clip, silently, at
+            // bind pose. The guid survives that. Resolved from the ABSOLUTE
+            // form so a re-save of an already-relative source keeps it, and
+            // written only when there IS a row (a clip from a loose file on
+            // disk still travels by path alone, exactly as before).
+            const QString absolute = source.isEmpty()
+                ? QString()
+                : (QFileInfo(source).isAbsolute() ? source
+                                                  : staticRelativeBase.absoluteFilePath(source));
+            const QString sourceGuid = assetGuidForTexturePath(absolute);
+            if (!sourceGuid.isEmpty()) skelObj["guid"] = sourceGuid;
             if (!source.isEmpty() && QFileInfo(source).isAbsolute())
                 source = staticRelativeBase.relativeFilePath(source);
             skelObj["source"] = source;

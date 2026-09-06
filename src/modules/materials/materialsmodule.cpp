@@ -73,6 +73,18 @@ void MaterialsModule::registerApi(ScriptEngine &engine)
         undoDelegate.undoCount = [effectsPage]() { return effectsPage->graphUndoCount(); };
         undoDelegate.redoCount = [effectsPage]() { return effectsPage->graphRedoCount(); };
         graphApi->setUndoDelegate(undoDelegate);
+
+        // F2: graph.removeNode / graph.disconnect on the page's canvas go
+        // through that same stack (the page pushes the canvas's own delete
+        // commands), so a scripted deletion is undoable like a clicked one.
+        GraphApi::EditDelegate editDelegate;
+        editDelegate.removeNode = [effectsPage](const QString &id) {
+            return effectsPage->removeGraphNode(id);
+        };
+        editDelegate.removeConnection = [effectsPage](const QString &id) {
+            return effectsPage->removeGraphConnection(id);
+        };
+        graphApi->setEditDelegate(editDelegate);
     }
     engine.addModule(materialsApi);
     engine.addModule(new MaterialApi(host));

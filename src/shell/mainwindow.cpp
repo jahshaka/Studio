@@ -149,6 +149,8 @@ For more information see the LICENSE file
 #include "modules/materials/materialsmodule.h"
 #include "modules/publish/publishmodule.h"
 #include "modules/avatar/avatarmodule.h"
+#include "player/playermodule.h"
+#include "services/playerservice.h"
 #include "modules/studiomodule.h"
 #include "player/playerwidget.h"
 #include "player/engineplayerview.h"
@@ -867,6 +869,18 @@ void MainWindow::setupServices()
     sessionMarkers->attach(playbackService);
     LoadTimeline::setStatsProvider([this] { return SessionMarkers::sceneStats(scene); });
 
+    // The PLAYER space (verb-coverage audit F1) — a different state machine
+    // from playbackService's play-in-place. setupViewPort has already built the
+    // backend when the engine is up; headless runs leave the host null and the
+    // player.* verbs refuse cleanly.
+    playerService = new PlayerService(this);
+    playerService->setHost(playerBackend);
+    if (playerView) {
+        auto *widget = playerView;
+        connect(playerService, &PlayerService::playingChanged, widget,
+                [widget](bool playing) { widget->showPlaying(playing); });
+    }
+
     projectService = new ProjectService(db, project, settings,
                                         sceneView, undoService,
                                         [this]() { return scene; });
@@ -905,6 +919,7 @@ void MainWindow::setupServices()
     services->undo = undoService;
     services->selection = selectionService;
     services->playback = playbackService;
+    services->player = playerService;
     services->project = projectService;
     services->sceneEdit = sceneEditService;
     services->thumbnails = thumbnailService;
@@ -2146,6 +2161,10 @@ void MainWindow::setupDockWidgets()
     animationDock = new QDockWidget("Timeline", viewPort);
     animationDock->setObjectName(QStringLiteral("animationDock"));
     animationWidget = new AnimationWidget;
+    // F16: the Timeline's edits are undoable — the panel pushes the same
+    // commands the anim.* verbs push (services/animationedits.h is the shared
+    // edit, src/commands/animationcommands.h the shared record).
+    animationWidget->setServices(services);
 
     QWidget *animationDockContents = new QWidget;
     QGridLayout *animationLayout = new QGridLayout(animationDockContents);
@@ -2647,7 +2666,7 @@ void MainWindow::setupViewPort()
 
 	// The player page: PlayerWidget gets an EnginePlayerView (a second engine
 	// Scene mirroring the same document), or none in headless runs.
-	EnginePlayerView *playerBackend = nullptr;
+	playerBackend = nullptr;
 	if (EngineHost::instance().isRunning()) {
 		auto &host = EngineHost::instance();
 		playerBackend = createEnginePlayerView(host.engine(), host.driver(), viewPort);
@@ -2750,7 +2769,11 @@ void MainWindow::setupDesktop()
 	materialsModule = new MaterialsModule;
 	publishModule = new PublishModule;
 	avatarModule = new AvatarModule;
-	modules = { materialsModule, publishModule, avatarModule };
+	// The Player space contributes VERBS only (verb-coverage audit F1): its
+	// page is PlayerWidget, built in setupViewPort, because the stacked-widget
+	// index order is load-bearing (PLAYER = 4).
+	playerModule = new PlayerModule;
+	modules = { materialsModule, publishModule, avatarModule, playerModule };
 	for (auto *module : modules) module->initialize(moduleHost);
 	materialsModule->setAssetView(_assetView);
 

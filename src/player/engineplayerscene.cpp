@@ -1,7 +1,9 @@
+#include "bridge/offscreenrenderscope.h"
 #include "bridge/sceneworkerthreads.h"
 #include "player/engineplayerscene.h"
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include "irisgl/mirror/scenemirror.h"
 #include "player/playback.h"
@@ -25,6 +27,23 @@ EnginePlayerScene::~EnginePlayerScene()
     delete mPlayback;
 }
 
+bool EnginePlayerScene::ensureScene()
+{
+    auto engine = mEngine.lock();
+    if (!engine) return false;
+    if (mScene) return true;
+    // On-screen and watched at frame rate, exactly like the editor scene
+    // (fps audit F3, bridge/sceneworkerthreads.h).
+    mScene = engine->createScene("player-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
+                                 sceneworkers::count(sceneworkers::Tier::Primary));
+    if (!mScene) return false;
+    mScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
+    mMirror.reset(new SceneMirror(mScene));
+    mMirror->setLightWires(false);           // the player never shows editor wires
+    if (mDocument) mMirror->setSource(mDocument);
+    return true;
+}
+
 bool EnginePlayerScene::attach(View *view)
 {
     auto engine = mEngine.lock();
@@ -34,15 +53,7 @@ bool EnginePlayerScene::attach(View *view)
         // Re-bound to another view (the widget's native window was recreated).
         if (mView) mView->setScene(nullptr);
     } else if (!mScene) {
-        // On-screen and watched at frame rate, exactly like the editor scene
-        // (fps audit F3, bridge/sceneworkerthreads.h).
-        mScene = engine->createScene("player-" + std::to_string(reinterpret_cast<uintptr_t>(this)),
-                                     sceneworkers::count(sceneworkers::Tier::Primary));
-        if (!mScene) return false;
-        mScene->setAmbient(Colour(0.25f, 0.27f, 0.32f), Colour(0.15f, 0.15f, 0.18f));
-        mMirror.reset(new SceneMirror(mScene));
-        mMirror->setLightWires(false);           // the player never shows editor wires
-        if (mDocument) mMirror->setSource(mDocument);
+        if (!ensureScene()) return false;
     }
     mView = view;
     mView->setScene(mScene);
@@ -154,4 +165,65 @@ void EnginePlayerScene::play()
 void EnginePlayerScene::stop()
 {
     if (mPlayback->isScenePlaying()) mPlayback->stopScene();
+}
+
+void EnginePlayerScene::stepFrames(int n, float dt, int width, int height)
+{
+    auto engine = mEngine.lock();
+    if (!engine || !mView || !mScene) return;
+    for (int i = 0; i < n; ++i) {
+        step(dt >= 0.0f ? dt : 0.016f, width, height);
+        engine->renderOneFrame();
+    }
+}
+
+QImage EnginePlayerScene::takeScreenshot(int width, int height, bool postFx)
+{
+    auto engine = mEngine.lock();
+    if (!engine || width <= 0 || height <= 0) return QImage();
+    // A screenshot can be the FIRST thing asked of the player — before the page
+    // has ever been shown, so before attach() ran. The engine Scene and its
+    // mirror need no window (only the on-screen View does), so build them here
+    // rather than answering "no player" to a perfectly answerable question.
+    if (!ensureScene()) return QImage();
+    auto cam = camera();
+    if (!cam) return QImage();
+
+    static unsigned serial = 0;
+    View *shot = engine->createOffscreenView("player-screenshot-" + std::to_string(++serial),
+                                             unsigned(width), unsigned(height),
+                                             Colour(0.10f, 0.11f, 0.14f));
+    if (!shot) return QImage();
+    shot->setScene(mScene);
+    if (mMirror) {
+        mMirror->sync();
+        mMirror->applySky(shot);
+        mMirror->applyEnvironment(shot);
+        // The camera is copied at the shot's OWN aspect ratio, so a 16:9
+        // request off a square page does not photograph a squashed world.
+        const float saved = cam->aspectRatio;
+        cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
+        mMirror->applyCamera(cam, shot);
+        cam->setAspectRatio(saved);
+        if (postFx) {
+            jahshaka::engine::PostFxDesc fx = shot->postFx();
+            fx.allowOffscreen = true;
+            shot->setPostFx(fx);
+        }
+    }
+
+    // Quiet the on-screen views for the two forced frames (fps audit F5) —
+    // the same scope the editor's screenshot uses.
+    OffscreenRenderScope quiet(engine.get());
+    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+
+    Image img;
+    QImage result;
+    if (shot->readPixels(img) && img.width && img.height) {
+        result = QImage(int(img.width), int(img.height), QImage::Format_RGBA8888);
+        for (unsigned y = 0; y < img.height; ++y)
+            memcpy(result.scanLine(int(y)), &img.rgba[size_t(y) * img.width * 4u], img.width * 4u);
+    }
+    engine->destroyView(shot);
+    return result;
 }

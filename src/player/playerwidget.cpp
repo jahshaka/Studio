@@ -112,20 +112,32 @@ void PlayerWidget::end()
 	playerView->end();
 	if (playerView->isScenePlaying()) {
 		playerView->stopScene();
-		playBtn->setIcon(playIcon);
     }
+	showPlaying(playerView->isScenePlaying());
+}
+
+void PlayerWidget::showPlaying(bool playing)
+{
+	if (!playBtn) return;
+	playBtn->setIcon(playing ? stopIcon : playIcon);
+	playBtn->setToolTip(playing ? "Stop the scene" : "Play the scene");
 }
 
 void PlayerWidget::onPlayScene()
 {
     if (!playerView) return;
-    if (playerView->isScenePlaying()) {
+    // The button goes through the same calls the verbs go through; the ICON is
+    // driven by PlayerService::playingChanged, so it is correct whoever moved
+    // the state. Calling the view directly here (rather than the service) keeps
+    // the widget free of a service dependency it has no other use for — the
+    // service observes the same object.
+    const bool wasPlaying = playerView->isScenePlaying();
+    if (wasPlaying) {
         playerView->stopScene();
-        playBtn->setIcon(playIcon);
     }
     else {
         playerView->playScene();
-        playBtn->setIcon(stopIcon);
         playerView->asWidget()->setFocus();
     }
+    showPlaying(playerView->isScenePlaying());
 }

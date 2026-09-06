@@ -117,6 +117,20 @@ public:
 
 	void deleteSelectedNodes();
 	void deleteNode(GraphNode* node);
+
+	// Delete BY ID, through the same undo commands deleteSelectedNodes pushes
+	// (verb-coverage audit F2). The canvas deletes what is selected; the
+	// graph.removeNode / graph.disconnect verbs address a node or a pipe by
+	// id and must not have to fake a selection to do it — and must land on
+	// the page's edit stack, or graph.undo would silently not cover them.
+	//
+	// Refusals are answers, not exceptions: false = no such node/connection
+	// in this scene, or (for the master) a node this scene will not delete.
+	// With no undo stack wired the delete still happens, unrecorded — the
+	// same degradation every other command site here has.
+	bool deleteNodeById(const QString& nodeId);
+	bool deleteConnectionById(const QString& connectionId);
+
 	void clearDragHighlight();
 
 	// selection API (§3a): the panel and the graph.selectNode/selectedNode/

@@ -115,7 +115,23 @@ public:
     };
     void setUndoDelegate(const UndoDelegate &delegate) { mUndo = delegate; }
 
+    /// The Effects page's DESTRUCTIVE edits (verb-coverage audit F2). Removing
+    /// a node or a connection on the page must go through the page's undo
+    /// commands or graph.undo would silently not cover a scripted deletion —
+    /// so the verbs offer the id to the page FIRST (exactly the pattern
+    /// selectNode uses) and only edit their own script graph when the page
+    /// answers "I have no such node". Unset in headless slices.
+    struct EditDelegate {
+        std::function<bool(const QString &)> removeNode;
+        std::function<bool(const QString &)> removeConnection;
+    };
+    void setEditDelegate(const EditDelegate &delegate) { mEdit = delegate; }
+
     Q_INVOKABLE QVariantList nodes();
+    Q_INVOKABLE QVariantList connections();
+    Q_INVOKABLE QVariantMap nodeInfo(const QString &type);
+    Q_INVOKABLE bool removeNode(const QString &nodeId);
+    Q_INVOKABLE bool disconnect(const QVariant &connection);
     Q_INVOKABLE QVariantList nodeTypes();
     Q_INVOKABLE QString addNode(const QString &type);
     Q_INVOKABLE bool connect(const QString &fromId, const QVariant &fromSocket,
@@ -144,6 +160,7 @@ private:
     QString mSelectedNodeId;      // API-local selection (headless fallback)
     SelectionDelegate mSelection; // the Effects page, when wired
     UndoDelegate mUndo;           // the Effects page's edit stack, when wired
+    EditDelegate mEdit;           // the Effects page's destructive edits
 };
 
 #endif // SCRIPTING_MATERIALSAPI_H

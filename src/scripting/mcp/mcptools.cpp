@@ -200,8 +200,11 @@ QJsonArray McpTools::listTools() const
           "default the scene's post-processing chain (HDR/tonemap, bloom, ambient "
           "occlusion, SMAA) is applied so the image matches what the user sees; "
           "pass postFx:false for a neutral render.\n"
-          "The EDITOR view is the only view there is: the player view has no offscreen "
-          "render path and no verb behind it, so it is not a parameter here.\n"
+          "`view` picks the SPACE: \"editor\" (the default) or \"player\" — the Player page's "
+          "own engine Scene, through the document's scene camera, which is what the runtime "
+          "actually shows. A player shot is player.screenshot, called for you; `camera`, "
+          "`frameNode` and the pose echo are editor-only (the player has no viewport camera to "
+          "move).\n"
           "`camera` and `frameNode` move the editor camera before the shot — they are "
           "editor.setCamera / editor.frameNode, called for you, and they MOVE THE USER'S "
           "VIEWPORT (there is no separate screenshot camera). The resulting pose is "
@@ -217,8 +220,9 @@ QJsonArray McpTools::listTools() const
             { "properties", QJsonObject{
                 { "view", QJsonObject{
                     { "type", "string" },
-                    { "enum", QJsonArray{ "editor" } },
-                    { "description", "Which view to capture — editor only." } } },
+                    { "enum", QJsonArray{ "editor", "player" } },
+                    { "description", "Which space to capture: \"editor\" (default) or "
+                                     "\"player\" (the Player page's own scene and camera)." } } },
                 { "width", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 800)." } } },
                 { "height", QJsonObject{ { "type", "integer" }, { "description", "Pixels, 16-4096 (default 600)." } } },
                 { "camera", QJsonObject{
@@ -468,12 +472,52 @@ QJsonObject McpTools::screenshot(const QJsonObject &args)
             "project first (run_script: project.create(name))"), true);
 
     const QString view = args.value(QLatin1String("view")).toString(QStringLiteral("editor"));
-    if (view != QLatin1String("editor"))
-        return textResult(QStringLiteral("screenshot: view '%1' does not exist — the editor "
-                                         "view is the only one that can be captured").arg(view), true);
+    if (view != QLatin1String("editor") && view != QLatin1String("player"))
+        return textResult(QStringLiteral("screenshot: view '%1' does not exist — the views are "
+                                         "\"editor\" and \"player\"").arg(view), true);
 
     const int width = qBound(16, args.value(QLatin1String("width")).toInt(800), 4096);
     const int height = qBound(16, args.value(QLatin1String("height")).toInt(600), 4096);
+
+    // THE PLAYER SPACE (verb-coverage audit F1). The tool carries bytes; the
+    // VERB carries the capability (player.screenshot renders the player's own
+    // engine Scene through the document camera). Camera placement is editor-only
+    // by construction: the player has no viewport camera to move, so asking for
+    // one here is a refusal rather than a silently ignored argument.
+    if (view == QLatin1String("player")) {
+        if (args.contains(QLatin1String("camera")) || args.contains(QLatin1String("frameNode")))
+            return textResult(QStringLiteral(
+                "screenshot: camera/frameNode place the EDITOR camera and mean nothing for the "
+                "player view — the player renders through the document's scene camera "
+                "(scene.setActiveCamera picks it)"), true);
+        QTemporaryDir scratch;
+        if (!scratch.isValid())
+            return textResult(QStringLiteral("screenshot: could not create a scratch directory"), true);
+        const QString file = scratch.filePath(QStringLiteral("player.png"));
+        const bool playerPostFx = args.value(QLatin1String("postFx")).toBool(true);
+        const QByteArray quoted = QJsonDocument(QJsonArray{ file }).toJson(QJsonDocument::Compact);
+        const QString expr =
+            QStringLiteral("player.screenshot(%1[0], {width: %2, height: %3, postFx: %4})")
+                .arg(QString::fromUtf8(quoted))
+                .arg(width).arg(height)
+                .arg(playerPostFx ? QStringLiteral("true") : QStringLiteral("false"));
+        const ScriptResult shot = mEngine->evaluate(expr, QStringLiteral("<screenshot>"), false);
+        if (!shot.ok)
+            return textResult(QStringLiteral("screenshot: %1").arg(shot.error), true);
+        QFile png(file);
+        if (!png.open(QIODevice::ReadOnly))
+            return textResult(QStringLiteral("screenshot: the player render produced no file"), true);
+        const QByteArray bytes = png.readAll();
+        QJsonObject echo = QJsonDocument::fromVariant(shot.value).object();
+        echo.remove(QStringLiteral("path"));    // a scratch path is noise to the caller
+        echo["view"] = QStringLiteral("player");
+        return QJsonObject{ { "content", QJsonArray{
+            QJsonObject{ { "type", "image" }, { "data", QString::fromLatin1(bytes.toBase64()) },
+                         { "mimeType", "image/png" } },
+            QJsonObject{ { "type", "text" },
+                         { "text", QStringLiteral("player view: %1").arg(QString::fromUtf8(
+                               QJsonDocument(echo).toJson(QJsonDocument::Compact))) } } } } };
+    }
 
     // Optional camera placement, done by CALLING THE VERBS: editor.setCamera /
     // editor.frameNode carry the capability and their tests gate it; this tool

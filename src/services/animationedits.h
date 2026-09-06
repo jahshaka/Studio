@@ -121,6 +121,60 @@ bool removeAnimation(const iris::SceneNodePtr &node, const iris::AnimationPtr &a
 /// does NOT pose the node.
 QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, double time);
 
+// ---- undo (F16) -----------------------------------------------------------
+//
+// EVERY anim.* write is a TRACK-level edit: setting a key, removing a key,
+// re-shaping a key's tangents and deleting a whole property all begin and end
+// with "what did this property's track look like". So undo needs exactly one
+// primitive — snapshot the track, restore the track — rather than four bespoke
+// inverse operations, each of which would be the one that forgets that
+// removing the last key of a channel also moves the animation's LENGTH.
+//
+// The snapshot is a plain value: it owns no document object and stays valid
+// after the track it came from is deleted, which is what lets an undo command
+// hold one for the whole life of the stack. A snapshot with `existed == false`
+// is the honest "there was no track here", and restoring it removes whatever
+// track is there now — that is how the undo of "the first key on a property"
+// takes the track away again instead of leaving an empty one behind.
+
+/// One key of one channel, with its full curve shape.
+struct KeySnapshot
+{
+    double time = 0.0;
+    float  value = 0.0f;
+    int    leftTangent = 0;      // iris::TangentType
+    int    rightTangent = 0;
+    float  leftSlope = 0.0f;
+    float  rightSlope = 0.0f;
+    int    handleMode = 0;       // iris::HandleMode
+};
+
+/// One float channel of a track ("X", "R", or the track's own name for a
+/// single-channel float track).
+struct ChannelSnapshot
+{
+    QString name;
+    QList<KeySnapshot> keys;
+};
+
+/// A property's whole keyframe track, as data.
+struct TrackSnapshot
+{
+    bool exists = false;         ///< false = there was no track for this property
+    QString property;
+    QList<ChannelSnapshot> channels;
+};
+
+/// Copies `property`'s track out of `anim`. `exists` is false when there is
+/// none — which is a snapshot worth taking, not a failure.
+TrackSnapshot snapshotTrack(const iris::AnimationPtr &anim, const QString &property);
+
+/// Puts `snap` back: removes whatever track the property has now and rebuilds
+/// it from the snapshot (nothing rebuilt when `exists` is false). Recomputes
+/// the animation length. Idempotent — the property that makes it safe as the
+/// body of both undo() and redo(), given QUndoStack::push replays redo().
+bool restoreTrack(const iris::AnimationPtr &anim, const TrackSnapshot &snap);
+
 }   // namespace animedits
 
 #endif   // ANIMATIONEDITS_H

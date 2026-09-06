@@ -273,6 +273,7 @@ set(SRCS
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
     src/services/animationedits.cpp
+    src/services/playerservice.cpp
     src/services/playbackservice.cpp
     src/ui/panels/presets/assetmodelpanel.cpp 
     src/ui/panels/presets/assetmaterialpanel.cpp 
@@ -348,6 +349,7 @@ set(SRCS
     src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
+    src/commands/animationcommands.cpp
     src/commands/structuralundo.cpp
     src/commands/staticstate.cpp
     src/ui/dialogs/progressdialog.cpp 
@@ -388,6 +390,8 @@ set(SRCS
     src/ui/dialogs/dialoghelper.cpp
     # player
     src/player/playerwidget.cpp
+    src/player/playermodule.cpp
+    src/player/api/playerapi.cpp
     src/player/engineplayerscene.cpp
     src/player/engineplayerview.cpp
     src/player/playermousecontroller.cpp

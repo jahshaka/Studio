@@ -1,0 +1,244 @@
+// scripting.e2e.avatar_verbs — the Avatar module AS VERBS (verb-coverage audit
+// F15), plus the clip-loading verb F5 added.
+//
+// The avatar program already has document suites (avatar.movement,
+// avatar.possession, avatar.locomotion) that drive iris::Scene and the
+// components directly, and two verb suites for pieces of it (mannequin,
+// locomotion). What did NOT exist was one run that drives the module the way a
+// script, an MCP session or the owner's own tooling actually drives it: spawn,
+// possess, push the movement knobs until they clamp, get told no by
+// setLocomotionAsset, read locomotionState back, and — the verb the owner's
+// incoming Mixamo files need — load a clip onto a character that is already in
+// the scene and watch its roles bind themselves.
+//
+// THE FIXTURE PAIR, both generated at build time from the shipped Skeletal
+// Animation sample (tests/avatar/fixtures/):
+//   beta_mannequin.dae   Mixamo's Beta, full bare-named skeleton, clip STRIPPED
+//   beta_walk.dae        the same file with the BODY stripped instead and its
+//                        clip renamed "Walking" — an animation-only export, the
+//                        shape Mixamo hands you for "without skin"
+// They therefore share their joint names by construction, which is the join key
+// a skeletal clip uses.
+//
+// --headless: every verb here is Needs::Document.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var RIG  = "@JAHSHAKA_MANNEQUIN_DAE@";
+var WALK = "@JAHSHAKA_BETA_WALK_DAE@";
+
+project.create("avatar verbs");
+var pguid = project.list().filter(function (p) { return p.name === "avatar verbs"; })[0].guid;
+
+// ---- 1. spawn -------------------------------------------------------------
+
+var guid = assets.import(RIG);
+assert(guid.length > 10, "assets.import(beta_mannequin.dae) -> " + guid);
+assert(assets.addToProject(guid) === guid, "the character joins the project");
+
+var av = avatar.spawn(guid, { position: { x: 1, y: 0, z: 2 } });
+assert(av && av.length > 10, "avatar.spawn -> " + av);
+
+var listed = avatar.list();
+assert(listed.length === 1 && listed[0].id === av, "avatar.list reports exactly the one we spawned");
+
+var badOption = false;
+try { avatar.spawn(guid, { colour: "red" }); } catch (e) { badOption = true; }
+assert(badOption, "an unknown spawn option is REFUSED, not ignored");
+
+// The mannequin is NEUTRAL: nothing to bind, nothing to loop.
+assert(avatar.clipRoles(av).clips.length === 0, "the spawned character starts with zero clips");
+assert(avatar.locomotionAsset(av).states.length === 0,
+       "...so its default asset is an EMPTY machine");
+
+// ---- 2. possess -----------------------------------------------------------
+
+assert(avatar.possessed() === undefined || avatar.possessed() === null
+       || avatar.possessed() === "", "nothing is possessed at rest");
+assert(avatar.possess(av), "avatar.possess(the mannequin)");
+assert(avatar.possessed() === av, "avatar.possessed() names it");
+
+var possessJunk = false;
+try { avatar.possess("not-a-node"); } catch (e) { possessJunk = true; }
+assert(possessJunk, "possessing a node that does not exist is refused");
+assert(avatar.possessed() === av, "...and the refusal did not drop the possession");
+
+var cam = avatar.followCamera();
+assert(cam.armLength > 0 && cam.armLength < 10,
+       "the follow arm is sized off the capsule (" + cam.armLength.toFixed(2) + " m)");
+
+// ---- 3. setMovement clamping ----------------------------------------------
+
+var mv = avatar.movement(av);
+assert(typeof mv.walkSpeed === "number" && typeof mv.capsuleHeight === "number",
+       "avatar.movement reports the §6.2 knob set");
+
+var clamped = avatar.setMovement(av, { walkSpeed: -12, walkableFloorAngle: 179 });
+console.log("clamped: " + JSON.stringify(clamped));
+assert(clamped.walkSpeed === 0, "a negative walkSpeed CLAMPS to 0 rather than being refused");
+assert(clamped.walkableFloorAngle <= 89,
+       "walkableFloorAngle is capped at 89 deg (" + clamped.walkableFloorAngle
+       + ") — a wall can never read as floor");
+
+var explicit = avatar.setMovement(av, { capsuleRadius: 0.3, capsuleHeight: 1.8 });
+assert(explicit.capsuleAuto === false,
+       "writing a capsule dimension clears capsuleAuto — an explicit dimension is a decision");
+assert(explicit.capsuleHeight >= 2 * explicit.capsuleRadius,
+       "the capsule is never shorter than a sphere of its own radius");
+
+var unknownKnob = false;
+try { avatar.setMovement(av, { turboBoost: 9 }); } catch (e) { unknownKnob = true; }
+assert(unknownKnob, "an unknown movement key is REFUSED, not ignored");
+
+// Put a usable walk/run speed back for the role matcher below.
+avatar.setMovement(av, { walkSpeed: 2, runSpeed: 5 });
+
+// ---- 4. setLocomotionAsset refusal classes --------------------------------
+//
+// Every one of these is a DIFFERENT reason to say no, and each must leave the
+// installed asset exactly where it was.
+
+var baseline = JSON.stringify(avatar.locomotionAsset(av));
+function refuses(name, asset) {
+    var refused = false;
+    try { refused = !avatar.setLocomotionAsset(av, asset); } catch (e) { refused = true; }
+    assert(refused, "refused: " + name);
+    assert(JSON.stringify(avatar.locomotionAsset(av)) === baseline,
+           "...and nothing changed (" + name + ")");
+}
+
+refuses("an empty state list", { name: "X", entry: "A", states: [], transitions: [] });
+refuses("an entry that names no state",
+        { name: "X", entry: "Nowhere",
+          states: [{ name: "A", loop: true, source: { kind: "clip", clip: "Walking" } }],
+          transitions: [] });
+refuses("a transition from a state to itself",
+        { name: "X", entry: "A",
+          states: [{ name: "A", loop: true, source: { kind: "clip", clip: "Walking" } }],
+          transitions: [{ from: "A", to: "A", condition: "speed > 0.5", blendDuration: 0.2 }] });
+refuses("an out-of-vocabulary condition",
+        { name: "X", entry: "A",
+          states: [{ name: "A", loop: true, source: { kind: "clip", clip: "Walking" } },
+                   { name: "B", loop: true, source: { kind: "clip", clip: "Walking" } }],
+          transitions: [{ from: "A", to: "B", condition: "speed >= 0.5", blendDuration: 0.2 }] });
+refuses("a one-sample blend space",
+        { name: "X", entry: "A",
+          states: [{ name: "A", loop: true, source: { kind: "blendspace",
+                     samples: [{ clip: "Walking", position: 0, authoredSpeed: 0 }] } }],
+          transitions: [] });
+refuses("a negative blend duration",
+        { name: "X", entry: "A",
+          states: [{ name: "A", loop: true, source: { kind: "clip", clip: "Walking" } },
+                   { name: "B", loop: true, source: { kind: "clip", clip: "Walking" } }],
+          transitions: [{ from: "A", to: "B", condition: "speed > 0.5", blendDuration: -1 }] });
+
+// ---- 5. locomotionState ---------------------------------------------------
+
+var st = avatar.locomotionState(av);
+console.log("avatar.locomotionState: " + JSON.stringify(st));
+assert(typeof st.speed === "number" && typeof st.grounded === "boolean"
+       && typeof st.verticalVelocity === "number" && typeof st.jumpRequested === "boolean"
+       && st.moveInput && typeof st.moveInput.x === "number",
+       "the five §5 parameters are reported");
+assert(typeof st.state === "string" && typeof st.transitioning === "boolean"
+       && typeof st.phase === "number" && st.weights.length !== undefined,
+       "...plus what the state machine did with them");
+
+// ---- 6. loadClip (F5) — the verb the Mixamo files need --------------------
+
+var badTarget = false;
+try {
+    var ground = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
+    if (ground) avatar.loadClip(ground.id, WALK); else badTarget = true;
+} catch (e) { badTarget = true; }
+assert(badTarget, "loading a clip onto a node that is not an avatar is refused");
+
+var missing = false;
+try { avatar.loadClip(av, "/no/such/clip.fbx"); } catch (e) { missing = true; }
+assert(missing, "a path that is neither a file nor an asset guid is refused");
+
+var loaded = avatar.loadClip(av, WALK);
+console.log("avatar.loadClip: " + JSON.stringify(loaded));
+assert(loaded.added === 1, "one clip landed");
+assert(loaded.clips[0] === "Walking", "...and it is called Walking");
+assert(loaded.match.matched === loaded.match.boneChannels && loaded.match.boneChannels > 40,
+       "every one of its " + loaded.match.boneChannels + " bone channels exists on this rig");
+assert(loaded.asset && loaded.asset.length > 10,
+       "the clip file became a real ASSET (" + loaded.asset + ") — which is what makes it "
+       + "survive a reopen and ride an archive");
+
+// THE PIN: the asset is in the project, not merely in the library.
+var pinned = assets.list({ scope: "project" }).filter(function (a) { return a.guid === loaded.asset; });
+assert(pinned.length === 1, "the clip asset is PINNED to the project");
+
+// THE POINT: refreshClips re-ran the tolerant matcher, with zero authoring.
+var roles = avatar.clipRoles(av);
+console.log("avatar.clipRoles after loadClip: " + JSON.stringify(roles));
+assert(roles.clips.length === 1 && roles.clips[0].name === "Walking",
+       "the character now carries the clip");
+assert(roles.clips[0].length > 1, "...with its real length (" + roles.clips[0].length + "s)");
+assert(roles.walk === "Walking",
+       "a clip whose NAME says walk bound the WALK role by itself — no authoring at all");
+
+var asset = avatar.locomotionAsset(av);
+console.log("avatar.locomotionAsset after loadClip: " + JSON.stringify(asset));
+assert(asset.states.length === 1, "the default asset regenerated around the new clip");
+assert(asset["default"] === true, "...and it is still the generated default");
+
+// Loading the SAME clip again reuses the asset row and uniquifies the name —
+// it must not mint a second library asset for the same bytes.
+var again = avatar.loadClip(av, loaded.asset);
+assert(again.asset === loaded.asset, "passing the ASSET GUID reuses the row");
+assert(again.clips[0] !== "Walking", "...and the duplicate clip name is uniquified ("
+       + again.clips[0] + ")");
+assert(avatar.clipRoles(av).clips.length === 2, "both clips are on the character");
+
+// A foreign rig is refused by NAME, not loaded and silently inert. rig2.glb is
+// a two-bone rig (jointRoot/jointTip) with clips on it: nothing a Mixamo
+// skeleton has, so the score is 0.
+var rig2 = assets.import("@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb");
+assert(rig2.length > 10, "the foreign rig imported (so the refusal below is about the RIG)");
+var foreignMessage = "";
+var foreign = false;
+try { avatar.loadClip(av, rig2); } catch (e) { foreign = true; foreignMessage = e.message; }
+console.log("refusal: " + foreignMessage);
+assert(foreign, "a clip animating a DIFFERENT rig is refused");
+assert(foreignMessage.indexOf("different rig") >= 0,
+       "...and the message says so, naming the bones that do not exist here");
+assert(avatar.clipRoles(av).clips.length === 2, "...and attached nothing");
+
+// ---- 7. save + reopen: the clip is still bound -----------------------------
+
+var beforeRoles = JSON.stringify(avatar.clipRoles(av));
+var beforeAsset = JSON.stringify(avatar.locomotionAsset(av));
+
+assert(project.save(), "project.save");
+assert(project.close(), "project.close");
+assert(project.open(pguid), "project.open");
+
+var back = avatar.list();
+assert(back.length === 1, "the avatar came back");
+var av2 = back[0].id;
+var afterRoles = avatar.clipRoles(av2);
+console.log("avatar.clipRoles after reopen: " + JSON.stringify(afterRoles));
+assert(afterRoles.clips.length === 2,
+       "F5: BOTH loaded clips survived save + close + open — the asset pin is what resolves "
+       + "them (a store object's file name is a sha256, so a path alone would not)");
+assert(afterRoles.walk === "Walking", "F5: ...and the walk role is still bound");
+assert(JSON.stringify(afterRoles) === beforeRoles, "F5: every role binding round-tripped");
+assert(JSON.stringify(avatar.locomotionAsset(av2)) === beforeAsset,
+       "F5: ...and so did the generated asset built from them");
+
+// ---- 8. spawn's post-spawn options go through the same paths ---------------
+
+var av4 = avatar.spawn(guid, { position: { x: -3, y: 0, z: 0 }, clips: [loaded.asset] });
+assert(av4 && av4 !== av2, "avatar.spawn({clips: [...]}) -> " + av4);
+var spawnRoles = avatar.clipRoles(av4);
+console.log("spawn(clips) roles: " + JSON.stringify(spawnRoles));
+assert(spawnRoles.clips.length === 1, "the spawn option attached the clip");
+assert(spawnRoles.walk === "Walking", "...and the walk role bound, exactly as loadClip's does");
+
+console.log("e2e_avatar_verbs: ALL OK");

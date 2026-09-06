@@ -1359,6 +1359,22 @@ void EffectsPage::deselectGraphNodes()
 	if (scene != nullptr) scene->deselectAll();
 }
 
+bool EffectsPage::removeGraphNode(const QString& nodeId)
+{
+	if (scene == nullptr) return false;
+	if (!scene->deleteNodeById(nodeId)) return false;
+	scene->update();
+	return true;
+}
+
+bool EffectsPage::removeGraphConnection(const QString& connectionId)
+{
+	if (scene == nullptr) return false;
+	if (!scene->deleteConnectionById(connectionId)) return false;
+	scene->update();
+	return true;
+}
+
 // ---- the graph's edit stack (graph.undo / graph.redo, and the shell's
 //      Ctrl+Z while the Materials space is active) --------------------------
 

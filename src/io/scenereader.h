@@ -181,7 +181,13 @@ public:
      */
     iris::MeshPtr getMesh(QString filePath, int index);
 
-    iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName);
+    /// `assetGuid` (F5, optional) is the STABLE half of the reference: a
+    /// stored file's name is a sha256, so the path-and-name re-home below
+    /// cannot resolve a clip that came from the asset store once the store has
+    /// moved. When a guid is given it is tried FIRST. Absent in every scene
+    /// written before 2026-09-06, which is why it has a default.
+    iris::SkeletalAnimationPtr getSkeletalAnimation(QString filePath, QString animName,
+                                                    const QString &assetGuid = QString());
 };
 
 #endif // SCENEREADER_H
