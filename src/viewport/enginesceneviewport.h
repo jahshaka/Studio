@@ -149,6 +149,7 @@ public:
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;
+    MirrorStats mirrorStats() const override;
 
     void begin() override;
     void end() override;

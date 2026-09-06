@@ -162,6 +162,20 @@ QVector<VerbInfo> AppApi::verbs() const
           "off until something asks, so the very first call reports metricsRecording=false with zeroed "
           "counters and every call after a rendered frame reports real ones.",
           Needs::Engine },
+        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, nodes, meshes, materials, textures, datablocks}",
+          "A CENSUS of what the renderer is HOLDING — the companion to app.renderStats(), which "
+          "only says what a frame cost (fps audit F11). `views` and `scenes` are the engine's own "
+          "objects, `enabledViews` the subset renderOneFrame actually draws; `nodes`, `meshes`, "
+          "`materials` and `textures` are the per-scene registries of ids this boundary handed out "
+          "and still honours, SUMMED over every live scene; `datablocks` is process-wide (Hlms "
+          "datablocks belong to the one HlmsManager, not to a scene) and includes the backend's own "
+          "defaults, so only its delta means anything. NOTHING HERE IS A TIMING: the point is that "
+          "in a scene nobody is editing every one of these numbers is FLAT, which makes an object "
+          "leak — a view created per readback and never destroyed, a mesh record outliving its "
+          "document node, a datablock per material push — assertable without a per-machine "
+          "baseline. That is exactly what the perf.epic_steady_state gate does with it. Cheap: "
+          "container sizes plus one walk of the (tiny) view and scene vectors.",
+          Needs::Engine },
         { "apiProblems", "app.apiProblems() -> [string]",
           "Everything wrong with the scripting API's OWN metadata, as sentences: a verb with no "
           "doc string or signature, a duplicate name, a module that registers nothing, or — the "
@@ -437,5 +451,29 @@ QVariantMap AppApi::renderStats()
     out.insert("triangles", QVariant::fromValue(qulonglong(s.triangles)));
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
+    return out;
+}
+
+QVariantMap AppApi::engineObjects()
+{
+    // Needs::Engine, same reasoning as renderStats: every number comes out of
+    // the boundary, and a map full of zeros would read like an engine holding
+    // nothing rather than like an engine that is not there.
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.engineObjects: no engine in this session"); return out; }
+    jahshaka::engine::ObjectCounts c;
+    if (!engine->objectCounts(c)) {
+        fail("app.engineObjects: the engine could not report its object counts");
+        return out;
+    }
+    out.insert("views", c.views);
+    out.insert("enabledViews", c.enabledViews);
+    out.insert("scenes", c.scenes);
+    out.insert("nodes", c.nodes);
+    out.insert("meshes", c.meshes);
+    out.insert("materials", c.materials);
+    out.insert("textures", c.textures);
+    out.insert("datablocks", c.datablocks);
     return out;
 }

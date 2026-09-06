@@ -45,6 +45,7 @@ public:
     Q_INVOKABLE QVariantMap frameStats();
     Q_INVOKABLE QVariantMap pacing(const QString &mode = QString());
     Q_INVOKABLE QVariantMap renderStats();
+    Q_INVOKABLE QVariantMap engineObjects();
     Q_INVOKABLE QVariantList apiProblems();
 };
 
