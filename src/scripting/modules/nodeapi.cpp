@@ -152,6 +152,22 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "collision", "node.collision(id) -> bool",
           "Whether a character can walk into this object.",
           Needs::Document },
+        { "setAttached", "node.setAttached(id, attached) -> bool",
+          "Whether this node is PART OF ITS PARENT ASSET rather than an independent object — "
+          "the outliner's \"Attach..\" menu (Attach All Children / Detach From Parent), as a "
+          "verb. Attached is what every node an imported model brings in is born as: a click "
+          "anywhere in the asset selects the whole thing (scene.raycast reports it as each "
+          "hit's `rootId`), and the node inherits its parent's animation instead of owning "
+          "one. Detaching a part makes it an object in its own right — selectable and "
+          "animatable alone — WITHOUT moving it in the hierarchy: this is not a reparent, "
+          "the transform, the parent and the place in the tree are all untouched. Serialized "
+          "with the scene. Undoable.",
+          Needs::Document },
+        { "attached", "node.attached(id) -> bool",
+          "Whether this node is part of its parent asset (see node.setAttached). False for "
+          "everything created by hand — primitives, lights, cameras, empties — and true for "
+          "the parts an imported model brought with it.",
+          Needs::Document },
         { "setFolder", "node.setFolder(id, path) -> bool",
           "Files the node in an OUTLINER FOLDER — node.setFolder(id, \"Props/Kitchen\"); an "
           "empty path puts it back at the root level. THIS IS NOT A REPARENT and never will be "
@@ -322,6 +338,25 @@ bool NodeApi::collision(const QString &id)
     auto node = nodeOrFail(id, QStringLiteral("node.collision"));
     if (!node) return false;
     return node->isCollisionEnabled();
+}
+
+bool NodeApi::setAttached(const QString &id, bool attached)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setAttached"));
+    if (!node) return false;
+    const bool was = node->isAttached();
+    node->setAttached(attached);
+    recordNodeEdit(QStringLiteral("attach"),
+                   [node, attached]() { node->setAttached(attached); },
+                   [node, was]() { node->setAttached(was); });
+    return true;
+}
+
+bool NodeApi::attached(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.attached"));
+    if (!node) return false;
+    return node->isAttached();
 }
 
 bool NodeApi::setFolder(const QString &id, const QString &path)

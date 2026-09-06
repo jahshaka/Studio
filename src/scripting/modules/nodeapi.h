@@ -61,6 +61,8 @@ public:
     Q_INVOKABLE bool planarReflector(const QString &id);
     Q_INVOKABLE bool setCollision(const QString &id, bool enabled);
     Q_INVOKABLE bool collision(const QString &id);
+    Q_INVOKABLE bool setAttached(const QString &id, bool attached);
+    Q_INVOKABLE bool attached(const QString &id);
     Q_INVOKABLE bool setFolder(const QString &id, const QString &path);
     Q_INVOKABLE QString folder(const QString &id);
     Q_INVOKABLE bool setStatic(const QString &id, bool value);

@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "viewport/scenepicker.h"   // ScenePicker::pickRoot — raycast's `rootId`
 
 using namespace scriptmod;
 
@@ -63,13 +64,19 @@ QVector<VerbInfo> SceneApi::verbs() const
         { "root", "scene.root() -> id",
           "The scene root's id.",
           Needs::Document },
-        { "raycast", "scene.raycast(origin, direction, {maxDistance, includeUnpickable}) -> [{id, name, point, distance, triangleIndex}]",
+        { "raycast", "scene.raycast(origin, direction, {maxDistance, includeUnpickable}) -> [{id, rootId, name, point, distance, triangleIndex}]",
           "Casts a ray through the document's meshes and returns every triangle-level hit, "
           "nearest first. `origin` and `direction` are {x,y,z} (direction need not be "
           "normalized); `maxDistance` defaults to 10000. Honors each node's `pickable` flag "
           "unless `includeUnpickable` is true, and never returns hidden nodes — the same "
-          "semantics the viewport's click uses. This is the API's click: pair it with "
-          "editor.select(id) to select what a user would have clicked.",
+          "semantics the viewport's click uses.\n\n"
+          "TWO IDS PER HIT, and the difference matters. `id` is the node the ray actually hit — "
+          "the sub-mesh, the individual part. `rootId` is what a VIEWPORT CLICK on that spot "
+          "would SELECT: the top of the hit node's `attached` chain, i.e. the whole imported "
+          "asset (the picker's own root rule, so the two cannot disagree). They are equal for "
+          "anything unattached, which is every primitive and every hand-built node. So: "
+          "editor.select(hits[0].rootId) reproduces a user's click, editor.select(hits[0].id) "
+          "drills into the part under the cursor.",
           Needs::Document },
         { "addPrimitive", "scene.addPrimitive(name, {position, rotation, scale, parent, count}) -> id | [id]",
           "Adds a built-in primitive: plane, ground, cone, cube, cylinder, sphere, torus, capsule, "
@@ -341,6 +348,15 @@ QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction
         QVariantMap m;
         m.insert(QStringLiteral("id"), h.node->getGUID());
         m.insert(QStringLiteral("name"), h.node->getName());
+        // `rootId` is what a VIEWPORT CLICK on this hit would select (F4,
+        // 2026-09-06 verb-coverage audit): the top of the node's `attached`
+        // chain, resolved by the picker's own ScenePicker::pickRoot so the
+        // verb and the click can never disagree. On an unattached node it is
+        // simply `id` — the two differ exactly where an imported asset's
+        // sub-mesh was hit, which is the case that used to make a scripted
+        // raycast + editor.select land somewhere a user's click never does.
+        const iris::SceneNodePtr root = ScenePicker::pickRoot(h.node);
+        m.insert(QStringLiteral("rootId"), root ? root->getGUID() : h.node->getGUID());
         QVariantMap p;
         p.insert(QStringLiteral("x"), h.hitPoint.x());
         p.insert(QStringLiteral("y"), h.hitPoint.y());

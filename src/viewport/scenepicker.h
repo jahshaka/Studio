@@ -57,6 +57,17 @@ public:
     /// The nearest hit, or a null node.
     static ScenePick nearest(const QList<ScenePick> &hits);
 
+    /// The PICK ROOT of a hit node: the top of its `attached` chain — the
+    /// whole imported asset a click lands on rather than the sub-mesh under
+    /// the cursor. `hasParent()` as well as `isAttached()` because `parent` is
+    /// a weak reference: "attached but the parent is gone" is reachable and
+    /// used to be an infinite loop on a null pointer.
+    ///
+    /// Shared with the scripting surface: scene.raycast reports it as each
+    /// hit's `rootId` (2026-09-06 verb-coverage audit F4), so the verb and a
+    /// viewport click cannot disagree about what a hit selects.
+    static iris::SceneNodePtr pickRoot(iris::SceneNodePtr picked);
+
     /// The selection rule: with `selectRootObject`, clicking an attached child
     /// selects its root (the whole asset). Only a click on the root that is
     /// ALREADY the current selection drills down to the part under the cursor;
