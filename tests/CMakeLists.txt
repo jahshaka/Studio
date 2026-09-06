@@ -198,3 +198,7 @@ add_subdirectory(sockets)
 # that exists BEFORE the swap, so v1 has a recorded baseline to be judged
 # against. Label `benchmark`: minutes, not seconds; `ctest -LE benchmark` skips it.
 add_subdirectory(benchmarks)
+# The session log (SPECS/SESSION_LOG_SPEC.md): log.core (the sink, no display),
+# log.events (verbs + event markers, real binary), log.engine (the Ogre
+# listener + device rows) and log.perf (the periodic sampler).
+add_subdirectory(log)

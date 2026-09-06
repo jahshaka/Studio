@@ -238,6 +238,8 @@ set(SRCS
     src/services/projectassets.cpp
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp
+    src/services/jahlog.cpp
+    src/services/sessionheader.cpp
     src/services/loadtimeline.cpp
     src/services/meshbakestore.cpp
     src/services/mainthreadheartbeat.cpp

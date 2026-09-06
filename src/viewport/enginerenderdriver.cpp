@@ -5,6 +5,7 @@
 #include <QTimer>
 
 #include "services/engineerrorpump.h"
+#include "services/jahlog.h"
 #include "services/loadtimeline.h"
 
 /// A frame this long is a visible hitch, not a frame.
@@ -65,6 +66,12 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
         const bool anythingToDraw = mEngine && mEngine->hasEnabledViews();
         if (anythingToDraw) { mEngine->renderOneFrame(); ++mStats.rendered; }
         else                { ++mStats.skipped; }
+        // The session log's frame column (SESSION_LOG_SPEC §3.7) — what turns
+        // "these three warnings" into "these three warnings IN THE SAME FRAME".
+        // ONE relaxed atomic store, no log call: the discipline is zero LOG
+        // calls on the frame path, and pushing the number is what lets the
+        // logging threads read it without racing this loop's Stats struct.
+        JahLog::setFrameCounter(mStats.rendered);
         // Whatever the frame (or anything else since the last one — the sink is
         // process-wide) refused to do, said so in the engine's error string and
         // nowhere else. Drain it here, where the one render loop lives, so a

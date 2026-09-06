@@ -15,6 +15,7 @@
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/input/inputmap.h"
 #include "player/playermousecontroller.h"
+#include "services/jahlog.h"
 #include "viewport/keyboardstate.h"
 
 PlayBack::PlayBack()
@@ -72,8 +73,45 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 	// own pointer when there is no editor viewport (headless tests).
 	auto scene = editorViewport ? editorViewport->getScene() : this->scene;
 
-	if (camController->getCamera() != scene->camera)
-		irisLog("Controller mismatch!");
+	// LATCHED, not per frame (SESSION_LOG_SPEC §8-R2). This used to be a bare
+	// irisLog("Controller mismatch!") right here — i.e. a mutex, a formatted
+	// QTextStream write, an out->flush() AND a qInfo() to stderr, ONCE PER
+	// FRAME for as long as the mismatch held. And it can hold indefinitely:
+	// setController() only calls setCamera() when the controller POINTER
+	// changes (see above), so once the scene's camera is reassigned underneath
+	// it — which the player does, engineplayerscene.cpp `mDocument->setCamera`
+	// — nothing re-syncs the controller and the branch is true every frame
+	// thereafter. That is a per-frame flushed write on the frame path, which
+	// the logging discipline forbids outright.
+	//
+	// It is NOT deleted, because the condition is a real defect signal (it is
+	// adjacent to the 2026-09-05 "can't click anything after play" class); it
+	// has simply never been readable. Now it reports the TRANSITION — each
+	// distinct controller/camera pair once, and once more when it clears.
+	{
+		iris::CameraNode *ctrlCam = camController->getCamera().data();
+		iris::CameraNode *sceneCam = scene ? scene->camera.data() : nullptr;
+		if (ctrlCam != sceneCam) {
+			if (!mMismatchLatched || mMismatchController != ctrlCam
+			    || mMismatchScene != sceneCam) {
+				mMismatchLatched = true;
+				mMismatchController = ctrlCam;
+				mMismatchScene = sceneCam;
+				JAH_LOG(JahLog::render, Warning,
+				        QStringLiteral("playback: camera controller is driving a different "
+				                       "camera than the scene's (controller %1, scene %2) — "
+				                       "player input and the rendered view can disagree")
+				            .arg(QString::asprintf("%p", static_cast<void *>(ctrlCam)),
+				                 QString::asprintf("%p", static_cast<void *>(sceneCam))));
+			}
+		} else if (mMismatchLatched) {
+			mMismatchLatched = false;
+			mMismatchController = nullptr;
+			mMismatchScene = nullptr;
+			JAH_LOG(JahLog::render, Log,
+			        QStringLiteral("playback: camera controller and scene camera agree again"));
+		}
+	}
 
 	// A paused scene is frozen: the clock does not advance and the document is
 	// left exactly as the pause found it.
