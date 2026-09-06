@@ -162,10 +162,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "off until something asks, so the very first call reports metricsRecording=false with zeroed "
           "counters and every call after a rendered frame reports real ones.",
           Needs::Engine },
-        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, nodes, meshes, materials, textures, datablocks}",
+        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, nodes, meshes, materials, textures, datablocks}",
           "A CENSUS of what the renderer is HOLDING — the companion to app.renderStats(), which "
           "only says what a frame cost (fps audit F11). `views` and `scenes` are the engine's own "
-          "objects, `enabledViews` the subset renderOneFrame actually draws; `nodes`, `meshes`, "
+          "objects, `enabledViews` the subset renderOneFrame actually draws; `updatedScenes` is "
+          "how many SCENES the last frame updated — the frame loop walks a scene only while an "
+          "enabled view draws it, so in an editor holding preview, player, asset and staging "
+          "scenes this is normally 1 and `scenes` is not (THREADING_ADOPTION_SPEC.md P3); "
+          "`updatedScenes` climbing to meet `scenes` means the gate stopped working and every "
+          "idle scene is being walked 60 times a second again. `nodes`, `meshes`, "
           "`materials` and `textures` are the per-scene registries of ids this boundary handed out "
           "and still honours, SUMMED over every live scene; `datablocks` is process-wide (Hlms "
           "datablocks belong to the one HlmsManager, not to a scene) and includes the backend's own "
@@ -470,6 +475,7 @@ QVariantMap AppApi::engineObjects()
     out.insert("views", c.views);
     out.insert("enabledViews", c.enabledViews);
     out.insert("scenes", c.scenes);
+    out.insert("updatedScenes", c.updatedScenes);
     out.insert("nodes", c.nodes);
     out.insert("meshes", c.meshes);
     out.insert("materials", c.materials);
