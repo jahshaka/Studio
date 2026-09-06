@@ -167,7 +167,9 @@ EditorData* SceneReader::readEditorData(QJsonObject& projectObj)
     editorData->showLightWires = editorObj["showLightWires"].toBool(true);
 	editorData->showDebugDrawFlags = editorObj["showDebugDrawFlags"].toBool();
     // Grid defaults ON: scenes saved before the grid existed read back true.
-    editorData->showGrid = editorObj["showGrid"].toBool(true);
+    // Default OFF since 2026-09-06 (scenes ship a tiled floor); a file that
+    // recorded a choice keeps it — only the missing-key default changed.
+    editorData->showGrid = editorObj["showGrid"].toBool(false);
 
     return editorData;
 }

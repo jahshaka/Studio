@@ -381,7 +381,11 @@ assert(typeof ov0.selectionWireframe === "boolean", "overlays().selectionWirefra
 assert(typeof ov0.stats === "boolean", "overlays().stats is a boolean");
 assert(typeof ov0.gameView === "boolean", "overlays().gameView is a boolean");
 assert(ov0.fps === undefined, "the key is 'stats', not 'fps'");
-assert(ov0.grid === true && ov0.lightWires === true, "grid and light wires are on by default");
+// Grid default flipped OFF 2026-09-06: scenes ship a tiled floor, so the
+// perspective grid is opt-in (the canonical axis views force their own,
+// independent of this flag — that is render behavior, not this preference).
+assert(ov0.grid === false && ov0.lightWires === true,
+    "grid defaults OFF (tiled floors), light wires default ON");
 assert(ov0.selectionWireframe === false, "selection highlight defaults to the outline");
 
 assert(editor.setOverlays({ grid: false, lightWires: false, selectionWireframe: true }), "setOverlays");

@@ -143,6 +143,27 @@ QString EngineSceneViewport::cameraMode() const
 // each ortho view keeps its own pan + zoom. A first visit to an axis view gets
 // the standard framing (the orbital controller animates there via its lerp;
 // the free camera turns in place). Re-picking the current view re-snaps it.
+// The grid's effective state for the current canonical view (owner rule,
+// 2026-09-06): scenes ship a tiled floor, so the perspective view shows the
+// grid only when the user turns it on (mShowGrid, the View-menu toggle); the
+// axis views ALWAYS show it — that is where a grid earns its keep for
+// alignment — oriented into the plane that faces the view axis, because a
+// floor grid seen edge-on from `front` or `left` is one useless line.
+static void gridStateForView(const QString &view, bool showPref,
+                             bool &on, SceneMirror::GridPlane &plane)
+{
+    using GridPlane = SceneMirror::GridPlane;
+    plane = GridPlane::Floor;
+    on = showPref;
+    if (view == QLatin1String("perspective")) return;
+    on = true;
+    if (view == QLatin1String("front") || view == QLatin1String("back"))
+        plane = GridPlane::FrontXY;
+    else if (view == QLatin1String("left") || view == QLatin1String("right"))
+        plane = GridPlane::SideYZ;
+    // top / bottom keep the floor plane.
+}
+
 bool EngineSceneViewport::setCameraView(const QString &view)
 {
     struct AxisView { const char *name; float yaw; float pitch; };
@@ -1216,7 +1237,11 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         }
         mMirror->setHighlightedNode(highlight);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
-        mMirror->setGrid(mShowGrid && helpers && !mPlaying, SnapSettings::translateSize());
+        {
+            bool on; SceneMirror::GridPlane plane;
+            gridStateForView(mCameraView, mShowGrid, on, plane);
+            mMirror->setGrid(on && helpers && !mPlaying, SnapSettings::translateSize(), plane);
+        }
         mMirror->sync();
     }
     if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
@@ -1661,7 +1686,11 @@ void EngineSceneViewport::primeSceneGeometry()
     const bool helpers = !mGameView;
     mMirror->setLightWires(mShowLightWires && helpers);
     mMirror->setHighlightWireframe(mSelectionWireframe);
-    mMirror->setGrid(mShowGrid && helpers, SnapSettings::translateSize());
+    {
+        bool on; SceneMirror::GridPlane plane;
+        gridStateForView(mCameraView, mShowGrid, on, plane);
+        mMirror->setGrid(on && helpers, SnapSettings::translateSize(), plane);
+    }
     LoadTimeline::Accumulate mirror(QStringLiteral("engine:mirrorSync"));
     mMirror->sync();
 }

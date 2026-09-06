@@ -389,7 +389,11 @@ private:
     double mPipSize = 0.28;
     EditorData *mEditorData = nullptr;
     bool mShowLightWires = true;
-    bool mShowGrid = true;              // per-scene (EditorData), default ON
+    // Per-scene (EditorData). Default OFF (owner, 2026-09-06): scenes ship a
+    // tiled floor, so the perspective grid is noise — and it was baking into
+    // reflection probes. The canonical orthographic views force it on with a
+    // view-facing plane regardless of this flag; see gridStateForView().
+    bool mShowGrid = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     QHash<QString, ViewCameraState> mViewStates; // per-view camera memory (session-only)
     bool mGameView = false;             // G: helpers hidden; never persisted
