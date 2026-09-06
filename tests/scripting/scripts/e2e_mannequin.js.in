@@ -58,21 +58,65 @@ var expect = ["Hips", "Spine2", "Head", "LeftHand", "RightHand", "LeftFoot", "Ri
 for (var e = 0; e < expect.length; e++)
     assert(bones.indexOf(expect[e]) >= 0, "joint present: " + expect[e]);
 
-// Bare names must canonicalize: the built-in socket sweep, which FAILED SOFT
-// on rig2's jointRoot/jointTip, must actually MAP on this rig. addSockets
-// maps against the bones of the ONE piece it is called on, so aim it at the
-// piece that carries the head chain (the limbs piece legitimately maps 0).
-var headRig = null;
-for (var h = 0; h < rows.length; h++) {
-    var hb = node.boneNames(rows[h].id);
-    if (hb && hb.indexOf("Head") >= 0) { headRig = rows[h].id; break; }
+// SPAWN ALREADY RESOLVED THE SOCKETS (D1, fixed 2026-09-06). The sweep used to
+// run on the FIRST skinned mesh depth-first, which on Beta is the limbs piece
+// (46 bones, no Head, no Shoulder): it failed soft and a spawned character came
+// out with ZERO sockets. Nothing below calls addSockets first — these are the
+// sockets avatar.spawn installed, wherever in the subtree they landed.
+var haveHead = null, haveShoulder = null;
+for (var q = 0; q < rows.length; q++) {
+    // Sockets live on rigged MESH nodes; node.sockets refuses anything else.
+    var qb = node.boneNames(rows[q].id);
+    if (!qb || qb.length === 0) continue;
+    var socks = node.sockets(rows[q].id);
+    for (var w = 0; w < socks.length; w++) {
+        if (socks[w].name === "head") haveHead = { node: rows[q].id, bone: socks[w].bone };
+        if (socks[w].name === "shoulder") haveShoulder = { node: rows[q].id, bone: socks[w].bone };
+    }
 }
-assert(headRig !== null, "a skinned piece carries the Head joint");
-var report = avatar.addSockets(headRig);
+console.log("spawn sockets: head=" + JSON.stringify(haveHead) +
+            " shoulder=" + JSON.stringify(haveShoulder));
+assert(haveHead !== null, "avatar.spawn resolved the `head` socket with NO manual addSockets");
+assert(haveHead.bone === "Head", "the head socket sits on the Head joint");
+assert(haveShoulder !== null, "avatar.spawn resolved the `shoulder` socket too");
+
+// Bare names must canonicalize: the built-in socket sweep, which FAILED SOFT
+// on rig2's jointRoot/jointTip, must actually MAP on this rig. Called on the
+// CHARACTER (a wrapper, not a mesh) it walks the subtree; every built-in is
+// already there, so every row must come back `existed`.
+var report = avatar.addSockets(av);
 var mapped = 0;
 for (var s = 0; s < report.length; s++) if (report[s].mapped) mapped++;
 console.log("addSockets mapped " + mapped + "/" + report.length + ": " + JSON.stringify(report));
-assert(mapped >= 1, "bare Mixamo names canonicalize — the head socket maps (" + mapped + " mapped)");
+assert(mapped === 2, "avatar.addSockets on the CHARACTER maps both built-ins (" + mapped + ")");
+for (var s2 = 0; s2 < report.length; s2++) {
+    assert(report[s2].existed, report[s2].socket + ": spawn's socket is left alone, not replaced");
+    assert(report[s2].node && report[s2].node.length > 10,
+           report[s2].socket + ": the report names the piece it lives on");
+}
+
+// ---- 2b. the capsule is METRES, and shaped like a person (D2) -------------
+// It used to be measured in the WRAPPER's local frame, which divides the cm
+// unit scale back out (height 180.71) while every consumer — step-up, the
+// follow camera — is world-space; and its radius came from AABB corners, so a
+// T-posed body measured its ARM SPAN (0.81 m, a barrel).
+var mv = avatar.movement(av);
+console.log("avatar.movement capsule: height=" + mv.capsuleHeight + " radius=" + mv.capsuleRadius);
+assert(mv.capsuleHeight > 1.6 && mv.capsuleHeight < 2.0,
+       "capsuleHeight " + mv.capsuleHeight.toFixed(3) + " m is a human height (1.6..2.0)");
+assert(mv.capsuleRadius > 0.15 && mv.capsuleRadius < 0.5,
+       "capsuleRadius " + mv.capsuleRadius.toFixed(3) + " m is a human radius (0.15..0.5)");
+
+// The follow camera sizes itself off that capsule and off the shoulder socket
+// (possession.cpp captureOffsetReference), so a wrong capsule put the camera
+// 397 m away and the viewport went black.
+assert(avatar.possess(av), "avatar.possess(the mannequin)");
+var cam = avatar.followCamera();
+console.log("avatar.followCamera: " + JSON.stringify(cam));
+assert(cam.armLength < 10, "follow arm " + cam.armLength.toFixed(2) + " m frames the character");
+assert(cam.heightOffset > 1.0 && cam.heightOffset < 2.0,
+       "the shoulder socket set the pivot height (" + cam.heightOffset.toFixed(3) + " m)");
+assert(avatar.unpossess(), "avatar.unpossess()");
 
 // ---- 3. centimeter units were honored -------------------------------------
 // Ray straight down from 10 m above the origin: the first hit is the top of
