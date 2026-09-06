@@ -358,6 +358,64 @@ assert(anim.keyframes(cube, "rotation").tracks.length === 0,
 assert(anim.sample(cube, "rotation", 0) === undefined,
        "sampling a property with no track is undefined, not an error");
 
+// ---- UNDO (verb-coverage audit F16) -----------------------------------------
+//
+// Every anim.* write used to say "Not undoable" in its own doc string. They all
+// go through the animedits:: service, and so does the Timeline panel, so undo
+// became a property of the SERVICE's edits: the verbs and the panel push the
+// same commands (src/commands/animationcommands.h) and the panel got undo for
+// free.
+//
+// A script run is ONE macro, and QUndoStack refuses to undo into an open macro
+// — so `editor.undo()` cannot reach these steps from inside the run. What CAN
+// be asserted from here is that the steps were RECORDED, which is exactly what
+// editor.undoState().pushes is for (it counts pushes through the service,
+// unlike stack.count(), which is frozen while the macro is open), plus that a
+// CLOSED batch inside the run undoes as one unit.
+
+var undoNode = scene.addPrimitive("cube");
+anim.create(undoNode, "UndoMe");
+
+var before = editor.undoState().pushes;
+assert(anim.keyframe(undoNode, "position", 0, { x: 0, y: 0, z: 0 }), "key at t=0");
+assert(anim.keyframe(undoNode, "position", 1, { x: 5, y: 0, z: 0 }), "key at t=1");
+assert(editor.undoState().pushes === before + 2,
+       "F16: each keyframe write RECORDED an undo step (pushCount "
+       + before + " -> " + editor.undoState().pushes + ")");
+
+assert(anim.setKeyTangents(undoNode, "position", 1, { left: "constant" }), "re-shape a key");
+assert(anim.removeKeyframe(undoNode, "position", 1), "remove a key");
+assert(anim.removeProperty(undoNode, "position"), "remove the track");
+assert(editor.undoState().pushes === before + 5,
+       "F16: tangents, key removal and track removal each recorded one too");
+
+// UNDO ITSELF is asserted in services.animation_undo, not here: a script run is
+// ONE macro and QUndoStack refuses to undo into a macro that is still being
+// composed (editor.undoState().macroOpen says so), so editor.undo() from inside
+// a run reaches the step BEFORE the run and can never reach these. What this
+// suite proves is that the steps exist; that suite proves what undoing one
+// does. Both halves have to be somewhere, and this is the honest split.
+assert(editor.undoState().macroOpen === true,
+       "the script's own macro is open, which is WHY undo cannot be exercised from here");
+
+// A REFUSED edit must never leave an entry.
+var beforeRefusal = editor.undoState().pushes;
+throws(function () { anim.keyframe(undoNode, "nosuchprop", 0, 1); }, "a refused key throws");
+assert(anim.removeKeyframe(undoNode, "position", 77) === false,
+       "removing a key that is not there answers false");
+assert(editor.undoState().pushes === beforeRefusal,
+       "F16: a REFUSED edit records nothing — the apply-then-push contract");
+
+// Removing a whole animation records a step too. Last, because anim.create
+// makes the new clip ACTIVE and removing it leaves the node with none.
+anim.create(undoNode, "Doomed");
+var beforeRemove = editor.undoState().pushes;
+assert(anim.remove(undoNode, "Doomed"), "anim.remove(Doomed)");
+assert(editor.undoState().pushes === beforeRemove + 1,
+       "F16: removing an animation recorded an undo step");
+assert(anim.list(undoNode).filter(function (a) { return a.name === "Doomed"; }).length === 0,
+       "...and it really went");
+
 // Removing the active animation leaves the node with none — and the verbs that
 // need one say so instead of dereferencing null.
 assert(anim.remove(cube) === true, "anim.remove with no name removes the active one");

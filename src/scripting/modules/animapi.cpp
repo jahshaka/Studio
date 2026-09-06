@@ -15,10 +15,12 @@ For more information see the LICENSE file
 
 #include <QColor>
 
+#include "commands/animationcommands.h"
 #include "scripting/modules/moduleshared.h"
 #include "services/animationedits.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
+#include "services/undoservice.h"
 
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -122,7 +124,8 @@ QVector<VerbInfo> AnimApi::verbs() const
         { "remove", "anim.remove(id, nameOrIndex?) -> bool",
           "Deletes an animation from the node, the active one when no name is given. If the "
           "active one goes, the node is left with no active animation (it keeps whatever pose it "
-          "was last posed into) — call anim.setActive to pick another. Not undoable.",
+          "was last posed into) — call anim.setActive to pick another. Undoable: undo puts the "
+          "clip back with its keys, and makes it active again if it was.",
           Needs::Document },
         { "setLooping", "anim.setLooping(id, loop) -> bool",
           "Whether the ACTIVE animation wraps: looping samples time modulo the animation length, "
@@ -144,7 +147,8 @@ QVector<VerbInfo> AnimApi::verbs() const
           "use. Without a value it keys what the node holds right now (the Timeline's insert-key "
           "button). A key already at that time is OVERWRITTEN, never doubled. Values are whole "
           "property values — a number, {x,y,z} or [x,y,z], \"#rrggbb\" — and the split into the "
-          "track's float channels is done here. Not undoable. WHAT ACTUALLY POSES: the document "
+          "track's float channels is done here. Undoable — undo restores the property's track "
+          "exactly as it was, including taking away a track this call created. WHAT ACTUALLY POSES: the document "
           "evaluates position/rotation/scale on any node, a light's intensity, lightColor, "
           "distance, spotCutOff, spotCutOffSoftness, rectWidth and rectHeight, and a decal's "
           "width, height, depth, metalness and roughness. A track on any other property is "
@@ -154,7 +158,7 @@ QVector<VerbInfo> AnimApi::verbs() const
           Needs::Document },
         { "removeKeyframe", "anim.removeKeyframe(id, property, time) -> bool",
           "Removes the key at `time` from every channel of the property's track on the active "
-          "animation. False when there was no key there. Not undoable.",
+          "animation. False when there was no key there. Undoable.",
           Needs::Document },
         { "keyframes", "anim.keyframes(id, property) -> {property, type, length, tracks: [{name, keys: [{time, value, leftTangent, rightTangent, leftSlope, rightSlope, handleMode}]}]}",
           "Reads a property's keys back, CHANNEL BY CHANNEL — a vec3 track reports three tracks "
@@ -170,10 +174,11 @@ QVector<VerbInfo> AnimApi::verbs() const
           "free | linear | constant; handleMode is joined | broken; the slopes are floats. "
           "`channel` names ONE channel of a multi-channel track (\"X\", \"R\", ...); without it "
           "every channel with a key at that time is set. Omitted keys keep their value. False "
-          "when no channel has a key at that time. Not undoable (like every keyframe write).",
+          "when no channel has a key at that time. Undoable.",
           Needs::Document },
         { "removeProperty", "anim.removeProperty(id, property) -> bool",
-          "Deletes a property's whole track from the active animation. False when it had none.",
+          "Deletes a property's whole track from the active animation. False when it had none. "
+          "Undoable: undo rebuilds the track, keys and curve shapes included.",
           Needs::Document },
         { "sample", "anim.sample(id, property, time) -> value",
           "Evaluates a property's track at `time` WITHOUT posing anything — the interpolated "
@@ -213,6 +218,18 @@ iris::AnimationPtr AnimApi::activeOrFail(const iris::SceneNodePtr &node, const Q
         return iris::AnimationPtr();
     }
     return anim;
+}
+
+void AnimApi::pushTrackEdit(QUndoCommand *command)
+{
+    if (!command) return;
+    if (host.services && host.services->undo) {
+        host.services->undo->push(command);
+        return;
+    }
+    // No undo service in this host (the scripting unit slices, --headless runs
+    // whose shell never built one): the edit stands, the record does not.
+    delete command;
 }
 
 iris::AnimationPtr AnimApi::find(const iris::SceneNodePtr &node, const QString &name)
@@ -306,7 +323,10 @@ bool AnimApi::remove(const QString &id, const QString &name)
     // Shared with the Timeline's delete button: SceneNode::deleteAnimation
     // only drops the clip from the list, so the active pointer has to be
     // cleared with it (animedits::removeAnimation).
-    return animedits::removeAnimation(node, anim);
+    const bool wasActive = (node->getAnimation() == anim);
+    if (!animedits::removeAnimation(node, anim)) return false;
+    pushTrackEdit(new RemoveAnimationCommand(node, anim, wasActive));
+    return true;
 }
 
 bool AnimApi::setLooping(const QString &id, bool loop)
@@ -386,9 +406,16 @@ bool AnimApi::keyframe(const QString &id, const QString &property, double time, 
         }
     }
 
+    // F16: undoable. The snapshot pair is taken around the edit, not derived
+    // from it — the inverse of "set a key" is "the track as it was", which
+    // covers the track this call may have CREATED (undo takes it away again)
+    // and the key it may have overwritten.
+    const animedits::TrackSnapshot before = animedits::snapshotTrack(anim, property);
     QString error;
     if (!animedits::setKeyframe(anim, prop, qMax(0.0, time), typed, nullptr, &error))
         return fail(QStringLiteral("anim.keyframe: %1").arg(error));
+    pushTrackEdit(new SetKeyframeCommand(anim, property, before,
+                                         animedits::snapshotTrack(anim, property)));
     return true;
 }
 
@@ -398,7 +425,11 @@ bool AnimApi::removeKeyframe(const QString &id, const QString &property, double 
     if (!node) return false;
     auto anim = activeOrFail(node, QStringLiteral("anim.removeKeyframe"));
     if (!anim) return false;
-    return animedits::removeKeyframe(anim, property, time) > 0;
+    const animedits::TrackSnapshot before = animedits::snapshotTrack(anim, property);
+    if (animedits::removeKeyframe(anim, property, time) <= 0) return false;
+    pushTrackEdit(new RemoveKeyframeCommand(anim, property, before,
+                                            animedits::snapshotTrack(anim, property)));
+    return true;
 }
 
 QVariantMap AnimApi::keyframes(const QString &id, const QString &property)
@@ -471,6 +502,7 @@ bool AnimApi::setKeyTangents(const QString &id, const QString &property, double 
         return fail(QStringLiteral("anim.setKeyTangents: 'handleMode' must be joined or broken"));
 
     const QString channel = shape.value("channel").toString();
+    const animedits::TrackSnapshot before = animedits::snapshotTrack(anim, property);
     int touched = 0;
     for (const auto &info : track->getKeyFrames()) {
         if (!info.keyFrame) continue;
@@ -490,6 +522,8 @@ bool AnimApi::setKeyTangents(const QString &id, const QString &property, double 
                         .arg(time).arg(property,
                                        channel.isEmpty() ? QString()
                                                          : QStringLiteral(" channel '%1'").arg(channel)));
+    pushTrackEdit(new SetTangentsCommand(anim, property, before,
+                                         animedits::snapshotTrack(anim, property)));
     return true;
 }
 
@@ -499,7 +533,10 @@ bool AnimApi::removeProperty(const QString &id, const QString &property)
     if (!node) return false;
     auto anim = activeOrFail(node, QStringLiteral("anim.removeProperty"));
     if (!anim) return false;
-    return animedits::removeTrack(anim, property);
+    const animedits::TrackSnapshot before = animedits::snapshotTrack(anim, property);
+    if (!animedits::removeTrack(anim, property)) return false;
+    pushTrackEdit(new RemovePropertyCommand(anim, property, before));
+    return true;
 }
 
 QVariant AnimApi::sample(const QString &id, const QString &property, double time)

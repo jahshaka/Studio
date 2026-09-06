@@ -36,17 +36,21 @@ For more information see the LICENSE file
 //   * TIME is the scene's, not the node's (Scene::animationTime, which is what
 //     SceneMirror pushes at the engine) — hence anim.seek, one clock.
 //
-// Writes are direct document writes, matching the Timeline panel: keyframe
-// edits are NOT undoable individually (the panel's insert-key button is not
-// either). A script run is still one undo macro for everything undoable it
-// does. The panel is not live-refreshed by script writes — reselect the node
-// in the hierarchy to see them.
+// Writes are UNDOABLE since the verb-coverage audit's F16: keyframe, tangent,
+// track and animation removals each push a command from src/commands/
+// animationcommands.h, and so does the Timeline panel — both callers already
+// shared the animedits:: service, so undo is a property of the SERVICE's edits
+// rather than of either caller. A script run is still one undo macro for
+// everything it does. The panel is not live-refreshed by script writes —
+// reselect the node in the hierarchy to see them.
 
 #include <QVariantList>
 #include <QVariantMap>
 
 #include "scripting/apimodule.h"
 #include "irisgl/irisglfwd.h"
+
+class QUndoCommand;
 
 class AnimApi : public ApiModule
 {
@@ -83,6 +87,11 @@ private:
     /// The node's animation by name — or by index, when the string is a number
     /// and no animation carries that name. Null (no error thrown) on a miss.
     iris::AnimationPtr find(const iris::SceneNodePtr &node, const QString &name);
+    /// Records a keyframe edit on the undo stack (F16). The edit has ALREADY
+    /// been applied and verified when this is called — a refused edit must
+    /// never leave an entry — and the command is deleted rather than leaked in
+    /// hosts with no undo service (headless slices, the unit tests).
+    void pushTrackEdit(QUndoCommand *command);
 };
 
 #endif // SCRIPTING_ANIMAPI_H

@@ -31,6 +31,8 @@ class KeyFrameWidget;
 class KeyFrameCurveWidget;
 class AnimationWidgetData;
 class CreateAnimationWidget;
+class QUndoCommand;
+struct StudioServices;
 
 namespace Ui
 {
@@ -100,6 +102,13 @@ public:
     void removeProperty(QString propertyName);
     void clearPropertyKeys(QString propertyName);
 
+    /// The service layer, for UNDO (verb-coverage audit F16). Nullable — the
+    /// panel works without it exactly as it did before, only without the undo
+    /// record. Wired by the shell once the services exist; the commands the
+    /// panel pushes are the same ones the anim.* verbs push, because the edit
+    /// underneath is the same animedits:: call.
+    void setServices(StudioServices *s) { services = s; }
+
 signals:
     void animationChanged(iris::SceneNodePtr ptr, iris::AnimationPtr anim);
 
@@ -135,9 +144,15 @@ private slots:
     iris::AnimationPtr ensureAnimation();
 
 private:
+    /// Records a keyframe edit on the app's undo stack (F16). The edit has
+    /// already been applied; with no services the command is deleted, not
+    /// leaked, and the panel behaves as it always did.
+    void pushEdit(QUndoCommand *command);
+
     //float timeAtCursor;
     float timerSpeed;
     Ui::AnimationWidget *ui;
+    StudioServices *services = nullptr;
 };
 
 #endif // ANIMATIONWIDGET_H

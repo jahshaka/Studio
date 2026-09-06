@@ -288,4 +288,79 @@ QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, do
     }
 }
 
+// ---- undo (F16) -----------------------------------------------------------
+
+TrackSnapshot snapshotTrack(const iris::AnimationPtr &anim, const QString &property)
+{
+    TrackSnapshot snap;
+    snap.property = property;
+    if (!anim || !anim->hasPropertyAnim(property)) return snap;
+    auto *track = anim->getPropertyAnim(property);
+    if (!track) return snap;
+
+    snap.exists = true;
+    for (const auto &info : track->getKeyFrames()) {
+        ChannelSnapshot channel;
+        channel.name = info.name;
+        if (info.keyFrame) {
+            for (const auto *key : info.keyFrame->keys) {
+                KeySnapshot k;
+                k.time = key->time;
+                k.value = key->value;
+                k.leftTangent = int(key->leftTangent);
+                k.rightTangent = int(key->rightTangent);
+                k.leftSlope = key->leftSlope;
+                k.rightSlope = key->rightSlope;
+                k.handleMode = int(key->handleMode);
+                channel.keys.append(k);
+            }
+        }
+        snap.channels.append(channel);
+    }
+    return snap;
+}
+
+bool restoreTrack(const iris::AnimationPtr &anim, const TrackSnapshot &snap)
+{
+    if (!anim) return false;
+
+    // Whatever is there now goes first, in both directions: restoring a
+    // snapshot is "make the track be exactly this", not "merge into it".
+    if (anim->hasPropertyAnim(snap.property))
+        anim->removePropertyAnim(snap.property);
+
+    if (snap.exists) {
+        // The channel COUNT is the track's type — PropertyAnim carries no tag
+        // (sampleTrack reads it the same way).
+        iris::PropertyType type = iris::PropertyType::None;
+        switch (snap.channels.count()) {
+        case 1: type = iris::PropertyType::Float; break;
+        case 3: type = iris::PropertyType::Vec3;  break;
+        case 4: type = iris::PropertyType::Color; break;
+        default: break;
+        }
+        auto *fresh = makePropertyAnim(type, snap.property);
+        if (!fresh) return false;
+        const auto frames = fresh->getKeyFrames();
+        if (frames.count() != snap.channels.count()) { delete fresh; return false; }
+        for (int c = 0; c < frames.count(); ++c) {
+            auto *frame = frames[c].keyFrame;
+            if (!frame) continue;
+            for (const auto &k : snap.channels[c].keys) {
+                auto *key = frame->addKey(k.value, k.time);
+                key->leftTangent  = iris::TangentType(k.leftTangent);
+                key->rightTangent = iris::TangentType(k.rightTangent);
+                key->leftSlope    = k.leftSlope;
+                key->rightSlope   = k.rightSlope;
+                key->handleMode   = iris::HandleMode(k.handleMode);
+            }
+            refreshFrameLength(frame);
+        }
+        anim->addPropertyAnim(fresh);
+    }
+
+    anim->calculateAnimationLength();
+    return true;
+}
+
 }   // namespace animedits

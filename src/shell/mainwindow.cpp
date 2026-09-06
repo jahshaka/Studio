@@ -2089,6 +2089,10 @@ void MainWindow::setupDockWidgets()
     animationDock = new QDockWidget("Timeline", viewPort);
     animationDock->setObjectName(QStringLiteral("animationDock"));
     animationWidget = new AnimationWidget;
+    // F16: the Timeline's edits are undoable — the panel pushes the same
+    // commands the anim.* verbs push (services/animationedits.h is the shared
+    // edit, src/commands/animationcommands.h the shared record).
+    animationWidget->setServices(services);
 
     QWidget *animationDockContents = new QWidget;
     QGridLayout *animationLayout = new QGridLayout(animationDockContents);

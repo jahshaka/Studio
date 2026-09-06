@@ -342,6 +342,7 @@ set(SRCS
     src/commands/worldmodecommand.cpp
     src/commands/setnodepropertycommand.cpp
     src/commands/nodeeditcommand.cpp
+    src/commands/animationcommands.cpp
     src/commands/structuralundo.cpp
     src/commands/staticstate.cpp
     src/ui/dialogs/progressdialog.cpp 
