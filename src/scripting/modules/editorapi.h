@@ -64,6 +64,7 @@ public:
     Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
     Q_INVOKABLE QVariantMap warmUpShaders();
     Q_INVOKABLE QVariantMap viewportState();
+    Q_INVOKABLE QVariantMap mirrorStats();
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
                                        const QVariantList &probes = QVariantList(),
                                        bool postFx = false);

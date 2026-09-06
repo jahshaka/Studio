@@ -1285,6 +1285,16 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     refreshOverlay();
 }
 
+IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
+{
+    MirrorStats s;
+    if (!mMirror) return s;   // available stays false: no mirror, no counts
+    s.available = true;
+    s.giPushes = mMirror->giPushCount();
+    s.giRefreshes = mMirror->giRefreshCount();
+    return s;
+}
+
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
     return takeScreenshot(width, height, false);

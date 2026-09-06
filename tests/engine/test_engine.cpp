@@ -2790,6 +2790,92 @@ void render_stats_are_live_and_lazily_recorded() {
               "worst must not be better than best: %f vs %f", after.worstMs, after.bestMs);
 }
 
+/// objectCounts() is the CENSUS half of the instrumentation renderStats() is
+/// the cost half of (fps audit F11, `app.engineObjects()`).
+///
+/// Everything here is a DELTA. The Engine is one per process and every test
+/// before this one has left the counts wherever it left them, so "there are
+/// exactly N meshes" is not a statement this suite can make; "creating a mesh
+/// added exactly one, and destroying it took exactly one away" is, and it is
+/// also the only statement the steady-state gate needs to be true.
+///
+/// The point of asserting the DESTROY direction as loudly as the create one:
+/// this counter exists to catch a leak, and a counter that only ever goes up
+/// would report every scene teardown in the program as one.
+void object_counts_track_lifetimes() {
+    ObjectCounts base;
+    REQUIRE(gEngine->objectCounts(base));
+    std::printf("    base: %u views (%u enabled) %u scenes %u nodes %u meshes "
+                "%u materials %u textures %u datablocks\n",
+                base.views, base.enabledViews, base.scenes, base.nodes, base.meshes,
+                base.materials, base.textures, base.datablocks);
+
+    ObjectCounts c;
+    {
+        Fixture fx;
+        View *v = fx.view("census-view", 64, 64, kBlue); REQUIRE(v);
+        Scene *s = fx.scene("census-scene");             REQUIRE(s);
+        v->setScene(s);
+
+        REQUIRE(gEngine->objectCounts(c));
+        CHECK_MSG(c.views == base.views + 1, "one view added: %u -> %u", base.views, c.views);
+        CHECK_MSG(c.scenes == base.scenes + 1, "one scene added: %u -> %u", base.scenes, c.scenes);
+        // A view is enabled when it is created; the count must SEE that, because
+        // "enabled views stopped matching live views" is the exact shape of the
+        // offscreen-isolation defect (fps audit F5).
+        CHECK_MSG(c.enabledViews == base.enabledViews + 1,
+                  "the new view counts as enabled: %u -> %u", base.enabledViews, c.enabledViews);
+        v->setEnabled(false);
+        REQUIRE(gEngine->objectCounts(c));
+        CHECK_MSG(c.enabledViews == base.enabledViews,
+                  "disabling it takes it back out: %u", c.enabledViews);
+        CHECK_MSG(c.views == base.views + 1, "…without destroying it: %u", c.views);
+        v->setEnabled(true);
+
+        // Content. populate() adds a light node and a cube (node + mesh +
+        // material); the assertions are on the deltas it is responsible for.
+        const ObjectCounts empty = c;
+        populate(s, kOrange);
+        aim(v);
+        render(fx.e, 2);
+        REQUIRE(gEngine->objectCounts(c));
+        std::printf("    populated: +%u nodes +%u meshes +%u materials\n",
+                    c.nodes - empty.nodes, c.meshes - empty.meshes,
+                    c.materials - empty.materials);
+        CHECK_MSG(c.nodes > empty.nodes, "populating the scene added nodes: %u -> %u",
+                  empty.nodes, c.nodes);
+        CHECK_MSG(c.meshes == empty.meshes + 1, "…exactly one mesh: %u -> %u",
+                  empty.meshes, c.meshes);
+        CHECK_MSG(c.materials == empty.materials + 1, "…and exactly one material: %u -> %u",
+                  empty.materials, c.materials);
+
+        // AND IT IS FLAT WHILE IDLE. This is the property the whole
+        // perf.epic_steady_state gate stands on, asserted here at the boundary
+        // where it is cheap: rendering the same scene again allocates nothing.
+        const ObjectCounts beforeIdle = c;
+        render(fx.e, 10);
+        REQUIRE(gEngine->objectCounts(c));
+        CHECK_MSG(c.views == beforeIdle.views && c.scenes == beforeIdle.scenes &&
+                      c.nodes == beforeIdle.nodes && c.meshes == beforeIdle.meshes &&
+                      c.materials == beforeIdle.materials && c.textures == beforeIdle.textures &&
+                      c.datablocks == beforeIdle.datablocks,
+                  "ten idle frames changed nothing: nodes %u->%u meshes %u->%u "
+                  "materials %u->%u textures %u->%u datablocks %u->%u",
+                  beforeIdle.nodes, c.nodes, beforeIdle.meshes, c.meshes,
+                  beforeIdle.materials, c.materials, beforeIdle.textures, c.textures,
+                  beforeIdle.datablocks, c.datablocks);
+    }
+    // The fixture destroyed the view and the scene: the census must come all the
+    // way back down, including the per-scene registries that died with it.
+    REQUIRE(gEngine->objectCounts(c));
+    CHECK_MSG(c.views == base.views, "the view is gone again: %u -> %u", base.views, c.views);
+    CHECK_MSG(c.scenes == base.scenes, "the scene is gone again: %u -> %u", base.scenes, c.scenes);
+    CHECK_MSG(c.nodes == base.nodes, "its nodes went with it: %u -> %u", base.nodes, c.nodes);
+    CHECK_MSG(c.meshes == base.meshes, "its meshes went with it: %u -> %u", base.meshes, c.meshes);
+    CHECK_MSG(c.materials == base.materials, "its materials went with it: %u -> %u",
+              base.materials, c.materials);
+}
+
 
 // ---------------------------------------------------------------------------
 // The post chain (POST_CHAIN_SPEC.md phases 3-7).
@@ -3397,6 +3483,7 @@ int main(int argc, char **argv) {
         { "hud_overlay_draws_where_it_says_when_allowed", hud_overlay_draws_where_it_says_when_allowed },
         { "hud_overlay_toggle_does_not_rebuild_the_workspace", hud_overlay_toggle_does_not_rebuild_the_workspace },
         { "render_stats_are_live_and_lazily_recorded", render_stats_are_live_and_lazily_recorded },
+        { "object_counts_track_lifetimes",          object_counts_track_lifetimes },
         { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
         { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
         { "bloom_bleeds_bright_areas",              bloom_bleeds_bright_areas },

@@ -282,6 +282,26 @@ public:
     virtual bool planarReflectorAccepted(iris::SceneNodePtr node) const
     { Q_UNUSED(node); return true; }
 
+    /// The viewport's document→engine mirror, as counters (see mirrorStats).
+    /// `available` false means this viewport has no mirror to ask — the
+    /// document-only stand-ins — and the counts are then meaningless rather
+    /// than zero.
+    struct MirrorStats {
+        bool available = false;
+        quint64 giPushes = 0;      ///< SceneMirror::giPushCount()
+        quint64 giRefreshes = 0;   ///< SceneMirror::giRefreshCount()
+    };
+    /// How many times the mirror has pushed a NEW global-illumination
+    /// configuration into the engine, and how many times it has asked for the
+    /// existing one to be re-solved (SceneMirror::giPushCount /
+    /// giRefreshCount). Both are expensive — a VCT re-solve tears the
+    /// voxelizer down and rebuilds it from every item — and both are debounced,
+    /// so "an idle scene re-solves ZERO times" is a contract of the mirror that
+    /// is invisible in pixels and in the document. The mirror suite asserts it
+    /// on a synthetic scene; this accessor is what lets the steady-state gate
+    /// assert it on a REAL one, through the real app.
+    virtual MirrorStats mirrorStats() const { return {}; }
+
     /// Deterministic frame stepping for scripts and tests (editor.frame(n)):
     /// document→engine sync + renderOneFrame, n times, synchronously — the exact
     /// pattern of the headless suites. Only the engine viewport implements it;
