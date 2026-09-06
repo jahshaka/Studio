@@ -122,23 +122,34 @@ done
 echo
 # Median AND spread, per the gate's wording — a mean over five runs on a box
 # with other work on it is the number that lies.
+# POSIX awk only (SUBSEP-composed keys, no gawk multidimensional arrays): mawk is
+# what /usr/bin/awk is on a Debian-family box and it rejects a[i][j] outright.
 awk '
 { arm=$1
-  for (i=2;i<=NF;++i) { split($i,kv,"="); v[arm][kv[1]][n[arm][kv[1]]++]=kv[2]+0 } }
+  for (i=2;i<=NF;++i) { split($i,kv,"="); k=kv[1]
+    # `+0` is load-bearing: an unset n[arm,k] is the EMPTY STRING, and using it
+    # raw as a subscript files the first sample under "" instead of 0 — which
+    # silently costs every series its first (and, after sorting, its smallest)
+    # value. Cost half an hour; the min column read 0.
+    idx = n[arm,k] + 0
+    v[arm,k,idx] = kv[2]+0; n[arm,k] = idx + 1 } }
+function median(arm, key,   cnt,i,j,t,s) {
+  cnt = n[arm,key]; if (!cnt) return -1
+  for (i=0;i<cnt;++i) s[i] = v[arm,key,i]
+  for (i=0;i<cnt;++i) for (j=i+1;j<cnt;++j) if (s[j]<s[i]) { t=s[i]; s[i]=s[j]; s[j]=t }
+  lo = s[0]; hi = s[cnt-1]
+  return (cnt%2) ? s[int(cnt/2)] : (s[cnt/2-1]+s[cnt/2])/2
+}
 END {
   split("openMs firstFrameMs waitedMs slowFrames worstMs loadRequests", keys, " ")
   printf "%-14s %12s %12s %10s\n", "metric", "A (sync)", "B (batched)", "B/A"
   for (k=1;k<=6;++k) { key=keys[k]
-    for (a=1;a<=2;++a) { arm=(a==1?"A":"B")
-      cnt=n[arm][key]; if (!cnt) continue
-      for (i=0;i<cnt;++i) s[i]=v[arm][key][i]
-      for (i=0;i<cnt;++i) for (j=i+1;j<cnt;++j) if (s[j]<s[i]) { t=s[i]; s[i]=s[j]; s[j]=t }
-      med[arm] = (cnt%2) ? s[int(cnt/2)] : (s[cnt/2-1]+s[cnt/2])/2
-      lo[arm]=s[0]; hi[arm]=s[cnt-1]
-    }
-    ratio = med["A"] ? med["B"]/med["A"] : 0
-    printf "%-14s %12.1f %12.1f %9.2fx\n", key, med["A"], med["B"], ratio
-    printf "%-14s %12s %12s\n", "  (min..max)", sprintf("%.0f..%.0f",lo["A"],hi["A"]), sprintf("%.0f..%.0f",lo["B"],hi["B"])
+    ma = median("A", key); loa = lo; hia = hi
+    mb = median("B", key); lob = lo; hib = hi
+    if (ma < 0 || mb < 0) continue
+    printf "%-14s %12.1f %12.1f %9.2fx\n", key, ma, mb, (ma ? mb/ma : 0)
+    printf "%-14s %12s %12s\n", "  (min..max)", \
+           sprintf("%.0f..%.0f",loa,hia), sprintf("%.0f..%.0f",lob,hib)
   }
 }' "$outdir/results.txt"
 
