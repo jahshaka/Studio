@@ -139,8 +139,14 @@ void PropertyWidget::addIntProperty(iris::Property *prop)
         combo->setLabel(intProp->displayName);
         // Unreal-familiar names; Glass stays value 3 (the engine's
         // realistic-transparency mode — shipped scenes/presets depend on it).
+        // This list must cover the WHOLE declared range (PbrMaterial's
+        // alphaMode maxValue is 6, i.e. seven values): a material set to a
+        // mode with no label here showed a BLANK combo, and any pick then
+        // silently downgraded it — Refractive was missing exactly that way
+        // (PUBLISH_AUDIT #4).
         for (const QString &label : { tr("Opaque"), tr("Masked"), tr("Translucent"),
-                                      tr("Glass"), tr("Additive"), tr("Modulate") })
+                                      tr("Glass"), tr("Additive"), tr("Modulate"),
+                                      tr("Refractive") })
             combo->addItem(label);
         combo->index = prop->id;
         combo->setCurrentIndex(intProp->getValue().toInt());
