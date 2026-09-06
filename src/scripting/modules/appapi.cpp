@@ -149,7 +149,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances}",
+        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances, incompletePsoRequests}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -161,9 +161,16 @@ QVector<VerbInfo> AppApi::verbs() const
           "snapshots them per camera at the end of that camera's pass, so with two on-screen views the "
           "second includes the first). They are LAZY: recording costs integer adds per draw call and is "
           "off until something asks, so the very first call reports metricsRecording=false with zeroed "
-          "counters and every call after a rendered frame reports real ones.",
+          "counters and every call after a rendered frame reports real ones. "
+          "`incompletePsoRequests` is how many pipeline objects the last frame GAVE UP on for "
+          "running out of its compile budget — objects using one do not appear that frame. It "
+          "is ALWAYS 0 here and that is deliberate (THREADING_ADOPTION_SPEC.md P4, decision "
+          "D-E): the budget is a process-wide knob whose own documentation warns that "
+          "one-shot shader techniques may end up uninitialised, which describes every "
+          "thumbnail, IBL bake and offscreen pixel suite in this app, so it is left off. A "
+          "non-zero value means somebody turned it on.",
           Needs::Engine },
-        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, nodes, meshes, materials, textures, datablocks}",
+        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, stagingScenes, nodes, meshes, materials, textures, datablocks}",
           "A CENSUS of what the renderer is HOLDING — the companion to app.renderStats(), which "
           "only says what a frame cost (fps audit F11). `views` and `scenes` are the engine's own "
           "objects, `enabledViews` the subset renderOneFrame actually draws; `updatedScenes` is "
@@ -171,7 +178,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "enabled view draws it, so in an editor holding preview, player, asset and staging "
           "scenes this is normally 1 and `scenes` is not (THREADING_ADOPTION_SPEC.md P3); "
           "`updatedScenes` climbing to meet `scenes` means the gate stopped working and every "
-          "idle scene is being walked 60 times a second again. `nodes`, `meshes`, "
+          "idle scene is being walked 60 times a second again. `stagingScenes` counts the "
+          "SceneManagers the engine holds that are NOT Scenes — the document's staging "
+          "manager, where every node that is not in a rendered scene lives (everything an "
+          "importer builds, everything the undo stack holds). It is a row of its own rather "
+          "than part of `scenes` because it has no view, no workspace, no worker threads and "
+          "no place in the frame loop, and a census that mixes two kinds of object answers no "
+          "question. `nodes`, `meshes`, "
           "`materials` and `textures` are the per-scene registries of ids this boundary handed out "
           "and still honours, SUMMED over every live scene; `datablocks` is process-wide (Hlms "
           "datablocks belong to the one HlmsManager, not to a scene) and includes the backend's own "
@@ -519,6 +532,7 @@ QVariantMap AppApi::renderStats()
     out.insert("triangles", QVariant::fromValue(qulonglong(s.triangles)));
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
+    out.insert("incompletePsoRequests", s.incompletePsoRequests);
     return out;
 }
 
@@ -539,6 +553,7 @@ QVariantMap AppApi::engineObjects()
     out.insert("enabledViews", c.enabledViews);
     out.insert("scenes", c.scenes);
     out.insert("updatedScenes", c.updatedScenes);
+    out.insert("stagingScenes", c.stagingScenes);
     out.insert("nodes", c.nodes);
     out.insert("meshes", c.meshes);
     out.insert("materials", c.materials);

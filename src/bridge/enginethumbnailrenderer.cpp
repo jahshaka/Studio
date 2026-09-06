@@ -73,7 +73,14 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
     if (!mScene) {
         // One frame into a small texture, then emptied again: a worker pool
         // would be pure barrier cost (fps audit F3).
-        mScene = engine->createScene("thumbs", sceneworkers::count(sceneworkers::Tier::Utility));
+        //
+        // NO POOL, not a pool of one (THREADING_ADOPTION_SPEC.md P5). This asked
+        // for Tier::Utility until the hygiene phase, and 1 does not avoid the
+        // barrier — Ogre spawns a thread and pays two syncs per parallel pass to
+        // do the same serial work. Tier::MainThread reaches the backend as a
+        // genuine 0, where mForceMainThread runs every pass inline
+        // (OgreSceneManager.cpp:171, :4705-4717).
+        mScene = engine->createScene("thumbs", sceneworkers::count(sceneworkers::Tier::MainThread));
         if (!mScene) return false;
         mScene->setAmbient(Colour(0.45f, 0.45f, 0.45f), Colour(0.30f, 0.30f, 0.30f));
         mView->setScene(mScene);

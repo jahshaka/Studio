@@ -101,9 +101,29 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
                                                  Colour(0.0f, 0.0f, 0.0f, 1.0f));
+    // PRIMARY, NOT UTILITY, AND THIS IS THE WHOLE OF PHASE P4(a)
+    // (SPECS/THREADING_ADOPTION_SPEC.md §3.4a, interaction I-2).
+    //
+    // Every other one-frame-into-a-texture scene in the app has NO worker pool
+    // at all (Tier::MainThread, P5) because the barrier is pure overhead at
+    // 32x32 — and that is right for a thumbnail, whose job is to CULL and DRAW
+    // a handful of objects. It is exactly wrong for THIS scene, whose job is to
+    // COMPILE, because Ogre forks
+    // shader compilation across the same per-scene worker pool: the parallel
+    // warm-up path is gated on getNumWorkerThreads() > 1
+    // (OgreRenderQueue.cpp:588), and getNumWorkerThreads() returns max(n, 1)
+    // (OgreSceneManager.cpp:170), so 1 AND 0 both compile serially. A "utility"
+    // scene that wants threads is a contradiction in the tier's own terms, and
+    // the tier list in bridge/sceneworkerthreads.h says so at the Utility entry.
+    //
+    // The measured shape this is aimed at: 47 shaders in the first second of a
+    // cold start and 19 in the second (kSettleMs above), all on one core.
+    // Worthless without mode 2 — P1 — and free the moment it lands, because the
+    // per-scene warm-up on the editor scene (viewport/enginesceneviewport.cpp)
+    // already runs at Tier::Primary and always satisfied the predicate.
     Scene *warmScene = warmView ? engine->createScene(
                                       "startup-warmup",
-                                      sceneworkers::count(sceneworkers::Tier::Utility))
+                                      sceneworkers::count(sceneworkers::Tier::Primary))
                                 : nullptr;
     if (warmScene) {
         warmView->setScene(warmScene);

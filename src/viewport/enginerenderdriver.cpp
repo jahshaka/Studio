@@ -21,13 +21,24 @@ EngineRenderDriver::EngineRenderDriver(jahshaka::engine::Engine *engine, QObject
     mTimer->setTimerType(Qt::PreciseTimer);
     connect(mTimer, &QTimer::timeout, this, [this] {
         // A frame is UI-THREAD work: whatever it costs, the window is not
-        // answering while it runs. The first frame of a freshly opened world
-        // is the expensive one — the Hlms compiles a shader variant per new
-        // material/pass combination, with no cache anywhere in the pin
-        // (lane-openasync 2026-09-03: no HlmsDiskCache, no microcode cache,
-        // no VkPipelineCache persistence is wired). Slow frames are logged
-        // and, while a scene open is being measured, banked in the ledger, so
-        // "opening is still slow" always has a number attached to it.
+        // answering while it runs. The first frame of a freshly opened world is
+        // still the expensive one — the Hlms compiles a shader variant per new
+        // material/pass combination — but it is no longer expensive for the
+        // reason this comment used to give. It claimed "no cache anywhere in
+        // the pin (lane-openasync 2026-09-03: no HlmsDiskCache, no microcode
+        // cache, no VkPipelineCache persistence is wired)", and shader-cache v2
+        // wired all three (irisgl/engine/src/OgreShaderCache.cpp); a warm launch
+        // loads them instead of compiling. What is left on a COLD launch, or
+        // after an app update, a driver update or a Clear Cache, is real work
+        // that has to happen somewhere, and this is where it lands.
+        //
+        // Since the threading program it is also THREADED work: mode 2 compiles
+        // shader variants across the scene's worker pool during the frame
+        // (THREADING_ADOPTION_SPEC.md P1), and textures are streamed and
+        // collected once at the head of the frame instead of one blocking wait
+        // per texture (P2). Slow frames are logged and, while a scene open is
+        // being measured, banked in the ledger, so "opening is still slow"
+        // always has a number attached to it.
         QElapsedTimer frame;
         frame.start();
         ++mStats.ticks;
