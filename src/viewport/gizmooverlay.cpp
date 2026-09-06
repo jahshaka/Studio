@@ -42,9 +42,19 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
             if (m && mTarget->attachMesh(slot.node, m, slot.material)) { slot.mesh = m; slot.source = src; }
         }
         SceneMirror::pushTransform(mTarget, slot.node, item.transform);
-        mTarget->setUnlitMaterial(slot.material, Colour(item.colour.redF(), item.colour.greenF(), item.colour.blueF(), 1.0f));
-        mTarget->setNodeVisible(slot.node, true);
-        slot.shown = true;
+        // COLOUR ON CHANGE ONLY (fps audit F14). setUnlitMaterial schedules a
+        // const-buffer write, and this ran for every part of the gizmo on every
+        // frame the gizmo was up — while the only thing that ever changes a
+        // part's colour is the mouse moving onto or off it. The transform above
+        // genuinely does change every frame (the gizmo is screen-scaled and
+        // follows the camera), so it stays unconditional.
+        if (!slot.colourPushed || slot.colour != item.colour) {
+            mTarget->setUnlitMaterial(slot.material, Colour(item.colour.redF(), item.colour.greenF(),
+                                                            item.colour.blueF(), 1.0f));
+            slot.colour = item.colour;
+            slot.colourPushed = true;
+        }
+        if (!slot.shown) { mTarget->setNodeVisible(slot.node, true); slot.shown = true; }
         ++mVisible;
     }
     for (int i = items.size(); i < mSlots.size(); ++i) {

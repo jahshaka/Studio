@@ -31,6 +31,11 @@ private:
         jahshaka::engine::MeshId mesh = 0;
         iris::Mesh *source = nullptr;
         bool shown = false;
+        /// The colour last pushed to `material`, and whether one ever was.
+        /// A gizmo part's colour only changes on hover, but the push (an unlit
+        /// const-buffer write) happened per part per frame — fps audit F14.
+        QColor colour;
+        bool colourPushed = false;
     };
     jahshaka::engine::MeshId meshFor(iris::Mesh *mesh);
 
