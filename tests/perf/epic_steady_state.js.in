@@ -1,0 +1,248 @@
+// perf.epic_steady_state — THE REGRESSION NET FOR THE CLASS WE ALREADY SHIPPED.
+//
+// THE DEFECT CLASS. On 2026-09-05 the owner reported the editor falling from
+// 60+ fps to 24 to 20 on an Epic-quality scene. The cause was a one-line change
+// in an Ogre patch that silently took a FIFO present mode instead of the
+// MAILBOX one the engine asked for. It shipped, and nothing went red, because
+// every gate in this tree asserts either PIXELS (which were identical) or
+// DOCUMENT STATE (which was untouched). Nothing in the whole suite ever said
+// "and a frame of this scene still costs about what it used to, and the
+// renderer is still holding about as many objects as it used to".
+//
+// So this suite is deliberately NOT a benchmark. It has no baseline file, no
+// per-machine numbers and nothing to re-record: every assertion compares one
+// sample of THIS run against another sample of the SAME run. That makes it
+// machine-independent by construction — it runs on the owner's RTX 4080, on
+// lavapipe, and on an M4 Pro, and means the same thing on all three.
+//
+//   * GROWTH-ONLY. Between sample 2 and sample 6 of a scene NOBODY IS EDITING,
+//     the draw calls, the triangle count and every object the renderer holds
+//     must be EXACTLY equal. Not "close": equal. An idle editor that draws one
+//     more batch each minute, or holds one more view per readback, is broken,
+//     and this is the only place that says so.
+//   * SAMPLE 1 IS SKIPPED. The first block still compiles shaders and uploads
+//     the scene's textures; asserting on it would be asserting on warm-up.
+//   * QUALITY IS EPIC, EXPLICITLY. The owner's rule: "we should be testing at
+//     Epic quality anyway". A gate at Low would not run the SSAO, the shadow
+//     atlas or the post chain that the expensive regressions live in.
+//   * THE SCENE IS MATCAPS, and that is not an arbitrary choice. Showroom,
+//     Particles, Physics and Skeletal Animation are NOT open-to-open
+//     deterministic (VCT + autoRefresh + particle RNG + physics: Showroom's
+//     centre pixel swings +-80 between two IDENTICAL opens). Matcaps is the one
+//     shipped sample that is (MESH_BAKE_SPEC; the bake A/B is sha256-identical).
+//
+// WHAT EACH SAMPLE MEASURES, and why it is measured the way it is.
+//
+//   THE WORK is 50 editor.frame(n, dt) steps at a fixed dt. Fixed-dt stepping is
+//   the deterministic path: without it every stepped frame advances the
+//   document clock by however long the previous JS statement happened to take.
+//
+//   THE COST is app.renderStats().frameMs — Ogre's own rolling average, fed by
+//   the renderOneFrame calls those steps just made. NOT app.frameStats().workMs,
+//   which the charter for this suite named: editor.frame BYPASSES
+//   EngineRenderDriver entirely (the verb's own doc says so), so in a --script
+//   run the driver's ticks/rendered/workMs never move and workMs is flat 0. A
+//   suite asserting "0 <= 1.25 * 0" would be green forever. frameStats is still
+//   READ and PRINTED each sample, because "the driver did nothing" is itself
+//   worth seeing in the log; it is simply not what the assertion stands on.
+//   The script's own wall clock over the block is printed beside it as a
+//   cross-check.
+//
+//   THE GEOMETRY AND OBJECT COUNTS come from a FIXED-SIZE OFFSCREEN RENDER
+//   (editor.screenshot at a size this script chooses), not from the on-screen
+//   view. The on-screen view is whatever size the window manager gave us, so
+//   its draw call count depends on the aspect ratio it was culled against —
+//   fine for a within-run comparison, useless for anything else. Rendering the
+//   probe frame at a size the SCRIPT picks makes the numbers this gate prints
+//   comparable between machines even though it does not yet assert on them
+//   (the per-machine budget half is deliberately not built — see the follow-up
+//   note at the bottom). The readback is also a free extra assertion: a
+//   readback that leaked its throwaway view would show up in `views`.
+//
+//   THE GI COUNTERS come from editor.mirrorStats(). A GI re-solve tears the
+//   voxelizer down and rebuilds it from every item in the scene, and it is
+//   invisible in pixels and in the document — a re-voxelized scene looks
+//   identical, it just costs a frame. "An idle scene re-solves ZERO times" is a
+//   contract of SceneMirror that only a counter can check.
+//
+// PROVEN TO CATCH THE CLASS: see the lane report. With a deliberate one-extra-
+// offscreen-view-per-frame leak injected into the viewport, this suite fails on
+// the named `views` assertion instead of passing green.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var ZIP = "@SOURCE_DIR@/scenes/Matcaps.zip";
+var SAMPLES = 6;             // 6 x 50 = the 300 idle frames
+var FRAMES_PER_SAMPLE = 50;
+var DT = 1.0 / 60.0;
+var PROBE_W = 640, PROBE_H = 360;   // the script-set, machine-independent size
+var FIRST = 1;               // sample 2 (0-based) — sample 1 is warm-up
+var LAST = SAMPLES - 1;      // sample 6
+
+// ---------------------------------------------------------------------------
+// 1. INSTALL AND OPEN. Same verbs the sample dialog's double-click runs.
+app.engineErrors(true);
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "importArchive(Matcaps) -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open");
+
+var nodes = scene.nodes();
+assert(nodes.length >= 5, "Matcaps opened with its content (" + nodes.length + " nodes)");
+
+// 2. EPIC, EXPLICITLY. The tier is a document field; asserting the readback
+//    means the run cannot silently measure a different quality level than the
+//    one it claims to.
+var mode = world.mode({ mode: "epic" });
+assert(mode === "epic", "world.mode -> epic (got '" + mode + "')");
+
+// And Epic really is the expensive tier: the GI assertion below would be
+// vacuous with GI off, and the whole point of gating at Epic rather than at the
+// default is that the expensive machinery is running.
+var w = world.get();
+console.log("epic: gi=" + J(w.gi) + " shadows=" + J(w.shadows) +
+            " planar=" + J(w.planarReflections) + " aa=" + world.antiAliasing());
+assert(w.gi.mode !== "off",
+       "Epic turned global illumination ON (mode '" + w.gi.mode +
+       "') — the GI assertion below is not vacuous");
+
+// 3. THE HONESTY GUARD. Everything below is meaningless if this session's
+//    viewport cannot render — a document-only stand-in has no mirror and
+//    editor.frame is a no-op on it. Say so and stop, rather than asserting
+//    0 === 0 six times and reporting a pass.
+var mirror0 = editor.mirrorStats();
+console.log("viewport: " + J(editor.viewportState()) + " mirror: " + J(mirror0));
+if (!mirror0.available) {
+    console.log("this session's viewport is a document-only stand-in — " +
+                "there is no frame to measure and nothing to assert; skipping");
+} else {
+
+// Warm-up OUTSIDE the samples as well as inside sample 1: the first frames of a
+// freshly opened world compile shaders, and renderStats' geometry counters are
+// LAZY (the first read only switches recording on).
+editor.frame(20, DT);
+app.renderStats();
+
+// ---------------------------------------------------------------------------
+function takeSample(i) {
+    var t0 = Date.now();
+    editor.frame(FRAMES_PER_SAMPLE, DT);
+    var wallMs = Date.now() - t0;
+
+    // Timing FIRST, before the readback: the two probe frames would otherwise
+    // enter Ogre's rolling window between the work and the reading of it.
+    var timing = app.renderStats();
+
+    // The fixed-size offscreen probe frame, and the counters it produced.
+    editor.screenshot("epic_steady_state_" + i + ".png", PROBE_W, PROBE_H);
+    var geom = app.renderStats();
+
+    var s = {
+        i: i + 1,
+        frameMs: timing.frameMs,
+        worstMs: timing.worstMs,
+        wallMsPerFrame: wallMs / FRAMES_PER_SAMPLE,
+        draws: geom.draws,
+        batches: geom.batches,
+        triangles: geom.triangles,
+        objects: app.engineObjects(),
+        mirror: editor.mirrorStats(),
+        driver: app.frameStats()
+    };
+    console.log("sample " + s.i + ": frameMs=" + s.frameMs.toFixed(3) +
+                " wall/frame=" + s.wallMsPerFrame.toFixed(3) +
+                " draws=" + s.draws + " batches=" + s.batches +
+                " tris=" + s.triangles +
+                " objects=" + J(s.objects) +
+                " gi={push:" + s.mirror.giPushes + ",refresh:" + s.mirror.giRefreshes + "}" +
+                " driver={rendered:" + s.driver.rendered + ",workMs:" + s.driver.workMs + "}");
+    return s;
+}
+
+var samples = [];
+for (var i = 0; i < SAMPLES; ++i) samples.push(takeSample(i));
+
+var a = samples[FIRST], b = samples[LAST];
+console.log("comparing sample " + a.i + " -> sample " + b.i +
+            " (" + (SAMPLES * FRAMES_PER_SAMPLE) + " idle frames total)");
+
+// 4. THE GUARD THAT KEEPS THE EQUALITIES HONEST. "draws did not change" proves
+//    nothing if draws is 0 — which is exactly what a session that never
+//    rendered would report.
+assert(a.draws > 0 && a.triangles > 0,
+       "the renderer is actually drawing (" + a.draws + " draws, " + a.triangles + " triangles)");
+assert(a.objects.scenes > 0 && a.objects.meshes > 0,
+       "the engine is holding the scene (" + J(a.objects) + ")");
+
+// 5. GROWTH-ONLY EQUALITIES. Every one of these is EXACT on purpose.
+function flat(name, x, y) {
+    assert(x === y, "idle: " + name + " did not grow (" + x + " -> " + y + ")");
+}
+flat("draws", a.draws, b.draws);
+// NOTE, so nobody reads more into this line than it says: `batches` measures 0
+// on this path today (Ogre only counts a batch for the draw shapes this scene
+// does not use), so on its own it proves nothing. It is asserted anyway because
+// it costs nothing and a regression that starts producing batches would be
+// exactly the kind of growth this suite exists to see. The assertions that
+// carry weight here are draws and triangles, and the guard above proves those
+// two are non-zero.
+flat("batches", a.batches, b.batches);
+flat("triangles", a.triangles, b.triangles);
+flat("views", a.objects.views, b.objects.views);
+flat("enabledViews", a.objects.enabledViews, b.objects.enabledViews);
+flat("scenes", a.objects.scenes, b.objects.scenes);
+flat("nodes", a.objects.nodes, b.objects.nodes);
+flat("meshes", a.objects.meshes, b.objects.meshes);
+flat("materials", a.objects.materials, b.objects.materials);
+flat("textures", a.objects.textures, b.objects.textures);
+flat("datablocks", a.objects.datablocks, b.objects.datablocks);
+
+// 6. GI: an idle scene re-solves ZERO times. The delta, not the absolute —
+//    opening the world and applying Epic are real pushes and are allowed.
+assert(b.mirror.giRefreshes - a.mirror.giRefreshes === 0,
+       "idle: the mirror asked for NO GI re-solve over " +
+       ((LAST - FIRST) * FRAMES_PER_SAMPLE) + " frames (" +
+       a.mirror.giRefreshes + " -> " + b.mirror.giRefreshes + ")");
+console.log("gi pushes over the same window: " + a.mirror.giPushes + " -> " + b.mirror.giPushes);
+
+// 7. COST. The one inequality, and the only noisy number in the suite — which
+//    is why it carries a floor and an absolute slack on top of the ratio. Both
+//    exist so that a box under load turns a 0.4 ms frame into a 0.6 ms frame
+//    without inventing a regression; a real steady-state leak is not a 25%
+//    story, it is a multiple.
+var BUDGET_RATIO = 1.25;
+var SLACK_MS = 0.5;      // absolute headroom, for frames that are already cheap
+var NOISE_FLOOR_MS = 0.2;
+if (a.frameMs < NOISE_FLOOR_MS) {
+    console.log("frame cost " + a.frameMs.toFixed(3) + " ms is below the " + NOISE_FLOOR_MS +
+                " ms noise floor — the ratio is not asserted (it would be measuring the clock)");
+} else {
+    var budget = BUDGET_RATIO * a.frameMs + SLACK_MS;
+    assert(b.frameMs <= budget,
+           "idle: the frame did not get more expensive (" + a.frameMs.toFixed(3) + " ms -> " +
+           b.frameMs.toFixed(3) + " ms, budget " + budget.toFixed(3) + " ms)");
+}
+
+// 8. INFORMATIONAL. The error pump is read but not asserted on: this lane's
+//    contract is steady state, and a sample that records a decode failure is
+//    the samples suite's red, not this one's. It is printed so that a
+//    steady-state red can be read beside it.
+var errs = app.engineErrors(false);
+console.log("engineErrors: drains=" + errs.drains + " recorded=" + errs.recorded +
+            " entries=" + J(errs.entries));
+assert(errs.drains > 0, "the frame loop really ran (" + errs.drains + " pump drains)");
+
+}   // end of the "we have a real viewport" branch
+
+console.log("perf.epic_steady_state: ALL OK");
+
+// FOLLOW-UP, deliberately NOT built here (it is a different kind of test): the
+// PER-MACHINE BUDGET half — a committed baseline-epic-<platform>.json recorded
+// on a quiet box, with absolute ms and draw-call budgets for this exact scene
+// at this exact probe size, in the shape tests/benchmarks/baseline-linux.json
+// already uses. That half needs a recording protocol and a re-record policy;
+// this half needs neither and ships now.
