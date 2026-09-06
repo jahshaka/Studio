@@ -6,8 +6,11 @@
 #include <QGuiApplication>
 #include <QColor>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QTemporaryDir>
 
+#include <cmath>
 #include <cstdio>
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -19,6 +22,7 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/texture2d.h"
 
+#include "export/gltfexporter.h"
 #include "export/walkers/scenewalker.h"
 #include "export/walkers/meshbufferreader.h"
 #include "export/walkers/materialtexturereader.h"
@@ -72,11 +76,26 @@ int main(int argc, char **argv)
     cube->setMaterial(pbr);
     scene->rootNode->addChild(cube);
 
+    // A real, non-identity transform on both levels: the transform round trip
+    // is asserted against the exported glTF further down (PUBLISH_AUDIT #5 —
+    // nothing anywhere asserted an exported TRS, so a scene-graph change could
+    // have silently flattened every export).
+    cube->setLocalPos(iris::Vec3(1.5f, -2.25f, 3.0f));
+    cube->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(0, 1, 0), 90.0f));
+    cube->setLocalScale(iris::Vec3(2.0f, 3.0f, 4.0f));
+
     auto childCube = iris::MeshNode::create();
     childCube->setName("childCube");
     childCube->setMesh(":assets/models/cube.obj");
     childCube->setMaterial(pbr);
     cube->addChild(childCube);
+    // AFTER the parenting on purpose: addChild(keepTransform=true) re-expresses
+    // whatever local transform a node already had so its WORLD transform
+    // survives the move, so a local set before the call would not be the local
+    // the exporter sees.
+    childCube->setLocalPos(iris::Vec3(0.0f, 5.0f, 0.0f));
+    childCube->setLocalScale(iris::Vec3(0.5f, 0.5f, 0.5f));
+    childCube->setLocalRot(iris::Quat());
 
     auto hidden = iris::MeshNode::create();
     hidden->setName("hidden");
@@ -185,6 +204,60 @@ int main(int argc, char **argv)
             if (w != 1.0f && w != -1.0f) unitW = false;
         }
         CHECK(unitW, "tangent w is pure handedness (+/-1)");
+    }
+
+    // ---- the exported TRS (PUBLISH_AUDIT #5) -------------------------------
+    // The walkers hand a node's transform to whoever writes the file, and
+    // NOTHING asserted what came out the other end — the single thing a
+    // scene-graph swap could quietly break had zero coverage. Export this same
+    // tree and read the numbers back out of the glTF JSON: local (not world)
+    // TRS on both levels, and the parent's `children` really pointing at the
+    // child's node index.
+    {
+        const GltfExporter::Result r = GltfExporter::exportScene(scene, "walkers");
+        CHECK(r.ok, "trs: scene exported");
+        const QJsonArray nodes = r.json["nodes"].toArray();
+        int cubeIdx = -1, childIdx = -1;
+        for (int i = 0; i < nodes.size(); ++i) {
+            const QString name = nodes.at(i).toObject()["name"].toString();
+            if (name == "cube") cubeIdx = i;
+            else if (name == "childCube") childIdx = i;
+        }
+        CHECK(cubeIdx >= 0 && childIdx >= 0, "trs: cube and childCube both exported");
+        auto near = [](double a, double b) { return std::fabs(a - b) < 1e-5; };
+        if (cubeIdx >= 0) {
+            const QJsonObject n = nodes.at(cubeIdx).toObject();
+            const QJsonArray t = n["translation"].toArray();
+            CHECK(t.size() == 3 && near(t[0].toDouble(), 1.5) &&
+                      near(t[1].toDouble(), -2.25) && near(t[2].toDouble(), 3.0),
+                  "trs: parent translation exported verbatim");
+            const QJsonArray s = n["scale"].toArray();
+            CHECK(s.size() == 3 && near(s[0].toDouble(), 2.0) &&
+                      near(s[1].toDouble(), 3.0) && near(s[2].toDouble(), 4.0),
+                  "trs: parent non-uniform scale exported");
+            // 90 deg about +Y = (0, sin45, 0, cos45); glTF stores xyzw.
+            const QJsonArray q = n["rotation"].toArray();
+            const double s45 = std::sin(M_PI / 4.0);
+            CHECK(q.size() == 4 && near(q[0].toDouble(), 0.0) && near(q[1].toDouble(), s45) &&
+                      near(q[2].toDouble(), 0.0) && near(q[3].toDouble(), s45),
+                  "trs: parent rotation exported as an xyzw quaternion");
+            const QJsonArray kids = n["children"].toArray();
+            CHECK(kids.size() == 1 && kids[0].toInt() == childIdx,
+                  "trs: parent's children index points at the child node");
+        }
+        if (childIdx >= 0) {
+            const QJsonObject n = nodes.at(childIdx).toObject();
+            const QJsonArray t = n["translation"].toArray();
+            CHECK(t.size() == 3 && near(t[0].toDouble(), 0.0) &&
+                      near(t[1].toDouble(), 5.0) && near(t[2].toDouble(), 0.0),
+                  "trs: child translation is LOCAL, not baked into world space");
+            const QJsonArray s = n["scale"].toArray();
+            CHECK(s.size() == 3 && near(s[0].toDouble(), 0.5) && near(s[1].toDouble(), 0.5) &&
+                      near(s[2].toDouble(), 0.5),
+                  "trs: child scale is LOCAL (not multiplied by the parent's)");
+            CHECK(!n.contains("rotation"),
+                  "trs: an identity rotation is omitted (glTF default), not written as zeros");
+        }
     }
 
     std::printf(failures ? "test_export_walkers: %d FAILURES\n"
