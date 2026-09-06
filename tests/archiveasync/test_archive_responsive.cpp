@@ -25,8 +25,10 @@
 // this wrote is the same world, and a cancelled import leaves no orphan.
 #include <QCoreApplication>
 #include <QDir>
+#include <QDirIterator>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -38,8 +40,12 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTcpServer>
+#include <QTemporaryDir>
 #include <QThread>
 #include <cstdio>
+
+#include "export/exportmanifest.h"
+#include "io/ziphelper.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -197,6 +203,24 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
     seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
+    // HERMETIC BY CONSTRUCTION. This suite's HOME lives in the build tree and
+    // SURVIVES between runs, and a warm library quietly weakens what the run
+    // can prove: a mesh bake is content-addressed, so a second run's import
+    // finds the bake object already in the store and records no bake row
+    // against the new project's asset rows at all — the "no bake travels"
+    // assertion below would then pass on an empty set and prove nothing
+    // (measured: bake:2 from a cold library, bake:0 from a warm one). Start
+    // every run from an empty library. Guarded on the directory NAME so this
+    // can never point at a real user's home.
+    {
+        const QString home = qEnvironmentVariable("HOME");
+        if (QFileInfo(home).fileName() == QLatin1String("e2e-home-archive"))
+            QDir(QDir(home).filePath(QStringLiteral(".local/share/Jahshaka"))).removeRecursively();
+        else
+            std::printf("info: HOME is not the suite's scratch home (%s) — not resetting\n",
+                        home.toUtf8().constData());
+    }
+
     const QString sample = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/Showroom.zip");
     CHECK(QFileInfo::exists(sample), "Showroom sample archive present");
 
@@ -242,6 +266,22 @@ int main(int argc, char **argv)
                           .value("result").toInt();
     CHECK(nodes > 1, "the imported world really loaded");
 
+    // Make sure the world HAS mesh bakes before it is archived — otherwise the
+    // "no bakes travel" assertion below would pass on an empty set and prove
+    // nothing. Opening bakes lazily already; this is the belt.
+    mcp.runScript(QStringLiteral("assets.bakeAll({dryRun: false})"));
+    const QString storeRoot =
+        mcp.runScript(QStringLiteral("assets.storeRoot()")).value("result").toString();
+    int bakesOnDisk = 0;
+    if (!storeRoot.isEmpty()) {
+        QDirIterator it(storeRoot, QStringList() << QStringLiteral("*.jmb"), QDir::Files,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) { it.next(); ++bakesOnDisk; }
+    }
+    std::printf("info: %d mesh bake(s) in the store at %s\n", bakesOnDisk,
+                storeRoot.toUtf8().constData());
+    CHECK(bakesOnDisk > 0, "the world has mesh bakes on disk before the export");
+
     const RunStats exported =
         runArchive(mcp, QStringLiteral("project.exportArchiveAsync('%1')").arg(outZip), "export");
     CHECK(exported.started, "project.exportArchiveAsync accepted");
@@ -258,6 +298,42 @@ int main(int argc, char **argv)
     CHECK(exportResult.value("ok").toBool(), "the export reported success");
     CHECK(QFileInfo::exists(outZip) && QFileInfo(outZip).size() > 1024,
           "the archive was written and is not empty");
+
+    // ---- 2b. WHAT the archive ships (PUBLISH_AUDIT #2) --------------------
+    // The mesh bake is derived data keyed on the BUILD that produced it: the
+    // importing installation rejects a foreign bake as stale on sight and the
+    // .jaf ingest cannot preserve the role anyway. The raw exporter has always
+    // filtered role 'bake'; the project archiver silently did not, so every
+    // generation of every bake travelled as dead megabytes. Read the manifest
+    // the archiver actually wrote and hold that line.
+    {
+        QTemporaryDir peek;
+        CHECK(peek.isValid(), "temp dir to read the archive manifest");
+        QString zipError;
+        CHECK(ZipHelper::extract(outZip, peek.path(), &zipError),
+              "the exported archive extracts");
+        QFile manifestFile(QDir(peek.path()).filePath(exportformat::manifestFileName()));
+        CHECK(manifestFile.open(QIODevice::ReadOnly), "the archive carries a manifest.json");
+        const QJsonObject manifest =
+            QJsonDocument::fromJson(manifestFile.readAll()).object();
+        const QJsonArray manifestAssets = manifest.value("assets").toArray();
+        CHECK(!manifestAssets.isEmpty(), "the manifest lists assets");
+        int bakeEntries = 0, jmbEntries = 0, sourceEntries = 0;
+        for (const auto &av : manifestAssets) {
+            for (const auto &fv : av.toObject().value("files").toArray()) {
+                const QJsonObject f = fv.toObject();
+                const QString role = f.value("role").toString();
+                if (role == QLatin1String("bake")) ++bakeEntries;
+                else if (role == QLatin1String("source")) ++sourceEntries;
+                if (f.value("name").toString().endsWith(QLatin1String(".jmb"))) ++jmbEntries;
+            }
+        }
+        std::printf("info: manifest files — source:%d bake:%d .jmb:%d\n",
+                    sourceEntries, bakeEntries, jmbEntries);
+        CHECK(sourceEntries > 0, "the manifest still ships the real sources");
+        CHECK(bakeEntries == 0, "no role:'bake' entry travels in the archive");
+        CHECK(jmbEntries == 0, "no .jmb bake file travels in the archive");
+    }
 
     // ---- 3. CORRECTNESS: the synchronous verb and the threaded one agree ---
     // Re-importing what the threaded export wrote must produce the same world.

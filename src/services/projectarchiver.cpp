@@ -186,11 +186,21 @@ bool ProjectArchiver::planExport(const QString &destZipPath)
         // The asset's files: every recorded object, with the SOURCE role
         // materialized at the project's pinned content (I3 — the archive
         // carries the bytes the project renders with).
+        //
+        // EXCEPT the mesh bake, for exactly the reasons exportcontentsource.cpp
+        // spells out (MESH_BAKE_SPEC phase 1): a bake is derived data keyed on
+        // the BUILD that produced it, the .jaf ingest re-derives roles from file
+        // names and so cannot preserve one anyway, and the importing
+        // installation rejects a foreign bake as stale on sight. Shipping it
+        // means every generation of every bake travels as dead megabytes. The
+        // raw exporter has always filtered it; this path silently did not
+        // (PUBLISH_AUDIT #2), which is why the two queries now agree.
         const QString pin = AssetCas::pinnedOid(conn, projectGuid, asset.guid);
 
         QSqlQuery files(conn);
         files.prepare("SELECT AF.role, AF.name, AF.oid, F.size, F.ext FROM asset_files AF "
                       "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
+                      "AND AF.role <> 'bake' "
                       "ORDER BY CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, AF.name");
         files.addBindValue(asset.guid);
         files.exec();
