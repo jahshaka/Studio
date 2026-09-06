@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "services/loadtimeline.h"
 
+#include "services/jahlog.h"
+
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QMap>
@@ -64,6 +66,14 @@ QVariantList &lastRunStore()
     return list;
 }
 
+/// The shell's scene-stats hook (LoadTimeline::setStatsProvider). Guarded by
+/// the ledger lock, called OUTSIDE it.
+std::function<QStringList()> &statsProvider()
+{
+    static std::function<QStringList()> p;
+    return p;
+}
+
 /// Caller holds the lock.
 void closeStageLocked()
 {
@@ -109,9 +119,19 @@ void add(const QString &counter, double ms, int items)
     c.items += items;
 }
 
+void setStatsProvider(std::function<QStringList()> provider)
+{
+    QMutexLocker locked(&lock());
+    statsProvider() = std::move(provider);
+}
+
 void end()
 {
     QString line;
+    QString label;
+    double total = 0.0;
+    QStringList blockLines;
+    std::function<QStringList()> provider;
     {
         QMutexLocker locked(&lock());
         Run &r = run();
@@ -119,7 +139,8 @@ void end()
         closeStageLocked();
         r.running = false;
 
-        const double total = double(r.wall.nsecsElapsed()) / 1.0e6;
+        total = double(r.wall.nsecsElapsed()) / 1.0e6;
+        label = r.label;
 
         QVariantList out;
         {
@@ -138,6 +159,7 @@ void end()
             out.append(entry);
             line += QStringLiteral("\n[open-profile]   %1 %2 ms")
                         .arg(s.name, -34).arg(s.ms, 8, 'f', 1);
+            blockLines << QStringLiteral("%1 %2 ms").arg(s.name, -34).arg(s.ms, 8, 'f', 1);
         }
         for (auto it = r.counters.constBegin(); it != r.counters.constEnd(); ++it) {
             QVariantMap entry;
@@ -147,9 +169,34 @@ void end()
             out.append(entry);
             line += QStringLiteral("\n[open-profile]   (of which) %1 %2 ms over %3")
                         .arg(it.key(), -22).arg(it.value().ms, 8, 'f', 1).arg(it.value().items);
+            blockLines << QStringLiteral("(of which) %1 %2 ms over %3")
+                              .arg(it.key(), -22).arg(it.value().ms, 8, 'f', 1).arg(it.value().items);
         }
         lastRunStore() = out;
+        provider = statsProvider();
     }
+
+    // THE SCENE OPEN BLOCK (SESSION_LOG_SPEC §5). This is the choke point every
+    // open path funnels through — a tile click, project.open, openAsync, the
+    // sync path and import all call begin() and exactly one place calls end() —
+    // so a UI-driven open and a scripted one produce the identical record.
+    //
+    // OUTSIDE THE LEDGER LOCK, for the same reason the qDebug it replaces was
+    // (spec §9-R7): emitting a multi-line block while holding the timeline lock
+    // would put the log mutex inside the timeline mutex, and LoadTimeline::add()
+    // — which workers call — can invert that order.
+    //
+    // The stats walk runs here too, AFTER the total is banked, so the cost of
+    // counting the scene can never appear in the ledger it accompanies (§9-R8).
+    if (provider) blockLines << provider();
+    JahLog::writeBlock(JahLog::scene, JahLog::Level::Display,
+                       QStringLiteral("=== SCENE OPEN === '%1' in %2 ms")
+                           .arg(label).arg(total, 0, 'f', 1),
+                       blockLines);
+
+    // The qDebug stays: it is what the heartbeat e2e and the profiling tables
+    // read, it is bit-identical on stderr, and the funnel does NOT double it
+    // into the file (qDebug maps to Verbose, and `qt` sits at Log).
     qDebug().noquote() << line;
 }
 

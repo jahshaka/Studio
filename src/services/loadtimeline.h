@@ -30,9 +30,19 @@ For more information see the LICENSE file
 // the heartbeat e2e both read them.
 
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 
+#include <functional>
+
 namespace LoadTimeline {
+
+/// Extra lines appended to the SCENE OPEN block in the session log
+/// (SESSION_LOG_SPEC §5) — node/mesh/material/light counts, which this service
+/// has no way to know. Installed by the shell; called by end() AFTER the run is
+/// closed and the total is banked, so the walk it costs can never pollute the
+/// ledger it accompanies (spec §9-R8). Unset = no extra lines.
+void setStatsProvider(std::function<QStringList()> provider);
 
 /// Starts a run (discarding any unfinished one). `label` names what is being
 /// opened.

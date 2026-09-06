@@ -16,6 +16,7 @@ For more information see the LICENSE file
 // policy it implies, split out of main.cpp.
 
 #include <QString>
+#include <QStringList>
 
 struct CliOptions
 {
@@ -37,6 +38,22 @@ struct CliOptions
     /// Our `r.InvalidateCachedShaders`, and the flag every benchmark of a cold
     /// start has to use.
     bool clearShaderCache = false;
+
+    // ---- the session log (SESSION_LOG_SPEC §3.5, layer 3 of the precedence
+    // chain: compiled default -> ini -> COMMAND LINE -> runtime) -------------
+    /// --log-level=<level> or --log-level=<cat>=<lvl>[,<cat>=<lvl>…], repeatable.
+    QStringList logLevels;
+    /// --log-file=<path>: the session file itself (its directory becomes the
+    /// log dir, so the ogre sibling lands beside it).
+    QString logFile;
+    /// --log-dir=<path>: THE hermetic-test flag. `HOME=` does not isolate app
+    /// data on macOS (CFFIXED_USER_HOME is what CoreFoundation honours), so a
+    /// rotation test written with HOME= would write into the developer's real
+    /// log directory there — this is the platform-independent isolation.
+    QString logDir;
+    /// --no-log: routing, levels and the in-memory ring all still work;
+    /// nothing reaches disk.
+    bool noLog = false;
 
     static CliOptions parse(int argc, char *argv[]);
 

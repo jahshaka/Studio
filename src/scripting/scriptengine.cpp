@@ -18,10 +18,13 @@ For more information see the LICENSE file
 #include <mutex>
 #include <thread>
 
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJSValueIterator>
 #include <QJsonDocument>
 #include <QUndoStack>
+
+#include "services/jahlog.h"
 
 namespace {
 
@@ -163,6 +166,13 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     ScriptResult result;
     result.fileName = fileName;
 
+    // The SCRIPT RUN RECORD (SESSION_LOG_SPEC §5). This is the single entry
+    // point for the console dock, --script and the MCP run_script tool, so one
+    // record covers all three. PER-VERB records are explicitly out of scope: a
+    // script can call thousands of verbs and the log is not a trace.
+    QElapsedTimer scriptClock;
+    scriptClock.start();
+
     // Always clear first: an interrupted PREVIOUS run leaves the flag set, and
     // a still-set flag aborts the next script before its first statement.
     mJs.setInterrupted(false);
@@ -229,6 +239,20 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     } else {
         result.ok = true;
         result.value = value.toVariant();
+    }
+
+    if (result.ok) {
+        JAH_LOG(JahLog::script, Display,
+                QStringLiteral("script: %1 ok in %2 ms")
+                    .arg(fileName.isEmpty() ? QStringLiteral("<expression>") : fileName)
+                    .arg(scriptClock.elapsed()));
+    } else {
+        JAH_LOG(JahLog::script, Error,
+                QStringLiteral("script: %1%2 FAILED after %3 ms — %4")
+                    .arg(result.fileName.isEmpty() ? QStringLiteral("<expression>")
+                                                   : result.fileName,
+                         result.line > 0 ? QStringLiteral(":%1").arg(result.line) : QString())
+                    .arg(scriptClock.elapsed()).arg(result.error));
     }
     return result;
 }

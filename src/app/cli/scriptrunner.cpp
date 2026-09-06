@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "scripting/mcp/mcpserver.h"
 #include "shell/mainwindow.h"
 #include "services/mainthreadwatchdog.h"
+#include "services/jahlog.h"
 #include "shell/shutdownorder.h"
 
 int finalizeAppExit(int rc)
@@ -51,9 +52,17 @@ int finalizeAppExit(int rc)
     if (!QThreadPool::globalInstance()->waitForDone(5000)) {
         qWarning("shutdown: background workers still running 5s after exit — "
                  "forcing process exit (code %d)", rc);
+        // The session log's close bracket is worth having even on the forced
+        // path: an absent one is the signal that the session died, and this
+        // exit is not a death.
+        JahLog::stop(QStringLiteral("forced exit: background workers hung"));
         std::fflush(nullptr);
         std::_Exit(rc);
     }
+    // THE CLOSE BRACKET (SESSION_LOG_SPEC §3.9) plus the session summary. This
+    // is the choke point every ordinary exit passes through — the window close
+    // path, --script and --mcp-port all end here.
+    JahLog::stop(QStringLiteral("exit code %1").arg(rc));
     return rc;
 }
 

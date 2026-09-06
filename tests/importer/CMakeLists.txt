@@ -87,6 +87,9 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
+    # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
@@ -135,6 +138,9 @@ set_tests_properties(importer.meshformats PROPERTIES
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 add_executable(test_importer_security test_importer_security.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    # The import record (SESSION_LOG_SPEC §5) is emitted from the one pipeline
+    # entry point; JahLog is a leaf service (Qt + iris::Logger, nothing else).
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp

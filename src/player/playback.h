@@ -64,6 +64,13 @@ class PlayBack
 	float animTime;
 	QPointF prevMousePos;
 
+	// The camera-controller mismatch latch (SESSION_LOG_SPEC §8-R2). Raw
+	// observer pointers, compared and never dereferenced: they exist only to
+	// answer "is this the SAME mismatch I already reported".
+	iris::CameraNode *mMismatchController = nullptr;
+	iris::CameraNode *mMismatchScene = nullptr;
+	bool mMismatchLatched = false;
+
 	bool _isPlaying = false;
 	/// Paused is a state of PLAYING, not a stop: the physics world, the saved
 	/// pre-play transforms and the animation clock all survive it.

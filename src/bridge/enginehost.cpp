@@ -3,6 +3,7 @@
 #include "irisgl/document/scenegraph/nodegraph.h"
 #include "viewport/enginerenderdriver.h"
 #include "data/settingsmanager.h"
+#include "services/jahlog.h"
 #include "data/constants.h"
 #include "services/loadtimeline.h"
 
@@ -139,15 +140,28 @@ EngineConfig EngineHost::resolveConfig()
     // QT_DEBUG is off (src/data/settingsmanager.h:44-57).
     // Debug builds keep the relative name so a dev run still drops the log
     // beside the binary, where every existing doc and habit expects it.
+    //
+    // PER-SESSION NAME (SESSION_LOG_SPEC fork F3-B). The session log computes
+    // it — `jahshaka-<stamp>-<pid>-ogre.log`, beside the session file it is the
+    // sibling of — so the two halves of one run sort together, rotate under one
+    // policy, and a crash report is a directory rather than a scavenger hunt.
+    // The old fixed name survives as the fallback for a run with no session log
+    // (--no-log, or a log directory that could not be opened), which keeps the
+    // "Ogre's log is our only crash forensics" property above intact.
+    const QString sessionOgreLog = JahLog::ogreFilePath();
+    if (!sessionOgreLog.isEmpty()) {
+        cfg.logFile = sessionOgreLog.toStdString();
+    } else {
 #ifdef QT_DEBUG
-    cfg.logFile = "jahshaka-ogre.log";
-#else
-    const QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (!logDir.isEmpty() && QDir().mkpath(logDir))
-        cfg.logFile = QDir(logDir).filePath(QStringLiteral("jahshaka-ogre.log")).toStdString();
-    else
         cfg.logFile = "jahshaka-ogre.log";
+#else
+        const QString logDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        if (!logDir.isEmpty() && QDir().mkpath(logDir))
+            cfg.logFile = QDir(logDir).filePath(QStringLiteral("jahshaka-ogre.log")).toStdString();
+        else
+            cfg.logFile = "jahshaka-ogre.log";
 #endif
+    }
     // Shadow-caster geometry optimization (POST_CHAIN_SPEC.md §11): an
     // application preference, not a scene setting — the flag is process-wide and
     // consumed when a mesh is BUILT, so a mesh built while it was on keeps its
@@ -174,6 +188,27 @@ EngineConfig EngineHost::resolveConfig()
     // no hash inside Ogre can see a change to src/. A user updating the app
     // therefore pays exactly one cold launch, which is correct and is the same
     // property Unreal's DDC has.
+    // ---- The engine's log, forwarded (SESSION_LOG_SPEC F3-B) ----------------
+    // Installed through the CONFIG rather than through Engine::setLogSink so it
+    // is live before the plugins load and the render system initialises —
+    // which is exactly where the boot-time criticals are (a missing
+    // render-system plugin, an ABI complaint, a Vulkan validation error).
+    //
+    // LML_CRITICAL -> `engine`/Error, which is where every Vulkan validation
+    // error and every "cannot find resource" lands. LML_NORMAL -> `ogre`/Log, a
+    // category that sits at Warning in a dev build and Off in a release one, so
+    // the thousands of ordinary boot lines cost one suppressed-level compare
+    // each — and stay ONE `--log-level=ogre=log` away.
+    //
+    // THREE RULES this lambda obeys (Engine::setLogSink documents why): it runs
+    // under Ogre's log mutex on whatever thread logged, JahLog is mutex-guarded
+    // and non-blocking, and nothing in here calls back into Ogre.
+    cfg.logSink = [](int level, const std::string &message) {
+        const QString text = QString::fromStdString(message);
+        if (level == 1) JAH_LOG(JahLog::engine, Error, text);
+        else            JAH_LOG(JahLog::ogre, Log, text);
+    };
+
     cfg.appBuildId = QStringLiteral("%1/%2/%3")
                          .arg(Constants::CONTENT_VERSION,
                               QStringLiteral(GIT_COMMIT_HASH),
@@ -324,6 +359,31 @@ bool EngineHost::start(QString &error)
     //     engine side is already lazy and ready for it.
     iris::graph::setStagingScene(
         reinterpret_cast<iris::graph::SceneHandle>(mEngine->documentGraphScene()));
+
+    // The DEVICE BLOCK — SESSION_LOG_SPEC §4's two NEW header rows. It is a
+    // block of its own, emitted HERE rather than in the startup header, for a
+    // reason that is not going away: no render system — and therefore no
+    // device, no driver version and no API version — exists when that header
+    // is written. This is the first moment the answer exists at all, and it is
+    // still long before anything a user can do.
+    {
+        const jahshaka::engine::DeviceInfo dev = mEngine->deviceInfo();
+        QList<QPair<QString, QString>> rows;
+        auto row = [&rows](const char *k, const std::string &v) {
+            rows << qMakePair(QString::fromLatin1(k),
+                              v.empty() ? QStringLiteral("(not reported)")
+                                        : QString::fromStdString(v));
+        };
+        row("render system", dev.renderSystem);
+        row("gpu vendor", dev.vendor);
+        row("gpu device", dev.deviceName);
+        row("driver version", dev.driverVersion);
+        row("api version", dev.apiVersion);
+        rows << qMakePair(QStringLiteral("headless"),
+                          cfg.headless ? QStringLiteral("true (NULL render system)")
+                                       : QStringLiteral("false"));
+        JahLog::writeHeaderBlock(QStringLiteral("=== DEVICE ==="), rows);
+    }
     return true;
 }
 

@@ -31,6 +31,7 @@ For more information see the LICENSE file
 #include "services/worldmodes.h"
 #include "services/undoservice.h"
 #include "commands/worldmodecommand.h"
+#include "services/jahlog.h"
 
 using namespace scriptmod;
 
@@ -261,7 +262,14 @@ int WorldApi::setAntiAliasing(int samples)
         fail(QStringLiteral("world.setAntiAliasing: samples must be 1 (off), 2, 4 or 8"));
         return 0;
     }
+    const int was = scene->antiAliasing;
     scene->antiAliasing = samples;
+    // A graphics setting that changed mid-session is what makes two frame-rate
+    // readings incomparable (SESSION_LOG_SPEC §5 — the substitute for the
+    // "quality tier" row, which does not exist in this tree).
+    if (was != samples)
+        JAH_LOG(JahLog::render, Display,
+                QStringLiteral("msaa: %1x -> %2x requested").arg(was).arg(samples));
     // A direct edit of a backing field is a PIN (POST_CHAIN_SPEC §9.1): without
     // this the next world.mode() switch would silently undo it.
     worldmodes::pinRowValue(scene, QStringLiteral("msaa"), samples);

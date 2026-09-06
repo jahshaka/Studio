@@ -12,7 +12,7 @@ For more information see the LICENSE file
 
 #include <algorithm>
 
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "jahshaka/engine/Engine.h"
 
 EngineErrorPump &EngineErrorPump::instance()
@@ -49,10 +49,10 @@ bool EngineErrorPump::takeLogBudget(qint64 now)
     if (now - mBudgetWindowMs >= mWindowMs) {
         if (mFloodedInWindow) {
             // One line saying what was swallowed, so a flood is never invisible.
-            iris::Logger::getSingleton()->warn(
-                QStringLiteral("engine: %1 further error(s) in the last %2 ms were not logged "
-                               "(flood budget) — app.engineErrors() has them")
-                    .arg(mFloodedInWindow).arg(mWindowMs));
+            JAH_LOG(JahLog::engine, Warning,
+                    QStringLiteral("%1 further error(s) in the last %2 ms were not logged "
+                                   "(flood budget) — app.engineErrors() has them")
+                        .arg(mFloodedInWindow).arg(mWindowMs));
         }
         mBudgetWindowMs  = now;
         mLoggedInWindow  = 0;
@@ -88,8 +88,7 @@ void EngineErrorPump::record(const QString &message)
         fresh.loggedMs = now;
         fresh.count    = 1;
         mEntries.push_back(fresh);
-        if (takeLogBudget(now))
-            iris::Logger::getSingleton()->warn(QStringLiteral("engine: ") + message);
+        if (takeLogBudget(now)) JAH_LOG(JahLog::engine, Warning, message);
         return;
     }
 
@@ -101,11 +100,10 @@ void EngineErrorPump::record(const QString &message)
         const quint64 swallowed = entry.suppressed;
         entry.suppressed = 0;
         entry.loggedMs   = now;
-        QString line = QStringLiteral("engine: ") + message;
+        QString line = message;
         if (swallowed)
             line += QStringLiteral(" (repeated %1x)").arg(swallowed + 1);
-        if (takeLogBudget(now))
-            iris::Logger::getSingleton()->warn(line);
+        if (takeLogBudget(now)) JAH_LOG(JahLog::engine, Warning, line);
     } else {
         ++entry.suppressed;
         ++mSuppressed;

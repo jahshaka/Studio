@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "scripting/modules/desktopapi.h"
 #include "scripting/modules/editorapi.h"
 #include "scripting/modules/inputapi.h"
+#include "scripting/modules/logapi.h"
 #include "scripting/modules/nodeapi.h"
 #include "scripting/modules/particlesapi.h"
 #include "scripting/modules/projectapi.h"
@@ -45,6 +46,10 @@ void registerStudioModules(ScriptEngine &engine)
     // reason CameraApi was: the registry order every generated doc and tool
     // schema already has stays unchanged.
     engine.addModule(new InputApi(host));
+    // The session log (SESSION_LOG_SPEC §7). Appended for the same reason
+    // CameraApi and InputApi were: the registry order every generated doc and
+    // tool schema already has stays unchanged.
+    engine.addModule(new LogApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

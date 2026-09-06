@@ -24,7 +24,10 @@ set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offsc
 # other. Needs a reachable DISPLAY like every engine suite (Ogre's XCB support
 # object connects at plugin load) even though the view is offscreen.
 add_executable(test_engine_error_pump test_engine_error_pump.cpp
-    ${CMAKE_SOURCE_DIR}/src/services/engineerrorpump.cpp)
+    ${CMAKE_SOURCE_DIR}/src/services/engineerrorpump.cpp
+    # The pump logs into JahLog's `engine` category now (SESSION_LOG_SPEC §5):
+    # same text, same rate limiting, now timestamped and frame-numbered.
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp)
 set_target_properties(test_engine_error_pump PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

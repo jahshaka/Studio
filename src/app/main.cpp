@@ -51,6 +51,8 @@ For more information see the LICENSE file
 #include "app/versionsplashscreen.h"
 #include "app/shaderbuildgate.h"
 #include "ui/style/thememanager.h"
+#include "services/jahlog.h"
+#include "services/sessionheader.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
@@ -129,6 +131,38 @@ int main(int argc, char *argv[])
 	initializeBreakpad();
 #endif
 
+    // ---- THE SESSION LOG (SPECS/SESSION_LOG_SPEC.md) -----------------------
+    // Opened HERE: after QApplication (SettingsManager and applicationDirPath
+    // need it) and after the crash handler, but before the theme, the upgrader
+    // and the splash — the three phases that used to fail with no record at
+    // all. One file per app RUN (fork F1-A) in <cwd>/logs (Debug) or
+    // <AppDataLocation>/logs (release), with a latest.log pointer beside it.
+    //
+    // PRECEDENCE, in this exact order (spec §3.5, UE's rule verbatim):
+    // compiled default -> ini -> command line -> runtime (the log.* verbs).
+    {
+        JahLog::Options logOpts =
+            JahLog::optionsFromSettings(SettingsManager::getDefaultManager()->settings);
+        if (!cli.logDir.isEmpty())  logOpts.dir = cli.logDir;
+        if (!cli.logFile.isEmpty()) logOpts.file = cli.logFile;
+        logOpts.disabled = cli.noLog;
+        JahLog::start(logOpts);                    // applies the compiled defaults
+        JahLog::applyIniLevels(SettingsManager::getDefaultManager()->settings);
+        for (const QString &spec : cli.logLevels) JahLog::applyLevelSpec(spec);
+        // The crash handler gets the path and the raw descriptor, and nothing
+        // else (spec §3.8-4, §9-R3): it runs in signal context, so it may
+        // write(2) into the log but may never CALL into it.
+        crashHandlerSetSessionLog(qPrintable(JahLog::sessionFilePath()), JahLog::rawFd());
+    }
+    // The funnel is what makes the ~61 existing qDebug/qWarning call sites land
+    // in the file with zero edits to any of them — LoadTimeline's open profile,
+    // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton
+    // diagnostics. It CHAINS to the previous handler, so stderr is unchanged.
+    JahLog::installQtMessageHandler();
+    // And this is fork F5-A: every irisLog() call site gains a timestamp, a
+    // category and rotation without one of them being edited.
+    JahLog::absorbIrisLogger();
+
     // Apply the app theme (Qlementine Dark by default, archived Classic on
     // request) BEFORE any widget exists — the Upgrader dialog and the engine
     // preview dialog are the first widgets alive. See THEME_AUDIT.md §4.
@@ -178,6 +212,73 @@ int main(int argc, char *argv[])
         QDir assetDir(AssetStorePaths::defaultRoot());
         if (!assetDir.exists()) assetDir.mkpath(AssetStorePaths::defaultRoot());
     }
+
+    // ---- The startup header (SESSION_LOG_SPEC §4) --------------------------
+    // Emitted HERE rather than beside JahLog::start() for one reason: the asset
+    // store's online/offline verdict and the engine config are two of the most
+    // useful rows in it, and neither exists until the bootstrap above has run.
+    // Everything before this point is still in the file — the open bracket, and
+    // whatever the theme and the upgrader had to say.
+    //
+    // The GPU/device/driver rows are NOT here: no render system exists yet.
+    // They arrive as their own block once the engine boots (phase 3).
+    SessionHeader::addProvider(QStringLiteral("settings"), [] {
+        SessionHeader::Rows r;
+        SettingsManager *sm = SettingsManager::getDefaultManager();
+        r << SessionHeader::Row { QStringLiteral("file"), sm->settings->fileName() };
+        r << SessionHeader::Row { QStringLiteral("theme"),
+                                  sm->getValue("appearance/theme", "qlementine-dark").toString() };
+        r << SessionHeader::Row { QStringLiteral("pacing"),
+                                  sm->getValue("viewport/pacing", "display").toString() };
+        r << SessionHeader::Row { QStringLiteral("watchdog"),
+                                  sm->getValue("watchdog_enabled", true).toString() };
+        r << SessionHeader::Row { QStringLiteral("shadowMeshOptimization"),
+                                  sm->getValue("shadow_mesh_optimization", true).toString() };
+        r << SessionHeader::Row { QStringLiteral("shaderWarmupSamples"),
+                                  sm->getValue("shader_warmup_samples", 1).toString() };
+        r << SessionHeader::Row { QStringLiteral("shaderWarmupShadows"),
+                                  sm->getValue("shader_warmup_shadows", true).toString() };
+        return r;
+    });
+    SessionHeader::addProvider(QStringLiteral("assets"), [] {
+        SessionHeader::Rows r;
+        const QString root = AssetStorePaths::root();
+        r << SessionHeader::Row { QStringLiteral("storeRoot"), root };
+        r << SessionHeader::Row { QStringLiteral("defaultRoot"), AssetStorePaths::defaultRoot() };
+        r << SessionHeader::Row { QStringLiteral("storeOnline"),
+                                  QDir(root).exists() ? QStringLiteral("true")
+                                                      : QStringLiteral("false (offline)") };
+        return r;
+    });
+    SessionHeader::addProvider(QStringLiteral("engine"), [] {
+        SessionHeader::Rows r;
+        const auto cfg = EngineHost::resolveConfig();
+        r << SessionHeader::Row { QStringLiteral("pluginDir"),
+                                  QString::fromStdString(cfg.pluginDir) };
+        r << SessionHeader::Row { QStringLiteral("hlmsMediaDir"),
+                                  QString::fromStdString(cfg.hlmsMediaDir) };
+        r << SessionHeader::Row { QStringLiteral("ogreLog"),
+                                  QString::fromStdString(cfg.logFile) };
+        r << SessionHeader::Row { QStringLiteral("optimizeShadowMeshes"),
+                                  cfg.optimizeShadowMeshes ? QStringLiteral("true")
+                                                           : QStringLiteral("false") };
+        r << SessionHeader::Row { QStringLiteral("appBuildId"),
+                                  QString::fromStdString(cfg.appBuildId) };
+        r << SessionHeader::Row { QStringLiteral("shaderCacheEnabled"),
+                                  EngineHost::shaderCacheEnabled() ? QStringLiteral("true")
+                                                                   : QStringLiteral("false") };
+        r << SessionHeader::Row { QStringLiteral("shaderCacheDir"),
+                                  EngineHost::shaderCacheDirectory() };
+        return r;
+    });
+    SessionHeader::addProvider(QStringLiteral("mcp"), [&cli] {
+        SessionHeader::Rows r;
+        r << SessionHeader::Row { QStringLiteral("port"),
+                                  cli.mcpPort ? QString::number(cli.mcpPort)
+                                              : QStringLiteral("(off for this run)") };
+        return r;
+    });
+    SessionHeader::emitBlock();
 
     // Fonts are a theme decision now: Classic sets DroidSans inside
     // ThemeManager::applyAtStartup; Qlementine Dark uses the theme's own
@@ -229,11 +330,19 @@ int main(int argc, char *argv[])
     // then survives its own main window (the headless-zombie bug family).
     splash.finish(&window);
 
-    if (!cli.selftestPng.isEmpty())
-        return runEngineSelftest(window, app, cli.selftestPng);
+    // The two CLI paths that do NOT go through finalizeAppExit get their close
+    // bracket here, so no exit route leaves a file that looks like a crash.
+    if (!cli.selftestPng.isEmpty()) {
+        const int rc = runEngineSelftest(window, app, cli.selftestPng);
+        JahLog::stop(QStringLiteral("engine selftest, exit code %1").arg(rc));
+        return rc;
+    }
 
-    if (!cli.dumpDocsPath.isEmpty())
-        return runDumpApiDocs(window, cli.dumpDocsPath);
+    if (!cli.dumpDocsPath.isEmpty()) {
+        const int rc = runDumpApiDocs(window, cli.dumpDocsPath);
+        JahLog::stop(QStringLiteral("dump-api-docs, exit code %1").arg(rc));
+        return rc;
+    }
 
     if (!cli.scriptPath.isEmpty())
         return runScriptFile(window, app, cli.scriptPath, cli.headlessScript);

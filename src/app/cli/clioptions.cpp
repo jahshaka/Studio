@@ -26,6 +26,16 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         else if (qstrncmp(argv[i], "--mcp-port=", 11) == 0) o.mcpPort = quint16(QByteArray(argv[i] + 11).toUInt());
         else if (qstrcmp(argv[i], "--mcp-port") == 0 && i + 1 < argc) o.mcpPort = quint16(QByteArray(argv[++i]).toUInt());
         else if (qstrcmp(argv[i], "--clear-shader-cache") == 0) o.clearShaderCache = true;
+        // The session log (SESSION_LOG_SPEC §3.5). --log-level is REPEATABLE
+        // and comma-separated, because retuning three categories for one
+        // debugging run should not need three different spellings.
+        else if (qstrncmp(argv[i], "--log-level=", 12) == 0) o.logLevels << QString::fromLocal8Bit(argv[i] + 12);
+        else if (qstrcmp(argv[i], "--log-level") == 0 && i + 1 < argc) o.logLevels << QString::fromLocal8Bit(argv[++i]);
+        else if (qstrncmp(argv[i], "--log-file=", 11) == 0) o.logFile = QString::fromLocal8Bit(argv[i] + 11);
+        else if (qstrcmp(argv[i], "--log-file") == 0 && i + 1 < argc) o.logFile = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrncmp(argv[i], "--log-dir=", 10) == 0) o.logDir = QString::fromLocal8Bit(argv[i] + 10);
+        else if (qstrcmp(argv[i], "--log-dir") == 0 && i + 1 < argc) o.logDir = QString::fromLocal8Bit(argv[++i]);
+        else if (qstrcmp(argv[i], "--no-log") == 0) o.noLog = true;
         else if (qstrncmp(argv[i], "--viewport", 10) == 0) {
             // Accepted for compatibility; the engine viewport is the only
             // renderer since the legacy GL viewport was deleted (step 14).

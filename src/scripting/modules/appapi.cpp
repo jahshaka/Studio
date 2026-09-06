@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "services/framepacing.h"
 #include "data/settingsmanager.h"
+#include "services/jahlog.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -246,6 +247,8 @@ QVariantMap AppApi::shaderCache()
 
 bool AppApi::clearShaderCache()
 {
+    JAH_LOG(JahLog::shader, Display,
+            QStringLiteral("shader cache: cleared on request — the NEXT launch is cold"));
     // Two halves on purpose: the engine drops what it wrote, and the host
     // removes the directory itself — clearing must work in a session whose
     // engine never started (a headless run) exactly as in one where it did.
@@ -408,7 +411,16 @@ QVariantMap AppApi::pacing(const QString &mode)
                      .arg(mode, framepacing::modeNames().join(QStringLiteral(", "))));
             return out;
         }
+        const framepacing::Mode was = driver->pacingMode();
         driver->setPacingMode(m);
+        // A graphics setting changing mid-session is exactly the kind of thing
+        // that makes two frame-rate readings incomparable — record it
+        // (SESSION_LOG_SPEC §5, the quality-tier row's substitute: no tier
+        // concept exists in this tree, so the individual settings are logged).
+        if (was != m)
+            JAH_LOG(JahLog::render, Display,
+                    QStringLiteral("pacing: %1 -> %2")
+                        .arg(framepacing::modeName(was), framepacing::modeName(m)));
         // Persisted here rather than in the driver: the driver is a render
         // loop, and the settings file belongs to the shell. Preferences writes
         // the same key (services/framepacing.h::settingsKey).

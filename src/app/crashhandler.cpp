@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #ifdef _WIN32
 void installCrashHandler() {}   // Windows story arrives with the port (SEH/breakpad)
+void crashHandlerSetSessionLog(const char *, int) {}
 #else
 
 #include <csignal>
@@ -42,6 +43,12 @@ void writeNum(int fd, unsigned long v, int base) {
 }
 
 struct sigaction gPrev[32];
+
+// The session log, for the handler's use only. Filled by
+// crashHandlerSetSessionLog; read in signal context, hence the fixed buffer and
+// the plain int — no QString, no allocation, no locking.
+char gSessionLogPath[4096] = { 0 };
+volatile sig_atomic_t gSessionLogFd = -1;
 
 void handler(int sig, siginfo_t *info, void *) {
     // File name built without snprintf's locale machinery.
@@ -75,8 +82,29 @@ void handler(int sig, siginfo_t *info, void *) {
         void *frames[64];
         int count = backtrace(frames, 64);
         backtrace_symbols_fd(frames, count, fd);
-        writeStr(fd, "\nsee jahshaka-ogre.log in the same directory for the session tail\n");
+        if (gSessionLogPath[0]) {
+            writeStr(fd, "\nsession log (the whole run, with the startup header and every\n"
+                         "warning up to this point):\n  ");
+            writeStr(fd, gSessionLogPath);
+            writeStr(fd, "\nthe engine's own log is the -ogre.log sibling beside it\n");
+        } else {
+            writeStr(fd, "\nsee jahshaka-ogre.log in the same directory for the session tail\n");
+        }
         close(fd);
+
+        // AND LEAVE A MARK IN THE SESSION LOG ITSELF (spec §3.8-4). Without
+        // this the log simply STOPS, which reads exactly like a hang, a kill
+        // or a power cut — the absence of the close bracket says "this session
+        // died" but not how. One write(2) into the descriptor JahLog is holding
+        // open; nothing here touches JahLog's mutex or its buffer.
+        const int slog = int(gSessionLogFd);
+        if (slog >= 0) {
+            writeStr(slog, "*** CRASH: signal ");
+            writeNum(slog, (unsigned long)sig, 10);
+            writeStr(slog, " — backtrace in ");
+            writeStr(slog, path);
+            writeStr(slog, " ***\n");
+        }
 
         // Mirror a one-liner to stderr so terminal runs see it immediately.
         writeStr(2, "\n*** Jahshaka crashed — backtrace written to ");
@@ -91,6 +119,15 @@ void handler(int sig, siginfo_t *info, void *) {
 }
 
 }  // namespace
+
+void crashHandlerSetSessionLog(const char *path, int fd) {
+    gSessionLogFd = fd;
+    if (!path) { gSessionLogPath[0] = 0; return; }
+    // strncpy, not strcpy: the buffer is fixed and the caller's path is not.
+    size_t i = 0;
+    for (; i + 1 < sizeof(gSessionLogPath) && path[i]; ++i) gSessionLogPath[i] = path[i];
+    gSessionLogPath[i] = 0;
+}
 
 void installCrashHandler() {
     // An alternate stack so a MAIN-THREAD fault with no stack headroom (deep

@@ -41,6 +41,9 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/materials/postprocessmanager.h"
 #include "irisgl/core/logger.h"
+#include "services/jahlog.h"
+#include "services/sessionmarkers.h"
+#include "services/perfsampler.h"
 
 #include "data/guidmanager.h"
 #include "services/thumbnailmanager.h"
@@ -202,12 +205,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     font.setPointSize(font.pointSize() * devicePixelRatio());
     setFont(font);
 
+    // The legacy iris::Logger file now lives UNDER THE SESSION-LOG ROOT with
+    // everything else (SESSION_LOG_SPEC §6). Two things changed:
+    //   * the release build no longer writes ~/Documents/jahshaka.log — a
+    //     user-visible file in a user-owned folder, for a developer artifact;
+    //   * both builds land beside the session log, so "send me your logs" is
+    //     one directory.
+    // The records themselves are already in the session file under `legacy`
+    // (fork F5-A, absorbed at the sink); this file survives for one release so
+    // nothing that greps it breaks on the same day.
+    {
+        const QString logDir = JahLog::paths().value(QStringLiteral("dir")).toString();
+        const QString legacyLog =
+            logDir.isEmpty() ? IrisUtils::getAbsoluteAssetPath("jahshaka.log")
+                             : QDir(logDir).filePath(QStringLiteral("jahshaka.log"));
+        iris::Logger::getSingleton()->init(legacyLog);
+    }
 #ifdef QT_DEBUG
-    iris::Logger::getSingleton()->init(IrisUtils::getAbsoluteAssetPath("jahshaka.log"));
     setWindowTitle(QString("Jahshaka %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
 #else
 	setWindowTitle(QString("Jahshaka %1").arg(Constants::CONTENT_VERSION));
-    iris::Logger::getSingleton()->init(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)+"/jahshaka.log");
 #endif
 
 	currentSpace = WindowSpaces::DESKTOP;
@@ -678,6 +695,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	// a shutdown.
 	JAH_SHUTDOWN_STEP(ShutdownOrder::CloseEvent, "closeEvent: autosave + settings");
 
+	// The session's own totals (SESSION_LOG_SPEC §5, "clean quit"). Written
+	// HERE, past the Cancel branch, for the same reason the step above is: a
+	// close the user backed out of is not the end of the session. JahLog's
+	// close bracket and by-level roll-up follow later, in finalizeAppExit.
+	SessionMarkers::logQuitSummary();
+
 	settings->setValue("geometry", saveGeometry());
 	settings->setValue("windowState", saveState());
 
@@ -836,6 +859,14 @@ void MainWindow::setupServices()
     connect(playbackService, &PlaybackService::playModeEntered,
             this, &MainWindow::applyPlayModeUi);
 
+    // The session log's PLAY START / PLAY STOP brackets (SESSION_LOG_SPEC §5)
+    // ride the SAME signals — no new calls on the play path. The scene-open
+    // block's stats lines come from here too, because LoadTimeline (a service)
+    // has no way to reach a document.
+    sessionMarkers = new SessionMarkers(this);
+    sessionMarkers->attach(playbackService);
+    LoadTimeline::setStatsProvider([this] { return SessionMarkers::sceneStats(scene); });
+
     projectService = new ProjectService(db, project, settings,
                                         sceneView, undoService,
                                         [this]() { return scene; });
@@ -878,6 +909,14 @@ void MainWindow::setupServices()
     services->sceneEdit = sceneEditService;
     services->thumbnails = thumbnailService;
     services->assets = assetService;
+
+    // The perf sampler (SESSION_LOG_SPEC §8-R3). Started HERE, from the
+    // settings, so it is running long before anything the owner does — a
+    // sampler a user has to turn on has already missed the session that
+    // needed it.
+    perfSampler = new PerfSampler(this);
+    services->perfSampler = perfSampler;
+    perfSampler->startFromSettings();
 
     // Commands raise their refreshes through the aggregate (stamped at push);
     // the viewport's gizmos push through the same aggregate.
@@ -926,10 +965,28 @@ void MainWindow::deselectViewports()
 	player_menu->setCursor(Qt::ArrowCursor);
 }
 
+/// Space names for the log — the same words app.space() accepts, so a record
+/// and a script read the same way.
+static const char *spaceName(WindowSpaces s)
+{
+	switch (s) {
+	case WindowSpaces::DESKTOP: return "desktop";
+	case WindowSpaces::PLAYER:  return "player";
+	case WindowSpaces::EDITOR:  return "editor";
+	case WindowSpaces::EFFECT:  return "materials";
+	case WindowSpaces::ASSETS:  return "assets";
+	case WindowSpaces::PUBLISH: return "publish";
+	case WindowSpaces::AVATAR:  return "avatar";
+	}
+	return "?";
+}
+
 void MainWindow::switchSpace(WindowSpaces space, bool force)
 {
 	if (currentSpace == space && !force)
 		return;
+	SessionMarkers::logSpaceSwitch(QString::fromLatin1(spaceName(currentSpace)),
+	                               QString::fromLatin1(spaceName(space)));
 	ListWidget::stopHighlightedNode();
 
 	// properly shutdown previous space

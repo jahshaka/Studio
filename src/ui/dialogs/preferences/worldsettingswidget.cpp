@@ -43,6 +43,8 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
+#include "services/perfsampler.h"
+#include "services/services.h"
 
 WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* settings) :
     QWidget(nullptr)
@@ -480,6 +482,38 @@ void WorldSettingsWidget::configureViewport()
 		if (!ok) return;
 		settings->setValue(framepacing::settingsKey(), framepacing::modeName(m));
 		if (EngineRenderDriver *d = EngineHost::instance().driver()) d->setPacingMode(m);
+	});
+
+	// ---- the session log's perf sampler (SESSION_LOG_SPEC §8-R3) ---------
+	// THE SAME CAPABILITY log.perf() drives — both call PerfSampler::start and
+	// both write the one persisted key (SCRIPTING_SPEC §2.3, API-first: the
+	// verb landed with its test before this row existed).
+	auto perfLabel = new QLabel("Performance Log Interval :");
+	setSizePolicyForWidgets(perfLabel);
+	auto perfSpin = new QSpinBox;
+	perfSpin->setRange(0, 3600);
+	perfSpin->setSuffix(" s");
+	perfSpin->setSpecialValueText("Off");
+	perfSpin->setToolTip(
+		"How often the session log records what the renderer is doing: frame time, draw "
+		"calls, triangles, engine errors and memory, on one line. This is what turns "
+		"'it got slow after a while' into a series you can read — rising frame work with "
+		"flat draw calls means the app got slower, rising draw calls mean the scene grew, "
+		"rising memory with everything else flat means a leak. It is a timer, not a hook: "
+		"it costs a handful of counter reads once per interval and never touches the "
+		"frame path. 0 turns it off.");
+	StyleSheet::setStyle({ perfLabel, perfSpin });
+	layout->addWidget(perfLabel, 7, 0);
+	layout->addWidget(perfSpin, 7, 2);
+	perfSpin->setValue(qBound(0, settings->getValue("log/perfSampleSeconds",
+	                                                PerfSampler::defaultSeconds()).toInt(), 3600));
+	connect(perfSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int seconds) {
+		settings->setValue("log/perfSampleSeconds", seconds);
+		// The LIVE sampler is re-timed too — a preference that only takes
+		// effect next launch is a preference nobody trusts.
+		if (mainWindow && mainWindow->studioServices()
+		    && mainWindow->studioServices()->perfSampler)
+			mainWindow->studioServices()->perfSampler->start(seconds);
 	});
 
 	layout->setColumnStretch(1, 50);

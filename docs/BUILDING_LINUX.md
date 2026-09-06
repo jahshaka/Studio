@@ -113,8 +113,40 @@ cd build-linux/bin
 ./Jahshaka --viewport=engine
 ```
 
-Run from `build-linux/bin` — the app writes its log (`jahshaka-ogre.log`) and settings to the
-working directory and finds its staged assets next to the executable.
+Run from `build-linux/bin` — the app writes its logs and settings to the working directory
+and finds its staged assets next to the executable.
+
+### Where the logs are
+
+Since the session-log program (SPECS/SESSION_LOG_SPEC.md) the app writes **one file per run**
+into a `logs/` subdirectory of that working directory, with a `latest.log` symlink to the
+current one:
+
+```
+build-linux/bin/logs/jahshaka-2026.09.06-14.22.31-10412.log        the session log
+build-linux/bin/logs/jahshaka-2026.09.06-14.22.31-10412-ogre.log   Ogre's own log, same session
+build-linux/bin/logs/latest.log -> the newest session log
+build-linux/bin/logs/jahshaka.log                                  legacy iris::Logger file
+```
+
+`tail -f build-linux/bin/logs/latest.log` is the one command to watch a running editor. The
+session log starts with a header block (build id, GPU, Qt/QPA, settings, engine config, asset
+store root) and gains a block per scene open, save and play/stop. Old sessions are swept at
+startup: 10 newest kept, anything of ours older than 5 days deleted — `crash-*.log` is never
+touched.
+
+Useful flags (all four are the log's, `--log-level` is repeatable and comma-separated):
+
+```bash
+./Jahshaka --log-level=verbose                  # everything, everywhere
+./Jahshaka --log-level=mirror=verbose,ogre=log  # per category
+./Jahshaka --log-dir=/tmp/mylogs                # somewhere else entirely (what tests use)
+./Jahshaka --no-log                             # nothing on disk
+```
+
+Precedence is compiled default → `jahsettings.ini` (`log/global`, `log/<category>`) → command
+line → the `log.*` script verbs at runtime. `qDebug()` output maps to `Verbose` and is
+therefore OFF by default even in a Debug build: `--log-level=qt=verbose` turns it on.
 
 `--viewport=engine` selects the Ogre-Next viewport (Vulkan, runs on X11/XWayland). It will be
 the default once the legacy viewport is removed; until then, omitting it launches the
