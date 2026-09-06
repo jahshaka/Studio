@@ -185,6 +185,31 @@ inline QString colorHelp(const QVariant &raw)
         .arg(normalizeJs(raw).toString());
 }
 
+/// The shared "an unknown key is a typo the caller must SEE" check
+/// (AI_SURFACE_AUDIT F7/F8, the silent-success class). Returns the refusal
+/// message for the FIRST key `params` carries that is not in `known`, or an
+/// EMPTY string when every key is understood — so the calling convention is:
+///
+///     const QString bad = refuseUnknownKeys("world.fog", params, known);
+///     if (!bad.isEmpty()) return fail(bad);
+///
+/// (the helper cannot call fail() itself: that is ApiModule's protected member
+/// and this header is deliberately free of the module base class). `note` is
+/// appended when a verb has something extra to say about the keys it does not
+/// take — node.physics' isVisible sentence is the pattern.
+inline QString refuseUnknownKeys(const QString &verb, const QVariantMap &params,
+                                 const QStringList &known, const QString &note = QString())
+{
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (known.contains(it.key())) continue;
+        QString message = QStringLiteral("%1: unknown key '%2' (known: %3)")
+                              .arg(verb, it.key(), known.join(QStringLiteral(", ")));
+        if (!note.isEmpty()) message += QStringLiteral(". ") + note;
+        return message;
+    }
+    return QString();
+}
+
 /// The script-facing name of a Property kind. `file` is deliberately reported
 /// as "string": FileProperty is what irisgl uses for every QString-valued row
 /// (there is no StringProperty), so a node's `name` and a particle emitter's
