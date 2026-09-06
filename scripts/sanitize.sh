@@ -32,7 +32,19 @@
 # configured with -DJAHSHAKA_TSAN=ON. Ogre-Next and Qt stay uninstrumented (we
 # link their installed shared libraries); scripts/tsan.supp covers what that
 # costs. Membership is the ctest label `tsan`: the async-contract suites
-# (importasync, openasync, archive.responsive, shutdown, services.memory).
+# (importasync, openasync, archive.responsive, shutdown, services.memory,
+# threading.staging_race).
+#
+# WHAT THIS LANE CANNOT SEE, said here as well as in tsan.supp because it is the
+# lane's biggest limitation: Ogre-Next is an INSTALLED SHARED LIBRARY we do not
+# compile, so none of its accesses are instrumented. A race living entirely
+# inside the engine — which is where the scene-manager worker pools live, and
+# where THREADING_ADOPTION_SPEC P1 puts shader compilation — is invisible to
+# this lane however green it is. threading.staging_race is a member
+# because its subject is OUR thread building document nodes beside the render
+# loop; the pre-fix use-after-free it regression-tests was two Ogre-internal
+# accesses, and it was caught by RUNNING it (a SIGSEGV in
+# Ogre::Node::updateAllTransforms), not by a TSan report.
 #
 # Race reports go to $BUILD/tsan-logs/tsan.<pid> (TSAN_OPTIONS=log_path), because
 # most of these suites spawn the real binary as a CHILD process — its reports
@@ -160,7 +172,7 @@ run_tsan() {
     # under TSan would cost half an hour and prove nothing.
     local targets=(Jahshaka test_import_async test_import_shutdown test_open_responsive
                    test_archive_responsive test_shutdown_order test_watchdog_stall
-                   test_memory_ownership)
+                   test_memory_ownership test_staging_race)
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building ${targets[*]}"
         cmake --build "$TSAN_BUILD_DIR" -j"$(nproc)" --target "${targets[@]}" \
@@ -179,6 +191,19 @@ run_tsan() {
     # report_thread_leaks=0: every thread in these processes belongs to Qt
     # (QThreadPool, QDBusConnection) and is left idle rather than joined at
     # exit, by Qt's design. A thread that was not joined is not a race.
+    # LAVAPIPE FOR THE ONE VULKAN SUITE IN THE LANE (threading.staging_race).
+    # TSan and the proprietary NVIDIA Vulkan driver do not coexist on this box:
+    # the process dies with `ThreadSanitizer:DEADLYSIGNAL / nested bug in the
+    # same thread, aborting` inside vkCreateDevice, before any of our code runs.
+    # Mesa's llvmpipe ICD is instrumentation-friendly and renders identical
+    # pixels (CLAUDE.md's recorded fact, and the reason no-GPU CI works), so the
+    # lane picks it when it is installed rather than quarantining the suite.
+    # Harmless for the lane's other members — none of them creates a device.
+    # Override with VK_DRIVER_FILES to test a different ICD deliberately.
+    if [ -z "${VK_DRIVER_FILES:-}" ] && [ -f /usr/share/vulkan/icd.d/lvp_icd.json ]; then
+        export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json
+        echo "sanitize: VK_DRIVER_FILES=$VK_DRIVER_FILES (lavapipe — TSan cannot survive the NVIDIA driver)"
+    fi
     export TSAN_OPTIONS="suppressions=$REPO_ROOT/scripts/tsan.supp:log_path=$logdir/tsan:history_size=4:second_deadlock_stack=1:ignore_noninstrumented_modules=1:report_thread_leaks=0"
     echo "sanitize: TSAN_OPTIONS=$TSAN_OPTIONS"
     [ -n "${DISPLAY:-}" ] || echo "sanitize: WARNING - no DISPLAY; the suites that spawn Jahshaka will fail"

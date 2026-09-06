@@ -64,10 +64,26 @@ applies the patches, configures, builds and installs it (~10 minutes; installs t
 ./irisgl/scripts/build-ogre.sh
 ```
 
-You never run this again unless the Ogre pin changes. Details, other platforms, and the
-gotchas explained: `irisgl/docs/OGRE_BUILD.md`. The critical one: **if `libshaderc-dev` is
-missing, Ogre configures "successfully" without Vulkan** — the script checks and fails loudly
-for you.
+You run this again whenever the Ogre pin, the patch stack **or the engine's build options**
+change. Details, other platforms, and the gotchas explained: `irisgl/docs/OGRE_BUILD.md`. The
+critical one: **if `libshaderc-dev` is missing, Ogre configures "successfully" without
+Vulkan** — the script checks and fails loudly for you.
+
+> **Re-run this script after pulling — it is not optional.** The engine install carries
+> build-time switches that Studio compiles against, and the current one is
+> `OGRE_SHADER_COMPILATION_THREADING_MODE=2` (multithreaded shader/PSO compilation,
+> `SPECS/THREADING_ADOPTION_SPEC.md` P1). A tree whose `ogre-next-install` predates it keeps
+> single-threaded shader compilation, and the only thing that says so is
+> `app.threading().multithreadedShaderCompilation`, which reads `false`.
+> Two safety nets exist and both are worth knowing:
+> * the script itself greps the installed `OgreBuildSettings.h` after installing and **fails**
+>   if `OGRE_SHADER_THREADING_BACKWARDS_COMPATIBLE_API` is still defined (the usual cause is a
+>   stale CMake cache in `irisgl/thirdparty/ogre-next/build` — delete it and re-run);
+> * the flip changes the engine ABI, and `Ogre::generateAbiCookie()` hashes it, so a Studio
+>   built against the *old* header and linked against the *new* engine **aborts at startup**
+>   rather than misbehaving quietly. On Linux and macOS the `-MD` depfiles track the installed
+>   header, so the ordinary `cmake --build` after this script rebuilds the affected objects by
+>   itself — no `rm -rf` and no manual list.
 
 ## 4. Build Jahshaka + IrisGL
 

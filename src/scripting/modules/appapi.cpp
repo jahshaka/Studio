@@ -163,10 +163,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "off until something asks, so the very first call reports metricsRecording=false with zeroed "
           "counters and every call after a rendered frame reports real ones.",
           Needs::Engine },
-        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, nodes, meshes, materials, textures, datablocks}",
+        { "engineObjects", "app.engineObjects() -> {views, enabledViews, scenes, updatedScenes, nodes, meshes, materials, textures, datablocks}",
           "A CENSUS of what the renderer is HOLDING — the companion to app.renderStats(), which "
           "only says what a frame cost (fps audit F11). `views` and `scenes` are the engine's own "
-          "objects, `enabledViews` the subset renderOneFrame actually draws; `nodes`, `meshes`, "
+          "objects, `enabledViews` the subset renderOneFrame actually draws; `updatedScenes` is "
+          "how many SCENES the last frame updated — the frame loop walks a scene only while an "
+          "enabled view draws it, so in an editor holding preview, player, asset and staging "
+          "scenes this is normally 1 and `scenes` is not (THREADING_ADOPTION_SPEC.md P3); "
+          "`updatedScenes` climbing to meet `scenes` means the gate stopped working and every "
+          "idle scene is being walked 60 times a second again. `nodes`, `meshes`, "
           "`materials` and `textures` are the per-scene registries of ids this boundary handed out "
           "and still honours, SUMMED over every live scene; `datablocks` is process-wide (Hlms "
           "datablocks belong to the one HlmsManager, not to a scene) and includes the backend's own "
@@ -176,6 +181,25 @@ QVector<VerbInfo> AppApi::verbs() const
           "document node, a datablock per material push — assertable without a per-machine "
           "baseline. That is exactly what the perf.epic_steady_state gate does with it. Cheap: "
           "container sizes plus one walk of the (tiny) view and scene vectors.",
+          Needs::Engine },
+        { "threading", "app.threading() -> {multithreadedShaderCompilation, shaderThreadingMode, sceneWorkerThreads, hlmsThreads}",
+          "WHAT THE ENGINE IS THREADING (SPECS/THREADING_ADOPTION_SPEC.md P1). "
+          "`multithreadedShaderCompilation` is the render system's OWN answer to "
+          "supportsMultithreadedShaderCompilation() — true means Ogre compiles shaders and "
+          "pipeline objects across the scene's worker pool instead of one at a time on the "
+          "thread that hit the missing permutation. It is the one number in this map that "
+          "cannot be inferred from Studio's source, because the switch that sets it lives in "
+          "the ENGINE INSTALL (build-ogre.sh's OGRE_SHADER_COMPILATION_THREADING_MODE=2), not "
+          "in this binary: A TREE THAT FORGOT TO RE-RUN `irisgl/scripts/build-ogre.sh` READS "
+          "false HERE AND IS OTHERWISE INDISTINGUISHABLE FROM A CORRECT ONE — it builds, it "
+          "runs, every suite passes, and it compiles its shaders on one core for ever. "
+          "`shaderThreadingMode` is the build-time mode Studio itself was compiled against "
+          "(2 = force-enabled, 1 = the backwards-compatible API, which in a shared build means "
+          "off). `sceneWorkerThreads` maps each live scene's name to its worker-pool size — the "
+          "editor scene gets the machine (capped at 8), previews and thumbnails deliberately "
+          "get fewer — and `hlmsThreads` is the largest of them, the ceiling on how many "
+          "threads any one pass can compile on and the count the shader disk cache is applied "
+          "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
         { "apiProblems", "app.apiProblems() -> [string]",
           "Everything wrong with the scripting API's OWN metadata, as sentences: a verb with no "
@@ -482,10 +506,35 @@ QVariantMap AppApi::engineObjects()
     out.insert("views", c.views);
     out.insert("enabledViews", c.enabledViews);
     out.insert("scenes", c.scenes);
+    out.insert("updatedScenes", c.updatedScenes);
     out.insert("nodes", c.nodes);
     out.insert("meshes", c.meshes);
     out.insert("materials", c.materials);
     out.insert("textures", c.textures);
     out.insert("datablocks", c.datablocks);
+    return out;
+}
+
+QVariantMap AppApi::threading()
+{
+    // Needs::Engine, same reasoning as renderStats/engineObjects: every field
+    // comes from the boundary, and an empty map would read like "not threaded"
+    // rather than like "no engine in this session" — which is precisely the
+    // confusion this verb exists to prevent.
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.threading: no engine in this session"); return out; }
+    jahshaka::engine::EngineThreading t;
+    if (!engine->threading(t)) {
+        fail("app.threading: the engine could not report its threading state");
+        return out;
+    }
+    out.insert("multithreadedShaderCompilation", t.multithreadedShaderCompilation);
+    out.insert("shaderThreadingMode", t.shaderThreadingMode);
+    QVariantMap scenes;
+    for (const auto &s : t.sceneWorkerThreads)
+        scenes.insert(QString::fromStdString(s.first), s.second);
+    out.insert("sceneWorkerThreads", scenes);
+    out.insert("hlmsThreads", t.hlmsThreads);
     return out;
 }

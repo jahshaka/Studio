@@ -285,10 +285,17 @@ void AvatarPreviewScene::resolvePose()
     auto engine = mEngine.lock();
     if (!engine || !mScene || !mView || !mMirror || !mModel) return;
     mMirror->sync();
-    // One frame for a pose read is still a frame of EVERY enabled view
-    // (fps audit F5) — quiet the on-screen ones for it.
-    OffscreenRenderScope quiet(engine.get());
-    engine->renderOneFrame();
+    // NO FRAME AT ALL — just this scene's graph update (THREADING_ADOPTION_SPEC
+    // P3). This used to render one frame with every on-screen view disabled,
+    // which resolved the pose only because Root::renderOneFrame updated EVERY
+    // scene manager whether or not anything drew it. The frame loop is now
+    // gated on "an enabled View draws this scene", so that trick resolved
+    // nothing the moment the avatar page's own view was the one being quieted
+    // (caught by scripting.e2e.avatar: the bone stopped moving between
+    // t=0 and t=0.5). Engine::updateScene says what this code always meant,
+    // costs strictly less than the old frame, and works whether or not the
+    // page is on screen.
+    engine->updateScene(mScene);
 }
 
 QImage AvatarPreviewScene::toQImage(const Image &img)

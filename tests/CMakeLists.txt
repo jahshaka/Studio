@@ -194,6 +194,9 @@ add_subdirectory(cameras)
 # the avatar bone-name table, the whole engine-pose -> socket -> pixels chain,
 # and the verbs + round trip in the real binary.
 add_subdirectory(sockets)
+# THREADING ADOPTION (SPECS/THREADING_ADOPTION_SPEC.md): the frame loop's
+# scene gate and the staging-manager race it closes.
+add_subdirectory(threading)
 # The scene-graph BENCHMARK GATE (SCENEGRAPH_SPEC §6) — the measurement suite
 # that exists BEFORE the swap, so v1 has a recorded baseline to be judged
 # against. Label `benchmark`: minutes, not seconds; `ctest -LE benchmark` skips it.

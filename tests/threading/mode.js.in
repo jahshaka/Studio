@@ -1,0 +1,103 @@
+// threading.mode — the multithreaded-shader-compilation smoke
+// (SPECS/THREADING_ADOPTION_SPEC.md P1, gate G1-c).
+//
+// THE FAILURE THIS EXISTS FOR IS SILENT. The switch that turns Ogre's threaded
+// shader/PSO compilation on lives in the ENGINE INSTALL — build-ogre.sh's
+// -DOGRE_SHADER_COMPILATION_THREADING_MODE=2 — not in this binary. A tree that
+// never re-ran that script, or that re-ran it against a stale CMake cache,
+// builds, links, boots, renders and passes every other suite in the tree while
+// compiling its shaders one at a time on the thread that missed the
+// permutation. `multithreadedShaderCompilation === true` below is the only
+// assertion in the whole gate that goes red for it.
+//
+// RUN TWICE, from two ctest entries against two virgin HOMEs:
+//   threading.mode          the default worker counts (parallel compile)
+//   threading.mode_serial   JAHSHAKA_SCENE_THREADS=1 (serial compile)
+// and threading.mode_pixels byte-compares the PNG each one writes. Serial and
+// parallel compilation must produce IDENTICAL images: threading may change when
+// a shader is built and on which thread, never what it computes. That is the
+// real correctness claim of P1, and it is cheap.
+//
+// THE SCENE IS MATCAPS, for the reason perf.epic_steady_state gives at length:
+// Showroom / Particles / Physics / Skeletal Animation are not open-to-open
+// pixel-deterministic (VCT + autoRefresh + RNG + physics), Matcaps is. At Epic
+// quality it brings up the shadow atlas, SSAO and the post chain, so the run
+// really does compile a spread of material and vertex-format permutations
+// rather than one lit cube's worth.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var ZIP = "@SOURCE_DIR@/scenes/Matcaps.zip";
+var SHOT = "threading_mode.png";
+var SHOT_W = 640, SHOT_H = 360;
+var DT = 1.0 / 60.0;
+
+app.engineErrors(true);
+
+// 1. THE FLAG. Before anything else, because everything else is uninteresting
+//    if this is false.
+var t = app.threading();
+console.log("threading: " + J(t));
+assert(t.multithreadedShaderCompilation === true,
+       "the engine supports multithreaded shader compilation — " +
+       "if this is false the tree needs `./irisgl/scripts/build-ogre.sh` re-run " +
+       "(THREADING_ADOPTION_SPEC P1)");
+assert(t.shaderThreadingMode === 2,
+       "Studio was compiled against a mode-2 OgreBuildSettings.h (got " +
+       t.shaderThreadingMode + ")");
+
+// 2. THE WORKER POOLS. The editor scene carries the machine's threads (capped
+//    at 8) unless this run is the SERIAL half, which pins them to 1 with
+//    JAHSHAKA_SCENE_THREADS. Both are legal; which one we are in decides what
+//    is asserted, and the run says which so the log is readable.
+var serial = t.hlmsThreads <= 1;
+console.log(serial ? "this run: SERIAL (JAHSHAKA_SCENE_THREADS=1)"
+                   : "this run: PARALLEL (hlmsThreads=" + t.hlmsThreads + ")");
+
+// 3. OPEN AND COMPILE. A virgin HOME means a cold shader cache, so this open is
+//    the compile burst the phase is about.
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid && imported.guid.length > 10,
+       "importArchive(Matcaps) -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open");
+assert(world.mode({ mode: "epic" }) === "epic", "world.mode -> epic");
+
+var mirror = editor.mirrorStats();
+if (!mirror.available) {
+    console.log("this session's viewport is a document-only stand-in — " +
+                "nothing to compile and nothing to compare; skipping");
+} else {
+    if (!serial) {
+        var t2 = app.threading();
+        console.log("threading with the scene up: " + J(t2));
+        assert(t2.hlmsThreads > 1,
+               "the editor scene's worker pool is > 1 thread (got " + t2.hlmsThreads +
+               ") — parallel compile needs it (OgreRenderQueue.cpp:388)");
+    }
+
+    editor.frame(3, DT);
+    var cache = app.shaderCache();
+    console.log("shaderCache: compiled=" + cache.compiledThisRun +
+                " fromCache=" + cache.loadedThisRun +
+                " expected=" + cache.expectedShaders);
+    assert(cache.compiledThisRun > 0,
+           "the run really compiled shaders (" + cache.compiledThisRun + ")");
+
+    // 4. THE PIXELS. Fixed size, chosen here rather than inherited from the
+    //    window, so the two runs are comparable byte for byte.
+    var shot = editor.screenshot(SHOT, SHOT_W, SHOT_H);
+    assert(shot && shot.width === SHOT_W && shot.height === SHOT_H,
+           "screenshot -> " + SHOT + " " + J(shot));
+
+    var errs = app.engineErrors();
+    console.log("engineErrors: " + J(errs));
+    assert(errs.recorded === 0,
+           "no engine error was pumped during the compile burst (" +
+           J(errs.entries) + ")");
+}
+
+console.log("threading.mode: PASSED");
