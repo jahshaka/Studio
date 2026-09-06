@@ -25,6 +25,7 @@ For more information see the LICENSE file
 
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/physics/avatarmovement.h"
+#include "irisgl/document/animation/locomotion.h"
 #include "irisgl/import/model.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/assets/vertexbuffer.h"
@@ -427,6 +428,30 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         avatarObj["capsuleRadius"] = p.capsuleRadius;
         avatarObj["capsuleHeight"] = p.capsuleHeight;
         sceneNodeObj["avatar"] = avatarObj;
+    }
+
+    // THE LOCOMOTION STATE MACHINE (AVATAR_LOCOMOTION_SPEC §7). Its OWN key
+    // rather than a sub-object of `avatar`: the two components are independent
+    // (one is physics, one is animation) and nesting would have made a reader
+    // that wanted only the state graph parse the knob set to find it.
+    //
+    // The asset is written even when it is the GENERATED default. Regenerating
+    // it on load would be smaller on disk and would silently change a scene's
+    // behaviour the first time the default changed in a later build — a file
+    // that says what it means is worth the two hundred bytes.
+    if (auto *loco = sceneNode->locomotion()) {
+        QJsonObject locoObj;
+        locoObj["default"] = loco->usesDefaultAsset();
+        QJsonObject rolesObj;
+        for (int i = 0; i < iris::kClipRoleCount; ++i) {
+            const auto role = iris::ClipRole(i);
+            if (loco->roles().has(role))
+                rolesObj[QLatin1String(iris::clipRoleName(role))] = loco->roles().get(role);
+        }
+        locoObj["roles"] = rolesObj;
+        if (!loco->asset().isEmpty())
+            locoObj["asset"] = iris::locomotionAssetToJson(loco->asset());
+        sceneNodeObj["locomotion"] = locoObj;
     }
 
     //todo: write data specific to node type

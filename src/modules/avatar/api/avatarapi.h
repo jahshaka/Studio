@@ -29,10 +29,11 @@ For more information see the LICENSE file
 #include <QVariantMap>
 #include <functional>
 
+#include "irisgl/irisglfwd.h"
 #include "scripting/apimodule.h"
 
 namespace avatar { class AvatarPreviewModel; }
-namespace iris { class AvatarPossession; }
+namespace iris { class AvatarPossession; class AvatarLocomotion; }
 
 class AvatarApi : public ApiModule
 {
@@ -116,7 +117,21 @@ public:
     Q_INVOKABLE QVariantList list();
     Q_INVOKABLE QVariantMap followCamera(const QVariantMap &values = QVariantMap());
 
+    // ---- the state machine (AVATAR_LOCOMOTION_SPEC §7, Stage 4) -----------
+    // The §5 parameter contract plus what the state machine did with it, the
+    // asset as data, and the role bindings. `locomotionState` is the assertion
+    // surface every gate in this program reads.
+    Q_INVOKABLE QVariantMap locomotionState(const QString &nodeId);
+    Q_INVOKABLE QVariantMap locomotionAsset(const QString &nodeId);
+    Q_INVOKABLE bool setLocomotionAsset(const QString &nodeId, const QVariantMap &values);
+    Q_INVOKABLE QVariantMap clipRoles(const QString &nodeId);
+    Q_INVOKABLE bool setClipRole(const QString &nodeId, const QString &role,
+                                 const QString &clipName);
+
 private:
+    /// The node's locomotion component, or null with a message recorded.
+    iris::AvatarLocomotion *locomotionOrFail(const char *verb, const QString &nodeId,
+                                             iris::SceneNodePtr *nodeOut = nullptr);
     /// The open scene's possession slot, or null with a message recorded.
     iris::AvatarPossession *possessionOrFail(const char *verb);
     QVariantMap previewState() const;

@@ -12,11 +12,13 @@ For more information see the LICENSE file
 #include "modules/avatar/api/avatarapi.h"
 
 #include <QColor>
+#include <QJsonObject>
 #include <QDir>
 #include <QFileInfo>
 
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarsockets.h"
+#include "irisgl/document/animation/locomotion.h"
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -164,13 +166,14 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "The avatar the input is driving, or null. Also null once that node has been deleted — "
           "the slot holds a weak reference on purpose.",
           Needs::Document },
-        { "list", "avatar.list() -> [{id, name, possessed, speed, grounded, mode}]",
+        { "list", "avatar.list() -> [{id, name, possessed, speed, grounded, mode, state}]",
           "Every node in the scene carrying an avatar component, in DOCUMENT ORDER (depth-first "
           "from the root) — the same order Play's auto-possess is defined against, so list()[0] "
           "is the avatar scene.playMode('third-person') takes over. `speed`, `grounded` and "
-          "`mode` are the movement component's published state (spec §5). The `state` column "
-          "the spec's table shows is the locomotion state MACHINE's and arrives with it "
-          "(Stage 4); it is deliberately absent rather than faked here.",
+          "`mode` are the movement component's published state (spec §5); `state` is the "
+          "locomotion state machine's current state, an empty string for an avatar whose clips "
+          "bound no role (which is not an error — the default asset degrades, it never refuses "
+          "to load).",
           Needs::Document },
         { "followCamera", "avatar.followCamera({armLength?, heightOffset?, lateralOffset?, yaw?, pitch?}) -> object",
           "The spring-arm follow camera (spec §8.5). With no argument it reports the current arm; "
@@ -181,6 +184,59 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "the live angles the Look action drives, in degrees; pitch is clamped to the arm's "
           "limits. Reports `position` and `rotation` too, which is what makes camera-relative "
           "movement assertable from a script.",
+          Needs::Document },
+
+        // ---- the state machine (AVATAR_LOCOMOTION_SPEC §7, Stage 4) -------
+        { "locomotionState", "avatar.locomotionState(nodeId) -> {speed, moveInput:{x,y,z}, grounded, verticalVelocity, jumpRequested, mode, state, previousState, transitioning, transitionProgress, transitionDuration, phase, weights:[{clip, weight, time, looping}]}",
+          "The five-parameter contract the movement component publishes every step (spec §5), "
+          "plus what the state machine did with it. `state` is the state the machine is IN — "
+          "during a cross-fade that is already the DESTINATION, with `previousState` naming what "
+          "is blending out and `transitionProgress` running 0 -> 1 over `transitionDuration` "
+          "seconds. `weights` is the per-frame push: one entry per clip, with the weight the "
+          "state machine intends and the ABSOLUTE time in seconds it should be sampled at — "
+          "never a relative advance, so two avatars that started walking two seconds apart are "
+          "never in lock-step. The weights are raw INTENT and are not normalized here: the "
+          "engine normalizes them per bone. Empty (falsy) for a node with no avatar component.",
+          Needs::Document },
+        { "locomotionAsset", "avatar.locomotionAsset(nodeId) -> {name, entry, default, states:[...], transitions:[...]}",
+          "The state machine as DATA (spec §7.1) — the exact shape setLocomotionAsset accepts "
+          "and the exact shape the scene file stores, so a round trip is an equality check. A "
+          "state is {name, loop, source} where source is either {kind:'clip', clip, speed} or "
+          "{kind:'blendspace', syncClips, samples:[{clip, position, authoredSpeed}]}; a "
+          "transition is {from, to, condition, blendDuration}, and TRANSITION ORDER IS THE "
+          "PRIORITY — first match wins, there is no priority field and there never will be. "
+          "`from` may be '*' for any state, which means any OTHER state: a wildcard does not "
+          "speak for a state that already carries an explicit transition to the same "
+          "destination. `default` is true while the asset is the generated 'Biped Locomotion' "
+          "one, which is what lets a role rebind or a walkSpeed change regenerate it without "
+          "ever overwriting an asset somebody authored.",
+          Needs::Document },
+        { "setLocomotionAsset", "avatar.setLocomotionAsset(nodeId, {name?, entry, states, transitions}) -> bool",
+          "Installs an authored state machine, replacing the generated default. REFUSED, with "
+          "the reason, on: a condition outside the CLOSED vocabulary (the message names the "
+          "offending text and lists the six forms — `speed > x`, `speed < x`, `grounded`, "
+          "`!grounded`, `clipEnded(fraction)`, `jumpRequested`), a `from`/`to`/`entry` that "
+          "names no state, a state that resolves to no clip (an empty clip set is a FROZEN "
+          "pose, not a bind pose), a blend space with fewer than two samples or with sample "
+          "positions that are not strictly increasing, a negative blend duration, or a "
+          "transition from a state to itself. Nothing changes on a refusal. Undoable.",
+          Needs::Document },
+        { "clipRoles", "avatar.clipRoles(nodeId) -> {idle, walk, run, jumpStart, fallLoop, land, clips:[{name, length}]}",
+          "The role -> clip-name binding the default asset is built from (spec §7.4), plus the "
+          "clips the character actually carries. Populated by TOLERANT NAME MATCHING at spawn "
+          "and re-run whenever a clip is loaded onto an already-spawned character: it works on "
+          "words rather than equality because Mixamo names are what they are, and it settles "
+          "the overlaps by resolving land -> jump-start -> fall-loop -> run -> walk -> idle "
+          "(so 'Falling To Landing' is a landing and 'Falling Idle' is a fall). An UNBOUND role "
+          "is an empty string and that is not an error: the default asset degrades — no `run` "
+          "gives a two-sample blend space, no `land` skips the Land state entirely.",
+          Needs::Document },
+        { "setClipRole", "avatar.setClipRole(nodeId, role, clipName) -> bool",
+          "Binds one role by hand: `idle`, `walk`, `run`, `jumpStart` (or `jump-start`), "
+          "`fallLoop` (or `fall-loop`), `land`. An empty clipName UNBINDS the role, which is "
+          "how you tell the default asset to skip a state. A hand-bound role is never clobbered "
+          "by a later automatic re-match. Regenerates the default asset when that is what is "
+          "installed, and leaves an authored asset alone. Undoable.",
           Needs::Document },
     };
 }
@@ -662,6 +718,17 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     movement->fitCapsuleToNode(node);
     if (auto mesh = findRiggedMesh(node)) avatar::sockets::installBuiltIns(mesh);
 
+    // THE LOCOMOTION STATE MACHINE (§7, Stage 4), installed at the same moment
+    // and on the same node. `refreshClips` reads the character's clips, runs
+    // the tolerant role matcher over their names and builds the shipped
+    // "Biped Locomotion" default from whatever bound — so a spawned character
+    // is already driving a state machine with ZERO authoring, which is L4's
+    // whole "hide the crud" requirement. A character whose clips bind no role
+    // gets an EMPTY asset and idles at bind pose: a degradation, not an error.
+    auto loco = iris::AvatarLocomotionPtr(new iris::AvatarLocomotion());
+    node->setLocomotionComponent(loco);
+    loco->refreshClips(node, movement->params().walkSpeed, movement->params().runSpeed);
+
     // R6, ANSWERED: an avatar spawned WHILE PLAYING registers with the running
     // world on the spot rather than being refused. Refusing would have meant a
     // script could not spawn a character into a running game at all, and the
@@ -673,8 +740,18 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         auto weak = node.toWeakRef();
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("avatar component"),
-            [weak, movement]() { if (auto n = weak.toStrongRef()) n->setAvatarComponent(movement); },
-            [weak]() { if (auto n = weak.toStrongRef()) n->setAvatarComponent(iris::AvatarMovementPtr()); }));
+            [weak, movement, loco]() {
+                if (auto n = weak.toStrongRef()) {
+                    n->setAvatarComponent(movement);
+                    n->setLocomotionComponent(loco);
+                }
+            },
+            [weak]() {
+                if (auto n = weak.toStrongRef()) {
+                    n->setAvatarComponent(iris::AvatarMovementPtr());
+                    n->setLocomotionComponent(iris::AvatarLocomotionPtr());
+                }
+            }));
     }
     return node->getGUID();
 }
@@ -753,6 +830,13 @@ QVariantMap AvatarApi::setMovement(const QString &nodeId, const QVariantMap &val
 
     movement->setParams(p);
     const iris::AvatarMovementParams after = movement->params();
+    // THE BLEND SPACE'S SAMPLE POSITIONS ARE walkSpeed AND runSpeed (§7.2), so
+    // a knob edit has to regenerate the generated default asset or the space
+    // keeps bracketing against the speeds the character no longer has. An
+    // AUTHORED asset is left alone — refreshDefaultAsset is a no-op for it —
+    // and a running character keeps its state rather than being thrown back to
+    // entry by a slider drag.
+    if (auto *loco = node->locomotion()) loco->refreshDefaultAsset(after.walkSpeed, after.runSpeed);
 
     if (host.services && host.services->undo) {
         auto weak = node.toWeakRef();
@@ -876,6 +960,8 @@ QVariantList AvatarApi::list()
                     { "grounded", s.grounded },
                     { "mode", s.mode == iris::AvatarMovementMode::Walking
                                   ? QStringLiteral("walking") : QStringLiteral("falling") },
+                    { "state", child->locomotion() ? child->locomotion()->currentState()
+                                                   : QString() },
                 });
             }
             walk(child);
@@ -929,4 +1015,209 @@ QVariantMap AvatarApi::followCamera(const QVariantMap &values)
     out["rotation"] = QVariantMap{ { "x", double(rot.x()) }, { "y", double(rot.y()) },
                                    { "z", double(rot.z()) }, { "w", double(rot.scalar()) } };
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// THE STATE MACHINE (AVATAR_LOCOMOTION_SPEC §7, Stage 4)
+//
+// Thin, for the same reason possession's verbs are thin: everything these
+// report has to be assertable in a headless document run with no window, no
+// engine and no display, so the machine itself lives on iris::AvatarLocomotion
+// and these verbs are a JSON skin over it. The asset's JSON grammar is the
+// DOCUMENT's (iris::locomotionAssetToJson / FromJson) — the same code the scene
+// writer and reader use — so a scene file and this verb cannot drift apart.
+
+iris::AvatarLocomotion *AvatarApi::locomotionOrFail(const char *verb, const QString &nodeId,
+                                                    iris::SceneNodePtr *nodeOut)
+{
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) {
+        record(QStringLiteral("%1: no scene is open").arg(QLatin1String(verb)));
+        return nullptr;
+    }
+    auto node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) {
+        record(QStringLiteral("%1: no node with id '%2'").arg(QLatin1String(verb), nodeId));
+        return nullptr;
+    }
+    if (nodeOut) *nodeOut = node;
+    return node->locomotion();
+}
+
+QVariantMap AvatarApi::locomotionState(const QString &nodeId)
+{
+    QVariantMap out;
+    iris::SceneNodePtr node;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.locomotionState: no scene is open"); return out; }
+    node = scriptmod::findNodeByGuid(scene->getRootNode(), nodeId);
+    if (!node) {
+        record(QStringLiteral("avatar.locomotionState: no node with id '%1'").arg(nodeId));
+        return out;
+    }
+    if (!node->hasAvatarComponent()) return out;   // not an avatar: empty, not an error
+
+    // THE §5 CONTRACT, straight off the movement component — the same struct
+    // the state machine read this step, never a re-derivation.
+    const iris::AvatarLocomotionState &s = node->avatar()->state();
+    out["speed"] = double(s.speed);
+    out["moveInput"] = QVariantMap{ { "x", double(s.moveInput.x()) },
+                                    { "y", double(s.moveInput.y()) },
+                                    { "z", double(s.moveInput.z()) } };
+    out["grounded"] = s.grounded;
+    out["verticalVelocity"] = double(s.verticalVelocity);
+    out["jumpRequested"] = s.jumpRequested;
+    out["mode"] = s.mode == iris::AvatarMovementMode::Walking ? QStringLiteral("walking")
+                                                              : QStringLiteral("falling");
+
+    QVariantList weights;
+    if (auto *loco = node->locomotion()) {
+        out["state"] = loco->currentState();
+        out["previousState"] = loco->previousState();
+        out["transitioning"] = loco->isTransitioning();
+        out["transitionProgress"] = double(loco->transitionProgress());
+        out["transitionDuration"] = double(loco->transitionDuration());
+        out["phase"] = double(loco->statePhase());
+        for (const auto &w : loco->weights())
+            weights.append(QVariantMap{ { "clip", w.clip },
+                                        { "weight", double(w.weight) },
+                                        { "time", double(w.time) },
+                                        { "looping", w.looping } });
+    } else {
+        out["state"] = QString();
+        out["previousState"] = QString();
+        out["transitioning"] = false;
+        out["transitionProgress"] = 1.0;
+        out["transitionDuration"] = 0.0;
+        out["phase"] = 0.0;
+    }
+    out["weights"] = weights;
+    return out;
+}
+
+QVariantMap AvatarApi::locomotionAsset(const QString &nodeId)
+{
+    QVariantMap out;
+    auto *loco = locomotionOrFail("avatar.locomotionAsset", nodeId);
+    if (!loco) return out;
+    out = iris::locomotionAssetToJson(loco->asset()).toVariantMap();
+    out["default"] = loco->usesDefaultAsset();
+    return out;
+}
+
+bool AvatarApi::setLocomotionAsset(const QString &nodeId, const QVariantMap &values)
+{
+    iris::SceneNodePtr node;
+    auto *loco = locomotionOrFail("avatar.setLocomotionAsset", nodeId, &node);
+    if (!loco) {
+        if (node)
+            return record(QStringLiteral("avatar.setLocomotionAsset: '%1' carries no locomotion "
+                                         "component (avatar.spawn installs one)")
+                              .arg(node->getName()));
+        return false;
+    }
+
+    // ONE grammar (the document's), so a refusal here reads exactly like a
+    // refusal from a hand-edited scene file, and gate S6's round trip covers
+    // both paths because they ARE one path.
+    const QJsonObject obj =
+        QJsonObject::fromVariantMap(scriptmod::normalizeJs(values).toMap());
+    iris::LocomotionAsset asset;
+    QString err;
+    if (!iris::locomotionAssetFromJson(obj, asset, &err))
+        return record(QStringLiteral("avatar.setLocomotionAsset: %1").arg(err));
+
+    const iris::LocomotionAsset before = loco->asset();
+    const bool wasDefault = loco->usesDefaultAsset();
+    if (!loco->setAsset(asset, &err))
+        return record(QStringLiteral("avatar.setLocomotionAsset: %1").arg(err));
+
+    if (host.services && host.services->undo) {
+        auto weak = node.toWeakRef();
+        host.services->undo->push(new NodeEditCommand(
+            QStringLiteral("locomotion asset"),
+            [weak, asset]() {
+                if (auto n = weak.toStrongRef())
+                    if (auto *l = n->locomotion()) { QString e; l->setAsset(asset, &e); }
+            },
+            [weak, before, wasDefault]() {
+                if (auto n = weak.toStrongRef())
+                    if (auto *l = n->locomotion()) {
+                        // The FLAG travels with the asset: undoing back to the
+                        // generated default has to restore "this is the
+                        // default" too, or the next role bind would refuse to
+                        // regenerate what it is looking at.
+                        QString e;
+                        l->restoreAsset(before, wasDefault, &e);
+                    }
+            }));
+    }
+    return true;
+}
+
+QVariantMap AvatarApi::clipRoles(const QString &nodeId)
+{
+    QVariantMap out;
+    iris::SceneNodePtr node;
+    auto *loco = locomotionOrFail("avatar.clipRoles", nodeId, &node);
+    if (!loco) return out;
+
+    // The table is refreshed first: a clip loaded onto the character after it
+    // was spawned must show up here, and re-matching is what the physics tick
+    // would have done on the next step anyway.
+    const iris::AvatarMovementParams p = node->hasAvatarComponent()
+                                             ? node->avatar()->params()
+                                             : iris::AvatarMovementParams();
+    loco->refreshClips(node, p.walkSpeed, p.runSpeed);
+
+    const iris::ClipRoles &r = loco->roles();
+    out["idle"] = r.get(iris::ClipRole::Idle);
+    out["walk"] = r.get(iris::ClipRole::Walk);
+    out["run"] = r.get(iris::ClipRole::Run);
+    out["jumpStart"] = r.get(iris::ClipRole::JumpStart);
+    out["fallLoop"] = r.get(iris::ClipRole::FallLoop);
+    out["land"] = r.get(iris::ClipRole::Land);
+
+    QVariantList clips;
+    const QMap<QString, float> &lengths = loco->clipLengths();
+    for (auto it = lengths.constBegin(); it != lengths.constEnd(); ++it)
+        clips.append(QVariantMap{ { "name", it.key() }, { "length", double(it.value()) } });
+    out["clips"] = clips;
+    return out;
+}
+
+bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QString &clipName)
+{
+    iris::SceneNodePtr node;
+    auto *loco = locomotionOrFail("avatar.setClipRole", nodeId, &node);
+    if (!loco) {
+        if (node)
+            return record(QStringLiteral("avatar.setClipRole: '%1' carries no locomotion "
+                                         "component (avatar.spawn installs one)")
+                              .arg(node->getName()));
+        return false;
+    }
+    iris::ClipRole r;
+    if (!iris::clipRoleFromName(role, r))
+        return record(QStringLiteral("avatar.setClipRole: '%1' is not a role (known: idle, "
+                                     "walk, run, jumpStart, fallLoop, land)").arg(role));
+
+    const QString before = loco->roles().get(r);
+    loco->setClipRole(r, clipName);
+    if (host.services && host.services->undo) {
+        auto weak = node.toWeakRef();
+        host.services->undo->push(new NodeEditCommand(
+            QStringLiteral("clip role"),
+            [weak, r, clipName]() {
+                if (auto n = weak.toStrongRef())
+                    if (auto *l = n->locomotion()) l->setClipRole(r, clipName);
+            },
+            [weak, r, before]() {
+                if (auto n = weak.toStrongRef())
+                    if (auto *l = n->locomotion()) l->setClipRole(r, before);
+            }));
+    }
+    return true;
 }

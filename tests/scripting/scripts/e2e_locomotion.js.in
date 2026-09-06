@@ -1,0 +1,184 @@
+// scripting.e2e.locomotion — AVATAR_LOCOMOTION_SPEC Stage 4 through the VERBS
+// and through a REAL scene file.
+//
+// The document-level gates S1-S7 live in the `avatar.locomotion` suite, which
+// drives iris::Scene and the state machine directly. This one exists for the
+// claims that suite CANNOT make, because they are not document claims:
+//
+//   * the four Stage 4 verbs really exist, on the real registry, with the
+//     shapes docs/SCRIPTING.md advertises;
+//   * a character imported through the ONE import pipeline is ALREADY driving
+//     the shipped default asset with zero authoring (L4's "hide the crud"),
+//     and degrades honestly when its clips bind only one role — rig2.glb ships
+//     exactly two clips, "Idle" and the junk name "mixamo.com", which is the
+//     Mixamo reality §7.4 is written for;
+//   * S6 THROUGH A REAL SCENE FILE: the asset, its role bindings and the
+//     "is this the generated default" flag survive project.save + close + open.
+//     Only a real project round trip exercises SceneWriter's and SceneReader's
+//     locomotion hunks.
+//
+// --headless: every verb here is Needs::Document.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+project.create("locomotion");
+
+var guid = assets.import("@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb");
+assert(guid.length > 10, "assets.import(rig2.glb) -> " + guid);
+assert(assets.addToProject(guid) === guid, "the rig joins the project");
+
+var av = avatar.spawn(guid, { position: { x: 0, y: 0, z: 0 } });
+assert(av && av.length > 10, "avatar.spawn -> " + av);
+
+// ---- clip roles: tolerant matching against a REAL Mixamo-shaped file -------
+
+var roles = avatar.clipRoles(av);
+console.log("avatar.clipRoles: " + JSON.stringify(roles));
+assert(roles.idle === "Idle", "'Idle' bound the idle role by name matching, with no authoring");
+assert(roles.walk === "" && roles.run === "" && roles.jumpStart === ""
+       && roles.fallLoop === "" && roles.land === "",
+       "the junk name 'mixamo.com' bound NOTHING — a missing role is not an error");
+assert(roles.clips.length === 2, "both of the file's clips are reported with their lengths");
+
+// ---- the default asset, generated, degraded, and honest about it -----------
+
+var asset = avatar.locomotionAsset(av);
+console.log("avatar.locomotionAsset: " + JSON.stringify(asset));
+assert(asset.name === "Biped Locomotion", "the shipped default asset is installed");
+assert(asset["default"] === true, "...and it reports itself as the GENERATED default");
+assert(asset.entry === "Grounded", "its entry state is Grounded");
+assert(asset.states.length === 1 && asset.states[0].source.kind === "clip",
+       "S4 through the verbs: ONE bound role degrades Grounded to a plain clip state "
+       + "(a one-sample blend space is refused, correctly — there is nothing to blend)");
+assert(asset.transitions.length === 0,
+       "...and no transition survives that names a state that does not exist");
+
+// A hand-bound role regenerates the default asset into a real blend space.
+assert(avatar.setClipRole(av, "walk", "mixamo.com"), "avatar.setClipRole(walk, 'mixamo.com')");
+asset = avatar.locomotionAsset(av);
+assert(asset.states[0].source.kind === "blendspace"
+       && asset.states[0].source.samples.length === 2,
+       "binding a second role regenerates Grounded as a TWO-sample blend space");
+assert(asset.states[0].source.samples[0].clip === "Idle"
+       && asset.states[0].source.samples[1].clip === "mixamo.com",
+       "...idle at position 0, walk at walkSpeed, in order");
+assert(asset["default"] === true, "...and it is still the generated default");
+
+var badRole = false;
+try { avatar.setClipRole(av, "sprinting", "Idle"); } catch (e) { badRole = true; }
+assert(badRole || avatar.clipRoles(av).run === "", "an unknown role name is refused, not guessed");
+
+// ---- S5 through the verb: the closed vocabulary refuses, and says what ------
+
+var authored = {
+    name: "Authored",
+    entry: "Stand",
+    states: [
+        { name: "Stand", loop: true, source: { kind: "clip", clip: "Idle", speed: 1 } },
+        { name: "Move", loop: true, source: { kind: "clip", clip: "mixamo.com", speed: 1 } }
+    ],
+    transitions: [
+        { from: "Stand", to: "Move", condition: "speed > 0.5", blendDuration: 0.2 },
+        { from: "Move", to: "Stand", condition: "speed < 0.5", blendDuration: 0.2 }
+    ]
+};
+
+var broken = JSON.parse(JSON.stringify(authored));
+broken.transitions[0].condition = "speed >= 0.5";
+var refused = false;
+try { refused = !avatar.setLocomotionAsset(av, broken); } catch (e) { refused = true; }
+assert(refused, "an out-of-vocabulary condition is REFUSED");
+assert(avatar.locomotionAsset(av).name === "Biped Locomotion",
+       "...and the refusal changed nothing");
+
+var brokenState = JSON.parse(JSON.stringify(authored));
+brokenState.entry = "Nowhere";
+refused = false;
+try { refused = !avatar.setLocomotionAsset(av, brokenState); } catch (e) { refused = true; }
+assert(refused, "an entry that names no state is refused too");
+
+// ---- the authored asset installs, and stops being 'default' ---------------
+
+assert(avatar.setLocomotionAsset(av, authored), "avatar.setLocomotionAsset(valid)");
+var installed = avatar.locomotionAsset(av);
+assert(installed.name === "Authored", "the authored asset is what reads back");
+assert(installed["default"] === false,
+       "...and it is no longer the generated default, so no knob change can overwrite it");
+assert(installed.transitions[0].condition === "speed > 0.5",
+       "the condition round-trips as its CANONICAL text");
+
+// ---- the §5 contract, through avatar.locomotionState ----------------------
+
+var st = avatar.locomotionState(av);
+console.log("avatar.locomotionState: " + JSON.stringify(st));
+assert(typeof st.speed === "number" && typeof st.grounded === "boolean"
+       && typeof st.verticalVelocity === "number" && typeof st.jumpRequested === "boolean"
+       && st.moveInput && typeof st.moveInput.x === "number",
+       "the five §5 parameters are all reported");
+assert(st.mode === "walking" || st.mode === "falling", "...plus the movement mode");
+// NOTE (finding, reported upward, NOT this lane's): a QVariantList nested
+// inside a verb's returned map reaches JS as an ARRAY-LIKE, not as a real
+// Array — `Array.isArray` is false on it although `.length` and indexing both
+// work and JSON.stringify prints `[]`. It is registry-wide (every verb that
+// returns a map containing a list does it), so the check below is on `.length`.
+assert(typeof st.state === "string" && typeof st.transitioning === "boolean"
+       && typeof st.transitionProgress === "number" && typeof st.phase === "number"
+       && st.weights.length !== undefined,
+       "...plus what the state machine did with them");
+// The weight list is what was published by the LAST step. Outside play nothing
+// has stepped, so it is empty — and that is the honest answer rather than a
+// pose invented for a character nobody is driving.
+assert(st.weights.length === 0, "outside play nothing has stepped, so no weights are published");
+assert(avatar.list()[0].state === st.state,
+       "avatar.list's `state` column and locomotionState agree");
+
+// A node with no avatar component reports nothing rather than throwing.
+var plain = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];
+if (plain) {
+    var empty = avatar.locomotionState(plain.id);
+    assert(!empty || Object.keys(empty).length === 0,
+           "a node with no avatar component reports an EMPTY state, not an error");
+}
+
+// ---- S6 THROUGH A REAL SCENE FILE -----------------------------------------
+
+var pguid = project.list().filter(function (p) { return p.name === "locomotion"; })[0].guid;
+var beforeAsset = JSON.stringify(avatar.locomotionAsset(av));
+var beforeRoles = JSON.stringify(avatar.clipRoles(av));
+
+assert(project.save(), "project.save");
+assert(project.close(), "project.close");
+assert(project.open(pguid), "project.open");
+
+var reopened = avatar.list();
+assert(reopened.length === 1, "the avatar came back");
+var av2 = reopened[0].id;
+assert(JSON.stringify(avatar.locomotionAsset(av2)) === beforeAsset,
+       "S6: the AUTHORED asset survived save + close + open, byte for byte");
+assert(JSON.stringify(avatar.clipRoles(av2)) === beforeRoles,
+       "S6: ...and so did every role binding");
+assert(avatar.locomotionAsset(av2)["default"] === false,
+       "S6: ...and the 'this is authored, do not regenerate it' flag");
+
+// And the generated default round-trips too — it is written to the file
+// explicitly rather than regenerated on load, so a later build changing the
+// default cannot silently change an existing scene.
+var back = {
+    name: "Biped Locomotion", entry: "Grounded",
+    states: [{ name: "Grounded", loop: true,
+               source: { kind: "blendspace", syncClips: true,
+                         samples: [{ clip: "Idle", position: 0, authoredSpeed: 0 },
+                                   { clip: "mixamo.com", position: 2, authoredSpeed: 2 }] } }],
+    transitions: []
+};
+assert(avatar.setLocomotionAsset(av2, back), "install a blend-space asset");
+var blendBefore = JSON.stringify(avatar.locomotionAsset(av2));
+assert(project.save() && project.close() && project.open(pguid), "save/close/open again");
+var av3 = avatar.list()[0].id;
+assert(JSON.stringify(avatar.locomotionAsset(av3)) === blendBefore,
+       "S6: a BLEND SPACE — samples, positions and authoredSpeed — round-trips too");
+
+console.log("e2e_locomotion: ALL OK");
