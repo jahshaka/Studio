@@ -24,7 +24,9 @@ For more information see the LICENSE file
 
 #include "data/project.h"
 #include "export/embeddedpreview.h"
+#include "modules/publish/publishapi.h"
 #include "modules/publish/publishrecord.h"
+#include "scripting/scriptengine.h"
 #include "export/exportservice.h"
 #include "export/previewlauncher.h"
 #include "services/sceneeditservice.h"
@@ -488,4 +490,12 @@ void PublishPage::onOpenFolder()
 QWidget *PublishModule::createPage()
 {
     return new PublishPage(host, host.shellWidget);
+}
+
+void PublishModule::registerApi(ScriptEngine &engine)
+{
+    // The module's own verbs, registered exactly as the materials module's are
+    // — appended after the core registry, so the order every generated doc and
+    // tool schema already has stays unchanged.
+    engine.addModule(new PublishApi(engine.scriptHost(), host));
 }
