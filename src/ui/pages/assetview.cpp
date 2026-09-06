@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QTimer>
 #include "ui/dialogs/progressdialog.h"
 #include "data/settingsmanager.h"
+#include "services/assettags.h"
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 
@@ -1143,44 +1144,28 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     });
 
 	connect(updateAsset, &QPushButton::pressed, [this]() {
+		// ONE path for name + tags (assettags, 2026-09-06 audit F3): this
+		// button, assets.rename and assets.setTags all write through the same
+		// service, which is also where the "changing one must not wipe the
+		// other" rule lives. The inline JSON-blob builder this replaced was
+		// the only tag writer in the product.
+		const QStringList typedTags = tagModelField->text().split(QLatin1Char(','),
+																  Qt::SkipEmptyParts);
+		const QString newName = renameModelField->text();
+		assettags::write(db, selectedGridItem->metadata["guid"].toString(), newName,
+						 typedTags);
+
 		QJsonObject tags;
-		QJsonArray actualTags;
-
-		// parse tags
-		QString stringIn = tagModelField->text();
-		if (!stringIn.isEmpty()) {
-			std::vector<QString> commaSeparated(1);
-			int commaCounter = 0;
-			for (int i = 0; i<stringIn.size(); i++) {
-                if (stringIn[i] == ',') {
-					commaSeparated.push_back("");
-					commaCounter++;
-				}
-				else {
-					commaSeparated.at(commaCounter) += stringIn[i];
-				}
-			}
-
-			for (const QString &tag : commaSeparated) {
-				if (!tag.isEmpty()) actualTags.append(tag);
-			}
-
+		const QStringList stored = assettags::tagsOf(db, selectedGridItem->metadata["guid"].toString());
+		if (!stored.isEmpty()) {
+			QJsonArray actualTags;
+			for (const QString &tag : stored) actualTags.append(tag);
 			tags["tags"] = actualTags;
 		}
 
-		QJsonDocument tagsDoc(tags);
-
-		auto ext = QFileInfo(selectedGridItem->metadata["full_filename"].toString()).suffix();
-
-		db->updateAssetMetadata(
-			selectedGridItem->metadata["guid"].toString(),
-			renameModelField->text(),
-            tagsDoc.toJson()
-		);
-
 		auto metadata = selectedGridItem->metadata;
-		metadata["name"] = renameModelField->text();
-		metadata["full_filename"] = IrisUtils::buildFileName(renameModelField->text(), QFileInfo(selectedGridItem->metadata["full_filename"].toString()).suffix());
+		metadata["name"] = newName;
+		metadata["full_filename"] = IrisUtils::buildFileName(newName, QFileInfo(selectedGridItem->metadata["full_filename"].toString()).suffix());
 
 		selectedGridItem->updateMetadata(metadata, tags);
 		fetchMetadata(selectedGridItem);

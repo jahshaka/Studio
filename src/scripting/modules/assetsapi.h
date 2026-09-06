@@ -37,7 +37,11 @@ public:
     Q_INVOKABLE QVariantList list(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap metadata(const QString &guid);
     Q_INVOKABLE QString import(const QString &path);
-    Q_INVOKABLE QString importFile(const QString &path, int drawerId = -1);
+    Q_INVOKABLE QString importFile(const QString &path, int drawerId = -1,
+                                   const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE bool rename(const QString &guid, const QString &name);
+    Q_INVOKABLE QVariantList setTags(const QString &guid, const QVariant &tags);
+    Q_INVOKABLE QVariantList tags(const QString &guid);
     Q_INVOKABLE QVariantList drawers();
     Q_INVOKABLE int createDrawer(const QString &name, int parentId = -1);
     Q_INVOKABLE bool renameDrawer(int id, const QString &name);
