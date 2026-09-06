@@ -52,3 +52,21 @@ set_tests_properties(log.events PROPERTIES
     TIMEOUT 300
     LABELS "log")
 
+# log.engine — the engine half (SESSION_LOG_SPEC §10 phase 3 gate): the Ogre
+# LogListener, the device rows, the per-session ogre sibling and the pump's
+# dedupe surviving absorption. The ONE log suite that boots a real render
+# system, so it needs a reachable display like every other engine suite; it
+# then runs a SECOND time under --headless to prove the same block degrades
+# cleanly on the NULL render system instead of crashing.
+set(_lg_home ${CMAKE_CURRENT_BINARY_DIR}/log-engine-home)
+file(MAKE_DIRECTORY ${_lg_home}/run)
+add_test(NAME log.engine
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_engine.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_engine.js"
+         WORKING_DIRECTORY ${_lg_home}/run)
+set_tests_properties(log.engine PROPERTIES
+    ENVIRONMENT "HOME=${_lg_home}"
+    TIMEOUT 400
+    LABELS "log")
+

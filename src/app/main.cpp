@@ -149,6 +149,10 @@ int main(int argc, char *argv[])
         JahLog::start(logOpts);                    // applies the compiled defaults
         JahLog::applyIniLevels(SettingsManager::getDefaultManager()->settings);
         for (const QString &spec : cli.logLevels) JahLog::applyLevelSpec(spec);
+        // The crash handler gets the path and the raw descriptor, and nothing
+        // else (spec §3.8-4, §9-R3): it runs in signal context, so it may
+        // write(2) into the log but may never CALL into it.
+        crashHandlerSetSessionLog(qPrintable(JahLog::sessionFilePath()), JahLog::rawFd());
     }
     // The funnel is what makes the ~61 existing qDebug/qWarning call sites land
     // in the file with zero edits to any of them — LoadTimeline's open profile,

@@ -20,4 +20,17 @@ For more information see the LICENSE file
 /// which is why the ~1/65 startup crash went undiagnosed for days.
 void installCrashHandler();
 
+/// Tells the handler where this run's SESSION log is, so the crash report can
+/// name it and so the marker below has somewhere to go
+/// (SESSION_LOG_SPEC §6, §3.8-4). Call once, right after JahLog::start().
+///
+/// TWO POINTERS AND NOTHING ELSE. The path is copied into a static char[] and
+/// the descriptor into a static int, because the handler runs in SIGNAL
+/// CONTEXT: it may call write(2) and backtrace_symbols_fd and nothing else.
+/// It must NEVER call JahLog — that takes a mutex and allocates, which is the
+/// malloc-in-a-signal-handler deadlock this whole file exists to avoid
+/// (spec §9-R3). A builder "improving" the handler to use the nice new logger
+/// reintroduces it.
+void crashHandlerSetSessionLog(const char *path, int fd);
+
 #endif // CRASHHANDLER_H
