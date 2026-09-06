@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 
 #include "irisgl/document/physics/avatarmovement.h"
+#include "irisgl/document/animation/locomotion.h"
 #include "io/materialreader.h"
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
@@ -710,6 +711,46 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         p.capsuleHeight = float(a["capsuleHeight"].toDouble(p.capsuleHeight));
         movement->setParams(p);
         sceneNode->setAvatarComponent(movement);
+    }
+
+    // THE LOCOMOTION STATE MACHINE (AVATAR_LOCOMOTION_SPEC §7). The roles a
+    // file recorded are restored as MANUAL bindings: they were resolved once
+    // and saved, so the auto-matcher must not clobber them the next time a clip
+    // is loaded. A refused asset (a hand-edited file with a condition outside
+    // the closed vocabulary) is REPORTED and the character falls back to the
+    // generated default rather than loading with no state machine at all.
+    if (nodeObj.contains(QLatin1String("locomotion"))) {
+        const QJsonObject l = nodeObj["locomotion"].toObject();
+        // The blend space's sample POSITIONS follow the movement knobs, so the
+        // degradation path needs the knobs this very node just read (the avatar
+        // block above runs first, always — it is written first too).
+        const iris::AvatarMovementParams mp = sceneNode->avatar()
+                                                  ? sceneNode->avatar()->params()
+                                                  : iris::AvatarMovementParams();
+        auto loco = iris::AvatarLocomotionPtr(new iris::AvatarLocomotion());
+        iris::ClipRoles roles;
+        const QJsonObject rolesObj = l["roles"].toObject();
+        for (int i = 0; i < iris::kClipRoleCount; ++i) {
+            const auto role = iris::ClipRole(i);
+            const QString key = QLatin1String(iris::clipRoleName(role));
+            if (rolesObj.contains(key)) roles.set(role, rolesObj[key].toString());
+        }
+        loco->markRolesFromFile(roles, l["default"].toBool(true));
+        if (l.contains(QLatin1String("asset"))) {
+            iris::LocomotionAsset asset;
+            QString err;
+            if (iris::locomotionAssetFromJson(l["asset"].toObject(), asset, &err)) {
+                loco->setAssetPreservingDefaultFlag(asset, &err);
+            } else {
+                qWarning("SceneReader: node '%s' has an invalid locomotion asset (%s) — "
+                         "falling back to the generated default",
+                         qUtf8Printable(sceneNode->getName()), qUtf8Printable(err));
+                loco->setDefaultAsset(roles, mp.walkSpeed, mp.runSpeed);
+            }
+        } else {
+            loco->setDefaultAsset(roles, mp.walkSpeed, mp.runSpeed);
+        }
+        sceneNode->setLocomotionComponent(loco);
     }
 
 	sceneNode->isPhysicsBody = nodeObj["physicsObject"].toBool();

@@ -128,3 +128,35 @@ add_test(NAME avatar.possession COMMAND test_avatar_possession
 set_tests_properties(avatar.possession PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 300 LABELS "avatar")
 jah_no_display(avatar.possession)
+
+# avatar.locomotion — AVATAR_LOCOMOTION_SPEC Stage 4, gates S1-S7.
+#
+# The locomotion state machine (§7): the closed condition vocabulary and its
+# parser, first-match-wins evaluation, the cross-fade clock, clip roles and
+# their tolerant name matching, the shipped "Biped Locomotion" default asset and
+# every degradation of it, the JSON grammar the scene file and the verbs share,
+# and determinism under a fixed dt.
+#
+# Driven through the SAME real seam avatar.movement uses — iris::Scene ->
+# Environment::stepSimulation -> updateAvatarMovement -> the state machine
+# stepped immediately after the movement that published its inputs — except
+# where a gate is pure arithmetic (S2's blend clock), which is driven directly
+# with a synthetic §5 contract and says so at the section.
+#
+# No engine rendering, no display: the document graph's NULL render system is
+# the only engine here, and jah_no_display below proves it.
+add_executable(test_avatar_locomotion test_avatar_locomotion.cpp)
+set_target_properties(test_avatar_locomotion PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_avatar_locomotion PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_avatar_locomotion PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_avatar_locomotion PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_avatar_locomotion)
+add_test(NAME avatar.locomotion COMMAND test_avatar_locomotion
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(avatar.locomotion PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 300 LABELS "avatar")
+jah_no_display(avatar.locomotion)

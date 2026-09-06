@@ -572,7 +572,26 @@ set_tests_properties(scripting.e2e.possession PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
+# AVATAR_LOCOMOTION_SPEC Stage 4 through the VERBS and a REAL scene file: the
+# four state-machine verbs, the shipped default asset generated for an imported
+# character with zero authoring, its degradation when only one role binds
+# (rig2.glb ships "Idle" and the junk name "mixamo.com" — the Mixamo reality
+# §7.4 is written for), the closed vocabulary's refusal, and gate S6's save +
+# close + open, which is the only thing that exercises SceneWriter's and
+# SceneReader's locomotion hunks.
+configure_file(scripts/e2e_locomotion.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-locomotion)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.locomotion
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_locomotion.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.locomotion PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 300)
+
 jah_no_display(
+    scripting.e2e.locomotion
     scripting.e2e.static_semantics
     scripting.e2e.anim
     scripting.e2e.drawers
