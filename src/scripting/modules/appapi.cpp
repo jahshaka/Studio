@@ -201,6 +201,38 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
+        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries}",
+          "WHAT THE TEXTURE LOADER IS DOING (SPECS/THREADING_ADOPTION_SPEC.md P2). Since the "
+          "batched-loading phase, loading a texture SCHEDULES it and the frame edge waits once "
+          "for all of them, instead of the caller blocking on each texture in turn — so N "
+          "textures in a scene decode concurrently rather than one at a time. "
+          "`multiLoadThreads` is how many threads the decode pool has (0 = the feature is off "
+          "and Ogre's single background streaming thread does everything; the default is half "
+          "the machine's threads clamped to 2..6, and JAH_TEXTURE_MULTILOAD overrides it for "
+          "measurement). `doneStreaming` is true when nothing is queued or in flight — it is "
+          "normally true, because renderOneFrame waits, so a false here means you asked in the "
+          "middle of an open. `loadRequests` is a MONOTONIC counter of load requests this "
+          "process has made: only differences mean anything, and it moving across a render is "
+          "exactly the condition the offscreen readbacks' double-render guard tests. "
+          "`metadataCacheEntries` and `channelCacheEntries` are the two halves of the persistent "
+          "texture cache — resolution/format/pool per path (Ogre's own, which lets the main "
+          "thread reserve the right pool slice before anything is decoded) and our path -> "
+          "channel-count sidecar (which is what stops every image being decoded twice). Both are "
+          "derived data in the shader cache's directory and both die with the Clear Cache "
+          "button. NOTE metadataCacheEntries is the one expensive field: the backend exposes no "
+          "size() for that map, so asking exports it to count the rows.",
+          Needs::Engine },
+        { "waitForTextures", "app.waitForTextures() -> {waitedMs, loadRequests, doneStreaming}",
+          "Blocks until every scheduled texture load has finished, and reports how long that "
+          "took in `waitedMs` (0 when there was nothing to wait for). NOT NEEDED before an "
+          "ordinary frame — the render loop already waits at the head of every frame, which is "
+          "what keeps the pixel suites byte-exact. It is here for two callers: a script that "
+          "wants a provably complete picture before a readback that does not go through the "
+          "engine's own guard, and the A/B harness behind the batched-loading measurement, for "
+          "which `waitedMs` IS the number. `loadRequests` is the monotonic counter after the "
+          "wait, so a script can bracket an open with two calls and say how many textures it "
+          "cost.",
+          Needs::Engine },
         { "apiProblems", "app.apiProblems() -> [string]",
           "Everything wrong with the scripting API's OWN metadata, as sentences: a verb with no "
           "doc string or signature, a duplicate name, a module that registers nothing, or — the "
@@ -536,5 +568,32 @@ QVariantMap AppApi::threading()
         scenes.insert(QString::fromStdString(s.first), s.second);
     out.insert("sceneWorkerThreads", scenes);
     out.insert("hlmsThreads", t.hlmsThreads);
+    return out;
+}
+
+QVariantMap AppApi::textureStreaming()
+{
+    // Needs::Engine, same reasoning as threading(): every field comes off the
+    // boundary and zeros would read like "nothing is loading" rather than like
+    // "there is no engine in this session".
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.textureStreaming: no engine in this session"); return out; }
+    out.insert("multiLoadThreads", engine->textureMultiLoadThreads());
+    out.insert("doneStreaming", engine->texturesDoneStreaming());
+    out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
+    out.insert("metadataCacheEntries", engine->textureMetadataCacheEntries());
+    out.insert("channelCacheEntries", engine->textureChannelCacheEntries());
+    return out;
+}
+
+QVariantMap AppApi::waitForTextures()
+{
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.waitForTextures: no engine in this session"); return out; }
+    out.insert("waitedMs", engine->waitForTextureLoads());
+    out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
+    out.insert("doneStreaming", engine->texturesDoneStreaming());
     return out;
 }

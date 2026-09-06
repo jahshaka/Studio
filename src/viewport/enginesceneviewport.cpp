@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
+#include "bridge/stableoffscreenrender.h"
 #include "viewport/scenepicker.h"
 #include "player/playback.h"
 #include "irisgl/core/viewport.h"
@@ -1374,7 +1375,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
     // (fps audit F5, bridge/offscreenrenderscope.h). The shot view is
     // offscreen, so it is untouched.
     OffscreenRenderScope quiet(mEngine.get());
-    for (int i = 0; i < 2; ++i) mEngine->renderOneFrame();
+    // Plus whatever the texture load-request counter still owes
+    // (THREADING_ADOPTION_SPEC.md P2 item 4) — bridge/stableoffscreenrender.h.
+    renderStableFrames(mEngine.get());
     Image img;
     QImage result;
     if (shot->readPixels(img) && img.width && img.height) {

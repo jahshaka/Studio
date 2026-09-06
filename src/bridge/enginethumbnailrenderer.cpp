@@ -21,6 +21,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/sceneworkerthreads.h"
 #include "bridge/offscreenrenderscope.h"
+#include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
 
 using namespace jahshaka::engine;
@@ -273,7 +274,12 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // whole editor twice and blocked twice on the display's vsync — which is
     // what made a thumbnail sweep feel like a frozen application.
     OffscreenRenderScope quiet(engine.get());
-    for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+    // Two frames, plus however many more the texture load-request counter says
+    // this picture still owes (THREADING_ADOPTION_SPEC.md P2 item 4). Textures
+    // are streamed since P2, so "two frames" alone is no longer a guarantee that
+    // everything the thumbnail draws is resident — see bridge/
+    // stableoffscreenrender.h for upstream's recipe and why the minimum stays 2.
+    renderStableFrames(engine.get());
     Image img;
     const bool ok = mView->readPixels(img);
     mView->setEnabled(false);

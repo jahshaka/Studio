@@ -47,6 +47,8 @@ public:
     Q_INVOKABLE QVariantMap renderStats();
     Q_INVOKABLE QVariantMap engineObjects();
     Q_INVOKABLE QVariantMap threading();
+    Q_INVOKABLE QVariantMap textureStreaming();
+    Q_INVOKABLE QVariantMap waitForTextures();
     Q_INVOKABLE QVariantList apiProblems();
 };
 
