@@ -97,4 +97,80 @@ assert(found, "includeUnpickable reaches it");
 var misses = scene.raycast({ x: 0, y: 500, z: -10 }, { x: 0, y: 0, z: 1 });
 assert(misses.length === 0, "a clean miss returns []");
 
+// ---------------------------------------------------------------------------
+// A LOADED SCENE CLASSIFIES LIKE A BUILT ONE (2026-09-06, perf wave B).
+//
+// THE DEFECT: a freshly opened Showroom reported ZERO static nodes out of 241,
+// while the very same scene's Add-menu additions classified fine — every
+// project any user has ever opened was fully dynamic, and the whole
+// SCENE_STATIC program was doing nothing for loaded content.
+//
+// The reader's applyStaticDefaults pass was running and was not the problem;
+// `isStaticEligible()` was. It refused any node carrying an Animation OBJECT,
+// and the animation panel gives every node it is shown a channel-less
+// `Animation` which the writer then persists (31 of Showroom's 32 animations
+// had no properties and no skeletal clip at all). Rule 2 turned those misses
+// into a wipe-out: an ineligible TOP-LEVEL node stays dynamic, and
+// `canBeStatic` then refuses its entire subtree.
+//
+// Both open paths are the same four stages (MainWindow::openStage*), so this
+// covers the async open too — the sync/async split was ruled out by
+// measurement, not assumed.
+project.close();
+var reproName = "Static Reopen " + Date.now();
+var reproGuid = project.create(reproName);
+
+// Unique names, because the reopened document mints new ids and every
+// addPrimitive would otherwise leave three nodes called "Cube".
+function named(id, n) { assert(node.setProperty(id, "name", n) === true, "named " + n); return id; }
+
+var rGround = named(scene.addPrimitive("ground"), "R_ground");
+var rProp   = named(scene.addPrimitive("cube", { position: { x: 2, y: 0, z: 0 } }), "R_prop");
+named(scene.addPrimitive("sphere", { parent: rProp }), "R_propChild");
+// SHIPPED-CONTENT SHAPE: the animation panel leaves a channel-less "Animation"
+// on every node it is shown, so a real world's top-level nodes carry one. Both
+// of these did before the fix — and took the ground, the prop AND the prop's
+// child down with them.
+anim.create(rGround, "Animation");
+anim.create(rProp, "Animation");
+// The defect's shape: an animation with no channels at all. It drives nothing
+// (updateAnimation writes a transform only through hasPropertyAnim), so it must
+// not cost the node — or its subtree — its classification.
+var rIdle = named(scene.addPrimitive("cube", { position: { x: 4, y: 0, z: 0 } }), "R_emptyAnim");
+anim.create(rIdle, "Animation");
+named(scene.addPrimitive("sphere", { parent: rIdle }), "R_emptyAnimChild");
+// ...and the shape that genuinely moves: a real position track.
+var rMoving = named(scene.addPrimitive("cube", { position: { x: 6, y: 0, z: 0 } }), "R_animated");
+anim.create(rMoving, "Move");
+assert(anim.keyframe(rMoving, "position", 0) === true, "keyed a real position track");
+assert(anim.keyframe(rMoving, "position", 1) === true, "…and a second key");
+// A USER decision, which the file DOES carry and the policy must never
+// overrule (StaticOverride).
+var rPinned = named(scene.addPrimitive("cube", { position: { x: 8, y: 0, z: 0 } }), "R_pinnedDynamic");
+assert(node.setStatic(rPinned, false) === true, "pinned Dynamic by hand");
+
+assert(project.save() === true, "repro project saved");
+assert(project.close() === true, "repro project closed");
+assert(project.open(reproGuid) === true, "repro project REOPENED");
+
+function byName(n) {
+    var all = scene.nodes();
+    for (var i = 0; i < all.length; i++) if (all[i].name === n) return all[i].id;
+    throw new Error("assert failed: no node named " + n + " after reopen");
+}
+
+assert(node.isStatic(byName("R_ground")) === true,
+       "REOPENED: the ground reads static (was false — the whole defect)");
+assert(node.isStatic(byName("R_prop")) === true, "REOPENED: a loaded prop reads static");
+assert(node.isStatic(byName("R_propChild")) === true,
+       "REOPENED: a child of a loaded prop reads static (rule 2 cascades DOWN, not out)");
+assert(node.isStatic(byName("R_emptyAnim")) === true,
+       "REOPENED: a node carrying a CHANNEL-LESS animation is still static");
+assert(node.isStatic(byName("R_emptyAnimChild")) === true,
+       "REOPENED: …and so is its child (rule 2 would have refused the whole branch)");
+assert(node.isStatic(byName("R_animated")) === false,
+       "REOPENED: a node with a real position track is NOT static");
+assert(node.isStatic(byName("R_pinnedDynamic")) === false,
+       "REOPENED: a user's Dynamic pin beats the policy");
+
 console.log("static_semantics: all assertions passed");

@@ -623,6 +623,53 @@ int main(int argc, char **argv)
         std::printf("    document icon file: %d white pixels\n", countWhite(img));
         CHECK(countWhite(img) > 5, "the document's own icon image renders at the light");
 
+        // THE ICON FOLLOWS THE LIGHT (perf wave B, audit F7). setBillboards
+        // rewrites the whole instance buffer and is pushed on CHANGE only now,
+        // keyed on the light's world-transform signature — so "the icon is
+        // stuck where the light used to be" is the exact way that guard can be
+        // wrong, and it is invisible to every other assertion here.
+        {
+            auto whiteCentroidX = [&](const Image &im) {
+                double sum = 0; int n = 0;
+                for (unsigned y = 0; y < im.height; ++y)
+                    for (unsigned x = 0; x < im.width; ++x) {
+                        const Colour c = im.at(x, y);
+                        if (c.r > 0.85f && c.g > 0.85f && c.b > 0.85f) { sum += x; ++n; }
+                    }
+                return n ? sum / n : -1.0;
+            };
+            const double before = whiteCentroidX(img);
+            const iris::Vec3 was = point->getLocalPos();
+            point->setLocalPos(was + iris::Vec3(0.6f, 0.0f, 0.0f));
+            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            view->readPixels(img);
+            const double after = whiteCentroidX(img);
+            std::printf("    icon centroid x: %.1f -> %.1f after moving the light +0.6x\n",
+                        before, after);
+            CHECK(before >= 0 && after >= 0 && std::fabs(after - before) > 2.0,
+                  "the light icon billboard follows the light when it moves");
+            point->setLocalPos(was);
+            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            view->readPixels(img);
+        }
+
+        // ...and the WIRE COLOUR still follows an edit (the same change-guard
+        // discipline, one push earlier in syncLightWires).
+        {
+            auto countGreen = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.g > 0.7f && c.r < 0.4f && c.b < 0.4f) ++n; } return n; };
+            const QColor wasColour = point->color;
+            point->color = QColor(0, 255, 0);
+            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            view->readPixels(img);
+            std::printf("    recoloured light wires: %d green px, %d magenta px\n",
+                        countGreen(img), countMagenta(img));
+            CHECK(countGreen(img) > 0 && countMagenta(img) == 0,
+                  "editing the light's colour repaints its wires (magenta rings are gone)");
+            point->color = wasColour;
+            mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            view->readPixels(img);
+        }
+
         // Range change scales the ring wires (the visible extent grows).
         point->distance = 0.9f;
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
