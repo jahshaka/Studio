@@ -289,6 +289,41 @@ void GraphNodeScene::deleteSelectedNodes()
 	emit graphInvalidated();
 }
 
+bool GraphNodeScene::deleteNodeById(const QString& nodeId)
+{
+	auto node = getNodeById(nodeId);
+	if (!node)
+		return false;
+	// The master is the graph's output; deleteSelectedNodes refuses it too
+	// (silently, by filtering) — here the refusal has to be reportable.
+	if (nodeGraph && nodeGraph->getMasterNode() && nodeGraph->getMasterNode()->id == nodeId)
+		return false;
+
+	QList<GraphNode*> one{ node };
+	if (stack) {
+		stack->push(new DeleteNodeCommand(one, this));
+	} else {
+		deleteNode(node);
+		emitGraphInvalidated();
+	}
+	emit graphInvalidated();
+	return true;
+}
+
+bool GraphNodeScene::deleteConnectionById(const QString& connectionId)
+{
+	auto con = getConnection(connectionId);
+	if (!con)
+		return false;
+	if (stack) {
+		stack->push(new DeleteConnectionCommand(con, this));
+	} else {
+		removeConnection(connectionId, true, true);
+	}
+	emit graphInvalidated();
+	return true;
+}
+
 void GraphNodeScene::deleteNode(GraphNode* node)
 {
 	// remove in and out connections
@@ -595,6 +630,13 @@ SocketConnection *GraphNodeScene::addConnection(QString leftNodeId, int leftSock
 
 SocketConnection * GraphNodeScene::removeConnection(SocketConnection * connection, bool removeFromNodeGraph, bool emitSignal)
 {
+	// NULL-GUARDED (F2, 2026-09-06). The QString overload below hands whatever
+	// getConnection() found straight in, and getConnection answers null for any
+	// id the CANVAS does not carry — which includes every model-side id that
+	// has drifted from its canvas twin. deleteNode() walks the model's
+	// connections and removes each by MODEL id, so one such drift crashed the
+	// whole delete path rather than skipping a pipe.
+	if (!connection) return nullptr;
 	auto socket1 = connection->socket1;
 	auto socket2 = connection->socket2;
 	socket1->removeConnection(connection);

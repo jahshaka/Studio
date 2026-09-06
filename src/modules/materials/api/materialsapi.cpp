@@ -49,6 +49,7 @@ For more information see the LICENSE file
 #include "modules/materials/core/materialhelper.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 #include "modules/materials/graph/nodegraph.h"
+#include "modules/materials/models/connectionmodel.h"
 #include "modules/materials/models/libraryv1.h"
 #include "modules/materials/models/nodemodel.h"
 #include "modules/materials/models/socketmodel.h"
@@ -648,14 +649,41 @@ QVector<VerbInfo> GraphApi::verbs() const
         { "nodes", "graph.nodes() -> [{id, type, master}]",
           "The current graph's nodes.",
           Needs::Document },
+        { "connections", "graph.connections() -> [{id, from, fromSocket, fromIndex, to, toSocket, toIndex}]",
+          "Every pipe in the current graph: `from`/`to` are node ids, `fromSocket`/`toSocket` the "
+          "socket NAMES (what graph.connect accepts), `fromIndex`/`toIndex` the same sockets as "
+          "indices. `id` is what graph.disconnect takes. graph.nodes said what is in a graph; this "
+          "says how it is wired — without it the only way to read a loaded graph's topology was to "
+          "bake it and guess.",
+          Needs::Document },
         { "nodeTypes", "graph.nodeTypes() -> [type]",
           "Every node type the library can create (plus the master type PbrMaterial).",
+          Needs::Document },
+        { "nodeInfo", "graph.nodeInfo(type) -> {type, inputs: [{name, index, type, value}], outputs: [...]}",
+          "What a node type's sockets are, WITHOUT adding one to the graph: the input and output "
+          "socket names in index order, their socket type name, and an input's default literal. "
+          "graph.connect takes socket names, and this is the only way to learn them for a type you "
+          "have not instantiated. Unknown types are refused with the same message graph.addNode "
+          "gives.",
           Needs::Document },
         { "addNode", "graph.addNode(type) -> id",
           "Adds a node to the current graph ('PbrMaterial' adds and sets the master).",
           Needs::Document },
+        { "removeNode", "graph.removeNode(id) -> bool",
+          "Deletes a node and every pipe attached to it. On the MATERIALS PAGE this goes through "
+          "the page's edit stack — the same command the canvas's Delete key pushes — so graph.undo "
+          "takes it back; on a script graph opened by materials.loadGraph there is no command "
+          "stack and the deletion is immediate. The MASTER node is refused: it is the graph's "
+          "output, and a graph without one bakes nothing.",
+          Needs::Document },
         { "connect", "graph.connect(fromId, fromSocket, toId, toSocket) -> bool",
           "Connects an output socket to an input socket; sockets by index or name (e.g. 'Base Color').",
+          Needs::Document },
+        { "disconnect", "graph.disconnect(connectionIdOr{to, toSocket}) -> bool",
+          "Removes ONE pipe. Address it by the id graph.connections() reports, or — the shape a "
+          "caller usually has — by the INPUT end, {to: nodeId, toSocket: nameOrIndex}, because an "
+          "input socket holds at most one connection so that pair names exactly one pipe. Undo "
+          "behaves exactly as graph.removeNode's does. False when there is no such pipe.",
           Needs::Document },
         { "setValue", "graph.setValue(nodeId, value) -> bool",
           "Sets a node's value through the same path the editor uses (numbers, {r,g,b,a} colors, {x,y,z} vectors).",
@@ -743,6 +771,144 @@ QVariantList GraphApi::nodes()
                                 { "master", node == graph->masterNode } });
     }
     return out;
+}
+
+QVariantList GraphApi::connections()
+{
+    QVariantList out;
+    auto graph = graphOrFail(QStringLiteral("graph.connections"));
+    if (!graph) return out;
+    for (auto it = graph->connections.constBegin(); it != graph->connections.constEnd(); ++it) {
+        ConnectionModel *con = it.value();
+        if (!con || !con->leftSocket || !con->rightSocket) continue;
+        NodeModel *from = con->leftSocket->node;
+        NodeModel *to = con->rightSocket->node;
+        if (!from || !to) continue;
+        out.append(QVariantMap{
+            { "id", con->id },
+            { "from", from->id },
+            { "fromSocket", con->leftSocket->name },
+            { "fromIndex", from->outSockets.indexOf(con->leftSocket) },
+            { "to", to->id },
+            { "toSocket", con->rightSocket->name },
+            { "toIndex", to->inSockets.indexOf(con->rightSocket) } });
+    }
+    return out;
+}
+
+QVariantMap GraphApi::nodeInfo(const QString &type)
+{
+    QVariantMap out;
+    // A THROWAWAY instance is the only honest source: sockets are added by the
+    // node's own constructor (there is no static socket table anywhere), so
+    // anything else here would be a second, drifting description of them.
+    NodeModel *probe = nullptr;
+    if (type == QLatin1String("PbrMaterial")) {
+        probe = new PbrMasterNode();
+    } else {
+        LibraryV1 library;
+        if (!library.hasNode(type)) {
+            fail(QStringLiteral("graph.nodeInfo: unknown type '%1' (graph.nodeTypes() lists them)").arg(type));
+            return out;
+        }
+        probe = library.createNode(type);
+    }
+    if (!probe) {
+        fail(QStringLiteral("graph.nodeInfo: '%1' could not be instantiated").arg(type));
+        return out;
+    }
+
+    const auto describe = [](const QVector<SocketModel *> &sockets, bool wantValue) {
+        QVariantList rows;
+        for (int i = 0; i < sockets.size(); ++i) {
+            SocketModel *sock = sockets[i];
+            if (!sock) continue;
+            QVariantMap row{ { "name", sock->name }, { "index", i }, { "type", sock->typeName } };
+            // The default LITERAL an unconnected input folds to — the thing a
+            // caller wants to know before deciding whether to wire it at all.
+            if (wantValue && !sock->value.isEmpty()) row["value"] = sock->value;
+            rows.append(row);
+        }
+        return rows;
+    };
+
+    out["type"] = probe->typeName.isEmpty() ? type : probe->typeName;
+    out["title"] = probe->title;
+    out["inputs"] = describe(probe->inSockets, true);
+    out["outputs"] = describe(probe->outSockets, false);
+    delete probe;
+    return out;
+}
+
+bool GraphApi::removeNode(const QString &nodeId)
+{
+    // The PAGE first (the selectNode pattern): if the Materials page's canvas
+    // owns this node the deletion has to go through its undo stack.
+    if (mEdit.removeNode && mEdit.removeNode(nodeId)) return true;
+
+    auto graph = graphOrFail(QStringLiteral("graph.removeNode"));
+    if (!graph) return false;
+    if (!graph->nodes.contains(nodeId))
+        return fail(QStringLiteral("graph.removeNode: no node '%1'").arg(nodeId));
+    if (graph->masterNode && graph->masterNode->id == nodeId)
+        return fail("graph.removeNode: the master node is the graph's output and cannot be removed");
+    graph->removeNode(nodeId);
+    if (mSelectedNodeId == nodeId) mSelectedNodeId.clear();
+    return true;
+}
+
+bool GraphApi::disconnect(const QVariant &connection)
+{
+    const QVariant value = normalizeJs(connection);
+
+    // Shape 1: a connection id.
+    if (value.typeId() == QMetaType::QString) {
+        const QString id = value.toString();
+        if (mEdit.removeConnection && mEdit.removeConnection(id)) return true;
+        auto graph = graphOrFail(QStringLiteral("graph.disconnect"));
+        if (!graph) return false;
+        if (!graph->connections.contains(id))
+            return fail(QStringLiteral("graph.disconnect: no connection '%1' "
+                                       "(graph.connections() lists them)").arg(id));
+        graph->removeConnection(id);
+        return true;
+    }
+
+    // Shape 2: the INPUT end, {to, toSocket} — an input socket holds at most
+    // one connection, so the pair names exactly one pipe.
+    if (value.typeId() != QMetaType::QVariantMap)
+        return fail("graph.disconnect: pass a connection id or {to: nodeId, toSocket: nameOrIndex}");
+    const QVariantMap m = value.toMap();
+    auto graph = graphOrFail(QStringLiteral("graph.disconnect"));
+    if (!graph) return false;
+    const QString toId = m.value(QStringLiteral("to")).toString();
+    if (!graph->nodes.contains(toId))
+        return fail(QStringLiteral("graph.disconnect: no node '%1'").arg(toId));
+    NodeModel *to = graph->nodes[toId];
+
+    const QVariant ref = m.value(QStringLiteral("toSocket"));
+    int index = -1;
+    bool isInt = false;
+    const int asInt = ref.toInt(&isInt);
+    if (isInt && ref.typeId() != QMetaType::QString) {
+        index = asInt;
+    } else {
+        const QString name = ref.toString();
+        for (int i = 0; i < to->inSockets.size(); ++i)
+            if (to->inSockets[i]->name.compare(name, Qt::CaseInsensitive) == 0) { index = i; break; }
+    }
+    if (index < 0 || index >= to->inSockets.size())
+        return fail(QStringLiteral("graph.disconnect: no input socket '%1' on '%2'")
+                        .arg(ref.toString(), toId));
+
+    ConnectionModel *con = to->inSockets[index]->connection;
+    if (!con)
+        return fail(QStringLiteral("graph.disconnect: nothing is connected to '%1' on '%2'")
+                        .arg(to->inSockets[index]->name, toId));
+    // No page offer here: the id was resolved against the SCRIPT graph, so it
+    // is that graph's pipe by construction.
+    graph->removeConnection(con->id);
+    return true;
 }
 
 QVariantList GraphApi::nodeTypes()

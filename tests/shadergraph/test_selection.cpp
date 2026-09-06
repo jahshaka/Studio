@@ -195,6 +195,73 @@ int main(int argc, char** argv)
     CHECK(panel->currentView() == NodePropertiesPanel::View::GraphSettings,
           "empty selection: graph settings view");
 
+    // ---- delete BY ID, through the canvas's own undo commands (F2) ----------
+    //
+    // graph.removeNode / graph.disconnect address a node or a pipe by id and
+    // must land on the page's edit stack — otherwise graph.undo would silently
+    // not cover a scripted deletion, which is the promise its doc string makes.
+    // GraphNodeScene::deleteNodeById / deleteConnectionById are the entry
+    // points EffectsPage forwards to; this is where the undo behaviour is
+    // provable, because here there is a real QUndoStack.
+    {
+        QUndoStack stack;
+        scene->setUndoRedoStack(&stack);
+
+        auto extra = graph->library->createNode("float");
+        auto *added = scene->addNodeModel(extra, 10.0f, 10.0f);
+        CHECK(added != nullptr, "a node to delete exists on the canvas");
+        const QString extraId = extra->id;
+        const int nodesBefore = graph->nodes.count();
+
+        // A pipe into the master, so the removal has one to take with it. The
+        // canvas twin's id MUST be forced to the model's — that is what
+        // AddConnectionCommand does, and everything downstream (deleteNode,
+        // getConnection) joins the two halves on it.
+        auto *conn = graph->addConnection(extra->id, 0, master->id, 0);
+        CHECK(conn != nullptr, "a connection into the master exists");
+        auto *canvasConn = scene->addConnection(extra->id, 0, master->id, 0);
+        canvasConn->connectionId = conn->id;
+        const QString connId = conn->id;
+        const int connsBefore = graph->connections.count();
+
+        CHECK(!scene->deleteNodeById("no-such-node"), "deleteNodeById refuses an unknown id");
+        CHECK(!scene->deleteConnectionById("no-such-connection"),
+              "deleteConnectionById refuses an unknown id");
+        CHECK(!scene->deleteNodeById(master->id),
+              "deleteNodeById REFUSES the master — it is the graph's output");
+        CHECK(graph->nodes.contains(master->id), "...and the master is still there");
+
+        CHECK(scene->deleteConnectionById(connId), "deleteConnectionById removes the pipe");
+        CHECK(graph->connections.count() == connsBefore - 1, "...the model lost it");
+        CHECK(stack.count() == 1, "...through a command on the page's undo stack");
+        CHECK(stack.canUndo(), "...which can be undone");
+        stack.undo();
+        CHECK(graph->connections.count() == connsBefore,
+              "F2: undo put the connection back — the promise graph.undo makes");
+
+        CHECK(scene->deleteNodeById(extraId), "deleteNodeById removes the node");
+        CHECK(!graph->nodes.contains(extraId), "...the model lost it");
+        CHECK(graph->nodes.count() == nodesBefore - 1, "...and only it");
+        // The undo above moved the index back, so pushing here TRUNCATES the
+        // redo half: the stack holds ONE command, the new one.
+        CHECK(stack.count() == 1 && stack.canUndo(),
+              "...through a command of its own on the page's stack");
+        stack.undo();
+        CHECK(graph->nodes.contains(extraId),
+              "F2: undo put the node back, with the connections it took with it");
+
+        // NodeGraph::removeConnection had its guard commented out, so an
+        // unknown id INSERTED a null entry in the map and then dereferenced it.
+        // Surviving this call is the assertion.
+        const int before = graph->connections.count();
+        graph->removeConnection(QStringLiteral("definitely-not-a-connection"));
+        CHECK(graph->connections.count() == before,
+              "F2: removeConnection on an unknown id is a no-op, not a crash and not an "
+              "inserted null");
+
+        scene->setUndoRedoStack(nullptr);
+    }
+
     if (failures == 0) std::printf("ALL OK\n");
     else std::printf("%d FAILURES\n", failures);
     return failures == 0 ? 0 : 1;

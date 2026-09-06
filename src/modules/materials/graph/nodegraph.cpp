@@ -146,8 +146,13 @@ ConnectionModel* NodeGraph::addConnection(QString leftNodeId, int leftSockIndex,
 
 void NodeGraph::removeConnection(QString connectionId)
 {
-	//if (!connections.contains(connectionId))
-	//	return;
+	// The guard is BACK (F2, 2026-09-06). Commented out, `connections[id]` on
+	// an unknown id is QMap::operator[]'s INSERT-a-default, so the miss both
+	// grew a null entry in the map and then dereferenced it — a crash reachable
+	// from any caller that does not already know the id is live, which is every
+	// scripted caller.
+	if (!connections.contains(connectionId))
+		return;
 
 	auto con = connections[connectionId];
 

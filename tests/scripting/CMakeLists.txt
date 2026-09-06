@@ -609,7 +609,21 @@ set_tests_properties(scripting.e2e.mannequin PROPERTIES
     LABELS "scripting"
     TIMEOUT 300)
 
+# The graph READ/EDIT verbs (verb-coverage audit F2): graph.connections,
+# graph.nodeInfo, graph.removeNode and graph.disconnect over a script graph.
+# Document verbs only -> --headless.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-graph_edit)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.graph_edit
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_graph_edit.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.graph_edit PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+
 jah_no_display(
+    scripting.e2e.graph_edit
     scripting.e2e.mannequin
     scripting.e2e.locomotion
     scripting.e2e.static_semantics
