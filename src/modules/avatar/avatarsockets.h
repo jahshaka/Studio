@@ -57,6 +57,14 @@ struct Mapping
     QString bone;      ///< the bone it mapped to; empty when unmapped
     bool    mapped = false;
     bool    existed = false;   ///< the node already had a socket of this name (left alone)
+    /// The MESH NODE the socket landed on (guid), for the subtree sweep: a
+    /// real character is several skinned pieces sharing one skeleton, and
+    /// "which piece owns the head socket" is not a thing the caller can guess.
+    /// Empty when nothing mapped.
+    QString ownerGuid;
+    /// The owning piece itself, so the caller can undo exactly what it created
+    /// without re-walking the subtree. Null when nothing mapped.
+    iris::MeshNodePtr owner;
 };
 
 /// The socket names this module installs, in install order.
@@ -72,6 +80,21 @@ QString mapBone(const iris::SkeletonPtr &skeleton, const QString &socketName);
 /// overwritten: the user's authored offset outlives a re-install.
 /// An unrigged node returns two unmapped rows and changes nothing.
 QVector<Mapping> installBuiltIns(const iris::MeshNodePtr &node);
+
+/// Installs the built-ins across a WHOLE CHARACTER — every skinned mesh in the
+/// subtree, not just the first one.
+///
+/// A real exported character is not one skinned mesh. Mixamo's Beta is three
+/// pieces (limbs / torso / joints) bound to SUBSETS of one skeleton, so the
+/// first piece depth-first (46 bones: no Head, no Shoulder) maps NOTHING while
+/// the torso piece maps both built-ins perfectly. Installing on the first
+/// rigged mesh therefore left a spawned character with ZERO sockets and no
+/// error — the possession camera then had no shoulder to read its height from.
+///
+/// Each socket goes on the piece whose rig actually HAS the bone (first such
+/// piece, depth-first); a socket some piece already carries is left alone and
+/// reported as `existed`. One row per built-in, exactly like installBuiltIns.
+QVector<Mapping> installBuiltInsInSubtree(const iris::SceneNodePtr &root);
 
 }   // namespace sockets
 }   // namespace avatar

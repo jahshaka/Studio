@@ -148,8 +148,78 @@ QVector<Mapping> installBuiltIns(const iris::MeshNodePtr &node)
         if (node->addSocket(socket)) {
             mapping.mapped = true;
             mapping.bone = bone;
+            mapping.owner = node;
+            mapping.ownerGuid = node->getGUID();
         }
         report.append(mapping);
+    }
+    return report;
+}
+
+namespace {
+
+/// Every skinned mesh in the subtree, depth-first, the root included.
+void collectRiggedMeshes(const iris::SceneNodePtr &node, QVector<iris::MeshNodePtr> &out)
+{
+    if (node.isNull()) return;
+    if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto mesh = node.staticCast<iris::MeshNode>();
+        if (mesh->hasSkeleton()) out.append(mesh);
+    }
+    const int kids = node->childCount();
+    for (int i = 0; i < kids; ++i)
+        if (iris::SceneNode *c = node->childAt(i))
+            collectRiggedMeshes(c->sharedFromThis(), out);
+}
+
+}   // namespace
+
+QVector<Mapping> installBuiltInsInSubtree(const iris::SceneNodePtr &root)
+{
+    QVector<Mapping> report;
+    QVector<iris::MeshNodePtr> pieces;
+    collectRiggedMeshes(root, pieces);
+
+    for (const QString &socketName : builtInNames()) {
+        Mapping mapping;
+        mapping.socket = socketName;
+
+        // Already there on ANY piece: the user's (or a previous install's)
+        // offset stays, and a second copy on another piece would make
+        // findSocketOwner's answer depend on tree order.
+        bool done = false;
+        for (const iris::MeshNodePtr &piece : pieces) {
+            if (const iris::Socket *existing = piece->findSocket(socketName)) {
+                mapping.existed = true;
+                mapping.mapped = true;
+                mapping.bone = existing->boneName;
+                mapping.owner = piece;
+                mapping.ownerGuid = piece->getGUID();
+                done = true;
+                break;
+            }
+        }
+        if (done) { report.append(mapping); continue; }
+
+        // THE PIECE THAT ACTUALLY HAS THE BONE. Not the first rigged mesh:
+        // Beta's first piece is the limbs, whose 46-bone subset has neither a
+        // Head nor a Shoulder.
+        for (const iris::MeshNodePtr &piece : pieces) {
+            const QString bone = mapBone(piece->getSkeleton(), socketName);
+            if (bone.isEmpty()) continue;
+            iris::Socket socket;
+            socket.name = socketName;
+            socket.boneName = bone;
+            socket.builtIn = true;
+            if (piece->addSocket(socket)) {
+                mapping.mapped = true;
+                mapping.bone = bone;
+                mapping.owner = piece;
+                mapping.ownerGuid = piece->getGUID();
+            }
+            break;
+        }
+        report.append(mapping);   // fail soft: an unmapped row, never an error
     }
     return report;
 }
