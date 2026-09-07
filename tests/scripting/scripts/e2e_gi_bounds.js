@@ -91,10 +91,16 @@ st = world.giStatus();
 assert(Math.abs(extent(st.boundsMin, st.boundsMax) - extent(fit.boundsMin, fit.boundsMax)) < 1.0,
        "the renderer used the pinned volume, near enough its one-voxel margin");
 
-// A pin needs nodes: there is no "the selection" in a script.
-var threw = false;
-try { world.fitGiBounds({}); } catch (e) { threw = true; }
-assert(threw || true, "fitGiBounds with no nodes is refused (message, not a silent no-op)");
+// A pin needs nodes: there is no "the selection" in a script. A refusal is a
+// thrown message (ApiModule::fail), never a silent no-op that leaves the caller
+// believing it pinned something.
+var threw = "";
+try { world.fitGiBounds({}); } catch (e) { threw = String(e); }
+assert(threw.indexOf("fitGiBounds") >= 0,
+       "fitGiBounds with no nodes is REFUSED with a message: " + threw);
+threw = "";
+try { world.fitGiBounds({ nodes: [a], bogus: 1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("bogus") >= 0, "an unknown key is refused by name too: " + threw);
 
 // ---- the hybrid's probe region is NOT the lit volume ----------------------
 assert(world.gi({ mode: "vct_pcc_hybrid", quality: "low",
