@@ -34,8 +34,13 @@
 // three consecutive runs:
 //     GI off        r=0.000 g=0.000 b=0.000
 //     plain VCT     r=0.000 g=0.000 b=0.000
-//     hybrid        r=0.251 g=0.016 b=0.016      <- the red wall, via a probe
+//     hybrid        r=1.000 g=0.059 b=0.059      <- the red wall, via a probe
 //     hybrid, bailed r=0.000 g=0.000 b=0.000     <- indistinguishable from VCT
+//
+// The hybrid reading was r=0.251 until ogre-patch 0017 landed
+// (2026-09-07): upstream divided probe reflections by the NUMBER of
+// overlapping probes, and this scene runs four of them. Case (e) below is the
+// fence that keeps it fixed.
 //
 // Determinism discipline (spec §3, and the MESH_BAKE "Showroom is not
 // deterministic" facts): offscreen view (so MSAA stays 1x), no SSAO, no planar
@@ -56,6 +61,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 using namespace jahshaka::engine;
 
@@ -138,9 +144,19 @@ int main()
     // ---- the mirror ------------------------------------------------------
     // Metalness 1 + roughness 0: a pure specular surface with no diffuse term
     // at all, so its pixels are ONLY what the reflection integral returns.
-    const NodeId mirror = enginetest::addTestCube(s, Colour(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
-    enginetest::setNodePosition(s, mirror, Vec3(0.0f, 2.0f, 0.0f));
-    enginetest::setNodeScale(s, mirror, Vec3(1.6f, 1.6f, 1.6f));
+    // Built through the raw verbs rather than enginetest::addTestCube (which is
+    // exactly this, byte for byte) only so the HDR case below can reach its
+    // MaterialId — see there for why a 100% reflector cannot measure clipping.
+    PbrParams mirrorParams;
+    mirrorParams.albedo = Colour(1.0f, 1.0f, 1.0f);
+    mirrorParams.metalness = 1.0f;
+    mirrorParams.roughness = 0.0f;
+    const NodeId    mirror     = s->createNode();
+    const MeshId    mirrorMesh = s->createMesh(enginetest::unitCubeMesh());
+    const MaterialId mirrorMat = s->createPbrMaterial(mirrorParams);
+    CHECK(mirror && mirrorMesh && mirrorMat && s->attachMesh(mirror, mirrorMesh, mirrorMat),
+          "the mirror box attaches");
+    s->setNodeTransform(mirror, Vec3(0.0f, 2.0f, 0.0f), Quat(), Vec3(1.6f, 1.6f, 1.6f));
 
     // ---- light -----------------------------------------------------------
     // A single directional light, aimed almost horizontally at the red wall: it
@@ -379,6 +395,325 @@ int main()
         // Put it back so nothing after this reads a green room.
         s->setNodeHelper(helper, true);
         CHECK(s->removeNode(helper), "helper: witness removed");
+    }
+
+    // ---- (e) THE OVERLAPPING-PROBE DIVISION (ogre-patch 0017) --------------
+    // Upstream's hybrid piece divided the finished blend by the NUMBER of
+    // probes covering the pixel, after pccEnvS had already been normalised by
+    // the sum of their fades — so the same reflection got darker the more
+    // probes saw it. This case is the regression fence: the SAME reflection,
+    // captured by one probe and by four, must be the same brightness.
+    //
+    // Measured here on the day the patch landed, everything else held (the
+    // staged media file the only difference), on the FULL-power reading this
+    // suite takes a few lines above:
+    //     without 0017   4 probes r 0.251
+    //     with    0017   4 probes r 1.000   (clipped; the true value is ~1.004)
+    // and on this block's dimmed pair:
+    //     with    0017   1 probe r 0.271, 4 probes r 0.275   (1.4% apart)
+    //
+    // The light is dimmed for this block for one reason: at full power the
+    // corrected 4-probe reading CLIPS at 1.000 and a clipped number cannot
+    // measure a ratio. It is restored immediately afterwards.
+    {
+        LightDesc dim;
+        dim.type = LightType::Directional;
+        dim.colour = Colour(1.0f, 1.0f, 1.0f);
+        dim.intensity = 1.2f / 3.14159265358979323846f;
+        CHECK(s->setLight(lightNode, dim), "multi-probe: the light dims for an unclipped reading");
+
+        GiParams one = hybrid;
+        one.pccProbesX = one.pccProbesY = one.pccProbesZ = 1;
+        CHECK(s->setGlobalIllumination(one), "multi-probe: the 1-probe grid builds");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour oneProbe = img.at(mirrorX, mirrorY);
+        show("mirror, 1 probe", oneProbe);
+        CHECK(s->giStatus().probeCount == 1, "multi-probe: exactly one probe exists");
+        CHECK(oneProbe.r > 0.10f && oneProbe.r < 0.99f,
+              "multi-probe: the 1-probe reading is a real, UNCLIPPED reflection");
+
+        CHECK(s->setGlobalIllumination(hybrid), "multi-probe: the 4-probe grid builds");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour fourProbes = img.at(mirrorX, mirrorY);
+        show("mirror, 4 probes", fourProbes);
+        CHECK(s->giStatus().probeCount == 4, "multi-probe: exactly four probes exist");
+        CHECK(fourProbes.r < 0.99f, "multi-probe: the 4-probe reading is unclipped too");
+
+        // THE assertion. 10% of the larger reading: a probe reflection may
+        // legitimately shift a little between placements (four probes sit at
+        // the region's quarters, one sits at its centre, so the parallax
+        // correction lands on slightly different wall texels), but it may not
+        // shift by a FACTOR. Before 0017 this ratio was 0.25 — exactly 1/N.
+        const float larger = std::fmax(oneProbe.r, fourProbes.r);
+        const float delta = std::fabs(oneProbe.r - fourProbes.r);
+        std::printf("   1-probe vs 4-probe: %.3f vs %.3f  (delta %.1f%% of the larger)\n",
+                    oneProbe.r, fourProbes.r, 100.0f * delta / larger);
+        CHECK(delta < 0.10f * larger,
+              "FOUR probes reflect the wall as brightly as ONE (ogre-patch 0017: the hybrid "
+              "no longer divides probe reflections by the probe count)");
+
+        // Restore the light for everything after this block.
+        LightDesc full = dim;
+        full.intensity = 6.0f / 3.14159265358979323846f;
+        CHECK(s->setLight(lightNode, full), "multi-probe: the light is restored");
+    }
+
+    // ---- (e2) THE CLEAR-COAT PERMUTATION COMPILES -------------------------
+    // Patch 0017 rewrites the clear-coat lobe's blend as well as the main one,
+    // and `clear_coat + vct_num_probes + hlms_enable_cubemaps_auto` is a shader
+    // permutation nothing in this program otherwise builds — a permutation that
+    // fails to compile is silent until somebody puts a lacquered object in a
+    // hybrid-lit room. So: a clear-coat slab beside the mirror, and the witness
+    // is that the pixel where it stands CHANGES. (Change, not brightness: it
+    // proves the object was actually rasterized there, which a fixed threshold
+    // against an unknown background would not.)
+    {
+        const unsigned coatX = 111, coatY = 64;   // beside the mirror, on the far wall
+        render(engine.get());
+        view->readPixels(img);
+        const Colour before = img.at(coatX, coatY);
+
+        const NodeId coated = s->createNode();
+        const MeshId coatedMesh = s->createMesh(enginetest::unitCubeMesh());
+        PbrParams coat;
+        coat.albedo = Colour(0.5f, 0.5f, 0.5f);
+        coat.metalness = 0.0f;
+        coat.roughness = 0.5f;
+        coat.clearCoat = 1.0f;
+        coat.clearCoatRoughness = 0.1f;
+        const MaterialId coatMat = s->createPbrMaterial(coat);
+        CHECK(coated && coatedMesh && coatMat && s->attachMesh(coated, coatedMesh, coatMat),
+              "clear coat: the lacquered slab attaches");
+        s->setNodeTransform(coated, Vec3(1.15f, 2.0f, 0.0f), Quat(), Vec3(0.4f, 1.6f, 0.4f));
+        CHECK(s->setGlobalIllumination(hybrid), "clear coat: the hybrid rebuilds around it");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour after = img.at(coatX, coatY);
+        show("clear-coat pixel, before", before);
+        show("clear-coat pixel, after", after);
+        CHECK(std::fabs(after.r - before.r) + std::fabs(after.g - before.g) +
+                  std::fabs(after.b - before.b) > 0.02f,
+              "clear coat: the slab rendered — the clear-coat + VCT + probes shader "
+              "permutation compiles (patch 0017 touches its blend too)");
+        CHECK(engine->lastError().empty(),
+              "clear coat: ...and the engine reported no error building it");
+        CHECK(s->removeNode(coated), "clear coat: slab removed");
+    }
+
+    // ---- (f) HDR PROBE CAPTURES (P3a) -------------------------------------
+    // An 8-bit probe target clamps at capture time, BEFORE the IBL convolution
+    // that spreads a highlight across the mip chain — so anything brighter than
+    // white arrives in the reflection as flat white and loses its colour with
+    // its brightness. In a room the lamps and the windows ARE the reflection
+    // content, which is why this is worth 2x the probe VRAM at High.
+    //
+    // The witness is an EMISSIVE plate where the helper plate stood: black
+    // albedo (so it contributes no diffuse), emissive (6, 1.5, 1.5) — four
+    // times as red as it is green, and every channel of it over 1.0. Clamped to
+    // 8-bit sRGB both channels saturate and the plate reflects as WHITE; in
+    // floating point the 4:1 ratio survives. So the assertion is about HUE, not
+    // just brightness, which no exposure or tone-mapping difference can fake.
+    //
+    // probeHdr is pinned rather than reached through GiQuality::High on purpose:
+    // High also quadruples the probe resolution and (P3b) turns shadows on, and
+    // a test that moved three things at once would measure none of them.
+    //
+    // THE MIRROR IS DIMMED TO 15% FOR THIS BLOCK, and the first attempt failed
+    // without it: a 100% reflector hands the over-bright plate straight to an
+    // 8-bit FRAME BUFFER, so both readings came back (1,1,1) and the test
+    // measured the output's clipping instead of the probe's. A 15% reflector
+    // (dark chrome) puts the HDR reading at ~0.9/0.22 and the LDR one at a flat
+    // 0.15 — the difference between them is then entirely the probe format's.
+    {
+        PbrParams dimMirror = mirrorParams;
+        dimMirror.albedo = Colour(0.15f, 0.15f, 0.15f);
+        CHECK(s->setPbrMaterial(mirrorMat, dimMirror),
+              "hdr: the mirror dims to 15% so the FRAME does not clip before the probe can");
+
+        const NodeId lamp = s->createNode();
+        const MeshId lampMesh = s->createMesh(enginetest::unitCubeMesh());
+        PbrParams lampMat;
+        lampMat.albedo = Colour(0.0f, 0.0f, 0.0f);
+        lampMat.metalness = 0.0f;
+        lampMat.roughness = 1.0f;
+        lampMat.emissive = Colour(6.0f, 1.5f, 1.5f);
+        const MaterialId lampMatId = s->createPbrMaterial(lampMat);
+        CHECK(lamp && lampMesh && lampMatId && s->attachMesh(lamp, lampMesh, lampMatId),
+              "hdr: the over-bright emissive plate attaches");
+        s->setNodeTransform(lamp, Vec3(0.0f, 2.0f, 3.85f), Quat(), Vec3(7.0f, 4.0f, 0.1f));
+
+        GiParams ldr = hybrid;
+        ldr.probeHdr = GiToggle::Off;
+        CHECK(s->setGlobalIllumination(ldr), "hdr: the LDR (8-bit) capture builds");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour ldrPix = img.at(mirrorX, mirrorY);
+        show("mirror, emissive plate, LDR probe", ldrPix);
+        CHECK(!s->giStatus().probeHdr, "hdr: giStatus reports an LDR capture");
+
+        GiParams hdr = hybrid;
+        hdr.probeHdr = GiToggle::On;
+        CHECK(s->setGlobalIllumination(hdr), "hdr: the RGBA16F capture builds");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour hdrPix = img.at(mirrorX, mirrorY);
+        show("mirror, emissive plate, HDR probe", hdrPix);
+        CHECK(s->giStatus().probeHdr, "hdr: giStatus reports an HDR capture");
+        CHECK(s->giStatus().probeCount == 4 && s->giStatus().pccBound,
+              "hdr: the probe grid still built and bound at RGBA16F "
+              "(the IBL compute path accepts a float target)");
+
+        // The LDR capture clipped: r and g both hit the ceiling, so the
+        // reflection is achromatic. (It is white rather than dim BECAUSE it
+        // clipped — brightness alone would not distinguish the two.)
+        std::printf("   LDR r-g = %+.3f   HDR r-g = %+.3f\n",
+                    ldrPix.r - ldrPix.g, hdrPix.r - hdrPix.g);
+        CHECK(std::fabs(ldrPix.r - ldrPix.g) < 0.10f,
+              "hdr: the 8-bit capture CLIPS an over-bright emitter to flat white "
+              "(this is the defect being measured, not a passing grade)");
+        CHECK((hdrPix.r - hdrPix.g) > (ldrPix.r - ldrPix.g) + 0.15f,
+              "hdr: the float capture keeps the emitter's colour instead of clipping it");
+        CHECK(hdrPix.r >= ldrPix.r - 0.02f,
+              "hdr: ...and is no dimmer for it");
+
+        CHECK(s->removeNode(lamp), "hdr: witness removed");
+        CHECK(s->setPbrMaterial(mirrorMat, mirrorParams), "hdr: the mirror is restored to 100%");
+    }
+
+    // ---- (g) SHADOWED PROBE CAPTURES (P3b) --------------------------------
+    // v1 probe captures ran without a shadow node, so reflections showed a
+    // uniformly lit room. The shadowed workspace runs the scene's shadow node
+    // with `recalculate` in every face pass (JahshakaPcc.compositor).
+    //
+    // This block re-aims the light and it has to: the suite's light travels
+    // almost exactly along the mirror's reflection ray (+Z), so ANY occluder
+    // that shadows what the mirror looks at also stands in front of it, and the
+    // test would measure occlusion rather than shadowing. A light angled down
+    // at 64 degrees separates the two — the occluder sits at y ~ 4.1 while the
+    // reflection ray travels at y = 2.0 — and its shadow still lands across the
+    // red wall at the height the mirror samples.
+    {
+        CHECK(s->removeNode(lightNode), "shadows: the near-horizontal light is removed");
+        const NodeId steep = enginetest::addDirectionalLight(s, Vec3(0.0f, -0.9f, 0.436f), 6.0f);
+        CHECK(steep != 0, "shadows: a steeply angled light replaces it");
+
+        // The occluder: a wide, thin slab high above the reflection ray, in the
+        // light's path to the part of the red wall the mirror samples.
+        const NodeId blocker = addSlab(s, white, Vec3(0.0f, 4.1f, 3.0f), Vec3(4.0f, 0.4f, 1.0f));
+        CHECK(blocker != 0, "shadows: the occluder is in place");
+
+        GiParams unshadowed = hybrid;
+        unshadowed.probeShadows = GiToggle::Off;
+        CHECK(s->setGlobalIllumination(unshadowed), "shadows: the unshadowed capture builds");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour noShadow = img.at(mirrorX, mirrorY);
+        show("mirror, unshadowed capture", noShadow);
+        CHECK(!s->giStatus().probeShadows, "shadows: giStatus reports an unshadowed capture");
+        CHECK(noShadow.r > 0.15f,
+              "shadows: the unshadowed reflection still shows the lit red wall "
+              "(the test is looking at something)");
+
+        GiParams shadowed = hybrid;
+        shadowed.probeShadows = GiToggle::On;
+        CHECK(s->setGlobalIllumination(shadowed), "shadows: the shadowed capture builds");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour withShadow = img.at(mirrorX, mirrorY);
+        show("mirror, shadowed capture", withShadow);
+        CHECK(s->giStatus().probeShadows,
+              "shadows: giStatus reports a shadowed capture (the shadowed workspace was found "
+              "and the shadow node existed to recalculate)");
+        CHECK(s->giStatus().probeCount == 4 && s->giStatus().pccBound,
+              "shadows: the probe grid still built and bound through the shadowed workspace");
+        std::printf("   unshadowed r = %.3f   shadowed r = %.3f\n", noShadow.r, withShadow.r);
+        CHECK(withShadow.r < noShadow.r * 0.75f,
+              "shadows: the occluder's shadow is IN the reflection — the shadowed capture is "
+              "measurably darker where the unshadowed one is not");
+
+        // Auto follows the quality dial, which is the shipping contract: the
+        // suite runs at Medium, so Auto must resolve to OFF here and to ON at
+        // High. Cheap to assert and it is the half users actually get.
+        GiParams autoMed = hybrid;   // quality Medium, probeShadows Auto
+        CHECK(s->setGlobalIllumination(autoMed), "shadows: auto at Medium builds");
+        render(engine.get(), 1);
+        CHECK(!s->giStatus().probeShadows && !s->giStatus().probeHdr,
+              "shadows: Auto at Medium quality means unshadowed, LDR captures");
+        GiParams autoHigh = hybrid;
+        autoHigh.quality = GiQuality::High;
+        CHECK(s->setGlobalIllumination(autoHigh), "shadows: auto at High builds");
+        render(engine.get(), 1);
+        CHECK(s->giStatus().probeShadows && s->giStatus().probeHdr,
+              "shadows: Auto at High quality means shadowed, HDR captures");
+
+        CHECK(s->removeNode(blocker), "shadows: occluder removed");
+    }
+
+    // ---- (h) A SKY IBL *AND* THE HYBRID -----------------------------------
+    // The combination this lane found broken, that nothing tested, and that no
+    // upstream patch can fix: the PBS pixel shader has ONE env-probe texture
+    // slot, automatic PCC fills it with a probe cube ARRAY, and a datablock
+    // carrying its own PBSM_REFLECTION cubemap (which every PBR datablock gets
+    // the moment the sky IBL is armed) makes HlmsPbs suppress
+    // `use_parallax_correct_cubemaps` while the pass keeps
+    // `hlms_enable_cubemaps_auto`. Three compile failures follow, each revealed
+    // by fixing the one before it — toProbeLocalSpace/localCorrect undeclared,
+    // then vctSpecPosVS undeclared, then SampleEnvProbe having no
+    // textureCubeArray overload — and the third one is the verdict: the manual
+    // cubemap is UNSAMPLEABLE in that permutation, so the two are mutually
+    // exclusive by construction. The fix is ours and lives in
+    // OgreScene::reflectionTexForDatablocks (OgreSky.cpp): while auto PCC is
+    // bound we do not bind the IBL cubemap at all. Nothing is lost — the probe
+    // captures include the sky, so the probes ARE the environment.
+    //
+    // It was pre-existing (any user picking VCT+Probes on a scene with a sky got
+    // objects that did not draw) and it surfaced here only because P6 makes the
+    // Epic tier select the hybrid, which took scripting.e2e.sky_ibl_churn from
+    // green to a SEGFAULT.
+    //
+    // The assertion is deliberately the ordinary one: the mirror still shows the
+    // red wall. A PBS shader that does not compile does not draw, so a
+    // red-dominant mirror pixel IS the proof that the permutation built. RED-
+    // FIRST VERIFIED: with the fix reverted this case reads r=0.000 g=0.000.
+    // setSkyReflection, not setSky, is the verb that matters: the SKY alone does
+    // not touch datablocks, while the IBL reflection cubemap is bound to every
+    // PBR datablock as PBSM_REFLECTION (OgreSky.cpp applyReflectionToAll). A
+    // first attempt using setSky(Equirectangular) passed WITHOUT the patch and
+    // proved nothing — the defect needs the manual reflection texture.
+    {
+        std::string facePaths[6];
+        TextureId faces[6] = {};
+        bool facesOk = true;
+        for (int f = 0; f < 6; ++f) {
+            facePaths[f] = "gi_pcc_mirror_iblface" + std::to_string(f) + ".ppm";
+            FILE *fp = std::fopen(facePaths[f].c_str(), "wb");
+            std::fprintf(fp, "P6 8 8 255\n");
+            for (int i = 0; i < 8 * 8; ++i) {
+                std::fputc(20, fp); std::fputc(30, fp); std::fputc(90, fp);
+            }
+            std::fclose(fp);
+            faces[f] = s->loadTexture(facePaths[f], true);
+            if (!faces[f]) facesOk = false;
+        }
+        CHECK(facesOk, "sky+hybrid: the six IBL face textures load");
+        CHECK(s->setSkyReflection(faces),
+              "sky+hybrid: the IBL reflection cubemap arms (PBSM_REFLECTION on every "
+              "PBR datablock — the manual-probe half of the broken combination)");
+        CHECK(s->setGlobalIllumination(hybrid), "sky+hybrid: the hybrid rebuilds under the IBL");
+        render(engine.get(), 6);
+        view->readPixels(img);
+        const Colour skyMirror = img.at(mirrorX, mirrorY);
+        show("mirror, sky IBL + hybrid", skyMirror);
+        CHECK(skyMirror.r > skyMirror.g + 0.10f && skyMirror.r > skyMirror.b + 0.10f,
+              "sky+hybrid: the mirror still reflects the red wall — the manual-reflection + "
+              "auto-PCC combination renders (the env-probe slot is not fought over)");
+        CHECK(engine->lastError().empty(),
+              "sky+hybrid: ...and the engine reported no error doing it");
+        const TextureId none[6] = {};
+        CHECK(s->setSkyReflection(none), "sky+hybrid: the IBL reflection is cleared");
+        for (int f = 0; f < 6; ++f) std::remove(facePaths[f].c_str());
     }
 
     // ---- off restores -----------------------------------------------------

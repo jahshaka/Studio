@@ -442,6 +442,19 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giAutoRefresh = sceneObj["giAutoRefresh"].toBool(true);
         if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
             scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
+        // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
+        // document written before this phase; the toInt/toDouble defaults ARE
+        // the constructor's, so an old scene reads exactly as it did.
+        scene->giProbeHdr = qBound(-1, sceneObj["giProbeHdr"].toInt(-1), 1);
+        scene->giProbeShadows = qBound(-1, sceneObj["giProbeShadows"].toInt(-1), 1);
+        scene->giProbeOverlap =
+            float(qBound(0.01, sceneObj["giProbeOverlap"].toDouble(1.25), 8.0));
+        scene->giProbeSnapDeviation =
+            float(qMax(0.0, sceneObj["giProbeSnapDeviation"].toDouble(0.05)));
+        scene->giProbeSnapSidesMin =
+            float(qMax(0.0, sceneObj["giProbeSnapSidesMin"].toDouble(0.25)));
+        scene->giProbeSnapSidesMax =
+            float(qMax(0.0, sceneObj["giProbeSnapSidesMax"].toDouble(0.25)));
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
     // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd

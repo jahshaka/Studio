@@ -81,6 +81,101 @@ console.log("giStatus(hybrid 2x2x2) = " + JSON.stringify(st));
 assert(st.probeCount === 8, "a bigger grid rebuilds to a bigger probe count");
 assert(st.pccBound === true, "still bound after the rebuild");
 
+// ---- phase D: the probe-capture knobs (P3a/P3b/P3c) ----------------------
+// These are verb-only by design (the World panel stays the quality dial), so
+// this suite is the ONLY place they are exercised end to end. The two toggles
+// are tri-state: "auto" means follow the quality dial, which is the default and
+// the value almost every scene should hold.
+// The defaults a fresh scene holds, read back through world.get().gi. The two
+// toggles come back as the STRING "auto" rather than as a number, because
+// "follow the quality dial" is a third state a bool cannot carry.
+var giNow = world.get().gi;
+console.log("gi defaults = " + JSON.stringify(giNow));
+assert(giNow.probeHdr === "auto" && giNow.probeShadows === "auto",
+       "the probe toggles default to \"auto\"");
+assert(Math.abs(giNow.overlap - 1.25) < 1e-4,
+       "probe overlap defaults to 1.25 (upstream's sample value), not the pin's 1.5");
+assert(Math.abs(giNow.snapDeviation - 0.05) < 1e-4 &&
+       Math.abs(giNow.snapSidesMin - 0.25) < 1e-4 &&
+       Math.abs(giNow.snapSidesMax - 0.25) < 1e-4,
+       "the snap tolerances are set explicitly to the values that used to be inherited");
+
+// Unknown keys are still refused after the phase added six of them, and the
+// refusal names the key.
+var threw = "";
+try { world.gi({ probeHDR: true }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("probeHDR") >= 0,
+       "world.gi REFUSES an unknown key by name (probeHDR is not probeHdr): " + threw);
+
+// Range refusals: these are the knobs a script is most likely to get wrong.
+threw = "";
+try { world.gi({ overlap: 0 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("overlap") >= 0, "world.gi refuses overlap 0: " + threw);
+threw = "";
+try { world.gi({ snapDeviation: -1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("snapDeviation") >= 0, "world.gi refuses a negative snapDeviation: " + threw);
+threw = "";
+try { world.gi({ probeHdr: "sometimes" }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("probeHdr") >= 0,
+       "world.gi refuses a probeHdr that is neither a bool nor \"auto\": " + threw);
+
+// The happy path, and the resolved reading that follows it. quality stays low
+// (probes are 128px, six faces each) — probeHdr/probeShadows are pinned ON
+// rather than reached through quality:"high", which is the whole point of the
+// tri-state.
+assert(world.gi({ probeHdr: true, probeShadows: false, overlap: 1.4,
+                  snapDeviation: 0.08, snapSidesMin: 0.3, snapSidesMax: 0.3 }),
+       "world.gi accepts the probe-capture knobs");
+editor.frame(6);
+st = world.giStatus();
+console.log("giStatus(probeHdr on) = " + JSON.stringify(st));
+assert(st.probeHdr === true, "giStatus reports the HDR capture the scene pinned");
+assert(st.probeShadows === false, "giStatus reports the shadows the scene turned off");
+assert(st.probeCount === 8 && st.pccBound === true,
+       "the probe grid survived the knob change");
+
+// "auto" at low quality means both off; the same "auto" at high means both on.
+assert(world.gi({ probeHdr: "auto", probeShadows: "auto" }), "world.gi back to auto");
+editor.frame(6);
+st = world.giStatus();
+assert(st.probeHdr === false && st.probeShadows === false,
+       "auto at LOW quality resolves to LDR, unshadowed captures");
+assert(world.gi({ quality: "high", pccGrid: { x: 1, y: 1, z: 2 } }),
+       "world.gi(quality high) — a small grid, High probes are 512px");
+editor.frame(8);
+st = world.giStatus();
+console.log("giStatus(auto at high) = " + JSON.stringify(st));
+assert(st.probeHdr === true && st.probeShadows === true,
+       "the SAME auto at HIGH quality resolves to HDR, shadowed captures");
+
+// The knobs are document state, so they survive a save and a reopen.
+assert(world.gi({ quality: "low", probeHdr: false, overlap: 1.4 }), "world.gi pins for the round trip");
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(guid) === true, "project.open");
+editor.frame(4);
+var reopened = world.get().gi;
+console.log("reopened gi = " + JSON.stringify(reopened));
+assert(reopened.probeHdr === false, "probeHdr survived the round trip as a real false, not 'auto'");
+assert(reopened.probeShadows === "auto", "probeShadows survived as 'auto'");
+assert(Math.abs(reopened.overlap - 1.4) < 1e-4, "overlap survived the round trip");
+assert(Math.abs(reopened.snapDeviation - 0.08) < 1e-4, "snapDeviation survived");
+assert(Math.abs(reopened.snapSidesMin - 0.3) < 1e-4, "snapSidesMin survived");
+assert(Math.abs(reopened.snapSidesMax - 0.3) < 1e-4, "snapSidesMax survived");
+
+// ---- phase E: EPIC REACHES THE HYBRID (P6/F8) ----------------------------
+// The hybrid was unreachable from the quality tiers until this phase: Epic's
+// giMode row said plain VCT. This is the assertion that the flip is real all
+// the way down — not just a row value, but a bound probe grid in the renderer.
+assert(world.mode({ mode: "epic" }) === "epic", "world.mode(epic)");
+editor.frame(8);
+st = world.giStatus();
+console.log("giStatus(Epic) = " + JSON.stringify(st));
+assert(st.requestedMode === "vct_pcc_hybrid", "the Epic tier selects the VCT+PCC hybrid");
+assert(st.mode === "vct_pcc_hybrid", "...and the renderer is running it");
+assert(st.pccBound === true && st.probeCount > 0,
+       "...with a real probe grid bound to the PBR shader, not a silent fallback");
+
 // ---- teardown ------------------------------------------------------------
 assert(world.gi({ mode: "off" }), "world.gi(off) again");
 editor.frame(3);

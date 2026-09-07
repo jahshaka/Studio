@@ -221,6 +221,15 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giNumBounces"] = scene->giNumBounces;
     sceneObj["giAutoRefresh"] = scene->giAutoRefresh;
     sceneObj["giPccGrid"] = jsonVector3(scene->giPccGrid);
+    // Hybrid probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Always written:
+    // they are cheap, and a scene that pinned one must reopen with it. Readers
+    // of older documents fall back to these same defaults.
+    sceneObj["giProbeHdr"] = scene->giProbeHdr;
+    sceneObj["giProbeShadows"] = scene->giProbeShadows;
+    sceneObj["giProbeOverlap"] = scene->giProbeOverlap;
+    sceneObj["giProbeSnapDeviation"] = scene->giProbeSnapDeviation;
+    sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
+    sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;
 
     // The camera PLAY renders through (CAMERAS_SPEC D6). A guid into the scene
     // graph; empty (and absent, in every scene written before cameras existed)

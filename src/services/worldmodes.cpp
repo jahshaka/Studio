@@ -283,10 +283,23 @@ QVector<Row> buildRows()
                       { QStringLiteral("instant_radiosity"), QStringLiteral("Instant Radiosity"), 1 },
                       { QStringLiteral("vct"),              QStringLiteral("VCT"),               2 },
                       { QStringLiteral("vct_pcc_hybrid"),   QStringLiteral("VCT + Probes"),      3 } };
-        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
+        // EPIC = the hybrid (REFLECTIONS_ADOPTION_SPEC P6/F8). It was plain VCT
+        // until 2026-09-07 for a reason that no longer holds: shipping Epic onto
+        // the v1 hybrid would have shipped probes spread over ground-plane-
+        // inflated bounds, editor helpers baked into every capture, and a full
+        // re-solve per dragged frame. P1+P2 fixed all three and ogre-patch 0017
+        // removed the overlapping-probe division that made every probe
+        // reflection up to 8x too dark, so the hybrid is now strictly better
+        // than plain VCT at the top tier — and plain VCT's own weakness is
+        // sharpest exactly where Epic scenes live: a sealed room's cone-traced
+        // reflections carry almost nothing (gi.pcc_mirror's light note).
+        r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 3;
         r.cost = QStringLiteral("Indirect light. Instant Radiosity re-traces on light moves; VCT "
                                 "re-voxelizes on geometry edits (editing latency, not frame time). "
-                                "VCT + Probes also bakes six renders per reflection probe.");
+                                "VCT + Probes adds sharp reflections near geometry: six renders per "
+                                "reflection probe on every re-solve (18 probes by default), and at "
+                                "High quality those captures are HDR and shadowed. A light DRAG "
+                                "costs a cheap re-inject per few frames, not a re-solve per frame.");
         r.get = [](const iris::ScenePtr &s) { return int(s->giMode); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giMode = iris::GiMode(v); };
         out.append(r);
@@ -301,8 +314,10 @@ QVector<Row> buildRows()
                       { QStringLiteral("medium"), QStringLiteral("Medium"), 1 },
                       { QStringLiteral("high"),   QStringLiteral("High"),   2 } };
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 0; r.tier[3] = 1;
-        r.cost = QStringLiteral("Ray/voxel budget. High is a re-solve-latency trap in an editor: "
-                                "every geometry or light edit pays for it again.");
+        r.cost = QStringLiteral("Ray/voxel budget. In VCT + Probes it ALSO turns on HDR and "
+                                "shadowed probe captures at High (world.gi's probeHdr/probeShadows "
+                                "pin either one independently). High is a re-solve-latency trap in "
+                                "an editor: every geometry or light edit pays for it again.");
         r.get = [](const iris::ScenePtr &s) { return int(s->giQuality); };
         r.set = [](const iris::ScenePtr &s, int v) { s->giQuality = iris::GiQuality(v); };
         out.append(r);

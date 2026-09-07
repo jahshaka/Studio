@@ -300,6 +300,11 @@ public:
         /// stay at zero for every scene that never pinned them.
         QVector3D boundsMin, boundsMax;
         QVector3D probeRegionMin, probeRegionMax;
+        /// What the probe captures RESOLVED to (P3a/P3b). Both document fields
+        /// are tri-state with an "auto" that consults the quality dial, and the
+        /// shadow half falls back when no shadow node exists — so the request
+        /// alone never says what the reflections actually contain.
+        bool probeHdr = false, probeShadows = false;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 

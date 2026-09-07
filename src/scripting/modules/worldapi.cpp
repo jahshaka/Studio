@@ -39,6 +39,18 @@ For more information see the LICENSE file
 
 using namespace scriptmod;
 
+namespace {
+/// The document's tri-state probe toggles, back out in the spelling world.gi
+/// takes them in: the string "auto" (follow the quality dial) or a real bool.
+/// A plain int would round-trip through JS as 1/0/-1 and lose the meaning.
+QVariant giToggleToJs(int v)
+{
+    if (v == 1) return true;
+    if (v == 0) return false;
+    return QStringLiteral("auto");
+}
+}  // namespace
+
 QVector<VerbInfo> WorldApi::verbs() const
 {
     return {
@@ -64,12 +76,13 @@ QVector<VerbInfo> WorldApi::verbs() const
           "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
           "(world.setShadowResolution, node.setProperty on the light).",
           Needs::Document },
-        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh}) -> bool",
+        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax}) -> bool",
           "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
+          "The rest are vct_pcc_hybrid probe-capture knobs. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
-        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, live}",
-          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeHdr, probeShadows, live}",
+          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now — the same work Auto Refresh does when a light moves, on demand. Geometry that moves does NOT auto-refresh (the renderer would re-voxelize every frame while you drag), so after moving, adding or deleting objects this is what makes bounced light and reflection probes agree with the scene again. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
@@ -251,7 +264,13 @@ bool WorldApi::gi(const QVariantMap &params)
         QStringLiteral("mode"),      QStringLiteral("quality"),
         QStringLiteral("bounces"),   QStringLiteral("light"),
         QStringLiteral("boundsMin"), QStringLiteral("boundsMax"),
-        QStringLiteral("pccGrid"),   QStringLiteral("autoRefresh")
+        QStringLiteral("pccGrid"),   QStringLiteral("autoRefresh"),
+        // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Verb-only by
+        // design — the World panel stays the quality dial; these are integrator
+        // knobs and the two toggles default to following it.
+        QStringLiteral("probeHdr"),  QStringLiteral("probeShadows"),
+        QStringLiteral("overlap"),   QStringLiteral("snapDeviation"),
+        QStringLiteral("snapSidesMin"), QStringLiteral("snapSidesMax")
     };
     const QString refusal = refuseUnknownKeys(QStringLiteral("world.gi"), params, known);
     if (!refusal.isEmpty()) return fail(refusal);
@@ -288,6 +307,51 @@ bool WorldApi::gi(const QVariantMap &params)
     }
     if (params.contains("autoRefresh"))
         scene->giAutoRefresh = params.value("autoRefresh").toBool();
+    // ---- probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3) -----------------
+    // The two toggles are TRI-STATE, and the string "auto" is the point: a
+    // plain boolean could not express "follow the quality dial", which is the
+    // default and the only value most scenes should ever hold. Booleans are
+    // accepted too, so `{probeHdr: true}` reads naturally from a script.
+    const auto readToggle = [&](const char *key, int &out) -> QString {
+        if (!params.contains(QLatin1String(key))) return QString();
+        const QVariant v = params.value(QLatin1String(key));
+        if (v.typeId() == QMetaType::Bool) { out = v.toBool() ? 1 : 0; return QString(); }
+        const QString s = v.toString().trimmed().toLower();
+        if (s == QLatin1String("auto"))                                  { out = -1; return QString(); }
+        if (s == QLatin1String("on")  || s == QLatin1String("true"))     { out =  1; return QString(); }
+        if (s == QLatin1String("off") || s == QLatin1String("false"))    { out =  0; return QString(); }
+        return QStringLiteral("world.gi: %1 takes true, false or \"auto\" (auto = follow the GI "
+                              "quality dial: on at high, off below) — got '%2'")
+            .arg(QLatin1String(key), v.toString());
+    };
+    QString e = readToggle("probeHdr", scene->giProbeHdr);
+    if (!e.isEmpty()) return fail(e);
+    e = readToggle("probeShadows", scene->giProbeShadows);
+    if (!e.isEmpty()) return fail(e);
+    if (params.contains("overlap")) {
+        const double v = params.value("overlap").toDouble();
+        if (!(v > 0.0) || v > 8.0)
+            return fail(QStringLiteral("world.gi: overlap must be in (0, 8] — how far each probe's "
+                                       "influence stretches past its share of the region (1.0 = "
+                                       "no overlap and visible seams; the default is 1.25)"));
+        scene->giProbeOverlap = float(v);
+    }
+    if (params.contains("snapDeviation")) {
+        const double v = params.value("snapDeviation").toDouble();
+        if (v < 0.0) return fail(QStringLiteral("world.gi: snapDeviation must be >= 0 (a RELATIVE "
+                                                "error; 0 disables snap-back, default 0.05)"));
+        scene->giProbeSnapDeviation = float(v);
+    }
+    if (params.contains("snapSidesMin")) {
+        const double v = params.value("snapSidesMin").toDouble();
+        if (v < 0.0) return fail(QStringLiteral("world.gi: snapSidesMin must be >= 0 (default 0.25)"));
+        scene->giProbeSnapSidesMin = float(v);
+    }
+    if (params.contains("snapSidesMax")) {
+        const double v = params.value("snapSidesMax").toDouble();
+        if (v < 0.0) return fail(QStringLiteral("world.gi: snapSidesMax must be >= 0 (default 0.25)"));
+        scene->giProbeSnapSidesMax = float(v);
+    }
     return true;
 }
 
@@ -318,6 +382,8 @@ QVariantMap WorldApi::giStatus()
                             { QStringLiteral("boundsMax"), vecToJs(scene->giBoundsMax) },
                             { QStringLiteral("probeRegionMin"), vecToJs(iris::Vec3()) },
                             { QStringLiteral("probeRegionMax"), vecToJs(iris::Vec3()) },
+                            { QStringLiteral("probeHdr"), false },
+                            { QStringLiteral("probeShadows"), false },
                             { QStringLiteral("live"), false } };
     return QVariantMap{ { QStringLiteral("mode"), st.mode },
                         { QStringLiteral("requestedMode"), requested },
@@ -328,6 +394,8 @@ QVariantMap WorldApi::giStatus()
                         { QStringLiteral("boundsMax"), vecToJs(iris::fromQt(st.boundsMax)) },
                         { QStringLiteral("probeRegionMin"), vecToJs(iris::fromQt(st.probeRegionMin)) },
                         { QStringLiteral("probeRegionMax"), vecToJs(iris::fromQt(st.probeRegionMax)) },
+                        { QStringLiteral("probeHdr"), st.probeHdr },
+                        { QStringLiteral("probeShadows"), st.probeShadows },
                         { QStringLiteral("live"), true } };
 }
 
@@ -812,7 +880,15 @@ QVariantMap WorldApi::get()
                              { "boundsMin", vecToJs(scene->giBoundsMin) },
                              { "boundsMax", vecToJs(scene->giBoundsMax) },
                              { "pccGrid", vecToJs(scene->giPccGrid) },
-                             { "autoRefresh", scene->giAutoRefresh } };
+                             { "autoRefresh", scene->giAutoRefresh },
+                             // Tri-state, echoed in the same spelling world.gi
+                             // accepts: "auto" | true | false.
+                             { "probeHdr", giToggleToJs(scene->giProbeHdr) },
+                             { "probeShadows", giToggleToJs(scene->giProbeShadows) },
+                             { "overlap", scene->giProbeOverlap },
+                             { "snapDeviation", scene->giProbeSnapDeviation },
+                             { "snapSidesMin", scene->giProbeSnapSidesMin },
+                             { "snapSidesMax", scene->giProbeSnapSidesMax } };
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
     sky["type"] = scene->skyTypeToStr.at(typeIndex);

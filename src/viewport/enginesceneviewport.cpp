@@ -1308,6 +1308,8 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.boundsMax      = q(st.boundsMax);
     out.probeRegionMin = q(st.probeRegionMin);
     out.probeRegionMax = q(st.probeRegionMax);
+    out.probeHdr       = st.probeHdr;
+    out.probeShadows   = st.probeShadows;
     return out;
 }
 

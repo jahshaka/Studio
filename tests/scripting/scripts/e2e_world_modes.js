@@ -60,7 +60,12 @@ assert(fresh.hdr.value === 1, "Epic turns HDR on");
 // tests/engine. SMAA does the anti-aliasing instead.
 assert(fresh.msaa.value === 1, "Epic leaves hardware MSAA off: " + fresh.msaa.valueId);
 assert(fresh.smaa.valueId === "ultra", "Epic anti-aliases with SMAA Ultra: " + fresh.smaa.valueId);
-assert(fresh.giMode.valueId === "vct", "Epic turns VCT GI on");
+// EPIC = the VCT+PCC hybrid since REFLECTIONS_ADOPTION_SPEC P6 (2026-09-07).
+// It was plain "vct" until P1+P2 fixed probe placement, the helper channel and
+// the per-drag-frame re-solve, and ogre-patch 0017 removed the overlapping-
+// probe division that made every probe reflection up to 8x too dark.
+assert(fresh.giMode.valueId === "vct_pcc_hybrid",
+       "Epic turns the VCT+PCC hybrid on: " + fresh.giMode.valueId);
 assert(fresh.refractions.valueId === "auto", "Epic sets refractions to Auto");
 
 // ---- applying a tier writes THROUGH to the backing fields -------------------
@@ -85,7 +90,8 @@ assert(s.msaa.value === 1, "Epic leaves hardware MSAA off: " + s.msaa.valueId);
 // heavyweights that were not earning their cost. Everything else about Epic is
 // unchanged, which is what the assertions around these pin.
 assert(s.shadowResolution.value === 2048, "Epic sets a 2048 shadow atlas: " + s.shadowResolution.value);
-assert(s.giMode.valueId === "vct", "Epic turns VCT GI on: " + s.giMode.valueId);
+assert(s.giMode.valueId === "vct_pcc_hybrid",
+       "Epic turns the VCT+PCC hybrid on: " + s.giMode.valueId);
 assert(s.shadowFilter.valueId === "soft", "Epic filters shadows with PCF 4x4 (Soft)");
 assert(s.hdr.value === 1 && s.bloom.value === 1, "Epic turns HDR and bloom on");
 assert(s.ssao.valueId === "half", "Epic runs ambient occlusion at half resolution");
