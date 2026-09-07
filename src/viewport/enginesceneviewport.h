@@ -89,6 +89,13 @@ private:
     /// rendering: the policy value for the EXPLORER, zero (off) for a piloted
     /// scene camera (viewport/freecamerapolicy.h).
     float freeCameraFovCap() const;
+    /// Takes ownership of the explorer camera and STAMPS THE FREE-CAMERA POLICY
+    /// ON IT (freecamerapolicy.h). Every assignment to `mEditorCam` goes through
+    /// here — a fresh camera, a project's remembered one, a scripted one — so
+    /// there is exactly one place where "this camera is a free explorer" is
+    /// said, and the document's projection (i.e. every pick ray) and the engine's
+    /// cannot end up describing two different frusta.
+    void adoptEditorCamera(iris::CameraNodePtr camera);
 public:
 
     void setWindowSpace(WindowSpaces) override {}
