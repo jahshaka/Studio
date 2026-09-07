@@ -439,7 +439,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giBoundsMax = readVector3(sceneObj["giBoundsMax"].toObject());
         scene->giLightGuid = sceneObj["giLight"].toString();
         scene->giNumBounces = qBound(1, sceneObj["giNumBounces"].toInt(1), 4);
-        scene->giAutoRefresh = sceneObj["giAutoRefresh"].toBool(true);
+        // THE GI UPDATE BUDGET (FIX WAVE B1), with the legacy mapping: a
+        // document written before the fix wave carries the giAutoRefresh bool
+        // and nothing else, and false meant exactly what budget 0 means.
+        scene->giUpdateBudget =
+            sceneObj.contains("giUpdateBudget")
+                ? qBound(0, sceneObj["giUpdateBudget"].toInt(1), 512)
+                : (sceneObj["giAutoRefresh"].toBool(true) ? 1 : 0);
         if (sceneObj.contains("giPccGrid"))   // pre-hybrid documents keep the 3x2x3 default
             scene->giPccGrid = readVector3(sceneObj["giPccGrid"].toObject());
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Absent in every
@@ -457,7 +463,8 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             float(qMax(0.0, sceneObj["giProbeSnapSidesMax"].toDouble(0.25)));
         // Dynamic probes (P5a). Absent = 0 = the all-static grid every document
         // written before this phase was rendered with.
-        scene->giDynamicProbes = qBound(0, sceneObj["giDynamicProbes"].toInt(0), 512);
+        scene->giRayMarchStepScale =
+            float(qBound(1.0, sceneObj["giRayMarchStepScale"].toDouble(1.0), 8.0));
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
     // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd

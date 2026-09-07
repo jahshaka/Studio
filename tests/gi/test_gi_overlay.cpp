@@ -72,7 +72,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     doc->giMode = iris::GiMode::VCT;
     doc->giQuality = iris::GiQuality::LOW;
-    doc->giAutoRefresh = true;
+    doc->giUpdateBudget = 1;
     doc->giNumBounces = 1;
     doc->ambientColor = QColor(0, 0, 0);
     doc->ambientFromSky = false;

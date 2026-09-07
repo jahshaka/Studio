@@ -78,17 +78,18 @@ QVector<VerbInfo> WorldApi::verbs() const
           "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
           "(world.setShadowResolution, node.setProperty on the light).",
           Needs::Document },
-        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, autoRefresh, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, dynamicProbes}) -> bool",
+        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale}) -> bool",
           "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
           "The rest are vct_pcc_hybrid probe-capture knobs. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
-          "'dynamicProbes' (0..512, default 0) is how many probes re-capture the scene LIVE, nearest the camera first, so a mirror shows objects and lights that MOVE instead of the scene as it stood when the probes were built. It is a per-frame budget, not a quality setting: every live probe re-renders the whole scene six times plus an IBL mip chain on EVERY frame, so 1 or 2 is a real setting and 18 is not. world.giStatus().dynamicProbeCount reports how many the renderer actually made live. "
+          "'updateBudget' (0..512, default 1) is the GI UPDATE BUDGET: how many reflection probes the renderer may re-capture per FRAME. It replaced the old 'autoRefresh' switch and the old 'dynamicProbes' count, which were the same question asked twice. 0 PAUSES global illumination — no probe re-captures and nothing re-solves automatically, so the picture is whatever was last built until world.refreshGi() asks for more. 1 (the default) is a realtime editor: one probe's six faces per frame, about 2 ms in a debug build, with the whole grid refreshed within (probes / budget) frames and the probes nearest you — and the ones covering whatever just moved — updated first. Higher trades frame time for latency, linearly. world.giStatus().probeUpdatesPerFrame reports the resolved figure. NOTE, because it changes the picture: above 0 the renderer trusts the probes over cone-traced reflections inside the probe region, so ROUGH metal takes its reflections from the probes; mirror-sharp surfaces are unaffected. "
+          "'rayMarchStepScale' (>= 1.0, default 1.0) is how coarsely voxel light injection ray-marches towards each light when working out what is shadowed: bigger is faster and starts losing shadow contact in the bounce. It is the AT-REST value; while you drag something the renderer raises it on its own for the cheap re-injections it throws away a moment later. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
-        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeHdr, probeShadows, dynamicProbeCount, live}",
-          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'dynamicProbeCount' is how many probes are re-capturing the scene every frame (world.gi's dynamicProbes, clamped to the probes that exist, and 0 until a camera has been tracked). 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeHdr, probeShadows, probeUpdatesPerFrame, reusedLastRefresh, live}",
+          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region: a box that escaped it is what turns metal black in hard-edged patches, because the renderer stops trusting the probe. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer re-captures each frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked); every probe still refreshes within probeCount / probeUpdatesPerFrame frames. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
-          "Re-solves the CURRENT global illumination against the scene as it stands now — the same work Auto Refresh does when a light moves, on demand. Geometry that moves does NOT auto-refresh (the renderer would re-voxelize every frame while you drag), so after moving, adding or deleting objects this is what makes bounced light and reflection probes agree with the scene again. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
+          "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
         { "fitGiBounds", "world.fitGiBounds({nodes, margin}) -> {boundsMin, boundsMax}",
           "PINS the global-illumination bounds to the given objects: the union of their world bounds plus an optional margin is written into the scene's giBoundsMin/giBoundsMax, which switches the lit volume off automatic. 'nodes' is a list of node ids and is REQUIRED — there is deliberately no 'whatever is selected' default (the World panel's Fit Bounds To Scene button passes the scene's contents; a caller that wants a selection passes it). Children are included, so fitting an imported model's root fits the model rather than its origin. Returns the box it wrote. Clear the pin — hand the volume back to the automatic fit, which world.giStatus() reports — by setting both corners equal again through world.gi.",
@@ -267,16 +268,21 @@ bool WorldApi::gi(const QVariantMap &params)
         QStringLiteral("mode"),      QStringLiteral("quality"),
         QStringLiteral("bounces"),   QStringLiteral("light"),
         QStringLiteral("boundsMin"), QStringLiteral("boundsMax"),
-        QStringLiteral("pccGrid"),   QStringLiteral("autoRefresh"),
+        QStringLiteral("pccGrid"),   QStringLiteral("updateBudget"),
         // Probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3). Verb-only by
         // design — the World panel stays the quality dial; these are integrator
         // knobs and the two toggles default to following it.
         QStringLiteral("probeHdr"),  QStringLiteral("probeShadows"),
         QStringLiteral("overlap"),   QStringLiteral("snapDeviation"),
         QStringLiteral("snapSidesMin"), QStringLiteral("snapSidesMax"),
-        QStringLiteral("dynamicProbes")
+        QStringLiteral("rayMarchStepScale")
     };
-    const QString refusal = refuseUnknownKeys(QStringLiteral("world.gi"), params, known);
+    const QString refusal = refuseUnknownKeys(
+        QStringLiteral("world.gi"), params, known,
+        QStringLiteral("'autoRefresh' and 'dynamicProbes' were RETIRED by the update-budget "
+                       "model: both are now 'updateBudget' (0 = paused, which is the old "
+                       "autoRefresh false; N = N probe re-captures per frame, which is what "
+                       "dynamicProbes was trying to say)."));
     if (!refusal.isEmpty()) return fail(refusal);
 
     if (params.contains("mode")) {
@@ -309,8 +315,34 @@ bool WorldApi::gi(const QVariantMap &params)
         scene->giPccGrid = iris::Vec3(qBound(1, qRound(g.x()), 8), qBound(1, qRound(g.y()), 8),
                                      qBound(1, qRound(g.z()), 8));
     }
-    if (params.contains("autoRefresh"))
-        scene->giAutoRefresh = params.value("autoRefresh").toBool();
+    // THE GI UPDATE BUDGET (FIX WAVE B1). It replaced `autoRefresh` outright —
+    // the old key is deliberately NOT accepted as an alias, so a script written
+    // against the old model fails loudly and is told the new spelling, rather
+    // than silently getting one probe per frame where it asked for none.
+    if (params.contains("updateBudget")) {
+        const int v = params.value("updateBudget").toInt();
+        if (v < 0 || v > 512)
+            return fail(QStringLiteral(
+                "world.gi: updateBudget must be 0..512 — how many reflection probes the "
+                "renderer may re-capture PER FRAME. 0 pauses global illumination entirely "
+                "(nothing re-captures, nothing auto-re-solves; world.refreshGi() is then the "
+                "only way forward). 1, the default, is a realtime editor: one probe's six "
+                "faces a frame, so the whole grid refreshes in (probes) frames. Each extra "
+                "unit is another full six-face render every frame. "
+                "world.giStatus().probeUpdatesPerFrame reports what the renderer resolved."));
+        scene->giUpdateBudget = v;
+    }
+    if (params.contains("rayMarchStepScale")) {
+        const double v = params.value("rayMarchStepScale").toDouble();
+        if (!(v >= 1.0) || v > 8.0)
+            return fail(QStringLiteral(
+                "world.gi: rayMarchStepScale must be in [1, 8] — how coarsely voxel light "
+                "injection ray-marches towards each light. Below 1 the renderer asserts; "
+                "bigger is faster and starts losing shadow contact in the bounce. 1.0 is the "
+                "default and the at-rest value; the renderer raises it by itself for the "
+                "throwaway re-injections it does while you are dragging something."));
+        scene->giRayMarchStepScale = float(v);
+    }
     // ---- probe-capture knobs (REFLECTIONS_ADOPTION_SPEC P3) -----------------
     // The two toggles are TRI-STATE, and the string "auto" is the point: a
     // plain boolean could not express "follow the quality dial", which is the
@@ -356,20 +388,6 @@ bool WorldApi::gi(const QVariantMap &params)
         if (v < 0.0) return fail(QStringLiteral("world.gi: snapSidesMax must be >= 0 (default 0.25)"));
         scene->giProbeSnapSidesMax = float(v);
     }
-    // DYNAMIC PROBES (P5a). A BUDGET, not a quality dial — hence the refusal
-    // text naming the per-frame cost rather than a range alone.
-    if (params.contains("dynamicProbes")) {
-        const int v = params.value("dynamicProbes").toInt();
-        if (v < 0 || v > 512)
-            return fail(QStringLiteral("world.gi: dynamicProbes must be 0..512 — how many probes "
-                                       "re-capture the scene LIVE, nearest the camera first. 0 (the "
-                                       "default) freezes every reflection at build time; each live "
-                                       "probe costs six full scene renders plus an IBL mip chain "
-                                       "EVERY frame, so raise it one at a time and watch the frame "
-                                       "rate. world.giStatus().dynamicProbeCount reports what the "
-                                       "renderer actually made dynamic."));
-        scene->giDynamicProbes = v;
-    }
     return true;
 }
 
@@ -402,7 +420,10 @@ QVariantMap WorldApi::giStatus()
                             { QStringLiteral("probeRegionMax"), vecToJs(iris::Vec3()) },
                             { QStringLiteral("probeHdr"), false },
                             { QStringLiteral("probeShadows"), false },
-                            { QStringLiteral("dynamicProbeCount"), 0 },
+                            { QStringLiteral("probeShapeMin"), vecToJs(iris::Vec3()) },
+                            { QStringLiteral("probeShapeMax"), vecToJs(iris::Vec3()) },
+                            { QStringLiteral("probeUpdatesPerFrame"), 0 },
+                            { QStringLiteral("reusedLastRefresh"), false },
                             { QStringLiteral("live"), false } };
     return QVariantMap{ { QStringLiteral("mode"), st.mode },
                         { QStringLiteral("requestedMode"), requested },
@@ -415,7 +436,10 @@ QVariantMap WorldApi::giStatus()
                         { QStringLiteral("probeRegionMax"), vecToJs(iris::fromQt(st.probeRegionMax)) },
                         { QStringLiteral("probeHdr"), st.probeHdr },
                         { QStringLiteral("probeShadows"), st.probeShadows },
-                        { QStringLiteral("dynamicProbeCount"), st.dynamicProbeCount },
+                        { QStringLiteral("probeShapeMin"), vecToJs(iris::fromQt(st.probeShapeMin)) },
+                        { QStringLiteral("probeShapeMax"), vecToJs(iris::fromQt(st.probeShapeMax)) },
+                        { QStringLiteral("probeUpdatesPerFrame"), st.probeUpdatesPerFrame },
+                        { QStringLiteral("reusedLastRefresh"), st.reusedLastRefresh },
                         { QStringLiteral("live"), true } };
 }
 
@@ -900,7 +924,11 @@ QVariantMap WorldApi::get()
                              { "boundsMin", vecToJs(scene->giBoundsMin) },
                              { "boundsMax", vecToJs(scene->giBoundsMax) },
                              { "pccGrid", vecToJs(scene->giPccGrid) },
-                             { "autoRefresh", scene->giAutoRefresh },
+                             // The old spelling, kept as a READER only: a
+                             // settings dump that dropped it would silently
+                             // change meaning for anything comparing snapshots.
+                             { "autoRefresh", scene->giUpdateBudget > 0 },
+                             { "updateBudget", scene->giUpdateBudget },
                              // Tri-state, echoed in the same spelling world.gi
                              // accepts: "auto" | true | false.
                              { "probeHdr", giToggleToJs(scene->giProbeHdr) },
@@ -909,7 +937,7 @@ QVariantMap WorldApi::get()
                              { "snapDeviation", scene->giProbeSnapDeviation },
                              { "snapSidesMin", scene->giProbeSnapSidesMin },
                              { "snapSidesMax", scene->giProbeSnapSidesMax },
-                             { "dynamicProbes", scene->giDynamicProbes } };
+                             { "rayMarchStepScale", scene->giRayMarchStepScale } };
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
     sky["type"] = scene->skyTypeToStr.at(typeIndex);

@@ -1492,7 +1492,7 @@ int main(int argc, char **argv)
         auto gdoc = iris::Scene::create();
         gdoc->giMode = iris::GiMode::VCT;
         gdoc->giQuality = iris::GiQuality::LOW;     // 32^3 voxels: this is a counter test
-        gdoc->giAutoRefresh = true;
+        gdoc->giUpdateBudget = 1;
         auto gfloor = iris::MeshNode::create();
         gfloor->setName("floor");
         gfloor->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj"));

@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "services/worldmodes.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 
-#include "ui/controls/checkboxwidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
@@ -143,21 +142,27 @@ void WorldGiPropertyWidget::rebuild()
             connect(pccGrid, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onPccGridChanged);
         }
 
-        autoRefresh = this->addCheckBox("Auto Refresh", scene->giAutoRefresh);
-        connect(autoRefresh, SIGNAL(valueChanged(bool)), SLOT(onAutoRefreshChanged(bool)));
-
-        // REFLECTIONS_ADOPTION_SPEC.md P1d. Auto Refresh only watches LIGHTS —
-        // geometry that moves would re-voxelize every frame of a drag, so it
-        // deliberately does not trigger one. That left "I moved something and
-        // the bounced light is stale" with no recourse but toggling the mode
-        // off and on. This is the recourse. Same verb the script surface has
-        // (world.refreshGi).
-        refreshButton = new QPushButton(tr("Refresh"));
-        refreshButton->setToolTip(tr("Re-solve global illumination against the scene as it is "
-                                     "now. Moving objects does not do this automatically — "
-                                     "re-voxelizing every frame of a drag would be unusable."));
-        connect(refreshButton, &QPushButton::clicked, this, &WorldGiPropertyWidget::onRefreshClicked);
-        this->addWidgetToContent(refreshButton);
+        // THE GI UPDATE BUDGET (FIX WAVE B1) — one row where there used to be a
+        // checkbox and a button. "Auto Refresh" (a bool: may the renderer
+        // re-solve when something changes?) and the Refresh button (do it NOW)
+        // were two halves of a mode the renderer no longer has: GI updates
+        // continuously, on a budget, and 0 is how you stop it. The explicit
+        // re-solve survives where a script can reach it, `world.refreshGi()`.
+        this->addLabel("GI Update Budget",
+                       "How much work global illumination may spend per frame keeping "
+                       "up with the scene. 0 PAUSES it: nothing re-solves and no "
+                       "reflection probe re-captures until world.refreshGi() asks. "
+                       "1 (the default) is a realtime editor — in Voxel + Reflections "
+                       "it re-captures one reflection probe per frame, so the whole "
+                       "grid refreshes over as many frames as it has probes, the ones "
+                       "nearest you and the ones around whatever just moved going "
+                       "first, for about 2 ms a frame. Higher costs that again per "
+                       "unit. Note that any budget above 0 makes the renderer prefer "
+                       "the probes to cone-traced reflections inside the probe region, "
+                       "so rough metal reflects the probes.");
+        updateBudget = this->addFloatValueSlider("", 0.0f, 8.0f,
+                                                 float(qBound(0, scene->giUpdateBudget, 8)));
+        connect(updateBudget, SIGNAL(valueChanged(float)), SLOT(onUpdateBudgetChanged(float)));
 
         // P1a.3, adapted: the spec asked for "fit to SELECTION", but this panel
         // only ever appears while the WORLD is the selection (the properties
@@ -223,17 +228,11 @@ void WorldGiPropertyWidget::onPccGridChanged(iris::Vec3 value)
                                      qBound(1, qRound(value.z()), 8));
 }
 
-void WorldGiPropertyWidget::onAutoRefreshChanged(bool value)
+void WorldGiPropertyWidget::onUpdateBudgetChanged(float value)
 {
-    if (!!scene) scene->giAutoRefresh = value;
-}
-
-void WorldGiPropertyWidget::onRefreshClicked()
-{
-    // The document-side serial IS the verb (world.refreshGi): the mirror is what
-    // owns "push this to the engine", and a panel that called the renderer
-    // directly would be a second route to keep in step forever.
-    if (!!scene) ++scene->giRefreshSerial;
+    // The slider tops out at 8 because a row is a row; the VERB takes 0..512 for
+    // scripts that want a whole grid live for a capture.
+    if (!!scene) scene->giUpdateBudget = qBound(0, qRound(value), 8);
 }
 
 void WorldGiPropertyWidget::onFitBoundsClicked()

@@ -1,6 +1,21 @@
 // DYNAMIC PROBES (REFLECTIONS_ADOPTION_SPEC.md P5a, finding F9) — the gate that
 // proves a reflection probe can follow a scene that MOVES.
 //
+// RE-PINNED BY THE FIX WAVE (B1/B2, 2026-09-07), and the re-pin is the policy
+// change rather than a tolerance: `dynamicProbes` ("keep the nearest N probes
+// live for ever") became `updateBudget` ("re-capture N probes PER FRAME, in a
+// sweep that reaches every probe"). Three consequences, all visible below:
+//   * the DEFAULT is 1, not 0. Case (a)'s "static probes are stale" contract is
+//     therefore asserted by ASKING for budget 0 rather than by saying nothing;
+//   * a budget below the probe count no longer means "some probes never update".
+//     It means they update in turn — so case (d), which used to assert that one
+//     live probe moves the reflection LESS than four do, now asserts the shape
+//     that replaced it: after ONE frame one probe has caught up, and after a
+//     full sweep (probes / budget frames) the picture equals the all-at-once
+//     one. That is a stronger statement than the old one and it is the property
+//     gi.budget pins in general;
+//   * the cost table is a table of budgets.
+//
 // What shipped before this phase: every probe in the hybrid's grid is static.
 // The six cube faces are rendered once, at build time, and the reflection they
 // carry is frozen there until somebody calls world.refreshGi() and pays for a
@@ -10,17 +25,19 @@
 // P1a were built to catch.
 //
 // What this suite asserts, in one scene, changing exactly one number:
-//   (a) with dynamicProbes = 0 (the default), sliding a green slab onto the
+//   (a) with updateBudget = 0 (GI paused), sliding a green slab onto the
 //       mirror's reflection ray does NOT change the mirror pixel — it is still
 //       showing the red wall the slab now covers. That is the STALENESS this
-//       phase exists to fix, pinned as a contract so a future change cannot
-//       make dynamic probes the accidental default;
-//   (b) with dynamicProbes = 4 the same slide turns the same pixel green;
-//   (c) giStatus().dynamicProbeCount reports what the renderer RESOLVED, is
+//       phase exists to fix, and what a budget of 0 still buys anyone who wants
+//       reflections frozen;
+//   (b) with updateBudget = 4 (the whole grid every frame) the same slide turns
+//       the same pixel green;
+//   (c) giStatus().probeUpdatesPerFrame reports what the renderer RESOLVED, is
 //       clamped to the probes that exist, and goes back to 0 when the request
 //       does;
-//   (d) the NEAREST-N choice is a choice: with dynamicProbes = 1 exactly one
-//       probe is live, and it is the one nearest the camera.
+//   (d) a budget of 1 gets there too, in a sweep: one frame moves it part of the
+//       way, four frames (four probes, budget one) move it as far as the
+//       all-at-once budget did.
 //
 // THE SCENE is gi.pcc_mirror's closed room, deliberately: it is the room whose
 // probe behaviour every other suite in this program already pins, so a reading
@@ -41,7 +58,7 @@
 //
 // FRAME COST is measured here rather than argued (spec §7's "budget the
 // re-render cost", and the owner's Debug-daily-driver rule): the same 30 frames
-// are timed at dynamicProbes 0, 1, 2 and 4 and printed. The numbers are
+// are timed at updateBudget 0, 1, 2 and 4 and printed. The numbers are
 // printed, not asserted — a wall-clock assertion on a shared CI box is a flake
 // generator — but the SHAPE is asserted: more live probes must cost more, and
 // the per-probe increment must be roughly linear.
@@ -172,22 +189,23 @@ int main()
     hybrid.boundsMin = giMin; hybrid.boundsMax = giMax;
     hybrid.pccProbesX = 2; hybrid.pccProbesY = 1; hybrid.pccProbesZ = 2;   // 4 probes
     const int kProbes = 4;
+    hybrid.updateBudget = 0;    // (a) asks for PAUSED explicitly: the default is 1 now
 
     // =======================================================================
     // (a) STATIC PROBES: the mover slides and the reflection does not notice
     // =======================================================================
     moveMover(kMoverParked);
-    CHECK(s->setGlobalIllumination(hybrid), "hybrid arms with dynamicProbes = 0 (the default)");
+    CHECK(s->setGlobalIllumination(hybrid), "hybrid arms with updateBudget = 0 (GI paused)");
     render(engine.get(), 6);
     const Colour staticParked = mirrorPixel();
     show("static probes, mover parked", staticParked);
     {
         const GiStatus st = s->giStatus();
-        std::printf("   giStatus: probes=%d pccBound=%s dynamic=%d\n",
-                    st.probeCount, st.pccBound ? "true" : "false", st.dynamicProbeCount);
+        std::printf("   giStatus: probes=%d pccBound=%s updates/frame=%d\n",
+                    st.probeCount, st.pccBound ? "true" : "false", st.probeUpdatesPerFrame);
         CHECK(st.probeCount == kProbes, "the probe grid built (2 x 1 x 2 = 4)");
         CHECK(st.pccBound, "the probe grid is bound to HlmsPbs");
-        CHECK(st.dynamicProbeCount == 0, "dynamicProbes defaults to 0: no probe is live");
+        CHECK(st.probeUpdatesPerFrame == 0, "budget 0: no probe re-captures");
     }
     CHECK(staticParked.r > staticParked.g + 0.12f && staticParked.r > 0.15f,
           "static, parked: the mirror shows the RED wall (the baseline reading)");
@@ -201,34 +219,34 @@ int main()
     // the probe cubemaps still hold the room as it was at build time.
     CHECK(std::fabs(staticMoved.r - staticParked.r) < 0.05f &&
           std::fabs(staticMoved.g - staticParked.g) < 0.05f,
-          "static probes: moving the slab onto the reflection ray changes NOTHING (stale)");
+          "paused GI: moving the slab onto the reflection ray changes NOTHING (frozen)");
     CHECK(staticMoved.g < staticMoved.r,
-          "static probes: the reflection is still red, not the green now in front of it");
+          "paused GI: the reflection is still red, not the green now in front of it");
 
     // =======================================================================
     // (b) DYNAMIC PROBES: the same slide, live
     // =======================================================================
     // Rebuilt with the mover parked again, so the two halves start from an
-    // identical probe capture and the ONLY difference is dynamicProbes.
+    // identical probe capture and the ONLY difference is updateBudget.
     moveMover(kMoverParked);
-    hybrid.dynamicProbes = kProbes;
-    CHECK(s->setGlobalIllumination(hybrid), "hybrid re-arms with dynamicProbes = 4");
+    hybrid.updateBudget = kProbes;
+    CHECK(s->setGlobalIllumination(hybrid), "hybrid re-arms with updateBudget = 4 (the whole grid)");
     render(engine.get(), 6);
     const Colour dynParked = mirrorPixel();
     show("dynamic probes, mover parked", dynParked);
     {
         const GiStatus st = s->giStatus();
-        std::printf("   giStatus: probes=%d pccBound=%s dynamic=%d\n",
-                    st.probeCount, st.pccBound ? "true" : "false", st.dynamicProbeCount);
-        CHECK(st.dynamicProbeCount == kProbes,
-              "giStatus reports all four probes live (the RESOLVED count)");
+        std::printf("   giStatus: probes=%d pccBound=%s updates/frame=%d\n",
+                    st.probeCount, st.pccBound ? "true" : "false", st.probeUpdatesPerFrame);
+        CHECK(st.probeUpdatesPerFrame == kProbes,
+              "giStatus reports four probe updates a frame (the RESOLVED budget)");
     }
     // The picture with every probe live, and nothing moving, must be the same
     // picture the static grid produced: making a probe dynamic changes WHEN it
     // captures, never WHAT it captures.
     CHECK(std::fabs(dynParked.r - staticParked.r) < 0.06f &&
           std::fabs(dynParked.g - staticParked.g) < 0.06f,
-          "dynamic probes on a still scene render the same picture as static ones");
+          "a live budget on a still scene renders the same picture as a paused one");
 
     moveMover(kMoverOnRay);
     render(engine.get(), 8);
@@ -245,16 +263,16 @@ int main()
     // =======================================================================
     // (c) the request is clamped, and it goes back down
     // =======================================================================
-    hybrid.dynamicProbes = 99;         // more than exist
-    CHECK(s->setGlobalIllumination(hybrid), "an over-large dynamicProbes request is accepted");
+    hybrid.updateBudget = 99;         // more than exist
+    CHECK(s->setGlobalIllumination(hybrid), "an over-large updateBudget request is accepted");
     render(engine.get(), 4);
-    CHECK(s->giStatus().dynamicProbeCount == kProbes,
-          "dynamicProbes is CLAMPED to the probes that exist (99 -> 4)");
+    CHECK(s->giStatus().probeUpdatesPerFrame == kProbes,
+          "updateBudget is CLAMPED to the probes that exist (99 -> 4)");
 
-    hybrid.dynamicProbes = 0;
-    CHECK(s->setGlobalIllumination(hybrid), "dynamicProbes goes back to 0");
+    hybrid.updateBudget = 0;
+    CHECK(s->setGlobalIllumination(hybrid), "updateBudget goes back to 0");
     render(engine.get(), 4);
-    CHECK(s->giStatus().dynamicProbeCount == 0, "no probe is live again");
+    CHECK(s->giStatus().probeUpdatesPerFrame == 0, "nothing re-captures again");
     // ...and the reflection freezes again, at whatever it last captured.
     const Colour refrozenA = mirrorPixel();
     moveMover(kMoverParked);
@@ -266,33 +284,40 @@ int main()
           "back at 0 the reflection is frozen again (the flip is reversible both ways)");
 
     // =======================================================================
-    // (d) NEAREST-N is a choice, not "all of them"
+    // (d) A BUDGET BELOW THE PROBE COUNT IS A SWEEP, not a subset
     // =======================================================================
-    // The camera sits at z = +2.4, so the two probes on the +Z half of the room
-    // are nearer than the two on the -Z half. With a budget of one, the live
-    // probe must be a +Z one — asserted through the PICTURE rather than through
-    // a probe index, because the index is an implementation detail and the
-    // picture is the contract: the mirror's reflection ray lands on the +Z
-    // wall, so refreshing a +Z probe is what can possibly change it.
+    // What replaced the old nearest-N assertion (see the header's re-pin note).
+    // With four probes and a budget of one, one frame refreshes one probe and
+    // four frames refresh all four — so the picture after a full sweep must be
+    // the picture the all-at-once budget produced, and the picture after a
+    // single frame must be on the way there without being there yet.
     moveMover(kMoverParked);
-    hybrid.dynamicProbes = 1;
-    CHECK(s->setGlobalIllumination(hybrid), "hybrid re-arms with dynamicProbes = 1");
-    render(engine.get(), 6);
+    hybrid.updateBudget = 1;
+    CHECK(s->setGlobalIllumination(hybrid), "hybrid re-arms with updateBudget = 1");
+    render(engine.get(), 8);      // two full sweeps: everything settled and parked
     const Colour oneParked = mirrorPixel();
-    CHECK(s->giStatus().dynamicProbeCount == 1, "exactly one probe is live");
+    CHECK(s->giStatus().probeUpdatesPerFrame == 1, "exactly one probe update a frame");
+    show("budget 1, mover parked", oneParked);
+
     moveMover(kMoverOnRay);
-    render(engine.get(), 8);
-    const Colour oneMoved = mirrorPixel();
-    show("one live probe, mover parked", oneParked);
-    show("one live probe, mover ON the ray", oneMoved);
-    // One of four probes refreshed: the shader blends all four that cover the
-    // pixel, so the green arrives at roughly a quarter strength. The assertion
-    // is that it arrives AT ALL and that it is less than the all-live reading —
-    // which together say the choice is real in both directions.
-    CHECK(oneMoved.g > oneParked.g + 0.03f,
-          "one live probe still moves the reflection (the nearest probe is a +Z one)");
-    CHECK((oneMoved.g - oneMoved.r) < (dynMoved.g - dynMoved.r),
-          "one live probe moves it LESS than four do (the budget is a budget)");
+    render(engine.get(), 1);
+    const Colour afterOneFrame = mirrorPixel();
+    show("budget 1, ONE frame after the move", afterOneFrame);
+    render(engine.get(), kProbes - 1);
+    const Colour afterOneSweep = mirrorPixel();
+    show("budget 1, a FULL SWEEP after the move", afterOneSweep);
+
+    // One frame: something moved, but not everything.
+    CHECK(afterOneFrame.g > oneParked.g + 0.02f,
+          "one frame of budget 1 already moves the reflection (a probe caught up)");
+    CHECK(afterOneSweep.g > afterOneFrame.g + 0.02f,
+          "...and the rest of the sweep moves it further (the budget is a RATE)");
+    // A full sweep: the same answer the whole-grid budget gave, because every
+    // probe has now had its turn. Tolerance is the pixel-noise band the rest of
+    // this suite uses, not a fudge: the two paths render identical captures.
+    CHECK(std::fabs(afterOneSweep.g - dynMoved.g) < 0.06f &&
+          std::fabs(afterOneSweep.r - dynMoved.r) < 0.06f,
+          "after ceil(probes / budget) frames budget 1 has caught up with budget 4");
 
     // =======================================================================
     // FRAME COST (spec §7: budget the re-render cost). Printed, plus a shape
@@ -301,21 +326,21 @@ int main()
     std::printf("\n   --- frame cost, %dx128x128 offscreen, Debug ---\n", 1);
     double cost[5] = { 0, 0, 0, 0, 0 };
     for (int n : { 0, 1, 2, 4 }) {
-        hybrid.dynamicProbes = n;
+        hybrid.updateBudget = n;
         s->setGlobalIllumination(hybrid);
         render(engine.get(), 4);
         cost[n] = msPerFrame(engine.get(), 30);
-        std::printf("   dynamicProbes = %d   %6.2f ms/frame   (live probes: %d)\n",
-                    n, cost[n], s->giStatus().dynamicProbeCount);
+        std::printf("   updateBudget = %d   %6.2f ms/frame   (updates/frame: %d)\n",
+                    n, cost[n], s->giStatus().probeUpdatesPerFrame);
     }
     const double perProbe1 = cost[1] - cost[0];
     const double perProbe4 = (cost[4] - cost[0]) / 4.0;
-    std::printf("   per-live-probe: %.2f ms (from n=1)   %.2f ms (from n=4)\n",
+    std::printf("   per-probe-update: %.2f ms (from n=1)   %.2f ms (from n=4)\n",
                 perProbe1, perProbe4);
-    // SHAPE, not wall clock: a live probe must cost something, and four must
+    // SHAPE, not wall clock: a probe update must cost something, and four must
     // cost more than one. Anything tighter is a flake on a shared box.
-    CHECK(cost[1] > cost[0], "a live probe costs measurably more than none");
-    CHECK(cost[4] > cost[1], "four live probes cost more than one");
+    CHECK(cost[1] > cost[0], "one probe update a frame costs measurably more than none");
+    CHECK(cost[4] > cost[1], "four probe updates a frame cost more than one");
 
     // The same measurement at GiQuality::High, printed for the record: High
     // quadruples the probe face resolution (256 -> 512) AND, through the two
@@ -325,15 +350,15 @@ int main()
     {
         GiParams high = hybrid;
         high.quality = GiQuality::High;
-        high.dynamicProbes = 0;
+        high.updateBudget = 0;
         s->setGlobalIllumination(high); render(engine.get(), 4);
         const double h0 = msPerFrame(engine.get(), 20);
-        high.dynamicProbes = 1;
+        high.updateBudget = 1;
         s->setGlobalIllumination(high); render(engine.get(), 4);
         const GiStatus hs = s->giStatus();
         const double h1 = msPerFrame(engine.get(), 20);
         std::printf("   HIGH quality (512px faces, hdr=%s, shadows=%s): "
-                    "%6.2f -> %6.2f ms/frame  (+%.2f ms for one live probe)\n",
+                    "%6.2f -> %6.2f ms/frame  (+%.2f ms for one probe update)\n",
                     hs.probeHdr ? "on" : "off", hs.probeShadows ? "on" : "off", h0, h1, h1 - h0);
     }
 

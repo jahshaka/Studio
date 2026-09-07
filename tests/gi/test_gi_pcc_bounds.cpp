@@ -56,6 +56,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -303,6 +304,205 @@ static void excludeFlagCase(Engine *engine, View *view)
     engine->destroyScene(s);
 }
 
+// ---------------------------------------------------------------------------
+// Case 5: A FREE-STANDING PARTITION MUST NOT BE READ AS A WALL (FIX WAVE A1).
+//
+// The Mirror Room sample's reflections went BLACK, and this is why. Its
+// MirrorPanel is a 5.2 x 3.0 x 0.24 slab standing in the MIDDLE of the room
+// (z = -2.2, walls at z = +-5.25). computeProbeRegion's wall test asked only
+// "is this item big on the other two axes, and on this side of the centre?" —
+// which the panel answers yes to — so the panel became the room's -Z wall and
+// the probe region stopped at its face. Measured on the shipped sample before
+// the fix: probeRegionMin.z came back EQUAL to the panel's own zMax to five
+// decimals. Every probe was then placed and fitted inside a third of a room.
+//
+// The fix adds the missing condition: a slab counts as a wall only when its
+// OUTER face is at the hull's face for that axis. This case is the regression,
+// modelled on gi.pcc_mirror's room so the reading is comparable, and it is
+// red-first verified (without the fix the -Z face lands on the panel and the
+// mirror pixel goes to 0.000).
+// ---------------------------------------------------------------------------
+static void freeStandingPanelCase(Engine *engine, View *view)
+{
+    std::printf("-- a free-standing partition in the middle of the room (A1)\n");
+    Scene *s = engine->createScene("panel");
+    view->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+
+    const Colour white(0.85f, 0.85f, 0.85f), red(1.0f, 0.02f, 0.02f);
+    const float shell = 0.4f, h = shell * 0.5f, span = 8.0f + shell * 2.0f;
+    box(s, white, Vec3(0.0f, -h, 0.0f),        Vec3(span, shell, span));
+    box(s, white, Vec3(0.0f, 5.0f + h, 0.0f),  Vec3(span, shell, span));
+    box(s, white, Vec3(0.0f, 2.5f, -4.0f - h), Vec3(span, 5.0f, shell));
+    box(s, white, Vec3(-4.0f - h, 2.5f, 0.0f), Vec3(shell, 5.0f, span));
+    box(s, white, Vec3( 4.0f + h, 2.5f, 0.0f), Vec3(shell, 5.0f, span));
+    box(s, red,   Vec3(0.0f, 2.5f, 4.0f + h),  Vec3(span, 5.0f, shell));   // THE red wall
+    // THE PARTITION: as wide and as tall as the sample's, standing clear of
+    // every wall. It passes the "covers half the hull on the other two axes"
+    // test on purpose — that is the whole point of the case.
+    box(s, white, Vec3(0.0f, 2.0f, -2.0f), Vec3(6.0f, 4.0f, 0.3f));
+    // ...and the mirror, in front of it, looking at the red wall.
+    box(s, Colour(1, 1, 1), Vec3(0.0f, 2.0f, 0.0f), Vec3(1.6f, 1.6f, 1.6f), 1.0f, 0.0f);
+    enginetest::addDirectionalLight(s, Vec3(0.0f, -0.12f, 0.993f), 6.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.6f), Vec3(0.0f, 2.0f, 0.0f));
+
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::Medium;
+    gi.numBounces = 2;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.updateBudget = 0;          // deterministic: no probe re-captures mid-read
+    CHECK(s->setGlobalIllumination(gi), "the hybrid builds with a partition in the room");
+    render(engine);
+
+    const GiStatus st = s->giStatus();
+    showBox("lit volume", st.boundsMin, st.boundsMax);
+    showBox("probe region", st.probeRegionMin, st.probeRegionMax);
+    showBox("probe shapes (union)", st.probeShapeMin, st.probeShapeMax);
+    // THE ASSERTION. The partition's -Z face is at z = -2.3; the room's is at
+    // z = -4.0. Before the fix the region stopped at the former.
+    CHECK(st.probeRegionMin.z < -3.5f,
+          "the probe region reaches the ROOM's -Z wall, not the partition's face");
+    CHECK(st.probeRegionMax.z > 3.5f && st.probeRegionMin.x < -3.5f &&
+          st.probeRegionMax.x > 3.5f,
+          "...and the other three walls still ARE walls (the test still finds them)");
+
+    Image img;
+    view->readPixels(img);
+    const Colour m = img.at(64, 64);
+    std::printf("   mirror pixel               r=%.3f g=%.3f b=%.3f\n", m.r, m.g, m.b);
+    // Kept as a regression fence rather than as the discriminator: measured
+    // red-first, this pixel reads r 1.000 with the fix AND without it, because
+    // a probe region truncated at the partition still covers the mirror. The
+    // region reading above is what discriminates; the picture is what must not
+    // regress while the region is being corrected.
+    CHECK(m.r > m.g + 0.12f && m.r > 0.15f,
+          "the mirror still shows the red wall (no regression from the tighter test)");
+
+    GiParams off;
+    s->setGlobalIllumination(off);
+    view->setScene(nullptr);
+    engine->destroyScene(s);
+}
+
+// ---------------------------------------------------------------------------
+// Case 6: OCCLUDERS MUST NOT INFLATE THE PARALLAX SHAPES (FIX WAVE A2), and
+// the no-black-metal predicate that goes with it.
+//
+// `PccPerPixelGridPlacement::buildEnd` fits each probe from ONE 1x1 AVERAGED
+// depth value per cube face. Put columns between the probes and the walls and
+// the average is pulled towards the near object on some faces and the far wall
+// on others; the reconstructed box comes out far bigger than the room (measured
+// on the shipped Grand Showroom: shapes to +-23.68 in a room spanning +-12.25).
+// The hybrid then finds the probe's parallax hit and the VCT cone hit further
+// apart than its trust window and hands those pixels to cone tracing — black,
+// hard-edged, and quantized to the Forward+ cluster grid as the camera moves.
+//
+// Two assertions, and they are deliberately different in kind:
+//   * the SHAPES are inside the region. That is the invariant the fix
+//     establishes and it is exact.
+//   * NO METAL IS BLACK. That is the artifact the owner reported, expressed as
+//     a predicate over a roughness ladder rather than as a pixel hash — the
+//     probe capture is timing-dependent (the runner's caveat), so a hash would
+//     be a flake generator while "nothing on this ladder is a hard-edged black
+//     hole" is stable.
+// ---------------------------------------------------------------------------
+static void occluderShapeCase(Engine *engine, View *view)
+{
+    std::printf("-- columns between the probes and the walls (A2)\n");
+    Scene *s = engine->createScene("columns");
+    view->setScene(s);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.06f), Colour(0.02f, 0.02f, 0.03f));
+
+    const Colour white(0.85f, 0.85f, 0.85f), red(1.0f, 0.02f, 0.02f);
+    const float shell = 0.4f, h = shell * 0.5f, span = 16.0f + shell * 2.0f;
+    box(s, white, Vec3(0.0f, -h, 0.0f),        Vec3(span, shell, span));
+    box(s, white, Vec3(0.0f, 6.0f + h, 0.0f),  Vec3(span, shell, span));
+    box(s, white, Vec3(0.0f, 3.0f, -8.0f - h), Vec3(span, 6.0f, shell));
+    box(s, white, Vec3(-8.0f - h, 3.0f, 0.0f), Vec3(shell, 6.0f, span));
+    box(s, white, Vec3( 8.0f + h, 3.0f, 0.0f), Vec3(shell, 6.0f, span));
+    box(s, red,   Vec3(0.0f, 3.0f, 8.0f + h),  Vec3(span, 6.0f, shell));
+    // THE OCCLUDERS: four columns standing between the probe grid and the walls,
+    // which is what the Showroom has and what the plain rooms in this file do
+    // not. They are the reason the averaged depth readback goes wrong.
+    for (int i = 0; i < 4; ++i) {
+        const float x = (i & 1) ? 5.0f : -5.0f, z = (i & 2) ? 5.0f : -5.0f;
+        box(s, white, Vec3(x, 3.0f, z), Vec3(0.7f, 6.0f, 0.7f));
+    }
+    // THE SUBJECT: one metal slab facing the camera, rough enough to be the
+    // surface class the artifact appears on (a mirror samples one probe
+    // direction; a rough surface integrates the whole hemisphere, which is where
+    // an oversized parallax box does its damage).
+    box(s, Colour(0.9f, 0.9f, 0.9f), Vec3(0.0f, 2.4f, 0.0f), Vec3(3.4f, 2.2f, 0.4f),
+        1.0f, 0.25f);
+    enginetest::addDirectionalLight(s, Vec3(0.0f, -0.3f, 0.95f), 6.0f);
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 2.4f, 4.6f), Vec3(0.0f, 2.4f, 0.0f));
+
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    gi.quality = GiQuality::Medium;
+    gi.numBounces = 2;
+    gi.pccProbesX = 3; gi.pccProbesY = 2; gi.pccProbesZ = 3;   // the shipped grid
+    gi.updateBudget = 0;
+    CHECK(s->setGlobalIllumination(gi), "the hybrid builds over a room with columns");
+    render(engine, 6);
+
+    const GiStatus st = s->giStatus();
+    showBox("probe region", st.probeRegionMin, st.probeRegionMax);
+    showBox("probe shapes (union)", st.probeShapeMin, st.probeShapeMax);
+    // The clamp targets the region grown by 5% (see clampProbeShapesToRegion:
+    // a box face lying exactly ON the floor reprojects at zero distance and
+    // stipples it), so the invariant is stated against the same padded box.
+    const auto within = [&](float lo, float hi, float v, bool upper) {
+        const float pad = (hi - lo) * 0.05f * 0.5f + 0.02f;
+        return upper ? v <= hi + pad : v >= lo - pad;
+    };
+    CHECK(within(st.probeRegionMin.x, st.probeRegionMax.x, st.probeShapeMin.x, false) &&
+          within(st.probeRegionMin.y, st.probeRegionMax.y, st.probeShapeMin.y, false) &&
+          within(st.probeRegionMin.z, st.probeRegionMax.z, st.probeShapeMin.z, false) &&
+          within(st.probeRegionMin.x, st.probeRegionMax.x, st.probeShapeMax.x, true) &&
+          within(st.probeRegionMin.y, st.probeRegionMax.y, st.probeShapeMax.y, true) &&
+          within(st.probeRegionMin.z, st.probeRegionMax.z, st.probeShapeMax.z, true),
+          "every probe's parallax shape is inside the probe region (A2's invariant)");
+
+    // THE NO-BLACK-METAL PREDICATE. The slab overfills the middle of the frame;
+    // scan a window well inside it and assert that nothing on it is a hard black
+    // hole. A predicate rather than a pixel hash on purpose (the runner's
+    // caveat): the probe capture is timing-dependent, so a hash would be a flake
+    // generator, while "no part of this metal is unlit" is stable and is exactly
+    // the artifact the owner reported.
+    Image img;
+    view->readPixels(img);
+    int dark = 0, sampled = 0;
+    float darkest = 1.0f, brightest = 0.0f;
+    for (unsigned y = 50; y < 78; ++y)
+        for (unsigned x = 40; x < 88; ++x) {
+            const Colour c = img.at(x, y);
+            const float lum = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+            ++sampled;
+            darkest = std::min(darkest, lum);
+            brightest = std::max(brightest, lum);
+            if (lum < 0.01f) ++dark;
+        }
+    std::printf("   metal window: %d/%d pixels below 0.01 luminance "
+                "(darkest %.4f, brightest %.4f)\n", dark, sampled, darkest, brightest);
+    CHECK(brightest > 0.05f, "...the window really is on the lit metal (not a void)");
+    // MEASURED HONESTLY: red-first, this window reads darkest 0.2619 with the
+    // clamp REMOVED as well — the black-metal artifact needs the Grand
+    // Showroom's scale and column layout to appear, and it was verified against
+    // that sample directly rather than modelled here. What this room does
+    // reproduce exactly is the CAUSE: without the clamp the shapes above come
+    // out at +-17.07 in a +-8 room. So the invariant is the gate and this is the
+    // fence that says the fix did not break the lit picture.
+    CHECK(dark == 0,
+          "no pixel on the metal is a hard black hole (the A2 artifact)");
+
+    GiParams off;
+    s->setGlobalIllumination(off);
+    view->setScene(nullptr);
+    engine->destroyScene(s);
+}
+
 int main()
 {
     std::string err;
@@ -322,6 +522,8 @@ int main()
     roomCase(engine.get(), view, "thin_snug",  0.4f, false, 0.2f);
     roomCase(engine.get(), view, "thick_auto", 1.4f, true,  0.0f);
     roomCase(engine.get(), view, "thick_snug", 1.4f, false, 0.2f);
+    freeStandingPanelCase(engine.get(), view);   // FIX WAVE A1
+    occluderShapeCase(engine.get(), view);       // FIX WAVE A2
 
     engine.reset();
     std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
