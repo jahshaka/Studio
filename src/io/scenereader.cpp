@@ -455,6 +455,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             float(qMax(0.0, sceneObj["giProbeSnapSidesMin"].toDouble(0.25)));
         scene->giProbeSnapSidesMax =
             float(qMax(0.0, sceneObj["giProbeSnapSidesMax"].toDouble(0.25)));
+        // Dynamic probes (P5a). Absent = 0 = the all-static grid every document
+        // written before this phase was rendered with.
+        scene->giDynamicProbes = qBound(0, sceneObj["giDynamicProbes"].toInt(0), 512);
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
     // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd

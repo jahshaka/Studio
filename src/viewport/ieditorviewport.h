@@ -312,6 +312,10 @@ public:
         /// shadow half falls back when no shadow node exists — so the request
         /// alone never says what the reflections actually contain.
         bool probeHdr = false, probeShadows = false;
+        /// How many of those probes are re-capturing the scene EVERY FRAME
+        /// (REFLECTIONS_ADOPTION_SPEC.md P5a). 0 is the shipped default and
+        /// means every reflection is frozen at build time until a refresh.
+        int  dynamicProbeCount = 0;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 

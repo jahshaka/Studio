@@ -163,6 +163,57 @@ assert(Math.abs(reopened.snapDeviation - 0.08) < 1e-4, "snapDeviation survived")
 assert(Math.abs(reopened.snapSidesMin - 0.3) < 1e-4, "snapSidesMin survived");
 assert(Math.abs(reopened.snapSidesMax - 0.3) < 1e-4, "snapSidesMax survived");
 
+// ---- phase D2: DYNAMIC PROBES (P5a) --------------------------------------
+// The verb half of the phase whose pixels gi.dynamic_probes owns. What belongs
+// here rather than there: the default, the refusal, the RESOLVED count coming
+// back through the renderer, the clamp, and that it is document state.
+assert(reopened.dynamicProbes === 0,
+       "dynamicProbes defaults to 0 — the all-static grid every document " +
+       "written before this phase reads back as");
+threw = "";
+try { world.gi({ dynamicProbes: -1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("dynamicProbes") >= 0, "world.gi refuses a negative dynamicProbes: " + threw);
+threw = "";
+try { world.gi({ dynamicProbe: 1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("dynamicProbe") >= 0,
+       "world.gi REFUSES the near-miss key by name (dynamicProbe is not dynamicProbes): " + threw);
+
+// A grid of two, one probe live. quality stays low so the six face renders a
+// live probe costs every frame are 128px ones.
+assert(world.gi({ quality: "low", pccGrid: { x: 2, y: 1, z: 1 }, dynamicProbes: 1 }),
+       "world.gi accepts dynamicProbes");
+editor.frame(6);
+st = world.giStatus();
+console.log("giStatus(dynamicProbes 1) = " + JSON.stringify(st));
+assert(st.probeCount === 2, "the probe grid is the two the scene asked for");
+assert(st.dynamicProbeCount === 1,
+       "giStatus reports ONE live probe — the RESOLVED count, not the request");
+
+// The clamp: more live probes than probes.
+assert(world.gi({ dynamicProbes: 99 }), "world.gi accepts an over-large dynamicProbes");
+editor.frame(6);
+st = world.giStatus();
+assert(st.dynamicProbeCount === 2,
+       "dynamicProbes is clamped to the probes that exist (99 -> 2)");
+
+// ...and back off, which is the state every scene should be in.
+assert(world.gi({ dynamicProbes: 0 }), "world.gi turns dynamic probes off again");
+editor.frame(6);
+st = world.giStatus();
+assert(st.dynamicProbeCount === 0, "no probe is live again");
+assert(st.probeCount === 2 && st.pccBound === true,
+       "and the grid itself is untouched by the flip");
+
+// Document state: it survives a save and a reopen like its siblings.
+assert(world.gi({ dynamicProbes: 2 }), "world.gi pins dynamicProbes for the round trip");
+assert(project.save() === true, "project.save (dynamic probes)");
+assert(project.close() === true, "project.close (dynamic probes)");
+assert(project.open(guid) === true, "project.open (dynamic probes)");
+editor.frame(4);
+assert(world.get().gi.dynamicProbes === 2, "dynamicProbes survived the round trip");
+assert(world.gi({ dynamicProbes: 0 }), "back to the default before the next phase");
+editor.frame(4);
+
 // ---- phase E: EPIC REACHES THE HYBRID (P6/F8) ----------------------------
 // The hybrid was unreachable from the quality tiers until this phase: Epic's
 // giMode row said plain VCT. This is the assertion that the flip is real all

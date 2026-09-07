@@ -230,6 +230,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeSnapDeviation"] = scene->giProbeSnapDeviation;
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;
+    sceneObj["giDynamicProbes"] = scene->giDynamicProbes;   // P5a
 
     // The camera PLAY renders through (CAMERAS_SPEC D6). A guid into the scene
     // graph; empty (and absent, in every scene written before cameras existed)

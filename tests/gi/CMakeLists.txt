@@ -152,3 +152,24 @@ add_test(NAME gi.overlay COMMAND test_gi_overlay
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 600 LABELS "engine")
+
+# gi.dynamic_probes — DYNAMIC PROBES (REFLECTIONS_ADOPTION_SPEC.md P5a). Its own
+# binary for the same process-wide-HlmsPbs-binding reason as its siblings, and
+# because it TIMES frames: a suite sharing a process with another scene's GI
+# rebuild could not measure a per-frame cost honestly.
+add_executable(test_gi_dynamic_probes test_gi_dynamic_probes.cpp)
+set_target_properties(test_gi_dynamic_probes PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_dynamic_probes PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_dynamic_probes PRIVATE JahshakaEngine)
+add_dependencies(test_gi_dynamic_probes JahshakaEngineMedia)
+add_test(NAME gi.dynamic_probes COMMAND test_gi_dynamic_probes
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.dynamic_probes PROPERTIES TIMEOUT 600 LABELS "engine")
+
