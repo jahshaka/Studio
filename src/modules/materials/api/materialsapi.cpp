@@ -85,7 +85,7 @@ const QStringList kColorKeys = { "baseColor", "emissiveColor",
 /// this list is what keeps material.set working on a material whose property
 /// list does not carry them, and what the F7 refusal message quotes.
 const QStringList kPbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
-                                  "normalMap", "occlusionMap", "emissiveMap" };
+                                  "normalMap", "emissiveMap" };
 /// CustomMaterial's spellings (Default.shader declares them as Properties).
 /// On a PbrMaterial they name nothing and are REFUSED by name (F7) — so they
 /// are never writable keys, on either material class.
@@ -421,8 +421,8 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "in panel order, with 'min'/'max' present only where a range is declared — the PBR "
           "material declares real ones (metallic and roughness are 0..1, emissiveIntensity 0..10), "
           "so this is where a scale actually means something. 'writableKeys' is the exact set "
-          "material.set accepts — the row names plus, on a PbrMaterial, its six texture slots "
-          "(baseColorMap, metallicMap, roughnessMap, normalMap, occlusionMap, emissiveMap), "
+          "material.set accepts — the row names plus, on a PbrMaterial, its five texture slots "
+          "(baseColorMap, metallicMap, roughnessMap, normalMap, emissiveMap), "
           "which take a file path or an image asset guid. Read 'writableKeys' rather than "
           "deriving keys from 'rows': the two agree today but the slot list is what material.set "
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
@@ -531,7 +531,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                             "material.set: '%1' is a legacy shader texture name and this "
                             "node's PBR material has no such slot — %2 (the PBR maps are "
                             "baseColorMap, metallicMap, roughnessMap, normalMap, "
-                            "occlusionMap, emissiveMap)")
+                            "emissiveMap)")
                             .arg(key,
                                  instead.isEmpty()
                                      ? QStringLiteral("there is no PBR equivalent")

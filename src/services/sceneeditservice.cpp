@@ -847,7 +847,6 @@ iris::MaterialPtr materialFromPreset(const MaterialPreset &preset)
         pbr->setValue("roughnessLowerBound", preset.roughnessLowerBound);
         pbr->setValue("roughnessUpperBound", preset.roughnessUpperBound);
         pbr->setValue("normalFactor",        preset.pbrNormalFactor);
-        pbr->setValue("occlusionFactor",     preset.occlusionFactor);
         pbr->setValue("emissiveColor",       preset.emissiveColor);
         pbr->setValue("emissiveIntensity",   preset.emissiveIntensity);
         pbr->setValue("textureScale",        preset.textureScale);
@@ -859,7 +858,6 @@ iris::MaterialPtr materialFromPreset(const MaterialPreset &preset)
         pbr->setValue("metallicMap",   preset.metallicMap);
         pbr->setValue("roughnessMap",  preset.roughnessMap);
         pbr->setValue("normalMap",     preset.pbrNormalMap);
-        pbr->setValue("occlusionMap",  preset.occlusionMap);
         pbr->setValue("emissiveMap",   preset.emissiveMap);
 
         mat = pbr;

@@ -40,7 +40,10 @@ QVector<MasterSlot> masterSlotsFor(const QString& masterType)
 			{ "Metallic", MasterSlot::FloatSlot, "metallic", "metallicMap" },
 			{ "Roughness", MasterSlot::FloatSlot, "roughness", "roughnessMap" },
 			{ "Normal", MasterSlot::NormalSlot, "", "normalMap" },
-			{ "Occlusion", MasterSlot::FloatSlot, "occlusionFactor", "occlusionMap" },
+			// NO "Occlusion" slot: HLMS_ADOPTION P2 removed the socket, the
+			// bake output and the document rows together. It used to bake a
+			// full-resolution occlusionMap PNG into the user's project that
+			// nothing on any render path ever read.
 			{ "Emissive", MasterSlot::ColorSlot, "emissiveColor", "emissiveMap" },
 			{ "Alpha", MasterSlot::FloatSlot, "alpha", "" },
 			{ "Alpha Cutoff", MasterSlot::FloatSlot, "alphaCutoff", "" },
@@ -179,6 +182,12 @@ QJsonObject GraphBaker::classify(NodeGraph* graph, BakeProgram::TextureResolver 
 		perSocket[slot.socketName] = cls;
 	}
 	out["perSocket"] = perSocket;
+	// What LOADING this graph had to change (NodeGraph::migrationNotes). A
+	// migration that drops a connection has to be visible somewhere a caller
+	// actually looks, and bakeInfo is the "what will this graph produce, and
+	// what will it not" report — so it is the honest place for it.
+	if (!graph->migrationNotes.isEmpty())
+		out["migrations"] = QJsonArray::fromStringList(graph->migrationNotes);
 	return out;
 }
 
@@ -325,7 +334,6 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 	auto applyMapFactorRules = [&](const QString& mapKey) {
 		if (mapKey == "metallicMap") out.eval.values["metallic"] = 1.0;
 		else if (mapKey == "roughnessMap") out.eval.values["roughness"] = 1.0;
-		else if (mapKey == "occlusionMap") out.eval.values["occlusionFactor"] = 1.0;
 		else if (mapKey == "emissiveMap") {
 			out.eval.values["emissiveColor"] = colorToJson(QColor(Qt::white));
 			out.eval.values["emissiveIntensity"] = 1.0;

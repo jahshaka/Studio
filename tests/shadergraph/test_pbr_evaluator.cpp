@@ -89,7 +89,7 @@ int main(int argc, char** argv)
         auto cutoff = makeFloat(graph, 0.5);
         graph->addConnection(color, 0, master, 0);  // RGBA -> Base Color
         graph->addConnection(rough, 0, master, 2);  // value -> Roughness
-        graph->addConnection(cutoff, 0, master, 7); // value -> Alpha Cutoff
+        graph->addConnection(cutoff, 0, master, 6); // value -> Alpha Cutoff (socket layout 2)
 
         auto result = PbrGraphEvaluator::evaluate(graph);
         CHECK(result.hasPbrMaster, "graph 1: master recognised as PbrMaterial");
@@ -300,7 +300,7 @@ int main(int argc, char** argv)
 
         // an explicit setting overrides the auto rule (cutoff would say Masked)
         auto cutoff = makeFloat(graph, 0.5);
-        graph->addConnection(cutoff, 0, graph->masterNode, 7);
+        graph->addConnection(cutoff, 0, graph->masterNode, 6);   // Alpha Cutoff
         MaterialSettings s = graph->settings;
         s.blendMode = BlendMode::Additive;
         graph->setMaterialSettings(s);

@@ -221,7 +221,9 @@ static void testTextureRow()
 
     PanelRig rig;
     auto textures = rig.panel.findChildren<TexturePickerWidget *>();
-    CHECK(textures.size() >= 6, "texture: six map rows exist");
+    // FIVE, not six: HLMS_ADOPTION P2 removed the Occlusion Map row along with
+    // the rest of the AO ghost (the renderer has no AO input to bind it to).
+    CHECK(textures.size() == 5, "texture: five map rows exist (no Occlusion Map)");
     if (textures.isEmpty()) return;
 
     // rows appear in property order; the first texture property is baseColorMap
@@ -299,7 +301,7 @@ static void testRowsDisplayTheMaterialValues()
 
     struct { const char *prop; float expected; } rows[] = {
         { "roughness", 1.0f }, { "metallic", 0.0f }, { "textureScale", 1.0f },
-        { "normalFactor", 1.0f }, { "occlusionFactor", 1.0f }, { "alpha", 1.0f },
+        { "normalFactor", 1.0f }, { "alpha", 1.0f },
     };
     for (const auto &r : rows) {
         auto *row = sliderRow(&rig.panel, propId(rig.pbr, r.prop));

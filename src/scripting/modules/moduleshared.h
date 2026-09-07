@@ -414,7 +414,6 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
         if (pbr->useMetallicMap)  maps << QStringLiteral("metallic");
         if (pbr->useRoughnessMap) maps << QStringLiteral("roughness");
         if (pbr->useNormalMap)    maps << QStringLiteral("normal");
-        if (pbr->useOcclusionMap) maps << QStringLiteral("occlusion");
         if (pbr->useEmissiveMap)  maps << QStringLiteral("emissive");
         m["maps"] = maps;
     } else if (auto custom = material.dynamicCast<iris::CustomMaterial>()) {

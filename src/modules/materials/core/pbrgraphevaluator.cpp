@@ -50,7 +50,7 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 
 	static const QStringList colorKeys = { "baseColor", "emissiveColor" };
 	static const QStringList mapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
-	                                     "normalMap", "occlusionMap", "emissiveMap" };
+	                                     "normalMap", "emissiveMap" };
 
 	for (auto it = values.begin(); it != values.end(); ++it) {
 		const auto& key = it.key();

@@ -147,10 +147,6 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	                       tr("Additive"), tr("Modulate") });
 	formLayout->addRow(tr("Blend Mode"), form.blend);
 
-	form.cull = new QComboBox;
-	form.cull->addItems({ tr("Front"), tr("Back"), tr("None") });
-	formLayout->addRow(tr("Cull"), form.cull);
-
 	form.bakeResolution = new QSpinBox;
 	form.bakeResolution->setRange(128, 4096);
 	form.bakeResolution->setSingleStep(128);
@@ -158,25 +154,6 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	form.bakeResolution->setKeyboardTracking(false);
 	form.bakeResolution->setToolTip(tr("Per-texel bake resolution for this material (final quality)"));
 	formLayout->addRow(tr("Bake Resolution"), form.bakeResolution);
-
-	if (!compact) {
-		form.renderLayer = new QComboBox;
-		form.renderLayer->addItems({ tr("Opaque"), tr("AlphaTested"), tr("Transparent"), tr("Overlay") });
-		formLayout->addRow(tr("Render Layer"), form.renderLayer);
-
-		form.zwrite = new QCheckBox;
-		formLayout->addRow(tr("Z Write"), form.zwrite);
-		form.depthTest = new QCheckBox;
-		formLayout->addRow(tr("Depth Test"), form.depthTest);
-		form.fog = new QCheckBox;
-		formLayout->addRow(tr("Fog"), form.fog);
-		form.castShadow = new QCheckBox;
-		formLayout->addRow(tr("Cast Shadows"), form.castShadow);
-		form.receiveShadow = new QCheckBox;
-		formLayout->addRow(tr("Receive Shadows"), form.receiveShadow);
-		form.acceptLighting = new QCheckBox;
-		formLayout->addRow(tr("Accept Lighting"), form.acceptLighting);
-	}
 
 	layout->addLayout(formLayout);
 	layout->addStretch();
@@ -196,14 +173,7 @@ QWidget* NodePropertiesPanel::buildSettingsPage(bool compact)
 	// every edit rebuilds the settings struct and hands it to the page
 	connect(form.name, &QLineEdit::editingFinished, this, [this]() { emitSettings(); });
 	connect(form.blend, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emitSettings(); });
-	connect(form.cull, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emitSettings(); });
 	connect(form.bakeResolution, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { emitSettings(); });
-	if (!compact) {
-		connect(form.renderLayer, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emitSettings(); });
-		for (auto box : { form.zwrite, form.depthTest, form.fog,
-		                  form.castShadow, form.receiveShadow, form.acceptLighting })
-			connect(box, &QCheckBox::toggled, this, [this](bool) { emitSettings(); });
-	}
 
 	return pageScroll;
 }
@@ -258,17 +228,7 @@ void NodePropertiesPanel::refreshSettings()
 	for (SettingsForm* form : { &mGraphForm, &mMasterForm }) {
 		form->name->setText(s.name);
 		form->blend->setCurrentIndex((int)s.blendMode);
-		form->cull->setCurrentIndex((int)s.cullMode);
 		form->bakeResolution->setValue(s.bakeResolution);
-		if (form->renderLayer != nullptr) {
-			form->renderLayer->setCurrentIndex((int)s.renderLayer);
-			form->zwrite->setChecked(s.zwrite);
-			form->depthTest->setChecked(s.depthTest);
-			form->fog->setChecked(s.fog);
-			form->castShadow->setChecked(s.castShadow);
-			form->receiveShadow->setChecked(s.receiveShadow);
-			form->acceptLighting->setChecked(s.acceptLighting);
-		}
 	}
 	mUpdating = false;
 }
@@ -278,23 +238,12 @@ void NodePropertiesPanel::emitSettings()
 	if (mGraph == nullptr || mUpdating)
 		return;
 
-	// start from the live settings so fields absent from the compact form
-	// survive a master-view edit
+	// start from the live settings so anything not on the form survives an edit
 	MaterialSettings s = mGraph->settings;
 	const SettingsForm& form = (mStack->currentIndex() == 1) ? mMasterForm : mGraphForm;
 	s.name = form.name->text();
 	s.blendMode = (BlendMode)form.blend->currentIndex();
-	s.cullMode = (CullMode)form.cull->currentIndex();
 	s.bakeResolution = form.bakeResolution->value();
-	if (form.renderLayer != nullptr) {
-		s.renderLayer = (RenderLayer)form.renderLayer->currentIndex();
-		s.zwrite = form.zwrite->isChecked();
-		s.depthTest = form.depthTest->isChecked();
-		s.fog = form.fog->isChecked();
-		s.castShadow = form.castShadow->isChecked();
-		s.receiveShadow = form.receiveShadow->isChecked();
-		s.acceptLighting = form.acceptLighting->isChecked();
-	}
 
 	emit settingsEdited(s);
 	refreshSettings(); // both forms mirror the (possibly command-adjusted) result

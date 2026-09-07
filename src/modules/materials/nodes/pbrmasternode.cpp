@@ -18,17 +18,20 @@ PbrMasterNode::PbrMasterNode()
 	typeName = "PbrMaterial";
 	setNodeType(NodeCategory::Input);
 
-	// Indices 0-7: the PBR surface. Indices 8/9 MUST stay Vertex
-	// Offset/Extrusion (see header).
+	// SOCKET LAYOUT 2 (HLMS_ADOPTION P2). Layout 1 carried an "Occlusion"
+	// socket at index 4 that fed a per-texel bake nothing ever rendered; it is
+	// gone, and every later socket moved down one. Saved graphs reference
+	// sockets BY INDEX, so NodeGraph::deserialize migrates layout-1 files —
+	// see kSocketLayoutVersion there. Do not renumber again without doing the
+	// same.
 	addInputSocket(new Vector3SocketModel("Base Color", "vec3(1.0,1.0,1.0)")); // 0
 	addInputSocket(new FloatSocketModel("Metallic", "0.0"));                   // 1
 	addInputSocket(new FloatSocketModel("Roughness", "0.5"));                  // 2
 	addInputSocket(new Vector3SocketModel("Normal", "vec3(0.0, 0.0, 1.0)"));   // 3
-	addInputSocket(new FloatSocketModel("Occlusion", "1.0"));                  // 4
-	addInputSocket(new Vector3SocketModel("Emissive", "vec3(0.0,0.0,0.0)"));   // 5
-	addInputSocket(new FloatSocketModel("Alpha", "1.0"));                      // 6
-	addInputSocket(new FloatSocketModel("Alpha Cutoff"));                      // 7
-	addInputSocket(new Vector3SocketModel("Vertex Offset"));                   // 8
-	addInputSocket(new FloatSocketModel("Vertex Extrusion"));                  // 9
+	addInputSocket(new Vector3SocketModel("Emissive", "vec3(0.0,0.0,0.0)"));   // 4
+	addInputSocket(new FloatSocketModel("Alpha", "1.0"));                      // 5
+	addInputSocket(new FloatSocketModel("Alpha Cutoff"));                      // 6
+	addInputSocket(new Vector3SocketModel("Vertex Offset"));                   // 7
+	addInputSocket(new FloatSocketModel("Vertex Extrusion"));                  // 8
 }
 

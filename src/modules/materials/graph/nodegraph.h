@@ -27,30 +27,25 @@ enum class BlendMode {
 	Modulate,     // Final = Src × Dest (alphaMode 5)
 };
 
-enum class CullMode {
-	Front,
-	Back,
-	None,
-};
-
-enum class RenderLayer {
-	Opaque,
-	AlphaTested,
-	Transparent,
-	Overlay,
-};
-
+/// A graph material's settings. EVERY FIELD HERE LANDS SOMEWHERE — that is a
+/// rule now, not an observation.
+///
+/// It used to carry eight more (HLMS_ADOPTION P2 deleted them): zwrite,
+/// depthTest, fog, castShadow, receiveShadow, acceptLighting, cullMode and
+/// renderLayer. All eight were live checkboxes and combos in TWO panels, they
+/// were serialized, and they were UNDOABLE — a completely finished UI wired to
+/// nothing. Not one had a reader outside the widgets that set it.
+///
+/// Two of them have honest homes now: "receive shadows" is a real PbrMaterial
+/// row (P1) that reaches the renderer, and per-material fog is a candidate for
+/// the custom-piece phase. The rest describe render state the engine derives
+/// from the blend mode and the alpha mode.
+///
+/// Old graphs still carry the eight keys; deserialize simply does not read
+/// them, which is what tolerance looks like — no migration, no load failure.
 struct MaterialSettings {
 	QString name = "";
-	bool zwrite = true;
-	bool depthTest = true;
-	bool fog = true;
-	bool castShadow = true;
-	bool receiveShadow = true;
-	bool acceptLighting = true;
 	BlendMode blendMode = BlendMode::Opaque;
-	CullMode cullMode = CullMode::Back;
-	RenderLayer renderLayer = RenderLayer::Opaque;
 	// Final bake resolution for this material's UV-varying chains
 	// (MATERIALS_EVALUATOR_SPEC section 2); previews always bake 256.
 	int bakeResolution = 1024;
@@ -72,8 +67,21 @@ public:
 	// loader (and tools) re-target texture assignments that used to key off
 	// the property list.
 	QMap<QString, QString> migratedPropertyNodes;
+	/// What LOADING this graph had to change, in words, for the user. Written
+	/// by deserialize() and reported by graph.bakeInfo() so a silent migration
+	/// cannot happen: the PBR master's socket layout is versioned
+	/// (kSocketLayoutVersion) and a layout-1 file has its indices shifted, with
+	/// any connection into the removed Occlusion socket DROPPED. Dropping a
+	/// connection without saying so is the failure this list exists to prevent.
+	QStringList migrationNotes;
 	MaterialSettings settings;
 	QString materialGuid = "";
+
+	/// PbrMasterNode's socket layout (see pbrmasternode.h).
+	///   1 — ten sockets, "Occlusion" at index 4 (before HLMS_ADOPTION P2)
+	///   2 — nine sockets, no Occlusion
+	/// Absent from a saved graph means 1: the key did not exist then.
+	static constexpr int kSocketLayoutVersion = 2;
 
 	void addProperty(Property* prop);
 	void removeProperty(Property* prop);

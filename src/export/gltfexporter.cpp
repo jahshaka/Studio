@@ -367,18 +367,19 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         }
     }
 
-    // AO: in the document but deliberately dropped by the engine — web export
-    // carries what the engine drops (audit §1 "Occlusion").
-    const QString aoSrc = textureSlotSource(pbr, "u_occlusionMap");
-    if (!aoSrc.isEmpty()) {
-        const QImage img = loadDocumentImage(aoSrc, c);
-        const int tex = addTexture(c, addImage(c, "src:" + aoSrc, img, true));
-        if (tex >= 0) {
-            QJsonObject ref = textureRef(c, tex, uvScale);
-            ref["strength"] = double(std::min(1.0f, std::max(0.0f, pbr->occlusionFactor)));
-            m["occlusionTexture"] = ref;
-        }
-    }
+    // NO occlusionTexture. It used to be written here, and it was the ONE
+    // consumer the AO chain ever had: the editor never rendered AO (HlmsPbs has
+    // no ambient-occlusion input), so a user could author a map, wait for a
+    // 4096-square CPU bake, see nothing in the viewport, and have it appear
+    // only in a published web build. HLMS_ADOPTION P2 removed the whole chain
+    // rather than keep an authoring surface whose only target was the export.
+    // No shipped content used it (every shipped .material carries the default
+    // occlusionFactor 1.0 and no map).
+    //
+    // If AO is wanted for the web target specifically, it comes back as an
+    // EXPORT-time input — a map on the export settings, not a material row the
+    // editor pretends to honour. Bake AO into the base colour at import
+    // otherwise; that works on both targets.
 
     const QColor ec = pbr->emissiveColor;
     const float ei = pbr->emissiveIntensity;

@@ -6,7 +6,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QLayout>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
 #include "../graph/nodegraph.h"
@@ -15,6 +14,18 @@ namespace Ui {
 class MaterialSettingsWidget;
 }
 
+// The graph material's settings form: NAME and BLEND MODE, and nothing else.
+//
+// It used to carry eight more rows — Z Write, Depth Test, Fog, Cast Shadows,
+// Receive Shadows, Accept Lighting, Cull Mode, Render Layer — every one of
+// them a live, styled, serialized, UNDOABLE control that reached no renderer,
+// no material and no pixel (HLMS_ADOPTION P2). MaterialSettings no longer has
+// the fields, so the rows cannot come back by accident.
+//
+// "Receive Shadows" is not gone from the product: it is a real PbrMaterial row
+// now (HLMS_ADOPTION P1) and it reaches the datablock. The one here was a
+// different, dead control with almost the same name — which is precisely why
+// it had to go rather than be left beside the working one.
 class MaterialSettingsWidget : public QWidget
 {
 	Q_OBJECT
@@ -28,16 +39,7 @@ public:
 	void updateMaterialSettingsWidget(MaterialSettings &);
 
 	void setName(QString name);
-	void setZWrite(bool val);
-	void setDepthText(bool val);
-	void setFog(bool val);
-	void setCastShadows(bool val);
-	void setReceiveShadows(bool val);
-	void setAcceptLighting(bool val);
-
 	void setBlendMode(BlendMode index);
-	void setCullMode(CullMode index);
-	void setRenderLayer(RenderLayer index);
 
 private:
     MaterialSettings settings;
@@ -48,24 +50,8 @@ private:
 	QFormLayout *formLayout;
 	QLabel *label;
 	QLineEdit *lineEdit;
-	QLabel *label_2;
-	QCheckBox *checkBox;
-	QLabel *label_3;
-	QCheckBox *checkBox_2;
 	QLabel *label_4;
 	QComboBox *comboBox;
-	QLabel *label_5;
-	QComboBox *comboBox_2;
-	QLabel *label_6;
-	QComboBox *comboBox_3;
-	QLabel *label_7;
-	QCheckBox *checkBox_3;
-	QLabel *label_8;
-	QLabel *label_9;
-	QLabel *label_10;
-	QCheckBox *checkBox_4;
-	QCheckBox *checkBox_5;
-	QCheckBox *checkBox_6;
 	QFont font;
 signals:
     void settingsChanged(MaterialSettings value);

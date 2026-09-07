@@ -197,8 +197,10 @@ QJsonObject NodeGraph::serialize()
 	}
 	graph.insert("connections", consJson);
 	graph.insert("masternode", this->masterNode->id);
-
-	//todo: save settings (acceptLighting, blendstate, depthstate, etc..)
+	// The master node's socket layout, so a future renumbering can migrate
+	// instead of silently re-pointing every connection (pbrmasternode.h).
+	// Absent = layout 1, which is what every graph saved before P2 is.
+	graph.insert("socketLayout", kSocketLayoutVersion);
 
 	graph["settings"] = serializeMaterialSettings();
 
@@ -350,6 +352,20 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		}
 	}
 
+	// SOCKET-LAYOUT MIGRATION (HLMS_ADOPTION P2). Layout 1's PBR master had
+	// "Occlusion" at input index 4; layout 2 does not, so every input index
+	// above it moved down one. Connections are stored BY INDEX, so a layout-1
+	// file read as layout 2 would land Emissive on Normal, Alpha on Emissive
+	// and so on — silently. The version key makes that impossible instead of
+	// unlikely. A connection INTO the removed socket is dropped and NAMED: it
+	// fed a bake nothing ever rendered, and the user is owed the sentence.
+	const int savedLayout = graphObj.contains("socketLayout")
+	                            ? graphObj["socketLayout"].toInt(1) : 1;
+	const QString masterId = graphObj["masternode"].toString();
+	const bool pbrMaster = graph->masterNode && graph->masterNode->typeName == "PbrMaterial";
+	const bool migrateSockets = savedLayout < 2 && pbrMaster;
+	constexpr int kRemovedOcclusionSocket = 4;
+
 	// read connections
 	auto conList = graphObj["connections"].toArray();
 	for (auto conVar : conList) {
@@ -363,6 +379,20 @@ NodeGraph* NodeGraph::deserialize(QJsonObject graphObj, NodeLibrary* library)
 		// endpoints may be missing when an unknown node type was skipped
 		if (!graph->nodes.contains(leftNodeId) || !graph->nodes.contains(rightNodeId))
 			continue;
+
+		if (migrateSockets && rightNodeId == masterId) {
+			if (rightSockIndex == kRemovedOcclusionSocket) {
+				// ONCE, however many connections carried it.
+				const QString note =
+				    QStringLiteral("The master node's Occlusion input was removed: the renderer "
+				                   "has no ambient-occlusion input, so the map it baked was never "
+				                   "read by anything. Its connection was dropped on load. Bake AO "
+				                   "into the base colour at import if you need it.");
+				if (!graph->migrationNotes.contains(note)) graph->migrationNotes << note;
+				continue;
+			}
+			if (rightSockIndex > kRemovedOcclusionSocket) --rightSockIndex;
+		}
 
 		// §3b: a texture PropertyNode had outputs texture/rgba/normal — the
 		// replacing texture node has the single texture output, and the
@@ -410,44 +440,12 @@ QJsonObject NodeGraph::serializeMaterialSettings()
 		blendType = "Modulate";
 	}
 
-	QString cullMode;
-	switch (settings.cullMode) {
-	case CullMode::Front:
-		cullMode = "Front";
-		break;
-	case CullMode::Back:
-		cullMode = "Back";
-		break;
-	case CullMode::None:
-		cullMode = "None";
-	}
-
-	QString renderLayer;
-	switch (settings.renderLayer) {
-	case RenderLayer::Opaque:
-		renderLayer = "Opaque";
-		break;
-	case RenderLayer::AlphaTested:
-		renderLayer = "AlphaTested";
-		break;
-	case RenderLayer::Transparent:
-		renderLayer = "Transparent";
-		break;
-	case RenderLayer::Overlay:
-		renderLayer = "Overlay";
-		break;
-	}
-
+	// The eight inert keys (zWrite/depthTest/fog/castShadow/receiveShadow/
+	// acceptLighting/cullMode/renderLayer) are no longer WRITTEN. Old files
+	// keep carrying them and are still read fine — deserialize just ignores
+	// names it no longer has fields for.
 	obj["name"] = settings.name;
-	obj["zWrite"] = settings.zwrite;
-	obj["depthTest"] = settings.depthTest;
-	obj["fog"] = settings.fog;
-	obj["castShadow"] = settings.castShadow;
-	obj["receiveShadow"] = settings.receiveShadow;
-	obj["acceptLighting"] = settings.acceptLighting;
 	obj["blendMode"] = blendType;
-	obj["cullMode"] = cullMode;
-	obj["renderLayer"] = renderLayer;
 	obj["bakeResolution"] = settings.bakeResolution;
 	return obj;
 }
@@ -464,31 +462,9 @@ MaterialSettings NodeGraph::deserializeMaterialSettings(QJsonObject obj)
 		if (mode == "modulate") return BlendMode::Modulate;
 		return BlendMode::Opaque;
 	};
-	auto getCullMode = [](QJsonObject obj) {
-		if (obj["cullMode"].toString().toLower() == "front") return CullMode::Front;
-		if (obj["cullMode"].toString().toLower() == "back") return CullMode::Back;
-		if (obj["cullMode"].toString().toLower() == "none") return CullMode::None;
-		return CullMode::Front;
-	};
-	auto getRenderLayer = [](QJsonObject obj) {
-		if (obj["renderLayer"].toString().toLower() == "opaque") return RenderLayer::Opaque;
-		if (obj["renderLayer"].toString().toLower() == "alphatested") return RenderLayer::AlphaTested;
-		if (obj["renderLayer"].toString().toLower() == "transparent") return RenderLayer::Transparent;
-		if (obj["renderLayer"].toString().toLower() == "overlay") return RenderLayer::Overlay;
-		return RenderLayer::Opaque;
-	};
-
 	MaterialSettings settings;
 	settings.name = obj["name"].toString();
-	settings.zwrite = obj["zWrite"].toBool();
-	settings.depthTest = obj["depthTest"].toBool();
-	settings.fog = obj["fog"].toBool();
-	settings.castShadow = obj["castShadow"].toBool();
-	settings.receiveShadow = obj["receiveShadow"].toBool();
-	settings.acceptLighting = obj["acceptLighting"].toBool();
 	settings.blendMode = getBlendmode(obj);
-	settings.cullMode = getCullMode(obj);
-	settings.renderLayer = getRenderLayer(obj);
 	// absent in graphs saved before the Materials Evaluator program
 	settings.bakeResolution = qBound(128, obj["bakeResolution"].toInt(1024), 4096);
 
