@@ -312,10 +312,18 @@ public:
         /// shadow half falls back when no shadow node exists — so the request
         /// alone never says what the reflections actually contain.
         bool probeHdr = false, probeShadows = false;
-        /// How many of those probes are re-capturing the scene EVERY FRAME
-        /// (REFLECTIONS_ADOPTION_SPEC.md P5a). 0 is the shipped default and
-        /// means every reflection is frozen at build time until a refresh.
-        int  dynamicProbeCount = 0;
+        /// How many probes the renderer re-captures per frame — the RESOLVED
+        /// GI update budget (FIX WAVE B1/B2). 0 means GI is PAUSED: every
+        /// reflection is frozen until world.refreshGi() asks for more. Every
+        /// probe still refreshes within ceil(probeCount / this) frames.
+        int  probeUpdatesPerFrame = 0;
+        /// The union of the probes' fitted parallax shapes (FIX WAVE A2). Must
+        /// lie inside the probe region; a shape that escaped it is what makes
+        /// reflections go black in hard-edged, cluster-shaped patches.
+        QVector3D probeShapeMin, probeShapeMax;
+        /// Whether the last full refresh RE-USED the voxel arm instead of
+        /// rebuilding it from scratch (FIX WAVE B4).
+        bool reusedLastRefresh = false;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 

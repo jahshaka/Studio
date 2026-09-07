@@ -46,8 +46,7 @@ protected slots:
     void onBoundsMinChanged(iris::Vec3 value);
     void onBoundsMaxChanged(iris::Vec3 value);
     void onPccGridChanged(iris::Vec3 value);
-    void onAutoRefreshChanged(bool value);
-    void onRefreshClicked();
+    void onUpdateBudgetChanged(float value);
     void onFitBoundsClicked();
 
 private:
@@ -61,8 +60,7 @@ private:
     Widget3D *boundsMin = nullptr;
     Widget3D *boundsMax = nullptr;
     Widget3D *pccGrid = nullptr;
-    CheckBoxWidget *autoRefresh = nullptr;
-    QPushButton *refreshButton = nullptr;
+    HFloatSliderWidget *updateBudget = nullptr;
     QPushButton *fitBoundsButton = nullptr;
 };
 

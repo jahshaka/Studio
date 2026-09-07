@@ -76,8 +76,8 @@ function assert(cond, msg) {
 function J(x) { return JSON.stringify(x); }
 
 var ZIP = "@SOURCE_DIR@/scenes/Matcaps.zip";
-var SAMPLES = 6;             // 6 x 50 = the 300 idle frames
-var FRAMES_PER_SAMPLE = 50;
+var SAMPLES = 6;             // 6 x ~50 = the ~300 idle frames
+var FRAMES_PER_SAMPLE = 50;  // re-derived below, once the probe grid is known
 var DT = 1.0 / 60.0;
 var PROBE_W = 640, PROBE_H = 360;   // the script-set, machine-independent size
 var FIRST = 1;               // sample 2 (0-based) — sample 1 is warm-up
@@ -182,7 +182,46 @@ assert(a.objects.scenes > 0 && a.objects.meshes > 0,
 function flat(name, x, y) {
     assert(x === y, "idle: " + name + " did not grow (" + x + " -> " + y + ")");
 }
-flat("draws", a.draws, b.draws);
+
+// ...EXCEPT THE THREE GEOMETRY COUNTERS, WHICH NOW OSCILLATE BY DESIGN
+// (FIX WAVE B1/B2, 2026-09-07). Epic is the VCT+PCC hybrid, and since the GI
+// update budget shipped the renderer re-captures `updateBudget` reflection
+// probes EVERY frame in a sweep that reaches every probe. Each probe's six face
+// renders cull differently, so the frame these counters happen to be sampled on
+// carries whichever probe's geometry was in flight: measured on this scene at
+// the shipped 3x2x3 grid, draws move 15/16/17 and triangles 565k/634k/702k
+// between consecutive idle samples, while every OBJECT count below stays exactly
+// flat. (Aligning the sample length to a whole number of sweeps was tried and
+// does NOT fix it — takeSample's own readback frame shifts the phase by one
+// every sample.)
+//
+// That is the renderer working, not a leak, so the equality is replaced by the
+// statement a leak actually violates and an oscillation does not: NO TREND. A
+// leak grows monotonically, so the second half of the window would average
+// higher than the first half; a sweep averages out. The bound is 10%, which is
+// far tighter than the leak this suite was written to catch (one extra draw per
+// frame is +250 over the window, i.e. +1500%) and far looser than the sweep's
+// own swing.
+function noTrend(name, values, tol) {
+    var half = Math.floor(values.length / 2);
+    var mean = function (arr) {
+        var t = 0;
+        for (var i = 0; i < arr.length; ++i) t += arr[i];
+        return t / arr.length;
+    };
+    var first = mean(values.slice(0, half)), second = mean(values.slice(half));
+    var slack = tol * Math.max(first, 1) + 1;
+    assert(Math.abs(second - first) <= slack,
+           "idle: " + name + " has no growth TREND over the window (" +
+           first.toFixed(1) + " -> " + second.toFixed(1) + ", slack " + slack.toFixed(1) +
+           "; the per-frame swing is the GI probe sweep, values " + J(values) + ")");
+}
+function column(key) {
+    var out = [];
+    for (var i = 0; i < samples.length; ++i) out.push(samples[i][key]);
+    return out;
+}
+noTrend("draws", column("draws"), 0.10);
 // NOTE, so nobody reads more into this line than it says: `batches` measures 0
 // on this path today (Ogre only counts a batch for the draw shapes this scene
 // does not use), so on its own it proves nothing. It is asserted anyway because
@@ -190,8 +229,8 @@ flat("draws", a.draws, b.draws);
 // exactly the kind of growth this suite exists to see. The assertions that
 // carry weight here are draws and triangles, and the guard above proves those
 // two are non-zero.
-flat("batches", a.batches, b.batches);
-flat("triangles", a.triangles, b.triangles);
+noTrend("batches", column("batches"), 0.10);
+noTrend("triangles", column("triangles"), 0.10);
 flat("views", a.objects.views, b.objects.views);
 flat("enabledViews", a.objects.enabledViews, b.objects.enabledViews);
 flat("scenes", a.objects.scenes, b.objects.scenes);

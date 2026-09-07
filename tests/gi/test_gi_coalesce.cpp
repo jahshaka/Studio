@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     auto doc = iris::Scene::create();
     doc->giMode = iris::GiMode::VCT;
     doc->giQuality = iris::GiQuality::MEDIUM;
-    doc->giAutoRefresh = true;
+    doc->giUpdateBudget = 1;
     doc->giNumBounces = 2;
     // Zero ambient, like gi.modes: the red on the floor has to be BOUNCE and
     // nothing else, or the assertion is a study of the ambient term.
@@ -237,8 +237,11 @@ int main(int argc, char **argv)
     CHECK(mirror.giRefreshCount() == beforeExplicit + 1,
           "...and only once per bump");
 
-    // ---- auto refresh off means off ----------------------------------------
-    doc->giAutoRefresh = false;
+    // ---- a ZERO BUDGET means paused ----------------------------------------
+    // (FIX WAVE B1: `giAutoRefresh = false` became `giUpdateBudget = 0`. Same
+    // contract, one field instead of two — and it now also stops the probe
+    // round-robin, which is the other half of "GI is frozen".)
+    doc->giUpdateBudget = 0;
     const quint64 beforeOff = mirror.giRefreshCount();
     const quint64 lightBeforeOff = mirror.giLightRefreshCount();
     for (int f = 0; f < 30; ++f) {
@@ -248,7 +251,7 @@ int main(int argc, char **argv)
     for (int f = 0; f < 20; ++f) frame();
     CHECK(mirror.giRefreshCount() == beforeOff &&
           mirror.giLightRefreshCount() == lightBeforeOff,
-          "with Auto Refresh off, neither path runs however much the light moves");
+          "with the update budget at 0, neither path runs however much the light moves");
 
     // ---- RE-FIT ON EXIT (LIGHTING_FIX fix 2) -------------------------------
     //
@@ -265,7 +268,7 @@ int main(int argc, char **argv)
     // Auto bounds for this section — the suite above pins them on purpose, and
     // an escape from a hand-typed box is not a thing (a typed box is the user's
     // statement about where GI happens, so giEscapeSignature returns 0 for it).
-    doc->giAutoRefresh = true;
+    doc->giUpdateBudget = 1;
     doc->giBoundsMin = iris::Vec3(0, 0, 0);
     doc->giBoundsMax = iris::Vec3(0, 0, 0);
     frame();                       // the bounds change is a param change: one push

@@ -163,55 +163,93 @@ assert(Math.abs(reopened.snapDeviation - 0.08) < 1e-4, "snapDeviation survived")
 assert(Math.abs(reopened.snapSidesMin - 0.3) < 1e-4, "snapSidesMin survived");
 assert(Math.abs(reopened.snapSidesMax - 0.3) < 1e-4, "snapSidesMax survived");
 
-// ---- phase D2: DYNAMIC PROBES (P5a) --------------------------------------
-// The verb half of the phase whose pixels gi.dynamic_probes owns. What belongs
-// here rather than there: the default, the refusal, the RESOLVED count coming
-// back through the renderer, the clamp, and that it is document state.
-assert(reopened.dynamicProbes === 0,
-       "dynamicProbes defaults to 0 — the all-static grid every document " +
-       "written before this phase reads back as");
+// ---- phase D2: THE GI UPDATE BUDGET (FIX WAVE B1/B2) ---------------------
+// The verb half of the model whose pixels gi.budget and gi.dynamic_probes own.
+// What belongs here rather than there: the default, the refusals, the RESOLVED
+// figure coming back through the renderer, the clamp, that it is document
+// state, and that the two keys it REPLACED are gone by name.
+assert(reopened.updateBudget === 1,
+       "updateBudget defaults to 1 — one probe re-capture a frame, the realtime editor");
+assert(reopened.autoRefresh === true,
+       "the old autoRefresh spelling still READS, as budget > 0");
 threw = "";
-try { world.gi({ dynamicProbes: -1 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("dynamicProbes") >= 0, "world.gi refuses a negative dynamicProbes: " + threw);
+try { world.gi({ updateBudget: -1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("updateBudget") >= 0, "world.gi refuses a negative updateBudget: " + threw);
 threw = "";
-try { world.gi({ dynamicProbe: 1 }); } catch (e) { threw = String(e); }
-assert(threw.indexOf("dynamicProbe") >= 0,
-       "world.gi REFUSES the near-miss key by name (dynamicProbe is not dynamicProbes): " + threw);
+try { world.gi({ updateBudge: 1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("updateBudge") >= 0,
+       "world.gi REFUSES the near-miss key by name (updateBudge is not updateBudget): " + threw);
+// The two keys this replaced are REFUSED rather than silently aliased: a script
+// written against the old model must fail loudly and be told the new spelling.
+threw = "";
+try { world.gi({ autoRefresh: false }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("autoRefresh") >= 0 && threw.indexOf("updateBudget") >= 0,
+       "world.gi refuses the retired autoRefresh key and names updateBudget: " + threw);
+threw = "";
+try { world.gi({ dynamicProbes: 1 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("dynamicProbes") >= 0 && threw.indexOf("updateBudget") >= 0,
+       "world.gi refuses the retired dynamicProbes key and names updateBudget: " + threw);
 
-// A grid of two, one probe live. quality stays low so the six face renders a
-// live probe costs every frame are 128px ones.
-assert(world.gi({ quality: "low", pccGrid: { x: 2, y: 1, z: 1 }, dynamicProbes: 1 }),
-       "world.gi accepts dynamicProbes");
+// A grid of two, one update a frame. quality stays low so the six face renders
+// a probe update costs are 128px ones.
+assert(world.gi({ quality: "low", pccGrid: { x: 2, y: 1, z: 1 }, updateBudget: 1 }),
+       "world.gi accepts updateBudget");
 editor.frame(6);
 st = world.giStatus();
-console.log("giStatus(dynamicProbes 1) = " + JSON.stringify(st));
+console.log("giStatus(updateBudget 1) = " + JSON.stringify(st));
 assert(st.probeCount === 2, "the probe grid is the two the scene asked for");
-assert(st.dynamicProbeCount === 1,
-       "giStatus reports ONE live probe — the RESOLVED count, not the request");
+assert(st.probeUpdatesPerFrame === 1,
+       "giStatus reports ONE probe update a frame — the RESOLVED figure, not the request");
+// The probes' parallax shapes must lie inside the region they were fitted in
+// (FIX WAVE A2). This is the verb-surface half of the invariant gi.pcc_bounds
+// asserts in pixels; the two boxes are the only window onto it.
+var pad = 0.05, ok = true;
+["x", "y", "z"].forEach(function (a) {
+    var span = st.probeRegionMax[a] - st.probeRegionMin[a];
+    if (st.probeShapeMin[a] < st.probeRegionMin[a] - span * pad - 0.02) ok = false;
+    if (st.probeShapeMax[a] > st.probeRegionMax[a] + span * pad + 0.02) ok = false;
+});
+assert(ok, "every probe's parallax shape is inside the probe region: shapes " +
+           JSON.stringify(st.probeShapeMin) + ".." + JSON.stringify(st.probeShapeMax) +
+           " region " + JSON.stringify(st.probeRegionMin) + ".." +
+           JSON.stringify(st.probeRegionMax));
 
-// The clamp: more live probes than probes.
-assert(world.gi({ dynamicProbes: 99 }), "world.gi accepts an over-large dynamicProbes");
+// The clamp: a bigger budget than there are probes.
+assert(world.gi({ updateBudget: 99 }), "world.gi accepts an over-large updateBudget");
 editor.frame(6);
 st = world.giStatus();
-assert(st.dynamicProbeCount === 2,
-       "dynamicProbes is clamped to the probes that exist (99 -> 2)");
+assert(st.probeUpdatesPerFrame === 2,
+       "updateBudget is clamped to the probes that exist (99 -> 2)");
 
-// ...and back off, which is the state every scene should be in.
-assert(world.gi({ dynamicProbes: 0 }), "world.gi turns dynamic probes off again");
+// ...and 0, which is "pause global illumination".
+assert(world.gi({ updateBudget: 0 }), "world.gi pauses GI with updateBudget 0");
 editor.frame(6);
 st = world.giStatus();
-assert(st.dynamicProbeCount === 0, "no probe is live again");
+assert(st.probeUpdatesPerFrame === 0, "nothing re-captures while paused");
 assert(st.probeCount === 2 && st.pccBound === true,
-       "and the grid itself is untouched by the flip");
+       "and the grid itself is untouched by the pause");
+assert(world.get().gi.autoRefresh === false,
+       "the old autoRefresh reading follows the budget down to false");
+assert(world.refreshGi() === true, "world.refreshGi still works while paused");
 
-// Document state: it survives a save and a reopen like its siblings.
-assert(world.gi({ dynamicProbes: 2 }), "world.gi pins dynamicProbes for the round trip");
-assert(project.save() === true, "project.save (dynamic probes)");
-assert(project.close() === true, "project.close (dynamic probes)");
-assert(project.open(guid) === true, "project.open (dynamic probes)");
+// The ray-march scale (B5) is a verb-only integrator knob with a floor of 1.
+threw = "";
+try { world.gi({ rayMarchStepScale: 0.5 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("rayMarchStepScale") >= 0,
+       "world.gi refuses a rayMarchStepScale below 1 (upstream asserts): " + threw);
+assert(world.gi({ rayMarchStepScale: 1.5 }), "world.gi accepts rayMarchStepScale 1.5");
+
+// Document state: they survive a save and a reopen like their siblings.
+assert(world.gi({ updateBudget: 2 }), "world.gi pins updateBudget for the round trip");
+assert(project.save() === true, "project.save (update budget)");
+assert(project.close() === true, "project.close (update budget)");
+assert(project.open(guid) === true, "project.open (update budget)");
 editor.frame(4);
-assert(world.get().gi.dynamicProbes === 2, "dynamicProbes survived the round trip");
-assert(world.gi({ dynamicProbes: 0 }), "back to the default before the next phase");
+assert(world.get().gi.updateBudget === 2, "updateBudget survived the round trip");
+assert(Math.abs(world.get().gi.rayMarchStepScale - 1.5) < 1e-4,
+       "rayMarchStepScale survived the round trip");
+assert(world.gi({ updateBudget: 1, rayMarchStepScale: 1.0 }),
+       "back to the defaults before the next phase");
 editor.frame(4);
 
 // ---- phase E: EPIC REACHES THE HYBRID (P6/F8) ----------------------------

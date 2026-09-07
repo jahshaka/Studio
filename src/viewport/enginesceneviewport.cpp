@@ -1366,7 +1366,10 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeRegionMax = q(st.probeRegionMax);
     out.probeHdr       = st.probeHdr;
     out.probeShadows   = st.probeShadows;
-    out.dynamicProbeCount = st.dynamicProbeCount;
+    out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
+    out.probeShapeMin        = q(st.probeShapeMin);
+    out.probeShapeMax        = q(st.probeShapeMax);
+    out.reusedLastRefresh    = st.reusedLastRefresh;
     return out;
 }
 
