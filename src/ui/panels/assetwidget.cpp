@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QDirIterator>
 #include <QDrag>
+#include "ui/panels/singledragowner.h"
 #include <QJsonDocument>
 #include <QMenu>
 #include <QMessageBox>
@@ -117,8 +118,12 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	ui->assetView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     ui->assetView->setSelectionRectVisible(false);
 
-	ui->assetView->setDragEnabled(true);
 	ui->assetView->setDragDropMode(QAbstractItemView::DragDrop);
+	// ONE DRAG OWNER (ui/panels/singledragowner.h): this widget's eventFilter
+	// starts the QDrag, so the view's own machinery stays disarmed. Drops are
+	// untouched — the browser still accepts file URLs. LAST, because
+	// setDragDropMode arms dragEnabled.
+	singledrag::disarmViewDrag(ui->assetView);
 
 	activeFilter = SettingsManager::getDefaultManager()->getValue("active_filter", 0).toInt();
 	showDependencies = SettingsManager::getDefaultManager()->getValue("show_dependencies", false).toBool();
@@ -779,6 +784,11 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
                                 drag->setPixmap(item->icon().pixmap(64, 64));
                                 drag->exec();
+                                // The release exec() ate (singledragowner.h):
+                                // without it the view stays in DraggingState
+                                // and glues the item to the cursor the next
+                                // time the pointer enters the browser.
+                                singledrag::clearViewPressState(ui->assetView);
                                 // ONE drop per gesture: consume the move, or
                                 // QListWidget's own startDrag runs a second
                                 // QDrag from this same event and the drop

@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "modules/materials/core/materialhelper.h"
 
 #include "io/scenewriter.h"
+#include "ui/panels/singledragowner.h"
 
 AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
 {
@@ -37,8 +38,9 @@ AssetMaterialPanel::AssetMaterialPanel(QWidget *parent) : AssetPanel(parent)
     listView->viewport()->installEventFilter(this);
 
     setMouseTracking(true);
-    listView->setDragEnabled(true);
     listView->setDragDropMode(QAbstractItemView::DragDrop);
+    // ONE DRAG OWNER (ui/panels/singledragowner.h) — see assetmodelpanel.cpp.
+    singledrag::disarmViewDrag(listView);
     listView->setTextElideMode(Qt::ElideRight);
     listView->setItemDelegate(new FMListViewDelegate);
 
@@ -216,6 +218,8 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));
                             drag->exec();
+                            // The release exec() ate (singledragowner.h).
+                            singledrag::clearViewPressState(listView);
                             // ONE drop per gesture: consume the move, or the
                             // view's own startDrag runs a second QDrag from it
                             // (see assetmodelpanel.cpp for the traced defect).
