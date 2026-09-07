@@ -1398,6 +1398,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
     out.probeShapeMin        = q(st.probeShapeMin);
     out.probeShapeMax        = q(st.probeShapeMax);
+    out.cubemapProbeSlotsPerCell = st.cubemapProbeSlotsPerCell;
+    out.probesClampedToRegion    = st.probesClampedToRegion;
+    out.worstProbeShapeCellRatio = st.worstProbeShapeCellRatio;
     out.reusedLastRefresh    = st.reusedLastRefresh;
     return out;
 }
