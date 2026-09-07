@@ -216,6 +216,10 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));
                             drag->exec();
+                            // ONE drop per gesture: consume the move, or the
+                            // view's own startDrag runs a second QDrag from it
+                            // (see assetmodelpanel.cpp for the traced defect).
+                            return true;
                         }
                     }
                 }

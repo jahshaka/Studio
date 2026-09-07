@@ -111,6 +111,27 @@ var builtins = assets.builtins();
 assert(builtins.length > 20, "builtins enumerated (" + builtins.length + ")");
 assert(builtins.some(function (b) { return b.kind === "primitive" && b.name === "Cube"; }), "cube primitive listed");
 
+// THE RESERVED Default/Flat/Glass FAMILY REPORTS "material" (owner decision,
+// 2026-09-07). They stopped being shaders when CustomMaterial was retired —
+// each one hydrates as a PbrMaterial preset — and the old "shader" label was
+// the last echo of the map's historical name.
+var reservedFamily = ["00000000-0000-0000-0000-000000000001",   // Default
+                      "00000000-0000-0000-0000-000000000004",   // Flat
+                      "00000000-0000-0000-0000-000000000005"];  // Glass
+for (var rf = 0; rf < reservedFamily.length; rf++) {
+    var rows = builtins.filter(function (b) { return b.guid === reservedFamily[rf] && b.name.indexOf(".shader") >= 0; });
+    assert(rows.length === 1, "the reserved builtin " + reservedFamily[rf] + " is listed once");
+    assert(rows[0].kind === "material",
+           rows[0].name + " reports kind 'material', not 'shader' (" + rows[0].kind + ")");
+}
+assert(!builtins.some(function (b) { return b.kind === "shader"; }),
+       "no builtin still calls itself a shader");
+// TOLERANCE: nothing resolves by kind. assets.list's type vocabulary still
+// accepts "shader" (the graph-backed ModelTypes::Shader rows are real), so a
+// script written against the old label keeps working.
+assert(assets.list({ scope: "store", type: "shader" }).length >= 0,
+       "assets.list still accepts the legacy 'shader' type filter");
+
 var storeCountBefore = assets.list({ scope: "store" }).length;
 var objGuid = assets.import("@SOURCE_DIR@/app/content/primitives/cube.obj");
 assert(objGuid.length > 10, "assets.import -> " + objGuid);

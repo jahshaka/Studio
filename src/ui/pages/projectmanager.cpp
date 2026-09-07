@@ -709,13 +709,17 @@ void ProjectManager::openSampleBrowser()
     sampleList->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    // preview file -> sample name; the NAME is also the archive's file name
+    // (scenes/<name>.zip), so a new sample is a preview + an archive + a line
+    // here. The map is sorted by KEY, which is the display order.
     QMap<QString, QString> samples;
-    samples.insert("preview/matcaps.png",   "Matcaps");
-    samples.insert("preview/particles.png", "Particles");
-    samples.insert("preview/skeletal.png",  "Skeletal Animation");
-    samples.insert("preview/world.png",     "World Background");
-    samples.insert("preview/physics.png",   "Physics");
-    samples.insert("preview/showroom.png",  "Showroom");
+    samples.insert("preview/matcaps.png",    "Matcaps");
+    samples.insert("preview/mirrorroom.png", "Mirror Room");
+    samples.insert("preview/particles.png",  "Particles");
+    samples.insert("preview/skeletal.png",   "Skeletal Animation");
+    samples.insert("preview/world.png",      "World Background");
+    samples.insert("preview/physics.png",    "Physics");
+    samples.insert("preview/showroom.png",   "Showroom");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
 
@@ -742,8 +746,11 @@ void ProjectManager::openSampleBrowser()
         sampleList->addItem(item);
     }
 
-    // fixed size that fits the 3x2 grid cleanly (title + grid + button row)
-    const int sampleColumns = 3, sampleRows = 2;
+    // fixed size that fits the grid cleanly (title + grid + button row). Seven
+    // samples since the Mirror Room landed, so the last row is half full — a
+    // 4x2 dialog is 200 px wider than this one and buys nothing.
+    const int sampleColumns = 3;
+    const int sampleRows = (sampleList->count() + sampleColumns - 1) / sampleColumns;
     sampleList->setFixedSize(sampleColumns * sampleGridSize.width() + 16,
                              sampleRows * sampleGridSize.height() + 12);
 

@@ -779,6 +779,11 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
 
                                 drag->setPixmap(item->icon().pixmap(64, 64));
                                 drag->exec();
+                                // ONE drop per gesture: consume the move, or
+                                // QListWidget's own startDrag runs a second
+                                // QDrag from this same event and the drop
+                                // happens twice (see assetmodelpanel.cpp).
+                                return true;
                             }
                         }
                     }

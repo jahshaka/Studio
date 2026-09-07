@@ -55,7 +55,7 @@ static int failures = 0;
 /// The largest block an archive operation can still put on the UI thread is
 /// ONE install slice — one asset's CAS ingest, i.e. hashing and copying a
 /// single file — or the export's catalog sweep, which is pure SQLite over a
-/// project's asset rows. Both are tens of milliseconds on the Showroom sample.
+/// project's asset rows. Both are tens of milliseconds on the sample world.
 /// 750 ms leaves an order of magnitude of headroom over that while staying an
 /// order of magnitude BELOW the ~5 s of unanswered pings that makes GNOME
 /// offer to force-quit the app — the failure this whole program exists to
@@ -221,8 +221,17 @@ int main(int argc, char **argv)
                         home.toUtf8().constData());
     }
 
-    const QString sample = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/Showroom.zip");
-    CHECK(QFileInfo::exists(sample), "Showroom sample archive present");
+    // THE FIXTURE IS World Background (2026-09-07): it has to be a world with
+    // MODEL assets, because the export half asserts that mesh bakes exist on
+    // disk and never travel in the archive — and it has to be BIG, because the
+    // heartbeat below samples every 250 ms and an operation shorter than that
+    // records zero ticks (Matcaps imports in 231 ms and failed exactly there).
+    // World Background is the largest archive the tree ships (10 MB, 22
+    // objects); the Grand Showroom that replaced the old Showroom fixture is
+    // built from primitives, imports instantly and bakes nothing.
+    const QString sample =
+        QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/World Background.zip");
+    CHECK(QFileInfo::exists(sample), "World Background sample archive present");
 
     const QString outZip = QDir::current().filePath(QStringLiteral("archive-roundtrip.zip"));
     QFile::remove(outZip);

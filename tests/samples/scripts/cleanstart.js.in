@@ -48,8 +48,16 @@ var EXPECTED = {
                    types: { mesh: 3, particles: 4 } },
     "Physics": { nodes: 16, names: ["Teapot", "ball", "pipe", "Ground"],
                  types: { mesh: 13, light: 2 } },
-    "Showroom": { nodes: 200, names: ["Ground", "floormark", "RootNode"],
-                  types: { mesh: 20, light: 5, decal: 1 } },
+    // The GRAND SHOWROOM (2026-09-07) replaced the old 241-node import: a
+    // sealed hall of primitives — 6 room slabs, 4 columns, a 4-sphere metal
+    // roughness ladder, a torus and a teapot — under VCT + probes. 23 nodes,
+    // and it is REGENERABLE (scenes/tools/make_grand_showroom.js), which the
+    // world it replaced was not.
+    "Showroom": { nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot"],
+                  types: { mesh: 17, light: 5 }, objects: 0 },
+    // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
+    "Mirror Room": { nodes: 16, names: ["RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
+                     types: { mesh: 11, light: 4 }, objects: 0 },
     "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
                             types: { mesh: 4, light: 2 } },
     "World Background": { nodes: 7, names: ["SceneNode24", "Ground"],
@@ -192,7 +200,13 @@ app.engineErrors(true);
 var imported = project.importArchive(ZIP);
 assert(imported && imported.guid && imported.guid.length > 10, "importArchive -> " + (imported ? imported.guid : "null"));
 assert(imported.assets > 0, "catalog rows imported (" + imported.assets + ")");
-assert(imported.objects > 0, "objects ingested (" + imported.objects + ")");
+// OBJECTS: model files in the archive's CAS. The two script-built samples
+// (Showroom, Mirror Room) are made of PRIMITIVES, whose meshes are app
+// resources rather than library assets, so a correct import of those ingests
+// none — `objects` is per-sample expectation, not a universal contract.
+var wantObjects = want.objects === undefined ? 1 : want.objects;
+assert(imported.objects >= wantObjects,
+       "objects ingested (" + imported.objects + " >= " + wantObjects + ")");
 
 // 2. OPEN and check the content is the content.
 assert(project.open(imported.guid) === true, "project.open");
