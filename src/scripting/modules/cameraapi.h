@@ -83,6 +83,20 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE QVariantMap settings(const QString &id, const QVariant &options = QVariant());
+    // ---- CAMERA_LENS_SPEC §3 (P1/P2) -------------------------------------
+    // Three groups the settings block cannot express well, for the same reason
+    // `settings` itself exists: they are authored as a GROUP.
+    //   * filmback/lens — a preset is one word that moves several fields at
+    //     once, and both report the derived angles (horizontal, diagonal) that
+    //     nothing stores;
+    //   * the two preset tables — data, readable without a camera;
+    //   * focusInfo — pure derivation, read-only, and the reason the stored
+    //     aperture is honest before any DoF pass exists.
+    Q_INVOKABLE QVariantMap filmback(const QString &id, const QVariant &options = QVariant());
+    Q_INVOKABLE QVariantMap lens(const QString &id, const QVariant &options = QVariant());
+    Q_INVOKABLE QVariantList filmbackPresets();
+    Q_INVOKABLE QVariantList lensPresets();
+    Q_INVOKABLE QVariantMap focusInfo(const QString &id);
     Q_INVOKABLE bool lookAt(const QString &id, const QVariant &target);
     Q_INVOKABLE QVariantMap screenshot(const QString &id, const QString &path,
                                        const QVariantMap &options = QVariantMap());

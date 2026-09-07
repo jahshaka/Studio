@@ -46,6 +46,16 @@ QString focusModeName(iris::CameraFocusMode m)
     return QStringLiteral("manual");
 }
 
+QString sensorFitName(iris::CameraSensorFit f)
+{
+    switch (f) {
+    case iris::CameraSensorFit::Horizontal: return QStringLiteral("horizontal");
+    case iris::CameraSensorFit::Auto:       return QStringLiteral("auto");
+    case iris::CameraSensorFit::Vertical:   break;
+    }
+    return QStringLiteral("vertical");
+}
+
 }   // namespace
 
 // ---- the shared settings block (see cameraapi.h) --------------------------
@@ -56,6 +66,11 @@ const QStringList &settingsKeys()
 {
     static const QStringList keys{
         QStringLiteral("sensorWidth"), QStringLiteral("sensorHeight"),
+        // CAMERA_LENS_SPEC §3, the filmback block. It comes BEFORE the lens
+        // rows on purpose: applySettings writes in THIS order, and the fit and
+        // the squeeze decide what a focal length in the same call means.
+        QStringLiteral("sensorFit"), QStringLiteral("anamorphicSqueeze"),
+        QStringLiteral("lensShiftX"), QStringLiteral("lensShiftY"),
         QStringLiteral("angle"), QStringLiteral("focalLength"),
         QStringLiteral("authorMode"),
         QStringLiteral("projMode"), QStringLiteral("orthoSize"),
@@ -64,6 +79,10 @@ const QStringList &settingsKeys()
         QStringLiteral("dofEnabled"), QStringLiteral("focusMode"),
         QStringLiteral("focusDistance"), QStringLiteral("focusTarget"),
         QStringLiteral("fStop"),
+        // CAMERA_LENS_SPEC §3 P2, the focus block.
+        QStringLiteral("focusOffset"), QStringLiteral("smoothFocus"),
+        QStringLiteral("focusSmoothingSpeed"), QStringLiteral("minFocusDistance"),
+        QStringLiteral("bladeCount"), QStringLiteral("focusPlaneVisible"),
         QStringLiteral("outputHeight"), QStringLiteral("bodyVisible"),
     };
     return keys;
@@ -80,6 +99,11 @@ QVariantMap settingsToJs(const iris::CameraNodePtr &cam)
     out["sensorWidth"] = cam->sensorWidth;
     out["sensorHeight"] = cam->sensorHeight;
     out["authorMode"] = authorModeName(cam->authorMode);
+    // CAMERA_LENS_SPEC §3.
+    out["sensorFit"] = sensorFitName(cam->sensorFit);
+    out["anamorphicSqueeze"] = cam->anamorphicSqueeze;
+    out["lensShiftX"] = cam->lensShiftX;
+    out["lensShiftY"] = cam->lensShiftY;
     out["projMode"] = cam->projMode == iris::CameraProjection::Perspective
                           ? QStringLiteral("perspective") : QStringLiteral("orthogonal");
     out["orthoSize"] = cam->orthoSize;
@@ -92,6 +116,13 @@ QVariantMap settingsToJs(const iris::CameraNodePtr &cam)
     out["focusDistance"] = cam->focusDistance;
     out["focusTarget"] = cam->focusTarget;
     out["fStop"] = cam->fStop;
+    // CAMERA_LENS_SPEC §3 P2.
+    out["focusOffset"] = cam->focusOffset;
+    out["smoothFocus"] = cam->smoothFocus;
+    out["focusSmoothingSpeed"] = cam->focusSmoothingSpeed;
+    out["minFocusDistance"] = cam->minFocusDistance;
+    out["bladeCount"] = cam->bladeCount;
+    out["focusPlaneVisible"] = cam->focusPlaneVisible;
     out["outputHeight"] = cam->outputHeight;
     // Derived, never stored (CAMERAS_SPEC §2: one scalar plus the aspect is the
     // whole resolution model). Reported so a caller does not have to redo the
@@ -156,6 +187,32 @@ QString applySettings(const iris::CameraNodePtr &cam, const QVariantMap &params,
             else if (value.typeId() == QMetaType::QString)
                 return QStringLiteral("%1: focusMode is \"manual\", \"track\" or \"off\", got '%2'")
                            .arg(verb, s);
+        } else if (key == QLatin1String("sensorFit")) {
+            const QString s = value.toString().trimmed().toLower();
+            if (s == QLatin1String("auto"))            value = int(iris::CameraSensorFit::Auto);
+            else if (s == QLatin1String("horizontal")) value = int(iris::CameraSensorFit::Horizontal);
+            else if (s == QLatin1String("vertical"))   value = int(iris::CameraSensorFit::Vertical);
+            else if (value.typeId() == QMetaType::QString)
+                return QStringLiteral("%1: sensorFit is \"auto\", \"horizontal\" or \"vertical\", "
+                                      "got '%2'").arg(verb, s);
+        } else if (key == QLatin1String("anamorphicSqueeze")) {
+            // A squeeze of zero would divide the sensor away; a negative one is
+            // not a lens. Refused rather than silently clamped, because the
+            // caller meant something and we cannot guess what.
+            if (!(value.toFloat() > 0.0f))
+                return QStringLiteral("%1: anamorphicSqueeze must be greater than 0 "
+                                      "(1.0 is spherical, 2.0 is a 2x anamorphic)").arg(verb);
+        } else if (key == QLatin1String("lensShiftX") || key == QLatin1String("lensShiftY")) {
+            const float v = value.toFloat();
+            if (v < -1.0f || v > 1.0f)
+                return QStringLiteral("%1: %2 is a FRACTION of the frame and lives in [-1, 1] "
+                                      "(0.5 slides the image half a frame), got %3")
+                           .arg(verb, key, QString::number(v));
+        } else if (key == QLatin1String("bladeCount")) {
+            const int n = value.toInt();
+            if (n < 3 || n > 16)
+                return QStringLiteral("%1: bladeCount is a diaphragm, 3 to 16 blades, got %2")
+                           .arg(verb).arg(n);
         } else if (key == QLatin1String("projMode")) {
             const QString s = value.toString().trimmed().toLower();
             if (s == QLatin1String("perspective"))       value = int(iris::CameraProjection::Perspective);
@@ -190,9 +247,11 @@ QVector<VerbInfo> CameraApi::verbs() const
 {
     return {
         { "settings", "camera.settings(id, {…}?) -> {angle, focalLength, sensorWidth, sensorHeight, "
-                      "authorMode, projMode, orthoSize, nearClip, farClip, aspectRatio, "
+                      "authorMode, sensorFit, anamorphicSqueeze, lensShiftX, lensShiftY, "
+                      "projMode, orthoSize, nearClip, farClip, aspectRatio, "
                       "constrainAspect, dofEnabled, focusMode, focusDistance, focusTarget, fStop, "
-                      "outputHeight, outputWidth, bodyVisible}",
+                      "focusOffset, smoothFocus, focusSmoothingSpeed, minFocusDistance, "
+                      "bladeCount, focusPlaneVisible, outputHeight, outputWidth, bodyVisible}",
           "Reads a scene camera's whole settings block, or writes part of it and returns the "
           "result. `angle` is the VERTICAL field of view in degrees and `focalLength` is the same "
           "value in millimetres, bound through the sensor HEIGHT "
@@ -201,15 +260,89 @@ QVector<VerbInfo> CameraApi::verbs() const
           "`authorMode` (\"degrees\" or \"mm\") only decides which of the two survives a later "
           "sensor change. `projMode` is \"perspective\" or \"orthogonal\"; `focusMode` is "
           "\"manual\", \"track\" or \"off\" and `focusTarget` is the node id tracked in track "
-          "mode. The DOF rows (dofEnabled, focusMode, focusDistance, focusTarget, fStop) are "
-          "stored, animated and exported today — the live DOF render pass is a later phase, so "
-          "they change no pixels yet. `outputHeight` (with aspectRatio) sizes RENDERS and "
+          "mode — where the mirror rewrites `focusDistance` every synced frame from that node's "
+          "world position along the optical axis, plus `focusOffset`, clamped to "
+          "`minFocusDistance` and eased when `smoothFocus` is on (at `focusSmoothingSpeed` "
+          "e-folds per second). The DOF rows (dofEnabled, focusMode, focusDistance, focusTarget, "
+          "fStop, focusOffset, smoothFocus, focusSmoothingSpeed, minFocusDistance, bladeCount) "
+          "are stored, animated and exported today — the live DOF render pass is a later phase, "
+          "so they change no pixels yet; camera.focusInfo reports what they WOULD blur. "
+          "`focusPlaneVisible` draws the focus plane inside the camera's frustum helper (an "
+          "editor helper: never in a render, hidden in play). The filmback rows (sensorFit, "
+          "anamorphicSqueeze, lensShiftX, lensShiftY) are camera.filmback's and are documented "
+          "there; lens shift is the one row in this group that moves pixels, because it offsets "
+          "the projection itself. `outputHeight` (with aspectRatio) sizes RENDERS and "
           "EXPORTS only; the viewport ignores it, and the reported `outputWidth` is derived, not "
           "stored. Every row is also a reflected node property, so node.setProperty and keyframe "
           "animation reach the same fields. NOTE the read block also carries `id`, `name` and "
           "the derived `outputWidth`, which are NOT settings — strip those three before writing "
           "a read block back, or the write is refused (unknown keys always are, rather than "
           "being silently dropped). Undoable: each row is one step of the run's undo macro.",
+          Needs::Document },
+        { "filmback", "camera.filmback(id, preset|{preset?, sensorWidth?, sensorHeight?, "
+                      "sensorFit?, anamorphicSqueeze?, lensShiftX?, lensShiftY?}?) -> "
+                      "{sensorWidth, sensorHeight, sensorFit, fitAxis, anamorphicSqueeze, "
+                      "lensShiftX, lensShiftY, aspectRatio, preset, focalLength, angle, "
+                      "horizontalFov, diagonalFov}",
+          "The FILMBACK — the piece of film the lens projects onto — read, or written and read "
+          "back. Pass a preset name (camera.filmbackPresets() lists them) to load a sensor size in "
+          "one word, or an object to set rows individually; a preset plus explicit rows in the "
+          "same call means \"that preset, but…\". "
+          "`sensorFit` is \"vertical\" (the default and the historical behaviour: the angle of "
+          "view binds through the sensor HEIGHT), \"horizontal\" (through the WIDTH, crossed to "
+          "the stored vertical angle through aspectRatio — the cine convention, and what finally "
+          "makes sensorWidth matter), or \"auto\" (Blender's rule: the width covers the larger "
+          "image axis, so landscape frames behave horizontally). `anamorphicSqueeze` multiplies "
+          "the effective sensor WIDTH — a 2x anamorphic sees as wide as a half-length spherical "
+          "lens — and is therefore inert on a vertical fit. `lensShiftX/Y` shift the frustum "
+          "WITHOUT rotating the camera (the architectural rise/fall that keeps verticals "
+          "parallel), as a FRACTION of the frame in [-1, 1]: 0.5 slides the image half a frame. "
+          "The reported `fitAxis` is which axis \"auto\" resolved to for this aspect, and "
+          "`horizontalFov`/`diagonalFov` are derived from the stored vertical `angle` and "
+          "`aspectRatio` — a view that does not constrain its aspect renders at its own target's, "
+          "so those two are the authored frame's angles, not necessarily the window's. "
+          "Every row is also a camera.settings key and a keyable node property. Undoable.",
+          Needs::Document },
+        { "lens", "camera.lens(id, preset|focalLengthMm|{preset?, focalLength?, fStop?}?) -> "
+                  "{focalLength, fStop, angle, horizontalFov, diagonalFov, preset, sensorFit}",
+          "The LENS on the camera: focal length in millimetres and the aperture. Pass a preset "
+          "name (\"50mm\", or camera.lensPresets() for the kit), a bare number of millimetres, or "
+          "an object. Setting a focal length sets the SAME value `angle` names — they are one "
+          "value seen two ways, bound through the filmback (camera.filmback explains the binding) "
+          "— and flips authorMode to \"mm\", so a later sensor or fit change keeps the LENS and "
+          "moves the framing. A preset changes the lens ONLY: the f-stop is a shot decision and "
+          "is never reopened behind your back, so pass fStop explicitly (the preset's widest "
+          "aperture is reported as minFStop by camera.lensPresets). The 12mm preset is a "
+          "rectilinear ultra-wide, not a fisheye: no engine bends the projection for that, and "
+          "neither do we. Undoable.",
+          Needs::Document },
+        { "filmbackPresets", "camera.filmbackPresets() -> [{name, sensorWidth, sensorHeight, "
+                             "anamorphicSqueeze, sensorAspect}]",
+          "The named filmbacks camera.filmback accepts, smallest sensor first. These are "
+          "JAHSHAKA's defaults — a conventional sensor chart, not a reproduction of any other "
+          "tool's published table. `sensorAspect` is the SENSOR's own shape, which is not the "
+          "camera's aspectRatio: shooting a 16:9 frame on a Super 35 sensor is ordinary. Needs no "
+          "camera and changes nothing.",
+          Needs::Document },
+        { "lensPresets", "camera.lensPresets() -> [{name, focalLength, minFStop, note}]",
+          "The prime lens kit camera.lens accepts, wide to long. `minFStop` is the widest "
+          "aperture that lens is conventionally offered at — a suggestion for a UI, never applied "
+          "by camera.lens on its own. Needs no camera and changes nothing.",
+          Needs::Document },
+        { "focusInfo", "camera.focusInfo(id) -> {focusDistance, hyperfocal, nearLimit, farLimit, "
+                       "cocLimit}",
+          "The DEPTH OF FIELD this camera's lens, aperture and sensor actually produce, in "
+          "metres — read-only, derived, and true today even though the DoF render pass is a later "
+          "phase (that is the point: a focus pull can be authored and checked before anything "
+          "blurs). From the standard optics, with the circle of confusion taken as the sensor "
+          "diagonal over 1500 (`cocLimit`, in MILLIMETRES — 0.0288 mm on full frame, the value "
+          "published 35 mm depth-of-field tables use): hyperfocal H = f^2/(N*c) + f, near = "
+          "s*(H - f)/(H + s - 2f), far = s*(H - f)/(H - s). `farLimit` is Infinity when focus is "
+          "at or past the hyperfocal distance — where the sharp range is exactly [H/2, infinity), "
+          "the textbook identity — so test it "
+          "with isFinite() (JSON.stringify renders it as null). In \"track\" focus mode "
+          "`focusDistance` is whatever the last synced frame resolved from focusTarget, so step "
+          "editor.frame(1) after moving the rig before reading it.",
           Needs::Document },
         { "lookAt", "camera.lookAt(id, target) -> bool",
           "Points a camera at a target, which is either a node id or a world position {x,y,z}. "
@@ -277,6 +410,313 @@ QVariantMap CameraApi::settings(const QString &id, const QVariant &options)
     if (!error.isEmpty()) { fail(error); return out; }
 
     return camerashared::settingsToJs(cam);
+}
+
+// ---- CAMERA_LENS_SPEC §3: filmback, lens, presets, focus ------------------
+//
+// WHY THESE GO THROUGH camerashared::applySettings AND NOT THROUGH THE FIELDS:
+// every write in this file must be undoable, validated and refused the same way
+// whichever verb a script called. So both verbs below TRANSLATE their arguments
+// into a settings block and hand it to the one writer. A preset is therefore
+// not a special path — it is a few settings rows with a name.
+
+namespace {
+
+/// Case- and space-insensitive preset matching ("super 35" == "Super 35").
+QString normalizedName(const QString &s) { return s.trimmed().toLower().simplified(); }
+
+int findFilmbackPreset(const QString &name)
+{
+    int count = 0;
+    const iris::lens::FilmbackPreset *table = iris::lens::filmbackPresets(count);
+    const QString want = normalizedName(name);
+    for (int i = 0; i < count; ++i)
+        if (normalizedName(QString::fromLatin1(table[i].name)) == want) return i;
+    return -1;
+}
+
+int findLensPreset(const QString &name)
+{
+    int count = 0;
+    const iris::lens::LensPreset *table = iris::lens::lensPresets(count);
+    QString want = normalizedName(name);
+    for (int i = 0; i < count; ++i)
+        if (normalizedName(QString::fromLatin1(table[i].name)) == want) return i;
+    // "50" is as good a name for the 50 mm as "50mm" is — a script that
+    // computed a focal length should not have to format it our way.
+    if (!want.endsWith(QLatin1String("mm"))) want += QLatin1String("mm");
+    for (int i = 0; i < count; ++i)
+        if (normalizedName(QString::fromLatin1(table[i].name)) == want) return i;
+    return -1;
+}
+
+QString filmbackPresetNames()
+{
+    int count = 0;
+    const iris::lens::FilmbackPreset *table = iris::lens::filmbackPresets(count);
+    QStringList names;
+    for (int i = 0; i < count; ++i) names << QString::fromLatin1(table[i].name);
+    return names.join(QStringLiteral(", "));
+}
+
+QString lensPresetNames()
+{
+    int count = 0;
+    const iris::lens::LensPreset *table = iris::lens::lensPresets(count);
+    QStringList names;
+    for (int i = 0; i < count; ++i) names << QString::fromLatin1(table[i].name);
+    return names.join(QStringLiteral(", "));
+}
+
+/// The filmback preset this camera's sensor pair + squeeze currently matches,
+/// or an empty string. Exact-value comparison with a hair of tolerance: a
+/// camera whose sensor was nudged by hand is honestly NOT on a preset.
+QString matchedFilmback(const iris::CameraNodePtr &cam)
+{
+    int count = 0;
+    const iris::lens::FilmbackPreset *table = iris::lens::filmbackPresets(count);
+    for (int i = 0; i < count; ++i) {
+        if (qAbs(cam->sensorWidth - table[i].sensorWidth) < 0.005f &&
+            qAbs(cam->sensorHeight - table[i].sensorHeight) < 0.005f &&
+            qAbs(cam->anamorphicSqueeze - table[i].squeeze) < 0.001f)
+            return QString::fromLatin1(table[i].name);
+    }
+    return QString();
+}
+
+/// The lens preset this camera's focal length currently matches (within a tenth
+/// of a millimetre), or an empty string.
+QString matchedLens(const iris::CameraNodePtr &cam)
+{
+    int count = 0;
+    const iris::lens::LensPreset *table = iris::lens::lensPresets(count);
+    const float mm = cam->focalLength();
+    for (int i = 0; i < count; ++i)
+        if (qAbs(mm - table[i].focalMm) < 0.1f) return QString::fromLatin1(table[i].name);
+    return QString();
+}
+
+QVariantMap filmbackToJs(const iris::CameraNodePtr &cam)
+{
+    QVariantMap out;
+    out["sensorWidth"] = cam->sensorWidth;
+    out["sensorHeight"] = cam->sensorHeight;
+    out["sensorFit"] = sensorFitName(cam->sensorFit);
+    out["anamorphicSqueeze"] = cam->anamorphicSqueeze;
+    out["lensShiftX"] = cam->lensShiftX;
+    out["lensShiftY"] = cam->lensShiftY;
+    out["aspectRatio"] = cam->aspectRatio;
+    // Which axis the fit RESOLVES to for this aspect — the answer "auto" alone
+    // does not give, and the thing a user is actually asking about.
+    out["fitAxis"] = iris::lens::fitAxis(cam->sensorFit, cam->filmback().aspect) ==
+                             iris::lens::FitAxis::Horizontal
+                         ? QStringLiteral("horizontal") : QStringLiteral("vertical");
+    out["preset"] = matchedFilmback(cam);
+    out["focalLength"] = cam->focalLength();
+    out["angle"] = cam->angle;
+    out["horizontalFov"] = cam->horizontalFov();
+    out["diagonalFov"] = cam->diagonalFov();
+    return out;
+}
+
+QVariantMap lensToJs(const iris::CameraNodePtr &cam)
+{
+    QVariantMap out;
+    out["focalLength"] = cam->focalLength();
+    out["fStop"] = cam->fStop;
+    out["angle"] = cam->angle;
+    out["horizontalFov"] = cam->horizontalFov();
+    out["diagonalFov"] = cam->diagonalFov();
+    out["preset"] = matchedLens(cam);
+    out["sensorFit"] = sensorFitName(cam->sensorFit);
+    return out;
+}
+
+}   // namespace
+
+QVariantMap CameraApi::filmback(const QString &id, const QVariant &options)
+{
+    QVariantMap out;
+    auto cam = cameraOrFail(id, QStringLiteral("camera.filmback"));
+    if (!cam) return out;
+
+    const QVariant normalized = normalizeJs(options);
+    QVariantMap write;
+    if (normalized.isValid() && !normalized.isNull()) {
+        QVariantMap params;
+        if (normalized.typeId() == QMetaType::QString) {
+            params.insert(QStringLiteral("preset"), normalized.toString());
+        } else if (normalized.typeId() == QMetaType::QVariantMap) {
+            params = normalized.toMap();
+        } else {
+            fail("camera.filmback: the second argument is a preset NAME or an object of "
+                 "filmback settings");
+            return out;
+        }
+
+        static const QStringList known = { "preset", "sensorWidth", "sensorHeight", "sensorFit",
+                                           "anamorphicSqueeze", "lensShiftX", "lensShiftY" };
+        for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+            if (known.contains(it.key())) continue;
+            fail(QStringLiteral("camera.filmback: unknown filmback setting '%1' (known: %2) — the "
+                                "rest of the camera is camera.settings")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+
+        if (params.contains(QStringLiteral("preset"))) {
+            const QString name = params.value(QStringLiteral("preset")).toString();
+            const int idx = findFilmbackPreset(name);
+            if (idx < 0) {
+                fail(QStringLiteral("camera.filmback: no filmback preset named '%1' (known: %2)")
+                         .arg(name, filmbackPresetNames()));
+                return out;
+            }
+            int count = 0;
+            const iris::lens::FilmbackPreset *table = iris::lens::filmbackPresets(count);
+            // The preset is the FLOOR: explicit keys in the same call win, so
+            // "Super 35, but shifted" is one call and not two.
+            write.insert(QStringLiteral("sensorWidth"), table[idx].sensorWidth);
+            write.insert(QStringLiteral("sensorHeight"), table[idx].sensorHeight);
+            write.insert(QStringLiteral("anamorphicSqueeze"), table[idx].squeeze);
+        }
+        for (const QString &key : { QStringLiteral("sensorWidth"), QStringLiteral("sensorHeight"),
+                                    QStringLiteral("sensorFit"), QStringLiteral("anamorphicSqueeze"),
+                                    QStringLiteral("lensShiftX"), QStringLiteral("lensShiftY") })
+            if (params.contains(key)) write.insert(key, params.value(key));
+    }
+
+    const QString error = camerashared::applySettings(
+        cam, write,
+        host.services && host.services->sceneEdit ? host.services->sceneEdit->scene()
+                                                  : iris::ScenePtr(),
+        host.services ? host.services->undo : nullptr, QStringLiteral("camera.filmback"));
+    if (!error.isEmpty()) { fail(error); return out; }
+
+    return filmbackToJs(cam);
+}
+
+QVariantMap CameraApi::lens(const QString &id, const QVariant &options)
+{
+    QVariantMap out;
+    auto cam = cameraOrFail(id, QStringLiteral("camera.lens"));
+    if (!cam) return out;
+
+    const QVariant normalized = normalizeJs(options);
+    QVariantMap write;
+    if (normalized.isValid() && !normalized.isNull()) {
+        QVariantMap params;
+        if (normalized.typeId() == QMetaType::QString) {
+            params.insert(QStringLiteral("preset"), normalized.toString());
+        } else if (normalized.typeId() == QMetaType::Double ||
+                   normalized.typeId() == QMetaType::Int) {
+            // camera.lens(id, 35) is the obvious thing to type and it means
+            // exactly what it looks like: a 35 mm lens, preset or not.
+            params.insert(QStringLiteral("focalLength"), normalized.toDouble());
+        } else if (normalized.typeId() == QMetaType::QVariantMap) {
+            params = normalized.toMap();
+        } else {
+            fail("camera.lens: the second argument is a preset NAME, a focal length in "
+                 "millimetres, or an object {preset?, focalLength?, fStop?}");
+            return out;
+        }
+
+        static const QStringList known = { "preset", "focalLength", "fStop" };
+        for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+            if (known.contains(it.key())) continue;
+            fail(QStringLiteral("camera.lens: unknown lens setting '%1' (known: %2) — the sensor "
+                                "is camera.filmback and the rest is camera.settings")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+        if (params.contains(QStringLiteral("preset")) &&
+            params.contains(QStringLiteral("focalLength"))) {
+            fail("camera.lens: a preset IS a focal length — pass one of them, not both");
+            return out;
+        }
+
+        if (params.contains(QStringLiteral("preset"))) {
+            const QString name = params.value(QStringLiteral("preset")).toString();
+            const int idx = findLensPreset(name);
+            if (idx < 0) {
+                fail(QStringLiteral("camera.lens: no lens preset named '%1' (known: %2)")
+                         .arg(name, lensPresetNames()));
+                return out;
+            }
+            int count = 0;
+            const iris::lens::LensPreset *table = iris::lens::lensPresets(count);
+            // A preset changes the LENS, never the aperture: the f-stop is a
+            // shot decision and silently reopening it to the lens's maximum
+            // would change the exposure of somebody's scene. `minFStop` is
+            // reported by camera.lensPresets() for a caller who wants it.
+            write.insert(QStringLiteral("focalLength"), table[idx].focalMm);
+        }
+        for (const QString &key : { QStringLiteral("focalLength"), QStringLiteral("fStop") })
+            if (params.contains(key)) write.insert(key, params.value(key));
+    }
+
+    const QString error = camerashared::applySettings(
+        cam, write,
+        host.services && host.services->sceneEdit ? host.services->sceneEdit->scene()
+                                                  : iris::ScenePtr(),
+        host.services ? host.services->undo : nullptr, QStringLiteral("camera.lens"));
+    if (!error.isEmpty()) { fail(error); return out; }
+
+    return lensToJs(cam);
+}
+
+QVariantList CameraApi::filmbackPresets()
+{
+    QVariantList out;
+    int count = 0;
+    const iris::lens::FilmbackPreset *table = iris::lens::filmbackPresets(count);
+    for (int i = 0; i < count; ++i) {
+        QVariantMap m;
+        m["name"] = QString::fromLatin1(table[i].name);
+        m["sensorWidth"] = table[i].sensorWidth;
+        m["sensorHeight"] = table[i].sensorHeight;
+        m["anamorphicSqueeze"] = table[i].squeeze;
+        // The sensor's own shape, which is NOT the camera's aspectRatio: a
+        // 16:9 frame on a Super 35 sensor is a normal thing to shoot.
+        m["sensorAspect"] = table[i].sensorHeight > 0.0f
+                                ? table[i].sensorWidth / table[i].sensorHeight : 0.0f;
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantList CameraApi::lensPresets()
+{
+    QVariantList out;
+    int count = 0;
+    const iris::lens::LensPreset *table = iris::lens::lensPresets(count);
+    for (int i = 0; i < count; ++i) {
+        QVariantMap m;
+        m["name"] = QString::fromLatin1(table[i].name);
+        m["focalLength"] = table[i].focalMm;
+        m["minFStop"] = table[i].minFStop;
+        m["note"] = QString::fromLatin1(table[i].note);
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantMap CameraApi::focusInfo(const QString &id)
+{
+    QVariantMap out;
+    auto cam = cameraOrFail(id, QStringLiteral("camera.focusInfo"));
+    if (!cam) return out;
+
+    const iris::lens::FocusInfo info = cam->focusInfo();
+    out["focusDistance"] = info.focusDistance;
+    out["hyperfocal"] = info.hyperfocal;
+    out["nearLimit"] = info.nearLimit;
+    // Infinity is the ANSWER at and past the hyperfocal distance, not a
+    // failure — a script tests it with isFinite(), and JSON.stringify will
+    // render it as null, which is why the doc string says so.
+    out["farLimit"] = info.farLimit;
+    out["cocLimit"] = info.cocLimit;
+    return out;
 }
 
 bool CameraApi::lookAt(const QString &id, const QVariant &target)

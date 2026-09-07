@@ -19,6 +19,7 @@
 // Runs with QT_QPA_PLATFORM=offscreen and a reachable DISPLAY (Vulkan).
 
 #include <QGuiApplication>
+#include <cmath>
 #include <cstdio>
 #include <vector>
 
@@ -233,6 +234,86 @@ int main(int argc, char **argv)
     mirror.applyPip(iris::CameraNodePtr(), view, off);
     Image pipOff; frame(pipOff);
     CHECK(diff(pipOff, noPip) == 0, "switching the inset off leaves no trace");
+
+    // ---- 7. LENS SHIFT, in pixels (CAMERA_LENS_SPEC §3, P1) ---------------
+    //
+    // The shift offsets the PROJECTION without rotating the camera, so the
+    // image slides and nothing else does. Rendering THROUGH the scene camera
+    // (which also hides its own helpers, so the frame is the subject alone)
+    // makes that measurable: the subject's centroid must move by the fraction
+    // of the frame the document asked for, in the opposite direction to the
+    // frustum's offset, and zero must be byte-identical to never having asked.
+    {
+        auto frameThrough = [&](Image &out) {
+            mirror.sync();
+            mirror.applyCamera(cam, view);
+            for (int i = 0; i < 2; ++i) engine->renderOneFrame();
+            view->readPixels(out);
+        };
+        // The x centroid of everything that is not the clear colour, in
+        // normalised [0,1] frame coordinates.
+        auto centroidX = [](const Image &im) {
+            double sum = 0.0; size_t n = 0;
+            for (unsigned y = 0; y < im.height; ++y)
+                for (unsigned x = 0; x < im.width; ++x) {
+                    const Colour c = im.at(x, y);
+                    if (c.b > 0.8f && c.r < 0.15f && c.g < 0.15f) continue;
+                    sum += double(x); ++n;
+                }
+            return n ? float(sum / double(n) / double(im.width)) : -1.0f;
+        };
+
+        // Back the camera off until the subject is a BLOB in the frame rather
+        // than filling it: a subject that covers every pixel has a centroid of
+        // 0.5 whatever the projection does, which would make this assertion
+        // pass without measuring anything.
+        cam->setLocalPos(iris::Vec3(100.0f, 0.0f, 30.0f));
+        cam->lookAt(iris::Vec3(100.0f, 0.0f, 0.0f));
+        cam->lensShiftX = 0.0f; cam->lensShiftY = 0.0f;
+        Image straight; frameThrough(straight);
+        const float cx0 = centroidX(straight);
+        CHECK(cx0 > 0.3f && cx0 < 0.7f, "the unshifted shot has its subject near the centre");
+
+        // A quarter of a frame to the RIGHT: the frustum moves right, so what
+        // it sees moves LEFT in the image by exactly that fraction.
+        cam->lensShiftX = 0.25f;
+        Image shifted; frameThrough(shifted);
+        const float cx1 = centroidX(shifted);
+        std::printf("    lens shift x: centroid %.3f -> %.3f (expected %.3f)\n",
+                    cx0, cx1, cx0 - 0.25f);
+        CHECK(std::fabs((cx0 - cx1) - 0.25f) < 0.03f,
+              "lensShiftX = 0.25 slides the image a quarter of a frame");
+
+        cam->lensShiftX = 0.0f;
+        Image restored; frameThrough(restored);
+        CHECK(diff(restored, straight) == 0,
+              "zero lens shift is BYTE-IDENTICAL to a camera that never had the field");
+    }
+
+    // ---- 8. THE FOCUS PLANE (P2) ------------------------------------------
+    // An editor helper like the body: it draws inside the frustum wires when
+    // asked, and its off state is byte-exact.
+    {
+        cam->setLocalPos(iris::Vec3(0, 0, 0));
+        cam->lookAt(iris::Vec3(0, 0, -1.5f));
+        cam->focusDistance = 3.0f;
+        cam->focusPlaneVisible = false;
+        // One SETTLING frame first. sync() runs before applyCamera inside
+        // frame(), so the first frame after the view stops rendering THROUGH
+        // this camera still has its helpers hidden (a camera never draws
+        // itself) — comparing against that frame would be comparing against a
+        // scene with no helpers at all.
+        Image settle; frame(settle);
+        Image noPlane; frame(noPlane);
+        cam->focusPlaneVisible = true;
+        Image plane; frame(plane);
+        std::printf("    focus plane: %zu lit px -> %zu\n", litPixels(noPlane), litPixels(plane));
+        CHECK(litPixels(plane) > litPixels(noPlane),
+              "focusPlaneVisible draws the focus plane in the frustum helper");
+        cam->focusPlaneVisible = false;
+        Image planeOff; frame(planeOff);
+        CHECK(diff(planeOff, noPlane) == 0, "…and turning it off leaves no trace");
+    }
 
     mirror.setSource(nullptr);
     engine->destroyScene(target);

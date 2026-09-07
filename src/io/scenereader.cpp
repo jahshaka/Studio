@@ -1210,6 +1210,19 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
     cameraNode->authorMode = nodeObj["authorMode"].toString("degrees") == QLatin1String("mm")
                                  ? iris::CameraAuthorMode::Millimeters
                                  : iris::CameraAuthorMode::Degrees;
+    // CAMERA_LENS_SPEC §3. Every key below defaults to the value the
+    // constructor already set, so a file written before this phase existed
+    // loads a camera that projects EXACTLY what it used to (vertical fit, no
+    // squeeze, no shift). Set through the raw fields, not the setters, for the
+    // same reason the sensor pair is: `angle` above is the authored truth.
+    const QString sensorFit = nodeObj["sensorFit"].toString("vertical");
+    cameraNode->sensorFit = sensorFit == QLatin1String("horizontal") ? iris::CameraSensorFit::Horizontal
+                          : sensorFit == QLatin1String("auto")       ? iris::CameraSensorFit::Auto
+                                                                     : iris::CameraSensorFit::Vertical;
+    const float squeeze = (float) nodeObj["anamorphicSqueeze"].toDouble(1.0);
+    if (squeeze > 0.0f) cameraNode->anamorphicSqueeze = squeeze;
+    cameraNode->lensShiftX = qBound(-1.0f, (float) nodeObj["lensShiftX"].toDouble(0.0), 1.0f);
+    cameraNode->lensShiftY = qBound(-1.0f, (float) nodeObj["lensShiftY"].toDouble(0.0), 1.0f);
     cameraNode->constrainAspect = nodeObj["constrainAspect"].toBool(false);
     cameraNode->dofEnabled      = nodeObj["dofEnabled"].toBool(false);
     const QString focusMode = nodeObj["focusMode"].toString("manual");
@@ -1219,6 +1232,14 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
     cameraNode->focusDistance = std::max(0.0f, (float) nodeObj["focusDistance"].toDouble(10.0));
     cameraNode->focusTarget   = nodeObj["focusTarget"].toString();
     cameraNode->fStop         = std::max(0.0f, (float) nodeObj["fStop"].toDouble(2.8));
+    // CAMERA_LENS_SPEC §3 P2, the focus block — absent keys keep the
+    // constructor's defaults, which is what every pre-P2 file means.
+    cameraNode->focusOffset         = (float) nodeObj["focusOffset"].toDouble(0.0);
+    cameraNode->smoothFocus         = nodeObj["smoothFocus"].toBool(false);
+    cameraNode->focusSmoothingSpeed = std::max(0.0f, (float) nodeObj["focusSmoothingSpeed"].toDouble(8.0));
+    cameraNode->minFocusDistance    = std::max(0.0f, (float) nodeObj["minFocusDistance"].toDouble(0.1));
+    cameraNode->bladeCount          = qBound(3, nodeObj["bladeCount"].toInt(5), 16);
+    cameraNode->focusPlaneVisible   = nodeObj["focusPlaneVisible"].toBool(false);
     cameraNode->outputHeight  = qBound(1, nodeObj["outputHeight"].toInt(1080), 16384);
     cameraNode->bodyVisible   = nodeObj["bodyVisible"].toBool(true);
 
