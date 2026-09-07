@@ -94,6 +94,13 @@ add_script_e2e(render_stats e2e_render_stats.js)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
 add_script_e2e(planar e2e_planar.js)
+# LIGHTING CHANNELS (light masks): node.setLightMask / node.lightMask, the
+# reflected `lightMask` row and its signed spelling, and the save/reopen round
+# trip in both directions (a masked node keeps its channels; an unmasked one
+# comes back on ALL of them, which is what an absent key has to mean). The pixel
+# half — that the channels actually filter light, and that shadows do not follow
+# them — is the lights.masks engine suite.
+add_script_e2e(light_masks e2e_light_masks.js)
 # REFLECTIONS_ADOPTION_SPEC §3: world.giStatus() — the ACHIEVED reading of
 # global illumination (probe count, and whether the probe/VCT bindings are live
 # on the PBR shader). The API-first half of the PCC gate; the pixel half is the

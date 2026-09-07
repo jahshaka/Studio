@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/checkboxwidget.h"
+#include "ui/controls/lightchannelswidget.h"
 #include "services/planarreflectors.h"
 
 #include <QMessageBox>
@@ -53,6 +54,17 @@ MeshPropertyWidget::MeshPropertyWidget()
     // marked planes actually render is the World panel's budget, not this.
     planarReflector = this->addCheckBox("Planar Reflector", false);
     connect(planarReflector, SIGNAL(valueChanged(bool)), this, SLOT(onPlanarReflectorChanged(bool)));
+
+    // LIGHTING CHANNELS, object side. Every node is on every channel by
+    // default, so this row is inert until a user turns something off — which is
+    // also why it can sit here without changing any existing scene.
+    lightChannels = new LightChannelsWidget(this);
+    lightChannels->setDescription(
+        tr("Only lights that share a channel with this object light it. Shadows are NOT "
+           "filtered: an unlit object still casts a shadow from that light."));
+    this->addWidgetToContent(lightChannels);
+    connect(lightChannels, &LightChannelsWidget::maskChanged,
+            this, &MeshPropertyWidget::onLightChannelsChanged);
 
     //connect(meshPicker, SIGNAL(onPathChanged(QString)), SLOT(onMeshPathChanged(QString)));
 }
@@ -95,6 +107,14 @@ void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
     }
 }
 
+void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)
+{
+    if (meshNode.isNull()) return;
+    // Straight to the document: the mirror pushes the mask onto the node's Item
+    // on the next sync, change-guarded like every other flag.
+    meshNode->setLightMask(mask);
+}
+
 void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
@@ -102,6 +122,9 @@ void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         planarReflector->blockSignals(true);
         planarReflector->setValue(meshNode->getPlanarReflector());
         planarReflector->blockSignals(false);
+        // setMask does not emit, so this cannot write the value back into the
+        // node it was just read from.
+        lightChannels->setMask(meshNode->getLightMask());
         //meshPicker->setFilepath(meshNode->meshPath);
 
 		switch (meshNode->getFaceCullingMode())

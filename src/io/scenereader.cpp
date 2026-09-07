@@ -698,6 +698,13 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // emits the key when the user turned casting off, so every scene written
     // before the key existed loads exactly as it did.
     sceneNode->setShadowCastingEnabled(nodeObj["castShadow"].toBool(true));
+    // LIGHTING CHANNELS. ABSENT = ALL CHANNELS, which is what every scene
+    // written before the key existed means and what "the feature is off"
+    // means — so no old document changes appearance. Read through a double
+    // (QJsonValue's only numeric type; it holds every uint32 exactly) and
+    // masked back to 32 bits, so a hand-edited -1 also reads as "everything".
+    sceneNode->setLightMask(static_cast<quint32>(
+        static_cast<qlonglong>(nodeObj["lightMask"].toDouble(4294967295.0)) & 0xFFFFFFFFll));
     // SCENE_STATIC, the persisted USER OVERRIDE (format v2). Absent — every
     // node of every scene written before v2, and the overwhelming majority
     // after it — means "no opinion": the default policy decides, in the

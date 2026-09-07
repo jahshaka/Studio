@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "ui/controls/colorvaluewidget.h"
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/checkboxwidget.h"
+#include "ui/controls/lightchannelswidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -131,6 +132,18 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     connect(maskPick, &QPushButton::clicked, this, &LightPropertyWidget::pickMask);
     connect(maskClear, &QPushButton::clicked, this, &LightPropertyWidget::clearMask);
 
+    // LIGHTING CHANNELS, light side. Note the row above is called "Light Mask"
+    // and is a completely different thing (an area light's gobo IMAGE) — hence
+    // "Lighting Channels" here, and the description line, rather than the
+    // engine's `lightMask` spelling.
+    lightChannels = new LightChannelsWidget(this);
+    lightChannels->setDescription(
+        tr("This light only lights objects that share a channel with it. Shadows are NOT "
+           "filtered: an object this light does not light still casts a shadow from it."));
+    this->addWidgetToContent(lightChannels);
+    connect(lightChannels, &LightChannelsWidget::maskChanged,
+            this, &LightPropertyWidget::lightChannelsChanged);
+
     shadowType = this->addComboBox("Shadow Type");
     shadowType->addItem("None");
     shadowType->addItem("Hard");
@@ -208,6 +221,10 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
 
 		shadowColor->setColorValue(lightNode->shadowColor);
 		shadowAlpha->setValue(lightNode->shadowAlpha);
+
+        // Does not emit: setMask is the quiet setter, so selecting a light
+        // cannot write its own value back into it.
+        lightChannels->setMask(lightNode->getLightMask());
 
         if (lightNode->getLightType()==iris::LightType::Spot) {
             spotCutOff->show();
@@ -339,6 +356,14 @@ void LightPropertyWidget::lightAccurateChanged(bool accurate)
     // Accurate (LTC) area lights ignore the mask entirely — say so the moment
     // the user flips the switch, not the next time the panel is rebuilt.
     refreshBindingRows();
+}
+
+void LightPropertyWidget::lightChannelsChanged(quint32 mask)
+{
+    if (!lightNode) return;
+    // Document only: the mirror sees the changed LightDesc on the next sync
+    // (sameLight compares the mask) and pushes it.
+    lightNode->setLightMask(mask);
 }
 
 // --- Asset bindings -------------------------------------------------------

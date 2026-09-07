@@ -1664,6 +1664,63 @@ int main(int argc, char **argv)
         pmirror.setSource(nullptr);
     }
 
+    // ---- LIGHTING CHANNELS through the mirror -----------------------------
+    // The document field is on SceneNode and has to reach the engine twice: as
+    // the object-side mask on a mesh node's Item, and inside the LightDesc for
+    // a light. Both are CHANGE-GUARDED, which is the half that breaks silently:
+    // a guard that never notices a change means the second edit never lands.
+    // (The pixel proof that the masks then filter light is lights.masks.)
+    {
+        auto ldoc = iris::Scene::create();
+        auto cube = iris::MeshNode::create();
+        cube->setMesh(":assets/models/cube.obj");
+        cube->setMaterial(iris::PbrMaterial::create());
+        cube->setName("channels-cube");
+        ldoc->getRootNode()->addChild(cube, false);
+        auto lamp = iris::LightNode::create();
+        lamp->setLightType(iris::LightType::Point);
+        lamp->setName("channels-light");
+        ldoc->getRootNode()->addChild(lamp, false);
+
+        SceneMirror lmirror(target);
+        lmirror.setSource(ldoc);
+        lmirror.sync();
+        const auto cubeNode = lmirror.engineNode(cube.data());
+        const auto lampNode = lmirror.engineNode(lamp.data());
+        CHECK(cubeNode != 0 && lampNode != 0, "channels: both nodes reached the engine");
+        CHECK(target->nodeLightMask(cubeNode) == 0xFFFFFFFFu,
+              "channels: a node the user never touched is on EVERY channel");
+
+        cube->setLightMask(0x2u);
+        lmirror.sync();
+        CHECK(target->nodeLightMask(cubeNode) == 0x2u,
+              "channels: the document's mask reached the Item");
+        // The change guard: a SECOND edit must land too.
+        cube->setLightMask(0x4u);
+        lmirror.sync();
+        CHECK(target->nodeLightMask(cubeNode) == 0x4u,
+              "channels: a second edit is not swallowed by the push guard");
+        // And an idle sync must not undo it.
+        lmirror.sync();
+        CHECK(target->nodeLightMask(cubeNode) == 0x4u, "channels: an idle sync changes nothing");
+
+        // The LIGHT half rides the LightDesc, whose compare had to grow the
+        // field — a sameLight() that ignores the mask would drop this edit.
+        lamp->setLightMask(0x8u);
+        lmirror.sync();
+        CHECK(lamp->getLightMask() == 0x8u, "channels: the light carries its own mask");
+        // The engine records the mask on the node either way (a light node has
+        // no Item, so this is the record, not the Item's flag).
+        CHECK(target->nodeLightMask(lampNode) == 0x8u,
+              "channels: the light node's mask reached the engine too");
+        // A duplicate carries the channels: a copied object that silently
+        // rejoined every channel would be the classic "why is this one lit?".
+        auto copy = cube->duplicate();
+        CHECK(copy->getLightMask() == 0x4u, "channels: a duplicate keeps its channels");
+
+        lmirror.setSource(nullptr);
+    }
+
     // ---- SCENE_STATIC through the mirror ----------------------------------
     // SCENEGRAPH_SPEC §6 rule 3: the engine creates a node's Item in the NODE's
     // memory-manager class, because SceneNode::attachObject throws when the two

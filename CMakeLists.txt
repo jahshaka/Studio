@@ -317,6 +317,7 @@ set(SRCS
     src/ui/panels/propertywidgets/nodepropertywidget.cpp
     src/ui/controls/labelwidget.cpp
     src/ui/controls/checkboxwidget.cpp 
+    src/ui/controls/lightchannelswidget.cpp
     src/ui/controls/textinputwidget.cpp 
     src/ui/controls/comboboxwidget.cpp 
     src/ui/controls/hfloatsliderwidget.cpp 
@@ -553,6 +554,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/nodepropertywidget.h
     src/ui/controls/labelwidget.h
     src/ui/controls/checkboxwidget.h 
+    src/ui/controls/lightchannelswidget.h
     src/ui/controls/textinputwidget.h 
     src/ui/controls/comboboxwidget.h 
     src/ui/controls/hfloatsliderwidget.h 

@@ -387,6 +387,14 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     // 2026-09-04). NOTE: SceneMirror does not consume this flag yet, so today
     // the repair is document fidelity, not pixels.
     if (!sceneNode->getShadowCastingEnabled()) sceneNodeObj["castShadow"] = false;
+    // LIGHTING CHANNELS (light masks). Written only when the node is NOT on
+    // every channel — the same "off by default, so absent means default"
+    // discipline as the three keys above, and it keeps the mask out of every
+    // node of every scene ever written. As a JSON number: QJsonValue holds a
+    // double, which represents every uint32 exactly, so 4294967295 survives the
+    // round trip bit for bit (the reader clamps it back into 32 bits anyway).
+    if (sceneNode->getLightMask() != 0xFFFFFFFFu)
+        sceneNodeObj["lightMask"] = double(sceneNode->getLightMask());
 
     // Socket attachment (CAMERAS_SPEC §5). Written only when the node actually
     // rides a socket — as with planarReflector/castShadow above, a key on every

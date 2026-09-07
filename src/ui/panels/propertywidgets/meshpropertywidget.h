@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "ui/controls/accordionbladewidget.h"
 
 class IEditorViewport;
+class LightChannelsWidget;
 
 class MeshPropertyWidget : public AccordianBladeWidget
 {
@@ -38,6 +39,7 @@ protected slots:
     void onMeshPathChanged(const QString&);
 	void onCullModeChanged(const QString&);
     void onPlanarReflectorChanged(bool);
+    void onLightChannelsChanged(quint32 mask);
 
 private:
     QSharedPointer<iris::MeshNode> meshNode;
@@ -47,6 +49,8 @@ private:
     FilePickerWidget* meshPicker = nullptr;
 	ComboBoxWidget* faceCullMode;
     CheckBoxWidget* planarReflector = nullptr;
+    /// Lighting channels, object side — "which lights may light this".
+    LightChannelsWidget* lightChannels = nullptr;
     IEditorViewport* sceneView = nullptr;
 };
 

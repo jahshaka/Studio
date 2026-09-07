@@ -20,6 +20,7 @@ For more information see the LICENSE file
 class ColorValueWidget;
 class ColorPickerWidget;
 class Database;
+class LightChannelsWidget;
 class QLabel;
 class QPushButton;
 namespace iris
@@ -99,6 +100,9 @@ protected slots:
 	void shadowColorChanged(QColor color);
 	void shadowAlphaChanged(float bias);
 
+    /// Lighting channels, light side: which channels this light illuminates.
+    void lightChannelsChanged(quint32 mask);
+
 private:
     /// Repaints the two binding rows from the node, INCLUDING the honesty
     /// annotations: a profile does nothing on a shadow-casting point light (the
@@ -125,6 +129,9 @@ private:
     HFloatSliderWidget* rectHeight;
     CheckBoxWidget* doubleSided;
     CheckBoxWidget* accurate;
+    /// Lighting channels (light masks) — NOT the "Light Mask" rows above, which
+    /// bind an area light's gobo image.
+    LightChannelsWidget* lightChannels = nullptr;
     //EnumPicker* lightTypePicker;
 
 	ColorValueWidget* shadowColor;

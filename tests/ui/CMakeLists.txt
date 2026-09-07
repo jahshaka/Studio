@@ -162,3 +162,23 @@ endif()
 # this lane's first fix (hfloatsliderwidget.cpp).
 jah_lsan_lane(ui.property_anim ui.media_lazy)
 jah_lsan_blocked(ui.material_panel)
+
+# ui.light_channels — the lighting-channel checkbox row. Eight boxes over a
+# 32-bit field: the test is about the 24 bits the row does NOT show (they must
+# survive every edit), about "All" restoring the true all-ones default, and
+# about setMask being quiet (the panel calls it while selecting a node).
+# Widgets only — no document, no engine, no display.
+add_executable(test_light_channels test_light_channels.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp)
+set_target_properties(test_light_channels PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_light_channels PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_light_channels PRIVATE Qt6::Widgets Qt6::Test)
+add_test(NAME ui.light_channels COMMAND test_light_channels
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.light_channels PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")

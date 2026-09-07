@@ -141,6 +141,27 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "planarReflector", "node.planarReflector(id) -> bool",
           "Whether this object is a planar reflection plane.",
           Needs::Document },
+        { "setLightMask", "node.setLightMask(id, channels) -> bool",
+          "LIGHTING CHANNELS — \"this light only affects these objects\". Set on a LIGHT it is "
+          "the set of channels the light illuminates; set on an OBJECT it is the set of channels "
+          "the object is lit by. A light lights an object when the two sets INTERSECT. Every node "
+          "starts on every channel, so nothing is filtered until you say so. `channels` is either "
+          "a number (a 32-bit mask; -1 and 4294967295 both mean everything) or an ARRAY of "
+          "channel indices 0..31 — node.setLightMask(id, [0]) puts a node on channel 0 alone, "
+          "node.setLightMask(id, []) takes it off every channel. The editor's checkboxes show "
+          "channels 0..7; a script may use all 32. WHAT IT DOES NOT DO, at this engine: it "
+          "filters DIRECT light only. A masked-off object STILL CASTS a shadow from that light "
+          "(one shadow map serves every receiver, so the caster pass cannot know), and still "
+          "receives that light's GI bounce. Undoable.",
+          Needs::Document },
+        { "lightMask", "node.lightMask(id) -> {mask, channels, all}",
+          "The node's lighting channels: `mask` as an UNSIGNED 32-bit number, `channels` as the "
+          "array of set bit indices (0..31; absent from the reply when every bit is set, because "
+          "listing 32 of them says nothing), and `all` true while the node is on every channel — "
+          "the default, and the state in which the feature costs nothing. Note node.property(id, "
+          "'lightMask') reports the same bits SIGNED (-1 for everything), the way Unity's culling "
+          "mask does; this verb is the unsigned spelling.",
+          Needs::Document },
         { "setCollision", "node.setCollision(id, enabled) -> bool",
           "Whether a CHARACTER can walk into this object (AVATAR_LOCOMOTION_SPEC §6.3). ON by "
           "default for every mesh and off for every other node type, so an imported level is "
@@ -321,6 +342,68 @@ bool NodeApi::planarReflector(const QString &id)
     auto node = nodeOrFail(id, QStringLiteral("node.planarReflector"));
     if (!node) return false;
     return node->getPlanarReflector();
+}
+
+// LIGHTING CHANNELS. Two spellings in, one out: a raw 32-bit number for the
+// power user, an array of channel indices for everybody else (which is what the
+// checkbox row is, and what reads well in a script).
+bool NodeApi::setLightMask(const QString &id, const QVariant &channels)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.setLightMask"));
+    if (!node) return false;
+    const QVariant value = normalizeJs(channels);
+
+    quint32 mask = 0u;
+    if (value.typeId() == QMetaType::QVariantList) {
+        for (const QVariant &entry : value.toList()) {
+            bool ok = false;
+            const int bit = entry.toInt(&ok);
+            if (!ok || bit < 0 || bit > 31)
+                return fail(QStringLiteral("node.setLightMask: '%1' is not a channel index — "
+                                           "the array form takes whole numbers 0..31 (the editor "
+                                           "shows 0..7)")
+                                .arg(entry.toString()));
+            mask |= (1u << bit);
+        }
+    } else {
+        bool ok = false;
+        // Wide on purpose: -1 and 4294967295 are the same 32 bits and callers
+        // send both. toInt() would turn the unsigned spelling into 0 — "no
+        // channels", the exact opposite of what was meant.
+        const qlonglong wide = value.toLongLong(&ok);
+        if (!ok)
+            return fail(QStringLiteral("node.setLightMask: expected a 32-bit mask or an array of "
+                                       "channel indices 0..31, got '%1'")
+                            .arg(value.toString()));
+        mask = static_cast<quint32>(wide & 0xFFFFFFFFll);
+    }
+
+    const quint32 was = node->getLightMask();
+    if (was == mask) return true;          // idempotent, and no undo entry for a no-op
+    node->setLightMask(mask);
+    recordNodeEdit(QStringLiteral("lighting channels"),
+                   [node, mask]() { node->setLightMask(mask); },
+                   [node, was]() { node->setLightMask(was); });
+    return true;
+}
+
+QVariant NodeApi::lightMask(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.lightMask"));
+    if (!node) return QVariant();
+    const quint32 mask = node->getLightMask();
+    QVariantMap out;
+    // As a double: QJSEngine has no 32-bit unsigned type, and a double holds
+    // every uint32 exactly, so 4294967295 arrives in JS as 4294967295.
+    out["mask"] = double(mask);
+    out["all"] = (mask == 0xFFFFFFFFu);
+    if (mask != 0xFFFFFFFFu) {
+        QVariantList bits;
+        for (int i = 0; i < 32; ++i)
+            if (mask & (1u << i)) bits.append(i);
+        out["channels"] = bits;
+    }
+    return out;
 }
 
 bool NodeApi::setCollision(const QString &id, bool enabled)

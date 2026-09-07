@@ -59,6 +59,8 @@ public:
     Q_INVOKABLE QVariant particleTexture(const QString &id);
     Q_INVOKABLE bool setPlanarReflector(const QString &id, bool enabled);
     Q_INVOKABLE bool planarReflector(const QString &id);
+    Q_INVOKABLE bool setLightMask(const QString &id, const QVariant &channels);
+    Q_INVOKABLE QVariant lightMask(const QString &id);
     Q_INVOKABLE bool setCollision(const QString &id, bool enabled);
     Q_INVOKABLE bool collision(const QString &id);
     Q_INVOKABLE bool setAttached(const QString &id, bool attached);
