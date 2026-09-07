@@ -98,10 +98,14 @@ var s0 = snapshot();
 // The root cause, asserted directly: the default ground is TEXTURED, and the
 // document holds a resolved path to a file that exists. An empty string here
 // is the whole defect.
+//
+// The row is `baseColorMap`, not `diffuseTexture`: the default ground is a
+// PbrMaterial since HLMS_ADOPTION P4b (it was a Default.shader CustomMaterial,
+// and the builtin shaders were retired). Same file, same defect, same gate.
 var g0 = groundOf(s0);
 assert(g0 !== null, "the default Ground node is in the scene");
-assert(g0.mat.diffuseTexture && g0.mat.diffuseTexture.length > 0,
-       "fresh: Ground carries a resolved diffuseTexture path");
+assert(g0.mat.baseColorMap && g0.mat.baseColorMap.length > 0,
+       "fresh: Ground carries a resolved baseColorMap path");
 assert(g0.castShadow === false, "fresh: Ground has Shadow Caster OFF (createDefaultScene)");
 assert(p0.r < 200, "fresh: the ground is the mid-grey tile, not blown out (" + p0.r + ")");
 
@@ -115,8 +119,8 @@ for (var cycle = 1; cycle <= 3; cycle++) {
 
     var s = snapshot();
     var g = groundOf(s);
-    assert(g.mat.diffuseTexture === g0.mat.diffuseTexture,
-           "cycle " + cycle + ": Ground's diffuseTexture survived the round trip");
+    assert(g.mat.baseColorMap === g0.mat.baseColorMap,
+           "cycle " + cycle + ": Ground's baseColorMap survived the round trip");
     assert(g.castShadow === false,
            "cycle " + cycle + ": Ground's Shadow Caster flag survived the round trip");
 

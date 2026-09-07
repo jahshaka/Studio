@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include <QMessageBox>
 
 #include "irisgl/core/irisutils.h"
-#include "irisgl/document/materials/custommaterial.h"
 
 #include "data/constants.h"
 #include "data/guidmanager.h"

@@ -51,16 +51,21 @@ public:
 	/// The flat join(projectFolder, name) resolution is GONE.
 	QString resolveTextureGuid(const QString &guid, Database *db);
 
-	// if handle is null then it will try to fetch the assets
-	// from the asset manager
-	iris::CustomMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
+	/// A saved material definition (shaderGuid + values) as a PbrMaterial.
+	///
+	/// It returns a PbrMaterial because since HLMS_ADOPTION P4b there IS no
+	/// other material class: the six reserved builtins are PbrMaterial PRESETS
+	/// (io/builtinmaterials.h), and anything else legacy has its recognisable
+	/// uniform names mapped across. A definition this cannot understand yields
+	/// a DEFAULT PbrMaterial, never null and never a load failure — the reserved
+	/// guids are permanent, and a scene naming one must open.
+	iris::PbrMaterialPtr parseMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
 
 	// Dispatches on the "materialType" tag SceneWriter stamps on every saved
-	// material: "pbr" rebuilds a PbrMaterial (parseMaterial would force it
-	// through the shader-guid CustomMaterial path — a pbr definition has no
-	// shaderGuid, so it came back as a broken default material and the PBR
-	// values were silently dropped); anything else takes the legacy
-	// CustomMaterial path unchanged.
+	// material: "pbr" rebuilds a PbrMaterial from its own rows; a graph-backed
+	// material loads as the shader's baked PbrMaterial; anything else — a
+	// reserved builtin guid, or a legacy shader material — goes through
+	// parseMaterial's conversion. EVERY branch now yields a PbrMaterial.
 	iris::MaterialPtr parseMaterialTyped(QJsonObject matObject, Database* handle, bool loadTextures = true);
 
 	/// A SHADER asset (a stored graph definition) as the baked PbrMaterial the
@@ -79,11 +84,11 @@ public:
 	                                               const QString &projectFolder);
 
 	iris::PbrMaterialPtr parsePbrMaterial(QJsonObject matObject, Database* handle, bool loadTextures = true);
-	iris::CustomMaterialPtr createMaterialFromShaderGuid(QString shaderGuid, Database* db);
-	iris::CustomMaterialPtr createMaterialFromShaderFile(QString shaderPath, Database* db);
+	/// The PbrMaterial a reserved BUILTIN guid now stands for, with the saved
+	/// values applied — the reader half of the builtin retirement.
+	iris::PbrMaterialPtr createMaterialFromShaderGuid(QString shaderGuid, Database* db,
+	                                                  const QJsonObject &values = QJsonObject());
 	QJsonObject getShaderObjectFromId(QString shaderGuid, Database* db);
-	iris::CustomMaterialPtr loadMaterialV2(QJsonObject matObject, Database* handle);
-	iris::CustomMaterialPtr loadMaterialV1(QJsonObject matObject, Database* handle);
 	QJsonObject convertV1MaterialToV2(QJsonObject mat);
 
 	int getMaterialVersion(QJsonObject oldMatObj);
@@ -94,22 +99,10 @@ public:
 // did not belong to a load in progress.)
 };
 
-// used by material reader to create a material from a shader
-class ShaderHandler : public AssetIOBase
-{
-	TextureSource textureSource;
-	QString globalSourceFolder;
-public:
-	ShaderHandler(TextureSource texSrc = TextureSource::Project, QString globalSourceFolder = "");
-
-	iris::CustomMaterialPtr loadMaterialFromShader(QJsonObject shaderObject, Database* handle);
-	iris::CustomMaterialPtr loadMaterialFromShaderV2(QJsonObject shaderObject, Database* handle);
-	iris::CustomMaterialPtr loadMaterialFromShaderV1(QJsonObject shaderObject, Database* handle);
-
-	int getShaderVersion(QJsonObject shaderObj);
-
-private:
-	QJsonObject parsedShader;
-};
+// (ShaderHandler is GONE with HLMS_ADOPTION P4b. It existed to turn a `.shader`
+// definition into an iris::CustomMaterial: V1 compiled its GLSL, V2 kept its
+// uniforms as editable properties. The GLSL half died with the materials
+// evaluator and the class itself died here — there is nothing left for a
+// "material built from a shader" to be that a PbrMaterial preset is not.)
 
 #endif // MATERIALREADER_HPP

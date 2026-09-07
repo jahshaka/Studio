@@ -27,7 +27,7 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/materials/custommaterial.h"
+#include "io/builtinmaterials.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
@@ -209,27 +209,66 @@ int main(int argc, char **argv)
         QFile::remove(pngPath);
     }
 
-    // ---- Effects-module CustomMaterial (Default.shader): colour + diffuse texture property ----
+    // ---- THE RETIRED "Default" BUILTIN, as the PbrMaterial preset it became ----
+    //
+    // This block used to build an iris::CustomMaterial from
+    // app/shader_defs/Default.shader and assert that the mirror could scrape
+    // diffuseColor and diffuseTexture out of its property rows. The class is
+    // gone (HLMS_ADOPTION P4b) and so is the scraping: the conversion happens
+    // ONCE, at load, and what the mirror sees is an ordinary PbrMaterial.
+    //
+    // So the assertion moved with it — this drives the CONVERSION (a legacy
+    // `values{}` block naming the reserved Default guid) and then asserts the
+    // resulting material reaches pixels, which is the property that actually
+    // matters to a user reopening an old scene.
     {
-        const QString shaderDef = QString(JAHSHAKA_SOURCE_DIR) + "/app/shader_defs/Default.shader";
-        auto custom = iris::CustomMaterial::create();
-        custom->generate(shaderDef);
-        int props = 0; for (auto *p : custom->properties) if (p) ++props;
-        std::printf("    Default.shader exposes %d properties\n", props);
-        CHECK(props > 5, "CustomMaterial generated its properties from Default.shader without GL");
-        custom->setValue("diffuseColor", QColor(230, 40, 20));
-        meshNode2->setMaterial(custom);
+        QJsonObject values;
+        values["diffuseColor"] = QStringLiteral("#e62814");
+        values["shininess"] = 0.0;
+        auto converted = BuiltinMaterials::fromBuiltin(
+            QStringLiteral("00000000-0000-0000-0000-000000000001"), values,
+            [](const QString &p) { return p; });
+        CHECK(!converted.isNull(), "the reserved Default guid converts to a PbrMaterial");
+        CHECK(converted->getName() == QStringLiteral("Default"),
+              "...and it is still called Default");
+        meshNode2->setMaterial(converted);
         mirror.sync(); for (int i = 0; i < 2; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("CustomMaterial diffuseColor", img);
-        CHECK(isMaterial(centre(img)), "CustomMaterial's diffuseColor reaches the engine");
+        view->readPixels(img); show("converted Default builtin: diffuseColor", img);
+        CHECK(isMaterial(centre(img)), "the converted builtin's colour reaches the engine");
+
         const QString pngPath = QDir::temp().filePath("jahshaka_mirror_custom_green.png");
         QImage tex(16, 16, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
-        custom->setValue("diffuseColor", QColor(255, 255, 255));
-        custom->setValue("diffuseTexture", pngPath);
+        QJsonObject texValues;
+        texValues["diffuseColor"] = QStringLiteral("#ffffff");
+        texValues["diffuseTexture"] = pngPath;
+        auto texConverted = BuiltinMaterials::fromBuiltin(
+            QStringLiteral("00000000-0000-0000-0000-000000000001"), texValues,
+            [](const QString &p) { return p; });
+        meshNode2->setMaterial(texConverted);
         mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
-        view->readPixels(img); show("CustomMaterial diffuseTexture", img);
-        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "CustomMaterial's diffuseTexture property reaches the engine");
+        view->readPixels(img); show("converted Default builtin: diffuseTexture", img);
+        CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f,
+              "the legacy diffuseTexture name became a baseColorMap and reaches the engine");
         QFile::remove(pngPath);
+
+        // The FLAT builtin is the one whose conversion changes shading family
+        // (D-P4b): it becomes an UNLIT PbrMaterial, so its colour arrives
+        // unshaded. That is the whole product answer to "what is Flat?".
+        QJsonObject flatValues;
+        flatValues["color"] = QStringLiteral("#00cc22");
+        auto flat = BuiltinMaterials::fromBuiltin(
+            QStringLiteral("00000000-0000-0000-0000-000000000004"), flatValues,
+            [](const QString &p) { return p; });
+        CHECK(flat->shadingModel == 1, "the Flat builtin converts to the UNLIT shading model");
+        meshNode2->setMaterial(flat);
+        mirror.sync(); for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        view->readPixels(img); show("converted Flat builtin (unlit)", img);
+        // Colour components are 0..1 here. #00cc22 is (0, 0.8, 0.13); an UNLIT
+        // surface renders it as authored, so the green is at full strength
+        // rather than scaled down by a light.
+        CHECK(centre(img).r < 0.15f && centre(img).g > 0.7f && centre(img).b < 0.3f,
+              "Flat renders its AUTHORED colour, unshaded");
+
         meshNode2->setMaterial(legacy);
     }
 

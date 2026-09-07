@@ -61,6 +61,7 @@ set(AVATAR_LOAD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarpreviewmodel.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/avatar/avatarspace.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp

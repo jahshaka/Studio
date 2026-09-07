@@ -15,7 +15,7 @@ For more information see the LICENSE file
 // GltfExporter — hand-rolled glTF 2.0 (GLB) writer from the iris document model
 // (WEB_EXPORT_AUDIT §2 option (b)). Pure document consumer: no Ogre, no GL, no
 // assimp — mesh buffers are read straight from iris::Mesh::getVertexBuffers(),
-// materials from PbrMaterial/DefaultMaterial/CustomMaterial, lights/cameras/
+// materials from PbrMaterial/DefaultMaterial, lights/cameras/
 // particles from their nodes, and everything glTF cannot say natively rides in
 // the `jah.*` extras sidecar (GLTFLoader maps extras to Object3D.userData).
 //

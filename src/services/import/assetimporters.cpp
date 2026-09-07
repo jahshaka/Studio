@@ -30,6 +30,8 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "data/project.h"
 #include "io/assetmanager.h"
+#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "io/scenewriter.h"
 #include "services/assetcas.h"
 #include "services/assethelper.h"
@@ -40,7 +42,6 @@ For more information see the LICENSE file
 #include "services/videoutils.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/import/meshbake.h"
@@ -558,24 +559,24 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
 
     out.mainGuid = GUIDManager::generateGUID();
 
-    // Normalize through the shader's property set (the legacy
-    // extractTexturesAndMaterialFromMaterial), collecting texture references.
+    // Normalize through a PbrMaterial's property set, collecting texture
+    // references. The legacy Default-shader key names are renamed first
+    // (HLMS_ADOPTION P4b); before that this loaded the `.shader` file whose
+    // NAME matched the material's just to borrow a uniform list, so importing
+    // a `.material` whose name matched no shader normalised against Default's
+    // uniforms by accident.
     auto materialName = materialDefinition["name"].toString();
-    auto shaderName = Constants::SHADER_DEFS + materialName + ".shader";
-    if (materialName.isEmpty()) {
-        shaderName = QStringLiteral("app/shader_defs/Default.shader");
-        materialName = QStringLiteral("Default");
-    }
-    auto material = iris::CustomMaterial::create();
-    material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+    if (materialName.isEmpty()) materialName = QStringLiteral("Default");
+    const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
+    auto material = iris::PbrMaterial::create();
     material->setName(materialName);
 
     struct TexEntry { QString fileName, guid, path; };
     QVector<TexEntry> textures;
     for (const auto &prop : material->properties) {
-        if (!materialDefinition.contains(prop->name)) continue;
+        if (!normalised.contains(prop->name)) continue;
         if (prop->type == iris::PropertyType::Texture) {
-            const QString textureStr = materialDefinition[prop->name].toString();
+            const QString textureStr = normalised[prop->name].toString();
             if (textureStr.isEmpty()) continue;
             // Textures referenced by the definition that exist beside the
             // .material file import as members; the reference becomes a guid.
@@ -592,7 +593,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
                 material->setValue(prop->name, QFileInfo(textureStr).fileName());
             }
         } else {
-            material->setValue(prop->name, materialDefinition[prop->name].toVariant());
+            material->setValue(prop->name, normalised[prop->name].toVariant());
         }
     }
 

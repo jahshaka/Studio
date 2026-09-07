@@ -40,7 +40,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/skeletalanimation.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -792,15 +791,15 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 
 	// materialType discriminates which Material subclass to rebuild on load.
 	// Absent in scenes written before PBR existed; the reader treats a missing
-	// key as "custom", so older scenes load unchanged.
-	auto customMat = mat.dynamicCast<iris::CustomMaterial>();
-	if (!!customMat) {
-		matObj["materialType"] = "custom";
-		matObj["name"]         = customMat->getName();
-		matObj["shaderGuid"]   = customMat->getGuid();
-	}
-	else if (!!mat.dynamicCast<iris::PbrMaterial>()) {
+	// key as "custom" and converts, so older scenes load unchanged.
+	//
+	// NOTHING WRITES "custom" ANY MORE (HLMS_ADOPTION P4b): the class that tag
+	// named is gone, and a material carrying a reserved BUILTIN guid now saves
+	// as the PbrMaterial preset it became. Readers still accept the tag —
+	// that is the whole point of the retirement.
+	if (!!mat.dynamicCast<iris::PbrMaterial>()) {
 		matObj["materialType"] = "pbr";
+		if (!mat->getName().isEmpty()) matObj["name"] = mat->getName();
 	}
 	else {
 		// Some other Material subclass - record the parameters, but there is no

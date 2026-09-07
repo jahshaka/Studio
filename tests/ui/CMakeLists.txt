@@ -7,6 +7,7 @@ add_executable(test_material_panel
     test_material_panel.cpp
     test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp

@@ -129,7 +129,7 @@ assert(dragons.length === 1, "Matcaps: one dragon mesh");
 var m = material.get(dragons[0].id);
 assert(m.metallic === 1 && m.baseColor === "#ffd700",
        "Matcaps: dragon is the Gold PBR preset (metallic=" + m.metallic + " baseColor=" + m.baseColor + ")");
-assertTexturePath("Matcaps ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
+assertTexturePath("Matcaps ground", "baseColorMap", material.get(meshesByName("Ground")[0].id).baseColorMap);
 var p = shoot("matcaps", [ { x: 0.49, y: 0.49 }, { x: 0.50, y: 0.40 }, { x: 0.15, y: 0.85 } ]);
 // Gold reads gold even in shadow: strong red-over-blue at two body points.
 assert(p[0].r > 40 && p[0].r > p[0].b + 30, "Matcaps: dragon body 1 is gold " + fmt(p[0]));
@@ -141,9 +141,14 @@ assert(project.close(), "Matcaps.zip: project.close");
 // ---- Particles: textures intact, fire sphere yellow, THE FIRE IS FIRE -------
 var particlesGuid = importAndOpen("Particles.zip", 2);
 var sphereMat = material.get(meshesByName("Sphere")[0].id);
-assert(sphereMat.color === "#ffcd37", "Particles: sphere keeps its edge-material colour (" + sphereMat.color + ")");
-assertTexturePath("Particles ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
-assertTexturePath("Particles fire pit", "diffuseTexture", material.get(meshesByName("Fire Pit")[0].id).diffuseTexture);
+// The sphere used the EdgeMaterial builtin. It is a PbrMaterial now
+// (HLMS_ADOPTION P4b), so its authored colour lives on `baseColor` — the
+// fresnel rim EdgeMaterial also carried has no material-parameter home and is
+// documented as lost in src/io/builtinmaterials.cpp.
+assert(sphereMat.baseColor === "#ffcd37",
+       "Particles: sphere keeps its edge-material colour (" + sphereMat.baseColor + ")");
+assertTexturePath("Particles ground", "baseColorMap", material.get(meshesByName("Ground")[0].id).baseColorMap);
+assertTexturePath("Particles fire pit", "baseColorMap", material.get(meshesByName("Fire Pit")[0].id).baseColorMap);
 var particleCount = 0;
 var nodes = scene.nodes();
 for (var i = 0; i < nodes.length; i++) if (nodes[i].type === "particles") particleCount++;
@@ -168,18 +173,18 @@ assert(project.open(particlesGuid), "Particles.zip: reopen after save");
 // PIXELS FIRST: the emitters are what the owner sees, and the document-level
 // assertions below only say where the writer went wrong.
 assertFireIsFire(shoot("particles_plume_resaved", firePlumeProbePoints()), " after save+reopen");
-assertTexturePath("Particles ground (reopened)", "diffuseTexture",
-                  material.get(meshesByName("Ground")[0].id).diffuseTexture);
-assertTexturePath("Particles fire pit (reopened)", "diffuseTexture",
-                  material.get(meshesByName("Fire Pit")[0].id).diffuseTexture);
-assertTexturePath("Particles fire pit (reopened)", "normalTexture",
-                  material.get(meshesByName("Fire Pit")[0].id).normalTexture);
+assertTexturePath("Particles ground (reopened)", "baseColorMap",
+                  material.get(meshesByName("Ground")[0].id).baseColorMap);
+assertTexturePath("Particles fire pit (reopened)", "baseColorMap",
+                  material.get(meshesByName("Fire Pit")[0].id).baseColorMap);
+assertTexturePath("Particles fire pit (reopened)", "normalMap",
+                  material.get(meshesByName("Fire Pit")[0].id).normalMap);
 assert(project.close(), "Particles.zip: project.close after the round trip");
 
 // ---- Skeletal Animation: the blue character ---------------------------------
 importAndOpen("Skeletal Animation.zip", 2);
 var limb = material.get(meshesByName("Beta_HighLimbsGeoMesh")[0].id);
-assert(limb.diffuseColor === "#5ebfe7", "Skeletal: character keeps its blue colour (" + limb.diffuseColor + ")");
+assert(limb.baseColor === "#5ebfe7", "Skeletal: character keeps its blue colour (" + limb.baseColor + ")");
 p = shoot("skeletal", [ { x: 0.458, y: 0.363 }, { x: 0.2, y: 0.9 } ]);
 assert(p[0].b > 60 && p[0].b > p[0].r + 20, "Skeletal: character torso is blue " + fmt(p[0]));
 assert(isNeutral(p[1], 25), "Skeletal: ground is neutral grey " + fmt(p[1]));
@@ -200,7 +205,7 @@ assert(byColor["#ffd700"] && byColor["#ffd700"].metallic === 1,
        "World: Gold PBR dragon present");
 assert(byColor["#eef4f8"] && byColor["#eef4f8"].alphaMode === 3 && byColor["#eef4f8"].alpha < 0.5,
        "World: Glass PBR dragon present (alphaMode 3, alpha " + (byColor["#eef4f8"] ? byColor["#eef4f8"].alpha : "?") + ")");
-assertTexturePath("World ground", "diffuseTexture", material.get(meshesByName("Ground")[0].id).diffuseTexture);
+assertTexturePath("World ground", "baseColorMap", material.get(meshesByName("Ground")[0].id).baseColorMap);
 p = shoot("world", [ { x: 0.45,  y: 0.478 },   // gold dragon body highlight
                      { x: 0.194, y: 0.463 },   // silver dragon belly highlight
                      { x: 0.829, y: 0.533 },   // glass dragon (floor shows through)
@@ -213,8 +218,8 @@ assert(project.close(), "World Background.zip: project.close");
 
 // ---- Physics: coloured pipes + teapot ---------------------------------------
 importAndOpen("Physics.zip", 2);
-assert(material.get(meshesByName("pipe")[0].id).diffuseColor === "#c63030", "Physics: red pipe colour kept");
-assert(material.get(meshesByName("pipe 6")[0].id).diffuseColor === "#7872bf", "Physics: purple pipe colour kept");
+assert(material.get(meshesByName("pipe")[0].id).baseColor === "#c63030", "Physics: red pipe colour kept");
+assert(material.get(meshesByName("pipe 6")[0].id).baseColor === "#7872bf", "Physics: purple pipe colour kept");
 p = shoot("physics", [ { x: 0.327, y: 0.322 },  // red pipe cap
                        { x: 0.627, y: 0.841 },  // purple pipe band
                        { x: 0.463, y: 0.53 } ]); // teapot

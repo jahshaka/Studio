@@ -21,6 +21,8 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/assetmanager.h"
+#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "io/materialreader.h"
 #include "services/assetcas.h"
 #include "services/meshbakestore.h"
@@ -29,7 +31,6 @@ For more information see the LICENSE file
 #include "services/imagematerial.h"
 #include "services/loadtimeline.h"
 #include "irisgl/core/irisutils.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/meshbake.h"
 
@@ -145,14 +146,7 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             // worker (irisgl/import/meshprewarm.h) — then this is a build,
             // not a parse.
             const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
-                auto mat = iris::CustomMaterial::create();
-                mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-                mat->setValue("diffuseColor", data.diffuseColor);
-                mat->setValue("specularColor", data.specularColor);
-                mat->setValue("ambientColor", data.ambientColor);
-                mat->setValue("emissionColor", data.emissionColor);
-                mat->setValue("shininess", data.shininess);
-                return iris::MaterialPtr(mat);
+                return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
             };
             // THE BAKE first (MESH_BAKE_SPEC phase 1): the SAME deserialized
             // model the scene reader used this open — one file read served
@@ -196,14 +190,7 @@ bool ProjectAssets::registerSessionAsset(const QString &guid, Database *db,
             LoadTimeline::Accumulate parse(QStringLiteral("assimp:sessionAsset"));
             auto node = iris::MeshNode::loadAsSceneFragment(
                 path, [](iris::MeshPtr, iris::MeshMaterialData &data) {
-                    auto mat = iris::CustomMaterial::create();
-                    mat->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-                    mat->setValue("diffuseColor", data.diffuseColor);
-                    mat->setValue("specularColor", data.specularColor);
-                    mat->setValue("ambientColor", data.ambientColor);
-                    mat->setValue("emissionColor", data.emissionColor);
-                    mat->setValue("shininess", data.shininess);
-                    return iris::MaterialPtr(mat);
+                    return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
                 });
             if (!node) break;
             const auto definition = QJsonDocument::fromJson(db->fetchAssetData(member)).object();

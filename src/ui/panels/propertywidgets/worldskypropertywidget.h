@@ -49,7 +49,7 @@ public:
 public slots:
     void setEquiMap(const QString &guid);
     void setSkyMap(const QJsonObject& definition);
-    void setSkyFromCustomMaterial(const QJsonObject& definition);
+    void setSkyFromMaterialDefinition(const QJsonObject& definition);
     void skyTypeChanged(int index);
 	void onSlotChanged(QString value, QString guid, int index);
 	void onMaterialChanged(int index);

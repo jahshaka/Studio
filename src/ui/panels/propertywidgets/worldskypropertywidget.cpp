@@ -479,7 +479,7 @@ void WorldSkyPropertyWidget::setSkyMap(const QJsonObject &skyDataDefinition)
 
 }
 
-void WorldSkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
+void WorldSkyPropertyWidget::setSkyFromMaterialDefinition(const QJsonObject& definition)
 {
 	//auto vert = materialDefinition.value("vertexShader").toString();
 	//auto frag = materialDefinition.value("fragmentShader").toString();
@@ -515,7 +515,7 @@ void WorldSkyPropertyWidget::onMaterialChanged(int index)
 
 	//if (!!scene) {
 	//	if (scene->skyGuid == skyGuid) {
-	//		setSkyFromCustomMaterial(materialDefinition);
+	//		setSkyFromMaterialDefinition(materialDefinition);
 	//		updateAssetAndKeys();
 	//	}
 	//}

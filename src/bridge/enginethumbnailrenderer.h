@@ -46,12 +46,6 @@ public:
     /// AND the diffuse/specular/normal maps — the same material the asset preview
     /// viewer shows. (Thumbnails used to drop the textures and render grey.)
     static iris::MaterialPtr previewMaterialForMeshData(const iris::MeshMaterialData &data);
-    /// A material the mirror renders faithfully, textures kept: PbrMaterial and
-    /// DefaultMaterial pass through; a CustomMaterial's colour/texture/float
-    /// properties are copied onto a DefaultMaterial (the asset viewer's mapping).
-    static iris::MaterialPtr previewMaterialFor(iris::MaterialPtr material);
-    /// Applies previewMaterialFor to every mesh node in the hierarchy.
-    static void previewMaterials(iris::SceneNodePtr node);
 
 private:
     bool ensureResources(QSize size);

@@ -28,7 +28,6 @@ For more information see the LICENSE file
 // CustomMaterial users). It used to reach the type through thumbnailgenerator.h;
 // the dependency is spelled out here so the scheduled iris::CustomMaterial
 // deletion can grep its real call sites.
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/properties/property.h"
 #include "zip.h"
 
@@ -103,6 +102,8 @@ For more information see the LICENSE file
 #include "ui/controls/waveformwidget.h"
 #include "ui/pages/previewrouter.h"
 #include "io/assetmanager.h"
+#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "io/materialreader.h"
 #include "services/thumbnailgenerator.h"
 
@@ -1867,21 +1868,22 @@ void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
     const QJsonObject materialDefinition = doc.object();
 
     auto material_name = materialDefinition["name"].toString();
-    auto shaderName = Constants::SHADER_DEFS + material_name + ".shader";
-    if (material_name.isEmpty()) {
-        shaderName ="app/shader_defs/Default.shader";
-        material_name = "Default";
-    }
+    if (material_name.isEmpty()) material_name = "Default";
 
-    auto material = iris::CustomMaterial::create();
-    material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+    // The definition's legacy Default-shader key names are renamed to their PBR
+    // equivalents and then drive a PbrMaterial's own rows (HLMS_ADOPTION P4b).
+    // This used to load the matching `.shader` file just to borrow its uniform
+    // list, which meant a definition naming a shader that no longer existed
+    // silently produced a material with no properties and no values.
+    const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
+    auto material = iris::PbrMaterial::create();
     material->setName(material_name);
 
     for (const auto &prop : material->properties) {
-        if (materialDefinition.contains(prop->name)) {
+        if (normalised.contains(prop->name)) {
             if (prop->type == iris::PropertyType::Texture) {
-                auto textureStr = !materialDefinition[prop->name].toString().isEmpty()
-                ? materialDefinition[prop->name].toString()
+                auto textureStr = !normalised[prop->name].toString().isEmpty()
+                ? normalised[prop->name].toString()
                 : QString();
                 material->setValue(prop->name, textureStr);
                 if (!textureStr.isEmpty()) {
@@ -1889,7 +1891,7 @@ void AssetView::extractTexturesAndMaterialFromMaterial(const QString &filePath,
                 }
             }
             else {
-                material->setValue(prop->name, materialDefinition[prop->name].toVariant());
+                material->setValue(prop->name, normalised[prop->name].toVariant());
             }
         }
     }

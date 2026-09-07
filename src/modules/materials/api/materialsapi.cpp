@@ -42,7 +42,6 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
@@ -87,20 +86,20 @@ const QStringList kColorKeys = { "baseColor", "emissiveColor",
 /// list does not carry them, and what the F7 refusal message quotes.
 const QStringList kPbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
                                   "normalMap", "emissiveMap" };
-/// CustomMaterial's spellings (Default.shader declares them as Properties).
-/// On a PbrMaterial they name nothing and are REFUSED by name (F7) — so they
-/// are never writable keys, on either material class.
+/// The RETIRED builtin shaders' texture spellings (Default.shader declared them
+/// as uniforms). They name nothing on a PbrMaterial — which is now the only
+/// material class there is — and are REFUSED by name (F7) rather than falling
+/// into the texture branch and complaining about a missing file.
 const QStringList kLegacyMapKeys = { "diffuseTexture", "specularTexture",
                                      "normalTexture", "reflectionTexture" };
 const QStringList kMapKeys = kPbrMapKeys + kLegacyMapKeys;
 
-/// The material's declared Property rows: CustomMaterial and PbrMaterial each
-/// keep their own list and there is no common accessor.
+/// The material's declared Property rows. `properties` lives on the base class,
+/// so this no longer has to guess which subclass it is holding (it used to try
+/// CustomMaterial first, then PbrMaterial, and return nothing for anything else).
 QList<iris::Property *> declaredProperties(const iris::MaterialPtr &material)
 {
-    if (auto custom = material.dynamicCast<iris::CustomMaterial>()) return custom->properties;
-    if (auto pbr = material.dynamicCast<iris::PbrMaterial>()) return pbr->properties;
-    return {};
+    return material ? material->properties : QList<iris::Property *>();
 }
 
 /// The keys material.set will accept on this material — the declared rows plus,
@@ -417,8 +416,9 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "same values plus their types, ranges and the full writable-key list.",
           Needs::Document },
         { "properties", "material.properties(nodeId) -> {class, rows:[{name, displayName, type, value, min?, max?}], writableKeys:[…]}",
-          "What this node's material can be told, without guessing. 'class' is PbrMaterial or "
-          "CustomMaterial (they have different vocabularies). 'rows' are the DECLARED properties "
+          "What this node's material can be told, without guessing. 'class' is PbrMaterial for "
+          "everything a scene can hold (the legacy shader-material class was retired and its "
+          "materials convert at load). 'rows' are the DECLARED properties "
           "in panel order, with 'min'/'max' present only where a range is declared — the PBR "
           "material declares real ones (metallic and roughness are 0..1, emissiveIntensity 0..10), "
           "so this is where a scale actually means something. 'writableKeys' is the exact set "
@@ -516,8 +516,6 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     const QStringList &legacyMapKeys = kLegacyMapKeys;
     const QStringList &mapKeys = kMapKeys;
 
-    const bool isCustomMaterial = !material.dynamicCast<iris::CustomMaterial>().isNull();
-
     for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
         const QString &key = it.key();
         QVariant newValue = normalizeJs(it.value());
@@ -531,7 +529,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         // a missing file when the real problem is that this material has no such
         // slot at all. Only a legacy key whose value happened to resolve ever
         // reached the message written for it.
-        if (!isCustomMaterial && legacyMapKeys.contains(key)) {
+        if (legacyMapKeys.contains(key)) {
             static const QMap<QString, QString> replacement{
                 { QStringLiteral("diffuseTexture"),    QStringLiteral("baseColorMap") },
                 { QStringLiteral("normalTexture"),     QStringLiteral("normalMap") },
@@ -591,11 +589,10 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
             if (prop->name == key) { oldValue = prop->getValue(); known = true; break; }
         }
         if (!known) {
-            // CustomMaterial's command path asserts on unknown properties;
-            // a PbrMaterial map key is legal even if its Property row were ever
-            // dropped. The legacy *Texture spellings never reach here — they are
-            // refused by name at the top of the loop (F7).
-            if (isCustomMaterial || !mapKeys.contains(key))
+            // A PbrMaterial map key is legal even if its Property row were
+            // ever dropped. The legacy *Texture spellings never reach here —
+            // they are refused by name at the top of the loop (F7).
+            if (!mapKeys.contains(key))
                 // The key list is the ONE thing that turns this from a bare
                 // rejection into a usable answer (AI_SURFACE_PROGRAM_SPEC §3.A
                 // item #1): exactly the keys that survive the F7 fix. The legacy
@@ -623,10 +620,11 @@ QVariantMap MaterialApi::properties(const QString &nodeId)
     // Unlike SceneNode::getProperties(), a material's rows are OWNED by the
     // material (iris::Material holds the QList<Property*> for its lifetime) —
     // read them, never delete them.
+    // "CustomMaterial" was a third answer here until HLMS_ADOPTION P4b. It
+    // cannot come back: the class is gone and a legacy material converts at
+    // load, so a script asking what it is holding gets PbrMaterial.
     out["class"] = !material.dynamicCast<iris::PbrMaterial>().isNull()
                        ? QStringLiteral("PbrMaterial")
-                   : !material.dynamicCast<iris::CustomMaterial>().isNull()
-                       ? QStringLiteral("CustomMaterial")
                        : QStringLiteral("Material");
 
     QVariantList rows;

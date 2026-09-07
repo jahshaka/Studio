@@ -325,17 +325,20 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
 }
 
 // ---- materials the mirror can render ----
+//
+// Both of these are IDENTITY since HLMS_ADOPTION P4b. They existed to convert an
+// iris::CustomMaterial into a DefaultMaterial the mirror could render; every
+// material the document holds is now a PbrMaterial, which it renders natively.
+// They are kept as the seam (the interface declares them, and a future material
+// class that needs converting has a place to be converted) — not as work.
 
 iris::MaterialPtr EngineAssetViewer::mirrorable(iris::MaterialPtr material)
 {
-    // One conversion for previews AND thumbnails (they diverged once: thumbnails
-    // dropped the textures and rendered grey).
-    return EngineThumbnailRenderer::previewMaterialFor(material);
+    return material;
 }
 
-void EngineAssetViewer::mirrorableMaterials(iris::SceneNodePtr node)
+void EngineAssetViewer::mirrorableMaterials(iris::SceneNodePtr)
 {
-    EngineThumbnailRenderer::previewMaterials(node);
 }
 
 IAssetViewer *createEngineAssetViewer(const std::shared_ptr<Engine> &engine,

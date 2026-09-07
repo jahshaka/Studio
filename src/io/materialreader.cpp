@@ -37,8 +37,8 @@ For more information see the LICENSE file
 #include <QFileInfo>
 
 // iris includes
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
+#include "io/builtinmaterials.h"
 #include "irisgl/core/irisutils.h"
 //#include "irisgl/src/core/property.h"
 #include "modules/materials/core/materialhelper.h"
@@ -81,27 +81,23 @@ void MaterialReader::setSource(TextureSource texSrc, QString globalSrcFolder)
 	globalSourceFolder = globalSrcFolder;
 }
 
-iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid, Database* db)
+// THE BUILTIN RETIREMENT (HLMS_ADOPTION P4b). A reserved guid used to name a
+// `.shader` file that ShaderHandler turned into an iris::CustomMaterial; it now
+// names a PbrMaterial PRESET. The guid survives — it is on disk in every scene
+// that ever used a builtin — and only what it means has changed.
+iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString shaderGuid, Database* db,
+                                                                  const QJsonObject &values)
 {
-	auto shaderObject = getShaderObjectFromId(shaderGuid, db);
+	auto resolve = [this, db](const QString &ref) { return resolveTextureGuid(ref, db); };
+	if (BuiltinMaterials::isBuiltin(shaderGuid))
+		return BuiltinMaterials::fromBuiltin(shaderGuid, values, resolve);
 
-	ShaderHandler handler(textureSource, globalSourceFolder);
-	auto material = handler.loadMaterialFromShader(shaderObject, nullptr);
-	material->setGuid(shaderGuid);
-
-	return material;
-}
-
-iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderFile(QString shaderPath, Database* db)
-{
-	QFile file(shaderPath);
-	file.open(QIODevice::ReadOnly);
-	auto data = file.readAll();
-	auto shaderObj = QJsonDocument::fromJson(data).object();
-
-	ShaderHandler handler(textureSource, globalSourceFolder);
-	auto mat = handler.loadMaterialFromShader(shaderObj, db);
-
+	// Not a builtin: a legacy shader material whose GLSL is long gone. Carry
+	// across every uniform name that still has a meaning and drop the rest —
+	// there is no other material class left to fall back to, and refusing to
+	// open the scene would be the worse answer.
+	auto mat = BuiltinMaterials::fromLegacyValues(values, resolve);
+	mat->setGuid(shaderGuid);
 	return mat;
 }
 
@@ -162,10 +158,9 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 	// Graph-backed material assets - a shaderGuid whose stored definition
 	// carries a shadergraph - load as the shader's baked PbrMaterial
 	// (MATERIALS_EVALUATOR phase 5): folded values plus BakedMaps/<guid>/
-	// textures, resolved against the open project. The CustomMaterial-from-
-	// graph route is gone. A definition predating the evaluator (no
-	// "pbrMaterial" object) falls through to the shader-less CustomMaterial
-	// fallback; materials.regenerate rebuilds it.
+	// textures, resolved against the open project. A definition predating the
+	// evaluator (no "pbrMaterial" object) falls through to parseMaterial's
+	// legacy-uniform conversion; materials.regenerate rebuilds it properly.
 	if (getMaterialVersion(matObject) >= 2) {
 		const auto shaderGuid = matObject["shaderGuid"].toString();
 		if (!shaderGuid.isEmpty() && db
@@ -179,15 +174,20 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 		}
 	}
 
+	// Reserved builtins, and any legacy shader material: parseMaterial converts.
 	return parseMaterial(matObject, db, loadTextures);
 }
 
 iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &shaderGuid, Database *db)
 {
 	if (shaderGuid.isEmpty() || !db) return iris::MaterialPtr();
-	// getShaderObjectFromId, not a raw fetch: it also serves the reserved
-	// builtin shaders, which live as files (they carry no "pbrMaterial" and
-	// therefore come back null — the caller decides what to show instead).
+	// A reserved builtin is now a PbrMaterial PRESET, so a shader-asset preview
+	// or thumbnail of one has something real to show. Before HLMS_ADOPTION P4b
+	// this returned null for every builtin (they carry no "pbrMaterial" block)
+	// and every caller fell back to a placeholder.
+	if (BuiltinMaterials::isBuiltin(shaderGuid))
+		return BuiltinMaterials::fromBuiltin(shaderGuid, QJsonObject(), {});
+
 	const QJsonObject definition = getShaderObjectFromId(shaderGuid, db);
 	return shaderDefinitionAsPbr(definition, project ? project->getProjectFolder() : QString());
 }
@@ -264,49 +264,32 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 	return mat;
 }
 
-iris::CustomMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
+iris::PbrMaterialPtr MaterialReader::parseMaterial(QJsonObject matObject, Database* db, bool loadTextures)
 {
 	auto version = getMaterialVersion(matObject);
 	if (version == 1) matObject = convertV1MaterialToV2(matObject);
 
-	// get shader object
-	auto shaderGuid = matObject["shaderGuid"].toString();
-	auto shaderObject = getShaderObjectFromId(shaderGuid, db);
-	auto material = createMaterialFromShaderGuid(shaderGuid, db);
+	const QString shaderGuid = matObject["shaderGuid"].toString();
+	const QJsonObject values = matObject["values"].toObject();
 
-	// apply values
-	auto valuesObj = matObject["values"].toObject();
-
-	for (const auto prop : material->properties) {
-		if (prop->type == iris::PropertyType::Color) {
-			QColor col;
-			col.setNamedColor(valuesObj.value(prop->name).toString());
-			material->setValue(prop->name, col);
-		}
-		else if (prop->type == iris::PropertyType::Vec2) {
-			auto vec = readVector2(valuesObj[prop->name].toObject());
-			material->setValue(prop->name, iris::toQt(vec));
-		}
-		else if (prop->type == iris::PropertyType::Vec3) {
-			auto vec = readVector3(valuesObj[prop->name].toObject());
-			material->setValue(prop->name, iris::toQt(vec));
-		}
-		else if (prop->type == iris::PropertyType::Vec4) {
-			auto vec = readVector4(valuesObj[prop->name].toObject());
-			material->setValue(prop->name, iris::toQt(vec));
-		}
-		else if (prop->type == iris::PropertyType::Texture && loadTextures) {
-			auto texGuid = valuesObj.value(prop->name).toString();
-			material->setValue(prop->name, resolveTextureGuid(texGuid, db));
-		}
-		else {
-			// float, int, bool
-			material->setValue(prop->name, QVariant::fromValue(valuesObj.value(prop->name)));
-		}
+	// ONE call, and the values go IN rather than being applied after: a builtin
+	// preset and its saved values are not two independent things — Flat's
+	// `color` IS its base colour, Default's `shininess` IS its roughness — so
+	// the conversion needs both at once (io/builtinmaterials.h).
+	auto material = createMaterialFromShaderGuid(shaderGuid,
+	                                             loadTextures ? db : nullptr,
+	                                             loadTextures ? values : QJsonObject());
+	if (!loadTextures) {
+		// Textures deliberately skipped, but everything else still applies.
+		auto novalues = values;
+		for (const char *key : { "diffuseTexture", "baseColorMap", "albedoMap",
+		                         "normalTexture", "normalMap", "emissiveMap" })
+			novalues.remove(QLatin1String(key));
+		material = createMaterialFromShaderGuid(shaderGuid, nullptr, novalues);
 	}
-
-	//material->setMaterialDefinition(matObject);
-
+	const QString name = matObject["name"].toString();
+	if (!name.isEmpty()) material->setName(name);
+	material->setGuid(shaderGuid);
 	return material;
 }
 
@@ -370,79 +353,5 @@ QJsonObject MaterialReader::convertV1MaterialToV2(QJsonObject oldMatObj)
 int MaterialReader::getMaterialVersion(QJsonObject matObj)
 {
 	if (matObj.contains("version")) return matObj["version"].toInt();
-	return 1;
-}
-
-ShaderHandler::ShaderHandler(TextureSource texSrc, QString globalSrcFolder)
-{
-	textureSource = texSrc;
-	globalSourceFolder = globalSrcFolder;
-}
-
-iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShader(QJsonObject shaderObject, Database* db)
-{
-	if (getShaderVersion(shaderObject) == 1) return loadMaterialFromShaderV1(shaderObject, db);
-	return loadMaterialFromShaderV2(shaderObject, db);
-}
-
-iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV2(QJsonObject shaderObject, Database* db)
-{
-	// The GLSL pipeline died in MATERIALS_EVALUATOR phase 5: stored
-	// vertexShaderSource/fragmentShaderSource keys are IGNORED (readers stay
-	// tolerant of old files carrying them). The engine renders CustomMaterials
-	// from their editable properties alone; graph-backed material assets load
-	// as the shader's baked PbrMaterial via parseMaterialTyped's dispatch.
-	auto mat = iris::CustomMaterial::create();
-	mat->setMaterialDefinition(shaderObject);
-	mat->setVersion(2);
-	MaterialHelper::parseMaterialProperties(mat, shaderObject["properties"].toArray());
-	MaterialHelper::parseMaterialStates(mat, shaderObject);
-	return mat;
-}
-
-iris::CustomMaterialPtr ShaderHandler::loadMaterialFromShaderV1(QJsonObject shaderObject, Database* db)
-{
-	iris::CustomMaterialPtr material = iris::CustomMaterialPtr::create();
-
-	auto vertexShader = shaderObject["vertex_shader"].toString();
-	auto fragmentShader = shaderObject["fragment_shader"].toString();
-
-	if (textureSource == TextureSource::GlobalAssets) {
-		// Pin world: shader source files resolve by guid through the CAS
-		// (globalSourceFolder used to be a guid joined onto the store root).
-		QSqlDatabase conn = QSqlDatabase::database();
-		const QString root = AssetStorePaths::root();
-		const QString vPath = AssetCas::resolveSource(conn, root, vertexShader);
-		const QString fPath = AssetCas::resolveSource(conn, root, fragmentShader);
-		if (!vPath.isEmpty()) shaderObject["vertex_shader"] = vPath;
-		if (!fPath.isEmpty()) shaderObject["fragment_shader"] = fPath;
-	}
-	else {
-		for (auto asset : AssetManager::getAssets()) {
-			if (asset->type == ModelTypes::File) {
-				if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-				if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-			}
-		}
-
-		shaderObject["vertex_shader"] = vertexShader;
-		shaderObject["fragment_shader"] = fragmentShader;
-	}
-	
-	
-	//qDebug() << "shader vertex file: " << vertexShader;
-	//qDebug() << "shader fragment file: " << fragmentShader;
-	material->setMaterialDefinition(shaderObject);
-	material->generate(shaderObject);
-	material->setVersion(1);
-
-	return material;
-}
-
-int ShaderHandler::getShaderVersion(QJsonObject shaderObj)
-{
-	if (shaderObj.contains("version"))
-		return shaderObj["version"].toInt();
-
 	return 1;
 }

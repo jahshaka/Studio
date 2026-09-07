@@ -321,6 +321,7 @@ set(SRCS
     src/ui/controls/hfloatsliderwidget.cpp 
     src/ui/controls/particlerampwidget.cpp
     src/ui/controls/texturepickerwidget.cpp 
+    src/io/builtinmaterials.cpp
     src/io/materialreader.cpp 
     src/ui/controls/filepickerwidget.cpp 
     src/ui/panels/propertywidgets/meshpropertywidget.cpp
@@ -556,6 +557,7 @@ set(HEADERS
     src/ui/controls/hfloatsliderwidget.h 
     src/ui/controls/particlerampwidget.h
     src/ui/controls/texturepickerwidget.h 
+    src/io/builtinmaterials.h
     src/io/materialreader.h 
     src/ui/controls/filepickerwidget.h 
     src/ui/panels/propertywidgets/meshpropertywidget.h 

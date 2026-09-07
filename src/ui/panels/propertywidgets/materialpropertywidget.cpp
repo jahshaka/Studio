@@ -30,7 +30,8 @@ For more information see the LICENSE file
 
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/document/materials/custommaterial.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "io/builtinmaterials.h"
 #include "irisgl/core/properties/property.h"
 
 #include "services/services.h"
@@ -45,93 +46,25 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 
-iris::MaterialPtr MaterialPropertyWidget::currentMaterial() const
-{
-    return !!material ? material.staticCast<iris::Material>() : genericMaterial;
-}
-
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
-    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        meshNode = sceneNode.staticCast<iris::MeshNode>();
-
-        // dynamicCast, not staticCast: a mesh may carry any Material subclass.
-        // A staticCast here would reinterpret e.g. a PbrMaterial at
-        // CustomMaterial's layout, which is undefined behaviour.
-        material = meshNode->getMaterial().dynamicCast<iris::CustomMaterial>();
-        genericMaterial.clear();
-
-        if (!material) {
-            // Not a shader-graph material. Render its parameters generically -
-            // Material::properties is all these types have in common.
-            genericMaterial = meshNode->getMaterial();
-            meshNodeGuid    = meshNode->getGUID();
-            for (auto prop : genericMaterial->properties) {
-                if (prop->type == iris::PropertyType::Texture) {
-                    existingTextures.insert(prop->name, prop->getValue().toString());
-                }
-            }
-            setWidgetProperties();
-            return;
-        }
-
-        meshNodeGuid = meshNode->getGUID();
-
-        for (auto prop : material->properties) {
-            if (prop->type == iris::PropertyType::Texture) {
-                existingTextures.insert(prop->name, prop->getValue().toString());
-            }
-        }
-    }
-
-    setupShaderSelector();
-
-    if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        /*
-		// TODO - properly update only when requested, and cache these?
-        QFileInfo shaderFile;
-
-        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-        while (it.hasNext()) {
-            it.next();
-            if (it.key() == material->getGuid()) {
-                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-                break;
-            }
-        }
-
-        if (shaderFile.exists()) {
-            material->generate(shaderFile.absoluteFilePath());
-        } else {
-            for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == ModelTypes::Shader) {
-                    if (asset->assetGuid == material->getGuid()) {
-                        auto def = asset->getValue().toJsonObject();
-                        auto vertexShader = def["vertex_shader"].toString();
-                        auto fragmentShader = def["fragment_shader"].toString();
-                        for (auto asset : AssetManager::getAssets()) {
-                            if (asset->type == ModelTypes::File) {
-                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                            }
-                        }
-                        def["vertex_shader"] = vertexShader;
-                        def["fragment_shader"] = fragmentShader;
-                        material->generate(def);
-                    }
-                }
-            }
-        }
-		*/
-        setWidgetProperties();
-    }
-
-    else {
+    if (!(!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)) {
         meshNode.clear();
         material.clear();
-        genericMaterial.clear();
         return;
     }
+
+    meshNode = sceneNode.staticCast<iris::MeshNode>();
+    material = meshNode->getMaterial();
+    meshNodeGuid = meshNode->getGUID();
+    if (!material) return;
+
+    for (auto prop : material->properties)
+        if (prop->type == iris::PropertyType::Texture)
+            existingTextures.insert(prop->name, prop->getValue().toString());
+
+    setupShaderSelector();
+    setWidgetProperties();
 }
 
 void MaterialPropertyWidget::forceShaderRefresh(const QString &materialName)
@@ -154,22 +87,32 @@ void MaterialPropertyWidget::materialChanged(const QString &text)
     Q_UNUSED(text)
 }
 
+// The picker now chooses a MATERIAL, not a shader (HLMS_ADOPTION P4b): a
+// reserved builtin guid resolves to its PbrMaterial preset, a Shader asset to
+// the baked PbrMaterial its graph evaluates to. It used to swap the shader
+// definition inside a CustomMaterial, which is a thing that no longer exists.
 void MaterialPropertyWidget::materialChanged(int index)
 {
     Q_UNUSED(index);
-    material->purge();
+    if (!meshNode) return;
+    const QString guid = materialSelector->getCurrentItemData();
     clearPanel(this->layout());
 
-	MaterialReader reader;
-	reader.setProject(project);
-	material = reader.createMaterialFromShaderGuid(materialSelector->getCurrentItemData(), db);
-    material->setName(materialSelector->getCurrentItem());
-    material->setGuid(materialSelector->getCurrentItemData());
-	meshNode->setMaterial(material);
-	setupShaderSelector();
-	
-    //setSceneNode(meshNode);
+    MaterialReader reader;
+    reader.setProject(project);
+    iris::MaterialPtr picked = BuiltinMaterials::isBuiltin(guid)
+                                   ? reader.createMaterialFromShaderGuid(guid, db)
+                                         .staticCast<iris::Material>()
+                                   : reader.parseShaderAsPbr(guid, db);
+    // A graph asset with no baked material yet (a definition predating the
+    // evaluator) must not silently blank the mesh: keep what it had.
+    if (!picked) { setupShaderSelector(); setWidgetProperties(); return; }
 
+    picked->setName(materialSelector->getCurrentItem());
+    picked->setGuid(guid);
+    material = picked;
+    meshNode->setMaterial(material);
+    setupShaderSelector();
 
     QJsonObject node;
     SceneWriter::writeSceneNode(node, meshNode, false);
@@ -177,52 +120,43 @@ void MaterialPropertyWidget::materialChanged(int index)
     db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
     db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Shader);
 
-    bool usesDefaultShader = false;
-    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-    while (it.hasNext()) {
-        it.next();
-        if (it.key() == materialSelector->getCurrentItemData()) {
-            usesDefaultShader = true;
-            break;
-        }
-    }
-
-    // Don't create dependencies to builtin shaders
-    if (!usesDefaultShader) {
+    // Don't create dependencies to builtins — they ship with the app.
+    if (!BuiltinMaterials::isBuiltin(guid)) {
         db->createDependency(
             static_cast<int>(ModelTypes::Object),
             static_cast<int>(ModelTypes::Shader),
-            meshNodeGuid, materialSelector->getCurrentItemData(),
+            meshNodeGuid, guid,
             project->getProjectGuid()
         );
     }
 
-	
-	for (auto prop : material->properties) {
-		if (prop->type == (iris::PropertyType::Texture)) {
-			auto guid = prop->getValue().toString();
-			if (guid.isEmpty() || QFile::exists(guid)) continue;
-			// guid-valued texture reference: resolve through the CAS (pinned
-			// in project context); the flat projectFolder join stays as a
-			// last-resort fallback for pre-pipeline projects.
-			QSqlDatabase conn = QSqlDatabase::database();
-			QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
-			                                       project->getProjectGuid(), guid);
-			if (path.isEmpty())
-				path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guid);
-			if (path.isEmpty())
-				path = QDir(project->getProjectFolder()).filePath(db->fetchAsset(guid).name);
-			if (QFile::exists(path))
-				material->setValue(prop->name, path);
-		}
-	}
+    for (auto prop : material->properties) {
+        if (prop->type != iris::PropertyType::Texture) continue;
+        auto guidValue = prop->getValue().toString();
+        if (guidValue.isEmpty() || QFile::exists(guidValue)) continue;
+        // guid-valued texture reference: resolve through the CAS (pinned in
+        // project context); the flat projectFolder join stays as a last-resort
+        // fallback for pre-pipeline projects.
+        QSqlDatabase conn = QSqlDatabase::database();
+        QString path = AssetCas::resolvePinned(conn, AssetStorePaths::root(),
+                                               project->getProjectGuid(), guidValue);
+        if (path.isEmpty())
+            path = AssetCas::resolveSource(conn, AssetStorePaths::root(), guidValue);
+        if (path.isEmpty())
+            path = QDir(project->getProjectFolder()).filePath(db->fetchAsset(guidValue).name);
+        if (QFile::exists(path))
+            material->setValue(prop->name, path);
+    }
 
-	setWidgetProperties();
+    setWidgetProperties();
 }
 
 void MaterialPropertyWidget::setupShaderSelector()
 {
-    materialSelector = this->addComboBox("Shader");
+    // "Material", not "Shader": the entries are the reserved builtin PRESETS
+    // and the project's graph-backed material assets. Nothing here selects a
+    // shader any more (HLMS_ADOPTION P4b).
+    materialSelector = this->addComboBox("Material");
 
     QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
     while (it.hasNext()) {
@@ -236,39 +170,23 @@ void MaterialPropertyWidget::setupShaderSelector()
         }
     }
 
-    materialSelector->setCurrentItemData(material->getGuid());
+    if (material) materialSelector->setCurrentItemData(material->getGuid());
 
     connect(materialSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(materialChanged(int)));
 }
 
 void MaterialPropertyWidget::onPropertyChanged(iris::Property *prop)
 {
-    auto mat = currentMaterial();
-    if (!mat) return;
-
-    if (!material) {
-        // Generic material (PbrMaterial, ...): Material::setValue is the ONLY
-        // bridge onto the real fields the mirror reads (pbrmaterial.cpp:126 -
-        // toPbrParams reads pbr->textureScale etc., not the Property list).
-        // Writing the Property object alone changes what gets SAVED but not
-        // what RENDERS - that was the dead material panel: edits appeared to
-        // do nothing live and only showed up after a scene reload rebuilt the
-        // material from JSON through setValue.
-        mat->setValue(prop->name, prop->getValue());
-        if (prop->type == iris::PropertyType::Texture)
-            updateTextureDependency(prop);
-        return;
-    }
-
-    for (auto property : material->properties) {
-        if (property->name == prop->name) property->setValue(prop->getValue());
-    }
-
-    // special case for textures since we have to generate these
-    if (prop->type == iris::PropertyType::Texture) {
-        material->setTextureWithUniform(prop->uniform, prop->getValue().toString());
+    if (!material) return;
+    // Material::setValue is the ONLY bridge onto the real fields the mirror
+    // reads (SceneMirror::toPbrParams reads pbr->textureScale etc., not the
+    // Property list). Writing the Property object alone changes what gets SAVED
+    // but not what RENDERS — that was the dead material panel: edits appeared to
+    // do nothing live and only showed up after a scene reload rebuilt the
+    // material from JSON through setValue.
+    material->setValue(prop->name, prop->getValue());
+    if (prop->type == iris::PropertyType::Texture)
         updateTextureDependency(prop);
-    }
 }
 
 // Keep the project database's object->texture dependency in step with a texture
@@ -309,7 +227,5 @@ void MaterialPropertyWidget::onPropertyChangeEnd(iris::Property* prop)
     if (startValue == prop->getValue()) return;
 
     if (services && services->undo)
-        // currentMaterial(), not the CustomMaterial member - that one is null
-        // whenever the mesh carries a PbrMaterial and the command would crash.
-        services->undo->push(new ChangeMaterialPropertyCommand(currentMaterial(), prop->name, startValue, prop->getValue()));
+        services->undo->push(new ChangeMaterialPropertyCommand(material, prop->name, startValue, prop->getValue()));
 }

@@ -75,7 +75,6 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/physicsproperties.h"
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/materials/custommaterial.h"
 
 #include "io/materialreader.h"
 #include "data/guidmanager.h"
@@ -236,6 +235,34 @@ QString SceneReader::resolveAssetPath(const QString &guid)
         const QString name = handle->fetchAsset(guid).name;
         if (!name.isEmpty()) {
             const QString candidate = QDir(assetDirectory).filePath(name);
+            if (QFileInfo::exists(candidate)) path = candidate;
+        }
+    }
+
+    // THE PROJECT-FOLDER LAST RESORT, and the writer's matching branch is why
+    // it has to exist. SceneWriter::assetGuidForTexturePath resolves a texture
+    // path to a guid two ways: through the CAS, and — when the file is not a
+    // store object — by looking the catalog up by FILE NAME within the project
+    // (Database::fetchAssetGUIDByName). That second branch is still live and
+    // still fires: MainWindow::createDefaultScene copies Tile.png straight into
+    // the project folder and registers a bare catalog row, so the default
+    // ground's texture is exactly such an asset — a guid the store knows
+    // nothing about. Writer and reader have to agree, or a save/reopen ERASES
+    // the texture and the floor comes back bare white (the "reopen lighting
+    // blowout", which was never a lighting bug).
+    //
+    // MaterialReader::resolveTextureGuid has carried this branch since that
+    // defect was fixed; THIS reader did not, and did not need to while the
+    // default ground was a legacy material that went through the other reader.
+    // HLMS_ADOPTION P4b made it a PbrMaterial, which lands here — so the same
+    // asymmetry re-appeared, in the same place, with the same 65,65,65 ->
+    // 255,255,255 signature. Last-resort and existence-checked, so nothing in
+    // the pin world changes shape because of it.
+    if (path.isEmpty() && !useAlternativeLocation && handle && project &&
+        !project->getProjectFolder().isEmpty()) {
+        const QString name = handle->fetchAsset(guid).name;
+        if (!name.isEmpty()) {
+            const QString candidate = QDir(project->getProjectFolder()).filePath(name);
             if (QFileInfo::exists(candidate)) path = candidate;
         }
     }
@@ -1344,7 +1371,11 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 	MaterialReader reader;
 	reader.setProject(project);
 	if (useAlternativeLocation) reader.setSource(TextureSource::GlobalAssets, assetDirectory);
-    if (nodeObj["material"].isNull()) return iris::CustomMaterial::create();
+    // A node with no material at all gets the default PbrMaterial — the one
+    // material class there is (HLMS_ADOPTION P4b). It used to get an EMPTY
+    // CustomMaterial: no shader, no properties, so every value the panel
+    // showed and every value the mirror read was absent.
+    if (nodeObj["material"].isNull()) return iris::PbrMaterial::create();
 
 	auto mat = nodeObj["material"].toObject();
 
@@ -1358,86 +1389,10 @@ iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)
 
 	return reader.parseMaterialTyped(mat, handle, true);
    
-/*
-	auto m = iris::CustomMaterial::create();
-    auto shaderGuid = mat["guid"].toString();
-
-    m->setName(mat["name"].toString());
-    m->setGuid(shaderGuid);
-
-    QFileInfo shaderFile;
-
-    // Note that this runs after asset accumulation, hence why we can get custom shaders used
-    QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-    while (it.hasNext()) {
-        it.next();
-        if (it.key() == shaderGuid) {
-            shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-            break;
-        }
-    }
-
-    if (shaderFile.exists()) {
-        m->generate(shaderFile.absoluteFilePath());
-    }
-    else {
-        if (useAlternativeLocation) {
-            auto shader = handle ? handle->fetchAssetData(shaderGuid) : QByteArray();
-            QJsonObject shaderDefinition = QJsonDocument::fromBinaryData(shader).object();
-
-            if (!shaderDefinition.isEmpty()) {
-                auto vAsset = handle->fetchAsset(shaderDefinition["vertex_shader"].toString());
-                auto fAsset = handle->fetchAsset(shaderDefinition["fragment_shader"].toString());
-
-                const QString vPath = resolveAssetPath(shaderDefinition["vertex_shader"].toString());
-                const QString fPath = resolveAssetPath(shaderDefinition["fragment_shader"].toString());
-                if (!vPath.isEmpty()) shaderDefinition["vertex_shader"] = vPath;
-                else if (!vAsset.name.isEmpty()) shaderDefinition["vertex_shader"] = QDir(assetDirectory).filePath(vAsset.name);
-                if (!fPath.isEmpty()) shaderDefinition["fragment_shader"] = fPath;
-                else if (!fAsset.name.isEmpty()) shaderDefinition["fragment_shader"] = QDir(assetDirectory).filePath(fAsset.name);
-                
-                m->generate(shaderDefinition);
-            }
-        }
-        else {
-            for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == ModelTypes::Shader) {
-                    if (asset->assetGuid == m->getGuid()) {
-                        auto def = asset->getValue().toJsonObject();
-                        auto vertexShader = def["vertex_shader"].toString();
-                        auto fragmentShader = def["fragment_shader"].toString();
-                        for (auto asset : AssetManager::getAssets()) {
-                            if (asset->type == ModelTypes::File) {
-                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                            }
-                        }
-                        def["vertex_shader"] = vertexShader;
-                        def["fragment_shader"] = fragmentShader;
-
-                        m->generate(def);
-                    }
-                }
-            }
-        }
-    }
-
-    for (auto prop : m->properties) {
-        if (mat.contains(prop->name)) {
-            if (prop->type == iris::PropertyType::Texture) {
-                QString textureStr = (handle && !mat[prop->name].toString().isEmpty())
-                        ? QDir(assetDirectory).filePath(handle->fetchAsset(mat[prop->name].toString()).name)
-                        : QString();
-
-                m->setValue(prop->name, textureStr);
-            } else {
-                m->setValue(prop->name, mat[prop->name].toVariant());
-            }
-        }
-    }
-
-    return m;
-	*/
+// (A ~60-line commented-out copy of the reader's builtin-shader lookup lived
+// here. It named a class that no longer exists — HLMS_ADOPTION P4b — and the
+// live path above has done this job for a long time. Deleted rather than left
+// as an archaeological hazard.)
 }
 
 void SceneReader::extractAssetsFromAssimpScene(QString filePath)

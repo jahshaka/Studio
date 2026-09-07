@@ -12,7 +12,6 @@ For more information see the LICENSE file
 #include "export/walkers/materialtexturereader.h"
 
 #include "irisgl/document/materials/material.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/properties/property.h"
 
@@ -34,13 +33,15 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
         found.append({ it.key(), it.value()->source });
     }
 
-    if (auto *custom = dynamic_cast<iris::CustomMaterial *>(material)) {
-        for (iris::Property *prop : custom->properties) {
-            if (!prop || prop->type != iris::PropertyType::Texture) continue;
-            const QString path = prop->getValue().toString();
-            if (path.isEmpty() || seen(path)) continue;
-            found.append({ prop->name, path });
-        }
+    // Texture-typed PROPERTY rows, for anything the slot map above missed. A
+    // PbrMaterial keeps both in step through setValue, so this is normally a
+    // no-op; it was the only route a CustomMaterial's maps could be found by
+    // (HLMS_ADOPTION P4b) and it stays as the belt to that brace.
+    for (iris::Property *prop : material->properties) {
+        if (!prop || prop->type != iris::PropertyType::Texture) continue;
+        const QString path = prop->getValue().toString();
+        if (path.isEmpty() || seen(path)) continue;
+        found.append({ prop->name, path });
     }
     return found;
 }

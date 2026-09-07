@@ -16,13 +16,13 @@ For more information see the LICENSE file
 #include <QAtomicInt>
 
 #include "irisgl/core/properties/property.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
+#include "io/builtinmaterials.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
@@ -51,90 +51,50 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
         auto materialDefinition = definition.value("material").toObject();
 
-        // PBR-tagged blobs (materialType "pbr" — every GLB imported since the
-        // importer fix) rebuild an iris::PbrMaterial from the saved values.
-        // The legacy path below would leave a blank CustomMaterial: no builtin
-        // shader guid matches, generate() never runs, no properties exist.
-        if (materialDefinition.value("materialType").toString() == QStringLiteral("pbr")) {
-            auto pbr = iris::PbrMaterial::create();
-            const QJsonObject values = materialDefinition.value("values").toObject();
-            for (const iris::Property* property : pbr->properties) {
-                if (!values.contains(property->name)) continue;
-                if (property->type == iris::PropertyType::Color)
-                    pbr->setValue(property->name,
-                                  QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
-                else if (property->type == iris::PropertyType::Texture)
-                    pbr->setValue(property->name,
-                                  resolveTexture(values.value(property->name).toString()));
-                else
-                    pbr->setValue(property->name, values.value(property->name).toVariant());
-            }
-            node.staticCast<iris::MeshNode>()->setMaterial(pbr);
-        } else {
-        auto nodeMaterial = node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>();
-
-        QFileInfo shaderFile;
-        QMapIterator<QString, QString> it(Constants::Reserved::BuiltinShaders);
-        while (it.hasNext()) {
-            it.next();
-            if (it.key() == materialDefinition["guid"].toString()) {
-                shaderFile = QFileInfo(IrisUtils::getAbsoluteAssetPath(it.value()));
-                break;
-            }
-        }
-
-        if (shaderFile.exists()) {
-            nodeMaterial->generate(shaderFile.absoluteFilePath());
-        }
-        else {
-            for (auto asset : AssetManager::getAssets()) {
-                if (asset->type == ModelTypes::Shader) {
-                    if (asset->assetGuid == materialDefinition["guid"].toString()) {
-                        auto def = asset->getValue().toJsonObject();
-                        auto vertexShader = def["vertex_shader"].toString();
-                        auto fragmentShader = def["fragment_shader"].toString();
-                        for (auto asset : AssetManager::getAssets()) {
-                            if (asset->type == ModelTypes::File) {
-                                if (vertexShader == asset->assetGuid) vertexShader = asset->path;
-                                if (fragmentShader == asset->assetGuid) fragmentShader = asset->path;
-                            }
-                        }
-                        def["vertex_shader"] = vertexShader;
-                        def["fragment_shader"] = fragmentShader;
-
-						nodeMaterial->setMaterialDefinition(def);
-                        nodeMaterial->generate(def);
-                    }
-                }
-            }
-        }
+        // ONE PATH SINCE HLMS_ADOPTION P4b, because there is one material class.
+        //
+        // A "pbr"-tagged blob rebuilds a PbrMaterial from its own rows; a
+        // LEGACY blob (a builtin shader guid plus Default-shader uniform names)
+        // has those names renamed to their PBR equivalents first, and then
+        // drives the same rows. What used to sit here was a second copy of the
+        // reader: it looked the builtin `.shader` file up, ran generate() to
+        // get a property list, and walked THAT — so a blob the shader lookup
+        // missed produced a material with no properties at all and every value
+        // was silently dropped.
+        const bool isPbrBlob =
+            materialDefinition.value("materialType").toString() == QStringLiteral("pbr");
 
         // V1 definitions carry values at the top level; V2 (everything the
         // one-pipeline importer writes) nests them under "values". Read both.
-        const QJsonObject nestedValues = materialDefinition.value("values").toObject();
-        const auto valueFor = [&](const QString &name) -> QJsonValue {
-            if (materialDefinition.contains(name)) return materialDefinition.value(name);
-            return nestedValues.value(name);
-        };
+        QJsonObject values = materialDefinition.value("values").toObject();
+        for (auto it = materialDefinition.constBegin(); it != materialDefinition.constEnd(); ++it)
+            if (!values.contains(it.key())) values.insert(it.key(), it.value());
+        if (!isPbrBlob) values = BuiltinMaterials::normaliseLegacyDefinition(values);
 
-        for (const iris::Property* property : nodeMaterial->properties) {
-            if (property->type == iris::PropertyType::Texture) {
-				QString textureValue = valueFor(property->name).toString();
-                if (!textureValue.isEmpty() || !QFileInfo(textureValue).suffix().isEmpty()) {
-                    nodeMaterial->setValue(property->name, resolveTexture(textureValue));
-                }
-            }
-            else if (property->type == iris::PropertyType::Color) {
-                nodeMaterial->setValue(
-                    property->name,
-                    QVariant::fromValue(valueFor(property->name).toVariant().value<QColor>())
-                );
-            }
-            else {
-                nodeMaterial->setValue(property->name, QVariant::fromValue(valueFor(property->name)));
+        auto pbr = iris::PbrMaterial::create();
+        for (const iris::Property* property : pbr->properties) {
+            if (!values.contains(property->name)) continue;
+            if (property->type == iris::PropertyType::Color)
+                pbr->setValue(property->name,
+                              QVariant::fromValue(values.value(property->name).toVariant().value<QColor>()));
+            else if (property->type == iris::PropertyType::Texture)
+                pbr->setValue(property->name,
+                              resolveTexture(values.value(property->name).toString()));
+            else
+                pbr->setValue(property->name, values.value(property->name).toVariant());
+        }
+        // The Flat builtin is the one legacy guid whose SHADING MODEL differs
+        // (HLMS_ADOPTION P4a/D-P4b), and a values-only walk cannot know that.
+        if (!isPbrBlob) {
+            const QString guid = materialDefinition.value("guid").toString().isEmpty()
+                                     ? materialDefinition.value("shaderGuid").toString()
+                                     : materialDefinition.value("guid").toString();
+            if (BuiltinMaterials::isBuiltin(guid)) {
+                auto builtin = BuiltinMaterials::fromBuiltin(guid, values, resolveTexture);
+                pbr->setValue(QStringLiteral("shadingModel"), builtin->shadingModel);
             }
         }
-        }
+        node.staticCast<iris::MeshNode>()->setMaterial(pbr);
     }
 
     QJsonArray children = definition["children"].toArray();
@@ -293,34 +253,17 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
             return iris::MaterialPtr(pbr);
         }
 
-        auto mat = iris::CustomMaterial::create();
-
-        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
+        // No pbrMetallicRoughness in the source: the legacy Blinn fields go
+        // through the shared conversion (io/builtinmaterials.h) instead of the
+        // Default.shader CustomMaterial this used to build. An embedded diffuse
+        // texture still neutralises the colour — assimp reports a tint AND the
+        // baked texture, and multiplying them darkened every embedded-texture
+        // import.
         if (data.hasEmbeddedDiffTexture && !data.diffuseTexture.isEmpty()) {
             hasEmbeddedTexture = true;
             data.diffuseColor = QColor(255, 255, 255);
         }
-
-        mat->setValue("diffuseColor",	data.diffuseColor);
-        mat->setValue("specularColor",	data.specularColor);
-        mat->setValue("ambientColor",	QColor(130, 130, 130));
-        mat->setValue("emissionColor",	data.emissionColor);
-        mat->setValue("shininess",		data.shininess);
-        mat->setValue("useAlpha",		true);
-
-        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-            mat->setValue("diffuseTexture", data.diffuseTexture);
-
-        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-            mat->setValue("specularTexture", data.specularTexture);
-
-        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile()) {
-            mat->setValue("normalTexture", data.normalTexture);
-            mat->setValue("normalIntensity", 1.f);
-        }
-
-        return iris::MaterialPtr(mat);
+        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
     }, ssource, nullptr, extractDir);
 
     const aiScene *scene = ssource->importer.GetScene();

@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "io/materialreader.h"
 #include "io/scenewriter.h"
-#include "irisgl/document/materials/custommaterial.h"
 
 bool Database::createDependency(const int &, const int &, const QString &,
                                 const QString &, const QString &)
@@ -59,9 +58,15 @@ MaterialReader::MaterialReader(TextureSource texSrc, QString globalSourceFolder)
 {
 }
 
-iris::CustomMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString, Database *)
+iris::PbrMaterialPtr MaterialReader::createMaterialFromShaderGuid(QString, Database *,
+                                                                  const QJsonObject &)
 {
-    return iris::CustomMaterialPtr();
+    return iris::PbrMaterialPtr();
+}
+
+iris::MaterialPtr MaterialReader::parseShaderAsPbr(const QString &, Database *)
+{
+    return iris::MaterialPtr();
 }
 
 void SceneWriter::writeSceneNode(QJsonObject &, iris::SceneNodePtr, bool)

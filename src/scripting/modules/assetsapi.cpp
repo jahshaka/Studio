@@ -53,7 +53,6 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/services.h"
 #include "irisgl/core/irisutils.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
 using namespace scriptmod;

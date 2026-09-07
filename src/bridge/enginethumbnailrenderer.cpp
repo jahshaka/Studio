@@ -14,7 +14,6 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/assets/texture2d.h"
 #include <QFileInfo>
@@ -178,60 +177,16 @@ iris::MaterialPtr EngineThumbnailRenderer::previewMaterialForMeshData(const iris
     return mat.staticCast<iris::Material>();
 }
 
-iris::MaterialPtr EngineThumbnailRenderer::previewMaterialFor(iris::MaterialPtr material)
-{
-    if (!material) return iris::DefaultMaterial::create().staticCast<iris::Material>();
-    auto custom = material.dynamicCast<iris::CustomMaterial>();
-    if (!custom) return material;   // PbrMaterial / DefaultMaterial mirror natively
-
-    // The asset viewer's mapping (EngineAssetViewer::mirrorable): colour, texture
-    // and float properties onto a DefaultMaterial, textures loaded when the file
-    // exists. Keeps shader-graph materials showing their real look.
-    auto out = iris::DefaultMaterial::create();
-    for (auto prop : custom->properties) {
-        if (!prop) continue;
-        const QVariant v = prop->getValue();
-        if (prop->type == iris::PropertyType::Color) {
-            const QColor c = v.value<QColor>();
-            if (prop->name == "diffuseColor" || prop->name == "color" ||
-                prop->name == "albedo" || prop->name == "baseColor")  out->setDiffuseColor(c);
-            else if (prop->name == "specularColor")                   out->setSpecularColor(c);
-            else if (prop->name == "ambientColor")                    out->setAmbientColor(c);
-        }
-        else if (prop->type == iris::PropertyType::Texture) {
-            const QString path = v.toString();
-            if (path.isEmpty() || !QFileInfo(path).isFile()) continue;
-            if (prop->name == "diffuseTexture")       out->setDiffuseTexture(iris::Texture2D::load(path));
-            else if (prop->name == "normalTexture")   out->setNormalTexture(iris::Texture2D::load(path));
-            else if (prop->name == "specularTexture") out->setSpecularTexture(iris::Texture2D::load(path));
-        }
-        else if (prop->type == iris::PropertyType::Float) {
-            if (prop->name == "shininess")            out->setShininess(v.toFloat());
-            else if (prop->name == "textureScale")    out->setTextureScale(v.toFloat());
-            else if (prop->name == "normalIntensity") out->setNormalIntensity(v.toFloat());
-        }
-    }
-    return out.staticCast<iris::Material>();
-}
-
-void EngineThumbnailRenderer::previewMaterials(iris::SceneNodePtr node)
-{
-    if (!node) return;
-    if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
-        auto mat = meshNode->getMaterial();
-        if (mat && mat.dynamicCast<iris::CustomMaterial>())
-            meshNode->setMaterial(previewMaterialFor(mat));
-    }
-    for (auto child : node->children()) previewMaterials(child);
-}
+// (previewMaterialFor and previewMaterials are GONE with HLMS_ADOPTION P4b.
+// They existed to convert an iris::CustomMaterial's Property rows into a
+// DefaultMaterial so a shader-graph material showed its real look in a
+// thumbnail instead of a grey stand-in. There is no CustomMaterial any more —
+// every material the document holds is a PbrMaterial, which the mirror renders
+// natively — so the conversion has nothing left to convert.)
 
 QImage EngineThumbnailRenderer::renderNode(iris::SceneNodePtr subject, QSize size)
 {
     if (!subject) return QImage();
-    // Convert shader-graph materials in place so every caller (dock imports, the
-    // assets page, refreshThumbnail) gets textured previews, not grey stand-ins.
-    previewMaterials(subject);
     iris::CameraNodePtr cam;
     auto document = buildPreviewScene(cam);
     document->rootNode->addChild(subject);

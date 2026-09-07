@@ -30,7 +30,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/defaultmaterial.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/viewport.h"
@@ -468,10 +467,14 @@ iris::ScenePtr MainWindow::createDefaultScene()
     assetTexture->path = QDir(project->getProjectFolder()).filePath("Tile.png");
     AssetManager::addAsset(assetTexture);
 
-    auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-    m->setValue("diffuseTexture", QDir(project->getProjectFolder()).filePath("Tile.png"));
+    // The default scene's ground, as a PbrMaterial (HLMS_ADOPTION P4b). The
+    // roughness is what the legacy Default shader's shininess 0 already meant
+    // through the mirror's remap, so the floor renders exactly as it did.
+    auto m = iris::PbrMaterial::create();
+    m->setValue("baseColorMap", QDir(project->getProjectFolder()).filePath("Tile.png"));
     m->setValue("textureScale", 4.f);
+    m->setValue("roughness", 1.0f);
+    m->setValue("metallic", 0.0f);
     node->setMaterial(m);
 
     scene->rootNode->addChild(node);

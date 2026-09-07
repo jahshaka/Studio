@@ -36,7 +36,6 @@ For more information see the LICENSE file
 #include <algorithm>
 
 #include "irisgl/core/irisutils.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h" 
 #include "irisgl/document/scenegraph/scene.h" 
 #include "zip.h"
@@ -61,6 +60,9 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include "io/ziphelper.h"
 #include "io/assetmanager.h"
+#include "io/builtinmaterials.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/core/properties/property.h"
 #include "io/scenewriter.h"
 #include "services/subscriber.h"
 #include "data/materialpreset.h"
@@ -316,22 +318,10 @@ void AssetWidget::trigger()
     for (const auto &file : files) {
         auto preset = reader->readMaterialPreset(file.absoluteFilePath());
 
-        auto m = iris::CustomMaterial::create();
-        m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-
-        m->setValue("diffuseTexture", preset.diffuseTexture);
-        m->setValue("specularTexture", preset.specularTexture);
-        m->setValue("normalTexture", preset.normalTexture);
-        m->setValue("reflectionTexture", preset.reflectionTexture);
-
-        m->setValue("ambientColor", preset.ambientColor);
-        m->setValue("diffuseColor", preset.diffuseColor);
-        m->setValue("specularColor", preset.specularColor);
-
-        m->setValue("shininess", preset.shininess);
-        m->setValue("normalIntensity", preset.normalIntensity);
-        m->setValue("reflectionInfluence", preset.reflectionInfluence);
-        m->setValue("textureScale", preset.textureScale);
+        // ONE conversion (io/builtinmaterials.h), shared with SceneEditService's
+        // preset apply — this was a second, drifting copy of it, and it built a
+        // Default-shader CustomMaterial for PBR presets too.
+        auto m = BuiltinMaterials::fromPreset(preset);
 
         auto assetMat = new AssetMaterial;
         assetMat->fileName = preset.name;
@@ -369,10 +359,7 @@ void AssetWidget::trigger()
 			auto node = iris::MeshNode::loadAsSceneFragment(QString(), assimpObject->getSceneData(),
 				[&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
 			{
-				auto mat = iris::CustomMaterial::create();
-				mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
-				return mat;
+				return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
 			});
 
 			AssetHelper::updateNodeMaterial(node, materialObj.object(), db);
@@ -432,17 +419,19 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 	QJsonDocument doc = QJsonDocument::fromJson(file->readAll());
 
 	const QJsonObject materialDefinition = doc.object();
-	auto shaderName = Constants::SHADER_DEFS + materialDefinition["name"].toString() + ".shader";
+	// Legacy key names renamed to their PBR equivalents, then driven onto a
+	// PbrMaterial's own rows (HLMS_ADOPTION P4b) — no `.shader` file is loaded
+	// to borrow a uniform list from any more.
+	const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
 
-	auto material = iris::CustomMaterial::create();
-	material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+	auto material = iris::PbrMaterial::create();
 	material->setName(materialDefinition["name"].toString());
 
 	for (const auto &prop : material->properties) {
-		if (materialDefinition.contains(prop->name)) {
+		if (normalised.contains(prop->name)) {
 			if (prop->type == iris::PropertyType::Texture) {
-				auto textureStr = !materialDefinition[prop->name].toString().isEmpty()
-					? materialDefinition[prop->name].toString()
+				auto textureStr = !normalised[prop->name].toString().isEmpty()
+					? normalised[prop->name].toString()
 					: QString();
 				material->setValue(prop->name, textureStr);
 				if (!textureStr.isEmpty()) {
@@ -450,7 +439,7 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 				}
 			}
 			else {
-				material->setValue(prop->name, materialDefinition[prop->name].toVariant());
+				material->setValue(prop->name, normalised[prop->name].toVariant());
 			}
 		}
 	}
@@ -465,17 +454,19 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 {
     QJsonDocument doc = QJsonDocument::fromJson(blob);
 	const QJsonObject materialDefinition = doc.object();
-	auto shaderName = Constants::SHADER_DEFS + materialDefinition["name"].toString() + ".shader";
+	// Legacy key names renamed to their PBR equivalents, then driven onto a
+	// PbrMaterial's own rows (HLMS_ADOPTION P4b) — no `.shader` file is loaded
+	// to borrow a uniform list from any more.
+	const QJsonObject normalised = BuiltinMaterials::normaliseLegacyDefinition(materialDefinition);
 
-	auto material = iris::CustomMaterial::create();
-	material->generate(IrisUtils::getAbsoluteAssetPath(shaderName));
+	auto material = iris::PbrMaterial::create();
 	material->setName(materialDefinition["name"].toString());
 
 	for (const auto &prop : material->properties) {
-		if (materialDefinition.contains(prop->name)) {
+		if (normalised.contains(prop->name)) {
 			if (prop->type == iris::PropertyType::Texture) {
-				auto textureStr = !materialDefinition[prop->name].toString().isEmpty()
-					? materialDefinition[prop->name].toString()
+				auto textureStr = !normalised[prop->name].toString().isEmpty()
+					? normalised[prop->name].toString()
 					: QString();
 				material->setValue(prop->name, textureStr);
 				//if (!textureStr.isEmpty()) {
@@ -483,7 +474,7 @@ void AssetWidget::extractTexturesAndMaterialFromMaterial(
 				//}
 			}
 			else {
-				material->setValue(prop->name, materialDefinition[prop->name].toVariant());
+				material->setValue(prop->name, normalised[prop->name].toVariant());
 			}
 		}
 	}

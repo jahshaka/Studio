@@ -34,7 +34,6 @@ For more information see the LICENSE file
 
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
@@ -70,6 +69,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root); }
 #include "io/assetmanager.h"
 #include "io/ziphelper.h"
 #include "io/materialreader.h"
+#include "io/builtinmaterials.h"
 #include "io/scenereader.h"
 #include "io/scenewriter.h"
 #include "services/selectionservice.h"
@@ -315,26 +315,7 @@ void SceneEditService::addMesh(const QString &path, bool ignore, iris::Vec3 posi
     // (the old `new` here leaked the whole parsed scene per added mesh).
     auto node = iris::MeshNode::loadAsSceneFragment(path, [](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
-        auto mat = iris::CustomMaterial::create();
-        mat->generate(IrisUtils::getAbsoluteAssetPath("app/shader_defs/Default.shader"));
-
-        mat->setValue("diffuseColor", data.diffuseColor);
-        mat->setValue("specularColor", data.specularColor);
-        mat->setValue("ambientColor", data.ambientColor);
-        mat->setValue("emissionColor", data.emissionColor);
-
-        mat->setValue("shininess", data.shininess);
-
-        if (QFile(data.diffuseTexture).exists() && QFileInfo(data.diffuseTexture).isFile())
-            mat->setValue("diffuseTexture", data.diffuseTexture);
-
-        if (QFile(data.specularTexture).exists() && QFileInfo(data.specularTexture).isFile())
-            mat->setValue("specularTexture", data.specularTexture);
-
-        if (QFile(data.normalTexture).exists() && QFileInfo(data.normalTexture).isFile())
-            mat->setValue("normalTexture", data.normalTexture);
-
-        return mat;
+        return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
     });
 
     // model file may be invalid so null gets returned
@@ -831,60 +812,15 @@ void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &
     for (const auto &child : node->children()) collectMeshNodes(child, out);
 }
 
-// Builds a fresh material instance from a preset. A PBR preset builds a
-// PbrMaterial; anything else takes the legacy CustomMaterial path, so existing
-// presets behave exactly as before.
+// Builds a fresh material instance from a preset.
+//
+// ONE line since HLMS_ADOPTION P4b: both preset flavours produce a PbrMaterial,
+// and the conversion lives with every other legacy-material translation
+// (io/builtinmaterials.h) rather than in a copy here and a second copy in the
+// asset panel — which is what it was.
 iris::MaterialPtr materialFromPreset(const MaterialPreset &preset)
 {
-    iris::MaterialPtr mat;
-
-    if (preset.type.compare("PBR", Qt::CaseInsensitive) == 0) {
-        auto pbr = iris::PbrMaterial::create();
-
-        pbr->setValue("baseColor",           preset.baseColor);
-        pbr->setValue("metallic",            preset.metallic);
-        pbr->setValue("roughness",           preset.roughness);
-        pbr->setValue("roughnessLowerBound", preset.roughnessLowerBound);
-        pbr->setValue("roughnessUpperBound", preset.roughnessUpperBound);
-        pbr->setValue("normalFactor",        preset.pbrNormalFactor);
-        pbr->setValue("emissiveColor",       preset.emissiveColor);
-        pbr->setValue("emissiveIntensity",   preset.emissiveIntensity);
-        pbr->setValue("textureScale",        preset.textureScale);
-        pbr->setValue("alphaMode",           preset.alphaMode);
-        pbr->setValue("alpha",               preset.alpha);
-        pbr->setValue("alphaCutoff",         preset.alphaCutoff);
-
-        pbr->setValue("baseColorMap",  preset.baseColorMap);
-        pbr->setValue("metallicMap",   preset.metallicMap);
-        pbr->setValue("roughnessMap",  preset.roughnessMap);
-        pbr->setValue("normalMap",     preset.pbrNormalMap);
-        pbr->setValue("emissiveMap",   preset.emissiveMap);
-
-        mat = pbr;
-    }
-    else {
-
-    auto m = iris::CustomMaterial::create();
-    m->generate(IrisUtils::getAbsoluteAssetPath(Constants::DEFAULT_SHADER));
-
-    m->setValue("diffuseTexture", preset.diffuseTexture);
-    m->setValue("specularTexture", preset.specularTexture);
-    m->setValue("normalTexture", preset.normalTexture);
-    m->setValue("reflectionTexture", preset.reflectionTexture);
-
-    m->setValue("ambientColor", preset.ambientColor);
-    m->setValue("diffuseColor", preset.diffuseColor);
-    m->setValue("specularColor", preset.specularColor);
-
-    m->setValue("shininess", preset.shininess);
-    m->setValue("normalIntensity", preset.normalIntensity);
-    m->setValue("reflectionInfluence", preset.reflectionInfluence);
-    m->setValue("textureScale", preset.textureScale);
-
-    mat = m;
-    }
-
-    return mat;
+    return BuiltinMaterials::fromPreset(preset);
 }
 
 } // namespace
@@ -1065,7 +1001,7 @@ void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QSt
         // it's safe to assume we're working the v2 material structure
         SceneWriter::writeSceneNodeMaterial(
             materialDef,
-            node.staticCast<iris::MeshNode>()->getMaterial().staticCast<iris::CustomMaterial>()
+            node.staticCast<iris::MeshNode>()->getMaterial()
         );
 
         // materialDef will be mutated

@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 
 #include "irisgl/document/materials/material.h"
-#include "irisgl/document/materials/custommaterial.h"
 
 #include "commands/animationcommands.h"
 #include "services/animationedits.h"

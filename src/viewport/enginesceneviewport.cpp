@@ -37,7 +37,6 @@
 #include "data/database/database.h"
 #include "io/assetmanager.h"
 #include "ui/panels/scenehierarchywidget.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "commands/changematerialpropertycommand.h"
 #include "services/assetcas.h"
@@ -532,12 +531,11 @@ void EngineSceneViewport::dragMoveEvent(QDragMoveEvent *event)
             mDragOriginalMaterial = meshNode->getMaterial();
             for (Asset *asset : AssetManager::getAssets()) {
                 if (asset->assetGuid == role.value(3).toString()) {
-                    // Project materials hydrate as MaterialPtr (PBR-aware);
-                    // the built-in defaults from trigger() still store a
-                    // CustomMaterialPtr — accept both.
-                    const QVariant value = asset->getValue();
-                    auto material = value.value<iris::MaterialPtr>();
-                    if (!material) material = value.value<iris::CustomMaterialPtr>();
+                    // Every material asset hydrates as a MaterialPtr since
+                    // HLMS_ADOPTION P4b (the builtin presets registered by
+                    // AssetWidget::trigger used to store a CustomMaterialPtr,
+                    // which this had to accept as a second QVariant shape).
+                    auto material = asset->getValue().value<iris::MaterialPtr>();
                     if (material) meshNode->setMaterial(material);
                 }
             }
@@ -611,13 +609,10 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
                     pbr->setValue(QStringLiteral("baseColorMap"), texPath);
                 }
                 if (mMainWindow) mMainWindow->sceneNodeSelected(node);
-            } else if (auto mat = meshNode->getMaterial().dynamicCast<iris::CustomMaterial>()) {
-                // The legacy CustomMaterial slot path stays for old materials.
-                if (!mat->firstTextureSlot().isEmpty()) {
-                    mat->setValue(mat->firstTextureSlot(), texPath);
-                    if (mMainWindow) mMainWindow->sceneNodeSelected(node);
-                }
             }
+            // (The CustomMaterial branch that dropped the texture into the
+            // shader's first texture slot went with the class — every mesh
+            // carries a PbrMaterial now, so the branch above is the only one.)
         } else {
             emit mEvents.addDroppedImagePlane(mDragScenePos, textureGuid);
         }

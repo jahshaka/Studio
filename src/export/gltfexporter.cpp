@@ -44,7 +44,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/materials/defaultmaterial.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/core/properties/property.h"
 
 namespace {
@@ -558,66 +557,12 @@ int convertDefaultMaterial(Ctx &c, iris::DefaultMaterial *def, iris::FaceCulling
     return c.materials.size() - 1;
 }
 
-int convertCustomMaterial(Ctx &c, iris::CustomMaterial *custom, iris::FaceCullingMode cullMode)
-{
-    // Shader-graph material: best-effort PBR fallback exactly like the mirror
-    // (colour + shininess/roughness properties, first albedo-ish texture).
-    // Full fidelity arrives with the Effects bake phase 2 (audit §1).
-    QJsonObject m;
-    m["name"] = QStringLiteral("custom");
-    QJsonObject mr;
-    float r = 0.8f, g = 0.8f, b = 0.8f, metalness = 0.0f, roughness = 0.6f, shininess = -1.0f;
-    float uvScale = 1.0f;
-    QString albedoSrc, normalSrc;
-    for (iris::Property *prop : custom->properties) {
-        if (!prop) continue;
-        const QVariant v = prop->getValue();
-        if (prop->type == iris::PropertyType::Color &&
-            (prop->name == "diffuseColor" || prop->name == "color" || prop->name == "albedo" ||
-             prop->name == "baseColor")) {
-            const QColor col = v.value<QColor>();
-            r = float(col.redF()); g = float(col.greenF()); b = float(col.blueF());
-        } else if (prop->type == iris::PropertyType::Float && prop->name == "shininess") {
-            shininess = v.toFloat();
-        } else if (prop->type == iris::PropertyType::Float &&
-                   (prop->name == "roughness" || prop->name == "roughnessFactor")) {
-            roughness = v.toFloat();
-        } else if (prop->type == iris::PropertyType::Float &&
-                   (prop->name == "metallic" || prop->name == "metalness")) {
-            metalness = v.toFloat();
-        } else if (prop->type == iris::PropertyType::Float && prop->name == "textureScale") {
-            uvScale = v.toFloat();
-        } else if (prop->type == iris::PropertyType::Texture) {
-            const QString path = v.toString();
-            if (path.isEmpty()) continue;
-            if (prop->name == "diffuseTexture" || prop->name == "baseColorMap" || prop->name == "albedoMap")
-                albedoSrc = path;
-            else if (prop->name == "normalTexture" || prop->name == "normalMap")
-                normalSrc = path;
-        }
-    }
-    if (shininess >= 0.0f) {
-        const float shin = std::max(0.0f, std::min(shininess, 128.0f));
-        roughness = 1.0f - std::sqrt(shin / 128.0f) * 0.9f;
-    }
-    mr["baseColorFactor"] = colorArray(r, g, b, 1.0f);
-    mr["metallicFactor"] = double(metalness);
-    mr["roughnessFactor"] = double(roughness);
-    if (!albedoSrc.isEmpty()) {
-        const QImage img = loadDocumentImage(albedoSrc, c);
-        const int tex = addTexture(c, addImage(c, "src:" + albedoSrc, img, true));
-        if (tex >= 0) mr["baseColorTexture"] = textureRef(c, tex, uvScale);
-    }
-    m["pbrMetallicRoughness"] = mr;
-    if (!normalSrc.isEmpty()) {
-        const QImage img = loadDocumentImage(normalSrc, c);
-        const int tex = addTexture(c, addImage(c, "src:" + normalSrc, img, false));
-        if (tex >= 0) m["normalTexture"] = textureRef(c, tex, uvScale);
-    }
-    if (cullMode == iris::FaceCullingMode::None) m["doubleSided"] = true;
-    c.materials.append(m);
-    return c.materials.size() - 1;
-}
+// (convertCustomMaterial is GONE with iris::CustomMaterial, HLMS_ADOPTION P4b.
+// It was a best-effort scrape of a shader material's Property rows — colour,
+// shininess-or-roughness, the first albedo-ish texture — into glTF. The
+// document holds PbrMaterials now, so convertPbrMaterial above exports the real
+// thing instead of a guess; the legacy uniform names it used to read are
+// translated once, at LOAD time, in src/io/builtinmaterials.cpp.)
 
 int materialFor(Ctx &c, iris::Material *material, iris::FaceCullingMode cullMode)
 {
@@ -628,8 +573,6 @@ int materialFor(Ctx &c, iris::Material *material, iris::FaceCullingMode cullMode
     int idx = -1;
     if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material))
         idx = convertPbrMaterial(c, pbr, cullMode);
-    else if (auto *custom = dynamic_cast<iris::CustomMaterial *>(material))
-        idx = convertCustomMaterial(c, custom, cullMode);
     else if (auto *def = dynamic_cast<iris::DefaultMaterial *>(material))
         idx = convertDefaultMaterial(c, def, cullMode);
     else {

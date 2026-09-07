@@ -116,7 +116,6 @@ private:
     struct EngineRequest { ThumbnailRequest request; QSize size; };
     void processOneEngineRequest();
     QImage renderEngineRequest(const ThumbnailRequest &request, QSize size);
-    iris::MaterialPtr previewMaterialFor(iris::MaterialPtr material);
 
     QList<EngineRequest> pending;
     QTimer *tick = nullptr;

@@ -109,13 +109,6 @@ void ThumbnailGenerator::processOneEngineRequest()
                               Qt::QueuedConnection);
 }
 
-iris::MaterialPtr ThumbnailGenerator::previewMaterialFor(iris::MaterialPtr material)
-{
-    // Shared with the mesh path: colours AND textures survive the conversion
-    // (a colour-only downgrade rendered every textured material grey).
-    return EngineThumbnailRenderer::previewMaterialFor(material);
-}
-
 QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, QSize size)
 {
     if (request.type == ThumbnailRequestType::ImportedMesh) {
@@ -163,7 +156,9 @@ QImage ThumbnailGenerator::renderEngineRequest(const ThumbnailRequest &request, 
         reader.setProject(project);
         // Typed: PBR material thumbnails render the real PbrMaterial.
         auto material = reader.parseMaterialTyped(doc.object(), db);
-        return engineRenderer->renderMaterial(previewMaterialFor(material), size);
+        // No conversion any more (HLMS_ADOPTION P4b): the reader returns a
+        // PbrMaterial, which the mirror renders natively.
+        return engineRenderer->renderMaterial(material, size);
     }
     return QImage();
 }

@@ -37,7 +37,6 @@ For more information see the LICENSE file
 // include/assimp/Importer.hpp` — bypassing assimp's own include directory.
 // ENGINEERING_DEBT_SPEC item 5, shape 3.)
 #include "irisgl/core/irisutils.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "zip.h"
 
 #include "data/constants.h"

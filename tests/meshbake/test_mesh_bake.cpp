@@ -60,9 +60,9 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexbuffer.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/graphicshelper.h"
 #include "irisgl/import/importflags.h"
@@ -255,8 +255,8 @@ static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneN
 
 static iris::MaterialPtr testMaterial(iris::MeshPtr, iris::MeshMaterialData &data)
 {
-    auto mat = iris::CustomMaterial::create();
-    mat->setValue("diffuseColor", data.diffuseColor);
+    auto mat = iris::PbrMaterial::create();
+    mat->setValue("baseColor", data.diffuseColor);
     return iris::MaterialPtr(mat);
 }
 

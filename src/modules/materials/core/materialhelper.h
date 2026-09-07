@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QJsonObject>
-#include "irisgl/document/materials/custommaterial.h"
 #include "pbrgraphevaluator.h"
 
 class GraphNodeScene;
@@ -66,10 +65,10 @@ public:
 	// (generateShader/createMaterialFromShaderGraph/generateMaterialFrom-
 	// MaterialDefinition died in MATERIALS_EVALUATOR phase 5 — the GLSL
 	// pipeline is gone. Graph-backed definitions load through
-	// createPbrMaterialFromDefinition; the shader-less CustomMaterial fallback
-	// lives in ShaderHandler::loadMaterialFromShaderV2.)
-
-	static void parseMaterialProperties(iris::CustomMaterialPtr material, QJsonArray propList);
-
-	static void parseMaterialStates(iris::CustomMaterialPtr material, QJsonObject matObj);
+	// createPbrMaterialFromDefinition.
+	//
+	// parseMaterialProperties/parseMaterialStates went with iris::CustomMaterial
+	// at HLMS_ADOPTION P4b: they filled a CustomMaterial's property list and
+	// render states from a `.shader` definition, and both had exactly one
+	// caller — the ShaderHandler that also died there.)
 };

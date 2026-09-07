@@ -1,7 +1,12 @@
 # SceneMirror tests: iris:: document -> engine, verified by pixels. Links IrisGL
 # (Qt) AND JahshakaEngine — the only suite that spans the boundary, on purpose.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
-add_executable(test_scene_mirror test_scene_mirror.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+# builtinmaterials.cpp is the ONE Studio source this suite compiles, and it is
+# deliberately self-contained (no Constants, no Database): the legacy-material
+# conversion is what a reopened old scene depends on, so the mirror suite drives
+# it directly rather than asserting on its output second-hand.
+add_executable(test_scene_mirror test_scene_mirror.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp)
 set_target_properties(test_scene_mirror PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "irisgl/irisglfwd.h"
-#include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -416,10 +415,6 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
         if (pbr->useNormalMap)    maps << QStringLiteral("normal");
         if (pbr->useEmissiveMap)  maps << QStringLiteral("emissive");
         m["maps"] = maps;
-    } else if (auto custom = material.dynamicCast<iris::CustomMaterial>()) {
-        // The base Material carries no name — only CustomMaterial does.
-        m["class"] = QStringLiteral("custom");
-        m["name"] = custom->getName();
     } else {
         m["class"] = QStringLiteral("material");
     }
