@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include <qmath.h>
 #include <math.h>
+#include <algorithm>
 #include "data/settingsmanager.h"
 #include "viewport/gizmo.h"
 #include "viewport/ieditorviewport.h"
@@ -238,14 +239,38 @@ void EditorCameraController::clearKeys()
 }
 
 /**
- * @brief EditorCameraController::updateCameraRot
+ * @brief EditorCameraController::setAxisView
+ *
+ * Snap the FREE camera to a canonical axis view. It TURNS the camera AND
+ * MOVES IT ONTO THE AXIS — the turn alone was the whole of this function
+ * until 2026-09-07, and it is why the axis views showed nothing: the camera
+ * stayed wherever it was (the default explorer pose is (0, 5, 14)), so
+ *
+ *   * `left` / `right` left the camera sitting INSIDE the x=0 plane those
+ *     views align to — the view-facing grid was exactly edge-on, and the
+ *     scene at the origin was 14 units off to the side;
+ *   * `back` left it at z=+14 looking along +Z, with the z=0 grid and the
+ *     whole scene BEHIND the near plane;
+ *   * only `front` worked, by luck: the default pose is already on +Z.
+ *
+ * The orbital controller never had the bug (it rebuilds the position from its
+ * pivot). Here the pivot is the world origin — the point every canonical view
+ * is a view OF — and the standoff is the camera's current distance from it,
+ * so an axis view keeps the framing the user had rather than teleporting.
  */
 void EditorCameraController::setAxisView(float yawDeg, float pitchDeg)
 {
     if (!camera) return;
     yaw = yawDeg;
     pitch = pitchDeg;
-    updateCameraRot();
+
+    // Distance to the origin, floored so a camera parked at (or very near)
+    // the origin still ends up outside the scene instead of inside it.
+    const float dist = std::max(camera->getLocalPos().length(), 5.0f);
+    const iris::Quat rot = iris::Quat::fromEulerAngles(pitch, yaw, 0);
+    camera->setLocalPos(rot.rotatedVector(iris::Vec3(0, 0, 1)) * dist);
+    camera->setLocalRot(rot);
+    camera->update(0);
 }
 
 void EditorCameraController::updateCameraRot()
