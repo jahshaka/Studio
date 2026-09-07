@@ -147,6 +147,7 @@ public:
     { return mEngine ? int(mEngine->shadowResolution()) : 0; }
     int activePlanarReflectors() const override
     { return (view() && view()->scene()) ? view()->scene()->activePlanarReflectors() : 0; }
+    GiStatusInfo giStatus() const override;
     bool planarReflectorAccepted(iris::SceneNodePtr node) const override;
     void renderFrames(int n) override;
     void renderFrames(int n, float dt) override;

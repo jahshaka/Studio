@@ -1288,6 +1288,24 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
     return view()->scene()->nodePlanarReflector(id);
 }
 
+IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
+{
+    GiStatusInfo out;
+    if (!view() || !view()->scene()) return out;   // available stays false
+    const jahshaka::engine::GiStatus st = view()->scene()->giStatus();
+    out.available = true;
+    switch (st.mode) {
+    case jahshaka::engine::GiMode::Off:              out.mode = QStringLiteral("off"); break;
+    case jahshaka::engine::GiMode::InstantRadiosity: out.mode = QStringLiteral("instant_radiosity"); break;
+    case jahshaka::engine::GiMode::Vct:              out.mode = QStringLiteral("vct"); break;
+    case jahshaka::engine::GiMode::VctPccHybrid:     out.mode = QStringLiteral("vct_pcc_hybrid"); break;
+    }
+    out.probeCount = st.probeCount;
+    out.pccBound   = st.pccBound;
+    out.vctBound   = st.vctBound;
+    return out;
+}
+
 void EngineSceneViewport::renderFrames(int n)
 {
     renderFrames(n, -1.0f);

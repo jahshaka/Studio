@@ -19,3 +19,26 @@ add_dependencies(test_gi JahshakaEngineMedia)
 add_test(NAME gi.modes COMMAND test_gi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.modes PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# The REAL PCC gate (REFLECTIONS_ADOPTION_SPEC.md §3): a closed room, a red wall
+# behind the camera and a roughness-0 metal box whose reflection must contain
+# that wall — plus Scene::giStatus() assertions, so buildPcc's silent
+# "hybrid renders as plain VCT" bail fails the suite instead of passing it.
+# Its OWN binary rather than a case in test_gi: the hybrid binds
+# process-wide HlmsPbs state (sVctBindingOwner), so this scene must not share a
+# process with gi.modes' scene (spec §9).
+add_executable(test_gi_pcc_mirror test_gi_pcc_mirror.cpp)
+set_target_properties(test_gi_pcc_mirror PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pcc_mirror PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pcc_mirror PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pcc_mirror JahshakaEngineMedia)
+add_test(NAME gi.pcc_mirror COMMAND test_gi_pcc_mirror
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pcc_mirror PROPERTIES TIMEOUT 600 LABELS "engine")

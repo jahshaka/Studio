@@ -275,6 +275,24 @@ public:
     /// off, nothing has rendered yet, or there is no engine to ask.
     virtual int activePlanarReflectors() const { return 0; }
 
+    /// What global illumination is ACHIEVING in the renderer, as opposed to
+    /// what the document asked for (REFLECTIONS_ADOPTION_SPEC.md §3). Reported
+    /// because the VCT+PCC hybrid can silently degrade to plain VCT — the probe
+    /// arm logs a line and returns, and nothing downstream could tell. Read
+    /// through world.giStatus().
+    ///
+    /// `available` false means there is no engine to ask (the document-only
+    /// stand-in viewports); the other fields are then meaningless rather than
+    /// merely zero, exactly like MirrorStats.
+    struct GiStatusInfo {
+        bool    available = false;
+        QString mode;          ///< off | instant_radiosity | vct | vct_pcc_hybrid
+        int     probeCount = 0;///< live parallax-corrected cubemap probes
+        bool    pccBound = false;  ///< this scene's probe grid is bound to the PBR shader
+        bool    vctBound = false;  ///< this scene's voxel lighting is bound to the PBR shader
+    };
+    virtual GiStatusInfo giStatus() const { return {}; }
+
     /// Whether the renderer ACCEPTED this node as a planar-reflection plane.
     /// The plane, its size and its normal are derived from the mesh's own
     /// bounds, so geometry that is not plate-like is refused — and only the

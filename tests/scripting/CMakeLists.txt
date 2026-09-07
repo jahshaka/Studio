@@ -89,6 +89,12 @@ add_script_e2e(render_stats e2e_render_stats.js)
 # PLANAR_REFLECTIONS_SPEC §8: the reflector flag, the budget/resolution/shadow
 # settings, the World Mode row driving them, and the save/reopen round trip.
 add_script_e2e(planar e2e_planar.js)
+# REFLECTIONS_ADOPTION_SPEC §3: world.giStatus() — the ACHIEVED reading of
+# global illumination (probe count, and whether the probe/VCT bindings are live
+# on the PBR shader). The API-first half of the PCC gate; the pixel half is the
+# gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
+# is that it measures the renderer rather than echoing the document.
+add_script_e2e(gi_status e2e_gi_status.js)
 # PARTICLES_FX2_SPEC §11 phase 2: the emitter verbs. scene.addParticles with a
 # recipe, every scalar row through the shared node.setProperty, the two over-life
 # ramps (which no Property kind can carry), the scene clock, the save round trip

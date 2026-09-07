@@ -64,6 +64,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
+        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, live}",
+          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+          Needs::Document },
         { "antiAliasing", "world.antiAliasing() -> int",
           "Reads the anti-aliasing (MSAA) sample count. With the engine viewport live this is the ACHIEVED count (the driver may clamp the request); otherwise the scene's requested value.",
           Needs::Document },
@@ -276,6 +279,38 @@ bool WorldApi::gi(const QVariantMap &params)
     if (params.contains("autoRefresh"))
         scene->giAutoRefresh = params.value("autoRefresh").toBool();
     return true;
+}
+
+QVariantMap WorldApi::giStatus()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.giStatus"));
+    if (!scene) return QVariantMap();
+    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
+    const QString requested = QString::fromLatin1(giModeNames[qBound(0, int(scene->giMode), 3)]);
+    const int requestedProbes = (scene->giMode == iris::GiMode::VCT_PCC_HYBRID)
+        ? qBound(1, qRound(scene->giPccGrid.x()), 8) * qBound(1, qRound(scene->giPccGrid.y()), 8) *
+          qBound(1, qRound(scene->giPccGrid.z()), 8)
+        : 0;
+    // The ACHIEVED reading, like world.antiAliasing() and world.shadowResolution():
+    // the renderer is asked whenever there is one. Without an engine viewport the
+    // document's request is all there is — reported with live:false so a caller
+    // never mistakes an unmeasured value for a measurement (headless --script runs
+    // hit this path).
+    IEditorViewport::GiStatusInfo st;
+    if (host.isEngineReady() && host.viewport) st = host.viewport->giStatus();
+    if (!st.available)
+        return QVariantMap{ { QStringLiteral("mode"), requested },
+                            { QStringLiteral("requestedMode"), requested },
+                            { QStringLiteral("probeCount"), requestedProbes },
+                            { QStringLiteral("pccBound"), false },
+                            { QStringLiteral("vctBound"), false },
+                            { QStringLiteral("live"), false } };
+    return QVariantMap{ { QStringLiteral("mode"), st.mode },
+                        { QStringLiteral("requestedMode"), requested },
+                        { QStringLiteral("probeCount"), st.probeCount },
+                        { QStringLiteral("pccBound"), st.pccBound },
+                        { QStringLiteral("vctBound"), st.vctBound },
+                        { QStringLiteral("live"), true } };
 }
 
 int WorldApi::antiAliasing()
