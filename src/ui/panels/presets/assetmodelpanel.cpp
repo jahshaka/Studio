@@ -253,6 +253,19 @@ bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));
                             drag->exec();
+                            // CONSUME THE MOVE (2026-09-07, the preset-drop
+                            // DOUBLE-ADD). Falling through here returned the
+                            // event to QListWidget, whose OWN drag machinery
+                            // (setDragEnabled above, QAbstractItemView's
+                            // DraggingState) then called startDrag() from this
+                            // same move — a SECOND QDrag, running with the
+                            // button already released, which dropped itself
+                            // immediately at the cursor. One gesture produced
+                            // two drops (traced: source=AssetModelPanel, then
+                            // source=QListWidget) and therefore two nodes and
+                            // two undo entries. The drag this filter started IS
+                            // the gesture's drag; nothing else may see the move.
+                            return true;
                         }
                     }
                 }
