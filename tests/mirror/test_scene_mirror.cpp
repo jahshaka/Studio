@@ -380,7 +380,10 @@ int main(int argc, char **argv)
         for (auto *prop : saved->properties) {
             switch (prop->type) {
             case iris::PropertyType::Bool:  values[prop->name] = prop->getValue().toBool(); break;
-            case iris::PropertyType::Int:   values[prop->name] = prop->getValue().toInt(); break;
+            // List is the ENUM row (alphaMode, brdf) and serializes as the
+            // plain int it stores — same case as Int, exactly as SceneWriter does.
+            case iris::PropertyType::Int:
+            case iris::PropertyType::List:  values[prop->name] = prop->getValue().toInt(); break;
             case iris::PropertyType::Float: values[prop->name] = prop->getValue().toFloat(); break;
             case iris::PropertyType::Color: values[prop->name] = prop->getValue().value<QColor>().name(); break;
             case iris::PropertyType::Texture:
@@ -405,7 +408,8 @@ int main(int argc, char **argv)
             const auto val = rvalues.value(prop->name);
             switch (prop->type) {
             case iris::PropertyType::Float:  reloaded->setValue(prop->name, static_cast<float>(val.toDouble())); break;
-            case iris::PropertyType::Int:    reloaded->setValue(prop->name, val.toInt()); break;
+            case iris::PropertyType::Int:
+            case iris::PropertyType::List:   reloaded->setValue(prop->name, val.toInt()); break;
             case iris::PropertyType::Color:  reloaded->setValue(prop->name, QColor(val.toString())); break;
             case iris::PropertyType::Bool:   reloaded->setValue(prop->name, val.toBool()); break;
             case iris::PropertyType::Texture:

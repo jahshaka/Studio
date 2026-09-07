@@ -84,8 +84,10 @@ struct Rig
         return node;
     }
 
-    // master socket indices: 0 Base Color, 1 Metallic, 2 Roughness, 3 Normal,
-    // 4 Occlusion, 5 Emissive, 6 Alpha, 7 Alpha Cutoff, 8/9 Vertex Offset/Extrusion
+    // master socket indices (LAYOUT 2 — the Occlusion socket at 4 was removed
+    // by HLMS_ADOPTION P2 and everything after it moved down one):
+    // 0 Base Color, 1 Metallic, 2 Roughness, 3 Normal, 4 Emissive, 5 Alpha,
+    // 6 Alpha Cutoff, 7/8 Vertex Offset/Extrusion
     void toMaster(NodeModel* from, int out, int masterIn)
     {
         graph->addConnection(from, out, master, masterIn);
@@ -121,7 +123,7 @@ int main(int argc, char** argv)
               "probe: float(0.25) -> Base Color is grayscale (0.25,0.25,0.25)");
     }
     {
-        Rig r; r.toMaster(r.addFloat(0.5), 0, 7);
+        Rig r; r.toMaster(r.addFloat(0.5), 0, 6);   // Alpha Cutoff
         auto res = r.eval();
         CHECK(exact(res.values["alphaCutoff"].toDouble(), 0.5) && res.values["alphaMode"].toInt() == 1,
               "probe: float(0.5) -> Alpha Cutoff == 0.5 with alphaMode=1");
@@ -148,7 +150,7 @@ int main(int argc, char** argv)
         auto col = r.addColor(1.0, 0.5, 0.25, 0.75);
         r.toMaster(col, 1, 1); // R -> Metallic
         r.toMaster(col, 2, 2); // G -> Roughness
-        r.toMaster(col, 4, 6); // A -> Alpha
+        r.toMaster(col, 4, 5); // A -> Alpha
         auto res = r.eval();
         CHECK(near(res.values["metallic"].toDouble(), 1.0, 1e-5)
                   && near(res.values["roughness"].toDouble(), 0.5, 1e-5)
@@ -635,8 +637,8 @@ int main(int argc, char** argv)
         auto split = r.add("splitvector");
         r.graph->addConnection(r.add("texCoords"), 0, split, 0);
         r.toMaster(split, 0, 1);           // varying U -> Metallic
-        r.toMaster(r.add("texCoords"), 0, 7); // varying Alpha Cutoff
-        r.toMaster(r.addVec(3, 1, 1, 1), 0, 8); // Vertex Offset fed
+        r.toMaster(r.add("texCoords"), 0, 6); // varying Alpha Cutoff
+        r.toMaster(r.addVec(3, 1, 1, 1), 0, 7); // Vertex Offset fed
 
         auto info = r.info();
         CHECK(info["Roughness"].toString() == "uniform", "bakeInfo: float -> Roughness is 'uniform'");

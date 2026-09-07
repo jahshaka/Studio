@@ -75,6 +75,47 @@ target_link_libraries(test_node_regressions PRIVATE IrisGL Qt6::Widgets Qt6::Sql
 add_test(NAME shadergraph.node_regressions COMMAND test_node_regressions WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadergraph.node_regressions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
 
+# HLMS_ADOPTION P2 (§4.4): the AO ghost is gone AND a graph authored with it
+# still loads correctly. The master node's connections are stored BY INDEX, so
+# removing its Occlusion socket is a versioned migration, not a deletion — this
+# is the suite that proves the migration shifts the right connections, drops
+# the Occlusion one, and SAYS SO exactly once. Same slice as node_regressions.
+add_executable(test_ao_removed
+    test_ao_removed.cpp
+    test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/graph/nodegraph.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/connectionmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/library.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/libraryv1.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/nodemodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/properties.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/models/socketmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/pbrmasternode.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/test.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/math.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/object.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/vector.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/nodes/texture.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp)
+set_target_properties(test_ao_removed PROPERTIES
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_ao_removed PRIVATE EFFECT_BUILD_AS_LIB)
+target_include_directories(test_ao_removed PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+   ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_ao_removed PRIVATE IrisGL Qt6::Widgets Qt6::Sql Qt6::Concurrent)
+add_test(NAME shadergraph.ao_removed COMMAND test_ao_removed WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadergraph.ao_removed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "shadergraph")
+
 # Materials Evaluator parity suite (MATERIALS_EVALUATOR_SPEC section 6): the
 # audit's probe table as fixtures, one hand-computed case per op node,
 # graph.bakeInfo classifier. Same slice as test_node_regressions.

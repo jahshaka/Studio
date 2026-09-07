@@ -49,7 +49,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/texture.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/assets/shader.h"
 #include "irisgl/document/materials/renderstates.h"
 #include "irisgl/document/materials/rasterizerstate.h"
 #include "irisgl/import/graphicshelper.h"
@@ -1306,6 +1305,8 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
 			break;
 		case iris::PropertyType::Int:
+		// An enum row stores (and serializes) a plain int — see SceneWriter.
+		case iris::PropertyType::List:
 			mat->setValue(prop->name, val.toInt());
 			break;
 		case iris::PropertyType::Color:

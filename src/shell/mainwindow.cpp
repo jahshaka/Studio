@@ -32,7 +32,6 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/document/materials/custommaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/assets/shader.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/assets/texture2d.h"

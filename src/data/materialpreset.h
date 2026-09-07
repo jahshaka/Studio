@@ -48,8 +48,6 @@ struct MaterialPreset
     float   roughnessUpperBound;
     QString pbrNormalMap;
     float   pbrNormalFactor;
-    QString occlusionMap;
-    float   occlusionFactor;
     QColor  emissiveColor;
     float   emissiveIntensity;
     QString emissiveMap;

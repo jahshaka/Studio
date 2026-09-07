@@ -217,3 +217,6 @@ add_subdirectory(benchmarks)
 # log.events (verbs + event markers, real binary), log.engine (the Ogre
 # listener + device rows) and log.perf (the periodic sampler).
 add_subdirectory(log)
+# Source-hygiene gates (no binary, no display): source.no_glsl_path guards the
+# HLMS_ADOPTION P3 deletion of the document-side GLSL load path.
+add_subdirectory(hygiene)

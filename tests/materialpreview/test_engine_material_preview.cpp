@@ -207,6 +207,85 @@ int main(int argc, char **argv)
             QDir(bakeDir).removeRecursively();
         }
 
+        // ---- 8. CLEAR COAT + BRDF reach pixels (HLMS_ADOPTION P1) ----
+        //
+        // Three claims, and the third is the one the whole phase rests on:
+        //   a) a coat CHANGES the image — the second specular lobe is real,
+        //      not a value that lands in a datablock and stops there;
+        //   b) turning the coat back off reproduces the no-coat image BYTE FOR
+        //      BYTE. This is the inertness contract as a pixel assertion: at
+        //      clearCoat 0 the renderer REMOVES the coat shader blocks rather
+        //      than multiplying by zero, so every material that never touches
+        //      the knob keeps its exact permutation, and every existing pixel
+        //      suite keeps its exact colours;
+        //   c) a non-Default BRDF cannot carry a coat: Cook-Torrance renders
+        //      identically with and without one (the coat is not applied), and
+        //      differs from Default (so setBrdf itself is reaching pixels and
+        //      the previous claim is not vacuous).
+        {
+            preview.setPreviewMesh(PreviewMesh::Sphere);
+            preview.setBackground(QColor(10, 10, 200));
+
+            auto makeMat = [](float coat, float coatRough, int brdf) {
+                auto m = iris::PbrMaterial::create();
+                m->setBaseColor(QColor(120, 120, 125));
+                m->setMetallicFactor(0.0f);
+                m->setRoughnessFactor(0.6f);
+                m->setClearCoat(coat);
+                m->setClearCoatRoughness(coatRough);
+                m->setBrdf(brdf);
+                return m;
+            };
+            auto imagesEqual = [](const Image &a, const Image &b) {
+                if (a.width != b.width || a.height != b.height) return false;
+                for (unsigned y = 0; y < a.height; ++y)
+                    for (unsigned x = 0; x < a.width; ++x) {
+                        const Colour p = a.at(x, y), q = b.at(x, y);
+                        if (p.r != q.r || p.g != q.g || p.b != q.b) return false;
+                    }
+                return true;
+            };
+            auto maxDelta = [](const Image &a, const Image &b) {
+                float worst = 0.0f;
+                for (unsigned y = 0; y < a.height; ++y)
+                    for (unsigned x = 0; x < a.width; ++x) {
+                        const Colour p = a.at(x, y), q = b.at(x, y);
+                        worst = std::max(worst, std::fabs(p.r - q.r));
+                        worst = std::max(worst, std::fabs(p.g - q.g));
+                        worst = std::max(worst, std::fabs(p.b - q.b));
+                    }
+                return worst * 255.0f;
+            };
+
+            preview.setMaterial(makeMat(0.0f, 0.0f, 0));
+            const Image noCoat = render(preview, *engine, view, 8);
+            show("Default BRDF, no coat", noCoat, CX, CY);
+
+            preview.setMaterial(makeMat(1.0f, 0.05f, 0));
+            const Image coated = render(preview, *engine, view, 8);
+            show("Default BRDF, clear coat 1.0 @ 0.05", coated, CX, CY);
+            const float coatDelta = maxDelta(noCoat, coated);
+            std::printf("    clear coat max channel delta: %.1f/255\n", double(coatDelta));
+            CHECK(coatDelta > 2.0f, "a clear coat measurably changes the rendered sphere");
+
+            preview.setMaterial(makeMat(0.0f, 0.0f, 0));
+            const Image noCoatAgain = render(preview, *engine, view, 8);
+            CHECK(imagesEqual(noCoat, noCoatAgain),
+                  "clearCoat 0 is BYTE-IDENTICAL to the pre-coat image (the inertness contract)");
+
+            // Cook-Torrance (index 1): a different BRDF family, which cannot
+            // carry a coat at all.
+            preview.setMaterial(makeMat(0.0f, 0.0f, 1));
+            const Image ct = render(preview, *engine, view, 8);
+            show("Cook-Torrance, no coat", ct, CX, CY);
+            CHECK(maxDelta(noCoat, ct) > 2.0f, "the BRDF picker reaches pixels (Cook-Torrance != Default)");
+
+            preview.setMaterial(makeMat(1.0f, 0.05f, 1));
+            const Image ctCoated = render(preview, *engine, view, 8);
+            CHECK(imagesEqual(ct, ctCoated),
+                  "a coat on a non-Default BRDF is not applied (BRDF wins, byte-identical)");
+        }
+
         preview.release();
         CHECK(view->scene() == nullptr, "release() detached the scene from the view");
     }

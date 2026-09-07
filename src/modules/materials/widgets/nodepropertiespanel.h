@@ -92,19 +92,15 @@ private:
 	QStackedWidget* mStack = nullptr;
 
 	// settings forms — one full (graph view), one compact (master view)
+	// One row per MaterialSettings field, and MaterialSettings only carries
+	// fields that land (HLMS_ADOPTION P2 deleted the eight that did not: Render
+	// Layer, Cull, Z Write, Depth Test, Fog, Cast Shadows, Receive Shadows,
+	// Accept Lighting — a finished, undoable UI wired to nothing). Both forms
+	// are identical now, so `compact` no longer gates any row.
 	struct SettingsForm {
 		QLineEdit* name = nullptr;
 		QComboBox* blend = nullptr;
-		QComboBox* cull = nullptr;
 		QSpinBox* bakeResolution = nullptr;
-		// full form only
-		QComboBox* renderLayer = nullptr;
-		QCheckBox* zwrite = nullptr;
-		QCheckBox* depthTest = nullptr;
-		QCheckBox* fog = nullptr;
-		QCheckBox* castShadow = nullptr;
-		QCheckBox* receiveShadow = nullptr;
-		QCheckBox* acceptLighting = nullptr;
 	};
 	SettingsForm mGraphForm;    // stack page 0
 	SettingsForm mMasterForm;   // stack page 1

@@ -367,18 +367,19 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         }
     }
 
-    // AO: in the document but deliberately dropped by the engine — web export
-    // carries what the engine drops (audit §1 "Occlusion").
-    const QString aoSrc = textureSlotSource(pbr, "u_occlusionMap");
-    if (!aoSrc.isEmpty()) {
-        const QImage img = loadDocumentImage(aoSrc, c);
-        const int tex = addTexture(c, addImage(c, "src:" + aoSrc, img, true));
-        if (tex >= 0) {
-            QJsonObject ref = textureRef(c, tex, uvScale);
-            ref["strength"] = double(std::min(1.0f, std::max(0.0f, pbr->occlusionFactor)));
-            m["occlusionTexture"] = ref;
-        }
-    }
+    // NO occlusionTexture. It used to be written here, and it was the ONE
+    // consumer the AO chain ever had: the editor never rendered AO (HlmsPbs has
+    // no ambient-occlusion input), so a user could author a map, wait for a
+    // 4096-square CPU bake, see nothing in the viewport, and have it appear
+    // only in a published web build. HLMS_ADOPTION P2 removed the whole chain
+    // rather than keep an authoring surface whose only target was the export.
+    // No shipped content used it (every shipped .material carries the default
+    // occlusionFactor 1.0 and no map).
+    //
+    // If AO is wanted for the web target specifically, it comes back as an
+    // EXPORT-time input — a map on the export settings, not a material row the
+    // editor pretends to honour. Bake AO into the base colour at import
+    // otherwise; that works on both targets.
 
     const QColor ec = pbr->emissiveColor;
     const float ei = pbr->emissiveIntensity;
@@ -462,9 +463,40 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     const bool matTwoSided = pbr->renderStates.rasterState.cullMode == iris::CullMode::None;
     if (matTwoSided || cullMode == iris::FaceCullingMode::None) m["doubleSided"] = true;
 
+    // Clear coat has a real glTF home (HLMS_ADOPTION P1 §3.4): three.js maps
+    // KHR_materials_clearcoat straight onto MeshPhysicalMaterial.clearcoat /
+    // .clearcoatRoughness. Written only when there IS a coat, so a material
+    // without one produces byte-identical glTF to before this feature existed.
+    // The renderer only honours a coat on the Default BRDF family, so the
+    // export obeys the same rule rather than exporting a coat the editor is
+    // not showing.
+    if (pbr->clearCoat > 0.0f && iris::PbrMaterial::brdfSupportsClearCoat(pbr->brdf)) {
+        c.useExtension("KHR_materials_clearcoat");
+        QJsonObject coat;
+        coat["clearcoatFactor"] = double(std::min(1.0f, std::max(0.0f, pbr->clearCoat)));
+        coat["clearcoatRoughnessFactor"] =
+            double(std::min(1.0f, std::max(0.0f, pbr->clearCoatRoughness)));
+        QJsonObject ext = m["extensions"].toObject();
+        ext["KHR_materials_clearcoat"] = coat;
+        m["extensions"] = ext;
+    }
+
     QJsonObject jah;
-    jah["useIbl"] = pbr->useIbl;
-    jah["iblIntensity"] = double(pbr->iblIntensity);
+    // NO useIbl / iblIntensity. They were two PbrMaterial fields that no
+    // property row declared, no panel showed, no serializer wrote, no mirror
+    // read and nothing ever set away from their defaults — they existed only
+    // to be written here, and the viewer then applied a value the editor could
+    // not author (HLMS_ADOPTION P6). Per-material IBL intensity is a real
+    // capability if it is ever wanted; it comes back as a declared row that
+    // reaches the renderer, not as an export-only field.
+    // BRDF, receive-shadows and emissive-as-lightmap have NO glTF equivalent.
+    // They ride extras.jah and the viewer ignores them — said here rather than
+    // faked onto some near-miss extension. A three.js viewer always receives
+    // shadows and always adds emissive on top; that divergence is real and
+    // documented, not papered over.
+    if (pbr->brdf != 0) jah["brdf"] = iris::PbrMaterial::brdfEngineName(pbr->brdf);
+    if (!pbr->receiveShadows) jah["receiveShadows"] = false;
+    if (pbr->emissiveAsLightmap) jah["emissiveAsLightmap"] = true;
     if (pbr->alphaMode == 4) jah["blendMode"] = "additive";
     else if (pbr->alphaMode == 5) jah["blendMode"] = "modulate";
     if (pbr->alphaMode == 6) {

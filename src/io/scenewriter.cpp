@@ -31,7 +31,6 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/assets/texture.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/document/assets/shader.h"
 #include "irisgl/document/materials/renderstates.h"
 #include "irisgl/document/materials/rasterizerstate.h"
 #include "irisgl/import/graphicshelper.h"
@@ -822,9 +821,12 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			valuesObj[prop->name] = prop->getValue().toFloat();
         }
 
-        // PbrMaterial's alphaMode is an IntProperty; without this case it would
-        // silently vanish from the saved scene.
-        if (prop->type == iris::PropertyType::Int) {
+        // An enum row (PropertyType::List — alphaMode, brdf) writes as the
+        // plain INT it stores, exactly like an IntProperty. That is why enums
+        // were moved onto ListProperty rather than given a new on-disk shape:
+        // materials saved before the move read back identically.
+        if (prop->type == iris::PropertyType::Int ||
+            prop->type == iris::PropertyType::List) {
 			valuesObj[prop->name] = prop->getValue().toInt();
         }
 

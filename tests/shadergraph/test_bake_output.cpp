@@ -234,7 +234,7 @@ int main(int argc, char** argv)
         r.toMaster(r.addColor(1.0, 0.0, 0.0), 0, 0); // uniform red base
         auto split = r.add("splitvector");
         r.graph->addConnection(r.add("texCoords"), 0, split, 0);
-        r.toMaster(split, 0, 6); // U -> Alpha (varying)
+        r.toMaster(split, 0, 5); // U -> Alpha (varying)
 
         auto res = bake(r, baseDir + "/alpha", 4);
         CHECK(res.maps.contains("baseColorMap"),

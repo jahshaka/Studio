@@ -434,7 +434,6 @@ void SkyPropertyWidget::setSkyFromCustomMaterial(const QJsonObject& definition)
 	auto vPath = resolveSkyAssetFile(project, db, vert);
 	auto fPath = resolveSkyAssetFile(project, db, frag);
 
-	//scene->skyMaterial->createProgramFromShaderSource(vPath, fPath);
 }
 
 void SkyPropertyWidget::onSingleSkyColorChanged(QColor color)

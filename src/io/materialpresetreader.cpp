@@ -101,7 +101,6 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
     material.metallicMap         = pbrTex("metallicMap");
     material.roughnessMap        = pbrTex("roughnessMap");
     material.pbrNormalMap        = pbrTex("normalMap");
-    material.occlusionMap        = pbrTex("occlusionMap");
     material.emissiveMap         = pbrTex("emissiveMap");
 
     material.metallic            = static_cast<float>(matObj["metallic"].toDouble(0.0));
@@ -110,7 +109,9 @@ MaterialPreset MaterialPresetReader::readMaterialPreset(QString filename)
     material.roughnessLowerBound = static_cast<float>(matObj["roughnessLowerBound"].toDouble(0.0));
     material.roughnessUpperBound = static_cast<float>(matObj["roughnessUpperBound"].toDouble(1.0));
     material.pbrNormalFactor     = static_cast<float>(matObj["normalFactor"].toDouble(1.0));
-    material.occlusionFactor     = static_cast<float>(matObj["occlusionFactor"].toDouble(1.0));
+    // "occlusionFactor"/"occlusionMap" are still present in shipped and user
+    // .material files and are deliberately UNREAD (HLMS_ADOPTION P2 removed the
+    // ghost AO chain). Tolerated, never a load failure.
     material.emissiveIntensity   = static_cast<float>(matObj["emissiveIntensity"].toDouble(0.0));
     material.alphaMode           = matObj["alphaMode"].toInt(0);
     material.alpha               = static_cast<float>(matObj["alpha"].toDouble(1.0));

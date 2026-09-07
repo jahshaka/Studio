@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
+#include "viewport/ieditorviewport.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "irisgl/core/irisutils.h"
@@ -85,7 +86,7 @@ const QStringList kColorKeys = { "baseColor", "emissiveColor",
 /// this list is what keeps material.set working on a material whose property
 /// list does not carry them, and what the F7 refusal message quotes.
 const QStringList kPbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
-                                  "normalMap", "occlusionMap", "emissiveMap" };
+                                  "normalMap", "emissiveMap" };
 /// CustomMaterial's spellings (Default.shader declares them as Properties).
 /// On a PbrMaterial they name nothing and are REFUSED by name (F7) — so they
 /// are never writable keys, on either material class.
@@ -421,13 +422,24 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "in panel order, with 'min'/'max' present only where a range is declared — the PBR "
           "material declares real ones (metallic and roughness are 0..1, emissiveIntensity 0..10), "
           "so this is where a scale actually means something. 'writableKeys' is the exact set "
-          "material.set accepts — the row names plus, on a PbrMaterial, its six texture slots "
-          "(baseColorMap, metallicMap, roughnessMap, normalMap, occlusionMap, emissiveMap), "
+          "material.set accepts — the row names plus, on a PbrMaterial, its five texture slots "
+          "(baseColorMap, metallicMap, roughnessMap, normalMap, emissiveMap), "
           "which take a file path or an image asset guid. Read 'writableKeys' rather than "
           "deriving keys from 'rows': the two agree today but the slot list is what material.set "
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
           "NOT writable on a PBR material and are refused by name.",
           Needs::Document },
+        { "dumpDatablock", "material.dumpDatablock(nodeId) -> string",
+          "DIAGNOSTIC: what the RENDERER's material for this node actually ends up holding, as "
+          "text, read off the live datablock. The document says one thing, the mirror translates "
+          "it, and the renderer then clamps, guards and reorders — 'what did the datablock "
+          "actually end up with' has been the hardest question in every material bug, and until "
+          "now it needed a debugger. Pairs with the JAHSHAKA_HLMS_DEBUG_DIR shader dump, which "
+          "answers 'and what shader did that produce'. The format is the RENDERER'S and is NOT a "
+          "material format: the document is the truth (asset guids, the node graph, baked maps, "
+          "our alpha-mode vocabulary and roughness bounds have no home in a datablock). Read it, "
+          "do not parse it. Needs a live renderer — it fails, by name, in a headless run.",
+          Needs::Engine },
     };
 }
 
@@ -531,7 +543,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                             "material.set: '%1' is a legacy shader texture name and this "
                             "node's PBR material has no such slot — %2 (the PBR maps are "
                             "baseColorMap, metallicMap, roughnessMap, normalMap, "
-                            "occlusionMap, emissiveMap)")
+                            "emissiveMap)")
                             .arg(key,
                                  instead.isEmpty()
                                      ? QStringLiteral("there is no PBR equivalent")
@@ -639,6 +651,29 @@ QVariantMap MaterialApi::get(const QString &nodeId)
         else out[prop->name] = value;
     }
     return out;
+}
+
+QString MaterialApi::dumpDatablock(const QString &nodeId)
+{
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.dumpDatablock"));
+    if (!meshNode) return QString();
+    if (!host.viewport) {
+        fail("material.dumpDatablock: no viewport in this session (the renderer is "
+             "what holds the datablock; there is nothing to dump without one)");
+        return QString();
+    }
+    const QString dump = host.viewport->dumpMaterial(nodeId);
+    if (dump.isEmpty()) {
+        // Empty is never "the datablock is empty" — it means we could not
+        // reach one, and saying which is the whole difference between a
+        // diagnostic and a second mystery.
+        fail(QStringLiteral("material.dumpDatablock: no renderer material for '%1' "
+                            "(the node is not mirrored into the engine scene, or this "
+                            "viewport has no mirror — a headless/document-only run)")
+                 .arg(nodeId));
+        return QString();
+    }
+    return dump;
 }
 
 // -------------------------------------------------------------------- graph.*

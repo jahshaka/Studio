@@ -221,7 +221,9 @@ static void testTextureRow()
 
     PanelRig rig;
     auto textures = rig.panel.findChildren<TexturePickerWidget *>();
-    CHECK(textures.size() >= 6, "texture: six map rows exist");
+    // FIVE, not six: HLMS_ADOPTION P2 removed the Occlusion Map row along with
+    // the rest of the AO ghost (the renderer has no AO input to bind it to).
+    CHECK(textures.size() == 5, "texture: five map rows exist (no Occlusion Map)");
     if (textures.isEmpty()) return;
 
     // rows appear in property order; the first texture property is baseColorMap
@@ -235,9 +237,11 @@ static void testTextureRow()
     CHECK(!rig.pbr->textures.contains("u_baseColorMap"), "texture: undo clears the map");
 }
 
-// The Alpha Mode row is an IntProperty rendered as a labeled dropdown (the
-// Unreal-parity blend modes; combo index == stored alphaMode value). It was
-// once a dead slider row — this guards both the wiring and the enum labels.
+// The Alpha Mode row is an ENUM row (iris::ListProperty) rendered as a labeled
+// dropdown: combo index == the stored alphaMode value, and the labels ride the
+// PROPERTY, not a by-name branch in the panel (HLMS_ADOPTION P1 generalised
+// what used to be `if (name == "alphaMode")`). It was once a dead slider row —
+// this guards the wiring, the labels and the generic mechanism.
 static void testIntRow()
 {
     PanelRig rig;
@@ -248,15 +252,18 @@ static void testIntRow()
     if (!row) return;
 
     auto *combo = row->getWidget();
-    // The combo must cover the property's WHOLE declared range. A mode with no
+    // The combo must cover the property's WHOLE vocabulary. A mode with no
     // entry (Refractive was missing one — PUBLISH_AUDIT #4) showed a blank
-    // combo and silently downgraded the material on the next pick, so this is
-    // asserted against maxValue rather than a hard-coded count that can drift
-    // away from PbrMaterial again.
-    const auto *alphaProp = static_cast<const iris::IntProperty *>(
+    // combo and silently downgraded the material on the next pick. Since the
+    // labels now LIVE on the property, this compares against them rather than
+    // against a declared range the panel could disagree with — the mechanism
+    // is what makes the two unable to drift apart, and this is its assertion.
+    const auto *alphaProp = static_cast<const iris::ListProperty *>(
         findProp(rig.pbr, "alphaMode"));
-    CHECK(alphaProp && combo->count() == alphaProp->maxValue + 1,
-          "int: one entry per declared alpha mode (0..maxValue)");
+    CHECK(alphaProp && alphaProp->type == iris::PropertyType::List,
+          "int: alphaMode is the generic enum row, not a by-name special case");
+    CHECK(alphaProp && combo->count() == alphaProp->labels.size(),
+          "int: one combo entry per declared alpha mode label");
     CHECK(combo->itemText(4) == "Additive" && combo->itemText(5) == "Modulate",
           "int: Additive/Modulate entries present");
     CHECK(combo->itemText(6) == "Refractive", "int: Refractive entry present");
@@ -294,7 +301,7 @@ static void testRowsDisplayTheMaterialValues()
 
     struct { const char *prop; float expected; } rows[] = {
         { "roughness", 1.0f }, { "metallic", 0.0f }, { "textureScale", 1.0f },
-        { "normalFactor", 1.0f }, { "occlusionFactor", 1.0f }, { "alpha", 1.0f },
+        { "normalFactor", 1.0f }, { "alpha", 1.0f },
     };
     for (const auto &r : rows) {
         auto *row = sliderRow(&rig.panel, propId(rig.pbr, r.prop));
@@ -356,6 +363,69 @@ static void testPanelRebuildDisplays()
           "rebuild: the second panel's Roughness row still shows 1.00");
 }
 
+// HLMS_ADOPTION P1: the BRDF picker is the SECOND user of the generic enum row
+// (its whole reason for existing), and it CONSTRAINS the two clear-coat rows.
+//
+// The renderer cannot carry a clear coat on anything but the Default BRDF
+// family, and the decided behaviour (D-P1b) is that the panel DISABLES the coat
+// rows rather than clearing them: a BRDF experiment must be reversible, so the
+// authored coat has to survive a trip through Cook-Torrance and come back. A
+// row that is editable but silently does nothing is the defect class this whole
+// program exists to remove — so "greyed out, with a reason in the tooltip" is
+// the assertion, not "the value got zeroed".
+static void testBrdfRowAndClearCoatConstraint()
+{
+    PanelRig rig;
+
+    ComboBoxWidget *brdfRow = nullptr;
+    for (auto *w : rig.panel.findChildren<ComboBoxWidget *>())
+        if (w->index == propId(rig.pbr, "brdf")) { brdfRow = w; break; }
+    CHECK(brdfRow != nullptr, "brdf: the picker exists as a dropdown");
+    if (!brdfRow) return;
+
+    const auto *brdfProp = static_cast<const iris::ListProperty *>(findProp(rig.pbr, "brdf"));
+    auto *combo = brdfRow->getWidget();
+    CHECK(brdfProp && combo->count() == brdfProp->labels.size(),
+          "brdf: one combo entry per declared BRDF label");
+    CHECK(combo->count() == 6, "brdf: the curated six, not all twelve of the renderer's");
+    CHECK(combo->itemText(0) == "Default", "brdf: entry 0 is Default");
+
+    auto *coat      = sliderRow(&rig.panel, propId(rig.pbr, "clearCoat"));
+    auto *coatRough = sliderRow(&rig.panel, propId(rig.pbr, "clearCoatRoughness"));
+    CHECK(coat && coatRough, "coat: both clear-coat rows exist");
+    if (!coat || !coatRough) return;
+    CHECK(coat->isEnabled() && coatRough->isEnabled(),
+          "coat: rows are live on the Default BRDF");
+
+    // author a coat, then move to Cook-Torrance (index 1, a different family)
+    auto *coatSlider = coat->findChild<QSlider *>();
+    CHECK(coatSlider != nullptr, "coat: slider child found");
+    if (!coatSlider) return;
+    coatSlider->setSliderDown(true);
+    coatSlider->setValue(700);            // clearCoat range 0..1 -> 0.7
+    coatSlider->setSliderDown(false);
+    CHECK(qAbs(rig.pbr->clearCoat - 0.7f) < 1e-3f, "coat: the slider reaches the field");
+
+    combo->setCurrentIndex(1);            // Cook-Torrance
+    CHECK(rig.pbr->brdf == 1, "brdf: the pick reaches the field");
+    CHECK(!coat->isEnabled() && !coatRough->isEnabled(),
+          "coat: both rows DISABLE on a non-Default BRDF");
+    CHECK(!coat->toolTip().isEmpty(),
+          "coat: the disabled row says WHY (a greyed row with no reason is a dead row)");
+    CHECK(qAbs(rig.pbr->clearCoat - 0.7f) < 1e-3f,
+          "coat: the authored value is KEPT, not zeroed, while the BRDF hides it");
+
+    // index 3 is DefaultSeparateDiffuseFresnel — still the Default FAMILY, so
+    // the coat comes back. This is the case a naive "index == 0" rule breaks.
+    combo->setCurrentIndex(3);
+    CHECK(coat->isEnabled() && coatRough->isEnabled(),
+          "coat: rows live again on a Default-FAMILY variant (index 3), not just index 0");
+    CHECK(qAbs(rig.pbr->clearCoat - 0.7f) < 1e-3f, "coat: the value survived the round trip");
+
+    rig.undo.undo();
+    CHECK(rig.pbr->brdf == 1, "brdf: undo steps back one pick");
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -369,6 +439,7 @@ int main(int argc, char *argv[])
     testNoOpGestureNoUndo();
     testTextureRow();
     testIntRow();
+    testBrdfRowAndClearCoatConstraint();
 
     printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;

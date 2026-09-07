@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "ui/controls/filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 #include "ui/controls/comboboxwidget.h"
+#include "irisgl/document/materials/pbrmaterial.h"
 #include <QDir>
 #include "data/database/database.h"
 
@@ -95,6 +96,7 @@ void PropertyWidget::addFloatProperty(iris::Property *prop)
     fltWidget->setValue(fltProp->getValue().toFloat());
     ui->contentpane->layout()->addWidget(fltWidget);
     properties.append(prop);
+    rowByName.insert(prop->name, fltWidget);
 
     connect(fltWidget, &HFloatSliderWidget::valueChanged, this, [this, fltProp](float value) {
         fltProp->value = value;
@@ -127,47 +129,53 @@ void PropertyWidget::addFloatProperty(iris::Property *prop)
     });
 }
 
+// The generic ENUM row. An enum wearing a slider reads as a meaningless 0..5,
+// so a ListProperty renders as a labeled dropdown: combo index == the stored
+// value, and the labels come off the ROW, not off a name branch here.
+//
+// That last part is the whole point. Until HLMS_ADOPTION P1 this was a
+// hardcoded `if (name == "alphaMode")` and PropertyType::List rendered
+// NOTHING, so every new enum meant another special case. The failure that
+// justifies the labels living on the row: a material set to a mode the panel
+// had no label for showed a BLANK combo, and any pick then silently
+// downgraded it — Refractive was missing exactly that way (PUBLISH_AUDIT #4).
+// With the vocabulary on the property, the picker and the document cannot
+// disagree.
+void PropertyWidget::addEnumProperty(iris::Property *prop)
+{
+    auto listProp = static_cast<iris::ListProperty*>(prop);
+
+    auto combo = new ComboBoxWidget();
+    combo->setLabel(listProp->displayName);
+    for (const QString &label : listProp->labels) combo->addItem(label);
+    combo->index = prop->id;
+    combo->setCurrentIndex(listProp->getValue().toInt());
+    progressiveHeight += combo->height() + stretch;
+    ui->contentpane->layout()->addWidget(combo);
+    properties.append(prop);
+    rowByName.insert(prop->name, combo);
+
+    connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
+            this, [this, listProp](int idx) {
+        if (listProp->getValue().toInt() == idx) return;
+        // Start must see the OLD value (it records the undo baseline),
+        // End the new one — a combo pick is a complete one-shot gesture.
+        if (listener) listener->onPropertyChangeStart(listProp);
+        listProp->value = idx;
+        if (listener) {
+            listener->onPropertyChanged(listProp);
+            listener->onPropertyChangeEnd(listProp);
+        }
+        emit onPropertyChanged(listProp);
+        // A pick can change which OTHER rows are available (BRDF -> clear coat).
+        applyRowConstraints();
+    });
+}
+
 void PropertyWidget::addIntProperty(iris::Property *prop)
 {
     auto intProp = static_cast<iris::IntProperty*>(prop);
 
-    // A material's Alpha Mode is an enum wearing an IntProperty: a slider row
-    // reads as a meaningless 0..5. Render it as a labeled dropdown instead —
-    // combo index == stored int value (PbrMaterial's alphaMode contract).
-    if (intProp->name == "alphaMode") {
-        auto combo = new ComboBoxWidget();
-        combo->setLabel(intProp->displayName);
-        // Unreal-familiar names; Glass stays value 3 (the engine's
-        // realistic-transparency mode — shipped scenes/presets depend on it).
-        // This list must cover the WHOLE declared range (PbrMaterial's
-        // alphaMode maxValue is 6, i.e. seven values): a material set to a
-        // mode with no label here showed a BLANK combo, and any pick then
-        // silently downgraded it — Refractive was missing exactly that way
-        // (PUBLISH_AUDIT #4).
-        for (const QString &label : { tr("Opaque"), tr("Masked"), tr("Translucent"),
-                                      tr("Glass"), tr("Additive"), tr("Modulate"),
-                                      tr("Refractive") })
-            combo->addItem(label);
-        combo->index = prop->id;
-        combo->setCurrentIndex(intProp->getValue().toInt());
-        progressiveHeight += combo->height() + stretch;
-        ui->contentpane->layout()->addWidget(combo);
-        properties.append(prop);
-        connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
-                this, [this, intProp](int idx) {
-            if (intProp->getValue().toInt() == idx) return;
-            // Start must see the OLD value (it records the undo baseline),
-            // End the new one — a combo pick is a complete one-shot gesture.
-            if (listener) listener->onPropertyChangeStart(intProp);
-            intProp->value = idx;
-            if (listener) {
-                listener->onPropertyChanged(intProp);
-                listener->onPropertyChangeEnd(intProp);
-            }
-            emit onPropertyChanged(intProp);
-        });
-        return;
-    }
     auto intWidget = addFloatValueSlider(intProp->displayName, intProp->minValue, intProp->maxValue);
 
     intWidget->index = prop->id;
@@ -427,6 +435,7 @@ void PropertyWidget::updatePane()
 
 void PropertyWidget::setProperties(QList<iris::Property*> properties)
 {
+    rowByName.clear();
     for (auto prop : properties)
         switch (prop->type) {
             case iris::PropertyType::Float:
@@ -454,6 +463,7 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
             break;
 
             case iris::PropertyType::List:
+                addEnumProperty(prop);
             break;
 
             case iris::PropertyType::Vec2:
@@ -474,6 +484,42 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
     updatePane();
 
     this->properties = properties;
+    applyRowConstraints();
+}
+
+void PropertyWidget::applyRowConstraints()
+{
+    // Clear coat is only representable on the renderer's Default BRDF family
+    // (the diffuse-fresnel variants of Default included). On any other pick the
+    // two coat rows are DISABLED rather than cleared: the authored values stay
+    // in the document and come back when the BRDF does. A greyed row with a
+    // reason is a visible constraint; a row that silently does nothing is the
+    // defect class this program exists to remove.
+    QWidget *coat      = rowByName.value(QStringLiteral("clearCoat"));
+    QWidget *coatRough = rowByName.value(QStringLiteral("clearCoatRoughness"));
+    if (!coat && !coatRough) return;
+
+    int brdfIndex = 0;
+    bool haveBrdf = false;
+    for (auto *prop : properties) {
+        if (prop && prop->name == QStringLiteral("brdf")) {
+            brdfIndex = prop->getValue().toInt();
+            haveBrdf = true;
+            break;
+        }
+    }
+    // No BRDF row on this material (a CustomMaterial, say) — leave the rows be.
+    if (!haveBrdf) return;
+
+    const bool coatOk = iris::PbrMaterial::brdfSupportsClearCoat(brdfIndex);
+    const QString why = coatOk
+        ? QString()
+        : tr("Clear coat is only available on the Default BRDF family.");
+    for (QWidget *w : { coat, coatRough }) {
+        if (!w) continue;
+        w->setEnabled(coatOk);
+        w->setToolTip(why);
+    }
 }
 
 int PropertyWidget::getHeight()

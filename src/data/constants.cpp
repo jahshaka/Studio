@@ -21,7 +21,6 @@ namespace Contants
 	QString META_EXT		  = "meta";
     QStringList PROJECT_DIRS  = { "Textures", "Shaders", "Materials", "Models", "Files" };
     QString SHADER_DEFS       = "/app/shader_defs/";
-	QString SHADER_FILE_DEFS	= "/app/shaders/";
     QString DEFAULT_SHADER    = "/app/shader_defs/Default.shader";
     QString SAMPLES_FOLDER    = "/scenes";
     QString PROJECT_FOLDER    = "/Jahshaka";

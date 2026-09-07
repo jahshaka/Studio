@@ -59,6 +59,12 @@ add_script_e2e(fragments e2e_fragments.js)
 # material assets by guid, and the full save/close/open round-trip of every
 # PBR property (the owner-reported "materials lost on reopen" data loss).
 add_script_e2e(pbr_materials e2e_pbr_materials.js)
+# HLMS_ADOPTION_SPEC P1 (§3.5): the five cheap PBS knobs — clear coat + coat
+# roughness, the curated BRDF picker, receive-shadows, emissive-as-lightmap —
+# plus the generic enum row they forced (alphaMode rides it now too). Asserts
+# the DEFAULTS are the renderer's own, which is the byte-identical-pixels
+# argument expressed as a test.
+add_script_e2e(pbs_knobs e2e_pbs_knobs.js)
 # MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
 # toMaterial/save/regenerate; baked maps land inside the project folder (and
 # so ride the recursive .jaf zip).

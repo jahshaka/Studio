@@ -306,6 +306,25 @@ public:
     /// assert it on a REAL one, through the real app.
     virtual MirrorStats mirrorStats() const { return {}; }
 
+    /// DIAGNOSTIC: what the RENDERER's material for this document node
+    /// actually ends up holding, as text (Scene::dumpMaterial). Empty when
+    /// this viewport has no mirror, the node is not mirrored, or it carries no
+    /// material.
+    ///
+    /// It exists because the hardest question in every material bug so far has
+    /// been exactly this one: the document says one thing, the mirror
+    /// translates it, applyPbr clamps and guards and reorders it, and until now
+    /// the result was only visible under a debugger. Behind
+    /// `material.dumpDatablock(nodeId)`.
+    ///
+    /// The format is the RENDERER'S and is not a material format — the document
+    /// is the truth. Read it, do not parse it.
+    virtual QString dumpMaterial(const QString &nodeGuid) const
+    {
+        Q_UNUSED(nodeGuid);
+        return QString();
+    }
+
     /// Deterministic frame stepping for scripts and tests (editor.frame(n)):
     /// document→engine sync + renderOneFrame, n times, synchronously — the exact
     /// pattern of the headless suites. Only the engine viewport implements it;

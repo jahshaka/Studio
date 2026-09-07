@@ -226,7 +226,11 @@ inline QString propertyTypeName(iris::PropertyType type)
     case iris::PropertyType::Color:   return QStringLiteral("color");
     case iris::PropertyType::Texture: return QStringLiteral("texture");
     case iris::PropertyType::File:    return QStringLiteral("string");
-    case iris::PropertyType::List:    return QStringLiteral("list");
+    // The generic ENUM row (HLMS_ADOPTION P1): an int value plus the labels
+    // that name each one. "enum" rather than "list" because the value is a
+    // single index, not a list — and the row reports `choices`, so a script or
+    // a model never has to guess what 3 means.
+    case iris::PropertyType::List:    return QStringLiteral("enum");
     case iris::PropertyType::None:    break;
     }
     return QStringLiteral("unknown");
@@ -262,6 +266,14 @@ inline QVariantMap propertyRowToJs(iris::Property *prop)
         if (f->maxValue > f->minValue) { row["min"] = f->minValue; row["max"] = f->maxValue; }
     } else if (auto *i = dynamic_cast<iris::IntProperty *>(prop)) {
         if (i->maxValue > i->minValue) { row["min"] = i->minValue; row["max"] = i->maxValue; }
+    } else if (auto *e = dynamic_cast<iris::ListProperty *>(prop)) {
+        // An enum's range is its VOCABULARY, and reporting it is the whole
+        // reason enums stopped being bare ints: `alphaMode: 3` told a caller
+        // nothing, `options[3] == "Glass"` tells it everything. The VALUE stays
+        // the index (that is what material.set writes back); `options` is
+        // spelled the same as NodeApi's faceCullingMode row, which reports the
+        // same idea for a name-valued enum.
+        if (!e->labels.isEmpty()) row["options"] = e->labels;
     }
     return row;
 }
@@ -402,7 +414,6 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
         if (pbr->useMetallicMap)  maps << QStringLiteral("metallic");
         if (pbr->useRoughnessMap) maps << QStringLiteral("roughness");
         if (pbr->useNormalMap)    maps << QStringLiteral("normal");
-        if (pbr->useOcclusionMap) maps << QStringLiteral("occlusion");
         if (pbr->useEmissiveMap)  maps << QStringLiteral("emissive");
         m["maps"] = maps;
     } else if (auto custom = material.dynamicCast<iris::CustomMaterial>()) {
