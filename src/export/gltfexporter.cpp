@@ -470,6 +470,18 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // The renderer only honours a coat on the Default BRDF family, so the
     // export obeys the same rule rather than exporting a coat the editor is
     // not showing.
+    // The UNLIT shading model has a CORE glTF home (HLMS_ADOPTION P4a §6.1):
+    // KHR_materials_unlit is the extension every stock viewer implements, and
+    // three.js maps it onto MeshBasicMaterial — which is exactly what the
+    // editor renders. Written only when the model IS unlit, so a lit material
+    // exports byte-identically to before this feature existed.
+    if (pbr->shadingModel == 1) {
+        c.useExtension("KHR_materials_unlit");
+        QJsonObject ext = m["extensions"].toObject();
+        ext["KHR_materials_unlit"] = QJsonObject();   // the extension has no fields
+        m["extensions"] = ext;
+    }
+
     if (pbr->clearCoat > 0.0f && iris::PbrMaterial::brdfSupportsClearCoat(pbr->brdf)) {
         c.useExtension("KHR_materials_clearcoat");
         QJsonObject coat;

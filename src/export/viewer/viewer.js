@@ -253,6 +253,12 @@
         // viewer can pretend. Clear coat, which DOES have a glTF home, arrives
         // through KHR_materials_clearcoat and GLTFLoader applies it to the
         // MeshPhysicalMaterial before this loop ever runs.
+        //
+        // The UNLIT shading model (HLMS_ADOPTION P4a) needs nothing here
+        // either, for the good reason: KHR_materials_unlit is a CORE glTF
+        // extension and GLTFLoader turns it into a MeshBasicMaterial itself —
+        // which is the same "flat authored colour, no lighting" the editor
+        // renders. It ignores castShadow/receiveShadow, as it should.
         scene.traverse(function (o) {
             if (o.isMesh && o.material && o.material.userData && o.material.userData.jah) {
                 var mj = o.material.userData.jah;

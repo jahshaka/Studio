@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "ui/controls/colorpickerwidget.h"
 #include "ui/controls/texturepickerwidget.h"
 #include "ui/controls/comboboxwidget.h"
+#include "ui/controls/checkboxwidget.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 
@@ -426,6 +427,92 @@ static void testBrdfRowAndClearCoatConstraint()
     CHECK(rig.pbr->brdf == 1, "brdf: undo steps back one pick");
 }
 
+// HLMS_ADOPTION P4a: the Shading Model row constrains most of the panel.
+//
+// Unlit is the OTHER renderer family, with no lighting term at all, so
+// thirteen rows below it have nothing to reach. The same rule as the clear
+// coat applies and for the same reason: DISABLE with a stated reason, never
+// clear — the values stay authored and come back when the model does. The
+// coverage that matters here is that the constraint reaches EVERY KIND of row
+// (float, enum, bool, colour, texture), because until this phase only float
+// and enum rows were even findable by name.
+static void testShadingModelRowConstraints()
+{
+    PanelRig rig;
+
+    ComboBoxWidget *modelRow = nullptr;
+    for (auto *w : rig.panel.findChildren<ComboBoxWidget *>())
+        if (w->index == propId(rig.pbr, "shadingModel")) { modelRow = w; break; }
+    CHECK(modelRow != nullptr, "shadingModel: the picker exists as a dropdown");
+    if (!modelRow) return;
+    auto *combo = modelRow->getWidget();
+    CHECK(combo->count() == 2, "shadingModel: two models");
+    CHECK(combo->itemText(0) == "Lit" && combo->itemText(1) == "Unlit",
+          "shadingModel: Lit and Unlit, in that order (the index is the stored value)");
+
+    // One representative of each row KIND, all in rowsUnusedWhenUnlit().
+    auto *roughness = sliderRow(&rig.panel, propId(rig.pbr, "roughness"));      // float
+    ComboBoxWidget *brdf = nullptr;                                             // enum
+    for (auto *w : rig.panel.findChildren<ComboBoxWidget *>())
+        if (w->index == propId(rig.pbr, "brdf")) { brdf = w; break; }
+    CheckBoxWidget *receive = nullptr;                                          // bool
+    for (auto *w : rig.panel.findChildren<CheckBoxWidget *>())
+        if (w->index == propId(rig.pbr, "receiveShadows")) { receive = w; break; }
+    ColorValueWidget *emissive = nullptr;                                       // colour
+    for (auto *w : rig.panel.findChildren<ColorValueWidget *>())
+        if (w->index == propId(rig.pbr, "emissiveColor")) { emissive = w; break; }
+    TexturePickerWidget *normalMap = nullptr;                                   // texture
+    for (auto *w : rig.panel.findChildren<TexturePickerWidget *>())
+        if (w->index == propId(rig.pbr, "normalMap")) { normalMap = w; break; }
+    CHECK(roughness && brdf && receive && emissive && normalMap,
+          "shadingModel: one row of every kind was found by name");
+    if (!roughness || !brdf || !receive || !emissive || !normalMap) return;
+
+    // A row the model does NOT constrain — the control. Base colour is the one
+    // thing Unlit renders, so it must stay live.
+    ColorValueWidget *baseColor = nullptr;
+    for (auto *w : rig.panel.findChildren<ColorValueWidget *>())
+        if (w->index == propId(rig.pbr, "baseColor")) { baseColor = w; break; }
+    CHECK(baseColor != nullptr, "shadingModel: the base colour row exists");
+
+    CHECK(roughness->isEnabled() && brdf->isEnabled() && receive->isEnabled() &&
+          emissive->isEnabled() && normalMap->isEnabled(),
+          "shadingModel: everything is live on the Lit model");
+
+    // author a roughness the switch must not destroy
+    auto *roughSlider = roughness->findChild<QSlider *>();
+    CHECK(roughSlider != nullptr, "shadingModel: roughness slider child found");
+    if (!roughSlider) return;
+    roughSlider->setSliderDown(true);
+    roughSlider->setValue(230);          // roughness range 0..1 -> 0.23
+    roughSlider->setSliderDown(false);
+    CHECK(qAbs(rig.pbr->roughnessFactor - 0.23f) < 1e-3f, "shadingModel: roughness authored");
+
+    combo->setCurrentIndex(1);           // Unlit
+    CHECK(rig.pbr->shadingModel == 1, "shadingModel: the pick reaches the field");
+    CHECK(!roughness->isEnabled() && !brdf->isEnabled() && !receive->isEnabled() &&
+          !emissive->isEnabled() && !normalMap->isEnabled(),
+          "shadingModel: every kind of unusable row DISABLES on Unlit");
+    CHECK(!roughness->toolTip().isEmpty() && !normalMap->toolTip().isEmpty(),
+          "shadingModel: the disabled rows say WHY");
+    CHECK(baseColor && baseColor->isEnabled(),
+          "shadingModel: base colour stays live — it is what Unlit renders");
+    CHECK(qAbs(rig.pbr->roughnessFactor - 0.23f) < 1e-3f,
+          "shadingModel: the authored roughness is KEPT, not zeroed");
+
+    combo->setCurrentIndex(0);           // back to Lit
+    CHECK(roughness->isEnabled() && brdf->isEnabled() && receive->isEnabled() &&
+          emissive->isEnabled() && normalMap->isEnabled(),
+          "shadingModel: every row comes back with the Lit model");
+    CHECK(qAbs(rig.pbr->roughnessFactor - 0.23f) < 1e-3f,
+          "shadingModel: and the value is still there");
+
+    rig.undo.undo();
+    CHECK(rig.pbr->shadingModel == 1, "shadingModel: undo steps back one pick");
+    rig.undo.redo();
+    CHECK(rig.pbr->shadingModel == 0, "shadingModel: redo re-applies it");
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -440,6 +527,7 @@ int main(int argc, char *argv[])
     testTextureRow();
     testIntRow();
     testBrdfRowAndClearCoatConstraint();
+    testShadingModelRowConstraints();
 
     printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;

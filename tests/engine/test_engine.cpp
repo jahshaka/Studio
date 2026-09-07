@@ -2223,6 +2223,240 @@ void pbr_texture_scale_tiles_uvs() {
     CHECK_MSG(transitions(imgBack) == t1, "uvScale back to 1 restores the single image");
 }
 
+// THE UNLIT SHADING MODEL (HLMS_ADOPTION P4a). Unlit is not a lighting preset
+// on the PBR pipeline — it is the OTHER backend material family, so the switch
+// destroys the material, rebuilds it and re-attaches every renderable while
+// keeping the MaterialId the host's whole scene refers to.
+//
+// The definition of "unlit" as an assertion: the surface renders its authored
+// colour, and CHANGING THE LIGHTING DOES NOT MOVE ONE BYTE OF IT. A shaded cube
+// under the same light is the control — without it, "flat colour" could just be
+// a well-chosen light.
+void unlit_shading_model_ignores_lighting() {
+    Fixture fx;
+    View *v = fx.view("unlit-view", 96, 96, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("unlit-scene");             REQUIRE(s);
+    v->setScene(s); aim(v);
+    s->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
+    const NodeId lightNode = enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    REQUIRE(lightNode != 0);
+
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = kOrange; p.roughness = 0.7f; p.metalness = 0.0f;
+    MaterialId mat = s->createPbrMaterial(p);
+    REQUIRE(mat != 0);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+    s->setNodeTransform(n, Vec3(0,0,0), Quat(), Vec3(1.2f, 1.2f, 1.2f));
+
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    const Px lit = centre(img);
+    std::printf("    LIT cube under the light: %d %d %d (albedo %d %d %d)\n",
+                lit.r, lit.g, lit.b, int(std::lround(kOrange.r*255)),
+                int(std::lround(kOrange.g*255)), int(std::lround(kOrange.b*255)));
+    CHECK_MSG(!near(lit, kOrange, 12),
+              "the LIT control is SHADED, not its raw albedo: %d %d %d", lit.r, lit.g, lit.b);
+
+    // ---- the switch ----
+    CHECK_MSG(s->setShadingModel(mat, ShadingModel::Unlit), "setShadingModel(Unlit): %s",
+              fx.e->lastError().c_str());
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px unlit = centre(img);
+    std::printf("    UNLIT cube: %d %d %d\n", unlit.r, unlit.g, unlit.b);
+    CHECK_MSG(near(unlit, kOrange, 6), "an unlit surface renders its authored colour: %d %d %d",
+              unlit.r, unlit.g, unlit.b);
+    // The re-attach worked: the item is still there, exactly one of it.
+    CHECK_MSG(s->itemCount(n) == 1, "the family switch left exactly one renderable, got %zu",
+              s->itemCount(n));
+    CHECK_MSG(!near(centre(img), kBlue, 20), "the cube did not vanish behind the switch");
+
+    // ---- the definition: lighting cannot touch it ----
+    const unsigned long long unlitHash = pixelHash(img);
+    s->removeNode(lightNode);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    CHECK_MSG(pixelHash(img) == unlitHash,
+              "removing every light leaves the unlit frame BYTE-IDENTICAL (that is what "
+              "unlit means)");
+
+    // The control, in the dark: the same scene change annihilates a lit surface.
+    CHECK(s->setShadingModel(mat, ShadingModel::Lit));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    const Px darkLit = centre(img);
+    std::printf("    LIT cube with no lights and no ambient: %d %d %d\n",
+                darkLit.r, darkLit.g, darkLit.b);
+    CHECK_MSG(darkLit.r < 40 && darkLit.g < 40,
+              "the lit control goes black without lighting: %d %d %d",
+              darkLit.r, darkLit.g, darkLit.b);
+
+    // ---- the round trip is lossless ----
+    // Put the lighting back and assert the ORIGINAL lit image returns byte for
+    // byte: the switch rebuilt the datablock from the parameters it was
+    // holding, so nothing the host pushed was quietly lost on the way out and
+    // back.
+    s->setAmbient(Colour(0.25f, 0.25f, 0.25f), Colour(0.2f, 0.2f, 0.2f));
+    enginetest::addDirectionalLight(s, Vec3(-0.5f, -0.7f, -0.5f), 3.14159f);
+    render(fx.e); Image back; REQUIRE(v->readPixels(back));
+    CHECK_MSG(near(centre(back), Colour(lit.r/255.0f, lit.g/255.0f, lit.b/255.0f), 3),
+              "Lit -> Unlit -> Lit restores the shaded image: %d %d %d vs %d %d %d",
+              centre(back).r, centre(back).g, centre(back).b, lit.r, lit.g, lit.b);
+
+    // Idempotence: setting the model it already has is a no-op that succeeds.
+    CHECK(s->setShadingModel(mat, ShadingModel::Lit));
+    render(fx.e); Image again; REQUIRE(v->readPixels(again));
+    CHECK_MSG(pixelHash(again) == pixelHash(back), "a no-op switch changes nothing at all");
+}
+
+// The base-colour MAP survives a family switch, and an unlit textured surface
+// samples it raw. This is the half of the switch that is easiest to get wrong:
+// the texture bindings live on the datablock that just got destroyed, so a
+// switch that only rebuilt PARAMETERS would silently strip every map.
+void unlit_keeps_its_base_colour_map() {
+    Fixture fx;
+    View *v = fx.view("unlittex-view", 128, 128, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("unlittex-scene");               REQUIRE(s);
+    v->setScene(s);
+    enginetest::testCameraLookAt(v, Vec3(0.0f, 0.0f, 2.2f), Vec3(0.0f, 0.0f, 0.0f));
+    s->setAmbient(Colour(0.6f, 0.6f, 0.6f), Colour(0.5f, 0.5f, 0.5f));
+    enginetest::addDirectionalLight(s, Vec3(0.2f, -0.3f, -1.0f), 3.14159f);
+    MeshId mesh = s->createMesh(unitCubeData());
+    PbrParams p; p.albedo = Colour(1.0f, 1.0f, 1.0f); p.roughness = 1.0f;
+    MaterialId mat = s->createPbrMaterial(p);
+    // Left half red, right half green — the same fixture the uvScale suite uses.
+    std::vector<unsigned char> pix(16 * 16 * 4);
+    for (int y = 0; y < 16; ++y) for (int x = 0; x < 16; ++x) {
+        unsigned char *q = &pix[(y * 16 + x) * 4];
+        q[0] = x < 8 ? 255 : 0; q[1] = x < 8 ? 0 : 255; q[2] = 0; q[3] = 255;
+    }
+    TextureId tex = s->createTexture(16, 16, pix.data(), true);
+    REQUIRE(tex != 0);
+    CHECK(s->setPbrTexture(mat, PbrTextureSlot::Albedo, tex));
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, mesh, mat));
+
+    auto sideColours = [&](const Image &img, Px &left, Px &right) {
+        const unsigned y = img.height / 2;
+        left  = px(img, img.width * 5u / 16u, y);
+        right = px(img, img.width * 11u / 16u, y);
+    };
+    render(fx.e); Image img; REQUIRE(v->readPixels(img));
+    Px l0, r0; sideColours(img, l0, r0);
+    CHECK_MSG(l0.r > l0.g + 30 && r0.g > r0.r + 30,
+              "lit control: the map shows red|green (%d %d %d | %d %d %d)",
+              l0.r, l0.g, l0.b, r0.r, r0.g, r0.b);
+
+    CHECK_MSG(s->setShadingModel(mat, ShadingModel::Unlit), "setShadingModel: %s",
+              fx.e->lastError().c_str());
+    render(fx.e); REQUIRE(v->readPixels(img));
+    Px l1, r1; sideColours(img, l1, r1);
+    std::printf("    unlit textured face: %d %d %d | %d %d %d\n",
+                l1.r, l1.g, l1.b, r1.r, r1.g, r1.b);
+    CHECK_MSG(l1.r > l1.g + 30 && r1.g > r1.r + 30,
+              "the base-colour map survived the switch: %d %d %d | %d %d %d",
+              l1.r, l1.g, l1.b, r1.r, r1.g, r1.b);
+    // Unlit samples the map RAW: the texels arrive at their authored values
+    // with no shading term anywhere near them.
+    CHECK_MSG(l1.r == 255 && l1.g == 0 && r1.r == 0 && r1.g == 255,
+              "unlit texels are the raw authored ones (%d %d | %d %d)", l1.r, l1.g, r1.r, r1.g);
+    // ...and they are the same with the lighting taken away, which is the
+    // property that makes them "raw" rather than "coincidentally saturated".
+    {
+        const unsigned long long litHash = pixelHash(img);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        render(fx.e); Image dark; REQUIRE(v->readPixels(dark));
+        CHECK_MSG(pixelHash(dark) == litHash,
+                  "the unlit textured frame is byte-identical with the ambient removed");
+        s->setAmbient(Colour(0.6f, 0.6f, 0.6f), Colour(0.5f, 0.5f, 0.5f));
+    }
+
+    // ...and switching back restores the lit sampling, so no binding was lost.
+    CHECK(s->setShadingModel(mat, ShadingModel::Lit));
+    render(fx.e); REQUIRE(v->readPixels(img));
+    Px l2, r2; sideColours(img, l2, r2);
+    CHECK_MSG(std::abs(l2.r - l0.r) <= 3 && std::abs(r2.g - r0.g) <= 3,
+              "back to Lit: the map is bound exactly as before (%d %d | %d %d)",
+              l2.r, l0.r, r2.g, r0.g);
+}
+
+// RULE 5 (HLMS_ADOPTION_SPEC §6.3), and it is a REFUSAL rather than a fallback.
+// The Unlit family hard-zeroes the skeleton properties when it hashes a
+// renderable, so a rigged mesh would render welded to its bind pose — a second,
+// solid body standing where the character used to be, with no error anywhere.
+// Both directions are closed: you cannot make a rigged mesh's material unlit,
+// and you cannot rig a mesh whose material already is.
+void unlit_refuses_rigged_meshes() {
+    Fixture fx;
+    // A View has to exist before a Scene can (the engine's ordering contract:
+    // createSceneManager segfaults without a render window). Nothing here
+    // renders — this suite is about refusals.
+    View *v = fx.view("unlitrig-view", 32, 32, kBlue); REQUIRE(v);
+    Scene *s = fx.scene("unlitrig-scene"); REQUIRE(s);
+    v->setScene(s);
+    MeshData skinned = unitCubeData();
+    skinned.blendIndices.assign(skinned.vertexCount() * 4, 0);
+    skinned.blendWeights.assign(skinned.vertexCount() * 4, 0.0f);
+    for (size_t i = 0; i < skinned.vertexCount(); ++i) skinned.blendWeights[i * 4] = 1.0f;
+    MeshId rigged = s->createMesh(skinned);
+    REQUIRE(rigged != 0);
+
+    SkeletonDesc rig; rig.id = "unlit-refusal-rig";
+    BoneDesc root; root.name = "root"; rig.bones.push_back(root);
+
+    PbrParams p; p.albedo = kOrange;
+    MaterialId mat = s->createPbrMaterial(p);
+    NodeId n = s->createNode();
+    CHECK_MSG(s->attachSkinnedMesh(n, rigged, mat, rig), "attachSkinnedMesh: %s",
+              fx.e->lastError().c_str());
+
+    CHECK_MSG(!s->setShadingModel(mat, ShadingModel::Unlit),
+              "a material used by a rigged mesh must REFUSE the Unlit model");
+    const std::string why = fx.e->lastError();
+    std::printf("    refusal: %s\n", why.c_str());
+    CHECK_MSG(why.find("skin") != std::string::npos && why.find("rigged") != std::string::npos,
+              "the refusal names the reason, got: %s", why.c_str());
+
+    // ...and nothing changed: the material is still lit and still usable.
+    PbrParams q = p; q.roughness = 0.3f;
+    CHECK_MSG(s->setPbrMaterial(mat, q),
+              "the refused material is untouched and still a PBR material: %s",
+              fx.e->lastError().c_str());
+
+    // The other direction: an already-unlit material refuses to be rigged.
+    MaterialId unlitMat = s->createPbrMaterial([]{ PbrParams u; u.shadingModel = ShadingModel::Unlit;
+                                                   u.albedo = kGreen; return u; }());
+    REQUIRE(unlitMat != 0);
+    NodeId n2 = s->createNode();
+    CHECK_MSG(!s->attachSkinnedMesh(n2, rigged, unlitMat, rig),
+              "attachSkinnedMesh must refuse a material whose shading model is Unlit");
+    std::printf("    reverse refusal: %s\n", fx.e->lastError().c_str());
+    CHECK_MSG(fx.e->lastError().find("Unlit") != std::string::npos,
+              "the reverse refusal names the model, got: %s", fx.e->lastError().c_str());
+
+    // MEASURED, and it is why the refusal tests the NODE's live skeleton and
+    // not "the mesh carries blend data": once a rig has been bound to a mesh,
+    // Ogre gives EVERY Item built from it a skeleton instance — including one
+    // attached through plain attachMesh. So such a node would be welded to the
+    // bind pose under Unlit exactly like a deliberately skinned one, and it is
+    // refused too. Deliberate, and asserted so nobody "fixes" it back.
+    {
+        NodeId shared = s->createNode();
+        MaterialId sharedMat = s->createPbrMaterial(p);
+        CHECK(s->attachMesh(shared, rigged, sharedMat));
+        CHECK_MSG(s->hasSkeleton(shared),
+                  "a plain attach of an already-rigged mesh still yields a skeleton instance");
+        CHECK_MSG(!s->setShadingModel(sharedMat, ShadingModel::Unlit),
+                  "...and is therefore refused Unlit for the same reason");
+    }
+
+    // An ordinary unrigged mesh is not affected by any of this.
+    NodeId n3 = s->createNode();
+    MeshId plainMesh = s->createMesh(unitCubeData());
+    MaterialId plain = s->createPbrMaterial(p);
+    CHECK(s->attachMesh(n3, plainMesh, plain));
+    CHECK_MSG(s->setShadingModel(plain, ShadingModel::Unlit),
+              "an unrigged mesh's material switches fine: %s", fx.e->lastError().c_str());
+}
+
 // Fog is EXPONENTIAL (Ogre's AtmosphereNpr math, adopted whole): a surface keeps
 // the fraction 2^(-distance * density) of its own colour, and the rest is fog. It
 // therefore NEVER equals the fog colour at any distance, which is why this suite
@@ -3468,6 +3702,9 @@ int main(int argc, char **argv) {
         { "pbr_additive_adds_modulate_multiplies",  pbr_additive_adds_modulate_multiplies },
         { "pbr_two_sided_shows_inside_faces",       pbr_two_sided_shows_inside_faces },
         { "pbr_texture_scale_tiles_uvs",            pbr_texture_scale_tiles_uvs },
+        { "unlit_shading_model_ignores_lighting",   unlit_shading_model_ignores_lighting },
+        { "unlit_keeps_its_base_colour_map",        unlit_keeps_its_base_colour_map },
+        { "unlit_refuses_rigged_meshes",            unlit_refuses_rigged_meshes },
         { "fog_transmittance_is_exponential",        fog_transmittance_is_exponential },
         { "fog_height_layer",                        fog_height_layer },
         { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },

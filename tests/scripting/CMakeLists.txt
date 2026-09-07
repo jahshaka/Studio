@@ -65,6 +65,12 @@ add_script_e2e(pbr_materials e2e_pbr_materials.js)
 # the DEFAULTS are the renderer's own, which is the byte-identical-pixels
 # argument expressed as a test.
 add_script_e2e(pbs_knobs e2e_pbs_knobs.js)
+# HLMS_ADOPTION_SPEC P4a (§6.5): the UNLIT shading model — the renderer's other
+# material family, reached through the same declared-row/material.set path
+# everything else uses. Asserts it reaches PIXELS (an unlit surface renders its
+# authored colour, a lit one does not), that the switch is one undo step, and
+# that every value the family cannot use survives the round trip.
+add_script_e2e(shading_model e2e_shading_model.js)
 # MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
 # toMaterial/save/regenerate; baked maps land inside the project folder (and
 # so ride the recursive .jaf zip).

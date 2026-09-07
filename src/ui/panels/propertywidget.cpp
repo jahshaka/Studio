@@ -182,6 +182,7 @@ void PropertyWidget::addIntProperty(iris::Property *prop)
     intWidget->setValue(float(intProp->getValue().toInt()));
     ui->contentpane->layout()->addWidget(intWidget);
     properties.append(prop);
+    rowByName.insert(prop->name, intWidget);
 
     // Same wiring as the float rows (this row had none at all - the panel's int
     // properties, e.g. a material's Alpha Mode, silently did nothing).
@@ -225,6 +226,7 @@ void PropertyWidget::addColorProperty(iris::Property *prop)
     colorWidget->setColorValue(colorProp->getValue().value<QColor>());
     ui->contentpane->layout()->addWidget(colorWidget);
     properties.append(prop);
+    rowByName.insert(prop->name, colorWidget);
 
     connect(colorWidget->getPicker(), &ColorPickerWidget::onColorChanged, this,
            [this, colorProp](QColor value)
@@ -257,6 +259,7 @@ void PropertyWidget::addBoolProperty(iris::Property *prop)
     boolWidget->setValue(boolProp->getValue().toBool());
     ui->contentpane->layout()->addWidget(boolWidget);
     properties.append(prop);
+    rowByName.insert(prop->name, boolWidget);
 
     connect(boolWidget, &CheckBoxWidget::valueChanged, this, [this, boolProp](bool value) {
         // A checkbox toggle is one discrete gesture - one undo entry.
@@ -285,6 +288,7 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
     textureWidget->setTexture(texturePath);
     ui->contentpane->layout()->addWidget(textureWidget);
     properties.append(prop);
+    rowByName.insert(prop->name, textureWidget);
 
     connect(textureWidget, &TexturePickerWidget::valueChanged, this,
            [this, textureProp](QString value)
@@ -489,36 +493,51 @@ void PropertyWidget::setProperties(QList<iris::Property*> properties)
 
 void PropertyWidget::applyRowConstraints()
 {
-    // Clear coat is only representable on the renderer's Default BRDF family
-    // (the diffuse-fresnel variants of Default included). On any other pick the
-    // two coat rows are DISABLED rather than cleared: the authored values stay
-    // in the document and come back when the BRDF does. A greyed row with a
-    // reason is a visible constraint; a row that silently does nothing is the
-    // defect class this program exists to remove.
-    QWidget *coat      = rowByName.value(QStringLiteral("clearCoat"));
-    QWidget *coatRough = rowByName.value(QStringLiteral("clearCoatRoughness"));
-    if (!coat && !coatRough) return;
+    // A row that silently does nothing is the defect class this whole program
+    // exists to remove, so the two places the renderer imposes a constraint
+    // both show up here as a GREYED ROW WITH A REASON. Nothing is ever cleared:
+    // the authored values stay in the document and come back the moment the
+    // constraint lifts, so an experiment is always reversible.
+    auto valueOf = [this](const QString &name, bool *found) {
+        for (auto *prop : properties)
+            if (prop && prop->name == name) { if (found) *found = true; return prop->getValue().toInt(); }
+        if (found) *found = false;
+        return 0;
+    };
+    auto constrain = [this](const QString &name, bool enabled, const QString &why) {
+        QWidget *w = rowByName.value(name);
+        if (!w) return;
+        w->setEnabled(enabled);
+        w->setToolTip(enabled ? QString() : why);
+    };
 
-    int brdfIndex = 0;
-    bool haveBrdf = false;
-    for (auto *prop : properties) {
-        if (prop && prop->name == QStringLiteral("brdf")) {
-            brdfIndex = prop->getValue().toInt();
-            haveBrdf = true;
-            break;
-        }
+    // ---- 1. the SHADING MODEL (HLMS_ADOPTION P4a) ----
+    // Unlit is a different renderer family, not a switch on this one: it has no
+    // lighting term at all, so metalness, roughness, normals, emissive, the
+    // BRDF, the clear coat, shadow reception and their maps have nothing to
+    // reach. Texture tiling is in the list for a narrower reason — uvScale
+    // rides a shader piece belonging to the lit family, and the unlit
+    // equivalent is deliberately out of v1 (decision D-P4a).
+    bool haveShading = false;
+    const int shadingModel = valueOf(QStringLiteral("shadingModel"), &haveShading);
+    const bool unlit = haveShading && shadingModel == 1;
+    if (haveShading) {
+        const QString why = tr("Not used by the Unlit shading model — it has no lighting. "
+                               "The value is kept and returns when the model does.");
+        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenUnlit())
+            constrain(name, !unlit, why);
     }
-    // No BRDF row on this material (a CustomMaterial, say) — leave the rows be.
-    if (!haveBrdf) return;
 
-    const bool coatOk = iris::PbrMaterial::brdfSupportsClearCoat(brdfIndex);
-    const QString why = coatOk
-        ? QString()
-        : tr("Clear coat is only available on the Default BRDF family.");
-    for (QWidget *w : { coat, coatRough }) {
-        if (!w) continue;
-        w->setEnabled(coatOk);
-        w->setToolTip(why);
+    // ---- 2. the clear coat's BRDF family (HLMS_ADOPTION P1) ----
+    // Clear coat is only representable on the renderer's Default BRDF family
+    // (the diffuse-fresnel variants of Default included).
+    bool haveBrdf = false;
+    const int brdfIndex = valueOf(QStringLiteral("brdf"), &haveBrdf);
+    if (haveBrdf && !unlit) {
+        const bool coatOk = iris::PbrMaterial::brdfSupportsClearCoat(brdfIndex);
+        const QString why = tr("Clear coat is only available on the Default BRDF family.");
+        constrain(QStringLiteral("clearCoat"), coatOk, why);
+        constrain(QStringLiteral("clearCoatRoughness"), coatOk, why);
     }
 }
 
