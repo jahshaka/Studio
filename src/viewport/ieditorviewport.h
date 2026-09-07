@@ -19,6 +19,7 @@
 #include <QImage>
 #include <QSize>
 #include <QString>
+#include <QVector3D>
 #include "irisgl/irisglfwd.h"
 
 class QWidget;
@@ -290,6 +291,15 @@ public:
         int     probeCount = 0;///< live parallax-corrected cubemap probes
         bool    pccBound = false;  ///< this scene's probe grid is bound to the PBR shader
         bool    vctBound = false;  ///< this scene's voxel lighting is bound to the PBR shader
+        /// The RESOLVED boxes the last GI build actually used
+        /// (REFLECTIONS_ADOPTION_SPEC.md P1a): the lit/voxel volume, and the
+        /// reflection-probe region, which is deliberately a DIFFERENT and
+        /// tighter box (the free space, no margin, pulled in to the room's
+        /// walls). Both are null boxes when nothing is built. This is the only
+        /// way to see what the auto-fit decided — the document's giBounds rows
+        /// stay at zero for every scene that never pinned them.
+        QVector3D boundsMin, boundsMax;
+        QVector3D probeRegionMin, probeRegionMax;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
@@ -312,6 +322,10 @@ public:
         bool available = false;
         quint64 giPushes = 0;      ///< SceneMirror::giPushCount()
         quint64 giRefreshes = 0;   ///< SceneMirror::giRefreshCount()
+        /// SceneMirror::giLightRefreshCount() — the CHEAP light-only re-injects
+        /// that run while a light is being dragged, instead of the full
+        /// re-solves the drag used to cost (REFLECTIONS_ADOPTION_SPEC.md P2).
+        quint64 giLightRefreshes = 0;
     };
     /// How many times the mirror has pushed a NEW global-illumination
     /// configuration into the engine, and how many times it has asked for the

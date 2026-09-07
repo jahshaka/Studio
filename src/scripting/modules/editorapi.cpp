@@ -247,7 +247,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "viewportState", "editor.viewportState() -> {state, framesPresented, width, height, offscreen}",
           "What the editor viewport is showing right now. `state` is \"presenting\" (the engine's own frames are on screen), \"loading\" (a world is bound but no frame of it has presented yet — the viewport wears its loading cover), \"noscene\" (no world open, the cover says so) or \"offscreen\" (this session's viewport never reaches a window: headless stand-ins and the macOS offscreen fallback). `framesPresented` counts frames actually drawn AND presented since the current world was bound, so a script can wait for real pixels instead of sleeping. `width`/`height` are the LIVE render target (the swapchain for an on-screen viewport), in pixels — not the size anybody requested, so a script can assert that a resize really took; `offscreen` says whether that target is a texture rather than a window.",
           Needs::Document },
-        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes}",
+        { "mirrorStats", "editor.mirrorStats() -> {available, giPushes, giRefreshes, giLightRefreshes}",
           "What the editor viewport's document->engine mirror has had to do about GLOBAL "
           "ILLUMINATION: `giPushes` counts NEW GI configurations sent to the engine, "
           "`giRefreshes` counts re-solves of the existing one. Both are expensive — a VCT "
@@ -256,7 +256,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "re-solves ZERO times\" is a contract of the mirror rather than an optimisation. It is "
           "invisible in pixels (a re-voxelized scene looks identical; it just costs a frame) and "
           "invisible in the document, which is why the counters are the only way to assert it — "
-          "the perf.epic_steady_state gate does exactly that on a real sample scene. `available` "
+          "the perf.epic_steady_state gate does exactly that on a real sample scene. "
+          "`giLightRefreshes` counts the CHEAP half: while a light is being dragged the mirror "
+          "no longer re-solves at all, it re-injects the lights into the voxels that are already "
+          "there every few frames and waits for the drag to stop before the real re-solve. So "
+          "during a drag this is the counter that moves and `giRefreshes` is the one that must "
+          "NOT. `available` "
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
@@ -980,6 +985,7 @@ QVariantMap EditorApi::mirrorStats()
     out.insert("available", s.available);
     out.insert("giPushes", QVariant::fromValue(s.giPushes));
     out.insert("giRefreshes", QVariant::fromValue(s.giRefreshes));
+    out.insert("giLightRefreshes", QVariant::fromValue(s.giLightRefreshes));
     return out;
 }
 

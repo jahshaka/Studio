@@ -100,6 +100,12 @@ add_script_e2e(planar e2e_planar.js)
 # gi.pcc_mirror engine suite. Engine UP, not --headless: the verb's entire value
 # is that it measures the renderer rather than echoing the document.
 add_script_e2e(gi_status e2e_gi_status.js)
+# REFLECTIONS_ADOPTION_SPEC P1a/P1d: the GI BOUNDS surface — the resolved
+# volumes world.giStatus() now reports (there was no way to see what the
+# automatic fit decided), the per-node exclude flag, world.fitGiBounds and
+# world.refreshGi. Engine UP for the same reason as gi_status: the interesting
+# numbers are the renderer's, not the document's.
+add_script_e2e(gi_bounds e2e_gi_bounds.js)
 # PARTICLES_FX2_SPEC §11 phase 2: the emitter verbs. scene.addParticles with a
 # recipe, every scalar row through the shared node.setProperty, the two over-life
 # ramps (which no Property kind can carry), the scene clock, the save round trip

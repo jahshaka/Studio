@@ -20,6 +20,10 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
+#include "services/gibounds.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+
+#include <QPushButton>
 
 namespace {
 // Combo rows in display order -> document modes (rows are NOT the enum values).
@@ -134,6 +138,34 @@ void WorldGiPropertyWidget::rebuild()
 
         autoRefresh = this->addCheckBox("Auto Refresh", scene->giAutoRefresh);
         connect(autoRefresh, SIGNAL(valueChanged(bool)), SLOT(onAutoRefreshChanged(bool)));
+
+        // REFLECTIONS_ADOPTION_SPEC.md P1d. Auto Refresh only watches LIGHTS —
+        // geometry that moves would re-voxelize every frame of a drag, so it
+        // deliberately does not trigger one. That left "I moved something and
+        // the bounced light is stale" with no recourse but toggling the mode
+        // off and on. This is the recourse. Same verb the script surface has
+        // (world.refreshGi).
+        refreshButton = new QPushButton(tr("Refresh"));
+        refreshButton->setToolTip(tr("Re-solve global illumination against the scene as it is "
+                                     "now. Moving objects does not do this automatically — "
+                                     "re-voxelizing every frame of a drag would be unusable."));
+        connect(refreshButton, &QPushButton::clicked, this, &WorldGiPropertyWidget::onRefreshClicked);
+        this->addWidgetToContent(refreshButton);
+
+        // P1a.3, adapted: the spec asked for "fit to SELECTION", but this panel
+        // only ever appears while the WORLD is the selection (the properties
+        // panel swaps the whole stack, scenenodepropertieswidget.cpp), so a
+        // selection-driven button here would be permanently empty. What is
+        // useful at this moment is pinning the volume to the scene's contents
+        // and then nudging the rows. The selection-driven form lives where it
+        // can work: the world.fitGiBounds({nodes}) verb.
+        fitBoundsButton = new QPushButton(tr("Fit Bounds To Scene"));
+        fitBoundsButton->setToolTip(tr("Pin the bounds above to everything in the scene. Leaving "
+                                       "them at zero lets the renderer fit them automatically, "
+                                       "which also ignores outsized objects like a ground plane; "
+                                       "pin them when you want a volume of your own."));
+        connect(fitBoundsButton, &QPushButton::clicked, this, &WorldGiPropertyWidget::onFitBoundsClicked);
+        this->addWidgetToContent(fitBoundsButton);
         break;
     }
     }
@@ -187,4 +219,24 @@ void WorldGiPropertyWidget::onPccGridChanged(iris::Vec3 value)
 void WorldGiPropertyWidget::onAutoRefreshChanged(bool value)
 {
     if (!!scene) scene->giAutoRefresh = value;
+}
+
+void WorldGiPropertyWidget::onRefreshClicked()
+{
+    // The document-side serial IS the verb (world.refreshGi): the mirror is what
+    // owns "push this to the engine", and a panel that called the renderer
+    // directly would be a second route to keep in step forever.
+    if (!!scene) ++scene->giRefreshSerial;
+}
+
+void WorldGiPropertyWidget::onFitBoundsClicked()
+{
+    if (!scene || scene->getRootNode().isNull()) return;
+    iris::Vec3 mn, mx;
+    if (!gibounds::fit(scene->getRootNode()->children(), 0.0f, mn, mx)) return;
+    scene->giBoundsMin = mn;
+    scene->giBoundsMax = mx;
+    // The rows are spin boxes holding the OLD numbers; rebuild so the panel
+    // shows what it just wrote.
+    rebuild();
 }

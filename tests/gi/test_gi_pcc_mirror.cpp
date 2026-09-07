@@ -325,6 +325,62 @@ int main()
               "the rebuilt probe grid is the same size and still bound");
     }
 
+    // ---- (d) THE HELPER CHANNEL (P1b) -------------------------------------
+    // The editor grid and the light icons used to be baked into every probe
+    // capture: they carried kVisibleBit like everything else, and the probe
+    // workspace set no visibility_mask at all. kHelperBit inverts that — helpers
+    // carry it INSTEAD of kVisibleBit and the probe face pass asks for
+    // kVisibleBit only.
+    //
+    // The witness is a saturated GREEN unlit plate standing just in front of the
+    // red wall, i.e. exactly in the direction this suite's mirror pixel samples,
+    // and BEHIND the camera, so it cannot reach the frame any way but through a
+    // probe. It is built the way the real grid is: an unlit, depth-tested
+    // material on a node marked helper BEFORE the geometry attaches (the order
+    // the mirror uses).
+    //
+    // Two readings, and the second is what makes the first mean something: with
+    // the flag ON the mirror must still show the RED WALL, and with the flag OFF
+    // the very same plate must take the mirror over. Without that second half a
+    // green-free reflection would prove nothing — the plate might simply not be
+    // in any probe's view.
+    {
+        const NodeId helper = s->createNode();
+        const MeshId helperMesh = s->createMesh(enginetest::unitCubeMesh());
+        const MaterialId helperMat = s->createUnlitMaterial(Colour(0.0f, 1.0f, 0.0f), true);
+        s->setNodeHelper(helper, true);
+        CHECK(helper && helperMesh && helperMat && s->attachMesh(helper, helperMesh, helperMat),
+              "helper: the unlit witness plate attaches");
+        CHECK(s->nodeHelper(helper), "helper: setNodeHelper reads back");
+        s->setNodeTransform(helper, Vec3(0.0f, 2.5f, 3.85f), Quat(),
+                            Vec3(7.0f, 4.0f, 0.1f));
+
+        CHECK(s->setGlobalIllumination(hybrid), "helper: the hybrid rebuilds with the plate in");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour withHelper = img.at(mirrorX, mirrorY);
+        show("mirror, helper plate (flagged)", withHelper);
+        CHECK(withHelper.r > withHelper.g + 0.12f,
+              "a helper-flagged object does NOT appear in the probe capture");
+        CHECK(std::fabs(withHelper.r - hyMirror.r) < 0.06f,
+              "...and the reflection is the same one it was before the plate existed");
+
+        // The same plate, no longer a helper: now it MUST take the mirror over.
+        s->setNodeHelper(helper, false);
+        CHECK(!s->nodeHelper(helper), "helper: clearing the flag reads back");
+        CHECK(s->setGlobalIllumination(hybrid), "helper: the hybrid rebuilds with the plate visible");
+        render(engine.get());
+        view->readPixels(img);
+        const Colour unflagged = img.at(mirrorX, mirrorY);
+        show("mirror, helper plate (unflagged)", unflagged);
+        CHECK(unflagged.g > unflagged.r + 0.05f,
+              "the SAME plate, unflagged, IS captured — so the flag is what removed it");
+
+        // Put it back so nothing after this reads a green room.
+        s->setNodeHelper(helper, true);
+        CHECK(s->removeNode(helper), "helper: witness removed");
+    }
+
     // ---- off restores -----------------------------------------------------
     GiParams off;
     CHECK(s->setGlobalIllumination(off), "setGlobalIllumination(Off) succeeds");

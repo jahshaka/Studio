@@ -676,6 +676,8 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     sceneNode->setPickable(nodeObj["pickable"].toBool(true));
     // Absent = false: the writer only emits the key when the flag is on.
     sceneNode->setPlanarReflector(nodeObj["planarReflector"].toBool(false));
+    // Absent = false, same as planarReflector: the writer only emits it when set.
+    sceneNode->setGiBoundsExcluded(nodeObj["giBoundsExcluded"].toBool(false));
     // Shadow Caster: absent = TRUE (the document default) — the writer only
     // emits the key when the user turned casting off, so every scene written
     // before the key existed loads exactly as it did.

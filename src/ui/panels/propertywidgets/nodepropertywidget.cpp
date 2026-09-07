@@ -31,8 +31,18 @@ NodePropertyWidget::NodePropertyWidget()
 
     shadowReceiver->setDisabled(true);
 
+    // REFLECTIONS_ADOPTION_SPEC.md P1a.2. The renderer fits the lit volume and
+    // the reflection-probe region to the scene's geometry; this is the one
+    // deterministic override for when that guess is wrong. The object still
+    // bounces light — it just stops deciding WHERE the lighting happens, which
+    // is what a 200-unit ground plane under a 2-unit scene otherwise does.
+    giBoundsExcluded = this->addCheckBox("Exclude From GI Bounds", false);
+
     connect(shadowCaster,   SIGNAL(valueChanged(bool)),
             this,           SLOT(onShadowEnabledChanged(bool)));
+
+    connect(giBoundsExcluded, SIGNAL(valueChanged(bool)),
+            this,             SLOT(onGiBoundsExcludedChanged(bool)));
 
     connect(drawType,       SIGNAL(currentTextChanged(QString)),
             this,           SLOT(drawTypeChanged(QString)));
@@ -48,6 +58,7 @@ void NodePropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
     if (!!sceneNode) {
         this->sceneNode = sceneNode.staticCast<iris::SceneNode>();
         shadowCaster->setValue(this->sceneNode->getShadowCastingEnabled());
+        giBoundsExcluded->setValue(this->sceneNode->getGiBoundsExcluded());
     } else {
         this->sceneNode.clear();
     }
@@ -57,6 +68,13 @@ void NodePropertyWidget::onShadowEnabledChanged(bool val)
 {
     if (!!this->sceneNode) {
         this->sceneNode->setShadowCastingEnabled(val);
+    }
+}
+
+void NodePropertyWidget::onGiBoundsExcludedChanged(bool val)
+{
+    if (!!this->sceneNode) {
+        this->sceneNode->setGiBoundsExcluded(val);
     }
 }
 
