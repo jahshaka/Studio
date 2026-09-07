@@ -20,7 +20,7 @@
 # the only coverage Showroom has.
 
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
-set(_samples "Matcaps" "Particles" "Physics" "Showroom" "Skeletal Animation" "World Background")
+set(_samples "Matcaps" "Mirror Room" "Particles" "Physics" "Showroom" "Skeletal Animation" "World Background")
 
 foreach(SAMPLE IN LISTS _samples)
     string(REPLACE " " "_" _slug "${SAMPLE}")
