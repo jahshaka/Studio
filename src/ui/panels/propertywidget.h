@@ -60,6 +60,10 @@ public:
 
     void addFloatProperty(iris::Property*);
     void addIntProperty(iris::Property*);
+    /// The generic ENUM row: a labeled dropdown built from ListProperty's own
+    /// `labels`, combo index == stored value. Every enum row in the app goes
+    /// through here — there is deliberately no second by-name special case.
+    void addEnumProperty(iris::Property*);
     void addColorProperty(iris::Property*);
     void addBoolProperty(iris::Property*);
     void addTextureProperty(iris::Property*);
@@ -80,6 +84,17 @@ private:
     QList<iris::Property*> properties;
     iris::PropertyListener *listener;
     int progressiveHeight, stretch;
+
+    /// The row widget each property built, by property name. Only needed by
+    /// rows that CONSTRAIN other rows (see applyRowConstraints).
+    QHash<QString, QWidget*> rowByName;
+
+    /// Cross-row availability. One rule today: the two clear-coat rows are
+    /// disabled unless the material's BRDF is in the Default family, because
+    /// the renderer cannot carry a coat on any other one. Disabling (rather
+    /// than zeroing) is the decided behaviour — the authored coat survives a
+    /// round trip through another BRDF (HLMS_ADOPTION_SPEC D-P1b).
+    void applyRowConstraints();
 
     void updatePane();
 

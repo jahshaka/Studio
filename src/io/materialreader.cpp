@@ -232,6 +232,8 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			mat->setValue(prop->name, static_cast<float>(val.toDouble()));
 			break;
 		case iris::PropertyType::Int:
+		// An enum row stores (and serializes) a plain int — see SceneWriter.
+		case iris::PropertyType::List:
 			mat->setValue(prop->name, val.toInt());
 			break;
 		case iris::PropertyType::Color:

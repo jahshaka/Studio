@@ -462,9 +462,35 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     const bool matTwoSided = pbr->renderStates.rasterState.cullMode == iris::CullMode::None;
     if (matTwoSided || cullMode == iris::FaceCullingMode::None) m["doubleSided"] = true;
 
+    // Clear coat has a real glTF home (HLMS_ADOPTION P1 §3.4): three.js maps
+    // KHR_materials_clearcoat straight onto MeshPhysicalMaterial.clearcoat /
+    // .clearcoatRoughness. Written only when there IS a coat, so a material
+    // without one produces byte-identical glTF to before this feature existed.
+    // The renderer only honours a coat on the Default BRDF family, so the
+    // export obeys the same rule rather than exporting a coat the editor is
+    // not showing.
+    if (pbr->clearCoat > 0.0f && iris::PbrMaterial::brdfSupportsClearCoat(pbr->brdf)) {
+        c.useExtension("KHR_materials_clearcoat");
+        QJsonObject coat;
+        coat["clearcoatFactor"] = double(std::min(1.0f, std::max(0.0f, pbr->clearCoat)));
+        coat["clearcoatRoughnessFactor"] =
+            double(std::min(1.0f, std::max(0.0f, pbr->clearCoatRoughness)));
+        QJsonObject ext = m["extensions"].toObject();
+        ext["KHR_materials_clearcoat"] = coat;
+        m["extensions"] = ext;
+    }
+
     QJsonObject jah;
     jah["useIbl"] = pbr->useIbl;
     jah["iblIntensity"] = double(pbr->iblIntensity);
+    // BRDF, receive-shadows and emissive-as-lightmap have NO glTF equivalent.
+    // They ride extras.jah and the viewer ignores them — said here rather than
+    // faked onto some near-miss extension. A three.js viewer always receives
+    // shadows and always adds emissive on top; that divergence is real and
+    // documented, not papered over.
+    if (pbr->brdf != 0) jah["brdf"] = iris::PbrMaterial::brdfEngineName(pbr->brdf);
+    if (!pbr->receiveShadows) jah["receiveShadows"] = false;
+    if (pbr->emissiveAsLightmap) jah["emissiveAsLightmap"] = true;
     if (pbr->alphaMode == 4) jah["blendMode"] = "additive";
     else if (pbr->alphaMode == 5) jah["blendMode"] = "modulate";
     if (pbr->alphaMode == 6) {
