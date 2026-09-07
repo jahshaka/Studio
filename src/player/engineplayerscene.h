@@ -76,7 +76,10 @@ public:
     /// would photograph the editor's world state (its sky push, its camera,
     /// its wires) and call it the player. Null QImage when there is nothing to
     /// render (no engine, no scene, no camera).
-    QImage takeScreenshot(int width, int height, bool postFx);
+    /// `grade` is IEditorViewport::ScreenshotGrade as an int (Raw / Tonemap /
+    /// Viewport — fix wave 2026-09-07 item 6). An int rather than the enum so
+    /// this header keeps not including the editor viewport's.
+    QImage takeScreenshot(int width, int height, int grade);
 
     /// Steps and renders exactly n frames synchronously (editor.frame's
     /// pattern for the player): PlayBack + mirror + renderOneFrame. `dt` < 0

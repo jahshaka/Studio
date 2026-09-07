@@ -79,6 +79,40 @@ struct Row {
     std::function<void(const iris::ScenePtr &, int)> set;
 };
 
+/// A CONTINUOUS post-process parameter — the other half of a post-fx row.
+///
+/// The tier table answers "how much machinery" (HDR on? which SMAA preset?);
+/// these answer "how does it LOOK", and they are deliberately NOT tiered: a
+/// mode switch must never silently regrade somebody's scene (world.postFx's own
+/// note). But they were nowhere declared, so the World panel had no way to
+/// offer them and the verb's ranges lived only inside the verb — the pattern
+/// this whole file exists to end.
+///
+/// ONE TABLE, TWO CONSUMERS, exactly like Row: the World > Post Process section
+/// builds a scrubbable row per entry and world.postFx reads and writes through
+/// the same entries, so a range can never mean two different things.
+struct ParamRow {
+    QString id;          ///< script-facing, and the world.postFx key ("exposure")
+    QString label;       ///< human ("Exposure")
+    QString ownerRowId;  ///< the Row this belongs under ("hdr", "bloom", "ssao")
+    double  minValue = 0.0, maxValue = 1.0;
+    double  perPixelStep = 0.02;   ///< scrub sensitivity in the panel
+    int     decimals = 2;
+    QString doc;         ///< the row tooltip AND the verb's documentation
+
+    std::function<double(const iris::ScenePtr &)>       get;
+    std::function<void(const iris::ScenePtr &, double)> set;
+};
+
+/// The continuous post-process parameters, in panel order.
+const QVector<ParamRow> &postFxParams();
+/// The parameter with this id, or null.
+const ParamRow *postFxParam(const QString &id);
+/// The ids of the Row entries the World > Post Process section shows, in order.
+/// (The post chain's rows, as opposed to shadows/GI/reflections, which have
+/// sections of their own.)
+const QStringList &postFxRowIds();
+
 /// The registry. Built once, never mutated.
 const QVector<Row> &rows();
 /// The row with this id, or null.

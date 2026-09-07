@@ -56,10 +56,10 @@ bool PlayerService::restart()
     return now;
 }
 
-QImage PlayerService::screenshot(int width, int height, bool postFx)
+QImage PlayerService::screenshot(int width, int height, int grade)
 {
     if (!mHost) return QImage();
-    return mHost->takePlayerScreenshot(width, height, postFx);
+    return mHost->takePlayerScreenshot(width, height, grade);
 }
 
 bool PlayerService::stepFrames(int n, float dt)

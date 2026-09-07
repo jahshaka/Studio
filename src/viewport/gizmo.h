@@ -123,6 +123,12 @@ struct GizmoDrawItem
 
 struct StudioServices;
 
+/// The calibration constant of Gizmo::updateSize (see the long note there).
+/// gizmoScale = k * distance * tan(fov/2) keeps the gizmo the same fraction of
+/// the frame at every angle of view; k is fixed at the value that reproduces
+/// the pre-2026-09-07 look at the default 45-degree camera EXACTLY.
+constexpr float kGizmoScreenFraction = 4.33f;
+
 class Gizmo
 {
 protected:

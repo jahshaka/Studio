@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/skypropertywidget.h"
 #include "ui/panels/propertywidgets/worldskypropertywidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
 #include "ui/panels/propertywidgets/worldmodespropertywidget.h"
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
@@ -89,12 +90,31 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 		if (worldAaPropView)     worldAaPropView->setScene(sc);
 		if (worldShadowPropView) worldShadowPropView->setScene(sc);
 		if (worldGiPropView)     worldGiPropView->setScene(sc);
+		if (worldPostFxPropView) worldPostFxPropView->setScene(sc);
 		if (worldSkyPropView)    worldSkyPropView->setScene(sc);
 	});
 
 	worldGiPropView = new WorldGiPropertyWidget();
 	worldGiPropView->setPanelTitle("Global Illumination");
 	worldGiPropView->expand();
+
+	// POST PROCESS (fix wave 2026-09-07 item 8): every post effect and its
+	// parameters in one section, generated from the same registry the World
+	// Mode section is. It sits between GI and Anti-Aliasing because that is
+	// where it sits in the frame — after the lighting solve, before the AA.
+	worldPostFxPropView = new WorldPostFxPropertyWidget();
+	worldPostFxPropView->setPanelTitle("Post Process");
+	worldPostFxPropView->expand();
+	// The two sections show the SAME on/off rows (this one groups the chain,
+	// the World Mode one lists the whole tier), so each has to re-read after
+	// the other writes.
+	connect(worldPostFxPropView, &WorldPostFxPropertyWidget::worldSettingsChanged,
+	        this, [this]() {
+		auto sc = scene;
+		if (!sc && !!sceneNode) sc = sceneNode->getScene();
+		if (!sc) return;
+		if (worldModesPropView) worldModesPropView->setScene(sc);
+	});
 
 	worldAaPropView = new WorldAaPropertyWidget();
 	worldAaPropView->setPanelTitle("Anti-Aliasing");
@@ -170,6 +190,9 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             worldModesPropView->setScene(sceneNode->getScene());
             worldGiPropView->setParent(this);
             worldGiPropView->setScene(sceneNode->getScene());
+            worldPostFxPropView->setParent(this);
+            worldPostFxPropView->setSceneView(sceneView);
+            worldPostFxPropView->setScene(sceneNode->getScene());
             worldAaPropView->setParent(this);
             worldAaPropView->setSceneView(sceneView);
             worldAaPropView->setScene(sceneNode->getScene());
@@ -180,6 +203,7 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
             widgetPropertyLayout->addWidget(worldSkyPropView);
             widgetPropertyLayout->addWidget(worldModesPropView);
             widgetPropertyLayout->addWidget(worldGiPropView);
+            widgetPropertyLayout->addWidget(worldPostFxPropView);
             widgetPropertyLayout->addWidget(worldAaPropView);
             widgetPropertyLayout->addWidget(worldShadowPropView);
             widgetPropertyLayout->addWidget(fogPropView);

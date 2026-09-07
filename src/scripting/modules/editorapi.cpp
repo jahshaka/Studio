@@ -27,6 +27,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
+#include "viewport/flyspeedsettings.h"
+#include "scripting/modules/flyspeedverb.h"
 #include "shell/mainwindow.h"
 #include "services/services.h"
 #include "services/playbackservice.h"
@@ -155,6 +157,20 @@ QVector<VerbInfo> EditorApi::verbs() const
           "REFUSED. `size` is clamped to 0.08-0.6. This is the Preferences row's own path — the UI "
           "calls this verb.",
           Needs::Engine },
+        { "flySpeed", "editor.flySpeed() -> {multiplier, base, speed, steps:[...]}",
+          "THE EDITOR FLY SPEED, Unreal's model: a `multiplier` on a fixed `base` of 8 world "
+          "units per second, so `speed` = base * multiplier is what the RMB fly actually moves "
+          "at (before Shift's 3x boost). `steps` is the ladder the toolbar dropdown offers and "
+          "the scroll wheel walks while flying. Editor-global and persisted (camera/flySpeedEditor); "
+          "the player has its own, player.flySpeed().",
+          Needs::Document },
+        { "setFlySpeed", "editor.setFlySpeed(multiplier | \"faster\" | \"slower\") -> {multiplier, base, speed, steps:[...]}",
+          "Sets the editor fly-speed multiplier and returns the state that resulted (the same "
+          "shape editor.flySpeed() reads). A NUMBER is the multiplier itself, clamped to "
+          "0.05..32 — it need not be one of the `steps`, which are only what the UI offers. "
+          "\"faster\"/\"slower\" step one entry along that ladder, exactly as the scroll wheel "
+          "does while the right mouse button is held. The toolbar dropdown follows either way.",
+          Needs::Document },
         { "cameraMode", "editor.cameraMode() -> \"free\" | \"orbit\"",
           "The active camera controller: \"free\" (fly camera) or \"orbit\" (arcball).",
           Needs::Engine },
@@ -268,8 +284,13 @@ QVector<VerbInfo> EditorApi::verbs() const
           "is false when this session's viewport has no mirror (the document-only stand-ins), and "
           "the counts are then meaningless rather than zero.",
           Needs::Document },
-        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], postFx=false) -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
-          "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. `postFx` true renders it through the scene's post-processing chain (HDR/tonemap, bloom, ambient occlusion, SMAA) so the shot matches what the viewport shows; false (the default) is the neutral, exactly-reproducible readback that pixel assertions want.",
+        { "screenshot", "editor.screenshot(path, w=256, h=256, probes=[], grade=\"raw\") -> {path, width, height, center:{r,g,b}, probes:[{x,y,r,g,b}]}",
+          "Offscreen render of the editor scene to a PNG; returns the centre pixel, plus the pixel at each probe point ({x,y} in normalized 0..1 image coordinates), so scripts can assert on colours. Headless-safe. "
+          "`grade` says how the shot is DEVELOPED, and the default is deliberately the dullest answer: "
+          "\"raw\" (or false) is no post-processing at all — the neutral, exactly-reproducible readback pixel assertions want, and what this verb has always returned. "
+          "\"tonemap\" applies the deterministic filmic grade ONLY (fixed exposure, no bloom, no ambient occlusion, no SMAA): a picture of the CONTENT that no longer clips to white wherever the scene is bright, and still the same picture every time. "
+          "\"viewport\" (or true) renders the scene's whole post-processing chain so the shot matches what the viewport shows, at the cost of the scene's ADAPTIVE exposure making it depend on how many frames it rendered. "
+          "The editor's own Screenshot action uses \"tonemap\".",
           Needs::Engine },
         { "beginBatch", "editor.beginBatch() -> bool",
           "Opens a nested undo macro inside the script's run (finer-grained grouping).",
@@ -719,6 +740,30 @@ QVariantMap EditorApi::setPip(const QVariantMap &change)
     return pip();
 }
 
+// FLY SPEED (owner request 2026-09-07). Verb-first, per the API-first rule: the
+// toolbar dropdown and the scroll-wheel gesture both land here, on
+// FlySpeedSettings, so there is exactly one value and one clamp. Needs::Document
+// deliberately — the setting is editor-global state, not a property of a live
+// engine, so a headless run can set it and a suite can assert it with no display.
+// The argument grammar is shared with player.setFlySpeed (flyspeedverb.h).
+QVariantMap EditorApi::flySpeed()
+{
+    return flyspeedverb::state(FlySpeedSettings::Editor);
+}
+
+QVariantMap EditorApi::setFlySpeed(const QVariant &multiplier)
+{
+    QString error;
+    if (!flyspeedverb::apply(FlySpeedSettings::Editor, multiplier, error)) {
+        fail(QStringLiteral("editor.setFlySpeed: %1").arg(error));
+        return QVariantMap();
+    }
+    // The toolbar dropdown is a VIEW of this value; tell the shell so a
+    // scripted change moves it, exactly as the wheel gesture does.
+    if (host.mainWindow) QMetaObject::invokeMethod(host.mainWindow, "syncFlySpeedUi");
+    return flyspeedverb::state(FlySpeedSettings::Editor);
+}
+
 QString EditorApi::cameraMode()
 {
     if (!requireEngine()) return QString();
@@ -998,14 +1043,40 @@ QVariantMap EditorApi::mirrorStats()
 }
 
 QVariantMap EditorApi::screenshot(const QString &path, int width, int height,
-                                  const QVariantList &probes, bool postFx)
+                                  const QVariantList &probes, const QVariant &grade)
 {
     QVariantMap out;
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("editor.screenshot: a file path is required"); return out; }
 
+    // THE GRADE (fix wave 2026-09-07 item 6). This argument was a BOOLEAN
+    // (`postFx`) and it stays compatible with one — false is Raw, true is
+    // Viewport — because the whole pixel-suite corpus passes it that way, and
+    // because Raw MUST remain the default: this verb is the tree's measuring
+    // instrument and its exact colours are what dozens of assertions pin.
+    // "tonemap" is the new third answer: the deterministic filmic grade alone,
+    // for a shot that should look like the editor rather than like a readback.
+    IEditorViewport::ScreenshotGrade mode = IEditorViewport::ScreenshotGrade::Raw;
+    if (!grade.isNull() && grade.isValid()) {
+        const QVariant g = scriptmod::normalizeJs(grade);
+        if (g.typeId() == QMetaType::Bool) {
+            mode = g.toBool() ? IEditorViewport::ScreenshotGrade::Viewport
+                              : IEditorViewport::ScreenshotGrade::Raw;
+        } else {
+            const QString word = g.toString().trimmed().toLower();
+            if (word == QLatin1String("raw"))           mode = IEditorViewport::ScreenshotGrade::Raw;
+            else if (word == QLatin1String("tonemap"))  mode = IEditorViewport::ScreenshotGrade::Tonemap;
+            else if (word == QLatin1String("viewport")) mode = IEditorViewport::ScreenshotGrade::Viewport;
+            else {
+                fail(QStringLiteral("editor.screenshot: unknown grade '%1' "
+                                    "(raw | tonemap | viewport, or a boolean)").arg(g.toString()));
+                return out;
+            }
+        }
+    }
+
     const QImage img = host.viewport->takeScreenshot(qBound(16, width, 4096),
-                                                     qBound(16, height, 4096), postFx);
+                                                     qBound(16, height, 4096), mode);
     if (img.isNull()) { fail("editor.screenshot: the viewport returned no image"); return out; }
 
     QFileInfo info(path);

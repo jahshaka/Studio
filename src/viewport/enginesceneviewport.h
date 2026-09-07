@@ -82,6 +82,14 @@ public:
     void setPipEnabled(bool on) override;
     double pipSize() const override { return mPipSize; }
     void setPipSize(double fraction) override;
+    void onFlySpeedChanged() override { emit mEvents.flySpeedChanged(); }
+
+private:
+    /// The wide-aspect horizontal FOV cap for the camera this view is currently
+    /// rendering: the policy value for the EXPLORER, zero (off) for a piloted
+    /// scene camera (viewport/freecamerapolicy.h).
+    float freeCameraFovCap() const;
+public:
 
     void setWindowSpace(WindowSpaces) override {}
     void setSceneMode(SceneMode) override {}
@@ -133,6 +141,7 @@ public:
     QImage takeScreenshot(int width = 1920, int height = 1080) override;
     QImage takeScreenshot(QSize dimension) override;
     QImage takeScreenshot(int width, int height, bool postFx) override;
+    QImage takeScreenshot(int width, int height, ScreenshotGrade grade) override;
     int sampleCount() const override
     { return view() ? int(view()->sampleCount()) : 1; }
     bool isOffscreen() const override

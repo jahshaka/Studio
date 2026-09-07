@@ -551,6 +551,11 @@ public slots:
     // explicitly instead of toggling the play button)
     void enterEditMode();
     void enterPlayMode();
+    /// Re-reads FlySpeedSettings into the toolbar dropdown. Public and a SLOT
+    /// because editor.setFlySpeed invokes it by name (the verb owns the value,
+    /// the toolbar is only a view of it) and because the viewport's wheel
+    /// gesture routes here through EditorViewportEvents::flySpeedChanged.
+    void syncFlySpeedUi();
 
 private slots:
     void translateGizmo();
@@ -730,6 +735,13 @@ private:
     QAction *gridCheckAction = nullptr;
     QAction *statsCheckAction = nullptr;   // F3 frame-stats readout (persisted)
     class Toast *snapToast = nullptr;   // [ / ] snap-size feedback
+    /// The editor toolbar's camera fly-speed dropdown (Unreal's speed control).
+    /// Owned by the toolbar; held to keep it in sync with FlySpeedSettings,
+    /// which the verb and the scroll wheel can both change behind its back.
+    class QComboBox *flySpeedCombo = nullptr;
+    /// One toast, reused, for every transient viewport readout (snap size, fly
+    /// speed). Positioned over the viewport by showViewportToast.
+    void showViewportToast(const QString &title, const QString &text);
     /// "The 3D view could not be created" — the respecced Failed state
     /// (STATS_OVERLAY_SPEC.md §6.4), which used to be a ViewportCover state.
     class Toast *viewErrorToast = nullptr;

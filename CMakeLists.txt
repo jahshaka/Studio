@@ -281,11 +281,13 @@ set(SRCS
     src/ui/controls/accordionbladewidget.cpp 
     src/ui/panels/transformeditor.cpp 
     src/ui/controls/dragspinbox.cpp 
+    src/ui/controls/dragvaluewidgets.cpp
     src/ui/panels/scenehierarchywidget.cpp 
     src/ui/panels/scenetreewidget.cpp
     src/viewport/cameracontrollerbase.cpp 
     src/viewport/gizmo.cpp
     src/viewport/snapsettings.cpp
+    src/viewport/flyspeedsettings.cpp
     src/viewport/gizmomeshes.cpp 
     src/viewport/translationgizmo.cpp 
     src/viewport/scalegizmo.cpp 
@@ -299,6 +301,7 @@ set(SRCS
     src/ui/panels/propertywidgets/skypropertywidget.cpp 
     src/ui/panels/propertywidgets/worldskypropertywidget.cpp
     src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
     src/ui/panels/propertywidgets/worldaapropertywidget.cpp
     src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
     src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
@@ -510,10 +513,14 @@ set(HEADERS
     src/services/playbackservice.h
     src/ui/panels/presets/assetpanel.h 
     src/ui/panels/presets/assetmodelpanel.h 
+    src/ui/panels/singledragowner.h
+    src/viewport/flyspeedsettings.h
+    src/scripting/modules/flyspeedverb.h
     src/ui/panels/presets/assetmaterialpanel.h 
     src/ui/controls/accordionbladewidget.h 
     src/ui/panels/transformeditor.h 
     src/ui/controls/dragspinbox.h 
+    src/ui/controls/dragvaluewidgets.h
     src/ui/panels/scenehierarchywidget.h 
     src/ui/panels/scenetreewidget.h
     src/viewport/orbitalcameracontroller.h 
@@ -525,6 +532,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/materialpropertywidget.h 
     src/ui/panels/propertywidgets/worldskypropertywidget.h
     src/ui/panels/propertywidgets/worldgipropertywidget.h 
+    src/ui/panels/propertywidgets/worldpostfxpropertywidget.h 
     src/ui/panels/propertywidgets/worldaapropertywidget.h
     src/ui/panels/propertywidgets/worldmodespropertywidget.h
     src/ui/panels/propertywidgets/worldshadowpropertywidget.h

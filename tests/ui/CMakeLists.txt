@@ -22,6 +22,7 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/controls/labelwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/filepickerwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragvaluewidgets.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
@@ -181,4 +182,25 @@ target_link_libraries(test_light_channels PRIVATE Qt6::Widgets Qt6::Test)
 add_test(NAME ui.light_channels COMMAND test_light_channels
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.light_channels PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+
+# ui.drag_owner — ONE DRAG OWNER PER ITEM VIEW (src/ui/panels/singledragowner.h).
+# The structural end of the "sticky preset" defect (third recurrence,
+# 2026-09-07): the panels run their own QDrag from an event filter while the
+# view's built-in machinery stayed armed underneath, so one gesture had two
+# owners and the view's DraggingState outlived the drag. Red-first: the first
+# block proves the armed view enters and keeps that state; the rest proves the
+# two calls that end it. Widgets only — no document, no engine, no display.
+add_executable(test_drag_owner test_drag_owner.cpp)
+set_target_properties(test_drag_owner PROPERTIES
+    AUTOMOC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_drag_owner PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_drag_owner PRIVATE Qt6::Widgets Qt6::Test)
+add_test(NAME ui.drag_owner COMMAND test_drag_owner
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.drag_owner PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")

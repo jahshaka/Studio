@@ -28,6 +28,8 @@ class TextInputWidget;
 class LabelWidget;
 class FilePickerWidget;
 class CubeMapWidget;
+class DragFloatWidget;
+class DragVector3Widget;
 // class PropertyWidget;
 #include "ui/panels/propertywidget.h"
 #include "modules/materials/propertywidgets/propertywidgetbase.h"
@@ -56,6 +58,16 @@ public:
     FilePickerWidget*       addFilePicker(const QString&);
 	Widget2D*				addVector2Widget(const QString&, float xValue, float yValue);
 	Widget3D*				addVector3Widget(const QString&, float xValue, float yValue, float zValue);
+	/// The COMPACT, SCRUBBABLE rows (ui/controls/dragvaluewidgets.h) — the
+	/// transform editor's shape, for panels that want a labelled number rather
+	/// than the unlabelled full-width spinboxes addVector3Widget produces (it
+	/// ignores its name argument entirely). New panel rows should use these.
+	DragFloatWidget*		addDragFloat(const QString &title, double value,
+	                                     double min, double max,
+	                                     double perPixelStep = 0.02, int decimals = 3);
+	DragVector3Widget*		addDragVector3(const QString &title, const iris::Vec3 &value,
+	                                       double min = -100000.0, double max = 100000.0,
+	                                       double perPixelStep = 0.02, int decimals = 3);
 	Widget4D*				addVector4Widget(const QString&, float xValue, float yValue, float zValue, float wValue);
 	CubeMapWidget*			addCubeMapWidget(QStringList list);
 	CubeMapWidget*			addCubeMapWidget();

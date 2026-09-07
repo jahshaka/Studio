@@ -60,7 +60,8 @@ public:
     bool restart();
 
     /// Offscreen readback of the PLAYER's scene through the player's camera.
-    QImage screenshot(int width, int height, bool postFx);
+    /// `grade` is IEditorViewport::ScreenshotGrade as an int.
+    QImage screenshot(int width, int height, int grade);
     /// Deterministic stepping of the player (editor.frame's shape). False
     /// when the player has no on-screen view to render into yet.
     bool stepFrames(int n, float dt);

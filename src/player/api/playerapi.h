@@ -50,6 +50,8 @@ public:
     Q_INVOKABLE bool playing();
     Q_INVOKABLE bool restart();
     Q_INVOKABLE QVariantMap state();
+    Q_INVOKABLE QVariantMap flySpeed();
+    Q_INVOKABLE QVariantMap setFlySpeed(const QVariant &multiplier);
     Q_INVOKABLE bool frame(int count = 1, double dt = -1.0);
     Q_INVOKABLE QVariantMap screenshot(const QString &path, const QVariantMap &options = QVariantMap());
 

@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "ui/controls/comboboxwidget.h"
 #include "ui/controls/hfloatsliderwidget.h"
 #include "ui/controls/labelwidget.h"
+#include "ui/controls/dragvaluewidgets.h"
 #include "services/gibounds.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -121,19 +122,25 @@ void WorldGiPropertyWidget::rebuild()
                                             float(scene->giNumBounces));
         connect(bounces, SIGNAL(valueChanged(float)), SLOT(onBouncesChanged(float)));
 
+        // COMPACT, SCRUBBABLE ROWS (owner report 2026-09-07). These were
+        // addVector3Widget — three full-width QDoubleSpinBoxes and NO label at
+        // all (that helper ignores its name argument), which is why the section
+        // pushed the dock wider than the panel and why a caption row above each
+        // pair was needed to say what they were. DragVector3Widget is the
+        // transform editor's row: named, shrinkable, and scrubbed by dragging
+        // left/right (ui/controls/dragvaluewidgets.h).
         this->addLabel("Bounds", "Corners of the lit area; zeros = fit the scene");
-        boundsMin = this->addVector3Widget("", scene->giBoundsMin.x(),
-                                           scene->giBoundsMin.y(), scene->giBoundsMin.z());
-        boundsMax = this->addVector3Widget("", scene->giBoundsMax.x(),
-                                           scene->giBoundsMax.y(), scene->giBoundsMax.z());
-        connect(boundsMin, &Widget3D::valueChanged, this, &WorldGiPropertyWidget::onBoundsMinChanged);
-        connect(boundsMax, &Widget3D::valueChanged, this, &WorldGiPropertyWidget::onBoundsMaxChanged);
+        boundsMin = this->addDragVector3("Min", scene->giBoundsMin);
+        boundsMax = this->addDragVector3("Max", scene->giBoundsMax);
+        connect(boundsMin, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onBoundsMinChanged);
+        connect(boundsMax, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onBoundsMaxChanged);
 
         if (scene->giMode == iris::GiMode::VCT_PCC_HYBRID) {
             this->addLabel("Reflection Probes", "Probe counts along each axis of the bounds");
-            pccGrid = this->addVector3Widget("", scene->giPccGrid.x(),
-                                             scene->giPccGrid.y(), scene->giPccGrid.z());
-            connect(pccGrid, &Widget3D::valueChanged, this, &WorldGiPropertyWidget::onPccGridChanged);
+            // Counts, not lengths: whole numbers, a coarse scrub, and a range
+            // that cannot ask for a probe grid nobody could afford.
+            pccGrid = this->addDragVector3("Grid", scene->giPccGrid, 1.0, 16.0, 0.05, 0);
+            connect(pccGrid, &DragVector3Widget::valueChanged, this, &WorldGiPropertyWidget::onPccGridChanged);
         }
 
         autoRefresh = this->addCheckBox("Auto Refresh", scene->giAutoRefresh);

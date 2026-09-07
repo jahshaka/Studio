@@ -1,5 +1,6 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "bridge/secondarysurfacetonemap.h"
 #include "bridge/enginethumbnailrenderer.h"
 
 #include <QColor>
@@ -229,6 +230,12 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // renderer's own studio lighting — deliberately not applyEnvironment.
     mMirror->applySky(mView);
     mMirror->applyCamera(camera, mView);
+    // THE SECONDARY-SURFACE TONEMAP (bridge/secondarysurfacetonemap.h). A
+    // thumbnail is a photograph of a world the viewport grades filmically; raw
+    // linear radiance clipped to 8 bits made every brightly-lit asset a white
+    // card. Deterministic (fixed exposure), so a thumbnail is still a
+    // reproducible picture of its content.
+    secondaryfx::apply(mView, true);
 
     mView->setEnabled(true);
     // The editor does not pay for a thumbnail (fps audit F5): renderOneFrame

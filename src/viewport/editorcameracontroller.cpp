@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "viewport/gizmo.h"
 #include "viewport/ieditorviewport.h"
+#include "viewport/flyspeedsettings.h"
 
 #include <QDebug>
 using namespace iris;
@@ -209,8 +210,21 @@ bool EditorCameraController::canLeftMouseDrag()
 		!gizmoDragging); // cant pan while dragging gizmo
 }
 
+// THE WHEEL HAS TWO JOBS (owner request 2026-09-07, Unreal's model). While the
+// RIGHT BUTTON IS HELD the camera is flying, and the wheel steps the fly speed
+// — the same value the toolbar dropdown sets, persisted, with the toast the
+// viewport shows. Otherwise it dollies, exactly as it always has. The two can
+// never fight: flying and not flying are disjoint, and dollying while flying
+// was never a gesture anyone could make on purpose (it fought the fly keys).
 void EditorCameraController::onMouseWheel(int delta)
 {
+    if (rightMouseDown) {
+        if (delta != 0) {
+            FlySpeedSettings::step(FlySpeedSettings::Editor, delta > 0 ? 1 : -1);
+            if (sceneWidget) sceneWidget->onFlySpeedChanged();
+        }
+        return;
+    }
     auto zoomSpeed = 0.01f;
     auto forward = camera->getLocalRot().rotatedVector(iris::Vec3(0,0,-1));
     auto movement = camera->getLocalPos() + forward*zoomSpeed*delta;
@@ -287,6 +301,14 @@ void EditorCameraController::updateCameraRot()
 // the view direction and the camera's right vector, Q/E move down/up the world
 // axis, Shift boosts 3x. Frame-rate independent (dt) — the dead KeyboardState
 // arrow-key path this replaces was never fed (EDITOR_SHORTCUTS_SPEC §2).
+//
+// THE ARROW KEYS ARE ALIASES (owner request 2026-09-07): Up/Down/Left/Right
+// are W/S/A/D, not a second movement model. They were the ONLY fly keys in the
+// 2016 editor and the muscle memory outlived the KeyboardState path that fed
+// them; one lookup table means the two spellings can never drift apart.
+//
+// SPEED is FlySpeedSettings::speed(Editor) — linearSpeed is the base and the
+// user-chosen multiplier rides on it (toolbar dropdown / wheel while flying).
 void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
@@ -295,16 +317,21 @@ void EditorCameraController::update(float dt)
     const iris::Vec3 forward = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
     const iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
 
+    const auto held = [this](int a, int b) {
+        return heldKeys.contains(a) || heldKeys.contains(b);
+    };
+
     iris::Vec3 move;
-    if (heldKeys.contains(Qt::Key_W)) move += forward;
-    if (heldKeys.contains(Qt::Key_S)) move -= forward;
-    if (heldKeys.contains(Qt::Key_D)) move += right;
-    if (heldKeys.contains(Qt::Key_A)) move -= right;
+    if (held(Qt::Key_W, Qt::Key_Up))    move += forward;
+    if (held(Qt::Key_S, Qt::Key_Down))  move -= forward;
+    if (held(Qt::Key_D, Qt::Key_Right)) move += right;
+    if (held(Qt::Key_A, Qt::Key_Left))  move -= right;
     if (heldKeys.contains(Qt::Key_E)) move += worldUp;
     if (heldKeys.contains(Qt::Key_Q)) move -= worldUp;
     if (move.isNull()) return;
 
     const float boost = heldKeys.contains(Qt::Key_Shift) ? 3.0f : 1.0f;
-    camera->setLocalPos(camera->getLocalPos() + move.normalized() * linearSpeed * boost * dt);
+    const float speed = linearSpeed * FlySpeedSettings::multiplier(FlySpeedSettings::Editor);
+    camera->setLocalPos(camera->getLocalPos() + move.normalized() * speed * boost * dt);
     camera->update(0);
 }

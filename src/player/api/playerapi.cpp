@@ -19,7 +19,9 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "services/playbackservice.h"
 #include "services/playerservice.h"
+#include "viewport/ieditorviewport.h"
 #include "services/services.h"
+#include "scripting/modules/flyspeedverb.h"
 
 using namespace scriptmod;
 
@@ -51,6 +53,16 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "the difference between playing and playing where anyone can see it (the player only "
           "steps and renders while its page is shown).",
           Needs::Document },
+        { "flySpeed", "player.flySpeed() -> {multiplier, base, speed, steps:[...]}",
+          "THE PLAYER'S FREE-CAMERA SPEED — editor.flySpeed for the other space, and a "
+          "SEPARATE value: the player's base is 25 world units per second (it flies through "
+          "finished worlds, not around a model on a turntable), so the same multiplier means a "
+          "different speed here. Persisted as camera/flySpeedPlayer.",
+          Needs::Document },
+        { "setFlySpeed", "player.setFlySpeed(multiplier | \"faster\" | \"slower\") -> {multiplier, base, speed, steps:[...]}",
+          "Sets the player's free-camera speed multiplier (clamped 0.05..32) or steps it along "
+          "`steps`, exactly like editor.setFlySpeed. Does not touch the editor's.",
+          Needs::Document },
         { "frame", "player.frame(count = 1, dt = -1) -> bool",
           "Steps and renders exactly `count` PLAYER frames synchronously — editor.frame for the "
           "other space. With `dt` >= 0 the player's clock advances by exactly that many seconds "
@@ -59,7 +71,7 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "player's on-screen view is created by its show event, and answering true while "
           "drawing nothing would be the worse answer. player.screenshot needs no view.",
           Needs::Engine },
-        { "screenshot", "player.screenshot(path, {width?, height?, probes?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
+        { "screenshot", "player.screenshot(path, {width?, height?, probes?, grade?, postFx?}) -> {path, width, height, center:{r,g,b}, probes:[...]}",
           "What the PLAYER sees, written to `path` as a PNG. Rendered through a throwaway "
           "offscreen view over the player's OWN engine Scene and the document's scene camera — "
           "the same mechanism camera.screenshot uses, and the reason this is not just "
@@ -67,8 +79,7 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "so a shot taken through the editor viewport would photograph the editor's world state "
           "and call it the player. Works before the Player page has ever been shown. `probes` are "
           "the same 5x5 averages editor.screenshot returns, in normalized 0..1 image coordinates; "
-          "`postFx` (default false) renders the scene's post chain so the shot matches the page "
-          "instead of being a neutral readback.",
+          "`grade` develops the shot the same three ways editor.screenshot does — \"raw\" (the default: a neutral, exactly-reproducible readback), \"tonemap\" (the deterministic filmic grade only, so a bright scene does not clip to white) or \"viewport\" (the scene's whole post chain). `postFx` is the older boolean spelling of raw/viewport and still works.",
           Needs::Engine },
     };
 }
@@ -146,7 +157,7 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
     if (!requireEngine()) return out;
     if (path.isEmpty()) { fail("player.screenshot: a file path is required"); return out; }
 
-    static const QStringList known = { "width", "height", "probes", "postFx" };
+    static const QStringList known = { "width", "height", "probes", "postFx", "grade" };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (!known.contains(it.key())) {
             fail(QStringLiteral("player.screenshot: unknown option '%1' — known options are %2")
@@ -157,9 +168,28 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
 
     const int width = qBound(16, options.value(QStringLiteral("width"), 256).toInt(), 4096);
     const int height = qBound(16, options.value(QStringLiteral("height"), 256).toInt(), 4096);
-    const bool postFx = options.value(QStringLiteral("postFx"), false).toBool();
+    // THE GRADE (fix wave 2026-09-07 item 6), editor.screenshot's argument on
+    // the other space. `postFx` survives as the boolean spelling it always was
+    // (false = raw, true = viewport) because the pixel suites pass it; `grade`
+    // is the three-way form and adds "tonemap" — the deterministic filmic
+    // grade only, which is what a shot of the player should usually look like.
+    IEditorViewport::ScreenshotGrade grade =
+        options.value(QStringLiteral("postFx"), false).toBool()
+            ? IEditorViewport::ScreenshotGrade::Viewport
+            : IEditorViewport::ScreenshotGrade::Raw;
+    if (options.contains(QStringLiteral("grade"))) {
+        const QString word = options.value(QStringLiteral("grade")).toString().trimmed().toLower();
+        if (word == QLatin1String("raw"))           grade = IEditorViewport::ScreenshotGrade::Raw;
+        else if (word == QLatin1String("tonemap"))  grade = IEditorViewport::ScreenshotGrade::Tonemap;
+        else if (word == QLatin1String("viewport")) grade = IEditorViewport::ScreenshotGrade::Viewport;
+        else {
+            fail(QStringLiteral("player.screenshot: unknown grade '%1' "
+                                "(raw | tonemap | viewport)").arg(word));
+            return out;
+        }
+    }
 
-    const QImage img = service->screenshot(width, height, postFx);
+    const QImage img = service->screenshot(width, height, int(grade));
     if (img.isNull()) {
         fail("player.screenshot: the player produced no image — the scene has no camera, or the "
              "engine is not up");
@@ -204,4 +234,22 @@ QVariantMap PlayerApi::screenshot(const QString &path, const QVariantMap &option
     }
     if (!probeResults.isEmpty()) out["probes"] = probeResults;
     return out;
+}
+
+// The player's half of the fly-speed control (owner request 2026-09-07) — the
+// same verb over the OTHER FlySpeedSettings surface, sharing editor.setFlySpeed's
+// argument grammar through flyspeedverb.h so the two cannot drift apart.
+QVariantMap PlayerApi::flySpeed()
+{
+    return flyspeedverb::state(FlySpeedSettings::Player);
+}
+
+QVariantMap PlayerApi::setFlySpeed(const QVariant &multiplier)
+{
+    QString error;
+    if (!flyspeedverb::apply(FlySpeedSettings::Player, multiplier, error)) {
+        fail(QStringLiteral("player.setFlySpeed: %1").arg(error));
+        return QVariantMap();
+    }
+    return flyspeedverb::state(FlySpeedSettings::Player);
 }

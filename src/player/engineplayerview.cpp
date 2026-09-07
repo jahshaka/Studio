@@ -90,7 +90,7 @@ bool EnginePlayerView::isScenePlaying() { return mScene->isPlaying(); }
 void EnginePlayerView::playScene()      { mScene->play(); }
 void EnginePlayerView::stopScene()      { mScene->stop(); }
 
-QImage EnginePlayerView::takePlayerScreenshot(int width, int height, bool postFx)
+QImage EnginePlayerView::takePlayerScreenshot(int width, int height, int grade)
 {
     // Bind the view lazily: a screenshot may be the FIRST thing a script asks
     // of the player, before the page has ever been shown (the native window is
@@ -98,7 +98,7 @@ QImage EnginePlayerView::takePlayerScreenshot(int width, int height, bool postFx
     // window — only the on-screen View does — so attach if we can and shoot
     // from the scene either way.
     if (view()) mScene->attach(view());
-    return mScene->takeScreenshot(width, height, postFx);
+    return mScene->takeScreenshot(width, height, grade);
 }
 
 bool EnginePlayerView::stepPlayerFrames(int n, float dt)

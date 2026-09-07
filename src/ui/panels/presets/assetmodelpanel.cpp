@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
 #include "shell/mainwindow.h"
+#include "ui/panels/singledragowner.h"
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 
@@ -35,8 +36,12 @@ AssetModelPanel::AssetModelPanel(QWidget *parent) : AssetPanel(parent)
     listView->viewport()->installEventFilter(this);
 
     setMouseTracking(true);
-    listView->setDragEnabled(true);
     listView->setDragDropMode(QAbstractItemView::DragDrop);
+    // ONE DRAG OWNER (ui/panels/singledragowner.h). This panel's eventFilter
+    // starts the QDrag; the view's own machinery must stay disarmed or the
+    // gesture is owned twice — the double-add AND the sticky item that
+    // survives the drag. LAST, because setDragDropMode arms dragEnabled.
+    singledrag::disarmViewDrag(listView);
     listView->setTextElideMode(Qt::ElideRight);
     listView->setItemDelegate(new FMListViewDelegate);
 
@@ -253,6 +258,12 @@ bool AssetModelPanel::eventFilter(QObject *watched, QEvent *event)
                             // only hide for object models
                             drag->setPixmap(item->icon().pixmap(64, 64));
                             drag->exec();
+                            // THE RELEASE THE NESTED LOOP ATE. exec() runs its
+                            // own event loop and the button release that ends
+                            // the drag is consumed in there, so the view's
+                            // press bookkeeping would otherwise outlive the
+                            // gesture. See ui/panels/singledragowner.h.
+                            singledrag::clearViewPressState(listView);
                             // CONSUME THE MOVE (2026-09-07, the preset-drop
                             // DOUBLE-ADD). Falling through here returned the
                             // event to QListWidget, whose OWN drag machinery

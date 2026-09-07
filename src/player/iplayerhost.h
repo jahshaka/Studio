@@ -45,7 +45,8 @@ public:
 
     /// The player's own offscreen readback (EnginePlayerScene::takeScreenshot).
     /// Null QImage when the player has no engine scene or no camera.
-    virtual QImage takePlayerScreenshot(int width, int height, bool postFx) = 0;
+    /// `grade` is IEditorViewport::ScreenshotGrade as an int.
+    virtual QImage takePlayerScreenshot(int width, int height, int grade) = 0;
 
     /// Steps and renders exactly n player frames synchronously; `dt` < 0 uses
     /// the wall clock. The deterministic stepping player assertions need,

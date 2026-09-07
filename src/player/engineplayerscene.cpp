@@ -3,6 +3,10 @@
 #include "bridge/sceneworkerthreads.h"
 #include "player/engineplayerscene.h"
 
+#include "viewport/freecamerapolicy.h"
+#include "viewport/ieditorviewport.h"
+#include "bridge/secondarysurfacetonemap.h"
+
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -151,7 +155,11 @@ void EnginePlayerScene::step(float dt, int width, int height)
         // player".
         mMirror->applySky(mView);
         mMirror->applyEnvironment(mView, mEngine.lock().get());
-        mMirror->applyCamera(cam, mView);
+        // The player's fly camera is a FREE camera and takes the wide-aspect
+        // FOV cap; applyCamera drops it by itself if the active-camera seam
+        // substitutes an AUTHORED camera underneath (a playing scene shooting
+        // through its own camera keeps that camera's lens exactly).
+        mMirror->applyCamera(cam, mView, freecam::kFreeCameraMaxHorizontalFovDegrees);
     }
 }
 
@@ -178,7 +186,7 @@ void EnginePlayerScene::stepFrames(int n, float dt, int width, int height)
     }
 }
 
-QImage EnginePlayerScene::takeScreenshot(int width, int height, bool postFx)
+QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
 {
     auto engine = mEngine.lock();
     if (!engine || width <= 0 || height <= 0) return QImage();
@@ -204,12 +212,17 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, bool postFx)
         // request off a square page does not photograph a squashed world.
         const float saved = cam->aspectRatio;
         cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
-        mMirror->applyCamera(cam, shot);
+        mMirror->applyCamera(cam, shot, freecam::kFreeCameraMaxHorizontalFovDegrees);
         cam->setAspectRatio(saved);
-        if (postFx) {
+        // The three grades (IEditorViewport::ScreenshotGrade), exactly as the
+        // editor's takeScreenshot resolves them — the player is the other
+        // space, not another policy.
+        if (grade == int(IEditorViewport::ScreenshotGrade::Viewport)) {
             jahshaka::engine::PostFxDesc fx = shot->postFx();
             fx.allowOffscreen = true;
             shot->setPostFx(fx);
+        } else if (grade == int(IEditorViewport::ScreenshotGrade::Tonemap)) {
+            secondaryfx::apply(shot, true);
         }
     }
 

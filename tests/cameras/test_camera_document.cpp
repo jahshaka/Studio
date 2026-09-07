@@ -33,6 +33,7 @@
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
+#include "jahshaka/engine/Types.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -347,6 +348,86 @@ int main(int argc, char **argv)
             (cam->getGlobalTransform() * iris::Vec4(0, 0, -1, 0)).toVector3D().normalized();
         CHECK(near(forward.z(), -1.0f, 1e-3f),
               "and points its -Z axis at the target");
+    }
+
+    // ---- 9. THE WIDE-ASPECT FOV CLAMP (owner report 2026-09-07) -----------
+    // The policy, as a pure function: `angle` is VERTICAL, so the horizontal
+    // angle of view grows with the target's aspect and an ultra-wide window
+    // fisheyes a free camera (45 vertical is 118 degrees wide at 32:9). Past
+    // the aspect where a 95-degree horizontal cap bites, the vertical angle
+    // narrows to hold it there.
+    //
+    // The load-bearing half is what the clamp does NOT do: at and below 16:9 it
+    // returns the authored angle BIT-IDENTICALLY, which is what lets every
+    // existing pixel suite stay byte-exact.
+    {
+        using jahshaka::engine::verticalFovForHorizontalCap;
+        const float cap = 95.0f;
+        const float authored = 45.0f;
+        const auto hfov = [](float vfovDeg, float aspect) {
+            const float k = float(M_PI) / 180.0f;
+            return 2.0f * std::atan(std::tan(vfovDeg * 0.5f * k) * aspect) / k;
+        };
+
+        // Off is the identity, in every spelling.
+        CHECK(verticalFovForHorizontalCap(authored, 1.777f, 0.0f) == authored,
+              "fov clamp: a zero cap is the identity, bit for bit");
+        CHECK(verticalFovForHorizontalCap(authored, 0.0f, cap) == authored,
+              "fov clamp: a zero aspect is the identity");
+
+        // Normal aspects: UNTOUCHED, and the equality is exact (==, not near).
+        const float normal[] = { 1.0f, 4.0f/3.0f, 3.0f/2.0f, 16.0f/10.0f, 16.0f/9.0f };
+        bool identical = true;
+        for (float a : normal) {
+            const float out = verticalFovForHorizontalCap(authored, a, cap);
+            if (out != authored) { identical = false; printf("    aspect %.3f -> %.6f\n", a, out); }
+        }
+        CHECK(identical, "fov clamp: 1:1 through 16:9 return the authored angle BIT-IDENTICALLY");
+        printf("    16:9  hfov = %.2f deg (cap %.0f) -> vfov stays %.2f\n",
+               hfov(authored, 16.0f/9.0f), cap, verticalFovForHorizontalCap(authored, 16.0f/9.0f, cap));
+
+        // THE SWEEP. Below the cap nothing moves; at and above it the
+        // horizontal angle is held AT the cap (not merely under it) and the
+        // vertical one narrows to do it. MEASURED, so the sweep also documents
+        // where the cap actually starts to bite for the default 45-degree lens:
+        // 21:9 is 88 degrees wide and untouched, 32:9 is 112 and clamped.
+        const float sweep[] = { 4.0f/3.0f, 16.0f/9.0f, 2.0f, 21.0f/9.0f, 2.5f,
+                                32.0f/9.0f, 4.0f, 5.0f };
+        bool held = true;
+        for (float a : sweep) {
+            const float before = hfov(authored, a);
+            const float v = verticalFovForHorizontalCap(authored, a, cap);
+            const float after = hfov(v, a);
+            printf("    aspect %.3f: hfov %.2f -> %.2f deg (vfov %.2f -> %.2f)%s\n",
+                   a, before, after, authored, v, before > cap ? "  CLAMPED" : "");
+            if (before <= cap) {
+                // Inside the cap: the identity, exactly.
+                if (v != authored) held = false;
+            } else {
+                if (!near(after, cap, 0.01f)) held = false;
+                if (!(v < authored) || !(v > 1.0f)) held = false;
+            }
+        }
+        CHECK(held, "fov clamp: inside the cap nothing moves; past it the HORIZONTAL angle is "
+                    "held AT the cap and the vertical angle narrows to do it");
+
+        // Monotonic: wider target, narrower vertical angle. No inversions.
+        float prev = 1e9f;
+        bool monotonic = true;
+        for (float a = 1.0f; a <= 6.0f; a += 0.25f) {
+            const float v = verticalFovForHorizontalCap(authored, a, cap);
+            if (v > prev + 1e-4f) monotonic = false;
+            prev = v;
+        }
+        CHECK(monotonic, "fov clamp: the vertical angle never widens as the target widens");
+
+        // An AUTHORED wide lens is still capped when a FREE camera carries it,
+        // and left alone when the cap is off — which is the whole rule the
+        // mirror enforces by passing 0 for authored cameras.
+        CHECK(verticalFovForHorizontalCap(90.0f, 32.0f/9.0f, 0.0f) == 90.0f,
+              "fov clamp: an authored 90-degree lens at 32:9 is untouched with the cap off");
+        CHECK(verticalFovForHorizontalCap(90.0f, 32.0f/9.0f, cap) < 90.0f,
+              "fov clamp: ...and IS narrowed when a free camera carries it");
     }
 
     printf(failures == 0 ? "\nALL CAMERA DOCUMENT CHECKS PASSED\n"

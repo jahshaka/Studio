@@ -19,6 +19,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/cameracontrollerbase.h"
 
+#include <functional>
+
 // Local picking record (was defined by the deleted legacy SceneViewWidget).
 struct PickingResult
 {
@@ -51,6 +53,12 @@ class PlayerMouseController : public CameraControllerBase
     iris::Viewport viewport;
 
 public:
+	/// Called after the wheel steps the fly speed while the free camera is
+	/// flying — the player widget shows the multiplier and re-syncs its
+	/// toolbar. A std::function rather than a signal because this controller
+	/// is not a QObject (CameraControllerBase never was).
+	std::function<void()> onSpeedChanged;
+
 	void setPlayState(bool playState) { _isPlaying = playState; }
 
 	PlayerMouseController();
