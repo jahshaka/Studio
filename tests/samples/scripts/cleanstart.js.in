@@ -56,8 +56,11 @@ var EXPECTED = {
     "Showroom": { nodes: 23, names: ["Floor", "Sphere_r0", "GoldTorus", "GreenTeapot"],
                   types: { mesh: 17, light: 5 }, objects: 0 },
     // The Mirror Room: the reflections sample (scenes/tools/make_mirror_room.js).
-    "Mirror Room": { nodes: 16, names: ["RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
-                     types: { mesh: 11, light: 4 }, objects: 0 },
+    // 14 since a799312a removed the two stray default-scene lights the resize
+    // pass had left behind (the expectation lagged the re-stage — three lanes
+    // independently flagged it).
+    "Mirror Room": { nodes: 14, names: ["RedWall", "MirrorPanel", "MirrorSphere", "GoldTorus"],
+                     types: { mesh: 11, light: 2 }, objects: 0 },
     "Skeletal Animation": { nodes: 70, names: ["Beta_HighLimbsGeoMesh", "Hips", "Ground"],
                             types: { mesh: 4, light: 2 } },
     "World Background": { nodes: 7, names: ["SceneNode24", "Ground"],

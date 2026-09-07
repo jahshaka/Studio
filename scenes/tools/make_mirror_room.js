@@ -40,10 +40,24 @@ function assert(cond, msg) {
 
 assert(project.create("Mirror Room").length > 0, "created the project");
 
+// The default scene ships lights this sealed room must not inherit (the
+// 2026-09-07 re-stage stripped them from the archive by hand; removing them
+// HERE means a regeneration can never bring them back).
+["Directional Light", "Point Light"].forEach(function (n) {
+    var stray = scene.find(n);
+    if (stray) assert(node.remove(stray), "removed the default-scene '" + n + "'");
+});
+
+// ROOM SCALE (owner 2026-09-07): the room reviewed too small at 1x — every
+// dimension below is authored in the original units and multiplied by S, which
+// matches the shipped archive's in-place 1.75x resize (commit a799312a).
+var S = 1.75;
+function sv(v) { return { x: v.x * S, y: v.y * S, z: v.z * S }; }
+
 function slab(name, pos, scale, color, rough, metal) {
-    var id = scene.addPrimitive("cube", { position: pos });
+    var id = scene.addPrimitive("cube", { position: sv(pos) });
     node.setProperty(id, "name", name);
-    node.transform(id, { scale: scale });
+    node.transform(id, { scale: sv(scale) });
     material.set(id, { baseColor: color,
                        roughness: rough === undefined ? 0.85 : rough,
                        metallic: metal === undefined ? 0.0 : metal });
@@ -71,29 +85,30 @@ var mirror = slab("MirrorPanel", { x: 0, y: FLOOR_TOP + MIRROR_HALF, z: -2.2 },
 
 var BALL_SCALE = 1.5;
 var ball = scene.addPrimitive("sphere", {
-    position: { x: 2.4, y: FLOOR_TOP + BALL_SCALE, z: -1.2 } });
+    position: sv({ x: 2.4, y: FLOOR_TOP + BALL_SCALE, z: -1.2 }) });
 node.setProperty(ball, "name", "MirrorSphere");
-node.transform(ball, { scale: { x: BALL_SCALE, y: BALL_SCALE, z: BALL_SCALE } });
+node.transform(ball, { scale: sv({ x: BALL_SCALE, y: BALL_SCALE, z: BALL_SCALE }) });
 material.set(ball, { baseColor: "#ffffff", roughness: 0.03, metallic: 1.0 });
 
 // ---- what the mirrors look at ----------------------------------------------
-var t = scene.addPrimitive("torus", { position: { x: -1.9, y: FLOOR_TOP + 1.4, z: 1.4 } });
+var t = scene.addPrimitive("torus", { position: sv({ x: -1.9, y: FLOOR_TOP + 1.4, z: 1.4 }) });
 node.setProperty(t, "name", "GoldTorus");
+node.transform(t, { scale: { x: S, y: S, z: S } });
 material.set(t, { baseColor: "#d9a520", roughness: 0.25, metallic: 1.0 });
 
-var tp = scene.addPrimitive("teapot", { position: { x: 1.4, y: FLOOR_TOP, z: 1.8 } });
+var tp = scene.addPrimitive("teapot", { position: sv({ x: 1.4, y: FLOOR_TOP, z: 1.8 }) });
 node.setProperty(tp, "name", "GreenTeapot");
-node.transform(tp, { scale: { x: 0.55, y: 0.55, z: 0.55 } });
+node.transform(tp, { scale: { x: 0.55 * S, y: 0.55 * S, z: 0.55 * S } });
 material.set(tp, { baseColor: "#20a040", roughness: 0.4, metallic: 0.0 });
 
 // ---- light -----------------------------------------------------------------
 // POINT lights, deliberately: a directional light injects NOTHING into VCT in a
 // sealed room (the upstream light-injection march), and this room's whole point
 // is bounced colour.
-var l1 = scene.addLight("point", { position: { x: 0, y: 3.2, z: 0 } });
+var l1 = scene.addLight("point", { position: sv({ x: 0, y: 3.2, z: 0 }) });
 node.setProperty(l1, "name", "KeyLight");
 node.setProperty(l1, "intensity", 1.4);
-var l2 = scene.addLight("point", { position: { x: -2.5, y: 2.8, z: -2.5 } });
+var l2 = scene.addLight("point", { position: sv({ x: -2.5, y: 2.8, z: -2.5 }) });
 node.setProperty(l2, "name", "FillLight");
 node.setProperty(l2, "intensity", 1.1);
 
@@ -101,8 +116,8 @@ node.setProperty(l2, "intensity", 1.1);
 // Bounds pinned to the ROOM: auto-fit spreads the probes over inflated bounds
 // (reflections P4), and a mis-placed probe is exactly what this sample shows.
 assert(world.gi({ mode: "vct_pcc_hybrid", quality: "high", bounces: 2,
-                  boundsMin: { x: -4.6, y: -0.6, z: -4.6 },
-                  boundsMax: { x: 4.6, y: 4.6, z: 4.6 },
+                  boundsMin: sv({ x: -4.6, y: -0.6, z: -4.6 }),
+                  boundsMax: sv({ x: 4.6, y: 4.6, z: 4.6 }),
                   pccGrid: { x: 3, y: 2, z: 3 } }), "GI: VCT + probes, room bounds");
 editor.frame(10);
 console.log("giStatus: " + JSON.stringify(world.giStatus()));
@@ -111,8 +126,16 @@ console.log("giStatus: " + JSON.stringify(world.giStatus()));
 // like any other, and the sample must survive one.
 node.transform(mirror, { rotation: { x: 0, y: 28, z: 0 } });
 
-editor.setCamera({ position: { x: 3.6, y: 2.4, z: 3.6 },
-                   lookAt: { x: -1.4, y: 1.3, z: -2.6 }, fov: 70 });
+// ---- REALTIME (owner 2026-09-07: "realtime is realtime") -------------------
+// The panel is a true PLANAR REFLECTOR: a whole extra scene render per frame,
+// so anything that moves — an object, an avatar, the light — is in the mirror
+// NEXT FRAME, no probe cadence involved. The probes keep serving every other
+// glossy surface under the update budget (giUpdateBudget, default 1/frame).
+assert(node.setPlanarReflector(mirror, true), "the MirrorPanel is a live planar reflector");
+console.log("planar: " + JSON.stringify(world.planarReflections()));
+
+editor.setCamera({ position: sv({ x: 3.6, y: 2.4, z: 3.6 }),
+                   lookAt: sv({ x: -1.4, y: 1.3, z: -2.6 }), fov: 70 });
 editor.select(null);
 editor.setOverlays({ lightWires: false });
 editor.frame(20);
