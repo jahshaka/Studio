@@ -202,3 +202,24 @@ add_test(NAME gi.budget COMMAND test_gi_budget
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.budget PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 600 LABELS "engine")
+
+# PROBE REBUILD PARITY + SHRINK-FIT LOCALITY (2026-09-07 fix wave, defect 2).
+# A CLUTTERED room — free-standing columns, which is what defeats the 1x1
+# averaged-depth shrink-fit that gi.pcc_mirror's empty room never exercises —
+# rebuilt six times at a fixed camera. Its own binary for the same
+# process-wide-binding reason as gi.pcc_mirror.
+add_executable(test_gi_pcc_stability test_gi_pcc_stability.cpp)
+set_target_properties(test_gi_pcc_stability PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pcc_stability PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pcc_stability PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pcc_stability JahshakaEngineMedia)
+add_test(NAME gi.pcc_stability COMMAND test_gi_pcc_stability
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pcc_stability PROPERTIES TIMEOUT 900 LABELS "engine")

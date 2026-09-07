@@ -1068,14 +1068,14 @@ QString EngineSceneViewport::gizmoMode() const
 
 void EngineSceneViewport::setEditorCamera(iris::CameraNodePtr camera)
 {
-    if (camera) mEditorCam = camera;
+    if (camera) adoptEditorCamera(camera);
     if (mCamController) mCamController->setCamera(mEditorCam);
 }
 
 void EngineSceneViewport::resetEditorCam()
 {
     clearViewStates();   // a fresh camera invalidates every remembered view pose
-    mEditorCam = iris::CameraNode::create();
+    adoptEditorCamera(iris::CameraNode::create());
     mEditorCam->setLocalPos(iris::Vec3(0, 5, 14));
     mEditorCam->lookAt(iris::Vec3(0, 0, 0));
     mEditorCam->angle = 45.0f;
@@ -1092,7 +1092,7 @@ void EngineSceneViewport::setEditorData(EditorData *data)
             // Project open: another scene's camera — its remembered view
             // poses do not apply (per-view memory is per scene session).
             if (data->editorCamera != mEditorCam) clearViewStates();
-            mEditorCam = data->editorCamera;
+            adoptEditorCamera(data->editorCamera);
         }
         mShowLightWires = data->showLightWires;
         mShowGrid = data->showGrid;
@@ -1163,8 +1163,20 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
 // a PILOTED scene camera is authored and never does — its lens is the shot.
 float EngineSceneViewport::freeCameraFovCap() const
 {
-    return (viewCamera() && viewCamera() == mEditorCam)
-               ? freecam::kFreeCameraMaxHorizontalFovDegrees : 0.0f;
+    // ONE SOURCE OF TRUTH, and it is the camera itself (2026-09-07 picking fix).
+    // adoptEditorCamera stamps the policy onto the explorer and onto nothing
+    // else, so "is this a free camera" is answered by the node the ray is cast
+    // through — the document's projection and the engine's now read the same
+    // field instead of two hosts agreeing by convention.
+    const iris::CameraNodePtr cam = viewCamera();
+    return cam ? cam->horizontalFovCap() : 0.0f;
+}
+
+void EngineSceneViewport::adoptEditorCamera(iris::CameraNodePtr camera)
+{
+    if (!camera) return;
+    mEditorCam = camera;
+    mEditorCam->setHorizontalFovCap(freecam::kFreeCameraMaxHorizontalFovDegrees);
 }
 
 void EngineSceneViewport::setPipEnabled(bool on)
@@ -1386,6 +1398,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeUpdatesPerFrame = st.probeUpdatesPerFrame;
     out.probeShapeMin        = q(st.probeShapeMin);
     out.probeShapeMax        = q(st.probeShapeMax);
+    out.cubemapProbeSlotsPerCell = st.cubemapProbeSlotsPerCell;
+    out.probesClampedToRegion    = st.probesClampedToRegion;
+    out.worstProbeShapeCellRatio = st.worstProbeShapeCellRatio;
     out.reusedLastRefresh    = st.reusedLastRefresh;
     return out;
 }

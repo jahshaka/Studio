@@ -348,6 +348,24 @@ public:
         /// lie inside the probe region; a shape that escaped it is what makes
         /// reflections go black in hard-edged, cluster-shaped patches.
         QVector3D probeShapeMin, probeShapeMax;
+        /// THE FORWARD+ PER-CELL CUBEMAP PROBE BUDGET, and the two per-probe
+        /// readings the union above cannot give (2026-09-07 fix wave).
+        ///
+        /// `cubemapProbeSlotsPerCell` is what stopped the owner's "hard-edged
+        /// black rectangles crawling over the metals": a cluster cell that sees
+        /// more probes than this DROPS the rest silently, and the pixels whose
+        /// probe was dropped fall through to cone tracing, which in an interior
+        /// is black. Below `probeCount` means cells can still drop probes.
+        ///
+        /// `probesClampedToRegion` is how many probes the region clamp had to
+        /// correct at the last build — i.e. how degenerate the 1x1
+        /// averaged-depth shrink-fit was in this scene. Not itself an artifact
+        /// (the clamp corrects it), but unlike the union check it CAN fire.
+        /// `worstProbeShapeCellRatio` reports how far the worst probe's
+        /// parallax box reaches past its own cell, as a multiple of that cell.
+        int   cubemapProbeSlotsPerCell = 0;
+        int   probesClampedToRegion = 0;
+        float worstProbeShapeCellRatio = 0.0f;
         /// Whether the last full refresh RE-USED the voxel arm instead of
         /// rebuilding it from scratch (FIX WAVE B4).
         bool reusedLastRefresh = false;

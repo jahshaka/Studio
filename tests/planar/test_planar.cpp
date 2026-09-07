@@ -81,6 +81,22 @@ static float maxRedExcessLowerHalf(const Image &img, int *outX = nullptr, int *o
     return best;
 }
 
+/// The same measure for an arbitrary channel over an arbitrary band of rows —
+/// used by the EDITOR-HELPER case, which has to say "present here, absent
+/// there" about the SAME object in one frame.
+static float maxGreenExcess(const Image &img, unsigned y0, unsigned y1)
+{
+    float best = 0.0f;
+    for (unsigned y = y0; y < y1 && y < img.height; ++y) {
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            const float e = c.g - (c.r > c.b ? c.r : c.b);
+            if (e > best) best = e;
+        }
+    }
+    return best;
+}
+
 static float measure(Engine *e, View *v, const char *what)
 {
     render(e, 3);
@@ -187,6 +203,68 @@ int main()
     const float redCleared = measure(engine.get(), view, "reflector cleared");
     CHECK(s->activePlanarReflectors() == 0, "no actors active once the flag is cleared");
     CHECK(redCleared < redOff + 0.06f, "clearing the flag restores the original pixels");
+
+    // ---- 3b. EDITOR HELPERS ARE NOT REFLECTED (2026-09-07 fix wave) ---------
+    //
+    // The ground grid, light icons, range wires, camera bodies and the
+    // selection outline are EDITOR FURNITURE: they exist so the user can see
+    // what they are doing, and a mirror in the scene must not show them, any
+    // more than a reflection probe or a shadow map does (both of those already
+    // mask to kVisibleBit; the reflection pass did not until this fix).
+    //
+    // ONE OBJECT, TWO REGIONS, ONE FRAME — which is what makes this a statement
+    // about the REFLECTION and not about visibility in general: a green
+    // emissive cube marked as a helper must be VISIBLE in the upper half (it is
+    // real editor furniture and the user must see it) and ABSENT from the lower
+    // half (the mirror), while the ordinary red emitter beside it keeps being
+    // reflected in that same lower half.
+    {
+        const NodeId helper = s->createNode();
+        {
+            PbrParams p;
+            p.albedo = Colour(0.05f, 0.05f, 0.05f);
+            p.emissive = Colour(0.0f, 3.0f, 0.0f);
+            p.roughness = 0.5f;
+            const MaterialId mat = s->createPbrMaterial(p);
+            const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+            CHECK(mat && mesh && s->attachMesh(helper, mesh, mat), "a green cube for the helper case");
+        }
+        enginetest::setNodeScale(s, helper, Vec3(1.2f, 1.2f, 1.2f));
+        enginetest::setNodePosition(s, helper, Vec3(-2.6f, 2.0f, 0.0f));
+        CHECK(s->setNodePlanarReflector(floor, true), "the mirror is armed again for the helper case");
+
+        // First WITHOUT the helper flag: an ordinary object, so it must be
+        // reflected. This is the control that proves the assertion below is
+        // about the flag and not about the cube being off-frame.
+        render(engine.get(), 3);
+        Image plainImg;
+        CHECK(view->readPixels(plainImg), "readPixels (helper case, plain object)");
+        const float greenTopPlain = maxGreenExcess(plainImg, 0, plainImg.height / 2);
+        const float greenBotPlain = maxGreenExcess(plainImg, plainImg.height / 2, plainImg.height);
+        std::printf("   plain object : green excess top %.3f  bottom(mirror) %.3f\n",
+                    greenTopPlain, greenBotPlain);
+        CHECK(greenTopPlain > 0.20f, "the green cube is drawn in the main view");
+        CHECK(greenBotPlain > 0.10f, "…and an ORDINARY object IS reflected in the mirror");
+
+        // Now mark it a helper. Nothing else changes.
+        s->setNodeHelper(helper, true);
+        render(engine.get(), 3);
+        Image helperImg;
+        CHECK(view->readPixels(helperImg), "readPixels (helper case, marked helper)");
+        const float greenTop = maxGreenExcess(helperImg, 0, helperImg.height / 2);
+        const float greenBot = maxGreenExcess(helperImg, helperImg.height / 2, helperImg.height);
+        const float redBot = maxRedExcessLowerHalf(helperImg);
+        std::printf("   marked helper: green excess top %.3f  bottom(mirror) %.3f  "
+                    "red bottom %.3f\n", greenTop, greenBot, redBot);
+        CHECK(greenTop > 0.20f, "a HELPER still draws in the main view");
+        CHECK(greenBot < 0.05f, "a HELPER is NOT reflected in the mirror");
+        CHECK(redBot > 0.10f, "…while the ordinary emitter is still reflected in the same frame");
+
+        // Leave the scene as found: the budget case below counts actors.
+        s->setNodeHelper(helper, false);
+        enginetest::setNodePosition(s, helper, Vec3(-2.6f, 2.0f, -400.0f));
+        CHECK(s->setNodePlanarReflector(floor, false), "the mirror is disarmed again");
+    }
 
     // ---- 4. budget clamp ----------------------------------------------------
     // Three reflectors, budget 2. All three are in frame; only two may render.
