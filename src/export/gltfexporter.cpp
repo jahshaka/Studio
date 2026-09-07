@@ -482,8 +482,13 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     }
 
     QJsonObject jah;
-    jah["useIbl"] = pbr->useIbl;
-    jah["iblIntensity"] = double(pbr->iblIntensity);
+    // NO useIbl / iblIntensity. They were two PbrMaterial fields that no
+    // property row declared, no panel showed, no serializer wrote, no mirror
+    // read and nothing ever set away from their defaults — they existed only
+    // to be written here, and the viewer then applied a value the editor could
+    // not author (HLMS_ADOPTION P6). Per-material IBL intensity is a real
+    // capability if it is ever wanted; it comes back as a declared row that
+    // reaches the renderer, not as an export-only field.
     // BRDF, receive-shadows and emissive-as-lightmap have NO glTF equivalent.
     // They ride extras.jah and the viewer ignores them — said here rather than
     // faked onto some near-miss extension. A three.js viewer always receives

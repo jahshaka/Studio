@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/sceneeditservice.h"
 #include "services/selectionservice.h"
+#include "viewport/ieditorviewport.h"
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "irisgl/core/irisutils.h"
@@ -428,6 +429,17 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
           "NOT writable on a PBR material and are refused by name.",
           Needs::Document },
+        { "dumpDatablock", "material.dumpDatablock(nodeId) -> string",
+          "DIAGNOSTIC: what the RENDERER's material for this node actually ends up holding, as "
+          "text, read off the live datablock. The document says one thing, the mirror translates "
+          "it, and the renderer then clamps, guards and reorders — 'what did the datablock "
+          "actually end up with' has been the hardest question in every material bug, and until "
+          "now it needed a debugger. Pairs with the JAHSHAKA_HLMS_DEBUG_DIR shader dump, which "
+          "answers 'and what shader did that produce'. The format is the RENDERER'S and is NOT a "
+          "material format: the document is the truth (asset guids, the node graph, baked maps, "
+          "our alpha-mode vocabulary and roughness bounds have no home in a datablock). Read it, "
+          "do not parse it. Needs a live renderer — it fails, by name, in a headless run.",
+          Needs::Engine },
     };
 }
 
@@ -639,6 +651,29 @@ QVariantMap MaterialApi::get(const QString &nodeId)
         else out[prop->name] = value;
     }
     return out;
+}
+
+QString MaterialApi::dumpDatablock(const QString &nodeId)
+{
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.dumpDatablock"));
+    if (!meshNode) return QString();
+    if (!host.viewport) {
+        fail("material.dumpDatablock: no viewport in this session (the renderer is "
+             "what holds the datablock; there is nothing to dump without one)");
+        return QString();
+    }
+    const QString dump = host.viewport->dumpMaterial(nodeId);
+    if (dump.isEmpty()) {
+        // Empty is never "the datablock is empty" — it means we could not
+        // reach one, and saying which is the whole difference between a
+        // diagnostic and a second mystery.
+        fail(QStringLiteral("material.dumpDatablock: no renderer material for '%1' "
+                            "(the node is not mirrored into the engine scene, or this "
+                            "viewport has no mirror — a headless/document-only run)")
+                 .arg(nodeId));
+        return QString();
+    }
+    return dump;
 }
 
 // -------------------------------------------------------------------- graph.*

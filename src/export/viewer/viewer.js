@@ -242,9 +242,9 @@
             });
         }
 
-        // per-material IBL intensity + jah blend modes (extras.jah.blendMode:
-        // core glTF has no additive/modulate — the exporter writes BLEND as the
-        // fallback and the real mode rides extras; IMAGE_PLANE_SPEC §9).
+        // jah blend modes (extras.jah.blendMode: core glTF has no
+        // additive/modulate — the exporter writes BLEND as the fallback and the
+        // real mode rides extras; IMAGE_PLANE_SPEC §9).
         //
         // extras.jah.brdf / .receiveShadows / .emissiveAsLightmap are read by
         // NOTHING here, on purpose (HLMS_ADOPTION P1 §3.4): three.js has one
@@ -256,6 +256,11 @@
         scene.traverse(function (o) {
             if (o.isMesh && o.material && o.material.userData && o.material.userData.jah) {
                 var mj = o.material.userData.jah;
+                // iblIntensity/useIbl are STILL READ, and deliberately so:
+                // the exporter stopped writing them (HLMS_ADOPTION P6 deleted
+                // the two dead document fields behind them), but an archive
+                // exported by an older build still carries them and must keep
+                // looking the way it did.
                 if (mj.iblIntensity !== undefined) o.material.envMapIntensity = mj.iblIntensity;
                 if (mj.useIbl === false) o.material.envMapIntensity = 0;
                 if (mj.blendMode === "additive" || mj.blendMode === "modulate") {

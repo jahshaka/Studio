@@ -1337,6 +1337,16 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     return s;
 }
 
+QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
+{
+    if (!mMirror || !mEngineScene || !mScene) return QString();
+    auto node = mScene->nodes.value(nodeGuid);
+    if (!node) return QString();
+    const auto material = mMirror->engineMaterial(node.data());
+    if (!material) return QString();
+    return QString::fromStdString(mEngineScene->dumpMaterial(material));
+}
+
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
     return takeScreenshot(width, height, false);

@@ -128,4 +128,28 @@ assert(material.set(reopened, { brdf: 99 }), "an out-of-range brdf index is acce
 assert(material.get(reopened).brdf === 99, "and stored verbatim (the engine falls back to Default)");
 assert(material.set(reopened, { brdf: 0 }), "reset to Default");
 
+// ---- 6. material.dumpDatablock — the diagnostic (HLMS_ADOPTION P6) ----
+//
+// The reason this verb exists is that the document, the mirror and the
+// renderer can disagree and nothing showed it. So the assertion that matters
+// is not "it returns a string" but "it reflects what the RENDERER ended up
+// with, including a value the document alone cannot tell you" — here, the
+// clear coat, which only appears in the datablock when the BRDF allowed it.
+assert(material.set(reopened, { clearCoat: 0.9, clearCoatRoughness: 0.2, brdf: 0 }),
+       "dump: authored a coat on the Default BRDF");
+editor.frame(2);   // let the mirror push the material before reading it back
+
+var dump = material.dumpDatablock(reopened);
+assert(typeof dump === "string" && dump.length > 0,
+       "material.dumpDatablock returns the live datablock as text");
+assert(/clear_coat/i.test(dump) || /clearcoat/i.test(dump),
+       "the dump carries the clear coat the renderer actually took (" +
+       dump.substring(0, 120).replace(/\s+/g, " ") + ")");
+
+// A node with no material at all must fail BY NAME, not return "".
+var empty = scene.addEmpty();
+var threw = false;
+try { material.dumpDatablock(empty); } catch (e) { threw = true; }
+assert(threw, "dumpDatablock on a non-mesh node fails loudly");
+
 console.log("e2e_pbs_knobs: ALL OK");
