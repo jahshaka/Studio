@@ -25,6 +25,7 @@ For more information see the LICENSE file
 #include <QMenu>
 #include <QMetaObject>
 #include <QPointer>
+#include <QPushButton>
 #include <QWidgetAction>
 
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -255,6 +256,46 @@ QString ThemeManager::chromeCompactButtonSheet()
         "QPushButton:pressed, QToolButton:pressed { background: #3a3a3a; }"
         "QPushButton:checked, QToolButton:checked { background: #2980b9; }"
         "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
+}
+
+QString ThemeManager::headerGlyphButtonSheet(const QFont &iconFont)
+{
+    if (s_classicActive) return QString();
+    // No plate, no border, no padding: the glyph IS the button. The hover
+    // brightening is the only feedback (a plate around a 28px icon-font
+    // character is what the owner read as a baked grey background).
+    //
+    // The FONT IS IN THE SHEET on purpose. A font pushed with setFont() does
+    // not survive here: setStyleSheet() re-polishes the button, and both
+    // Qlementine's polish (which re-sets the font of every QPushButton) and
+    // Qt's own QStyleSheetStyle unpolish/polish pair restore the font they
+    // saved earlier — which is how the Publish arrow, the one header glyph
+    // whose sheet is re-applied after construction (updateTopMenuStates),
+    // ended up rendering at the inherited 17px beside two 28px siblings. A
+    // sheet-declared font wins every repolish, so all three stay identical.
+    return QStringLiteral(
+               "QPushButton { background: transparent; border: none; padding: 0;"
+               " font-family: \"%1\"; font-size: %2px;"
+               " color: rgba(255,255,255,0.9); }"
+               "QPushButton:hover { color: rgba(255,255,255,1.0); }"
+               "QPushButton:pressed { color: rgba(255,255,255,0.7); }")
+        .arg(iconFont.family())
+        .arg(iconFont.pixelSize() > 0 ? iconFont.pixelSize() : 28);
+}
+
+void ThemeManager::applyHeaderGlyphButton(QPushButton *button, const QFont &iconFont)
+{
+    if (!button) return;
+    if (s_classicActive) {
+        // Classic is bit-for-bit: its own sheet, its own setFont.
+        button->setFont(iconFont);
+        button->setStyleSheet(button->objectName() == QLatin1String("prefsButton")
+                                  ? StyleSheet::PrefsButton()
+                                  : StyleSheet::HelpButton());
+        return;
+    }
+    button->setFont(iconFont);            // sizeHint before the first polish
+    button->setStyleSheet(headerGlyphButtonSheet(iconFont));
 }
 
 void ThemeManager::switchifyMenuToggles(QMenu *menu)

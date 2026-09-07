@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QString>
 
 class QApplication;
+class QFont;
 class QWidget;
 
 // App-wide theme selection (THEME_AUDIT.md §4). Two themes exist:
@@ -71,6 +72,25 @@ public:
     // corners and side gutters as chromeButtonSheet, reduced height. Returns
     // "" under Classic, like the full-height spec.
     static QString chromeCompactButtonSheet();
+
+    // The header's GLYPH buttons (Publish / Help / Preferences): an icon-font
+    // character on the header bar and nothing else — no button plate, no
+    // border, no padding. Qlementine paints every QPushButton with its plate
+    // background (#333), which on the near-black header reads as a "grey
+    // background baked into the icon" (owner report 2026-09-07); this is the
+    // sheet that takes the plate away. It also CARRIES THE ICON FONT: a font
+    // pushed with setFont() does not survive a repolish (Qlementine's polish
+    // re-sets every QPushButton's font, and Qt's stylesheet style restores the
+    // font it saved), which is exactly how the Publish arrow — the one header
+    // glyph whose sheet is re-applied after construction, in
+    // updateTopMenuStates — ended up 17px beside two 28px siblings. "" under
+    // Classic, whose HelpButton() / PrefsButton() sheets already do it.
+    static QString headerGlyphButtonSheet(const QFont &iconFont);
+
+    // Apply the glyph-button look and the icon font to `button`, per theme.
+    // One call site for all three header glyphs, so they cannot drift apart.
+    static void applyHeaderGlyphButton(class QPushButton *button,
+                                       const QFont &iconFont);
 
     // Qlementine mode: replaces every checkable QAction in the menu with a
     // qlementine Switch row (QWidgetAction). The original QAction stays alive
