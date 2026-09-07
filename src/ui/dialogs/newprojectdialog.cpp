@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 #include "data/settingsmanager.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 #include "ui/dialogs/newprojectdialog.h"
 #include "ui_newprojectdialog.h"
 
@@ -83,15 +84,38 @@ NewProjectDialog::NewProjectDialog(QDialog *parent) : QDialog(parent)
 	grid->addWidget(wid);
 
 
-	setMinimumWidth(410);
+	// WIDTH (owner ask 2026-09-07, ~30% narrower): the dialog asks for a name,
+	// and 410px of it was mostly empty. The location row is what used to blow
+	// it out further — a QLineEdit sized to a long absolute path — so it is
+	// allowed to shrink and shows the start of the path; the full value is in
+	// the tooltip and is what gets used either way (projectPath, not the
+	// edit's text).
+	setFixedWidth(288);
+	projectPathEdit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+	projectPathEdit->setMinimumWidth(0);
+	projectPathEdit->setToolTip(projectPath);
+	projectPathEdit->setCursorPosition(0);
 	setStyleSheet(StyleSheet::QWidgetDark());
 
 	projectNameEdit->setStyleSheet(StyleSheet::QLineEdit());
 	projectPathEdit->setStyleSheet(StyleSheet::QLineEdit());
 	scene->setStyleSheet(StyleSheet::QLabelWhite());
 	path->setStyleSheet(StyleSheet::QLabelWhite());
-	cancel->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
-	create->setStyleSheet(StyleSheet::QPushButtonBlueBig());
+	// THE PRIMARY ACTION IS "CREATE". Classic said so through its own two
+	// sheets; under Qlementine both getters return "" and the theme painted
+	// Cancel as the accented button and Create as the plain one — the owner
+	// read it, correctly, as the colours being swapped. The house chrome
+	// getters state it explicitly instead of relying on which button the
+	// style thinks is default.
+	cancel->setStyleSheet(ThemeManager::classicActive()
+	                          ? StyleSheet::QPushButtonGreyscaleBig()
+	                          : ThemeManager::chromeButtonSheet());
+	create->setStyleSheet(ThemeManager::classicActive()
+	                          ? StyleSheet::QPushButtonBlueBig()
+	                          : ThemeManager::chromeAccentButtonSheet());
+	// ...and no auto-default on Cancel, so Return still creates.
+	cancel->setAutoDefault(false);
+	cancel->setDefault(false);
 	
 
 	
