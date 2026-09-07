@@ -220,3 +220,6 @@ add_subdirectory(log)
 # Source-hygiene gates (no binary, no display): source.no_glsl_path guards the
 # HLMS_ADOPTION P3 deletion of the document-side GLSL load path.
 add_subdirectory(hygiene)
+# GENERATED SHADER PIECES (HLMS_ADOPTION P5): the backend mechanism the shader
+# graph's emitter targets, and the emitter's own gates.
+add_subdirectory(pieces)

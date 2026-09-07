@@ -46,6 +46,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 
 #include "modules/materials/core/graphbaker.h"
+#include "modules/materials/core/pieceemitter.h"
 #include "modules/materials/core/materialhelper.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 #include "modules/materials/graph/nodegraph.h"
@@ -413,7 +414,11 @@ QVector<VerbInfo> MaterialApi::verbs() const
           Needs::Document },
         { "get", "material.get(nodeId) -> {property: value}",
           "Reads the node material's editor-facing properties. material.properties(nodeId) is the "
-          "same values plus their types, ranges and the full writable-key list.",
+          "same values plus their types, ranges and the full writable-key list. A graph material "
+          "that renders through a GENERATED SHADER PIECE (HLMS_ADOPTION P5) also reports "
+          "`customPiecePixel` / `customPieceVertex` — read-only paths into the per-user piece "
+          "cache, and the only way to tell from outside that the surface is live rather than "
+          "baked.",
           Needs::Document },
         { "properties", "material.properties(nodeId) -> {class, rows:[{name, displayName, type, value, min?, max?}], writableKeys:[…]}",
           "What this node's material can be told, without guessing. 'class' is PbrMaterial for "
@@ -648,6 +653,16 @@ QVariantMap MaterialApi::get(const QString &nodeId)
         else if (value.typeId() == QMetaType::QVector3D) out[prop->name] = vecToJs(iris::fromQt(value.value<QVector3D>()));
         else out[prop->name] = value;
     }
+    // The generated shader pieces (HLMS_ADOPTION P5) are NOT declared
+    // properties — they are a cache reference the emitter owns, not something
+    // a user or a script sets — but they are the only way to see, from
+    // outside, that a graph material actually reached the renderer as a live
+    // surface rather than a baked one. Reported read-only, and absent when
+    // there is none.
+    if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material.data())) {
+        if (!pbr->customPiecePixel.isEmpty()) out["customPiecePixel"] = pbr->customPiecePixel;
+        if (!pbr->customPieceVertex.isEmpty()) out["customPieceVertex"] = pbr->customPieceVertex;
+    }
     return out;
 }
 
@@ -730,6 +745,15 @@ QVector<VerbInfo> GraphApi::verbs() const
           Needs::Document },
         { "bakeInfo", "graph.bakeInfo() -> {perSocket: {socketName: class}}",
           "Classifies each master input: 'uniform' | 'passthrough' | 'baked' | 'unsupported' | 'unconnected'.",
+          Needs::Document },
+        { "emitInfo", "graph.emitInfo() -> {accepted, animated, emitted: [socket], fallback: {socket: reason}, "
+          "ops: [opKey], pixelSource, vertexSource}",
+          "What the SHADER-PIECE EMITTER makes of the current graph (HLMS_ADOPTION P5): which master "
+          "sockets it lowers into generated GLSL that runs on the GPU per pixel (and per vertex), and "
+          "— the half that matters when something did not animate — the REASON every other socket was "
+          "left to the CPU baker, in words. `ops` is the emitter's whole op vocabulary. The two source "
+          "strings are the generated pieces themselves, for eyeballing and for tests; nothing is "
+          "written to disk by this verb.",
           Needs::Document },
         { "bake", "graph.bake({resolution?, time?}) -> {values, maps, passthrough, approximated, unsupported, animated, msElapsed}",
           "Full-quality synchronous bake of the current graph: UV-varying chains render per texel into "
@@ -1053,6 +1077,26 @@ QVariantMap GraphApi::bakeInfo()
     return PbrGraphEvaluator::bakeInfo(graph, MaterialHelper::textureResolver()).toVariantMap();
 }
 
+QVariantMap GraphApi::emitInfo()
+{
+    QVariantMap out;
+    auto graph = graphOrFail(QStringLiteral("graph.emitInfo"));
+    if (!graph) return out;
+    const auto result = materials::PieceEmitter::lower(graph, MaterialHelper::textureResolver());
+    out["accepted"] = result.accepted;
+    out["animated"] = result.animated;
+    out["emitted"] = QVariant(result.emittedSockets);
+    QVariantMap fallback;
+    for (auto it = result.fallbackReasons.constBegin(); it != result.fallbackReasons.constEnd(); ++it)
+        fallback[it.key().isEmpty() ? QStringLiteral("*") : it.key()] = it.value();
+    out["fallback"] = fallback;
+    out["ops"] = QVariant(materials::PieceEmitter::supportedOps());
+    out["sockets"] = QVariant(materials::PieceEmitter::supportedSockets());
+    out["pixelSource"] = result.pixelSource;
+    out["vertexSource"] = result.vertexSource;
+    return out;
+}
+
 QVariantMap GraphApi::bake(const QVariantMap &options)
 {
     QVariantMap out;
@@ -1105,12 +1149,27 @@ bool GraphApi::toMaterial(const QString &nodeId)
         opts.resolution = graph->settings.bakeResolution;
         opts.outputDir = host.project->getProjectFolder() + QStringLiteral("/BakedMaps/") + guid;
         opts.relativePrefix = QStringLiteral("BakedMaps/") + guid + QStringLiteral("/");
+        // The emitter first, so the baker skips what the piece owns
+        // (HLMS_ADOPTION P5) — see MaterialHelper::serializeWithBake.
+        materials::PieceEmitter::Result emitted = materials::PieceEmitter::lower(
+            graph, MaterialHelper::textureResolver());
+        opts.emittedSockets = emitted.emittedSockets;
         const auto baked = materials::GraphBaker::run(graph, opts, MaterialHelper::textureResolver());
         material = PbrGraphEvaluator::materialFromValues(baked.eval.values, MaterialHelper::textureResolver());
+        MaterialHelper::applyEmittedPieces(graph, material);
     } else {
-        material = PbrGraphEvaluator::createMaterial(graph, MaterialHelper::textureResolver());
+        material = MaterialHelper::createPbrMaterialFromShaderGraph(graph);
     }
     if (!material) return fail("graph.toMaterial: evaluation produced no material");
+    // Stamp the SOURCE GRAPH's asset guid on the material. It costs nothing for
+    // an ordinary material and it is what lets a reopened scene regenerate a
+    // GENERATED SHADER PIECE (HLMS_ADOPTION P5) whose cache file this machine
+    // does not have: the guid names the asset, the asset carries the graph, and
+    // the graph re-emits byte-identical source.
+    {
+        const QString guid = mAssetGuid.isEmpty() ? graph->materialGuid : mAssetGuid;
+        if (!guid.isEmpty()) material->setGuid(guid);
+    }
     node.staticCast<iris::MeshNode>()->setMaterial(material);
     return true;
 }

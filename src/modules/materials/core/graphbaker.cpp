@@ -263,6 +263,10 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiled, const 
 	// ---- land every socket ---------------------------------------------
 	for (auto& state : states) {
 		if (!state.cs->connected) continue;
+		// A socket the shader-piece emitter took (HLMS_ADOPTION P5) is not
+		// this baker's business any more: whatever it landed would be
+		// overwritten in the pixel shader before a light was accumulated.
+		if (opts.emittedSockets.contains(state.cs->slot.socketName)) continue;
 		const MasterSlot& slot = state.cs->slot;
 		const BakeProgram& program = state.cs->program;
 

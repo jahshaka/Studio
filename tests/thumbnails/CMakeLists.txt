@@ -51,6 +51,7 @@ add_executable(test_shader_thumbnail test_shader_thumbnail.cpp
     ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
     ${CMAKE_SOURCE_DIR}/tests/shadergraph/test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/materialhelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pieceemitter.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakeprogram.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/graphbaker.cpp
     ${CMAKE_SOURCE_DIR}/src/modules/materials/core/pbrgraphevaluator.cpp

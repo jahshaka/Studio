@@ -75,6 +75,11 @@ add_script_e2e(shading_model e2e_shading_model.js)
 # toMaterial/save/regenerate; baked maps land inside the project folder (and
 # so ride the recursive .jaf zip).
 add_script_e2e(bake_pipeline e2e_bake_pipeline.js)
+# HLMS_ADOPTION P5: a GENERATED SHADER PIECE end to end — the emitter's verdict
+# through graph.emitInfo, the content-addressed cache file, the piece riding a
+# real scene material to the renderer, and the save/close/open round trip that
+# proves re-emission is deterministic.
+add_script_e2e(custom_piece e2e_custom_piece.js)
 # EDITOR_SHORTCUTS_SPEC §5: the verbs behind the Unreal-style editor controls.
 add_script_e2e(editor_controls e2e_editor_controls.js)
 # DESKTOP_SLIDER_SPEC: desktop.* view-mode + filmstrip verbs (window verbs).

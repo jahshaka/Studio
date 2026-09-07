@@ -2,6 +2,7 @@
 
 #include <QJsonObject>
 #include "pbrgraphevaluator.h"
+#include "pieceemitter.h"
 
 class GraphNodeScene;
 class NodeGraph;
@@ -43,6 +44,15 @@ public:
 	// (which SceneMirror already mirrors into the engine). Texture-property
 	// GUIDs are resolved through TextureManager.
 	static iris::PbrMaterialPtr createPbrMaterialFromShaderGraph(NodeGraph* graph);
+
+	// Runs the shader-piece emitter over `graph` and lands the result on
+	// `material` (HLMS_ADOPTION P5). Sets both piece paths unconditionally —
+	// including to EMPTY — so a graph edited into something the emitter
+	// refuses drops the piece it used to carry instead of rendering it
+	// forever. Returns what the emitter did, including the per-socket reasons
+	// for everything it left to the baker.
+	static materials::PieceEmitter::Result applyEmittedPieces(NodeGraph* graph,
+	                                                          iris::PbrMaterialPtr material);
 
 	// Rebuilds the evaluated PBR material from a stored material definition
 	// (the "pbrMaterial" object written by serialize). Returns null when the
