@@ -363,6 +363,10 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     // off on every node in every scene but a handful, and a key on every node
     // in the file for a feature almost nothing uses is noise.
     if (sceneNode->getPlanarReflector()) sceneNodeObj["planarReflector"] = true;
+    // GI bounds exclusion (REFLECTIONS_ADOPTION_SPEC.md P1a). Written only when
+    // TRUE, like planarReflector above: the flag is off on every node of every
+    // scene but the handful a user deliberately marks.
+    if (sceneNode->getGiBoundsExcluded()) sceneNodeObj["giBoundsExcluded"] = true;
     // Shadow Caster (the Properties-panel checkbox, nodepropertywidget.cpp).
     // Written only when the user turned it OFF — the document default is on, so
     // an absent key reads as true and every scene written before this line

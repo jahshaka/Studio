@@ -20,6 +20,7 @@ For more information see the LICENSE file
 class ComboBoxWidget;
 class HFloatSliderWidget;
 class CheckBoxWidget;
+class QPushButton;
 
 /**
  * World-panel "Global Illumination" section: how light bounces around the
@@ -46,6 +47,8 @@ protected slots:
     void onBoundsMaxChanged(iris::Vec3 value);
     void onPccGridChanged(iris::Vec3 value);
     void onAutoRefreshChanged(bool value);
+    void onRefreshClicked();
+    void onFitBoundsClicked();
 
 private:
     void rebuild();
@@ -59,6 +62,8 @@ private:
     Widget3D *boundsMax = nullptr;
     Widget3D *pccGrid = nullptr;
     CheckBoxWidget *autoRefresh = nullptr;
+    QPushButton *refreshButton = nullptr;
+    QPushButton *fitBoundsButton = nullptr;
 };
 
 #endif // WORLDGIPROPERTYWIDGET_H

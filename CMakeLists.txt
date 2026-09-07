@@ -270,6 +270,7 @@ set(SRCS
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
+    src/services/gibounds.cpp
     src/services/worldmodes.cpp
     src/services/planarreflectors.cpp
     src/services/animationedits.cpp

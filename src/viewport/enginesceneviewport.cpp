@@ -1303,6 +1303,11 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probeCount = st.probeCount;
     out.pccBound   = st.pccBound;
     out.vctBound   = st.vctBound;
+    const auto q = [](const jahshaka::engine::Vec3 &v) { return QVector3D(v.x, v.y, v.z); };
+    out.boundsMin      = q(st.boundsMin);
+    out.boundsMax      = q(st.boundsMax);
+    out.probeRegionMin = q(st.probeRegionMin);
+    out.probeRegionMax = q(st.probeRegionMax);
     return out;
 }
 
@@ -1347,6 +1352,7 @@ IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
     s.available = true;
     s.giPushes = mMirror->giPushCount();
     s.giRefreshes = mMirror->giRefreshCount();
+    s.giLightRefreshes = mMirror->giLightRefreshCount();
     return s;
 }
 

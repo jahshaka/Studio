@@ -1555,19 +1555,26 @@ int main(int argc, char **argv)
         CHECK(mirror.giRefreshCount() == refresh0,
               "GI idle: 60 idle frames asked for ZERO GI re-solves");
 
-        // A light that really moves must still re-solve — exactly once.
+        // A light that really moves must still re-solve — exactly once, but NOT
+        // on the frame it moved (REFLECTIONS_ADOPTION_SPEC.md P2, re-pinned in
+        // that lane). The move ARMS a pending refresh; the expensive re-solve
+        // fires once the light has held still for the coalescing window, which
+        // is what stops a DRAG from costing one full re-voxelize per frame.
+        // Everything the old contract cared about still holds — one move, one
+        // re-solve, and idleness afterwards — it just happens a few frames later.
         gpanel->setLocalPos(iris::Vec3(1.5f, 2.6f, 0.0f));
         mirror.sync();
         mirror.applyEnvironment(view, engine.get());
         engine->renderOneFrame();
-        CHECK(mirror.giRefreshCount() == refresh0 + 1, "GI: moving a light re-solves once");
+        CHECK(mirror.giRefreshCount() == refresh0,
+              "GI: the frame a light MOVES does not re-solve (the coalescing gate)");
         for (int f = 0; f < 20; ++f) {
             mirror.sync();
             mirror.applyEnvironment(view, engine.get());
             engine->renderOneFrame();
         }
         CHECK(mirror.giRefreshCount() == refresh0 + 1,
-              "GI: the frames after the move are idle again (no second re-solve)");
+              "GI: once the light holds still, moving it re-solved exactly once");
 
         // Moving GEOMETRY is deliberately NOT a re-solve (GI_SPEC: the mirror
         // pushes every item's transform every frame; flagging that would

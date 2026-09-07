@@ -42,3 +42,49 @@ add_dependencies(test_gi_pcc_mirror JahshakaEngineMedia)
 add_test(NAME gi.pcc_mirror COMMAND test_gi_pcc_mirror
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_mirror PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# GI BOUNDS + PROBE PLACEMENT (spec §4 / P1a). Its own binary for the same
+# process-wide-binding reason as gi.pcc_mirror.
+add_executable(test_gi_pcc_bounds test_gi_pcc_bounds.cpp)
+set_target_properties(test_gi_pcc_bounds PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pcc_bounds PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pcc_bounds PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pcc_bounds JahshakaEngineMedia)
+add_test(NAME gi.pcc_bounds COMMAND test_gi_pcc_bounds
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pcc_bounds PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# gi.coalesce — the drag-a-light gate (spec §5 / P2). Links the MIRROR as well
+# as the engine (like tests/mirror) because the coalescing gate is mirror-side
+# and the cheap light-only path is engine-side; the contract is the pair.
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+add_executable(test_gi_coalesce test_gi_coalesce.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_gi_coalesce PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_gi_coalesce PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_gi_coalesce PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_coalesce PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(test_gi_coalesce JahshakaEngineMedia)
+add_test(NAME gi.coalesce COMMAND test_gi_coalesce
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.coalesce PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 600 LABELS "engine")

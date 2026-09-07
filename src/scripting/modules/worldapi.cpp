@@ -28,7 +28,11 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/core/geometry/boundingsphere.h"
+#include <functional>
 #include "services/worldmodes.h"
+#include "services/gibounds.h"
 #include "services/undoservice.h"
 #include "commands/worldmodecommand.h"
 #include "services/jahlog.h"
@@ -64,8 +68,14 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
-        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, live}",
-          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, live}",
+          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+          Needs::Document },
+        { "refreshGi", "world.refreshGi() -> bool",
+          "Re-solves the CURRENT global illumination against the scene as it stands now — the same work Auto Refresh does when a light moves, on demand. Geometry that moves does NOT auto-refresh (the renderer would re-voxelize every frame while you drag), so after moving, adding or deleting objects this is what makes bounced light and reflection probes agree with the scene again. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
+          Needs::Document },
+        { "fitGiBounds", "world.fitGiBounds({nodes, margin}) -> {boundsMin, boundsMax}",
+          "PINS the global-illumination bounds to the given objects: the union of their world bounds plus an optional margin is written into the scene's giBoundsMin/giBoundsMax, which switches the lit volume off automatic. 'nodes' is a list of node ids and is REQUIRED — there is deliberately no 'whatever is selected' default (the World panel's Fit Bounds To Scene button passes the scene's contents; a caller that wants a selection passes it). Children are included, so fitting an imported model's root fits the model rather than its origin. Returns the box it wrote. Clear the pin — hand the volume back to the automatic fit, which world.giStatus() reports — by setting both corners equal again through world.gi.",
           Needs::Document },
         { "antiAliasing", "world.antiAliasing() -> int",
           "Reads the anti-aliasing (MSAA) sample count. With the engine viewport live this is the ACHIEVED count (the driver may clamp the request); otherwise the scene's requested value.",
@@ -304,13 +314,71 @@ QVariantMap WorldApi::giStatus()
                             { QStringLiteral("probeCount"), requestedProbes },
                             { QStringLiteral("pccBound"), false },
                             { QStringLiteral("vctBound"), false },
+                            { QStringLiteral("boundsMin"), vecToJs(scene->giBoundsMin) },
+                            { QStringLiteral("boundsMax"), vecToJs(scene->giBoundsMax) },
+                            { QStringLiteral("probeRegionMin"), vecToJs(iris::Vec3()) },
+                            { QStringLiteral("probeRegionMax"), vecToJs(iris::Vec3()) },
                             { QStringLiteral("live"), false } };
     return QVariantMap{ { QStringLiteral("mode"), st.mode },
                         { QStringLiteral("requestedMode"), requested },
                         { QStringLiteral("probeCount"), st.probeCount },
                         { QStringLiteral("pccBound"), st.pccBound },
                         { QStringLiteral("vctBound"), st.vctBound },
+                        { QStringLiteral("boundsMin"), vecToJs(iris::fromQt(st.boundsMin)) },
+                        { QStringLiteral("boundsMax"), vecToJs(iris::fromQt(st.boundsMax)) },
+                        { QStringLiteral("probeRegionMin"), vecToJs(iris::fromQt(st.probeRegionMin)) },
+                        { QStringLiteral("probeRegionMax"), vecToJs(iris::fromQt(st.probeRegionMax)) },
                         { QStringLiteral("live"), true } };
+}
+
+bool WorldApi::refreshGi()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.refreshGi"));
+    if (!scene) return false;
+    // The document carries a monotonic serial rather than reaching for the
+    // renderer: the mirror is what owns the "push this to the engine" decision
+    // for every other GI field, and a verb that called the engine directly
+    // would work in the editor and silently do nothing under --headless or in a
+    // player scene. Bumping the serial is the whole verb; the mirror notices on
+    // its next sync and re-solves once.
+    ++scene->giRefreshSerial;
+    return true;
+}
+
+QVariantMap WorldApi::fitGiBounds(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.fitGiBounds"));
+    if (!scene) return QVariantMap();
+    static const QStringList known = { QStringLiteral("nodes"), QStringLiteral("margin") };
+    const QString refusal = refuseUnknownKeys(QStringLiteral("world.fitGiBounds"), params, known);
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+
+    const float margin = params.contains("margin") ? params.value("margin").toFloat() : 0.0f;
+    const QVariantList ids = params.value(QStringLiteral("nodes")).toList();
+    if (ids.isEmpty()) {
+        fail(QStringLiteral("world.fitGiBounds: give it {nodes:[id,...]} — the GI bounds are a "
+                            "deliberate pin, so there is no 'whatever is selected' default in a "
+                            "script. The World panel's Fit button passes the scene's contents."));
+        return QVariantMap();
+    }
+    QList<iris::SceneNodePtr> nodes;
+    for (const QVariant &v : ids) {
+        auto node = findNodeByGuid(scene->getRootNode(), v.toString());
+        if (!node) {
+            fail(QStringLiteral("world.fitGiBounds: no node with id '%1'").arg(v.toString()));
+            return QVariantMap();
+        }
+        nodes.append(node);
+    }
+    iris::Vec3 mn, mx;
+    if (!gibounds::fit(nodes, margin, mn, mx)) {
+        fail(QStringLiteral("world.fitGiBounds: none of those nodes has any extent"));
+        return QVariantMap();
+    }
+    scene->giBoundsMin = mn;
+    scene->giBoundsMax = mx;
+    return QVariantMap{ { QStringLiteral("boundsMin"), vecToJs(mn) },
+                        { QStringLiteral("boundsMax"), vecToJs(mx) } };
 }
 
 int WorldApi::antiAliasing()

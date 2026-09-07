@@ -30,6 +30,7 @@ public:
 
 protected slots:
     void onShadowEnabledChanged(bool val);
+    void onGiBoundsExcludedChanged(bool val);
     void drawTypeChanged(const QString&);
 
 private:
@@ -39,6 +40,7 @@ private:
     TextInputWidget* uuid;
     CheckBoxWidget* shadowCaster;
     CheckBoxWidget* shadowReceiver;
+    CheckBoxWidget* giBoundsExcluded;
 };
 
 #endif // NODEPROPERTY_H

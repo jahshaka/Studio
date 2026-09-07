@@ -42,6 +42,8 @@ public:
     Q_INVOKABLE bool shadows(const QVariantMap &params);
     Q_INVOKABLE bool gi(const QVariantMap &params);
     Q_INVOKABLE QVariantMap giStatus();
+    Q_INVOKABLE bool refreshGi();
+    Q_INVOKABLE QVariantMap fitGiBounds(const QVariantMap &params);
     Q_INVOKABLE int antiAliasing();
     Q_INVOKABLE int setAntiAliasing(int samples);
     Q_INVOKABLE int shadowResolution();
