@@ -1041,6 +1041,15 @@ void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNode
     sceneNodeObject["sensorHeight"] = cameraNode->sensorHeight;
     sceneNodeObject["authorMode"] =
         cameraNode->authorMode == iris::CameraAuthorMode::Millimeters ? "mm" : "degrees";
+    // CAMERA_LENS_SPEC §3, the filmback block. sensorFit is a STRING for the
+    // same reason focusMode is: the enum's ints stay free to move.
+    sceneNodeObject["sensorFit"] =
+        cameraNode->sensorFit == iris::CameraSensorFit::Horizontal ? "horizontal"
+      : cameraNode->sensorFit == iris::CameraSensorFit::Auto       ? "auto"
+                                                                   : "vertical";
+    sceneNodeObject["anamorphicSqueeze"] = cameraNode->anamorphicSqueeze;
+    sceneNodeObject["lensShiftX"] = cameraNode->lensShiftX;
+    sceneNodeObject["lensShiftY"] = cameraNode->lensShiftY;
     sceneNodeObject["constrainAspect"] = cameraNode->constrainAspect;
     sceneNodeObject["dofEnabled"] = cameraNode->dofEnabled;
     // Strings, so the enum ints stay free to be reordered — the same rule the
@@ -1052,6 +1061,15 @@ void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNode
     sceneNodeObject["focusDistance"] = cameraNode->focusDistance;
     sceneNodeObject["focusTarget"] = cameraNode->focusTarget;   // node guid
     sceneNodeObject["fStop"] = cameraNode->fStop;
+    // CAMERA_LENS_SPEC §3 P2, the focus block. Render-inert today and written
+    // anyway: a focus pull authored now must survive to the phase that renders
+    // it, and readers tolerate every one of these keys being absent.
+    sceneNodeObject["focusOffset"] = cameraNode->focusOffset;
+    sceneNodeObject["smoothFocus"] = cameraNode->smoothFocus;
+    sceneNodeObject["focusSmoothingSpeed"] = cameraNode->focusSmoothingSpeed;
+    sceneNodeObject["minFocusDistance"] = cameraNode->minFocusDistance;
+    sceneNodeObject["bladeCount"] = cameraNode->bladeCount;
+    sceneNodeObject["focusPlaneVisible"] = cameraNode->focusPlaneVisible;
     sceneNodeObject["outputHeight"] = cameraNode->outputHeight;
     sceneNodeObject["bodyVisible"] = cameraNode->bodyVisible;
 }

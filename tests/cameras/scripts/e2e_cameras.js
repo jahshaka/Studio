@@ -194,7 +194,14 @@ function fingerprint() {
             authorMode: r.authorMode, projMode: r.projMode, orthoSize: r.orthoSize,
             nearClip: r.nearClip, farClip: r.farClip, aspectRatio: r.aspectRatio,
             constrainAspect: r.constrainAspect, dofEnabled: r.dofEnabled,
-            focusMode: r.focusMode, focusDistance: r.focusDistance,
+            focusMode: r.focusMode,
+            // focusDistance is a READOUT in track mode since CAMERA_LENS_SPEC
+            // P2: the mirror resolves it from focusTarget's world position on
+            // every synced frame, so the value a reopened project shows is the
+            // resolved one and not the one the file happened to carry. It is
+            // fingerprinted only for the modes where it is authored state; the
+            // tracking itself is asserted below and in cameras.e2e.lens.
+            focusDistance: r.focusMode === "track" ? "(tracked)" : r.focusDistance,
             focusTarget: r.focusTarget, fStop: r.fStop,
             outputHeight: r.outputHeight, bodyVisible: r.bodyVisible,
             position: r.position, rotation: r.rotation, scale: r.scale
@@ -202,6 +209,15 @@ function fingerprint() {
     }
     return JSON.stringify(out);
 }
+
+// The tracked camera's distance IS resolved, and from the right place: the
+// cube sits at the origin and the camera at (1,2,3), so the distance along its
+// optical axis is what the tracker writes (CAMERA_LENS_SPEC P2 — the numbers
+// and the clamps are cameras.e2e.lens's job; this is the "it is live at all"
+// half, here because this is the camera that has a target).
+editor.frame(2);
+assert(Math.abs(camera.settings(cam).focusDistance - 6.25) > 1e-3,
+       "a track-mode camera's focusDistance is resolved by the mirror, not the stored number");
 
 var fresh = fingerprint();
 console.log("fingerprint: " + fresh);

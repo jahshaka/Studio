@@ -42,6 +42,30 @@ set_tests_properties(cameras.document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
     LABELS "document")
 jah_no_display(cameras.document)
 
+# ---- cameras.lens ---------------------------------------------------------
+# THE LENS MATH (CAMERA_LENS_SPEC §3, P1/P2) against hand-computed values:
+# filmback fits, the anamorphic squeeze, the lens-shift conversions (including
+# through Ogre's near/focal scaling) and the depth-of-field optics. Pure iris::,
+# no engine, no display — the golden table is the point, so nothing that could
+# vary is allowed anywhere near it.
+add_executable(test_camera_lens test_camera_lens.cpp)
+set_target_properties(test_camera_lens PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17)
+target_include_directories(test_camera_lens PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_camera_lens PRIVATE IrisGL Qt6::Gui Qt6::OpenGL)
+# A document node is an engine node (SPECS/SCENEGRAPH_SPEC.md D2), so even this
+# arithmetic suite boots the headless engine to make a CameraNode.
+jah_document_graph(test_camera_lens)
+add_test(NAME cameras.lens COMMAND test_camera_lens
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(cameras.lens PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "document")
+jah_no_display(cameras.lens)
+
 # ---- cameras.play_routing -------------------------------------------------
 add_executable(test_camera_play_routing test_camera_play_routing.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
@@ -101,6 +125,22 @@ add_test(NAME cameras.e2e
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(cameras.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 300)
+
+# ---- cameras.e2e.lens -----------------------------------------------------
+# CAMERA_LENS_SPEC §3 (P1 + P2) through the verbs in the real binary: the preset
+# tables, camera.filmback / camera.lens / camera.focusInfo, the new
+# camera.settings keys, focus TRACKING resolved on a real synced frame, and the
+# save/close/open round trip of every new field through the real writer and
+# reader. Same scratch-HOME contract as cameras.e2e.
+set(_lens_home ${CMAKE_CURRENT_BINARY_DIR}/lens-home)
+file(MAKE_DIRECTORY ${_lens_home}/run)
+add_test(NAME cameras.e2e.lens
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_camera_lens.js
+         WORKING_DIRECTORY ${_lens_home}/run)
+set_tests_properties(cameras.e2e.lens PROPERTIES
+    ENVIRONMENT "HOME=${_lens_home}"
     LABELS "scripting"
     TIMEOUT 300)
 
