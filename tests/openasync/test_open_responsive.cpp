@@ -14,8 +14,16 @@
 // answer between slices.
 //
 // Three contracts:
-//   1. project.openAsync of a Showroom-sized world completes, with the scene
-//      really open, and no UI-thread gap beyond the budget.
+//   1. project.openAsync of a heavy world completes, with the scene really
+//      open, and no UI-thread gap beyond the budget.
+//
+// THE FIXTURE IS Matcaps (2026-09-07). It used to be Showroom, because that
+// sample was the biggest world the tree shipped; the Grand Showroom that
+// replaced it is 23 primitives that open in a blink, which would leave this
+// suite measuring nothing (it needs an open long enough for the poll loop to
+// catch the app answering mid-flight). Matcaps carries the Stanford dragon —
+// the heaviest single mesh in the samples, and the world whose 12.5 s
+// synchronous open is quoted below.
 //   2. project.open (the synchronous verb every script and headless run uses)
 //      still opens the same world — unchanged behaviour, deliberately.
 //   3. Quitting with an open IN FLIGHT terminates the process, bounded and
@@ -155,8 +163,8 @@ int main(int argc, char **argv)
     seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
     const QString sample =
-        QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/Showroom.zip");
-    CHECK(QFileInfo::exists(sample), "Showroom sample archive present");
+        QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/Matcaps.zip");
+    CHECK(QFileInfo::exists(sample), "Matcaps sample archive present");
 
     QProcess jahshaka;
     QString token;
@@ -174,7 +182,7 @@ int main(int argc, char **argv)
         QStringLiteral("project.importArchive('%1')").arg(sample));
     const QString guid = imported.value("result").toObject().value("guid").toString();
     CHECK(imported.value("ok").toBool() && guid.length() > 10,
-          "Showroom.zip imported");
+          "Matcaps.zip imported");
     if (guid.isEmpty()) { jahshaka.kill(); jahshaka.waitForFinished(5000); return 1; }
 
     // ---- 1. the THREADED open, with the UI thread under measurement -------
