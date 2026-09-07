@@ -20,6 +20,7 @@ For more information see the LICENSE file
 class ComboBoxWidget;
 class HFloatSliderWidget;
 class CheckBoxWidget;
+class DragVector3Widget;
 class QPushButton;
 
 /**
@@ -58,9 +59,9 @@ private:
     ComboBoxWidget *quality = nullptr;
     ComboBoxWidget *lightSelector = nullptr;
     HFloatSliderWidget *bounces = nullptr;
-    Widget3D *boundsMin = nullptr;
-    Widget3D *boundsMax = nullptr;
-    Widget3D *pccGrid = nullptr;
+    DragVector3Widget *boundsMin = nullptr;
+    DragVector3Widget *boundsMax = nullptr;
+    DragVector3Widget *pccGrid = nullptr;
     CheckBoxWidget *autoRefresh = nullptr;
     QPushButton *refreshButton = nullptr;
     QPushButton *fitBoundsButton = nullptr;
