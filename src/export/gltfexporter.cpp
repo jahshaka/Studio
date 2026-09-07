@@ -936,10 +936,23 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 if (light->lightType != iris::LightType::Directional && light->distance > 0.0f)
                     l["range"] = double(light->distance);
                 if (light->lightType == iris::LightType::Spot) {
+                    // glTF's cone angles are HALF angles measured from the
+                    // light's axis (KHR_lights_punctual: outerConeAngle <= PI/2),
+                    // which is exactly what `spotCutOff` has always stored — so
+                    // it maps across unchanged, and only the INNER angle needs
+                    // deriving. It used to be derived by ADDING softness to the
+                    // cutoff, which read a 0..1 fraction as a number of degrees:
+                    // the shipped default of 1.0 exported a 30-degree core in a
+                    // 31-degree cone (a hard edge) where the renderer drew a
+                    // 0.3-degree core in a 30-degree cone (all penumbra). Same
+                    // formula as the renderer now (OgreScene::setLight), applied
+                    // to half angles instead of full ones — the ratio is what
+                    // matters, so it is identical either way.
                     QJsonObject spot;
-                    const float inner = std::max(0.1f, light->spotCutOff);
-                    const float outer = std::min(89.9f, inner + std::max(0.0f, light->spotCutOffSoftness));
-                    spot["innerConeAngle"] = double(qDegreesToRadians(std::min(inner, outer - 0.01f)));
+                    const float outer = std::min(std::max(light->spotCutOff, 1.0f), 85.0f);
+                    const float soft = std::min(std::max(light->spotCutOffSoftness, 0.0f), 0.99f);
+                    const float inner = outer * (1.0f - soft);
+                    spot["innerConeAngle"] = double(qDegreesToRadians(inner));
                     spot["outerConeAngle"] = double(qDegreesToRadians(outer));
                     l["spot"] = spot;
                 }

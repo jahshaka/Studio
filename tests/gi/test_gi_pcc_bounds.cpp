@@ -239,18 +239,29 @@ static void singleBigMeshCase(Engine *engine, View *view)
 }
 
 // ---------------------------------------------------------------------------
-// Case 4: the deterministic escape hatch. THREE items, so the heuristic is
-// switched off entirely and only the per-node flag can save the volume.
+// Case 4: the deterministic escape hatch — the per-node exclude flag, proven to
+// be a PURE FILTER with no side effect on the item set.
+//
+// RE-PINNED by the LIGHTING_FIX lane (fix 1), and the reason is the point of
+// that fix. This case used to rely on "three items, so the heuristic does not
+// run at all" — the old rejection only started at FOUR items, which is itself
+// the cliff the owner hit (a scene's fourth mesh collapsed its lit volume two
+// orders of magnitude). The replacement has no item-count gate, so a 200-unit
+// ground under two 1-unit boxes is now trimmed at any count and the old
+// premise is gone. The case therefore uses a scene the new heuristic keeps
+// WHOLE — a 20-unit ground under two 8-unit boxes, well inside the outlier
+// ramp — which restores exactly the property being tested: the volume changes
+// because of the FLAG and nothing else.
 // ---------------------------------------------------------------------------
 static void excludeFlagCase(Engine *engine, View *view)
 {
-    std::printf("-- the per-node exclude flag (three items: heuristic OFF)\n");
+    std::printf("-- the per-node exclude flag (a scene the heuristic keeps whole)\n");
     Scene *s = engine->createScene("exclude");
     view->setScene(s);
     const NodeId ground = box(s, Colour(0.7f, 0.7f, 0.7f), Vec3(0, -0.1f, 0),
-                              Vec3(200.0f, 0.2f, 200.0f));
-    box(s, Colour(0.8f, 0.2f, 0.2f), Vec3(-1.0f, 0.5f, 0), Vec3(1, 1, 1));
-    box(s, Colour(0.2f, 0.8f, 0.2f), Vec3( 1.0f, 0.5f, 0), Vec3(1, 1, 1));
+                              Vec3(20.0f, 0.2f, 20.0f));
+    box(s, Colour(0.8f, 0.2f, 0.2f), Vec3(-3.0f, 2.5f, 0), Vec3(5, 5, 5));
+    box(s, Colour(0.2f, 0.8f, 0.2f), Vec3( 3.0f, 2.5f, 0), Vec3(5, 5, 5));
     enginetest::addDirectionalLight(s, Vec3(0.2f, -1.0f, 0.3f), 4.0f);
 
     GiParams gi;
@@ -259,8 +270,8 @@ static void excludeFlagCase(Engine *engine, View *view)
     CHECK(s->setGlobalIllumination(gi), "VCT builds with the ground included");
     GiStatus st = s->giStatus();
     showBox("lit volume, ground in", st.boundsMin, st.boundsMax);
-    CHECK(st.boundsMax.x - st.boundsMin.x > 100.0f,
-          "with three items the outlier heuristic does NOT run (the ground is in)");
+    CHECK(st.boundsMax.x - st.boundsMin.x > 18.0f,
+          "the heuristic keeps this ground (it is not an outlier here)");
     CHECK(!s->nodeGiBoundsExcluded(ground), "the flag starts off");
 
     s->setNodeGiBoundsExcluded(ground, true);
@@ -270,9 +281,9 @@ static void excludeFlagCase(Engine *engine, View *view)
     render(engine, 2);
     st = s->giStatus();
     showBox("lit volume, ground out", st.boundsMin, st.boundsMax);
-    CHECK(st.boundsMax.x - st.boundsMin.x < 10.0f,
+    CHECK(st.boundsMax.x - st.boundsMin.x < 15.0f,
           "excluding the ground pulls the lit volume onto the two boxes");
-    CHECK(st.boundsMin.x <= -1.5f && st.boundsMax.x >= 1.5f, "...and still contains them");
+    CHECK(st.boundsMin.x <= -5.5f && st.boundsMax.x >= 5.5f, "...and still contains them");
 
     // The ground is EXCLUDED FROM THE BOUNDS, not from GI: it must still be one
     // of the items handed to the voxelizer, so bounced light still comes off it.
@@ -282,7 +293,8 @@ static void excludeFlagCase(Engine *engine, View *view)
     s->setNodeGiBoundsExcluded(ground, false);
     render(engine, 2);
     st = s->giStatus();
-    CHECK(st.boundsMax.x - st.boundsMin.x > 100.0f,
+    showBox("lit volume, ground back in", st.boundsMin, st.boundsMax);
+    CHECK(st.boundsMax.x - st.boundsMin.x > 18.0f,
           "clearing the flag restores the ground to the bounds");
 
     GiParams off;

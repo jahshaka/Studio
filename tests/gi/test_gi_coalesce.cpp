@@ -250,6 +250,70 @@ int main(int argc, char **argv)
           mirror.giLightRefreshCount() == lightBeforeOff,
           "with Auto Refresh off, neither path runs however much the light moves");
 
+    // ---- RE-FIT ON EXIT (LIGHTING_FIX fix 2) -------------------------------
+    //
+    // The other thing that stales a GI solve, and the one nothing watched: an
+    // OBJECT leaving the lit volume. Raise a cube above the auto-fitted volume
+    // and it kept the lighting it had at the old height until the user happened
+    // to nudge a LIGHT, at which point everything "mysteriously" fixed itself.
+    // That workaround is the bug report.
+    //
+    // The contract asserted here is exactly the one a dragged light already
+    // has, because it rides the same debounce: continuous movement costs ZERO
+    // rebuilds, and letting go costs exactly ONE.
+    //
+    // Auto bounds for this section — the suite above pins them on purpose, and
+    // an escape from a hand-typed box is not a thing (a typed box is the user's
+    // statement about where GI happens, so giEscapeSignature returns 0 for it).
+    doc->giAutoRefresh = true;
+    doc->giBoundsMin = iris::Vec3(0, 0, 0);
+    doc->giBoundsMax = iris::Vec3(0, 0, 0);
+    frame();                       // the bounds change is a param change: one push
+    for (int f = 0; f < 25; ++f) frame();
+
+    auto flyer = iris::MeshNode::create();
+    flyer->setName("flyer");
+    flyer->setMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"));
+    flyer->setLocalPos(iris::Vec3(0.0f, 0.6f, 1.0f));
+    flyer->setLocalScale(iris::Vec3(1.0f, 1.0f, 1.0f));
+    auto flyerMat = iris::PbrMaterial::create();
+    flyerMat->setBaseColor(QColor(255, 255, 255));
+    flyer->setMaterial(flyerMat);
+    doc->getRootNode()->addChild(flyer);
+    for (int f = 0; f < 25; ++f) frame();          // let it settle into the volume
+
+    const quint64 refreshBeforeLift = mirror.giRefreshCount();
+    // THE DRAG: 40 frames of the cube climbing out of the lit volume.
+    for (int f = 0; f < 40; ++f) {
+        flyer->setLocalPos(iris::Vec3(0.0f, 0.6f + 0.6f * float(f + 1), 1.0f));
+        frame();
+    }
+    const quint64 duringLift = mirror.giRefreshCount() - refreshBeforeLift;
+    std::printf("   40-frame lift out of the volume: full re-solves = %llu\n",
+                (unsigned long long)duringLift);
+    CHECK(duringLift == 0,
+          "dragging a cube out of the lit volume triggers ZERO per-frame rebuilds");
+
+    // ...and letting go re-fits, ONCE, without anyone touching a light.
+    for (int f = 0; f < 25; ++f) frame();
+    const quint64 afterLift = mirror.giRefreshCount() - refreshBeforeLift;
+    std::printf("   after the cube stops:   full re-solves = %llu\n",
+                (unsigned long long)afterLift);
+    CHECK(afterLift == 1, "letting go re-fits the volume EXACTLY once");
+    for (int f = 0; f < 40; ++f) frame();
+    CHECK(mirror.giRefreshCount() - refreshBeforeLift == 1,
+          "...and never again while nothing moves (the re-fit is not self-sustaining)");
+
+    // The point of all of it: the cube is now INSIDE the lit volume the
+    // renderer is using. Nothing but a re-fit could have put it there.
+    {
+        const jahshaka::engine::GiStatus st = escene->giStatus();
+        std::printf("   lit volume after the re-fit: y %.2f .. %.2f (cube at y %.2f)\n",
+                    st.boundsMin.y, st.boundsMax.y, flyer->getLocalPos().y());
+        CHECK(st.boundsMax.y > flyer->getLocalPos().y(),
+              "the re-fitted volume reaches the cube's new height");
+    }
+
     doc->giMode = iris::GiMode::OFF;
     frame();
     mirror.setSource(iris::ScenePtr());

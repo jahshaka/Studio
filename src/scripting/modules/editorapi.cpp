@@ -62,21 +62,24 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
           "engine-drawn frame-stats readout in the viewport's top-left corner (F3), "
           "`physicsDebug` the Bullet debug drawer (collision shapes and contacts, View → "
           "Wireframes → Physics Debug Overlay — only ever visible while a simulation runs), "
-          "`gameView` the "
+          "`giVolume` the wireframe boxes around the GI lit volume and the reflection-probe "
+          "region world.giStatus() reports (off by default, drawn only while GI is on — the lit "
+          "volume is the one thing in a GI scene a user cannot otherwise see, and an object "
+          "outside it gets no bounce), `gameView` the "
           "master switch that hides the HELPERS all at once. `stats` is deliberately NOT one of the "
           "things gameView hides: it is a diagnostic, not an editor helper, and \"what is my frame "
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
           "the numbers themselves — the readout never appears in a screenshot, because screenshots "
           "render through an offscreen view and the overlay is excluded from those by construction.",
           Needs::Engine },
-        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView}) -> bool",
+        { "setOverlays", "editor.setOverlays({grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume}) -> bool",
           "Turns the viewport's editor helpers on and off — the View Options rows, the G key and "
           "the F3 stats readout, as one verb. Omitted keys keep their value; an unknown key is "
           "REFUSED (a silently ignored overlay key is indistinguishable from a broken renderer). "
@@ -383,6 +386,7 @@ QVariantMap EditorApi::overlays()
     // rows to be script-invisible.
     out["physicsDebug"] = host.viewport->getShowDebugDrawFlags();
     out["gameView"] = host.viewport->isGameView();
+    out["giVolume"] = host.viewport->getShowGiVolume();
     return out;
 }
 
@@ -393,7 +397,7 @@ bool EditorApi::setOverlays(const QVariantMap &change)
     // read it and then guessed "fps" got the refusal below, and a caller who
     // trusted it never learned `stats` or `physicsDebug` existed.
     static const QStringList known = { "grid", "lightWires", "selectionWireframe",
-                                      "stats", "physicsDebug", "gameView" };
+                                      "stats", "physicsDebug", "gameView", "giVolume" };
     if (change.isEmpty())
         return fail(QStringLiteral("editor.setOverlays: nothing to change — pass a map ({%1}); "
                                    "editor.overlays() reads the current values")
@@ -434,6 +438,10 @@ bool EditorApi::setOverlays(const QVariantMap &change)
         else host.viewport->setShowDebugDrawFlags(on);
     }
     if (change.contains("gameView")) host.viewport->setGameView(change.value("gameView").toBool());
+    // The GI volume boxes (LIGHTING_FIX fix 9). Not persisted: it is a
+    // diagnostic you turn on to answer "is that object inside the lit volume?"
+    // and the answer stops mattering the moment it is yes.
+    if (change.contains("giVolume")) host.viewport->setShowGiVolume(change.value("giVolume").toBool());
     return true;
 }
 

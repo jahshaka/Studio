@@ -61,6 +61,43 @@ add_test(NAME gi.pcc_bounds COMMAND test_gi_pcc_bounds
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_bounds PROPERTIES TIMEOUT 600 LABELS "engine")
 
+# gi.cliff — THE GI-VOLUME CLIFF (LIGHTING_FIX fix 1) plus the engine half of
+# the re-fit-on-exit contract (fix 2). Its own binary for the same
+# process-wide-HlmsPbs-binding reason as its siblings.
+add_executable(test_gi_cliff test_gi_cliff.cpp)
+set_target_properties(test_gi_cliff PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_cliff PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_cliff PRIVATE JahshakaEngine)
+add_dependencies(test_gi_cliff JahshakaEngineMedia)
+add_test(NAME gi.cliff COMMAND test_gi_cliff
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.cliff PROPERTIES TIMEOUT 600 LABELS "engine")
+
+# gi.ambient — THE VCT AMBIENT (LIGHTING_FIX fix 3). Own binary: process-wide
+# HlmsPbs binding, same rule as its siblings.
+add_executable(test_gi_ambient test_gi_ambient.cpp)
+set_target_properties(test_gi_ambient PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_ambient PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_ambient PRIVATE JahshakaEngine)
+add_dependencies(test_gi_ambient JahshakaEngineMedia)
+add_test(NAME gi.ambient COMMAND test_gi_ambient
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ambient PROPERTIES TIMEOUT 600 LABELS "engine")
+
 # gi.coalesce — the drag-a-light gate (spec §5 / P2). Links the MIRROR as well
 # as the engine (like tests/mirror) because the coalescing gate is mirror-side
 # and the cheap light-only path is engine-side; the contract is the pair.
@@ -87,4 +124,31 @@ add_dependencies(test_gi_coalesce JahshakaEngineMedia)
 add_test(NAME gi.coalesce COMMAND test_gi_coalesce
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.coalesce PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 600 LABELS "engine")
+
+# gi.overlay — THE GI VOLUME OVERLAY (LIGHTING_FIX fix 9). Mirror-linked for the
+# same reason gi.coalesce is: the overlay is mirror-side, the helper channel it
+# rides is engine-side, and the contract is the pair.
+add_executable(test_gi_overlay test_gi_overlay.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_gi_overlay PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_gi_overlay PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_gi_overlay PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_overlay PRIVATE IrisGL JahshakaEngine Qt6::Gui)
+add_dependencies(test_gi_overlay JahshakaEngineMedia)
+add_test(NAME gi.overlay COMMAND test_gi_overlay
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 600 LABELS "engine")

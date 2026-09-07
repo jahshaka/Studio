@@ -109,6 +109,8 @@ public:
     void setShowLightWires(bool value) override { mShowLightWires = value; }
     bool getShowGrid() const override { return mShowGrid; }
     void setShowGrid(bool value) override { mShowGrid = value; }
+    bool getShowGiVolume() const override { return mShowGiVolume; }
+    void setShowGiVolume(bool value) override { mShowGiVolume = value; }
     // G / editor.gameView: hide every in-viewport editor helper (grid, light
     // wires, outline, gizmo) — docks and toolbars untouched. Not persisted.
     void setGameView(bool enabled) override { mGameView = enabled; }
@@ -397,6 +399,9 @@ private:
     // reflection probes. The canonical orthographic views force it on with a
     // view-facing plane regardless of this flag; see gridStateForView().
     bool mShowGrid = false;
+    /// GI volume boxes (fix 9). Diagnostic, default off, not persisted — it is
+    /// a thing you turn on while chasing a lighting question.
+    bool mShowGiVolume = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
     QHash<QString, ViewCameraState> mViewStates; // per-view camera memory (session-only)
     bool mGameView = false;             // G: helpers hidden; never persisted

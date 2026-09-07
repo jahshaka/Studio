@@ -113,12 +113,16 @@ if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
     add_library(JahshakaEngineAsan STATIC ${JAHSHAKA_ENGINE_SOURCES})
     target_include_directories(JahshakaEngineAsan
-        PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+        PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
+        PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR})
     target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})
     # Same shader-cache fingerprint terms as the real library (irisgl/engine/
-    # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them.
+    # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them. The
+    # engine BUILD ID now arrives as a generated header on the include path
+    # (LIGHTING_FIX fix 10), so this copy depends on the same custom target
+    # rather than baking a second, configure-time value.
+    add_dependencies(JahshakaEngineAsan JahshakaEngineBuildId)
     target_compile_definitions(JahshakaEngineAsan PRIVATE
-        JAHSHAKA_ENGINE_BUILD_ID="${JAHSHAKA_ENGINE_BUILD_ID}"
         JAHSHAKA_OGRE_PATCH_SERIES="${JAHSHAKA_OGRE_PATCH_SERIES}")
     set_target_properties(JahshakaEngineAsan PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     target_compile_options(JahshakaEngineAsan PRIVATE -fsanitize=address -fno-omit-frame-pointer)

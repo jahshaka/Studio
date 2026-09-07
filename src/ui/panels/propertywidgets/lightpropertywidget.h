@@ -77,6 +77,7 @@ protected slots:
     void lightSpotCutoffChanged(float spotCutOff);
 
     void lightSpotCutoffSoftnessChanged(float spotCutOffSoftness);
+    void lightSpotFalloffChanged(float spotFalloff);
 
     void lightRectWidthChanged(float width);
     void lightRectHeightChanged(float height);
@@ -117,6 +118,7 @@ private:
 	HFloatSliderWidget* distance;
     HFloatSliderWidget* spotCutOff;
     HFloatSliderWidget* spotCutOffSoftness;
+    HFloatSliderWidget* spotFalloff;
     HFloatSliderWidget* intensity;
     // Area lights (engine viewport): rectangle size, emission sides, LTC toggle.
     HFloatSliderWidget* rectWidth;
