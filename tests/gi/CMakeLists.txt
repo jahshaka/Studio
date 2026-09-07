@@ -173,3 +173,21 @@ add_test(NAME gi.dynamic_probes COMMAND test_gi_dynamic_probes
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.dynamic_probes PROPERTIES TIMEOUT 600 LABELS "engine")
 
+
+# DDGI SPIKE (GI_UNIFIED_SPEC.md §4 P0) — THROWAWAY, spike branch only.
+# Deliberately NOT an add_test: this is an instrument, not a gate. It is driven
+# by hand (`./test_ddgi_spike ab|ppf <n>|ambient|teardown`) and its output IS
+# the finding. Its own binary for the process-wide-HlmsPbs reason its siblings
+# document.
+add_executable(test_ddgi_spike test_ddgi_spike.cpp)
+set_target_properties(test_ddgi_spike PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_ddgi_spike PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_ddgi_spike PRIVATE JahshakaEngine)
+add_dependencies(test_ddgi_spike JahshakaEngineMedia)
