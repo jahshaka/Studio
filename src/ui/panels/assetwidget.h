@@ -356,7 +356,6 @@ private:
 	QAction *displayGridAction;
 	QAction *displayListAction;
 
-	QPushButton *goBackOneControl;  // goes to previous dir
 	QPushButton *goUpOneControl;    // goes to parent dir
 
 	QSize iconSize;

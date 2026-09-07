@@ -191,22 +191,21 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 	listSize = QSize(32, 32);
 	currentSize = iconSize;
 
-    goBackOneControl = new QPushButton(tr("<"));
+    // "Go Up" is the only directory control. A second "<" (go BACK) button
+    // lived here with its handler commented out and its addWidget commented
+    // out too — a dead widget that was constructed, never shown, never freed,
+    // and connected to an empty lambda. Deleted 2026-09-07 (owner ask); the
+    // "Assets" tree root and Go Up are untouched.
     goUpOneControl = new QPushButton(tr("Go Up"));
     goUpOneControl->setEnabled(false);
 
     QHBoxLayout *dirControlLayout = new QHBoxLayout;
     dirControlLayout->setSpacing(0);
     dirControlLayout->setSizeConstraint(QLayout::SetFixedSize);
-    //dirControlLayout->addWidget(goBackOneControl);
     dirControlLayout->addWidget(goUpOneControl);
 
     ui->dirControls->setLayout(dirControlLayout);
     ui->dirControls->setObjectName("DirControl");
-
-    connect(goBackOneControl, &QPushButton::pressed, [this]() {
-        //updateAssetView(assetItem.selectedGuid);
-    });
 
     connect(goUpOneControl, &QPushButton::pressed, [this]() {
         updateAssetView(db->fetchAsset(assetItem.selectedGuid).parent, activeFilter, showDependencies);
@@ -260,18 +259,37 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
     ui->filterWidget->setObjectName(QStringLiteral("FilterWidget"));
     ui->filterWidget->setLayout(filterGroupLayout);
 
+    // THE ASSET CLASSES THE PIPELINE ACTUALLY PRODUCES (audited 2026-09-07
+    // against ModelTypes + AssetView::getAssetType + the importers in
+    // src/services/import/): Object, Material, Texture, Shader,
+    // ParticleSystem, Sky, Music (shown as "Audio" everywhere else), Video,
+    // LightProfile (.ies) and File. Video and Light Profiles were missing —
+    // both are first-class library types with their own importer, metadata
+    // block and thumbnail, and neither could be filtered for. "Music" is
+    // relabelled "Audio" to match the type name the rest of the app shows.
+    // Mesh is deliberately NOT here: a mesh row is a DEPENDENCY of its Object
+    // row (Database::fetchChildAssets hides dependencies unless "Show
+    // dependencies" is on), so a Meshes filter would read as empty in the
+    // default view. Undefined / Variant / SoundEffect are enum values nothing
+    // ever writes.
     assetFilterCombo = new QComboBox(this);
     assetFilterCombo->addItem("All Assets", QVariant::fromValue(0));
     assetFilterCombo->addItem("Objects", QVariant::fromValue(static_cast<int>(ModelTypes::Object)));
     assetFilterCombo->addItem("Materials", QVariant::fromValue(static_cast<int>(ModelTypes::Material)));
-    assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
-    assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
     assetFilterCombo->addItem("Textures", QVariant::fromValue(static_cast<int>(ModelTypes::Texture)));
-    assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
-    assetFilterCombo->addItem("Music", QVariant::fromValue(static_cast<int>(ModelTypes::Music)));
+    assetFilterCombo->addItem("Shaders", QVariant::fromValue(static_cast<int>(ModelTypes::Shader)));
+    assetFilterCombo->addItem("Particle Systems", QVariant::fromValue(static_cast<int>(ModelTypes::ParticleSystem)));
     assetFilterCombo->addItem("Skies", QVariant::fromValue(static_cast<int>(ModelTypes::Sky)));
+    assetFilterCombo->addItem("Audio", QVariant::fromValue(static_cast<int>(ModelTypes::Music)));
+    assetFilterCombo->addItem("Video", QVariant::fromValue(static_cast<int>(ModelTypes::Video)));
+    assetFilterCombo->addItem("Light Profiles", QVariant::fromValue(static_cast<int>(ModelTypes::LightProfile)));
+    assetFilterCombo->addItem("Files", QVariant::fromValue(static_cast<int>(ModelTypes::File)));
 
+	// A persisted filter naming a class this build no longer offers must fall
+	// back to All Assets — findData returns -1, and an index of -1 leaves the
+	// combo blank while the view stays filtered by an invisible value.
 	int index = assetFilterCombo->findData(activeFilter);
+	if (index < 0) { index = 0; activeFilter = 0; }
 	assetFilterCombo->setCurrentIndex(index);
 
     filterGroupLayout->addWidget(new QLabel("Filter Assets:"));
@@ -734,6 +752,11 @@ bool AssetWidget::eventFilter(QObject *watched, QEvent *event)
                     if (draggingItem) {
                         int distance = (evt->pos() - startPos).manhattanLength();
                         if (distance >= QApplication::startDragDistance()) {
+                            // One drag per press: exec() below runs a nested
+                            // loop and can swallow the release that would
+                            // otherwise clear this (the sticky-drag class of
+                            // bug the presets panels had, 2026-09-07).
+                            draggingItem = false;
                             auto item = ui->assetView->currentItem();
 
                             if (item) {
