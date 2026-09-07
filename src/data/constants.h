@@ -33,7 +33,6 @@ namespace Constants
 	extern QString META_EXT;
     extern QStringList PROJECT_DIRS;
     extern QString SHADER_DEFS;
-	extern QString SHADER_FILE_DEFS;
     extern QString DEFAULT_SHADER;
     extern QString SAMPLES_FOLDER;
     extern QString PROJECT_FOLDER;

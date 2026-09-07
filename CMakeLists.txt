@@ -723,7 +723,6 @@ set (QRCS
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
-    ${CMAKE_SOURCE_DIR}/app/shaders.qrc
     ${CMAKE_SOURCE_DIR}/app/themes.qrc
     ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc
     ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudeskills.qrc
