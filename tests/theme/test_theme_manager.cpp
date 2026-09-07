@@ -4,12 +4,15 @@
 // Qlementine QStyle owns rendering. Runs offscreen; no style is applied.
 
 #include <QApplication>
+#include <QFont>
 #include <QMenu>
+#include <QPushButton>
 #include <QStyle>
 #include <cstdio>
 
 #include "ui/style/thememanager.h"
 #include "ui/style/stylesheet.h"
+#include "data/constants.h"
 #include "data/settingsmanager.h"
 
 static int failures = 0;
@@ -56,6 +59,61 @@ int main(int argc, char **argv)
     CHECK(StyleSheet::ItemGridTileBorder(2).isEmpty(), "qlementine: parameterized getter neutralized");
     CHECK(StyleSheet::PreferencesTabs().isEmpty(), "qlementine: preferences tabs getter neutralized");
 
+    // ---- header glyph buttons (owner report 2026-09-07) ----------------------
+    // The three header icons (Publish / Help / Preferences) are icon-font
+    // characters on the header bar. Two things went wrong and are pinned here:
+    // Qlementine painted its grey button PLATE behind them (read as "a grey
+    // background baked into the icon"), and a font pushed with setFont() was
+    // dropped by the next repolish, leaving Publish at the inherited UI size
+    // beside two 28px siblings. The sheet carries BOTH: no plate, and the font.
+    {
+        QFont iconFont(QStringLiteral("FontAwesome"));
+        iconFont.setPixelSize(28);
+
+        StyleSheet::setClassicThemeActive(false);
+        const QString sheet = ThemeManager::headerGlyphButtonSheet(iconFont);
+        CHECK(sheet.contains("background: transparent"),
+              "glyph button: no button plate under qlementine");
+        CHECK(sheet.contains("font-size: 28px"),
+              "glyph button: the sheet carries the icon size");
+        CHECK(sheet.contains("FontAwesome"),
+              "glyph button: the sheet carries the icon family");
+
+        QPushButton publish, help;
+        publish.setObjectName(QStringLiteral("publish_menu"));
+        help.setObjectName(QStringLiteral("helpButton"));
+        ThemeManager::applyHeaderGlyphButton(&publish, iconFont);
+        ThemeManager::applyHeaderGlyphButton(&help, iconFont);
+        CHECK(publish.styleSheet() == help.styleSheet(),
+              "glyph buttons: all three header icons get the SAME sheet");
+        // The regression itself: a repolish (any setStyleSheet on the widget,
+        // which updateTopMenuStates does to Publish and only to Publish) must
+        // not shrink it. Re-applying is idempotent, sheet and all.
+        QApplication::style()->polish(&publish);
+        ThemeManager::applyHeaderGlyphButton(&publish, iconFont);
+        CHECK(publish.styleSheet().contains("font-size: 28px"),
+              "glyph button: the size survives a re-apply after a polish");
+
+    }
+
+    // ---- the frame-stats readout is OFF by default ---------------------------
+    // Four doors read `show_fps` (F3, the View Options row, Preferences,
+    // editor.setOverlays({stats})) and all four pass this constant. A user who
+    // switched it on keeps it — the DEFAULT, for a settings file that has
+    // never seen the key, is off (owner report 2026-09-07).
+    CHECK(Constants::SHOW_FPS_DEFAULT == false,
+          "show_fps defaults to OFF");
+    {
+        auto *s = SettingsManager::getDefaultManager();
+        s->settings->remove(QStringLiteral("show_fps"));
+        CHECK(s->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool() == false,
+              "a settings file with no show_fps key reads back OFF");
+        s->setValue("show_fps", true);
+        CHECK(s->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool() == true,
+              "an explicit choice survives the default");
+        s->settings->remove(QStringLiteral("show_fps"));
+    }
+
     // ---- QMenu polish contract (menu-click regression, JOURNAL 2026-08-31) ----
     // Upstream QlementineStyle::polish(QMenu) installs a MenuEventFilter (a
     // plain QObject child of the menu) that swallows real mouse releases and
@@ -80,6 +138,33 @@ int main(int argc, char **argv)
             ++plainQObjectChildren;
     CHECK(plainQObjectChildren == 0,
           "qlementine: no MenuEventFilter children even after a re-polish");
+
+    // ---- the same glyph buttons under Classic --------------------------------
+    // LAST, because it flips ThemeManager's own live flag (the getters read
+    // that one, not StyleSheet's mirror) and the classic branch of
+    // applyAtStartup only swaps the application font. Classic keeps its two
+    // archived sheets bit-for-bit; the glyph sheet is neutralized there.
+    {
+        QFont iconFont(QStringLiteral("FontAwesome"));
+        iconFont.setPixelSize(28);
+        ThemeManager::setThemeId(ThemeManager::classicId());
+        ThemeManager::applyAtStartup(app);
+        CHECK(ThemeManager::classicActive(), "classic is live for the checks below");
+        CHECK(ThemeManager::headerGlyphButtonSheet(iconFont).isEmpty(),
+              "classic: the glyph sheet is neutralized (HelpButton/PrefsButton own it)");
+        QPushButton classicPrefs, classicHelp;
+        classicPrefs.setObjectName(QStringLiteral("prefsButton"));
+        classicHelp.setObjectName(QStringLiteral("helpButton"));
+        ThemeManager::applyHeaderGlyphButton(&classicPrefs, iconFont);
+        ThemeManager::applyHeaderGlyphButton(&classicHelp, iconFont);
+        CHECK(classicPrefs.styleSheet() == StyleSheet::PrefsButton(),
+              "classic: the gear keeps PrefsButton() bit-for-bit");
+        CHECK(classicHelp.styleSheet() == StyleSheet::HelpButton(),
+              "classic: help keeps HelpButton() bit-for-bit");
+        CHECK(classicPrefs.font().pixelSize() == 28,
+              "classic: the icon font is still applied");
+        settings->settings->remove(ThemeManager::settingsKey());
+    }
 
     std::printf(failures ? "FAILED (%d)\n" : "PASSED\n", failures);
     return failures ? 1 : 0;

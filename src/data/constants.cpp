@@ -87,6 +87,9 @@ namespace Contants
     int FPS_60                  = 17;	// milliseconds
 	float GRAVITY				= 15;	// this is flipped for bullet
 
+    // The frame-stats readout is off until asked for (see constants.h).
+    bool SHOW_FPS_DEFAULT       = false;
+
     namespace Reserved
     {
         // TODO - maybe move this to an external resources json file
