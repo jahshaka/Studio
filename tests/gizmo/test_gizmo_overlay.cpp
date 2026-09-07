@@ -83,6 +83,59 @@ int main(int argc, char **argv)
     CHECK(hasColour(img, 237/255.f, 66/255.f, 66/255.f), "X handle is red");
     CHECK(hasColour(img, 122/255.f, 204/255.f, 44/255.f), "Y handle is green");
 
+    // ------------------------------------------------------------------
+    // THE FOV SWEEP (fix wave 2026-09-07). updateSize used to feed DEGREES to
+    // qTan and then DIVIDE by the result: at fov 75 that is tan(37.5 rad) =
+    // -0.199, so gizmoScale went negative — every handle transform mirrored
+    // (read on the rig as a 180-degree flip) and every hit radius, which is
+    // gizmoScale * handleScale, went negative too, so nothing could be picked.
+    // The gate: positive and monotonically increasing across the whole range a
+    // camera can be authored at, plus the calibration pin at 45.
+    {
+        const float savedAngle = cam->angle;
+        gizmo.setSelectedNode(node);
+        cam->angle = 45.0f; gizmo.updateSize(cam);
+        const float at45 = gizmo.getGizmoScale();
+        // distance is 6 (camera at z=6, node at the origin); 4.33*6*tan(22.5deg)
+        // is the pre-fix 6/tan(22.5 rad) to five decimals — nothing moves at 45.
+        std::printf("    gizmoScale at fov 45: %.5f (legacy 1/tan(22.5rad)*6 = %.5f)\n",
+                    at45, 6.0f / std::tan(22.5f));
+        // 4.33 is the rounded 4.3310 that solves it exactly, so the agreement
+        // is to 0.02% (0.0025 world units at this distance), not to the bit.
+        CHECK(std::abs(at45 - 6.0f / std::tan(22.5f)) < 0.01f,
+              "fov 45 reproduces the legacy gizmo size (calibration)");
+
+        float prev = -1.0f;
+        bool positive = true, monotonic = true;
+        for (float fov = 30.0f; fov <= 120.5f; fov += 5.0f) {
+            cam->angle = fov;
+            gizmo.updateSize(cam);
+            const float s = gizmo.getGizmoScale();
+            if (!(s > 0.0f) || !std::isfinite(s)) { positive = false; std::printf("    fov %.0f -> scale %.4f (NOT POSITIVE)\n", fov, s); }
+            if (s <= prev) { monotonic = false; std::printf("    fov %.0f -> scale %.4f (NOT INCREASING, prev %.4f)\n", fov, s, prev); }
+            prev = s;
+        }
+        CHECK(positive, "gizmoScale stays positive across fov 30..120");
+        CHECK(monotonic, "gizmoScale grows with the angle of view (screen-constant sizing)");
+
+        // The rig's exact repro: at fov 75 the scale — and therefore every hit
+        // radius derived from it — used to be negative.
+        cam->angle = 75.0f; gizmo.updateSize(cam);
+        std::printf("    gizmoScale at fov 75: %.4f (was %.4f before the fix)\n",
+                    gizmo.getGizmoScale(), 6.0f / std::tan(37.5f));
+        CHECK(gizmo.getGizmoScale() > 0.0f, "fov 75 (the reported flip) is positive");
+
+        // Sanity at the extremes: a 1-degree lens and a 179-degree one both
+        // produce a finite, positive scale rather than a divide-by-zero.
+        cam->angle = 1.0f;   gizmo.updateSize(cam); const float atMin = gizmo.getGizmoScale();
+        cam->angle = 179.0f; gizmo.updateSize(cam); const float atMax = gizmo.getGizmoScale();
+        CHECK(atMin > 0.0f && std::isfinite(atMin) && atMax > atMin && std::isfinite(atMax),
+              "the clamped extremes stay finite and ordered");
+
+        cam->angle = savedAngle;
+        gizmo.updateSize(cam);
+    }
+
     // Highlight: aim the ray at the X handle's colour spot -> it turns yellow.
     // (Hit-testing is the gizmo's own; here we only prove colour changes flow through.)
     gizmo.clearSelectedNode();
