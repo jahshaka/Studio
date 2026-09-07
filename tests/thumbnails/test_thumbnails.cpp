@@ -14,7 +14,10 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/assets/mesh.h"          // MeshMaterialData
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/materials/defaultmaterial.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/cameranode.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "jahshaka/engine/Engine.h"
 
@@ -147,6 +150,52 @@ int main(int argc, char **argv)
             std::printf("    centre channel variance = %d\n", variance);
             CHECK(variance > 60, "thumbnail shows the texture's colour, not greyscale");
             CHECK(ct.red() > ct.blue() + 60, "and the colour is the texture's (red-dominant)");
+        }
+
+        // 7b. THE SECONDARY-SURFACE TONEMAP (owner report 2026-09-07, item 6).
+        //
+        // A thumbnail used to be a raw linear readback: everything above 1.0
+        // clipped to 255, so a brightly-lit world photographed as a white card
+        // while the viewport beside it, which tonemaps, rolled the highlight
+        // off. bridge/secondarysurfacetonemap.h turns the deterministic filmic
+        // grade on for this renderer.
+        //
+        // WHAT THIS CASE CAN AND CANNOT SHOW. renderNode's studio lighting is
+        // tuned so an ordinary asset does not blow out — which is precisely why
+        // the defect survived here and bit on SCENE thumbnails and screenshots
+        // of real worlds instead. So the clipping proof lives where it can be
+        // constructed: test_engine's fixed_exposure_tonemap case, which renders
+        // a violently lit scene with the grade on and off and compares the
+        // histograms. What THIS case pins is that the grade is applied at all
+        // (the highlight rolls down measurably) and that it never introduces
+        // clipping of its own.
+        {
+            auto hot = iris::MeshNode::create();
+            hot->setMesh(":assets/models/cube.obj");
+            auto hm = iris::DefaultMaterial::create();
+            hm->setDiffuseColor(QColor(255, 255, 255));
+            hot->setMaterial(hm);
+            QImage w = renderer.renderNode(hot, size); show("white cube", w);
+
+            int saturated = 0, lit = 0, maxChannel = 0;
+            for (int y = 0; y < w.height(); ++y) for (int x = 0; x < w.width(); ++x) {
+                const QColor p = w.pixelColor(x, y);
+                if (isBackground(p)) continue;
+                ++lit;
+                maxChannel = std::max(maxChannel, std::max({ p.red(), p.green(), p.blue() }));
+                if (p.red() >= 254 && p.green() >= 254 && p.blue() >= 254) ++saturated;
+            }
+            std::printf("    white cube: %d lit px, %d fully saturated, brightest channel %d\n",
+                        lit, saturated, maxChannel);
+            CHECK(lit > 200, "the white cube rendered");
+            CHECK(saturated == 0 && maxChannel < 255,
+                  "the tonemapped thumbnail does not clip: no pixel is flat white");
+            // MEASURED: 176 raw, 138 graded, on this renderer's studio lights.
+            // The band is wide enough to survive a driver, narrow enough that
+            // silently losing the grade (which would put it back at 176) fails.
+            CHECK(maxChannel > 100 && maxChannel < 160,
+                  "and the filmic curve is actually applied (brightest channel rolled down "
+                  "from the raw path's 176 into the 100..160 band)");
         }
 
         // 8. the primary view is untouched: still its own clear colour, nothing of the thumbs scene

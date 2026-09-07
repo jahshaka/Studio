@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "ui_labelwidget.h"
 #include "ui/controls/labelwidget.h"
 #include "ui_labelwidget.h"
+#include "ui/controls/dragvaluewidgets.h"
 #include "ui/controls/filepickerwidget.h"
 #include "ui_filepickerwidget.h"
 #include "ui/panels/propertywidget.h"
@@ -150,6 +151,34 @@ Widget3D * AccordianBladeWidget::addVector3Widget(const QString &, float xValue,
 {
 	auto widget = new Widget3D;
 	widget->setValues(xValue, yValue, zValue);
+	minimum_height += widget->height() + stretch;
+	ui->contentpane->layout()->addWidget(widget);
+	return widget;
+}
+
+DragFloatWidget *AccordianBladeWidget::addDragFloat(const QString &title, double value,
+                                                   double min, double max,
+                                                   double perPixelStep, int decimals)
+{
+	auto widget = new DragFloatWidget(title);
+	widget->setDecimals(decimals);
+	widget->setRange(min, max);
+	widget->setPerPixelStep(perPixelStep);
+	widget->setValue(value);
+	minimum_height += widget->height() + stretch;
+	ui->contentpane->layout()->addWidget(widget);
+	return widget;
+}
+
+DragVector3Widget *AccordianBladeWidget::addDragVector3(const QString &title, const iris::Vec3 &value,
+                                                        double min, double max,
+                                                        double perPixelStep, int decimals)
+{
+	auto widget = new DragVector3Widget(title);
+	widget->setDecimals(decimals);
+	widget->setRange(min, max);
+	widget->setPerPixelStep(perPixelStep);
+	widget->setValues(value);
 	minimum_height += widget->height() + stretch;
 	ui->contentpane->layout()->addWidget(widget);
 	return widget;

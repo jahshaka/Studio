@@ -168,6 +168,7 @@ For more information see the LICENSE file
 #include "services/shortcutregistry.h"
 #include "services/worldmodes.h"
 #include "viewport/snapsettings.h"
+#include "viewport/flyspeedsettings.h"
 #include "services/subscriber.h"
 #include "services/undoservice.h"
 #include "services/selectionservice.h"
@@ -198,6 +199,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 	settings = SettingsManager::getDefaultManager();
 	SnapSettings::bindSettings(settings->settings);   // snap sizes persist beside the shortcuts
+	FlySpeedSettings::bindSettings(settings->settings);   // and the camera fly speeds
 
 
     QFont font;
@@ -2896,6 +2898,27 @@ void MainWindow::setupToolBar()
 	actionArcballCam->setIcon(fontIcons->icon(fa::dotcircleo, options));
 	toolBar->addAction(actionArcballCam);
 
+	// CAMERA SPEED (owner request 2026-09-07, Unreal's control). A multiplier
+	// on the fly base, in the toolbar beside the two camera-mode buttons it
+	// belongs with. The value lives in FlySpeedSettings (persisted) and the
+	// verb editor.setFlySpeed owns writing it; this combo reads and writes
+	// through the same place the scroll wheel does, so the three can never
+	// disagree.
+	flySpeedCombo = new QComboBox;
+	flySpeedCombo->setObjectName(QStringLiteral("flySpeedCombo"));
+	flySpeedCombo->setToolTip("Camera Speed | Multiplier on the fly speed (8 u/s). "
+	                          "Scroll the wheel while holding the right mouse button in the viewport.");
+	for (float step : FlySpeedSettings::steps())
+		flySpeedCombo->addItem(QString("%1x").arg(double(step)));
+	flySpeedCombo->setFocusPolicy(Qt::NoFocus);   // never steal the fly keys
+	connect(flySpeedCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+		const QVector<float> &steps = FlySpeedSettings::steps();
+		if (index < 0 || index >= steps.size()) return;   // the off-ladder entry
+		FlySpeedSettings::setMultiplier(FlySpeedSettings::Editor, steps[index]);
+	});
+	toolBar->addWidget(flySpeedCombo);
+	syncFlySpeedUi();
+
 	toolBar->addSeparator();
 
     connect(actionTranslate,    SIGNAL(triggered(bool)), SLOT(translateGizmo()));
@@ -2973,6 +2996,16 @@ void MainWindow::setupToolBar()
 	connect(sceneView->events(), &EditorViewportEvents::updateToolbarButton, this, [=]() {
 		if (sceneView->editorCamera()->isPerspective) projectionChangeRequested(true);
 		else projectionChangeRequested(false);
+	});
+
+	// The scroll wheel stepped the fly speed while the camera was flying: show
+	// the new multiplier over the viewport and move the dropdown to match.
+	connect(sceneView->events(), &EditorViewportEvents::flySpeedChanged, this, [this]() {
+		syncFlySpeedUi();
+		showViewportToast("Camera Speed",
+		                  QString("%1x  (%2 u/s)")
+		                      .arg(double(FlySpeedSettings::multiplier(FlySpeedSettings::Editor)))
+		                      .arg(double(FlySpeedSettings::speed(FlySpeedSettings::Editor))));
 	});
 	
 	connect(actionExport,		SIGNAL(triggered(bool)), SLOT(exportSceneAsZip()));
@@ -3169,12 +3202,51 @@ void MainWindow::stepSnapSize(int direction)
                                                              SnapSettings::translateSize(), direction));
         text = QString("Move / grid snap: %1").arg(double(SnapSettings::translateSize()));
     }
+    showViewportToast("Snap Size", text);
+}
+
+// The transient readout over the viewport — one toast, reused, for every
+// "you just changed this with a gesture" message (snap size, fly speed). It was
+// stepSnapSize's tail; the fly-speed wheel needed the identical five lines.
+void MainWindow::showViewportToast(const QString &title, const QString &text)
+{
+    if (!sceneView) return;
     if (!snapToast) snapToast = new Toast(this);
-    snapToast->showToast("Snap Size", text, 0, QPoint(), QRect());   // auto-hides
+    snapToast->showToast(title, text, 0, QPoint(), QRect());   // auto-hides
     snapToast->adjustSize();
     QWidget *vp = sceneView->asWidget();
     const QPoint top = vp->mapToGlobal(QPoint(vp->width() / 2, 24));
     snapToast->move(top - QPoint(snapToast->width() / 2, 0));
+}
+
+// THE FLY-SPEED DROPDOWN follows FlySpeedSettings, never the other way round
+// (API-first: editor.setFlySpeed is the verb, this is a view of its value).
+// Reached from three directions — the dropdown's own activation, the scroll
+// wheel while flying (EditorViewportEvents::flySpeedChanged) and the verb
+// (invoked by name) — so the signal is blocked while the index is written or
+// the first two would fight.
+void MainWindow::syncFlySpeedUi()
+{
+    if (!flySpeedCombo) return;
+    const float mult = FlySpeedSettings::multiplier(FlySpeedSettings::Editor);
+    const QVector<float> &steps = FlySpeedSettings::steps();
+    int index = -1;
+    for (int i = 0; i < steps.size(); ++i)
+        if (qFuzzyCompare(steps[i], mult)) { index = i; break; }
+    QSignalBlocker blocked(flySpeedCombo);
+    if (index >= 0) {
+        // A step value: show the ladder entry.
+        if (flySpeedCombo->count() > steps.size()) flySpeedCombo->removeItem(steps.size());
+        flySpeedCombo->setCurrentIndex(index);
+    } else {
+        // A verb set something off the ladder (0.05..32 is legal, the ladder is
+        // only what the UI offers). Show it as a trailing entry rather than
+        // lying about which step is active.
+        const QString label = QString("%1x").arg(double(mult));
+        if (flySpeedCombo->count() > steps.size()) flySpeedCombo->setItemText(steps.size(), label);
+        else                                       flySpeedCombo->addItem(label);
+        flySpeedCombo->setCurrentIndex(steps.size());
+    }
 }
 
 // Space: translate -> rotate -> scale -> translate (Unreal's mode cycle).
@@ -3487,11 +3559,27 @@ void MainWindow::showProjectManagerInternal()
     pmContainer->cleanupOnClose();
 }
 
+// A BRAND-NEW SCENE STARTS AT THE DEFAULTS (owner report 2026-09-07). Opening a
+// scene pushes its saved EditorData into the viewport and the View menu
+// (openStage's `editorData` branch); creating one pushed NOTHING, so a new
+// scene silently inherited the last opened scene's helper state — the grid in
+// particular, which is why "new scene has the grid on" and "loaded scene does
+// not" could both be true in one session. A default-constructed EditorData IS
+// the statement of what a new scene looks like; applying it here is the same
+// operation the open path performs, with the same three settings.
 void MainWindow::newScene()
 {
     auto scene = this->createDefaultScene();
     this->setScene(scene);
     this->sceneView->resetEditorCam();
+
+    const EditorData defaults;
+    sceneView->setShowGrid(defaults.showGrid);
+    sceneView->setShowLightWires(defaults.showLightWires);
+    sceneView->setShowDebugDrawFlags(defaults.showDebugDrawFlags);
+    if (gridCheckAction)    gridCheckAction->setChecked(defaults.showGrid);
+    if (wireCheckAction)    wireCheckAction->setChecked(defaults.showLightWires);
+    if (physicsCheckAction) physicsCheckAction->setChecked(defaults.showDebugDrawFlags);
 }
 
 bool MainWindow::beginEngineSelftest(QString &why)

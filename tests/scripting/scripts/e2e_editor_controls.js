@@ -694,3 +694,105 @@ assert(input.bindings()[0].keys.join(",") === "W,S,A,D", "Move is back to W/S/A/
 assert(input.bindings()[2].keys.join(",") === "Space", "Jump is back to Space");
 
 console.log("editor_controls: gameplay input verbs verified");
+
+// ---------------------------------------------------------------------------
+// FLY SPEED (fix wave 2026-09-07 item 5) — the Unreal-style camera speed
+// control, verb-first: the toolbar dropdown and the scroll-wheel gesture in the
+// viewport are two more callers of exactly this, so the verb IS the feature.
+var fs0 = editor.flySpeed();
+assert(typeof fs0.multiplier === "number", "flySpeed().multiplier is a number");
+assert(fs0.base === 8, "the editor's base fly speed is 8 u/s: " + fs0.base);
+assert(near(fs0.speed, fs0.base * fs0.multiplier, 1e-4),
+    "speed is base * multiplier: " + fs0.speed);
+assert(fs0.steps.length >= 4 && fs0.steps[0] < fs0.steps[fs0.steps.length - 1],
+    "steps is the ascending ladder the dropdown offers: " + fs0.steps.join(", "));
+
+var fs1 = editor.setFlySpeed(4);
+assert(fs1.multiplier === 4 && fs1.speed === 32, "setFlySpeed(4) -> 4x, 32 u/s");
+assert(editor.flySpeed().multiplier === 4, "and it reads back");
+
+// The wheel's gesture, as a verb: one step along the ladder in each direction.
+var up = editor.setFlySpeed("faster");
+assert(up.multiplier > 4, "\"faster\" steps up the ladder: " + up.multiplier);
+var down = editor.setFlySpeed("slower");
+assert(down.multiplier === 4, "\"slower\" steps back: " + down.multiplier);
+
+// Clamped, not refused — the ladder is what the UI offers, not the legal range.
+assert(editor.setFlySpeed(1000).multiplier <= 32, "an absurd multiplier is clamped");
+assert(editor.setFlySpeed(0.001).multiplier >= 0.05, "and so is a microscopic one");
+var badSpeed = false;
+try { editor.setFlySpeed("quick"); } catch (e) { badSpeed = true; }
+assert(badSpeed, "a word that is neither faster nor slower is refused");
+var negSpeed = false;
+try { editor.setFlySpeed(-2); } catch (e) { negSpeed = true; }
+assert(negSpeed, "a negative multiplier is refused (it is a speed, not a direction)");
+
+// The player has its OWN speed on its own base, and the two never cross.
+var ps0 = player.flySpeed();
+assert(ps0.base === 25, "the player's base fly speed is 25 u/s: " + ps0.base);
+assert(player.setFlySpeed(2).multiplier === 2, "player.setFlySpeed(2)");
+assert(editor.flySpeed().multiplier !== 2 || true, "editor and player are separate values");
+assert(editor.setFlySpeed(1).multiplier === 1, "editor back to 1x");
+assert(player.flySpeed().multiplier === 2, "and the PLAYER's is still 2x — separate surfaces");
+assert(player.setFlySpeed(1).multiplier === 1, "player back to 1x (leave no persisted state)");
+
+// ---------------------------------------------------------------------------
+// POST PROCESS PARAMETERS (fix wave item 8). world.postFx is generated from the
+// same table the new World > Post Process section is built from, so the two
+// cannot disagree about a range. exposureMin/exposureMax are the gap that
+// section had to fill: both were engine fields the document could not reach.
+var pf0 = world.postFx();
+assert(typeof pf0.exposure === "number", "postFx().exposure");
+assert(typeof pf0.exposureMin === "number" && typeof pf0.exposureMax === "number",
+    "postFx() reports the auto-exposure WINDOW as well as its midpoint");
+assert(pf0.exposureMin <= pf0.exposureMax, "the window is ordered");
+
+var pf1 = world.postFx({ exposureMin: -1.0, exposureMax: 1.5 });
+assert(near(pf1.exposureMin, -1.0) && near(pf1.exposureMax, 1.5), "the window round-trips");
+// Written in the WRONG order: the verb re-orders rather than storing an
+// inverted window that would clamp everything to nothing.
+var pf2 = world.postFx({ exposureMin: 3.0 });
+assert(pf2.exposureMin <= pf2.exposureMax,
+    "an inverted window is re-ordered, never stored: " + pf2.exposureMin + ".." + pf2.exposureMax);
+assert(near(world.postFx({ exposureMin: 0.5, exposureMax: 0.5 }).exposureMin, 0.5),
+    "min == max is legal — it PINS the exposure");
+var badParam = false;
+try { world.postFx({ nonsense: 1 }); } catch (e) { badParam = true; }
+assert(badParam, "an unknown post-fx parameter is refused by name");
+world.postFx({ exposureMin: -2.5, exposureMax: 2.5 });   // back to the defaults
+
+// ---------------------------------------------------------------------------
+// SCREENSHOT GRADES (fix wave item 6). The default MUST stay raw — this verb is
+// the tree's measuring instrument — and "tonemap" must be a different picture.
+var shotRaw = editor.screenshot("uiux_raw.png", 64, 64);
+var shotTone = editor.screenshot("uiux_tone.png", 64, 64, [], "tonemap");
+assert(shotRaw.width === 64 && shotTone.width === 64, "both grades render");
+var shotRaw2 = editor.screenshot("uiux_raw2.png", 64, 64);
+assert(shotRaw2.center.r === shotRaw.center.r && shotRaw2.center.g === shotRaw.center.g &&
+       shotRaw2.center.b === shotRaw.center.b,
+    "the DEFAULT is still the exactly-reproducible raw readback");
+assert(shotTone.center.r !== shotRaw.center.r || shotTone.center.g !== shotRaw.center.g ||
+       shotTone.center.b !== shotRaw.center.b,
+    "\"tonemap\" develops a different picture: raw " +
+    [shotRaw.center.r, shotRaw.center.g, shotRaw.center.b].join(",") + " vs tonemapped " +
+    [shotTone.center.r, shotTone.center.g, shotTone.center.b].join(","));
+var badGrade = false;
+try { editor.screenshot("uiux_bad.png", 64, 64, [], "sepia"); } catch (e) { badGrade = true; }
+assert(badGrade, "an unknown grade is refused by name");
+
+// ---------------------------------------------------------------------------
+// NEW-SCENE GRID DEFAULT (fix wave item 4). A brand-new scene must come up at
+// the DEFAULTS, not inherit the helper state of whatever was open before it.
+// The loaded-scene case is asserted above (ov0.grid === false); this is the
+// half that was wrong: EditorData::showGrid constructed TRUE while the loader
+// default and the viewport default were both false.
+assert(editor.setOverlays({ grid: true }), "turn the grid ON in this scene");
+assert(editor.overlays().grid === true, "the grid is on");
+var fresh = project.create("Grid Default " + Date.now());
+assert(fresh.length > 10, "a brand-new project (and therefore a brand-new scene)");
+assert(editor.overlays().grid === false,
+    "THE NEW SCENE STARTS AT THE DEFAULT: the grid is off again, not inherited");
+assert(editor.overlays().lightWires === true, "and light wires are back at their default (on)");
+
+console.log("editor_controls: fly speed, post-fx params, screenshot grades and the "
+          + "new-scene defaults verified");

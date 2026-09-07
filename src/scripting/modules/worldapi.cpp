@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonObject>
 
+#include <utility>
+
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
 #include "services/assetcas.h"
@@ -133,8 +135,8 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "clearOverrides", "world.clearOverrides() -> object",
           "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
-        { "postFx", "world.postFx({exposure, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
-          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them.",
+        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
+          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
           Needs::Document },
         { "modeTable", "world.modeTable() -> object",
           "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from.",
@@ -161,7 +163,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "setMode", "world.setMode({mode}) -> string",
           "Alias of world.mode — same arguments, same result (and, called with no argument, the "
           "same read).", Needs::Document },
-        { "setPostFx", "world.setPostFx({exposure, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
+        { "setPostFx", "world.setPostFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
           "Alias of world.postFx — same arguments, same result.", Needs::Document },
     };
 }
@@ -1055,21 +1057,35 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
     QVariantMap out;
     auto scene = sceneOrFail(QStringLiteral("world.postFx"));
     if (!scene) return out;
-    // Deliberately NOT World Mode rows: a tier answers "how much machinery", and
-    // these answer "how does it look". Tiering an art decision would mean a mode
-    // switch silently regrading the user's scene.
-    if (params.contains("exposure"))
-        scene->exposure = float(qBound(-8.0, params.value("exposure").toDouble(), 8.0));
-    if (params.contains("bloomThreshold"))
-        scene->bloomThreshold = float(qBound(0.0, params.value("bloomThreshold").toDouble(), 64.0));
-    if (params.contains("ssaoPower"))
-        scene->ssaoPower = float(qBound(0.1, params.value("ssaoPower").toDouble(), 8.0));
-    if (params.contains("ssaoRadius"))
-        scene->ssaoRadius = float(qBound(0.05, params.value("ssaoRadius").toDouble(), 64.0));
-    out["exposure"] = scene->exposure;
-    out["bloomThreshold"] = scene->bloomThreshold;
-    out["ssaoPower"] = scene->ssaoPower;
-    out["ssaoRadius"] = scene->ssaoRadius;
+    // GENERATED FROM THE TABLE (services/worldmodes.h postFxParams), the way
+    // world.modeTable is generated from rows(). This verb used to name each
+    // parameter and hard-code its clamp, and the World panel had no way to see
+    // either — so the panel could not offer them at all, and when it finally
+    // did (fix wave 2026-09-07 item 8) it would have been a second copy of the
+    // ranges. One table, two consumers.
+    //
+    // Deliberately NOT World Mode rows: a tier answers "how much machinery",
+    // and these answer "how does it look". Tiering an art decision would mean a
+    // mode switch silently regrading the user's scene.
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!worldmodes::postFxParam(it.key())) {
+            QStringList known;
+            for (const auto &p : worldmodes::postFxParams()) known << p.id;
+            fail(QStringLiteral("world.postFx: unknown parameter '%1' (known: %2)")
+                     .arg(it.key(), known.join(QStringLiteral(", "))));
+            return QVariantMap();
+        }
+    }
+    for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) {
+        if (params.contains(p.id))
+            p.set(scene, qBound(p.minValue, params.value(p.id).toDouble(), p.maxValue));
+    }
+    // The one CROSS-parameter rule the table cannot express: the auto-exposure
+    // window has to be ordered, whichever order the caller wrote it in.
+    if (scene->exposureMax < scene->exposureMin)
+        std::swap(scene->exposureMin, scene->exposureMax);
+    for (const worldmodes::ParamRow &p : worldmodes::postFxParams())
+        out[p.id] = p.get(scene);
     return out;
 }
 

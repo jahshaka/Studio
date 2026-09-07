@@ -48,6 +48,8 @@
 #include "viewport/enginerenderdriver.h"
 #include "viewport/previewframing.h"
 #include "viewport/snapsettings.h"
+#include "viewport/freecamerapolicy.h"
+#include "bridge/secondarysurfacetonemap.h"
 #include "services/engineerrorpump.h"
 #include "services/loadtimeline.h"
 #include "services/services.h"
@@ -899,6 +901,12 @@ bool EngineSceneViewport::event(QEvent *e)
             switch (key) {
             case Qt::Key_W: case Qt::Key_A: case Qt::Key_S: case Qt::Key_D:
             case Qt::Key_Q: case Qt::Key_E: case Qt::Key_Shift:
+            // The ARROW ALIASES (owner request 2026-09-07). Up/Down/Left/Right
+            // are W/S/A/D in the fly, so they need the same claim on the key:
+            // arrows are Qt::WindowShortcut material elsewhere in the app
+            // (list navigation, the hierarchy tree) and without this the fly
+            // would fight whatever widget last had focus.
+            case Qt::Key_Up: case Qt::Key_Down: case Qt::Key_Left: case Qt::Key_Right:
                 e->accept();
                 return true;
             default:
@@ -1150,6 +1158,15 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
     return true;
 }
 
+// THE WIDE-ASPECT FOV CAP, for this viewport's OWN camera only
+// (viewport/freecamerapolicy.h). The explorer is a free camera and gets the cap;
+// a PILOTED scene camera is authored and never does — its lens is the shot.
+float EngineSceneViewport::freeCameraFovCap() const
+{
+    return (viewCamera() && viewCamera() == mEditorCam)
+               ? freecam::kFreeCameraMaxHorizontalFovDegrees : 0.0f;
+}
+
 void EngineSceneViewport::setPipEnabled(bool on)
 {
     if (on == mPipEnabled) return;
@@ -1311,7 +1328,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     }
     if (mMirror) mMirror->applySky(view());
     if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
-    if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view());
+    if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFovCap());
     syncPip();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine now, from the
@@ -1427,10 +1444,23 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height)
 {
-    return takeScreenshot(width, height, false);
+    // THE USER'S SCREENSHOT IS TONEMAPPED (owner report 2026-09-07, item 6).
+    // This is the no-argument door — the View menu's Screenshot action and the
+    // preview dialog it opens — and it used to hand back raw linear radiance
+    // clipped to 8 bits, so a photograph of an HDR scene was blown out where
+    // the viewport beside it was graded. The SCRIPT door (editor.screenshot)
+    // still defaults to Raw, deliberately: that one is a measuring instrument
+    // and every pixel suite in the tree asserts its exact colours.
+    return takeScreenshot(width, height, ScreenshotGrade::Tonemap);
 }
 
 QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
+{
+    return takeScreenshot(width, height,
+                          postFx ? ScreenshotGrade::Viewport : ScreenshotGrade::Raw);
+}
+
+QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrade grade)
 {
     // Offscreen render of the same engine scene at the requested size, then readback.
     if (!mEngine || !mEngineScene || width <= 0 || height <= 0) return QImage();
@@ -1446,16 +1476,24 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, bool postFx)
         // Textured skies are scene geometry and show up regardless.
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), shot);
+        if (viewCamera()) mMirror->applyCamera(viewCamera(), shot, freeCameraFovCap());
         // applyEnvironment pushed the scene's post-fx description, which an
-        // offscreen view ignores unless it is told otherwise. `postFx` is that
-        // opt-in and the only place in the app that sets it: it makes the shot
-        // match the viewport (tonemapped, bloomed, AA'd) at the cost of no
-        // longer being a neutral, exactly-reproducible readback.
-        if (postFx) {
+        // offscreen view ignores unless it is told otherwise (POST_CHAIN_SPEC
+        // §7.3). `grade` is that opt-in, and it has three answers because the
+        // two the boolean offered were both wrong for the common case:
+        //   Raw       nothing at all — a neutral, exactly reproducible readback,
+        //             which is what every pixel suite asserts;
+        //   Tonemap   the deterministic filmic grade ONLY (no bloom, no AO, no
+        //             SMAA, fixed exposure) — a picture of the CONTENT that no
+        //             longer clips wherever the scene is bright;
+        //   Viewport  the scene's whole chain, adaptive exposure and all — what
+        //             `postFx: true` has always meant.
+        if (grade == ScreenshotGrade::Viewport) {
             jahshaka::engine::PostFxDesc fx = shot->postFx();
             fx.allowOffscreen = true;
             shot->setPostFx(fx);
+        } else if (grade == ScreenshotGrade::Tonemap) {
+            secondaryfx::apply(shot, true);
         }
     }
     // A screenshot is an offscreen render of this same scene: without this
@@ -1806,7 +1844,7 @@ void EngineSceneViewport::primeSceneEnvironment()
         LoadTimeline::Accumulate env(QStringLiteral("engine:applyEnvironment"));
         mMirror->applyEnvironment(view(), mEngine.get());
     }
-    if (viewCamera()) mMirror->applyCamera(viewCamera(), view());
+    if (viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFovCap());
 }
 
 unsigned EngineSceneViewport::warmUpShaders()

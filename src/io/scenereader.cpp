@@ -483,6 +483,11 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // every document written before the chain existed means.
     scene->hdrEnabled = sceneObj["hdrEnabled"].toBool(false);
     scene->exposure = float(sceneObj["exposure"].toDouble(0.0));
+    // The adaptation window. Absent = the engine's historical hard-coded pair,
+    // so an older document grades exactly as it did.
+    scene->exposureMin = float(qBound(-8.0, sceneObj["exposureMin"].toDouble(-2.5), 8.0));
+    scene->exposureMax = float(qBound(double(scene->exposureMin),
+                                      sceneObj["exposureMax"].toDouble(2.5), 8.0));
     scene->bloomEnabled = sceneObj["bloomEnabled"].toBool(false);
     scene->bloomThreshold = float(sceneObj["bloomThreshold"].toDouble(5.0));
     scene->ssaoEnabled = sceneObj["ssaoEnabled"].toBool(false);

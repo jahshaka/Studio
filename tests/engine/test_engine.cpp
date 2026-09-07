@@ -3208,6 +3208,117 @@ void hdr_tonemap_and_exposure() {
               offCube.r, offCube.g, offCube.b, plainCube.r, plainCube.g, plainCube.b);
 }
 
+/// THE FIXED-EXPOSURE TONEMAP (PostFxDesc::tonemapFixed) — the deterministic
+/// grade every SECONDARY SURFACE uses (owner report 2026-09-07, fix wave item
+/// 6: thumbnails, previews, screenshots and the project tiles all photographed
+/// raw linear radiance, so a brightly lit world came back as a white card).
+///
+/// Three things have to be true, and none of them is a magic colour:
+///   1. RAW CLIPS. A surface driven well above 1.0 saturates to flat white in
+///      the passthrough graph — the defect, constructed rather than asserted
+///      from memory.
+///   2. THE GRADE DOES NOT. The same frame through hdr + tonemapFixed rolls the
+///      highlight off: no fully-saturated pixel, and the brightest channel is
+///      below 255.
+///   3. IT IS DETERMINISTIC. Two reads separated by real time are BYTE
+///      IDENTICAL, which the automatic exposure — which adapts against the wall
+///      clock — cannot be. This is the whole reason the fixed form exists.
+void fixed_exposure_tonemap() {
+    Fixture fx;
+    View *v = fx.view("tonemap-view", 96, 96, Colour(0, 0, 0)); REQUIRE(v);
+    Scene *s = fx.scene("tonemap-scene");                       REQUIRE(s);
+    v->setScene(s);
+    s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+    MeshId cube = s->createMesh(unitCubeData());
+    PbrParams hot;
+    hot.albedo = Colour(0, 0, 0);
+    // TWICE WHITE. The window this demonstration lives in is narrow and worth
+    // recording: raw saturates at 1.0, and the filmic curve's grade tail
+    // ((x-0.5)*1.25 + 0.5 + 0.11, HDR/FinalToneMapping_ps.glsl) saturates at a
+    // scene value of about 2.5 at this exposure. So 2.0 is over-range for the
+    // raw path and inside the graded one — which is precisely the band the
+    // whole feature exists to recover. (A value of 8 clips in BOTH: no
+    // tonemapper has infinite range, and claiming otherwise would be the kind
+    // of assertion that passes for the wrong reason.)
+    hot.emissive = Colour(2.0f, 2.0f, 2.0f);
+    MaterialId mat = s->createPbrMaterial(hot);
+    NodeId n = s->createNode();
+    CHECK(s->attachMesh(n, cube, mat));
+    s->setNodeTransform(n, Vec3(0, 0, 0), Quat(), Vec3(0.9f, 0.9f, 0.9f));
+    enginetest::testCameraLookAt(v, Vec3(0, 0, 3.0f), Vec3(0, 0, 0));
+
+    const auto histogram = [](const Image &img, int &saturated, int &lit, int &brightest) {
+        saturated = lit = brightest = 0;
+        for (unsigned y = 0; y < img.height; ++y) for (unsigned x = 0; x < img.width; ++x) {
+            const Px p = { (unsigned char)(img.at(x, y).r * 255.0f + 0.5f),
+                           (unsigned char)(img.at(x, y).g * 255.0f + 0.5f),
+                           (unsigned char)(img.at(x, y).b * 255.0f + 0.5f) };
+            if (p.r < 8 && p.g < 8 && p.b < 8) continue;      // background
+            ++lit;
+            brightest = std::max(brightest, int(std::max({ p.r, p.g, p.b })));
+            if (p.r >= 254 && p.g >= 254 && p.b >= 254) ++saturated;
+        }
+    };
+
+    // 1. RAW: the defect, measured.
+    render(fx.e, 3); Image raw; REQUIRE(v->readPixels(raw));
+    int rawSat = 0, rawLit = 0, rawMax = 0;
+    histogram(raw, rawSat, rawLit, rawMax);
+    std::printf("    raw:      %d lit, %d saturated (%.0f%%), brightest %d\n",
+                rawLit, rawSat, rawLit ? 100.0 * rawSat / rawLit : 0.0, rawMax);
+    CHECK_MSG(rawLit > 500, "the hot cube rendered: %d lit pixels", rawLit);
+    CHECK_MSG(rawSat * 2 > rawLit,
+              "RAW CLIPS: most of the hot cube is flat white (%d of %d lit pixels)",
+              rawSat, rawLit);
+
+    // 2. THE GRADE: same scene, same view, no clipping.
+    PostFxDesc fxDesc;
+    fxDesc.allowOffscreen = true;
+    fxDesc.hdr = true;
+    fxDesc.tonemapFixed = true;
+    fxDesc.exposure = 0.6f;          // secondaryfx::kFixedExposure
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() >= 2u,
+              "the fixed-exposure chain is a graph change: %u", v->workspaceGeneration());
+    render(fx.e, 3); Image graded; REQUIRE(v->readPixels(graded));
+    int gSat = 0, gLit = 0, gMax = 0;
+    histogram(graded, gSat, gLit, gMax);
+    std::printf("    tonemap:  %d lit, %d saturated (%.0f%%), brightest %d\n",
+                gLit, gSat, gLit ? 100.0 * gSat / gLit : 0.0, gMax);
+    CHECK_MSG(gLit > 500, "the graded frame still shows the cube: %d lit pixels", gLit);
+    CHECK_MSG(gSat * 4 < gLit,
+              "THE GRADE DOES NOT CLIP: %d of %d lit pixels saturated (was %d of %d)",
+              gSat, gLit, rawSat, rawLit);
+    CHECK_MSG(gMax < 255, "and the brightest channel rolls off short of white: %d", gMax);
+
+    // 3. DETERMINISTIC. The automatic chain adapts against WALL CLOCK time
+    // (renderFor exists precisely because of that), so a second read after real
+    // time has passed would move. The fixed form must not move by one bit.
+    renderFor(fx.e, 0.6);
+    Image again; REQUIRE(v->readPixels(again));
+    bool identical = again.width == graded.width && again.height == graded.height &&
+                     again.rgba == graded.rgba;
+    CHECK_MSG(identical,
+              "the fixed-exposure grade is frame- and time-independent (byte-identical reads)");
+
+    // ...and for contrast, the AUTOMATIC form on the same view is not: turning
+    // tonemapFixed off puts the luminance reduction back, which is a graph
+    // change, and the picture then depends on how long it has been adapting.
+    const unsigned genFixed = v->workspaceGeneration();
+    fxDesc.tonemapFixed = false;
+    v->setPostFx(fxDesc);
+    CHECK_MSG(v->workspaceGeneration() > genFixed,
+              "tonemapFixed is part of sameShape(): flipping it rebuilds (%u -> %u)",
+              genFixed, v->workspaceGeneration());
+
+    // Off again: the passthrough graph and the ORIGINAL pixels, exactly.
+    v->setPostFx(PostFxDesc());
+    render(fx.e, 3); Image off; REQUIRE(v->readPixels(off));
+    CHECK_MSG(off.rgba == raw.rgba,
+              "turning the chain off restores the exact raw readback — the offscreen "
+              "determinism guarantee is untouched by this feature");
+}
+
 /// Bloom: a bright emissive surface bleeds light into the dark background
 /// around it. The assertion is that bleed, not a colour.
 void bloom_bleeds_bright_areas() {
@@ -3723,6 +3834,7 @@ int main(int argc, char **argv) {
         { "object_counts_track_lifetimes",          object_counts_track_lifetimes },
         { "postfx_is_ignored_offscreen_unless_asked", postfx_is_ignored_offscreen_unless_asked },
         { "hdr_tonemap_and_exposure",               hdr_tonemap_and_exposure },
+        { "fixed_exposure_tonemap",                 fixed_exposure_tonemap },
         { "bloom_bleeds_bright_areas",              bloom_bleeds_bright_areas },
         { "ssao_darkens_creases",                   ssao_darkens_creases },
         { "smaa_smooths_edges",                     smaa_smooths_edges },

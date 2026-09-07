@@ -11,6 +11,7 @@ add_executable(test_engine_player test_engine_player.cpp test_stubs.cpp
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/flyspeedsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_engine_player PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
@@ -37,6 +38,7 @@ add_executable(test_editor_player_parity test_editor_player_parity.cpp test_stub
     ${CMAKE_SOURCE_DIR}/src/player/playermousecontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/cameracontrollerbase.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/keyboardstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/flyspeedsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_editor_player_parity PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17

@@ -48,6 +48,8 @@ public:
     Q_INVOKABLE bool setViewCamera(const QVariant &id = QVariant());
     Q_INVOKABLE QVariantMap pip();
     Q_INVOKABLE QVariantMap setPip(const QVariantMap &change = QVariantMap());
+    Q_INVOKABLE QVariantMap flySpeed();
+    Q_INVOKABLE QVariantMap setFlySpeed(const QVariant &multiplier);
     Q_INVOKABLE QString cameraMode();
     Q_INVOKABLE bool setCameraMode(const QString &mode);
     Q_INVOKABLE QString gizmoSpace();
@@ -70,7 +72,7 @@ public:
     Q_INVOKABLE QVariantMap mirrorStats();
     Q_INVOKABLE QVariantMap screenshot(const QString &path, int width = 256, int height = 256,
                                        const QVariantList &probes = QVariantList(),
-                                       bool postFx = false);
+                                       const QVariant &grade = QVariant());
     Q_INVOKABLE bool beginBatch();
     Q_INVOKABLE bool endBatch();
     Q_INVOKABLE bool importAssets(const QVariant &paths);

@@ -173,6 +173,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // so they live beside antiAliasing rather than anywhere near the materials.
     sceneObj["hdrEnabled"] = scene->hdrEnabled;
     sceneObj["exposure"] = scene->exposure;
+    sceneObj["exposureMin"] = scene->exposureMin;
+    sceneObj["exposureMax"] = scene->exposureMax;
     sceneObj["bloomEnabled"] = scene->bloomEnabled;
     sceneObj["bloomThreshold"] = scene->bloomThreshold;
     sceneObj["ssaoEnabled"] = scene->ssaoEnabled;

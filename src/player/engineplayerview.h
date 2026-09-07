@@ -37,7 +37,7 @@ public:
     void playScene() override;
     void stopScene() override;
     bool isPlayerActive() const override { return mActive; }
-    QImage takePlayerScreenshot(int width, int height, bool postFx) override;
+    QImage takePlayerScreenshot(int width, int height, int grade) override;
     bool stepPlayerFrames(int n, float dt) override;
 
     EnginePlayerScene *playerScene() const { return mScene.get(); }

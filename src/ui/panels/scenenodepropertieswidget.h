@@ -83,6 +83,7 @@ public:
 
 	WorldSkyPropertyWidget *worldSkyPropView;
 	WorldGiPropertyWidget *worldGiPropView;
+	class WorldPostFxPropertyWidget *worldPostFxPropView = nullptr;
 	WorldAaPropertyWidget *worldAaPropView;
 	WorldModesPropertyWidget *worldModesPropView;
 	WorldShadowPropertyWidget *worldShadowPropView;

@@ -48,6 +48,10 @@ signals:
     void addDroppedImagePlane(iris::Vec3 position, QString guid);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
     void updateToolbarButton();
+    /// The camera fly-speed multiplier changed from INSIDE the viewport (the
+    /// scroll wheel while flying). The shell shows the toast and re-syncs the
+    /// toolbar dropdown; FlySpeedSettings already holds the new value.
+    void flySpeedChanged();
     void changeSkyFromAssetWidget(int index);
 };
 
@@ -168,6 +172,12 @@ public:
     virtual void setPipEnabled(bool) {}
     virtual double pipSize() const { return 0.0; }
     virtual void setPipSize(double) {}
+
+    /// The fly speed changed under the viewport's feet — the wheel stepped it
+    /// while the camera was flying. The viewport shows the multiplier briefly
+    /// and tells the shell so the toolbar dropdown follows. FlySpeedSettings
+    /// already holds the new value; this only announces it.
+    virtual void onFlySpeedChanged() {}
     virtual void setEditorData(EditorData *data) = 0;
     virtual EditorData *getEditorData() = 0;
 
@@ -253,6 +263,23 @@ public:
     /// Default implementation ignores it (headless viewports have no chain).
     virtual QImage takeScreenshot(int width, int height, bool postFx) {
         (void)postFx; return takeScreenshot(width, height);
+    }
+
+    /// HOW A SCREENSHOT IS GRADED (owner report 2026-09-07, fix wave item 6).
+    /// The boolean above says "the whole viewport chain or nothing", and both
+    /// answers are wrong for the everyday case: `false` photographs raw linear
+    /// radiance, so a bright scene clips to white; `true` drags in the scene's
+    /// bloom, AO, SMAA and its ADAPTIVE exposure, which makes the shot depend on
+    /// how many frames it happened to render.
+    enum class ScreenshotGrade {
+        Raw,       ///< no post chain at all — what every pixel suite asserts
+        Tonemap,   ///< the deterministic filmic grade only (secondaryfx::apply)
+        Viewport,  ///< the scene's full post chain — the old `postFx = true`
+    };
+    /// Default maps onto the boolean overload, so a viewport that has no chain
+    /// (headless) needs no new code.
+    virtual QImage takeScreenshot(int width, int height, ScreenshotGrade grade) {
+        return takeScreenshot(width, height, grade == ScreenshotGrade::Viewport);
     }
 
     /// The ACHIEVED anti-aliasing (MSAA) sample count of the viewport's render

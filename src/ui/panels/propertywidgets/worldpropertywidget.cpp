@@ -45,7 +45,12 @@ WorldPropertyWidget::WorldPropertyWidget()
         "Flat ambient light. When Sky > Ambient From Sky is on, the ambient colour comes from "
         "the sky instead and this becomes its strength and tint: white = the sky at full "
         "strength, black = no ambient."));
-    showGridToggle = this->addCheckBox("Show Grid", true);
+    // Constructed OFF to agree with EditorData::showGrid (the three-way default
+    // the ui.grid_default gate pins). setGridAction immediately re-reads the
+    // real state from the View menu's action, so this only ever shows for the
+    // instant before a scene is bound — but a row that starts by disagreeing
+    // with the world is exactly how the old default drifted unnoticed.
+    showGridToggle = this->addCheckBox("Show Grid", false);
 
     // WHAT PLAY DOES (AVATAR_LOCOMOTION_SPEC §8.5). It belongs here and not in
     // the World Mode section: world.modeTable is the SCALABILITY registry

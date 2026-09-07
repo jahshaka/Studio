@@ -417,6 +417,126 @@ const Row *row(const QString &id)
     return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// THE CONTINUOUS POST-PROCESS PARAMETERS (fix wave 2026-09-07 item 8).
+//
+// Not tiered, on purpose (see ParamRow's note and world.postFx's): a mode
+// switch answers "how much machinery", never "how should this look". What they
+// ARE is declared once, here, so the World > Post Process section and the
+// world.postFx verb cannot disagree about a range, a label or what a number
+// means — which is the exact failure this file was written to prevent for the
+// on/off rows and which the parameters had, in miniature, all along (the
+// ranges lived inside the verb and nothing else could see them).
+
+static QVector<ParamRow> buildPostFxParams()
+{
+    QVector<ParamRow> out;
+    {
+        ParamRow p;
+        p.id = QStringLiteral("exposure");
+        p.label = QStringLiteral("Exposure");
+        p.ownerRowId = QStringLiteral("hdr");
+        p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("The auto-exposure midpoint. NOT stops: the value is used as "
+                               "e^(exposure-2), so +0.69 is one doubling. The scene default is "
+                               "+0.6, which is what puts mid-grey back where it was when HDR "
+                               "comes on.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->exposure); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->exposure = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("exposureMin");
+        p.label = QStringLiteral("Exposure Min");
+        p.ownerRowId = QStringLiteral("hdr");
+        p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("The bottom of the window automatic exposure may adapt within. "
+                               "Set equal to Exposure Max to PIN the exposure — the "
+                               "deterministic setting, and the one every secondary surface "
+                               "(thumbnails, previews, screenshots) grades with.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->exposureMin); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->exposureMin = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("exposureMax");
+        p.label = QStringLiteral("Exposure Max");
+        p.ownerRowId = QStringLiteral("hdr");
+        p.minValue = -8.0; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("The top of the auto-exposure window. A narrow window is a "
+                               "steadier image; a wide one copes with walking from a dark room "
+                               "into daylight.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->exposureMax); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->exposureMax = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("bloomThreshold");
+        p.label = QStringLiteral("Bloom Threshold");
+        p.ownerRowId = QStringLiteral("bloom");
+        p.minValue = 0.0; p.maxValue = 64.0; p.perPixelStep = 0.05; p.decimals = 2;
+        p.doc = QStringLiteral("Where the bright pass starts, in the tonemapper's units. High "
+                               "values read as highlight bloom; low values as a haze filter "
+                               "over the whole image.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->bloomThreshold); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->bloomThreshold = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("ssaoPower");
+        p.label = QStringLiteral("AO Power");
+        p.ownerRowId = QStringLiteral("ssao");
+        p.minValue = 0.1; p.maxValue = 8.0; p.perPixelStep = 0.01; p.decimals = 2;
+        p.doc = QStringLiteral("Contrast of the occlusion term — how dark a crease gets.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->ssaoPower); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->ssaoPower = float(v); };
+        out.append(p);
+    }
+    {
+        ParamRow p;
+        p.id = QStringLiteral("ssaoRadius");
+        p.label = QStringLiteral("AO Radius");
+        p.ownerRowId = QStringLiteral("ssao");
+        p.minValue = 0.05; p.maxValue = 64.0; p.perPixelStep = 0.02; p.decimals = 2;
+        p.doc = QStringLiteral("How far the occlusion looks, in metres. Too large and every "
+                               "surface shadows every other; too small and only the tightest "
+                               "corners darken.");
+        p.get = [](const iris::ScenePtr &s) { return double(s->ssaoRadius); };
+        p.set = [](const iris::ScenePtr &s, double v) { s->ssaoRadius = float(v); };
+        out.append(p);
+    }
+    return out;
+}
+
+const QVector<ParamRow> &postFxParams()
+{
+    static const QVector<ParamRow> table = buildPostFxParams();
+    return table;
+}
+
+const ParamRow *postFxParam(const QString &id)
+{
+    for (const ParamRow &p : postFxParams())
+        if (p.id == id) return &p;
+    return nullptr;
+}
+
+const QStringList &postFxRowIds()
+{
+    // ORDER IS THE PANEL'S ORDER, and it is the frame's order: the scene target
+    // and its grade first, then what rides on it, then what runs after the
+    // tonemap, then the two that are neither (reflections, refraction).
+    static const QStringList ids = {
+        QStringLiteral("hdr"), QStringLiteral("bloom"), QStringLiteral("ssao"),
+        QStringLiteral("smaa"), QStringLiteral("ssr"), QStringLiteral("refractions"),
+    };
+    return ids;
+}
+
 QString modeName(Mode m)
 {
     switch (m) {

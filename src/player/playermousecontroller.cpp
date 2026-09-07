@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "player/playermousecontroller.h"
 #include "viewport/keyboardstate.h"
+#include "viewport/flyspeedsettings.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -96,9 +97,15 @@ iris::Vec3 PlayerMouseController::calculateMouseRay(const QPointF& pos)
     return final_ray_coords.normalized();
 }
 
+// The wheel steps the free camera's speed while the RIGHT BUTTON is held — the
+// editor's gesture (EditorCameraController::onMouseWheel), on the player's own
+// FlySpeedSettings surface. It did nothing at all before; the player has no
+// dolly to conflict with.
 void PlayerMouseController::onMouseWheel(int delta)
 {
-
+    if (!rightMouseDown || delta == 0) return;
+    FlySpeedSettings::step(FlySpeedSettings::Player, delta > 0 ? 1 : -1);
+    if (onSpeedChanged) onSpeedChanged();
 }
 
 void PlayerMouseController::onMouseDown(Qt::MouseButton button)
@@ -259,7 +266,8 @@ void PlayerMouseController::setScene(iris::ScenePtr scene)
 
 void PlayerMouseController::update(float dt)
 {
-    auto linearSpeed = 15 * dt;
+    const float linearSpeed =
+        15.0f * FlySpeedSettings::multiplier(FlySpeedSettings::Player) * dt;
     if (!_isPlaying) {
         this->doGodMode(dt);
 		return;
@@ -272,21 +280,25 @@ void PlayerMouseController::update(float dt)
 	// Arrow-key fly, in play mode. The other half of this branch drove the
 	// removed viewer node's character controller (AVATAR_LOCOMOTION_SPEC
 	// Stage 0); piloted movement comes back as its own component in Stage 2.
+	const auto held = [](int a, int b) {
+		return KeyboardState::isKeyDown(a) || KeyboardState::isKeyDown(b);
+	};
+
 	auto camPos = camera->getLocalPos();
 	// left
-	if (KeyboardState::isKeyDown(Qt::Key_Left))
+	if (held(Qt::Key_Left, Qt::Key_A))
 		camPos -= x * linearSpeed;
 
 	// right
-	if (KeyboardState::isKeyDown(Qt::Key_Right))
+	if (held(Qt::Key_Right, Qt::Key_D))
 		camPos += x * linearSpeed;
 
 	// up
-	if (KeyboardState::isKeyDown(Qt::Key_Up))
+	if (held(Qt::Key_Up, Qt::Key_W))
 		camPos += z * linearSpeed;
 
 	// down
-	if (KeyboardState::isKeyDown(Qt::Key_Down))
+	if (held(Qt::Key_Down, Qt::Key_S))
 		camPos -= z * linearSpeed;
 
 	camera->setLocalPos(camPos);
@@ -299,9 +311,20 @@ void PlayerMouseController::update(float dt)
     }
 }
 
+// The player's FREE CAMERA (the scene is loaded but not playing).
+//
+// TWO CHANGES, 2026-09-07 (owner request):
+//   * W/A/S/D are ALIASES of the arrow keys here, exactly as the arrows became
+//     aliases of W/A/S/D in the editor fly. The player shipped with arrows
+//     only, the editor with WASD only, and moving between the two spaces meant
+//     changing hands — one lookup table, both spellings, in both places.
+//   * The speed is the persisted FlySpeedSettings multiplier on this surface's
+//     own base (25 u/s, `movementSpeed`), stepped by the toolbar dropdown and
+//     by the wheel while the right button is held (onMouseWheel).
 void PlayerMouseController::doGodMode(float dt)
 {
-    auto linearSpeed = movementSpeed * dt;
+    const float linearSpeed =
+        movementSpeed * FlySpeedSettings::multiplier(FlySpeedSettings::Player) * dt;
     auto forwardVector = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
     auto sideVector = camera->getLocalRot().rotatedVector(iris::Vec3(1, 0, 0));
     //auto x = iris::Vec3::crossProduct(forwardVector,upVector).normalized();
@@ -310,21 +333,25 @@ void PlayerMouseController::doGodMode(float dt)
     auto x = sideVector;
     auto z = forwardVector;
 
+    const auto held = [](int a, int b) {
+        return KeyboardState::isKeyDown(a) || KeyboardState::isKeyDown(b);
+    };
+
     auto camPos = camera->getLocalPos();
     // left
-    if(KeyboardState::isKeyDown(Qt::Key_Left))
+    if(held(Qt::Key_Left, Qt::Key_A))
         camPos -= x * linearSpeed;
 
     // right
-    if(KeyboardState::isKeyDown(Qt::Key_Right))
+    if(held(Qt::Key_Right, Qt::Key_D))
         camPos += x * linearSpeed;
 
     // up
-    if(KeyboardState::isKeyDown(Qt::Key_Up))
+    if(held(Qt::Key_Up, Qt::Key_W))
         camPos += z * linearSpeed;
 
     // down
-    if(KeyboardState::isKeyDown(Qt::Key_Down))
+    if(held(Qt::Key_Down, Qt::Key_S))
         camPos -= z * linearSpeed;
 
     camera->setLocalPos(camPos);
