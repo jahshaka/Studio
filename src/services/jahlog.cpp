@@ -899,6 +899,49 @@ namespace {
 QtMessageHandler gPrevHandler = nullptr;
 std::atomic<bool> gHandlerInstalled { false };
 
+// KNOWN-NOISE SUPPRESSION (owner order 2026-09-07: "we need our log files
+// clean with real errors only"). Each entry is one upstream defect we cannot
+// fix at its source, identified by its EXACT message text. The first
+// occurrence is logged (with a note that the rest are suppressed) and every
+// further one is counted and dropped — file AND stderr — so a 13-minute
+// session stops writing 57,000 copies of a warning nobody can act on.
+// Honesty rule: nothing here may match by substring or category — exact text
+// only, so a genuinely new problem can never hide behind an entry.
+struct KnownNoise {
+    const char *exactText;   // the full message, byte-exact
+    const char *anchor;      // where the upstream defect lives
+    std::atomic<quint64> suppressed { 0 };
+    std::atomic<bool> announced { false };
+};
+KnownNoise gKnownNoise[] = {
+    // Qlementine v1.4.2 Popover.cpp:538: _frame->mapTo(this, ...) with _frame
+    // not parented to the popover — fires once per paint, harmless (Qt
+    // returns (0,0) and the popover renders fine). Vendored submodule; fix
+    // upstream or at a bump, not here.
+    { "QWidget::mapTo(): parent must be in parent hierarchy",
+      "qlementine Popover.cpp:538", {}, {} },
+};
+
+// Matches msg against the table. Returns true when the message must be
+// dropped (already announced once); false when it should pass through —
+// including the FIRST occurrence, which passes annotated so the log shows
+// the defect exists without drowning in it.
+bool suppressKnownNoise(const QString &msg, QString &firstTimeNote)
+{
+    for (KnownNoise &n : gKnownNoise) {
+        if (msg != QLatin1String(n.exactText)) continue;
+        if (!n.announced.exchange(true)) {
+            firstTimeNote = msg + QStringLiteral(
+                "  [known-noise: %1 — further occurrences suppressed; count "
+                "reported at shutdown]").arg(QLatin1String(n.anchor));
+            return false;
+        }
+        n.suppressed.fetch_add(1, std::memory_order_relaxed);
+        return true;
+    }
+    return false;
+}
+
 Level levelForQt(QtMsgType type)
 {
     switch (type) {
@@ -913,6 +956,10 @@ Level levelForQt(QtMsgType type)
 
 void funnel(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
 {
+    QString noiseAnnotated;
+    if (suppressKnownNoise(msg, noiseAnnotated)) return;   // counted, dropped
+    const QString &effectiveMsg = noiseAnnotated.isEmpty() ? msg : noiseAnnotated;
+
     if (tlBypass == 0) {
         Category *cat = &qt;
         if (ctx.category && *ctx.category && qstrcmp(ctx.category, "default") != 0)
@@ -922,17 +969,18 @@ void funnel(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
             SinkState &s = sink();
             QMutexLocker lock(&s.mutex);
             BypassGuard guard;
-            const QString line = formatRecord(s, *cat, level, msg);
-            appendLocked(*cat, level, line, msg);
+            const QString line = formatRecord(s, *cat, level, effectiveMsg);
+            appendLocked(*cat, level, line, effectiveMsg);
         }
     }
 
     // ALWAYS chain. stderr must stay bit-identical to a build without this
     // program: app.startup_quiet's three ABSENCE assertions read that stream
     // and would pass vacuously the day it moves into the file (spec §9-R1).
-    // This is not an optimisation opportunity.
-    if (gPrevHandler) gPrevHandler(type, ctx, msg);
-    else qt_message_output(type, ctx, msg);
+    // This is not an optimisation opportunity. (Known-noise suppression above
+    // only ever REMOVES lines, which no absence assertion can notice.)
+    if (gPrevHandler) gPrevHandler(type, ctx, effectiveMsg);
+    else qt_message_output(type, ctx, effectiveMsg);
 }
 
 }   // namespace
@@ -946,6 +994,15 @@ void installQtMessageHandler()
 void removeQtMessageHandler()
 {
     if (!gHandlerInstalled.exchange(false)) return;
+    // The known-noise accounting the suppression promised: one summary line
+    // per table entry that actually fired, written while the funnel is still
+    // ours so it lands in the session log like any other record.
+    for (KnownNoise &n : gKnownNoise) {
+        const quint64 count = n.suppressed.load(std::memory_order_relaxed);
+        if (count)
+            qWarning("known-noise summary: suppressed %llu repeats of \"%s\" (%s)",
+                     static_cast<unsigned long long>(count), n.exactText, n.anchor);
+    }
     qInstallMessageHandler(gPrevHandler);
     gPrevHandler = nullptr;
 }

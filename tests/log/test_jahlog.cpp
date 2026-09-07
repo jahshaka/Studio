@@ -93,6 +93,13 @@ int childSession(const QString &dir)
     JahLog::installQtMessageHandler();
     qWarning("child: qwarning through the funnel");
 
+    // KNOWN-NOISE SUPPRESSION (owner order 2026-09-07): the qlementine mapTo
+    // flood. Fire it five times: the FIRST must land annotated, the other
+    // four must vanish, and removeQtMessageHandler must write the count.
+    for (int i = 0; i < 5; ++i)
+        qWarning("QWidget::mapTo(): parent must be in parent hierarchy");
+    JahLog::removeQtMessageHandler();
+
     JahLog::stop(QStringLiteral("child done"));
     return 0;
 }
@@ -322,6 +329,19 @@ void testSession(const QString &root)
           "funnel: a qWarning lands in the file under the qt category");
     CHECK(childErr.contains(QLatin1String("child: qwarning through the funnel")),
           "funnel: the same qWarning still reaches stderr (the previous handler is chained)");
+
+    // Known-noise suppression (owner order 2026-09-07): five copies of the
+    // qlementine mapTo warning went in; exactly ONE annotated line and ONE
+    // shutdown summary may come out, in the file and on stderr alike.
+    CHECK(whole.count(QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy"))
+              == 2,   // the annotated first occurrence + the quoted text in the summary
+          "known-noise: one annotated occurrence plus one summary, never the flood");
+    CHECK(whole.contains(QLatin1String("[known-noise: qlementine Popover.cpp:538")),
+          "known-noise: the first occurrence carries the annotation");
+    CHECK(whole.contains(QLatin1String("known-noise summary: suppressed 4 repeats")),
+          "known-noise: the shutdown summary reports the suppressed count");
+    CHECK(childErr.count(QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy")) == 2,
+          "known-noise: stderr sees the same single annotated line + summary, not the flood");
 
     // The startup header (spec §4). The base rows are asserted by name here;
     // the GPU/device rows belong to phase 3 and are gated by log.engine.
