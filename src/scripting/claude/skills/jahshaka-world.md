@@ -68,7 +68,8 @@ The rows, with their value spellings:
 | Rendering | `bloom` | `on` / `off` |
 | Rendering | `ssao` | `off`, `half`, `full` |
 | Rendering | `smaa` | `on` / `off` |
-| Rendering | `ssr`, `refractions` | declared; check `available` |
+| Rendering | `ssr` | `off`, `half`, `hq` |
+| Rendering | `refractions` | `off`, `auto`, `on` |
 | Shadows | `shadowResolution` | pixel sizes, or Auto |
 | Shadows | `shadowFilter` | `auto`, `hard`, `soft`, `verysoft` |
 | Global Illumination | `giMode` | `off`, `instant_radiosity`, `vct`, `vct_pcc_hybrid` |
@@ -87,6 +88,14 @@ number. Always confirm with the returned row state rather than assuming.
    Every tier ships `msaa: off` for that reason. Setting `msaa` to `4x` on a
    scene with the post chain on buys nothing; recommend `smaa` instead.
 2. **Bloom needs HDR.** It rides the HDR chain and does nothing without it.
+3. **`ssr` only reflects what is ON SCREEN.** It fills the gap probes cannot —
+   things that MOVE — but it fades out at the edges of the frame, on rough
+   surfaces, and wherever a ray is occluded, handing those pixels back to the
+   sky and the probes. It is a complement to `planarBudget` and the GI probes,
+   never a replacement. It also costs a second traversal of the scene, so no
+   tier below High enables it. With `ssr` on, alpha-BLENDED materials (Fade /
+   Transparent, not Refractive) can shade the surface behind them with their
+   own normal — leave `ssr` off in scenes built around translucent panes.
 
 ## Continuous tuning (not a tier row)
 
