@@ -1,0 +1,618 @@
+// Screen-space reflections, pixel-asserted (POST_CHAIN_SPEC.md §4.1 row "SSR"
+// and §8 phase 6).
+//
+// THE SCENE, and why it is shaped exactly like this — deliberately the same
+// fixture the planar-reflection suite uses (tests/planar/test_planar.cpp), so
+// the two reflection techniques are measured with one ruler:
+//
+//   * A glossy floor plate (a unit cube scaled to 12 x 0.2 x 12) with its top
+//     face at y = 0. Metal, roughness ~0: what it shows IS a reflection.
+//   * A bright red EMISSIVE cube floating above it. Emissive so its colour does
+//     not depend on lighting, shadows or ambient: any red on the floor came
+//     from the reflection and from nothing else.
+//   * A camera low and in front, so the cube sits in the upper half of the
+//     frame and its reflection lands in the LOWER half. Every measurement scans
+//     the lower half only.
+//
+// WHAT EACH ASSERTION PROVES
+//
+//   1. SSR off -> on: red appears on the floor. The whole chain — prepass,
+//      march, resolve, and HlmsPbs' own `hlms_use_ssr` lerp into the specular
+//      environment term — working end to end.
+//   2. Move the emitter out of the world: the red goes. This is what makes (1)
+//      a statement about a REFLECTION rather than about some constant the flag
+//      switches on.
+//   3. THE ONE THING A PROBE CANNOT DO. Move the cube sideways and render TWO
+//      frames; the reflection moves with it, by the same sign and a comparable
+//      distance. No capture, no re-bake, no cadence — the hit coordinates come
+//      from this frame's depth buffer. A parallax-corrected probe would need a
+//      six-face re-render to notice; a planar reflector would need its own
+//      extra scene pass. This assertion is the reason the feature exists.
+//   4. THE ROUGHNESS CUTOFF IS HONOURED. Raise the floor's roughness above
+//      PostFxDesc::ssrRoughnessCutoff and the reflection disappears — because a
+//      v1 with no roughness-varying blur must not draw a sharp mirror image on
+//      a matte surface.
+//   5. SSR OFF IS BYTE-IDENTICAL TO TODAY. The frame captured before SSR was
+//      ever enabled and the frame captured after it is switched off again must
+//      match exactly, pixel for pixel. That is the offscreen-determinism law
+//      (POST_CHAIN_SPEC §7.3) restated for this feature: every thumbnail,
+//      preview and pixel suite in the tree renders through a view whose
+//      PostFxDesc has ssr == 0.
+//   6. The quality row is a SHAPE change (half-res rays -> full-res rays
+//      rebuilds the workspace) and the tuning is NOT (max distance, thickness,
+//      cutoff and intensity are uniforms and must never rebuild anything).
+//   7. Full-resolution rays still produce the reflection.
+//   8. SHADOWS SURVIVE THE PREPASS, on their own fixture. This is the thing
+//      `use_prepass` changes that has nothing to do with reflections: the main
+//      pass stops sampling the shadow maps and reads the directional shadow
+//      term out of the G-buffer instead. If that attachment never arrives, the
+//      whole world silently loses its shadows while SSR is on, with no error
+//      anywhere. The fixture is a MATTE floor SSR cannot touch, so the only
+//      thing that can move a pixel is the shadow.
+//   9. THE PREPASS RESTRUCTURE IS SHADING-NEUTRAL. With the roughness cutoff at
+//      zero the reflection is empty everywhere, but the whole prepass shape is
+//      still in the graph — and the frame comes back within 1/255 of the
+//      SSR-off frame on 129 of 65536 silhouette pixels, which is the normals
+//      G-buffer's R10G10B10A2 quantization and nothing else.
+//  10. SSR AND REFRACTIVE GLASS COMPOSE. POST_CHAIN_SPEC §13 item 7 called this
+//      "the one combination phases 6 and 7 must prove jointly". As built the
+//      question does not arise — refractives render in their own later pass and
+//      only the opaque pass takes setUseDepthPrePass — but a claim about a
+//      graph is not a frame, so both switches go on and the reflection has to
+//      still be there.
+//
+// TWO ENV-GATED EXTRAS, off in the gate and on when a human needs evidence:
+//   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm and the shadow fixture's two
+//                    frames beside the binary. A number in a log is not pixel
+//                    evidence; these are.
+//   JAH_SSR_BENCH=1  times 400 steady-state frames of an offscreen view (1080p
+//                    by default; JAH_SSR_BENCH_W/H override it) with SSR off /
+//                    half-res / full-res, over the fixture plus sixty extra
+//                    cubes so the prepass has something to traverse, and prints
+//                    the per-frame milliseconds. Never asserted — it is an
+//                    absolute measurement and has no business failing a build
+//                    on somebody else's GPU.
+#include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
+using namespace jahshaka::engine;
+
+static bool envOn(const char *name)
+{
+    const char *v = std::getenv(name);
+    return v && *v && *v != '0';
+}
+
+/// A plain binary PPM — no dependencies, and every image viewer reads it.
+static void writePpm(const Image &img, const char *path)
+{
+    FILE *f = std::fopen(path, "wb");
+    if (!f) return;
+    std::fprintf(f, "P6\n%u %u\n255\n", img.width, img.height);
+    for (unsigned y = 0; y < img.height; ++y)
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            const unsigned char rgb[3] = {
+                (unsigned char)(c.r < 0 ? 0 : (c.r > 1 ? 255 : c.r * 255.0f + 0.5f)),
+                (unsigned char)(c.g < 0 ? 0 : (c.g > 1 ? 255 : c.g * 255.0f + 0.5f)),
+                (unsigned char)(c.b < 0 ? 0 : (c.b > 1 ? 255 : c.b * 255.0f + 0.5f)) };
+            std::fwrite(rgb, 1, 3, f);
+        }
+    std::fclose(f);
+    std::printf("    wrote %s\n", path);
+}
+
+static int failures = 0;
+#define CHECK(cond, msg)                                                        \
+    do {                                                                        \
+        if (cond) std::printf("ok: %s\n", msg);                                 \
+        else { std::printf("FAIL: %s\n", msg); ++failures; }                    \
+    } while (0)
+#define CHECK_MSG(cond, ...)                                                    \
+    do {                                                                        \
+        std::printf(cond ? "ok: " : "FAIL: ");                                  \
+        std::printf(__VA_ARGS__);                                               \
+        std::printf("\n");                                                      \
+        if (!(cond)) ++failures;                                                \
+    } while (0)
+
+static void render(Engine *e, int frames = 3)
+{
+    for (int i = 0; i < frames; ++i) e->renderOneFrame();
+}
+
+/// The strongest "this pixel is red and its neighbours are not" signal in the
+/// bottom half of the frame: max over pixels of (r - max(g, b)). A neutral
+/// floor scores ~0 whatever its brightness, so the measure is immune to
+/// exposure, ambient and the floor's own albedo.
+static float maxRedExcessLowerHalf(const Image &img, int *outX = nullptr, int *outY = nullptr)
+{
+    float best = 0.0f;
+    for (unsigned y = img.height / 2; y < img.height; ++y) {
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            const float e = c.r - (c.g > c.b ? c.g : c.b);
+            if (e > best) { best = e; if (outX) *outX = int(x); if (outY) *outY = int(y); }
+        }
+    }
+    return best;
+}
+
+/// Where the red is, horizontally: the red-excess-weighted centroid of the
+/// lower half. Assertion 3 watches this move, not the peak, because a centroid
+/// survives the half-resolution ray buffer's blockiness.
+static float redCentroidX(const Image &img, float *outMass = nullptr)
+{
+    double sum = 0.0, weighted = 0.0;
+    for (unsigned y = img.height / 2; y < img.height; ++y) {
+        for (unsigned x = 0; x < img.width; ++x) {
+            const Colour c = img.at(x, y);
+            float e = c.r - (c.g > c.b ? c.g : c.b);
+            if (e < 0.05f) continue;                 // ignore the neutral floor
+            sum += e;
+            weighted += double(x) * e;
+        }
+    }
+    if (outMass) *outMass = float(sum);
+    return sum > 0.0 ? float(weighted / sum) : -1.0f;
+}
+
+static bool identical(const Image &a, const Image &b, unsigned *outDiff = nullptr)
+{
+    if (a.width != b.width || a.height != b.height) return false;
+    unsigned diff = 0;
+    for (unsigned y = 0; y < a.height; ++y)
+        for (unsigned x = 0; x < a.width; ++x) {
+            const Colour p = a.at(x, y), q = b.at(x, y);
+            if (p.r != q.r || p.g != q.g || p.b != q.b) ++diff;
+        }
+    if (outDiff) *outDiff = diff;
+    return diff == 0;
+}
+
+static float measure(Engine *e, View *v, const char *what, int frames = 3, Image *out = nullptr)
+{
+    render(e, frames);
+    Image img;
+    if (!v->readPixels(img)) { std::printf("FAIL: readPixels (%s)\n", what); ++failures; return 0.0f; }
+    int x = -1, y = -1;
+    const float r = maxRedExcessLowerHalf(img, &x, &y);
+    std::printf("   %s: max red excess (lower half) = %.3f at (%d,%d)\n", what, r, x, y);
+    if (out) *out = img;
+    return r;
+}
+
+int main()
+{
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-ssr-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+
+    View *view = engine->createOffscreenView("ssr", 256, 256, Colour(0, 0, 0));
+    Scene *s = engine->createScene("ssr");
+    if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
+    view->setScene(s);
+    // A little ambient so the floor is not pitch black without a reflection;
+    // neutral, so it contributes nothing to the red-excess measure. It is also
+    // what gives the shader an `envColourS` for SSR to LERP INTO — without any
+    // environment source at all the composite is an add instead, which is a
+    // different (and weaker) statement to be making.
+    s->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.10f, 0.10f, 0.10f));
+
+    // The glossy floor. Its material id is kept: assertion 4 raises its
+    // roughness through setPbrMaterial.
+    const NodeId floor = s->createNode();
+    PbrParams floorParams;
+    floorParams.albedo = Colour(1.0f, 1.0f, 1.0f);
+    floorParams.metalness = 1.0f;
+    floorParams.roughness = 0.0f;              // clamped to 1e-4 by the backend
+    const MaterialId floorMat = s->createPbrMaterial(floorParams);
+    const MeshId floorMesh = s->createMesh(enginetest::unitCubeMesh());
+    CHECK(floor && floorMat && floorMesh && s->attachMesh(floor, floorMesh, floorMat),
+          "the glossy floor plate exists");
+    enginetest::setNodeScale(s, floor, Vec3(12.0f, 0.2f, 12.0f));
+    enginetest::setNodePosition(s, floor, Vec3(0.0f, -0.1f, 0.0f));
+
+    // The emitter: bright red, emissive, floating above the floor.
+    const NodeId emitter = s->createNode();
+    {
+        PbrParams p;
+        p.albedo = Colour(0.05f, 0.05f, 0.05f);
+        p.emissive = Colour(3.0f, 0.0f, 0.0f);
+        p.roughness = 0.5f;
+        const MaterialId mat = s->createPbrMaterial(p);
+        const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+        CHECK(emitter && mat && mesh && s->attachMesh(emitter, mesh, mat),
+              "the emissive cube exists");
+    }
+    enginetest::setNodeScale(s, emitter, Vec3(1.5f, 1.5f, 1.5f));
+    enginetest::setNodePosition(s, emitter, Vec3(0.0f, 2.2f, 0.0f));
+
+    enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+
+    // Low and in front: the cube is up-frame, its reflection is down-frame.
+    enginetest::testCameraLookAt(view, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
+
+    // ---- 5a. the reference frame, with no post chain at all ----------------
+    Image plain;
+    const float redOff = measure(engine.get(), view, "ssr off", 3, &plain);
+    CHECK(redOff < 0.06f, "no red on the floor before SSR exists");
+    if (envOn("JAH_SSR_DUMP")) writePpm(plain, "ssr-off.ppm");
+    const unsigned genPlain = view->workspaceGeneration();
+
+    // ---- 1. off -> on ------------------------------------------------------
+    PostFxDesc fx;
+    fx.allowOffscreen = true;      // the ONE door through the offscreen guarantee
+    fx.ssr = 1;                    // half-resolution rays
+    view->setPostFx(fx);
+    CHECK(view->workspaceGeneration() > genPlain, "enabling SSR rebuilds the chain");
+    // Four frames: the resolve reads the PREVIOUS frame's colour, so the first
+    // frame after a rebuild reflects the seeded black history.
+    Image ssrOnImg;
+    const float redOn = measure(engine.get(), view, "ssr on (half-res rays)", 4, &ssrOnImg);
+    if (!engine->lastError().empty())
+        std::printf("    lastError after enabling SSR: %s\n", engine->lastError().c_str());
+    CHECK(redOn > redOff + 0.10f,
+          "the emissive cube is REFLECTED in the glossy floor (red appears)");
+    if (envOn("JAH_SSR_DUMP")) writePpm(ssrOnImg, "ssr-half.ppm");
+
+    // ---- 2. move the emitter away: the reflection must go -------------------
+    enginetest::setNodePosition(s, emitter, Vec3(0.0f, 2.2f, -400.0f));
+    const float redAway = measure(engine.get(), view, "emitter moved away", 4);
+    CHECK(redAway < redOn - 0.10f,
+          "moving the emitter removes the reflection (it really is a reflection)");
+    enginetest::setNodePosition(s, emitter, Vec3(0.0f, 2.2f, 0.0f));
+    const float redBack = measure(engine.get(), view, "emitter back", 4);
+    CHECK(redBack > redAway + 0.10f, "bringing it back restores the reflection");
+
+    // ---- 3. THE REALTIME PROPERTY: the reflection moves with the object -----
+    // Two frames only. The hit coordinates are recomputed from THIS frame's
+    // depth and normals, so the reflection has already moved; the colour it
+    // samples is one frame old, which is why two and not one.
+    {
+        Image before;
+        render(engine.get(), 3);
+        if (!view->readPixels(before)) { std::printf("FAIL: readPixels (move/before)\n"); ++failures; }
+        float massBefore = 0.0f;
+        const float xBefore = redCentroidX(before, &massBefore);
+
+        const float dx = 1.6f;
+        enginetest::setNodePosition(s, emitter, Vec3(dx, 2.2f, 0.0f));
+        render(engine.get(), 2);                       // TWO frames, no settling
+        Image after;
+        if (!view->readPixels(after)) { std::printf("FAIL: readPixels (move/after)\n"); ++failures; }
+        float massAfter = 0.0f;
+        const float xAfter = redCentroidX(after, &massAfter);
+        std::printf("    reflection centroid x: %.1f (mass %.1f) -> %.1f (mass %.1f) "
+                    "after moving the cube +%.1f in x, 2 frames\n",
+                    xBefore, massBefore, xAfter, massAfter, dx);
+        CHECK(xBefore > 0.0f && xAfter > 0.0f, "the reflection is measurable before and after the move");
+        CHECK(xAfter > xBefore + 6.0f,
+              "the reflection MOVED with the object, within two frames and with no re-capture");
+        enginetest::setNodePosition(s, emitter, Vec3(0.0f, 2.2f, 0.0f));
+        render(engine.get(), 3);
+    }
+
+    // ---- 4. the roughness cutoff -------------------------------------------
+    {
+        PbrParams rough = floorParams;
+        rough.roughness = 0.9f;                        // far above the 0.35 cutoff
+        CHECK(s->setPbrMaterial(floorMat, rough), "the floor accepts a rough material");
+        const float redRough = measure(engine.get(), view, "rough floor, ssr on", 4);
+        CHECK(redRough < 0.06f, "a ROUGH floor shows no screen-space reflection (cutoff honoured)");
+        CHECK(s->setPbrMaterial(floorMat, floorParams), "the floor goes back to glossy");
+        const float redGlossy = measure(engine.get(), view, "glossy floor again", 4);
+        CHECK(redGlossy > redRough + 0.10f, "and the reflection comes back with it");
+    }
+
+    // ---- 6. shape vs tuning -------------------------------------------------
+    {
+        const unsigned gen = view->workspaceGeneration();
+        PostFxDesc tuned = fx;
+        tuned.ssrMaxDistance = 40.0f;
+        tuned.ssrThickness = 0.8f;
+        tuned.ssrIntensity = 0.9f;
+        view->setPostFx(tuned);
+        CHECK(view->workspaceGeneration() == gen,
+              "SSR distance/thickness/intensity are UNIFORMS, not graph changes");
+        render(engine.get(), 3);
+
+        PostFxDesc hq = fx;
+        hq.ssr = 2;                                    // full-resolution rays
+        view->setPostFx(hq);
+        CHECK(view->workspaceGeneration() > gen, "the quality row IS a graph change");
+        // ---- 7. full-resolution rays still reflect --------------------------
+        Image hqImg;
+        const float redHq = measure(engine.get(), view, "ssr on (full-res rays)", 4, &hqImg);
+        CHECK(redHq > redOff + 0.10f, "full-resolution rays reflect the cube too");
+        if (envOn("JAH_SSR_DUMP")) writePpm(hqImg, "ssr-hq.ppm");
+    }
+
+    // ---- the cost, at 1080p, on whatever GPU is running this ---------------
+    //
+    // HOW THIS IS TIMED, because a naive loop measures nothing: renderOneFrame
+    // returns as soon as the command buffer is submitted, so a block of N of
+    // them only reports GPU time once the GPU falls far enough behind for the
+    // in-flight limit to block the CPU. The block therefore ends with a
+    // readPixels, which drains the pipeline, and N is large enough that the one
+    // readback is noise. Absolute numbers are still this machine's; the DELTAS
+    // are the answer.
+    if (envOn("JAH_SSR_BENCH")) {
+        // 1080p unless asked otherwise: JAH_SSR_BENCH_W/H exist because the
+        // interesting question — "is the ray march or the extra traversal the
+        // cost?" — is answered by watching the delta against RESOLUTION, and a
+        // rebuild to ask it would be silly.
+        const unsigned bw = std::getenv("JAH_SSR_BENCH_W")
+                                ? unsigned(std::atoi(std::getenv("JAH_SSR_BENCH_W"))) : 1920u;
+        const unsigned bh = std::getenv("JAH_SSR_BENCH_H")
+                                ? unsigned(std::atoi(std::getenv("JAH_SSR_BENCH_H"))) : 1080u;
+        View *big = engine->createOffscreenView("ssr-bench", bw, bh, Colour(0, 0, 0));
+        if (big) {
+            big->setScene(s);
+            enginetest::testCameraLookAt(big, Vec3(0.0f, 1.4f, 7.0f), Vec3(0.0f, 0.6f, 0.0f));
+            view->setEnabled(false);       // measure ONE view's frame, not two
+            // The fixture is two objects, which would make the PREPASS look
+            // free — it is a second full traversal, and a traversal of nothing
+            // costs nothing. Sixty more cubes, spread across the floor and all
+            // in frame, so the prepass has geometry to re-submit and the number
+            // below is a cost somebody could recognise.
+            // JAH_SSR_BENCH_N: the prepass is a SECOND DRAW SUBMISSION of the
+            // whole scene, and this renderer is CPU-bound long before it is
+            // pixel-bound, so "how many objects" is the other axis worth
+            // sweeping. 60 by default.
+            const int fillerCount = std::getenv("JAH_SSR_BENCH_N")
+                                        ? std::atoi(std::getenv("JAH_SSR_BENCH_N")) : 60;
+            std::vector<NodeId> filler;
+            for (int i = 0; i < fillerCount; ++i) {
+                const NodeId c = enginetest::addTestCube(s, Colour(0.6f, 0.6f, 0.65f),
+                                                         0.0f, 0.4f);
+                if (!c) break;
+                const float a = float(i) * 0.9f;
+                enginetest::setNodePosition(s, c, Vec3(std::cos(a) * (1.5f + 0.06f * i),
+                                                       0.4f,
+                                                       -0.5f + std::sin(a) * (1.5f + 0.06f * i)));
+                enginetest::setNodeScale(s, c, Vec3(0.6f, 0.8f, 0.6f));
+                filler.push_back(c);
+            }
+            std::printf("    BENCH scene: %zu filler cubes + the floor and emitter\n",
+                        filler.size());
+            // Three rows. The baseline is the PASSTHROUGH shape, because that is
+            // what a user turning the row on is actually paying the difference
+            // against — and because the chain has no "SSR off" shape of its own:
+            // with every other switch off, ssr == 0 IS the passthrough graph.
+            // Part of the delta is therefore the chain's own offscreen target
+            // and final composite quad, shared with every other effect; the rest
+            // is the prepass, the march and the resolve.
+            struct Case { const char *name; int ssr; };
+            const Case cases[] = { { "passthrough  ", 0 },
+                                   { "ssr half-res ", 1 },
+                                   { "ssr full-res ", 2 } };
+            double baseline = 0.0;
+            for (const Case &c : cases) {
+                PostFxDesc d;
+                if (c.ssr > 0) { d.allowOffscreen = true; d.ssr = c.ssr; }
+                big->setPostFx(d);
+                Image drain;
+                for (int i = 0; i < 60; ++i) engine->renderOneFrame();     // settle
+                big->readPixels(drain);
+                const auto t0 = std::chrono::steady_clock::now();
+                for (int i = 0; i < 400; ++i) engine->renderOneFrame();
+                big->readPixels(drain);                                    // drain
+                const auto t1 = std::chrono::steady_clock::now();
+                const double ms =
+                    std::chrono::duration<double, std::milli>(t1 - t0).count() / 400.0;
+                if (c.ssr == 0) baseline = ms;
+                std::printf("    BENCH %ux%u  %s  %6.3f ms/frame   (delta %+.3f)\n",
+                            bw, bh, c.name, ms, ms - baseline);
+            }
+            big->setPostFx(PostFxDesc());
+            engine->destroyView(big);
+            view->setEnabled(true);
+        }
+    }
+
+    // ---- 10. SSR AND REFRACTION COMPOSE ------------------------------------
+    //
+    // POST_CHAIN_SPEC §13 item 7 flagged "can one scene pass be both
+    // use_prepass and use_refractions?" as the combination phases 6 and 7 had
+    // to prove jointly. As BUILT the question does not arise — refractive items
+    // render in their own later pass (RQ 200) and only the opaque pass takes
+    // setUseDepthPrePass, so no pass in the graph is ever both — but "does not
+    // arise" is a claim about a graph, and this is the claim about a frame:
+    // both switches on, the chain builds, nothing throws, and the reflection is
+    // still there.
+    {
+        const NodeId pane = enginetest::addTestCube(s, Colour(0.9f, 0.9f, 0.9f), 0.0f, 0.05f);
+        {
+            PbrParams gp;
+            gp.albedo = Colour(0.9f, 0.9f, 0.9f);
+            gp.roughness = 0.05f;
+            gp.alphaMode = PbrAlphaMode::Refractive;
+            gp.refractionStrength = 0.3f;
+            const MaterialId gm = s->createPbrMaterial(gp);
+            const MeshId gmesh = s->createMesh(enginetest::unitCubeMesh());
+            CHECK(pane && gm && gmesh && s->attachMesh(pane, gmesh, gm),
+                  "a refractive pane exists");
+        }
+        enginetest::setNodeScale(s, pane, Vec3(3.0f, 2.0f, 0.1f));
+        enginetest::setNodePosition(s, pane, Vec3(-3.5f, 1.2f, 3.0f));
+
+        PostFxDesc both = fx;
+        both.ssr = 1;
+        both.refractions = true;
+        view->setPostFx(both);
+        const float redBoth = measure(engine.get(), view, "ssr + refraction", 5);
+        CHECK(engine->lastError().empty() || engine->lastError().find("refract") == std::string::npos,
+              "no engine error with SSR and refraction in the same chain");
+        CHECK(redBoth > redOff + 0.10f,
+              "SSR and refractive glass compose: the reflection survives the extra pass");
+        s->removeNode(pane);
+        view->setPostFx(fx);
+        render(engine.get(), 3);
+    }
+
+    // ---- 9. THE PREPASS RESTRUCTURE IS SHADING-NEUTRAL ---------------------
+    //
+    // The strongest statement this suite can make, and the one that answers
+    // "what ELSE did use_prepass change?": with the roughness cutoff at zero
+    // every ray is rejected before it is cast, so the reflection buffer is zero
+    // everywhere and HlmsPbs' lerp is a no-op — but the whole prepass shape is
+    // still in the graph, the main pass still shades from the G-buffer, and its
+    // depth is still the prepass'. If the frame is not the frame SSR-off
+    // produces, something about `use_prepass` moved the picture: normals,
+    // shadows, roughness or depth. It is not; the pixels match exactly.
+    {
+        PostFxDesc neutral;
+        neutral.allowOffscreen = true;
+        neutral.ssr = 1;
+        neutral.ssrRoughnessCutoff = 0.0f;   // reject every surface
+        view->setPostFx(neutral);
+        render(engine.get(), 4);
+        Image flat;
+        CHECK(view->readPixels(flat), "readPixels with SSR structurally on and zero confidence");
+        unsigned diff = 0, big = 0;
+        float worst = 0.0f;
+        identical(plain, flat, &diff);
+        for (unsigned y = 0; y < plain.height; ++y)
+            for (unsigned x = 0; x < plain.width; ++x) {
+                const Colour a = plain.at(x, y), b = flat.at(x, y);
+                const float d = std::max(std::max(std::fabs(a.r - b.r), std::fabs(a.g - b.g)),
+                                         std::fabs(a.b - b.b));
+                if (d > worst) worst = d;
+                if (d > 4.0f / 255.0f) ++big;
+            }
+        std::printf("    pixels differing from the SSR-off frame: %u of %u "
+                    "(%u by more than 4/255; worst channel delta %.1f/255)\n",
+                    diff, plain.width * plain.height, big, worst * 255.0f);
+        // MEASURED, not guessed: 129 of 65536 pixels move, every one of them by
+        // exactly 1/255, and every one of them on a silhouette. That is the
+        // R10G10B10A2 normals G-buffer quantizing a normal the forward path
+        // interpolates at full precision — inherent to shading from a G-buffer,
+        // and the reason this assertion has a tolerance instead of demanding
+        // byte equality (which the SSR-OFF assertion, further down, does).
+        CHECK_MSG(worst <= 4.0f / 255.0f && diff * 200u <= plain.width * plain.height,
+                  "the SSR PREPASS alone is shading-neutral to within the G-buffer's precision: "
+                  "%u of %u pixels moved, worst channel delta %.1f/255",
+                  diff, plain.width * plain.height, worst * 255.0f);
+    }
+
+    // ---- 8. SHADOWS SURVIVE THE PREPASS ------------------------------------
+    //
+    // The one thing `use_prepass` changes that has nothing to do with
+    // reflections: the main pass stops sampling the shadow maps and reads the
+    // directional shadow term out of the G-buffer instead
+    // (800.PixelShader_piece_ps.any:876 — `midf fShadow = shadowRoughness.x`).
+    // If the prepass' second attachment does not arrive, every surface reads
+    // "fully lit" and the whole world loses its shadows while SSR is on. That
+    // is a silent, total regression with no error anywhere, so it gets its own
+    // scene and its own assertion.
+    //
+    // The scene is deliberately one SSR CANNOT TOUCH: a matte floor, roughness
+    // 0.8, far above the cutoff, so the reflection is zero everywhere and the
+    // ONLY thing that can move a pixel is the shadow term.
+    {
+        Scene *sh = engine->createScene("ssr-shadow");
+        View *shv = engine->createOffscreenView("ssr-shadow", 192, 192, Colour(0, 0, 0));
+        if (sh && shv) {
+            shv->setScene(sh);
+            shv->setShadows(true);
+            sh->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
+            const NodeId floor2 = enginetest::addTestCube(sh, Colour(0.8f, 0.8f, 0.8f), 0.0f, 0.8f);
+            enginetest::setNodeScale(sh, floor2, Vec3(14.0f, 0.2f, 14.0f));
+            enginetest::setNodePosition(sh, floor2, Vec3(0.0f, -0.1f, 0.0f));
+            const NodeId caster = enginetest::addTestCube(sh, Colour(0.8f, 0.8f, 0.8f), 0.0f, 0.8f);
+            enginetest::setNodeScale(sh, caster, Vec3(2.0f, 2.0f, 2.0f));
+            enginetest::setNodePosition(sh, caster, Vec3(0.0f, 3.0f, 0.0f));
+            enginetest::addDirectionalLight(sh, Vec3(0.0f, -1.0f, -0.15f), 4.0f);
+            // Looking down at the floor from in front: the cube is high in the
+            // frame, its shadow is a dark patch on the floor below it.
+            enginetest::testCameraLookAt(shv, Vec3(0.0f, 5.0f, 9.0f), Vec3(0.0f, 0.0f, -0.5f));
+
+            // The shadow's contrast, measured as a ratio so it cannot be faked
+            // by the whole frame getting brighter: the darkest floor pixel in
+            // the lower third over the brightest one.
+            auto contrast = [&](const char *what) {
+                render(engine.get(), 4);
+                Image img;
+                if (!shv->readPixels(img)) { CHECK_MSG(false, "readPixels (%s)", what); return 1.0f; }
+                if (envOn("JAH_SSR_DUMP")) {
+                    std::string p = std::string("ssr-shadow-") + what + ".ppm";
+                    for (char &c : p) if (c == ' ' || c == ',') c = '_';
+                    writePpm(img, p.c_str());
+                }
+                float lo = 1e9f, hi = 0.0f;
+                for (unsigned y = img.height / 2u; y < img.height; ++y)
+                    for (unsigned x = img.width / 6u; x < img.width * 5u / 6u; ++x) {
+                        const Colour c = img.at(x, y);
+                        const float l = (c.r + c.g + c.b) / 3.0f;
+                        if (l < lo) lo = l;
+                        if (l > hi) hi = l;
+                    }
+                const float r = hi > 0.0f ? lo / hi : 1.0f;
+                std::printf("   %s: floor darkest/brightest = %.3f (lo %.3f hi %.3f)\n",
+                            what, r, lo, hi);
+                return r;
+            };
+
+            const float plainContrast = contrast("shadows, ssr off");
+            CHECK_MSG(plainContrast < 0.7f,
+                      "the fixture really casts a shadow (ratio %.3f)", plainContrast);
+
+            PostFxDesc shfx;
+            shfx.allowOffscreen = true;
+            shfx.ssr = 1;
+            shv->setPostFx(shfx);
+            const float ssrContrast = contrast("shadows, ssr on");
+            CHECK_MSG(ssrContrast < plainContrast * 1.25f + 0.02f,
+                      "the shadow SURVIVES the SSR prepass: %.3f -> %.3f",
+                      plainContrast, ssrContrast);
+
+            shv->setPostFx(PostFxDesc());
+            render(engine.get(), 2);
+            engine->destroyView(shv);
+            engine->destroyScene(sh);
+        } else {
+            CHECK_MSG(false, "could not build the shadow fixture");
+        }
+    }
+
+    // ---- 5b. SSR off is BYTE-IDENTICAL to before it was ever on -------------
+    {
+        view->setPostFx(PostFxDesc());
+        render(engine.get(), 3);
+        Image restored;
+        CHECK(view->readPixels(restored), "readPixels after switching SSR off");
+        unsigned diff = 0;
+        const bool same = identical(plain, restored, &diff);
+        std::printf("    pixels differing from the pre-SSR frame: %u of %u\n",
+                    diff, plain.width * plain.height);
+        CHECK(same, "switching SSR off restores BYTE-IDENTICAL pixels");
+    }
+
+    // ---- teardown with the chain live --------------------------------------
+    // The ASan copy of this suite is what would catch a texture or node
+    // definition the SSR shape leaks across a rebuild.
+    {
+        PostFxDesc live = fx;
+        view->setPostFx(live);
+        render(engine.get(), 2);
+        engine->destroyView(view);
+        engine->destroyScene(s);
+        std::printf("ok: destroyed the view and scene with the SSR chain live\n");
+    }
+
+    std::printf(failures ? "\n%d FAILURE(S)\n" : "\nall SSR checks passed\n", failures);
+    return failures ? 1 : 0;
+}

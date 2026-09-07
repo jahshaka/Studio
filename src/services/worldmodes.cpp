@@ -177,13 +177,28 @@ QVector<Row> buildRows()
         out.append(r);
     }
     {
-        // SSR is DECLARED, not served — the same contract shape planarBudget
-        // used before its lane landed. The recipe is understood and the plumbing
-        // (PostFxDesc::ssr, ChainDesc::ssr, the fog piece's prepass guard) is in
-        // place; what is missing is the prepass restructure of the main scene
-        // pass, the compute + mipmap colour history and the per-view
-        // reprojection matrix. Declaring it keeps the tier table honest about
-        // what Epic will mean without shipping a switch that does nothing.
+        // SSR SHIPPED (POST_CHAIN_SPEC §8 phase 6; OgreChain.cpp's SSR block and
+        // irisgl/engine/media/Hlms/Jahshaka/JahSsr*). The row is served: a
+        // depth/normal/roughness prepass feeds a ray march that HlmsPbs composites
+        // into the specular environment term itself (`hlms_use_ssr`), so where the
+        // march is confident the screen replaces the probe/sky answer and where it
+        // is not the pixel is byte-for-byte what it is today. Pixel gate:
+        // `ssr.engine`.
+        //
+        // THE TIERS ARE THE MEASUREMENT, not a guess. On the RTX 4080 SUPER
+        // baseline, offscreen 1x, a 62-object fixture (tests/ssr with
+        // JAH_SSR_BENCH=1):
+        //     1920x1080   passthrough 0.41 ms   half-res +0.07..0.10   full-res +0.11..0.13
+        //     3840x2160   passthrough 0.44 ms   half-res +0.11         full-res +0.54
+        //     1920x1080, 602 objects              half-res +0.13        full-res +0.15
+        // Two things follow. (a) The ray march is pixel-bound and half resolution
+        // really is a quarter of it — at 4K the two rows separate by 5x, which is
+        // why the quality row exists at all. (b) At 1080p the march is BELOW the
+        // measurement floor and what is actually being paid is the second scene
+        // traversal, which grows with object count, not with resolution. That is
+        // the reason this row stays off below High: the cost a heavy world pays is
+        // CPU submission, and this renderer is CPU-bound long before it is
+        // pixel-bound.
         Row r;
         r.id = QStringLiteral("ssr");
         r.label = QStringLiteral("Screen-Space Reflections");
@@ -194,10 +209,13 @@ QVector<Row> buildRows()
                       { QStringLiteral("hq"),   QStringLiteral("Full-Res Rays"), 2 } };
         r.tier[0] = 0; r.tier[1] = 0; r.tier[2] = 1; r.tier[3] = 2;
         r.cost = QStringLiteral("Reflections of things that MOVE — the one gap a baked probe "
-                                "structurally cannot fill. Costs a second full traversal of the "
-                                "scene (a depth/normal prepass) on top of the ray march, so it "
-                                "never appears below High.");
-        r.available = false;
+                                "structurally cannot fill, and the only reflection source that "
+                                "needs no capture at all. Costs a second traversal of the scene "
+                                "(a depth/normal/roughness prepass) on top of the ray march, so "
+                                "it never appears below High. Only reflects what is ON SCREEN: "
+                                "reflections fade out at the frame's edges and on rough surfaces, "
+                                "and fall back to the sky and probes wherever they do.");
+        r.available = true;
         r.get = [](const iris::ScenePtr &s) { return s->ssrMode; };
         r.set = [](const iris::ScenePtr &s, int v) { s->ssrMode = v; };
         out.append(r);
