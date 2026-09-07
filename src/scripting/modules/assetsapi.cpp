@@ -163,7 +163,13 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "other option key is refused rather than ignored.",
           Needs::Document },
         { "builtins", "assets.builtins() -> [{guid, name, kind}]",
-          "The reserved built-ins: primitives, materials and shaders with their reserved guids. Guids collide across kinds — always pair guid with kind.",
+          "The reserved built-ins: primitives and materials with their reserved guids. Guids collide "
+          "across kinds — always pair guid with kind. The Default/Flat/Glass family reports kind "
+          "'material' since HLMS adoption retired CustomMaterial: those rows ARE material presets, "
+          "and reported 'shader' only because the map they live in is still called BuiltinShaders. "
+          "Nothing resolves BY kind — a scene, a script or a saved document referencing one of these "
+          "guids works exactly as before, and assets.list still accepts type 'shader' for the "
+          "graph-backed material assets that really are ModelTypes::Shader rows.",
           Needs::Document },
         { "remove", "assets.remove(guid, {keepShared: true}) -> bool",
           "Deletes a store asset: its catalog rows, its sidecar, whatever the retired per-guid folder left behind, and (keepShared false) its dependency assets too. The asset's CONTENT is not unlinked here — objects can be shared or pinned by a project, so reclaiming them is assets.gc's job. PERMANENT — no undo.",
@@ -678,7 +684,14 @@ QVariantList AssetsApi::builtins()
     };
     append(Constants::Reserved::DefaultPrimitives, "primitive");
     append(Constants::Reserved::DefaultMaterials, "material");
-    append(Constants::Reserved::BuiltinShaders, "shader");
+    // "material", not "shader" (owner decision, 2026-09-07). The reserved
+    // Default/Flat/Glass/Matcap family stopped being shaders when
+    // CustomMaterial was retired (HLMS_ADOPTION P4b): every one of them
+    // hydrates as a PbrMaterial preset (io/builtinmaterials.cpp) and the
+    // "Material" picker lists them beside the graph-backed materials. The map
+    // keeps its historical name; the REPORTED kind now tells the truth.
+    // Purely a label: nothing looks these guids up by kind.
+    append(Constants::Reserved::BuiltinShaders, "material");
     return out;
 }
 
