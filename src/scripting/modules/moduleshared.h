@@ -375,6 +375,7 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
     if (light->lightType == iris::LightType::Spot) {
         m["spotCutOff"] = light->spotCutOff;
         m["spotCutOffSoftness"] = light->spotCutOffSoftness;
+        m["spotFalloff"] = light->spotFalloff;
     }
     if (light->lightType == iris::LightType::Area) {
         m["rectWidth"] = light->rectWidth;

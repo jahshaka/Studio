@@ -149,7 +149,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "driver about its screen (0 = unknown, which falls back to 16 ms). The setting persists "
           "as viewport/pacing and is the same one Preferences > Viewport > Frame Pacing writes.",
           Needs::Window },
-        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances, incompletePsoRequests}",
+        { "renderStats", "app.renderStats() -> {metricsRecording, fps, frameMs, lastMs, p95Ms, p99Ms, bestMs, worstMs, draws, batches, triangles, vertices, instances, incompletePsoRequests, forwardPlusLights, forwardPlusBudget, forwardPlusOverBudget}",
           "What the RENDERER measured, straight off the engine boundary — the numbers behind the F3 "
           "stats overlay, and the read-back answer for an agent that wants to know what a frame costs "
           "(a screenshot cannot carry them; the overlay is deliberately absent from offscreen renders). "
@@ -533,6 +533,12 @@ QVariantMap AppApi::renderStats()
     out.insert("vertices", QVariant::fromValue(qulonglong(s.vertices)));
     out.insert("instances", QVariant::fromValue(qulonglong(s.instances)));
     out.insert("incompletePsoRequests", s.incompletePsoRequests);
+    // The Forward+ census. `forwardPlusOverBudget` == 0 PROVES no light was
+    // dropped from any cell; non-zero says a full cell would have dropped that
+    // many. See RenderStats for why an exact drop count needs an Ogre patch.
+    out.insert("forwardPlusLights", s.forwardPlusLights);
+    out.insert("forwardPlusBudget", s.forwardPlusBudget);
+    out.insert("forwardPlusOverBudget", s.forwardPlusOverBudget);
     return out;
 }
 

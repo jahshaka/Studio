@@ -216,6 +216,13 @@ public:
     virtual bool getShowGrid() const { return true; }
     virtual void setShowGrid(bool) {}
 
+    /// The GI volume overlay (LIGHTING_FIX fix 9): wireframe boxes around the
+    /// lit (voxel) volume and the reflection-probe region `world.giStatus()`
+    /// reports. Default OFF — it is a diagnostic, not scenery. Only the engine
+    /// viewport draws it, and only while GI is on.
+    virtual bool getShowGiVolume() const { return false; }
+    virtual void setShowGiVolume(bool) {}
+
     /// Game View (G): hides every in-viewport editor helper (grid, light
     /// wires, selection outline, gizmo). Docks/toolbars untouched, never
     /// persisted. Only the engine viewport implements it.

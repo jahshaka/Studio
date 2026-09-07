@@ -74,7 +74,7 @@ QVector<VerbInfo> NodeApi::verbs() const
           "Sets any of position/rotation/scale (absolute; rotation in euler degrees; omitted parts keep their value) and returns the result. Undoable.",
           Needs::Document },
         { "property", "node.property(id, key) -> value",
-          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. A mesh's `faceCullingMode` comes back as a NAME (\"none\" | \"front\" | \"back\" | \"material\"), never as the document's ordinal.",
+          "Reads a reflected property (position, rotation, scale; lights add intensity, lightColor, distance, spotCutOff, spotCutOffSoftness, spotFalloff, rectWidth, rectHeight). node.properties(id) lists every key this particular node has, with types and current values. A mesh's `faceCullingMode` comes back as a NAME (\"none\" | \"front\" | \"back\" | \"material\"), never as the document's ordinal.",
           Needs::Document },
         { "setProperty", "node.setProperty(id, key, value) -> bool",
           "Writes a reflected property (same keys as node.property; node.properties(id) lists them, and says which are writable). Enum rows travel as NAMES: a mesh's `faceCullingMode` takes \"none\" | \"front\" | \"back\" | \"material\" (\"material\" = the material decides, which is the default), and an ordinal is refused with that list. Undoable — the write rides the run's undo macro.",

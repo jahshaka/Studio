@@ -1298,6 +1298,9 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         mMirror->setHighlightedNode(highlight);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
         pushGridForView(helpers && !mPlaying);
+        // The GI volume boxes (LIGHTING_FIX fix 9): an editor helper like the
+        // rest, so Game View and play hide them.
+        mMirror->setGiVolumeOverlay(mShowGiVolume && helpers && !mPlaying);
         mMirror->sync();
     }
     if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
@@ -1781,6 +1784,7 @@ void EngineSceneViewport::primeSceneGeometry()
     mMirror->setLightWires(mShowLightWires && helpers);
     mMirror->setHighlightWireframe(mSelectionWireframe);
     pushGridForView(helpers);
+    mMirror->setGiVolumeOverlay(mShowGiVolume && helpers);
     LoadTimeline::Accumulate mirror(QStringLiteral("engine:mirrorSync"));
     mMirror->sync();
 }

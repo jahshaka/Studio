@@ -104,8 +104,13 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     lightColor = this->addColorPicker("Color");
     intensity = this->addFloatValueSlider("Intensity", 0, 10.f);
     distance = this->addFloatValueSlider("Distance", 0, 100.f);
-    spotCutOff = this->addFloatValueSlider("Spotlight CutOff", 0, 90.f);
-    spotCutOffSoftness = this->addFloatValueSlider("Spotlight Softness", .1f, 90.f);
+    // The cutoff is a HALF angle; 1..85 is what the renderer clamps to, so the
+    // slider offers exactly that rather than a 0..90 range whose ends do
+    // nothing. Softness is a 0..1 FRACTION and was on a 0.1..90 slider —
+    // i.e. 99% of its travel was the same clamped value (LIGHTING_FIX F-S3).
+    spotCutOff = this->addFloatValueSlider("Spotlight CutOff", 1.f, 85.f);
+    spotCutOffSoftness = this->addFloatValueSlider("Spotlight Softness", 0.f, 1.f);
+    spotFalloff = this->addFloatValueSlider("Spotlight Falloff", 0.1f, 8.f);
 
     // Area lights only (engine viewport): the emitting rectangle and its modes.
     rectWidth = this->addFloatValueSlider("Rect Width", 0.05f, 20.f);
@@ -170,6 +175,7 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     connect(distance,SIGNAL(valueChanged(float)),this,SLOT(lightDistanceChanged(float)));
     connect(spotCutOff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffChanged(float)));
     connect(spotCutOffSoftness,SIGNAL(valueChanged(float)),this,SLOT(lightSpotCutoffSoftnessChanged(float)));
+    connect(spotFalloff,SIGNAL(valueChanged(float)),this,SLOT(lightSpotFalloffChanged(float)));
 
     connect(rectWidth,SIGNAL(valueChanged(float)),this,SLOT(lightRectWidthChanged(float)));
     connect(rectHeight,SIGNAL(valueChanged(float)),this,SLOT(lightRectHeightChanged(float)));
@@ -198,6 +204,7 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         distance->setValue(lightNode->distance);
         spotCutOff->setValue(lightNode->spotCutOff);
         spotCutOffSoftness->setValue(lightNode->spotCutOffSoftness);
+        spotFalloff->setValue(lightNode->spotFalloff);
 
 		shadowColor->setColorValue(lightNode->shadowColor);
 		shadowAlpha->setValue(lightNode->shadowAlpha);
@@ -205,9 +212,11 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         if (lightNode->getLightType()==iris::LightType::Spot) {
             spotCutOff->show();
             spotCutOffSoftness->show();
+            spotFalloff->show();
         } else {
             spotCutOff->hide();
             spotCutOffSoftness->hide();
+            spotFalloff->hide();
         }
 
         // Area lights: the emitting rectangle replaces the cone controls.
@@ -297,6 +306,12 @@ void LightPropertyWidget::lightSpotCutoffSoftnessChanged(float spotCutOffSoftnes
 {
     if(!!lightNode)
         lightNode->spotCutOffSoftness = spotCutOffSoftness;
+}
+
+void LightPropertyWidget::lightSpotFalloffChanged(float spotFalloff)
+{
+    if(!!lightNode)
+        lightNode->spotFalloff = spotFalloff;
 }
 
 void LightPropertyWidget::lightRectWidthChanged(float width)

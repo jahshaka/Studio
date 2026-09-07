@@ -974,6 +974,7 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     sceneNodeObject["distance"] = lightNode->distance;
     sceneNodeObject["spotCutOff"] = lightNode->spotCutOff;
     sceneNodeObject["spotCutOffSoftness"] = lightNode->spotCutOffSoftness;
+    sceneNodeObject["spotFalloff"] = lightNode->spotFalloff;
     sceneNodeObject["rectWidth"] = lightNode->rectWidth;
     sceneNodeObject["rectHeight"] = lightNode->rectHeight;
     sceneNodeObject["doubleSided"] = lightNode->doubleSided;

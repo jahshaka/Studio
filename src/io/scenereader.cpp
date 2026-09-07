@@ -1100,7 +1100,11 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->spotCutOff = (float)nodeObj["spotCutOff"].toDouble(30.0f);
     // Serializer gap fixed (WEB_EXPORT_AUDIT §1): the mirror consumes softness
     // but it was never persisted. Default matches the LightNode constructor.
-    lightNode->spotCutOffSoftness = (float)nodeObj["spotCutOffSoftness"].toDouble(1.0f);
+    // The default is the CONSTRUCTOR's (0.15 since LIGHTING_FIX fix 5), not the
+    // old 1.0: a document written before softness was persisted never meant
+    // "all penumbra", it simply had nothing to say.
+    lightNode->spotCutOffSoftness = (float)nodeObj["spotCutOffSoftness"].toDouble(0.15f);
+    lightNode->spotFalloff = (float)nodeObj["spotFalloff"].toDouble(1.0f);
     lightNode->rectWidth = (float)nodeObj["rectWidth"].toDouble(1.0f);
     lightNode->rectHeight = (float)nodeObj["rectHeight"].toDouble(1.0f);
     lightNode->doubleSided = nodeObj["doubleSided"].toBool(false);
