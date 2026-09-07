@@ -78,6 +78,14 @@ namespace Constants
     extern int FPS_60;
 	extern float GRAVITY;
 
+    /// The frame-stats readout (`show_fps`) is OFF until the user asks for it
+    /// — F3, the View Options row, the Preferences checkbox and
+    /// editor.setOverlays({stats}) are the four doors, and every one of them
+    /// reads the setting with THIS default. It lived as four separate `false`
+    /// literals; one constant means a future flip cannot happen in three
+    /// places out of four (asserted by theme.manager).
+    extern bool SHOW_FPS_DEFAULT;
+
     namespace Reserved
     {
         // TODO - maybe move this to an external resources json file

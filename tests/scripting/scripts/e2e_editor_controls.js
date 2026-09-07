@@ -150,6 +150,39 @@ assert(editor.setView("perspective"), "back to perspective");
 assert(editor.view() === "perspective", "view reads back perspective");
 editor.frame(2);
 
+// A canonical axis view must LOOK AT THE SCENE, not just turn in place.
+// EditorCameraController::setAxisView rotated the free camera and left its
+// POSITION alone, so every view was taken from wherever the explorer happened
+// to be: "left"/"right" sat inside the x=0 plane their grid lies in (the grid
+// exactly edge-on, the scene 14 units off to the side) and "back" had the
+// whole scene behind its near plane. Only "front" worked, by luck, because the
+// default pose is already on +Z (owner report 2026-09-07). The camera lands ON
+// the axis of the view now, looking at the origin, with the standoff it had.
+var axisFraming = [
+    { view: "top",    axis: "y", sign:  1 },
+    { view: "bottom", axis: "y", sign: -1 },
+    { view: "left",   axis: "x", sign:  1 },
+    { view: "right",  axis: "x", sign: -1 },
+    { view: "front",  axis: "z", sign:  1 },
+    { view: "back",   axis: "z", sign: -1 }
+];
+for (var ai = 0; ai < axisFraming.length; ++ai) {
+    var af = axisFraming[ai];
+    assert(editor.setView(af.view), "axis framing: setView(" + af.view + ")");
+    editor.frame(2);
+    var ap = editor.camera().position;
+    var offAxis = (af.axis === "x") ? [ap.y, ap.z]
+                : (af.axis === "y") ? [ap.x, ap.z]
+                                    : [ap.x, ap.y];
+    assert(near(offAxis[0], 0, 1e-2) && near(offAxis[1], 0, 1e-2),
+        af.view + ": the camera is ON the " + af.axis + " axis (" +
+        ap.x + "," + ap.y + "," + ap.z + ")");
+    assert(af.sign * ap[af.axis] > 1,
+        af.view + ": it stands off along " + (af.sign > 0 ? "+" : "-") + af.axis);
+}
+assert(editor.setView("perspective"), "axis framing: back to perspective");
+editor.frame(2);
+
 // ---- per-view camera memory (owner defect: Top -> Perspective reset the
 // camera). Each view remembers its camera for the viewport session:
 // perspective its full pose, each ortho view its own pan + zoom. Verified

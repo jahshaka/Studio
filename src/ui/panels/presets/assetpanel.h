@@ -210,6 +210,18 @@ protected:
     QListWidget *listView;
     MainWindow *mainWindow;
     Database *handle;
+
+    // Drag state for the panels' event filters — MEMBERS, deliberately.
+    // Both panels used to declare `QPoint startPos;` as a LOCAL inside
+    // eventFilter(), so every MouseMove measured the drag distance from
+    // (0,0): a single selecting CLICK (press, a pixel of movement, release)
+    // was already "far enough" and started a QDrag, whose grab then outlived
+    // the release — the item followed the cursor with no button held (owner
+    // report 2026-09-07, "presets pick the model up as if dragging").
+    // `dragCandidate` is the other half: a drag may only begin from a press
+    // that landed ON an item, exactly as AssetWidget has always done.
+    QPoint dragStartPos;
+    bool   dragCandidate = false;
 };
 
 #endif

@@ -181,6 +181,10 @@ public:
     void setupProjectDB();
     void setupUndoRedo();
 
+    /// THE size of the header's glyph icons (Publish / Help / Preferences) —
+    /// one font for all three, so they cannot drift apart again.
+    QFont headerGlyphFont() const;
+
 	WindowSpaces getWindowSpace();
 	void deselectViewports();
 
@@ -190,6 +194,10 @@ public:
 	/// views are orthographic) and keeps the toolbar + dropdown checks in
 	/// sync. Returns false for an unknown name.
 	bool applyCameraView(const QString &name);
+	/// The Views dropdown's label = the view it is currently in ("Perspective"
+	/// until one is picked). Driven from applyCameraView, so a scripted
+	/// editor.setView moves it exactly like a click does.
+	void setViewsButtonLabel(const QString &view);
 	/// Rebuilds the camera switcher's list from the live document
 	/// (CAMERAS_SPEC D4). Connected to the menu's aboutToShow.
 	void rebuildCamerasMenu();

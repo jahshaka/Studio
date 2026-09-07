@@ -1053,6 +1053,10 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 
             assetWidget->refresh();
 			isSceneOpen = true;
+			// The dropdown follows the VIEWPORT, and a scene open resets it to
+			// perspective (per-view camera memory is per scene session) — so
+			// re-read it here rather than leaving "Top" over a fresh scene.
+			setViewsButtonLabel(sceneView->cameraView());
 
 			sceneView->begin();
 			// The on-screen View could not be created at all: nothing will
@@ -1165,8 +1169,12 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 
 	// publish_menu is an ICON in the right cluster — the text-menu sheets set a
 	// 14px font that halves the glyph. It keeps the help-button styling always;
-	// active-space feedback comes from the page itself.
-	publish_menu->setStyleSheet(StyleSheet::HelpButton());
+	// active-space feedback comes from the page itself. Re-applying the sheet
+	// re-polishes the button, and Qlementine's polish re-sets its font, so the
+	// icon font is pushed again HERE (the helper does both, in that order) —
+	// otherwise the arrow drops to the inherited 17px UI font while Help and
+	// Preferences stay at 28 (owner report 2026-09-07).
+	ThemeManager::applyHeaderGlyphButton(publish_menu, headerGlyphFont());
 	publish_menu->setCursor(Qt::PointingHandCursor);
 
 	avatar_menu->setStyleSheet(activeSpace == WindowSpaces::AVATAR ? selectedMenu : unselectedMenu);
@@ -2188,6 +2196,13 @@ void MainWindow::setupDockWidgets()
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
 
+QFont MainWindow::headerGlyphFont() const
+{
+	// 28px of the icon font — the size Help and Preferences always had, now
+	// the size all three header glyphs share.
+	return fontIcons->font(28);
+}
+
 void MainWindow::setupViewPort()
 {
 	// ui->MenuBar->setVisible(false);
@@ -2214,7 +2229,7 @@ void MainWindow::setupViewPort()
 	publish_menu->setObjectName("publish_menu");
 	publish_menu->setText(QChar(static_cast<ushort>(fa::arrowcircleup)));
 	publish_menu->setToolTip("Publish");
-	publish_menu->setStyleSheet(StyleSheet::HelpButton());
+	ThemeManager::applyHeaderGlyphButton(publish_menu, headerGlyphFont());
 	publish_menu->setCursor(Qt::PointingHandCursor);
 	avatar_menu = new QPushButton("Avatar");
 	avatar_menu->setObjectName("avatar_menu");
@@ -2262,10 +2277,11 @@ void MainWindow::setupViewPort()
     // for adapting Qt6.9.0
     help->setText(QChar(static_cast<ushort>(fa::questioncircle)));
     //help->setText(QChar(fa::questioncircle));
-	help->setFont(fontIcons->font(28));
+	// Sheet + font together, through the one helper: the three header glyphs
+	// (Publish, Help, Preferences) are the same size and sit on the header's
+	// own colour instead of Qlementine's grey button plate.
+	ThemeManager::applyHeaderGlyphButton(help, headerGlyphFont());
 	help->setCursor(Qt::PointingHandCursor);
-
-	help->setStyleSheet(StyleSheet::HelpButton());
 
     connect(help, &QPushButton::pressed, []() {
         QDesktopServices::openUrl(QUrl("https://www.jahshaka.com/learn/resources/"));
@@ -2277,10 +2293,9 @@ void MainWindow::setupViewPort()
     //prefs->setText(QChar(fa::cog));
     // for adapting Qt6.9.0
     prefs->setText(QChar(static_cast<ushort>(fa::cog)));
-	prefs->setFont(fontIcons->font(28));
+	// (Classic still gets PrefsButton() — the helper picks by object name.)
+	ThemeManager::applyHeaderGlyphButton(prefs, headerGlyphFont());
 	prefs->setCursor(Qt::PointingHandCursor);
-
-	prefs->setStyleSheet(StyleSheet::PrefsButton());
 
 	connect(prefs, &QPushButton::pressed, [this]() { showPreferences(); });
 
@@ -2288,7 +2303,7 @@ void MainWindow::setupViewPort()
 	QHBoxLayout *bl = new QHBoxLayout;
 	buttons->setLayout(bl);
 	bl->setSpacing(20);
-	publish_menu->setFont(fontIcons->font(28));
+	ThemeManager::applyHeaderGlyphButton(publish_menu, headerGlyphFont());
 	bl->addWidget(publish_menu);
 	bl->addWidget(help);
 	bl->addWidget(prefs);
@@ -2377,7 +2392,7 @@ void MainWindow::setupViewPort()
     statsCheckAction = new QAction(QIcon(), "Frame Stats (F3)");
     statsCheckAction->setCheckable(true);
     statsCheckAction->setChecked(
-        SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool());
+        SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
     connect(statsCheckAction, &QAction::toggled, this,
             [this](bool on) { setShowFrameStats(on); });
     wireFramesMenu->addAction(statsCheckAction);
@@ -2447,7 +2462,14 @@ void MainWindow::setupViewPort()
         viewsActions.push_back(action);
     }
     viewsButton->setMenu(viewsMenu);
-    viewsButton->setText("Views ");
+    // The button SHOWS the current view, it does not advertise the menu: a
+    // static "Views" label told the user nothing about which view they were
+    // in (owner report 2026-09-07). It starts on Perspective — the viewport's
+    // own starting view — and follows every path that changes it, the
+    // dropdown, the view.* shortcuts and editor.setView alike, because they
+    // all land in applyCameraView.
+    viewsButton->setToolTip(tr("Canonical camera views"));
+    setViewsButtonLabel(QStringLiteral("perspective"));
     viewsButton->setPopupMode(QToolButton::InstantPopup);
 
     // Camera ▾ — the switcher (CAMERAS_SPEC D4): the Viewport (explorer) plus
@@ -2682,7 +2704,7 @@ void MainWindow::setupViewPort()
     // The persisted readout state reaches the viewport HERE, not when the menu
     // action was built: the View Options menu is constructed before sceneView
     // exists, so its initial setChecked found nothing to switch on.
-    setShowFrameStats(SettingsManager::getDefaultManager()->getValue("show_fps", false).toBool());
+    setShowFrameStats(SettingsManager::getDefaultManager()->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
 
     QGridLayout* layout = new QGridLayout;
     layout->addWidget(sceneView->asWidget(), 0, 0);
@@ -3914,7 +3936,21 @@ bool MainWindow::applyCameraView(const QString &name)
 
     for (QAction *action : viewsActions)
         action->setChecked(action->data().toString() == name);
+    setViewsButtonLabel(name);
     return true;
+}
+
+void MainWindow::setViewsButtonLabel(const QString &view)
+{
+    if (!viewsButton) return;
+    // The label is the checked action's own text, so the button and the menu
+    // can never spell the same view differently.
+    for (QAction *action : viewsActions) {
+        if (action->data().toString() != view) continue;
+        viewsButton->setText(action->text() + QStringLiteral(" "));
+        return;
+    }
+    viewsButton->setText(QStringLiteral("Perspective "));
 }
 
 void MainWindow::changeProjection(bool val)

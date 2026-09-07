@@ -267,6 +267,12 @@ private:
     bool ensureEngineScene();
     void setActiveGizmo(Gizmo *g);
 
+    /// The ONE grid push (visibility, plane, spacing, floor offset, colours)
+    /// derived from the current canonical view — every mirror sync goes
+    /// through it so the axis views cannot disagree about the grid.
+    /// `helpers` is the caller's "editor helpers are drawable now" state.
+    void pushGridForView(bool helpers);
+
     /// Per-view camera memory (Views dropdown / editor.setView): each canonical
     /// view keeps its own camera between visits for the life of the viewport —
     /// perspective its full free/orbit pose, each ortho view its pan + zoom.

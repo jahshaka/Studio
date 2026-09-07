@@ -164,6 +164,63 @@ static void gridStateForView(const QString &view, bool showPref,
     // top / bottom keep the floor plane.
 }
 
+// Everything else the grid needs from the current view (owner report
+// 2026-09-07 — "the axis-view grid is not there, and where it is it is white"):
+//
+//   * WHERE the floor plane sits. The default -0.01 tucks the floor grid under
+//     the ground plane every scene ships, which is right in perspective and
+//     fatal from above: in `top` / `bottom` the ground hid the grid completely.
+//     Those two views get a small POSITIVE offset so the grid draws over the
+//     ground; nothing else changes.
+//   * WHAT COLOUR it is. One blue-grey for every plane made an axis view read
+//     as "white lines". Each axis view is tinted by the axis its grid plane
+//     FACES — Y green for top/bottom, Z blue for front/back, X red for
+//     left/right — the gizmo's own axis colours, so the view announces itself.
+//     Perspective keeps the neutral editor grid.
+static float gridFloorOffsetForView(const QString &view)
+{
+    if (view == QLatin1String("top") || view == QLatin1String("bottom"))
+        return 0.02f;
+    return -0.01f;
+}
+
+static void gridColoursForView(const QString &view,
+                               jahshaka::engine::Colour &minor,
+                               jahshaka::engine::Colour &major)
+{
+    using Colour = jahshaka::engine::Colour;
+    // The perspective default: the neutral blue-grey SceneMirror ships.
+    minor = Colour(0.46f, 0.48f, 0.52f, 0.28f);
+    major = Colour(0.62f, 0.64f, 0.68f, 0.50f);
+    if (view == QLatin1String("perspective")) return;
+    // Axis views: brighter (they ARE the alignment aid there) and tinted.
+    if (view == QLatin1String("top") || view == QLatin1String("bottom")) {
+        minor = Colour(0.36f, 0.62f, 0.40f, 0.42f);   // Y — green
+        major = Colour(0.48f, 0.86f, 0.54f, 0.75f);
+    } else if (view == QLatin1String("front") || view == QLatin1String("back")) {
+        minor = Colour(0.34f, 0.50f, 0.74f, 0.42f);   // Z — blue
+        major = Colour(0.44f, 0.66f, 0.98f, 0.75f);
+    } else {
+        minor = Colour(0.72f, 0.38f, 0.38f, 0.42f);   // X — red
+        major = Colour(0.94f, 0.48f, 0.48f, 0.75f);
+    }
+}
+
+// The one push: visibility + plane + spacing + floor offset + colours, from
+// the current canonical view. Called from every place that syncs the mirror.
+void EngineSceneViewport::pushGridForView(bool helpers)
+{
+    if (!mMirror) return;
+    bool on = false;
+    SceneMirror::GridPlane plane = SceneMirror::GridPlane::Floor;
+    gridStateForView(mCameraView, mShowGrid, on, plane);
+    jahshaka::engine::Colour minor, major;
+    gridColoursForView(mCameraView, minor, major);
+    mMirror->setGridColours(minor, major);
+    mMirror->setGridFloorOffset(gridFloorOffsetForView(mCameraView));
+    mMirror->setGrid(on && helpers, SnapSettings::translateSize(), plane);
+}
+
 bool EngineSceneViewport::setCameraView(const QString &view)
 {
     struct AxisView { const char *name; float yaw; float pitch; };
@@ -1240,11 +1297,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
         }
         mMirror->setHighlightedNode(highlight);
         // Grid spacing = the translate snap size ([ and ] re-space it live).
-        {
-            bool on; SceneMirror::GridPlane plane;
-            gridStateForView(mCameraView, mShowGrid, on, plane);
-            mMirror->setGrid(on && helpers && !mPlaying, SnapSettings::translateSize(), plane);
-        }
+        pushGridForView(helpers && !mPlaying);
         mMirror->sync();
     }
     if (mGizmo && viewCamera() && mSelectedNode) mGizmo->updateSize(viewCamera());
@@ -1727,11 +1780,7 @@ void EngineSceneViewport::primeSceneGeometry()
     const bool helpers = !mGameView;
     mMirror->setLightWires(mShowLightWires && helpers);
     mMirror->setHighlightWireframe(mSelectionWireframe);
-    {
-        bool on; SceneMirror::GridPlane plane;
-        gridStateForView(mCameraView, mShowGrid, on, plane);
-        mMirror->setGrid(on && helpers, SnapSettings::translateSize(), plane);
-    }
+    pushGridForView(helpers);
     LoadTimeline::Accumulate mirror(QStringLiteral("engine:mirrorSync"));
     mMirror->sync();
 }

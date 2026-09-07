@@ -212,7 +212,7 @@ WorldSettingsWidget::WorldSettingsWidget(Database *handle, SettingsManager* sett
 	//connect(ui->shortcutss,	&QPushButton::pressed, [this]() { ui->stackedWidget->setCurrentIndex(6); });
 
 
-	//showFps = settings->getValue("show_fps", false).toBool();
+	//showFps = settings->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool();
 	//ui->showFPS->setChecked(showFps);
 
 	//autoSave = settings->getValue("auto_save", true).toBool();
@@ -654,7 +654,7 @@ void WorldSettingsWidget::configureEditor()
 
 
 
-	fps->setChecked(settings->getValue("show_fps", false).toBool());
+	fps->setChecked(settings->getValue("show_fps", Constants::SHOW_FPS_DEFAULT).toBool());
 	openInPlayer->setChecked(settings->getValue("open_in_player", false).toBool());
 	autoUpdates->setChecked(settings->getValue("automatic_updates", true).toBool());
 	// COPY-PASTE DEFECT, fixed (STATS_OVERLAY_SPEC.md §1.1): the *Show

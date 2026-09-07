@@ -157,8 +157,9 @@ void AssetMaterialPanel::addFavorites()
 
 bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
 {
-    QPoint startPos;
-
+    // The drag anchor lives on the panel (AssetPanel::dragStartPos /
+    // dragCandidate), NOT here: a local reset itself to (0,0) on every event,
+    // so a plain selecting click started a drag. See assetpanel.h.
     if (watched == listView->viewport()) {
         switch (event->type()) {
             case QEvent::ContextMenu: {
@@ -170,8 +171,8 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
             case QEvent::MouseButtonPress: {
                 auto evt = static_cast<QMouseEvent*>(event);
                 if (evt->button() == Qt::LeftButton) {
-                    startPos = evt->pos();
-                    QModelIndex index = listView->indexAt(evt->pos());
+                    dragStartPos = evt->pos();
+                    dragCandidate = listView->indexAt(evt->pos()).isValid();
                 }
 
                 AssetMaterialPanel::mousePressEvent(evt);
@@ -180,15 +181,18 @@ bool AssetMaterialPanel::eventFilter(QObject *watched, QEvent *event)
 
             case QEvent::MouseButtonRelease: {
                 auto evt = static_cast<QMouseEvent*>(event);
+                dragCandidate = false;
                 AssetMaterialPanel::mouseReleaseEvent(evt);
                 break;
             }
 
             case QEvent::MouseMove: {
                 auto evt = static_cast<QMouseEvent*>(event);
-                if (evt->buttons() & Qt::LeftButton) {
-                    int distance = (evt->pos() - startPos).manhattanLength();
+                if (dragCandidate && (evt->buttons() & Qt::LeftButton)) {
+                    int distance = (evt->pos() - dragStartPos).manhattanLength();
                     if (distance >= QApplication::startDragDistance()) {
+                        // One drag per press (see assetmodelpanel.cpp).
+                        dragCandidate = false;
                         auto item = listView->currentItem();
 
                         if (item) {
