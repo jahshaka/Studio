@@ -21,6 +21,7 @@ set(SRCS
 	src/modules/materials/core/graphbaker.cpp
 	src/modules/materials/core/materialhelper.cpp
 	src/modules/materials/core/pbrgraphevaluator.cpp
+	src/modules/materials/core/pieceemitter.cpp
 	#src/modules/materials/core/project.cpp
 	src/modules/materials/core/texturemanager.cpp
 	src/modules/materials/core/undoredo.cpp
@@ -79,6 +80,7 @@ set(HEADERS
 	src/modules/materials/core/guidhelper.h
 	src/modules/materials/core/materialhelper.h
 	src/modules/materials/core/pbrgraphevaluator.h
+	src/modules/materials/core/pieceemitter.h
 	#src/modules/materials/core/project.h
 	src/modules/materials/core/texturemanager.h
 	src/modules/materials/core/undoredo.h

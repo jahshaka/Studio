@@ -24,6 +24,8 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/avatarmovement.h"
 #include "irisgl/document/animation/locomotion.h"
 #include "io/materialreader.h"
+#include "modules/materials/core/materialhelper.h"
+#include "modules/materials/core/pieceemitter.h"
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
 #include "services/scenefolders.h"
@@ -1363,7 +1365,60 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 		}
 	}
 
+	restoreCustomPieces(mat, values);
 	return mat;
+}
+
+/// GENERATED SHADER PIECES (HLMS_ADOPTION P5), on the way back in.
+///
+/// The scene stores the piece by FILE NAME (a hash of the file's own bytes) and
+/// the guid of the shader asset it was generated from. Two ways home, in order:
+///
+///   1. the file is already in this user's piece cache — the ordinary case,
+///      free, and the reason the name rather than a path is what gets written
+///      (the cache lives somewhere different on every machine);
+///   2. it is not, because this is another machine or a wiped cache — then the
+///      SHADER ASSET is fetched by guid and re-emitted. The graph is the source
+///      of truth and emission is deterministic, so the regenerated file has the
+///      same name the scene asked for.
+///
+/// If neither works (no database, the asset is gone) the material simply loads
+/// as its baked self: an animated surface renders its t=0 fold instead of
+/// moving. That is a visible degradation, never a broken material.
+void SceneReader::restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObject& values)
+{
+	const QString pixelName  = values["customPiece"].toString();
+	const QString vertexName = values["customPieceVertex"].toString();
+	if (pixelName.isEmpty() && vertexName.isEmpty()) return;
+
+	const QString dir = materials::PieceEmitter::cacheDir();
+	auto resolve = [&dir](const QString& name) {
+		if (name.isEmpty()) return QString();
+		const QString path = dir + QLatin1Char('/') + name;
+		return QFileInfo::exists(path) ? path : QString();
+	};
+	QString pixelPath = resolve(pixelName);
+	QString vertexPath = resolve(vertexName);
+
+	if ((pixelPath.isEmpty() && !pixelName.isEmpty()) ||
+	    (vertexPath.isEmpty() && !vertexName.isEmpty())) {
+		const QString graphGuid = values["customPieceGraph"].toString();
+		if (!graphGuid.isEmpty() && handle) {
+			MaterialReader reader;
+			reader.setProject(project);
+			const QJsonObject definition = reader.getShaderObjectFromId(graphGuid, handle);
+			if (!definition.isEmpty()) {
+				// createPbrMaterialFromDefinition re-emits and writes the piece
+				// files as a side effect; we want the PATHS, not the material.
+				if (auto regenerated = MaterialHelper::createPbrMaterialFromDefinition(definition)) {
+					if (pixelPath.isEmpty()) pixelPath = resolve(pixelName);
+					if (vertexPath.isEmpty()) vertexPath = resolve(vertexName);
+				}
+			}
+		}
+	}
+	mat->setCustomPiecePixel(pixelPath);
+	mat->setCustomPieceVertex(vertexPath);
 }
 
 iris::MaterialPtr SceneReader::readMaterial(QJsonObject& nodeObj)

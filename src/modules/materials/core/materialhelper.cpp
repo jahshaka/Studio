@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../graph/nodegraph.h"
 #include "graphbaker.h"
 #include "pbrgraphevaluator.h"
+#include "pieceemitter.h"
 #include "texturemanager.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -121,18 +122,39 @@ QJsonObject MaterialHelper::serializeWithBake(NodeGraph* graph, const QString& b
 	if (!graph || bakeGuid.isEmpty() || projectRoot.isEmpty())
 		return matObj;
 
+	// THE EMITTER RUNS FIRST (HLMS_ADOPTION P5), because what it takes the
+	// baker must not spend time on. Both backends are driven from the same
+	// compiled graph, and a socket lands on exactly one of them.
+	materials::PieceEmitter::Result emitted;
+	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, textureResolver(),
+	                                                                &emitted);
+
 	materials::GraphBaker::Options opts;
 	opts.resolution = graph->settings.bakeResolution;
 	opts.outputDir = projectRoot + "/BakedMaps/" + bakeGuid;
 	opts.relativePrefix = "BakedMaps/" + bakeGuid + "/";
+	opts.emittedSockets = emitted.emittedSockets;
 	const auto baked = materials::GraphBaker::run(graph, opts, textureResolver());
 
 	QJsonObject pbrObj = matObj["pbrMaterial"].toObject();
 	pbrObj["values"] = baked.eval.values;
 	pbrObj["unsupportedNodes"] = QJsonArray::fromStringList(baked.eval.unsupportedNodes);
 	pbrObj["approximatedNodes"] = QJsonArray::fromStringList(baked.eval.approximatedNodes);
-	pbrObj["animated"] = baked.eval.animated;
+	pbrObj["animated"] = baked.eval.animated || emitted.animated;
 	pbrObj["bakedMaps"] = baked.maps;
+	// The piece record is a FLAG plus the sockets it owns — never the machine's
+	// file paths. Pieces live in a per-USER cache, so a stored absolute path
+	// would be wrong on the next machine to open the project; the definition
+	// carries the graph, and the graph re-emits byte-identical source (and
+	// therefore the identical content-addressed name) wherever it is opened.
+	if (emitted.accepted) {
+		QJsonObject pieceObj;
+		pieceObj["emittedSockets"] = QJsonArray::fromStringList(emitted.emittedSockets);
+		pieceObj["animated"] = emitted.animated;
+		if (pieces.contains("customPiecePixel")) pieceObj["pixel"] = true;
+		if (pieces.contains("customPieceVertex")) pieceObj["vertex"] = true;
+		pbrObj["customPiece"] = pieceObj;
+	}
 	matObj["pbrMaterial"] = pbrObj;
 	return matObj;
 }
@@ -174,7 +196,24 @@ PbrGraphEvaluator::TextureResolver MaterialHelper::textureResolver()
 
 iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromShaderGraph(NodeGraph* graph)
 {
-	return PbrGraphEvaluator::createMaterial(graph, textureResolver());
+	auto material = PbrGraphEvaluator::createMaterial(graph, textureResolver());
+	applyEmittedPieces(graph, material);
+	return material;
+}
+
+materials::PieceEmitter::Result MaterialHelper::applyEmittedPieces(NodeGraph* graph,
+                                                                   iris::PbrMaterialPtr material)
+{
+	materials::PieceEmitter::Result result;
+	if (!graph || !material) return result;
+	const QJsonObject pieces = materials::PieceEmitter::emitAndStore(graph, textureResolver(),
+	                                                                &result);
+	// Set BOTH, always, including to empty: a material being re-evaluated after
+	// an edit that made its graph un-emittable has to LOSE the piece it had, or
+	// the renderer would keep drawing the previous surface.
+	material->setCustomPiecePixel(pieces["customPiecePixel"].toString());
+	material->setCustomPieceVertex(pieces["customPieceVertex"].toString());
+	return result;
 }
 
 iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject matObj)
@@ -182,8 +221,31 @@ iris::PbrMaterialPtr MaterialHelper::createPbrMaterialFromDefinition(QJsonObject
 	if (!matObj.contains("pbrMaterial"))
 		return iris::PbrMaterialPtr();
 
-	auto values = matObj["pbrMaterial"].toObject()["values"].toObject();
-	return PbrGraphEvaluator::materialFromValues(values, textureResolver());
+	const QJsonObject pbrObj = matObj["pbrMaterial"].toObject();
+	auto values = pbrObj["values"].toObject();
+	auto material = PbrGraphEvaluator::materialFromValues(values, textureResolver());
+
+	// RE-EMIT (HLMS_ADOPTION P5). The definition says a piece exists but never
+	// where: the file lives in a per-user cache under a name that is a hash of
+	// its own bytes, so re-emitting from the stored GRAPH reproduces the same
+	// name and either finds the file already there (the ordinary case, free) or
+	// writes it back (a wiped cache, a fresh machine, a first open). That is
+	// what makes the cache genuinely disposable.
+	//
+	// Only for definitions that HAVE a piece: deserializing a graph is not
+	// free, and an ordinary baked material must not pay for a feature it does
+	// not use.
+	if (material && pbrObj.contains("customPiece")) {
+		if (NodeGraph* graph = extractNodeGraphFromMaterialDefinition(matObj)) {
+			resolveAppRelativeTextures(graph);
+			const QJsonObject pieces =
+			    materials::PieceEmitter::emitAndStore(graph, textureResolver());
+			material->setCustomPiecePixel(pieces["customPiecePixel"].toString());
+			material->setCustomPieceVertex(pieces["customPieceVertex"].toString());
+			delete graph;
+		}
+	}
+	return material;
 }
 
 NodeGraph* MaterialHelper::extractNodeGraphFromMaterialDefinition(QJsonObject matObj)

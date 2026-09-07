@@ -72,6 +72,12 @@ public:
 		QString relativePrefix;  // prepended to emitted map values (e.g. "BakedMaps/<guid>/")
 		bool bakeMaps = true;    // false = evaluator mode: Baked chains report unsupported
 		bool pruneStale = true;  // remove PNGs in outputDir not produced by this bake
+		// Master sockets a GENERATED SHADER PIECE owns (HLMS_ADOPTION P5).
+		// The piece overwrites the surface after the maps have been sampled,
+		// so baking these would spend bake time on a PNG nothing can read; a
+		// socket named here is skipped entirely — no value, no map, and NOT
+		// reported unsupported, because it is neither baked nor lost.
+		QStringList emittedSockets;
 	};
 
 	struct Result

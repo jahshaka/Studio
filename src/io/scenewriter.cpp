@@ -861,6 +861,24 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 		// add vector properties
     }
 
+	// GENERATED SHADER PIECES (HLMS_ADOPTION P5). Not Property rows — they are
+	// a cache reference the emitter owns, not something a user sets — so they
+	// are written explicitly, and by FILE NAME rather than path: the piece
+	// lives in a per-USER cache whose location differs on every machine, while
+	// the name is a hash of the file's own content and is therefore the same
+	// everywhere. `customPieceGraph` names the shader asset the piece came
+	// from, so a machine that does not have the file can regenerate it from the
+	// graph instead of silently falling back to the baked surface.
+	if (auto pbr = mat.dynamicCast<iris::PbrMaterial>()) {
+		if (!pbr->customPiecePixel.isEmpty())
+			valuesObj["customPiece"] = QFileInfo(pbr->customPiecePixel).fileName();
+		if (!pbr->customPieceVertex.isEmpty())
+			valuesObj["customPieceVertex"] = QFileInfo(pbr->customPieceVertex).fileName();
+		if ((!pbr->customPiecePixel.isEmpty() || !pbr->customPieceVertex.isEmpty()) &&
+		    !pbr->getGuid().isEmpty())
+			valuesObj["customPieceGraph"] = pbr->getGuid();
+	}
+
 	matObj["values"] = valuesObj;
 }
 
