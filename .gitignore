@@ -44,6 +44,7 @@ CmakeSettings.json
 
 # Cmake Related
 build/
+build_vs/
 
 \.DS_Store
 

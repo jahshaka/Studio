@@ -1443,8 +1443,6 @@ QJsonObject AssetView::importMeshToDb(const QString &filePath,
     QVector<vtkmeta::TextureMapResult> importedTexures{};
     QStringList existedTextures{};
     for (auto texture : textures) {
-        qDebug() << texture.guid_ << texture.filename_ << texture.file_path_;
-
         if (existedTextures.contains(texture.filename_) || texture.filename_.isEmpty()) {
             continue;
         }
@@ -1485,8 +1483,6 @@ QJsonObject AssetView::importMeshToDb(const QString &filePath,
                                                     tagsDoc.toJson(),
                                                     QJsonDocument(obj).toJson(),
                                                     AssetViewFilter::AssetsView);
-
-    qDebug() << "xxxxxxxxxx--------" << objectGuid << main_guid << assetGuid;
 
     // Create dependencies to the object for the textures used
     for (const auto &image : importedTexures) {
@@ -1641,7 +1637,6 @@ void AssetView::addAssetItemToProject(AssetGridItem *item)
 	auto pDir = IrisUtils::join(defaultProjectDirectory, Globals::project->getProjectGuid());
 
 	QString guid = item->metadata["guid"].toString();
-	int assetType = item->metadata["type"].toInt();
 
     auto assetsDir = IrisUtils::join(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), Constants::ASSET_FOLDER, guid);
 

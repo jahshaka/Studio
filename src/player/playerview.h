@@ -6,7 +6,6 @@
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkRenderer.h>
 #include <QTimer>
-#include <QElapsedTimer>
 
 //#include "irisgl/src/irisglfwd.h"
 
@@ -27,11 +26,10 @@
 class CameraControllerBase;
 class PlayerVrController;
 class PlayerMouseController;
-class QElapsedTimer;
 class QTimer;
 class PlayBack;
 
-class VtkPlayBackSim;
+class VtkPlaybackManager;
 
 class PlayerView : public QVTKOpenGLNativeWidget
 {
@@ -82,9 +80,7 @@ private:
 
 
     QTimer* update_timer_ = nullptr;
-    QElapsedTimer* fps_timer_ = nullptr;
-
-    VtkPlayBackSim* playback;
+    VtkPlaybackManager* playback_ = nullptr;
 
 
     void renderScene();

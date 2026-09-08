@@ -3233,6 +3233,8 @@ QString Database::copyAsset(
         }
     }
 
+    qDebug() << "----------------------" << assetGuids;
+
     for (auto &asset : assetsToImport) {
         if (asset.type == static_cast<int>(ModelTypes::Object)   ||
 			asset.type == static_cast<int>(ModelTypes::Material) ||
@@ -3241,11 +3243,15 @@ QString Database::copyAsset(
             auto doc = QJsonDocument::fromJson(asset.asset);
             QString docToString = doc.toJson(QJsonDocument::Compact);
 
+            qDebug() << "--------------------" << docToString;
+
             QMapIterator<QString, QString> i(assetGuids);
             while (i.hasNext()) {
                 i.next();
                 docToString.replace(i.key(), i.value());
             }
+
+            qDebug() << "****************************" << docToString;
 
             QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
             asset.asset = updatedDoc.toJson();

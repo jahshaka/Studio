@@ -2,17 +2,16 @@
 #define VTKPLAYBACKMANAGER_H
 
 #include <QObject>
-#include <QVector2D>
+#include <QElapsedTimer>
 #include <QTimer>
+#include <vector>
 #include <vtkSmartPointer.h>
 #include <vtkActor.h>
 #include <vtkRenderer.h>
 #include <vtkProp.h>
-#include <QDateTime> // For time tracking
 
 namespace vtkmeta {
 class Node;
-class Scence;
 }
 
 class VtkPlaybackManager : public QObject
@@ -22,7 +21,7 @@ public:
     explicit VtkPlaybackManager(QObject *parent = nullptr);
     ~VtkPlaybackManager();
 
-    void setRenderer(vtkSmartPointer<vtkRenderer> renderer);
+    void setRenderer(vtkRenderer* renderer);
     void addSceneActor(vtkSmartPointer<vtkActor> actor);
     void removeSceneActor(vtkSmartPointer<vtkActor> actor);
     const std::vector<vtkSmartPointer<vtkActor>>& getActors() const { return actors_; }
@@ -36,17 +35,19 @@ public:
 //    void handleMouseWheel(int delta);
  //   void updateCamera(float dt);
 
+signals:
+    void frameAdvanced(float delta_seconds);
+
 private slots:
-    void update(float dt);
+    void onUpdateTimer();
 
 private:
     bool is_playing_ = false;
-    float last_time_ = 0.0f;
-    QTimer* update_timer_;
+    QElapsedTimer elapsed_timer_;
+    QTimer* update_timer_ = nullptr;
 
-    vtkRenderer* renderer_;
+    vtkRenderer* renderer_ = nullptr;
     std::vector<vtkSmartPointer<vtkActor>> actors_;
-    std::vector<std::shared_ptr<vtkmeta::Node>> nodes_;
 };
 
 #endif // VTKPLAYBACKMANAGER_H
