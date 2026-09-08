@@ -355,6 +355,10 @@ void SceneNodePropertiesWidget::setServices(StudioServices *services)
     // which runs before this setter.
     if (worldModesPropView) worldModesPropView->setServices(services);
     if (skyPropView) skyPropView->eventBus = services ? services->eventBus : nullptr;
+    // Sun coupling (re-audit F5): both sky panels carry the "drive a
+    // directional light" row, which needs the selection and the undo stack.
+    if (skyPropView) skyPropView->setServices(services);
+    if (worldSkyPropView) worldSkyPropView->setServices(services);
 }
 
 void SceneNodePropertiesWidget::setDatabase(Database *db)

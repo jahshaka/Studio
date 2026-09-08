@@ -35,6 +35,7 @@ namespace iris {
 }
 
 class Subscriber;
+struct StudioServices;
 
 class SkyPropertyWidget: public AccordianBladeWidget
 {
@@ -46,6 +47,9 @@ public:
     SkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
+    /// Selection + undo, for the sun-coupling row (re-audit F5). Injected by
+    /// the properties panel; null in headless hosts.
+    void setServices(StudioServices *s) { this->services = s; }
 
 	void setSkyAlongWithProperties(const QString &guid, iris::SkyType skyType);
 
@@ -68,6 +72,7 @@ protected slots:
     void onMieDireChanged(float val);
     void onSunAzimuthChanged(float val);
     void onSunElevationChanged(float val);
+    void onSunDrivesLightChanged(bool on);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -78,7 +83,12 @@ private:
     /// Pushes the two angle sliders into the stored sun vector.
     void writeSunAngles();
 
+    /// Adds the "Drive Selected Directional Light" row. Only offered while this
+    /// sky asset IS the open scene's sky — a sky in the library drives nothing.
+    void addSunLinkRow();
+
     Database *db;
+    StudioServices *services = nullptr;
     QSharedPointer<iris::Scene> scene;
     iris::SkyType currentSky;
 	QString skyGuid;
@@ -111,6 +121,7 @@ private:
     // still stores sunPosX/Y/Z, these two are the readable view of them.
     HFloatSliderWidget *sunAzimuth = nullptr;
     HFloatSliderWidget *sunElevation = nullptr;
+    CheckBoxWidget *sunDrivesLight = nullptr;     // sun coupling (re-audit F5)
 
 	QJsonObject singleColorDefinition;
 	QJsonObject cubeMapDefinition;

@@ -1766,6 +1766,129 @@ int main(int argc, char **argv)
         smirror.setSource(nullptr);
     }
 
+    // ---- SUN COUPLING: the sky's sun drives a directional light (F5) --------
+    // Document assert AND pixel assert, over one scene: a lit floor under a
+    // single directional light, with the light linked to the realistic sky's
+    // sun. Moving the sun must (a) rotate the DOCUMENT light onto the sun's
+    // direction — lights emit down their local -Y — and (b) change what the
+    // camera sees, which is what "the lighting follows the sky" means.
+    {
+        auto sdoc = iris::Scene::create();
+        sdoc->setAmbientColor(QColor(0, 0, 0));      // only the sun lights this scene
+        sdoc->ambientFromSky = false;                // and no sky-driven ambient either
+        sdoc->skyType = iris::SkyType::SINGLE_COLOR; // no sky bake in the picture
+        sdoc->skyColor = QColor(0, 0, 255);
+
+        auto floorMat = iris::PbrMaterial::create();
+        floorMat->setValue("baseColor", QColor(220, 220, 220));
+        floorMat->setValue("roughness", 1.0f);
+        floorMat->setValue("metallic", 0.0f);
+        auto floor = iris::MeshNode::create();
+        floor->setName("sun floor");
+        floor->setMesh(":assets/models/cube.obj");
+        floor->setMaterial(floorMat);
+        floor->setLocalScale(iris::Vec3(8.0f, 0.2f, 8.0f));
+        floor->setLocalPos(iris::Vec3(0, -1.1f, 0));
+        sdoc->getRootNode()->addChild(floor);
+
+        auto sunLight = iris::LightNode::create();
+        sunLight->setName("sun");
+        sunLight->lightType = iris::LightType::Directional;
+        // Deliberately BELOW saturation: a blown-out floor reads 255 at every
+        // sun angle and would make the pixel assertion below meaningless.
+        sunLight->intensity = 0.9f;
+        sunLight->color = QColor(255, 255, 255);
+        sunLight->setLocalPos(iris::Vec3(0, 5, 0));
+        // A deliberately WRONG starting rotation: the coupling has to be what
+        // puts the light where the sun is, not the authored value.
+        sunLight->setLocalRot(iris::Quat::fromEulerAngles(0.0f, 0.0f, 0.0f));
+        sdoc->getRootNode()->addChild(sunLight);
+
+        // The sun: high overhead to start with.
+        sdoc->skyType = iris::SkyType::REALISTIC;
+        sdoc->skyRealistic = iris::SkyRealistic::defaults();
+        sdoc->skyRealistic.setSunAngles(0.0f, 85.0f);
+        sdoc->skyType = iris::SkyType::SINGLE_COLOR;   // keep the sky OUT of the pixels
+        CHECK(!sdoc->applySunCoupling(),
+              "sun coupling: nothing is driven until a light is linked");
+
+        sdoc->skyType = iris::SkyType::REALISTIC;
+        sdoc->sunLightGuid = sunLight->getGUID();
+        CHECK(sdoc->applySunCoupling(), "sun coupling: linking swings the light");
+
+        // (a) DOCUMENT: the light now emits along the sun -> scene direction.
+        const auto sunDir = [&sdoc]() {
+            iris::Vec3 v(sdoc->skyRealistic.sunPosX, sdoc->skyRealistic.sunPosY,
+                         sdoc->skyRealistic.sunPosZ);
+            return -v.normalized();
+        };
+        auto travelMatchesSun = [&](const char *what) {
+            const iris::Vec3 want = sunDir();
+            const iris::Vec3 have = sunLight->getLightDir().normalized();
+            const float dot = have.x() * want.x() + have.y() * want.y() + have.z() * want.z();
+            std::printf("    %-34s light dir %.3f %.3f %.3f   sun travel %.3f %.3f %.3f\n",
+                        what, have.x(), have.y(), have.z(), want.x(), want.y(), want.z());
+            CHECK(dot > 0.999f, what);
+        };
+        travelMatchesSun("sun coupling: high sun -> light points down");
+
+        // Render it in a CLEAN ROOM: its own engine scene and view, so none of
+        // the geometry the blocks above left in `target` can reach the probe.
+        Scene *sunScene = engine->createScene("sun-coupling");
+        View *sunView = engine->createOffscreenView("sun-coupling", 96, 96, Colour(0, 0, 1));
+        CHECK(sunScene && sunView, "sun coupling: clean-room scene + view");
+        sunView->setScene(sunScene);
+        sunScene->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        SceneMirror sunMirror(sunScene);
+        sunMirror.setLightWires(false);
+        sunMirror.setSource(sdoc);
+        enginetest::testCameraLookAt(sunView, Vec3(0.0f, 4.0f, 4.0f), Vec3(0, -1, 0));
+        sunMirror.sync();
+        sunMirror.applyEnvironment(sunView);
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        sunView->readPixels(img);
+        const Colour high = centre(img);
+        show("sun overhead", img);
+
+        // Move the sun down to the horizon: same scene, same camera, only the
+        // sky's sun angle changed.
+        sdoc->skyRealistic.setSunAngles(0.0f, 2.0f);
+        CHECK(sdoc->applySunCoupling(), "sun coupling: moving the sun re-aims the light");
+        travelMatchesSun("sun coupling: low sun -> light points sideways");
+        sunMirror.sync();
+        for (int i = 0; i < 3; ++i) engine->renderOneFrame();
+        sunView->readPixels(img);
+        const Colour low = centre(img);
+        show("sun at the horizon", img);
+
+        // (b) PIXELS: a grazing sun cannot light a horizontal face the way an
+        // overhead one does.
+        const float dropped = high.r - low.r;
+        std::printf("    %-34s high %.3f -> low %.3f (drop %.3f)\n",
+                    "sun coupling: floor luminance", high.r, low.r, dropped);
+        CHECK(high.r > 0.2f, "sun coupling: the overhead sun lights the floor");
+        CHECK(dropped > 0.1f, "sun coupling: dropping the sun to the horizon darkens the floor");
+
+        // Unlinking stops the driving and leaves the light alone.
+        sdoc->sunLightGuid.clear();
+        const iris::Quat parked = sunLight->getGlobalRotation();
+        sdoc->skyRealistic.setSunAngles(180.0f, 60.0f);
+        CHECK(!sdoc->applySunCoupling(), "sun coupling: an unlinked scene drives nothing");
+        const iris::Quat after = sunLight->getGlobalRotation();
+        CHECK(qFuzzyCompare(parked.x(), after.x()) && qFuzzyCompare(parked.y(), after.y()) &&
+              qFuzzyCompare(parked.z(), after.z()) && qFuzzyCompare(parked.scalar(), after.scalar()),
+              "sun coupling: unlinked, the light keeps its rotation");
+
+        // A non-realistic sky has no sun: the link is remembered but inert.
+        sdoc->sunLightGuid = sunLight->getGUID();
+        sdoc->skyType = iris::SkyType::GRADIENT;
+        CHECK(!sdoc->applySunCoupling(), "sun coupling: only the realistic sky has a sun");
+
+        sunMirror.setSource(nullptr);
+        engine->destroyView(sunView);
+        engine->destroyScene(sunScene);
+    }
+
     mirror.setSource(nullptr);
     engine->destroyView(view);
     engine->destroyScene(target);

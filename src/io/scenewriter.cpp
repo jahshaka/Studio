@@ -139,6 +139,9 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
 
 	sceneObj["skyType"] = static_cast<int>(scene->skyType);
     sceneObj["skyGuid"] = scene->skyGuid;
+    // The directional light the realistic sky's sun drives; empty = none
+    // (VISUAL_PARITY re-audit F5).
+    sceneObj["sunLight"] = scene->sunLightGuid;
     sceneObj["skyData"] = skyDefs;
 	sceneObj["ambientMusicGuid"] = scene->ambientMusicGuid;
 	sceneObj["ambientMusicVolume"] = scene->ambientMusicVolume;

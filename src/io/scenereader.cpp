@@ -303,6 +303,9 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     //scene already contains root node, so just add children
     auto sceneObj = projectObj["scene"].toObject();
 	scene->skyGuid = sceneObj["skyGuid"].toString();
+	// Sun coupling (re-audit F5); absent in every document written before it,
+	// which reads as "nothing is driven" — the default.
+	scene->sunLightGuid = sceneObj["sunLight"].toString();
 	scene->ambientMusicGuid = sceneObj["ambientMusicGuid"].toString();
 	auto volume = sceneObj["ambientMusicVolume"].toDouble(50);
 	scene->setAmbientMusicVolume(volume);

@@ -31,6 +31,7 @@
 #include <QGuiApplication>
 #include <QUndoStack>
 #include <QVector3D>
+#include <cmath>
 #include <cstdio>
 
 #include "commands/addscenenodecommand.h"
@@ -39,9 +40,11 @@
 #include "commands/setnodepropertycommand.h"
 #include "commands/staticstate.h"
 #include "commands/structuralundo.h"
+#include "commands/sunlightlinkcommand.h"
 #include "commands/transformscenenodecommand.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/services.h"
@@ -276,6 +279,63 @@ int main(int argc, char **argv)
         good->setGUID(QStringLiteral("captured-guid"));
         CHECK(structuralundo::liveIsUsable(good, fragment),
               "reinstate: a matching, detached live node is usable");
+    }
+
+    // ---- SunLightLinkCommand: the sun coupling is ONE undo step (F5) --------
+    // The link is two pieces of state — the scene's sunLightGuid and the
+    // rotation the light had before it was driven — and an undo has to put
+    // BOTH back, or "unlinking restores manual control" restores the control
+    // and leaves the light pointing wherever the sun last put it.
+    {
+        auto scene = iris::Scene::create();
+        scene->skyType = iris::SkyType::REALISTIC;
+        scene->skyRealistic = iris::SkyRealistic::defaults();
+        scene->skyRealistic.setSunAngles(0.0f, 20.0f);
+
+        auto sun = iris::LightNode::create();
+        sun->setName(QStringLiteral("Sun"));
+        sun->lightType = iris::LightType::Directional;
+        const iris::Quat authored = iris::Quat::fromEulerAngles(-12.0f, 33.0f, 0.0f);
+        sun->setLocalRot(authored);
+        scene->getRootNode()->addChild(sun);
+
+        auto sameRot = [](const iris::Quat &a, const iris::Quat &b) {
+            const float dot = std::fabs(a.x() * b.x() + a.y() * b.y()
+                                      + a.z() * b.z() + a.scalar() * b.scalar());
+            return dot > 0.9999f;
+        };
+
+        QUndoStack stack;
+        CHECK(scene->sunLightGuid.isEmpty(), "sun link: nothing is driven to start with");
+
+        stack.push(new SunLightLinkCommand(QStringLiteral("Link Sun Light"), scene, sun->getGUID()));
+        CHECK(stack.count() == 1, "sun link: linking is ONE undo step");
+        CHECK(scene->sunLightGuid == sun->getGUID(), "sun link: the scene names the light");
+        CHECK(!sameRot(sun->getGlobalRotation(), authored),
+              "sun link: the light left its authored rotation");
+        const iris::Quat driven = sun->getGlobalRotation();
+
+        stack.undo();
+        CHECK(scene->sunLightGuid.isEmpty(), "sun link: undo drops the link");
+        CHECK(sameRot(sun->getGlobalRotation(), authored),
+              "sun link: undo gives the light its authored rotation back");
+
+        stack.redo();
+        CHECK(scene->sunLightGuid == sun->getGUID(), "sun link: redo re-links");
+        CHECK(sameRot(sun->getGlobalRotation(), driven), "sun link: redo re-aims the light");
+
+        // Unlinking is its own step, and it does NOT snap the light anywhere:
+        // the user gets manual control of the light where the sun left it.
+        stack.push(new SunLightLinkCommand(QStringLiteral("Unlink Sun Light"), scene, QString()));
+        CHECK(scene->sunLightGuid.isEmpty(), "sun unlink: the link is gone");
+        CHECK(sameRot(sun->getGlobalRotation(), driven),
+              "sun unlink: the light stays where the sun left it");
+        scene->skyRealistic.setSunAngles(180.0f, 70.0f);
+        CHECK(!scene->applySunCoupling(), "sun unlink: the sun no longer drives it");
+        CHECK(sameRot(sun->getGlobalRotation(), driven), "sun unlink: manual control really is manual");
+
+        stack.undo();
+        CHECK(scene->sunLightGuid == sun->getGUID(), "sun unlink: undo restores the link");
     }
 
     if (failures) printf("\n%d of %d checks FAILED\n", failures, checks);

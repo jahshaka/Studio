@@ -155,6 +155,10 @@ add_script_e2e(presentation_state e2e_presentation_state.js)
 # metallic datablocks, planar reflection passes and offscreen post-fx shots are
 # all binding descriptor sets built from that pointer. The script's own header
 # says why each ingredient is there; surviving it is the assertion.
+# VISUAL_PARITY re-audit F5: sun/sky-light coupling — world.sunLight links a
+# directional light to the realistic sky's sun, the light follows the dials,
+# unlinking gives manual control back, and the link is a document field.
+add_script_e2e(sun_light e2e_sun_light.js)
 add_script_e2e(sky_ibl_churn e2e_sky_ibl_churn.js)
 set_tests_properties(scripting.e2e.sky_ibl_churn PROPERTIES TIMEOUT 300)
 

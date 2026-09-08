@@ -33,6 +33,9 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/worldmodes.h"
+#include "services/services.h"
+#include "services/selectionservice.h"
+#include "services/sunlink.h"
 #include <QSqlDatabase>
 #include <QTimer>
 
@@ -196,6 +199,7 @@ void WorldSkyPropertyWidget::skyTypeChanged(int index)
 				"sun disc on a big display, at the cost of a longer bake on every change."));
 			skyDetail->setCurrentIndex(scene->skyBakeResolution >= 1024 ? 2
 									 : scene->skyBakeResolution >= 512  ? 1 : 0);
+			addSunLinkRow();
 
 			sunAzimuth->setValue(loaded.sunAzimuth());
 			sunElevation->setValue(loaded.sunElevation());
@@ -319,6 +323,39 @@ void WorldSkyPropertyWidget::addAmbientFromSkyRow()
 		"Color then sets the strength and tint of that instead of being the ambient itself."));
 	connect(ambientFromSky, &CheckBoxWidget::valueChanged,
 			this, &WorldSkyPropertyWidget::onAmbientFromSkyChanged);
+}
+
+void WorldSkyPropertyWidget::addSunLinkRow()
+{
+	// Sun coupling (re-audit F5). Realistic sky only: it is the one sky that
+	// HAS a sun, so the row is built inside that case and nowhere else.
+	if (!scene) { sunDrivesLight = nullptr; return; }
+	sunDrivesLight = this->addCheckBox("Drive Selected Directional Light",
+									   !scene->sunLightGuid.isEmpty());
+	// addCheckBox drops its `value` argument (accordionbladewidget.cpp:216) —
+	// the same pre-existing defect the Ambient From Sky row works around.
+	sunDrivesLight->setValue(!scene->sunLightGuid.isEmpty());
+	sunDrivesLight->setToolTip(QStringLiteral(
+		"Point a directional light down the sky's sun: the Sun Azimuth and Sun Elevation dials "
+		"then drive its rotation, so the shadows and the lighting follow the sky. Uses the "
+		"selected directional light, or the scene's first one if the selection is something "
+		"else. Turning it off gives the light back the rotation it had before it was linked."));
+	connect(sunDrivesLight, &CheckBoxWidget::valueChanged,
+			this, &WorldSkyPropertyWidget::onSunDrivesLightChanged);
+}
+
+void WorldSkyPropertyWidget::onSunDrivesLightChanged(bool on)
+{
+	if (!scene) return;
+	const iris::SceneNodePtr selected =
+		(services && services->selection) ? services->selection->selected() : iris::SceneNodePtr();
+	const QString linked = sunlink::setDriven(scene, services, on, selected);
+	// A scene with no directional light cannot honour the request: put the box
+	// back rather than leaving it showing a coupling that does not exist.
+	if (on && linked.isEmpty() && sunDrivesLight) {
+		QSignalBlocker block(sunDrivesLight);
+		sunDrivesLight->setValue(false);
+	}
 }
 
 void WorldSkyPropertyWidget::onAmbientFromSkyChanged(bool on)

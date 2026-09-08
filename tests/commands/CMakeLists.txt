@@ -18,6 +18,8 @@ add_executable(test_structural_undo
     ${CMAKE_SOURCE_DIR}/src/commands/setnodepropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    # Sun coupling is undoable (VISUAL_PARITY re-audit F5).
+    ${CMAKE_SOURCE_DIR}/src/commands/sunlightlinkcommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/structuralundo.cpp)
 set_target_properties(test_structural_undo PROPERTIES
     AUTOMOC ON AUTOUIC OFF AUTORCC OFF
