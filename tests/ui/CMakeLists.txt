@@ -26,6 +26,12 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    # The .ui-sourced controls call ThemeManager::clearClassicSheets after
+    # setupUi (VISUAL_PARITY re-audit F3), so these suites link the real theme
+    # manager — and therefore qlementine — rather than a stub that would make
+    # the sweep untestable here.
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
@@ -58,7 +64,7 @@ target_include_directories(test_material_panel PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_material_panel PRIVATE IrisGL Qt6::Widgets Qt6::Test Qt6::Sql)
+target_link_libraries(test_material_panel PRIVATE IrisGL Qt6::Widgets Qt6::Test Qt6::Sql qlementine)
 add_test(NAME ui.material_panel COMMAND test_material_panel
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.material_panel PROPERTIES
@@ -236,6 +242,12 @@ add_executable(test_rayon_panel
     ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    # The .ui-sourced controls call ThemeManager::clearClassicSheets after
+    # setupUi (VISUAL_PARITY re-audit F3), so these suites link the real theme
+    # manager — and therefore qlementine — rather than a stub that would make
+    # the sweep untestable here.
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
     ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
     ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
@@ -266,7 +278,7 @@ target_include_directories(test_rayon_panel PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_link_libraries(test_rayon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+target_link_libraries(test_rayon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
 # A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
 jah_document_graph(test_rayon_panel)
 add_test(NAME ui.rayon_panel COMMAND test_rayon_panel

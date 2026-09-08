@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QFont>
 #include <QMenu>
+#include <QLabel>
 #include <QPushButton>
 #include <QStyle>
 #include <cstdio>
@@ -139,6 +140,32 @@ int main(int argc, char **argv)
     CHECK(plainQObjectChildren == 0,
           "qlementine: no MenuEventFilter children even after a re-polish");
 
+    // ---- clearClassicSheets under Qlementine (re-audit F3) -------------------
+    // The sweep the .ui-sourced widgets run after setupUi: root AND children,
+    // one level of recursion is not enough (the accordion blade's #212121 sits
+    // on an inner frame). It runs BEFORE any runtime sheet, so a semantic sheet
+    // applied afterwards — assetview.cpp's #StoreOfflineBanner, for one —
+    // survives; that ordering is the caller's contract and is asserted here by
+    // re-applying one after the sweep.
+    {
+        QWidget root;
+        auto *mid = new QWidget(&root);
+        auto *leaf = new QLabel(mid);
+        root.setStyleSheet(QStringLiteral("QWidget { background: #212121; }"));
+        mid->setStyleSheet(QStringLiteral("QWidget { background: #4D4D4D; }"));
+        leaf->setStyleSheet(QStringLiteral("QLabel { color: #212121; }"));
+        ThemeManager::clearClassicSheets(&root);
+        CHECK(root.styleSheet().isEmpty(), "qlementine: the root's sheet is swept");
+        CHECK(mid->styleSheet().isEmpty(), "qlementine: a child's sheet is swept");
+        CHECK(leaf->styleSheet().isEmpty(), "qlementine: a GRANDchild's sheet is swept");
+        const QString semantic = QStringLiteral("#StoreOfflineBanner { color: #ff8800; }");
+        leaf->setStyleSheet(semantic);
+        CHECK(leaf->styleSheet() == semantic,
+              "qlementine: a runtime sheet applied AFTER the sweep survives");
+        ThemeManager::clearClassicSheets(nullptr);
+        CHECK(true, "qlementine: clearClassicSheets(nullptr) is harmless");
+    }
+
     // ---- the same glyph buttons under Classic --------------------------------
     // LAST, because it flips ThemeManager's own live flag (the getters read
     // that one, not StyleSheet's mirror) and the classic branch of
@@ -163,6 +190,22 @@ int main(int argc, char **argv)
               "classic: help keeps HelpButton() bit-for-bit");
         CHECK(classicPrefs.font().pixelSize() == 28,
               "classic: the icon font is still applied");
+
+        // clearClassicSheets is a NO-OP under Classic (VISUAL_PARITY re-audit
+        // F3). The sweep is wired into every .ui-sourced widget's constructor
+        // now, so this is the guarantee that Classic still renders bit-for-bit:
+        // the archived sheets those widgets carry must survive untouched.
+        QWidget classicRoot;
+        auto *classicChild = new QLabel(&classicRoot);
+        const QString rootSheet = QStringLiteral("QWidget { background: #212121; }");
+        const QString childSheet = QStringLiteral("QLabel { color: #4D4D4D; }");
+        classicRoot.setStyleSheet(rootSheet);
+        classicChild->setStyleSheet(childSheet);
+        ThemeManager::clearClassicSheets(&classicRoot);
+        CHECK(classicRoot.styleSheet() == rootSheet,
+              "classic: clearClassicSheets leaves the root's sheet bit-for-bit");
+        CHECK(classicChild->styleSheet() == childSheet,
+              "classic: clearClassicSheets leaves a child's sheet bit-for-bit");
         settings->settings->remove(ThemeManager::settingsKey());
     }
 

@@ -12,12 +12,18 @@ For more information see the LICENSE file
 #include "ui/dialogs/screenshotwidget.h"
 #include "ui_screenshotwidget.h"
 #include <QFileDialog>
+#include "ui/style/thememanager.h"
 
 ScreenshotWidget::ScreenshotWidget(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::ScreenshotWidget)
 {
     ui->setupUi(this);
+    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
+    // here, before any runtime sheet is applied, so the QStyle paints instead of
+    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
+    // no-op under the Classic theme, which those sheets ARE).
+    ThemeManager::clearClassicSheets(this);
 
     this->setWindowTitle("Screenshot");
     ui->label->setScaledContents(true);

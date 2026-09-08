@@ -22,12 +22,18 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 
 #include <QResource>
+#include "ui/style/thememanager.h"
 
 SkyPresets::SkyPresets(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::SkyPresets)
 {
     ui->setupUi(this);
+    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
+    // here, before any runtime sheet is applied, so the QStyle paints instead of
+    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
+    // no-op under the Classic theme, which those sheets ARE).
+    ThemeManager::clearClassicSheets(this);
 
     mainWindow = nullptr;
 
