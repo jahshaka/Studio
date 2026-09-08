@@ -116,6 +116,9 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
           Needs::Document },
+        { "refreshShadows", "world.refreshShadows() -> bool",
+          "Re-renders every STATIC shadow map in the scene once, on the next frame — the shadow twin of world.refreshGi(). A light whose 'Static Shadow' is on has its shadow map rendered once and kept, which saves six cube-face passes plus a copy every frame for a fixed lamp; the renderer re-renders it by itself when the light moves or changes, when geometry is attached or destroyed, and when ANY transform in the document changes. This verb is for the case the renderer cannot see — a material or a texture edited outside those paths, or a script that wants the re-render to have happened before its next read. Harmless and cheap with no static lights (it sets a flag). It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
+          Needs::Document },
         { "fitGiBounds", "world.fitGiBounds({nodes, margin}) -> {boundsMin, boundsMax}",
           "PINS the global-illumination bounds to the given objects: the union of their world bounds plus an optional margin is written into the scene's giBoundsMin/giBoundsMax, which switches the lit volume off automatic. 'nodes' is a list of node ids and is REQUIRED — there is deliberately no 'whatever is selected' default (the World panel's Fit Bounds To Scene button passes the scene's contents; a caller that wants a selection passes it). Children are included, so fitting an imported model's root fits the model rather than its origin. Returns the box it wrote. Clear the pin — hand the volume back to the automatic fit, which world.giStatus() reports — by setting both corners equal again through world.gi.",
           Needs::Document },
@@ -689,6 +692,17 @@ bool WorldApi::refreshGi()
     // player scene. Bumping the serial is the whole verb; the mirror notices on
     // its next sync and re-solves once.
     ++scene->giRefreshSerial;
+    return true;
+}
+
+bool WorldApi::refreshShadows()
+{
+    auto scene = sceneOrFail(QStringLiteral("world.refreshShadows"));
+    if (!scene) return false;
+    // Same reasoning as refreshGi, verbatim: the document carries a monotonic
+    // serial and the MIRROR owns the push, so the verb behaves identically in
+    // the editor, under --headless and in a player scene.
+    ++scene->shadowRefreshSerial;
     return true;
 }
 

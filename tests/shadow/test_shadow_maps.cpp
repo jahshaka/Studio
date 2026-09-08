@@ -46,7 +46,8 @@ static const float kHalfExtent = 12.702f;      // kCamHeight * tan(30 degrees)
 
 struct Room { Scene *scene = nullptr; NodeId lamps[4] = {0,0,0,0}; };
 
-static Room buildRoom(Engine *e, View *v, const char *name, int lamps)
+static Room buildRoom(Engine *e, View *v, const char *name, int lamps, bool pillars = true,
+                      int staticLamp = -1)
 {
     Room room;
     room.scene = e->createScene(name);
@@ -61,15 +62,18 @@ static Room buildRoom(Engine *e, View *v, const char *name, int lamps)
     s->attachMesh(floor, mesh, mat);
     s->setNodeTransform(floor, Vec3(0, -0.1f, 0), Quat(), Vec3(40.0f, 0.2f, 40.0f));
     for (int i = 0; i < lamps; ++i) {
-        const NodeId pillar = s->createNode();
-        s->attachMesh(pillar, mesh, mat);
-        s->setNodeTransform(pillar, Vec3(kQuadX[i], 1.0f, kQuadZ[i]), Quat(), Vec3(1.2f, 2.0f, 1.2f));
+        if (pillars) {
+            const NodeId pillar = s->createNode();
+            s->attachMesh(pillar, mesh, mat);
+            s->setNodeTransform(pillar, Vec3(kQuadX[i], 1.0f, kQuadZ[i]), Quat(), Vec3(1.2f, 2.0f, 1.2f));
+        }
         const NodeId lamp = s->createNode();
         LightDesc d;
         d.type = LightType::Point;
         d.intensity = 0.25f;
         d.range = 12.0f;
         d.castShadows = true;
+        d.shadowStatic = (i == staticLamp);
         s->setLight(lamp, d);
         s->setNodeTransform(lamp, Vec3(kQuadX[i] * 1.35f, 4.5f, kQuadZ[i] * 1.35f), Quat(), Vec3(1,1,1));
         room.lamps[i] = lamp;
@@ -127,6 +131,169 @@ static int countShadowed(const Image &img, int lamps)
         if (r < 0.35) ++n;
     }
     return n;
+}
+
+static double meanLum(const Image &img)
+{
+    double sum = 0.0;
+    for (size_t i = 0; i + 3 < img.rgba.size(); i += 4)
+        sum += (img.rgba[i] + img.rgba[i+1] + img.rgba[i+2]) / 3.0;
+    return sum / double(img.rgba.size() / 4);
+}
+
+// ---------------------------------------------------------------------------
+// T0 — THE TWO LIGHT PATHS MUST AGREE (ogre-patch 0018).
+//
+// A point light that wins a shadow-map slot is lit by the PASS BUFFER; the same
+// light without a slot is lit by FORWARD+ clustered. Before patch 0018 those
+// two paths did not agree: Forward+ multiplies by
+// max((range - d) * (1/range), 0) under `hlms_forward_fade_attenuation_range`
+// (default ON) and the pass-buffer path had no such term, so THE SAME LAMP was
+// about twice as bright once it got a shadow map — measured here at 141 vs 63
+// mean luminance before the patch. That made the whole shadow-map budget
+// feature change scene BRIGHTNESS, which is not what a shadow setting may do.
+//
+// No pillars: with nothing to cast, a shadow map changes no pixel, so the only
+// difference between the two runs is which shader path lit the lamps.
+static void t0_light_path_parity(Engine *e, View *v)
+{
+    std::printf("-- T0: the pass-buffer and Forward+ light paths agree (ogre-patch 0018)\n");
+    Room room = buildRoom(e, v, "t0", 2, /*pillars*/ false);
+    if (!room.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    e->setShadowMapBudget(2u);
+    render(e, 10);
+    const ShadowStatus st = e->shadowStatus();
+    Image mapped;
+    v->readPixels(mapped);
+    std::printf("    casters %u, focusedMaps %u, unmapped %zu\n",
+                st.casters, st.focusedMaps, st.unmapped.size());
+    CHECK(st.casters == 2u && st.unmapped.empty(),
+          "both lamps hold a shadow map (pass buffer): casters %u, unmapped %zu",
+          st.casters, st.unmapped.size());
+
+    // The same two lamps, now not casting: both go through Forward+ instead.
+    for (int i = 0; i < 2; ++i) {
+        LightDesc d;
+        d.type = LightType::Point;
+        d.intensity = 0.25f;
+        d.range = 12.0f;
+        d.castShadows = false;
+        room.scene->setLight(room.lamps[i], d);
+    }
+    render(e, 10);
+    Image forward;
+    v->readPixels(forward);
+    const double a = meanLum(mapped), b = meanLum(forward);
+    const double drift = (a > 0.0) ? std::fabs(a - b) / a : 1.0;
+    std::printf("    mean luminance: pass buffer %.2f, Forward+ %.2f, drift %.2f%%\n",
+                a, b, drift * 100.0);
+    CHECK(a > 5.0, "the room is actually lit (%.2f)", a);
+    CHECK(drift < 0.02, "the two paths light the same lamp within 2%% (%.2f%%)", drift * 100.0);
+    e->destroyScene(room.scene);
+}
+
+// ---------------------------------------------------------------------------
+// T3 — A STATIC SHADOW MAP RENDERS EXACTLY ONCE UNTIL IT IS DIRTIED.
+//
+// Counted, not inferred: shadowStatus().staticMapRendersLastFrame is fed by a
+// CompositorWorkspaceListener that sees the shadow node's own passes. The
+// picture is checked at the end for the reason phase 0 existed — with
+// upstream's whole-atlas clear, "not re-rendering" would have meant "black",
+// because the atlas would be wiped every frame around the map nobody redrew.
+static void t3_static_map_renders_once(Engine *e, View *v)
+{
+    std::printf("-- T3: a static shadow map renders once, then not until dirtied\n");
+    Room room = buildRoom(e, v, "t3", 2, /*pillars*/ true, /*staticLamp*/ 0);
+    if (!room.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+    e->setShadowMapBudget(2u);
+    render(e, 12);
+
+    ShadowStatus st = e->shadowStatus();
+    int staticSlots = 0;
+    bool lampIsStatic = false;
+    for (const ShadowMapInfo &m : st.mapped) {
+        if (m.isStatic) ++staticSlots;
+        if (m.isStatic && m.node == room.lamps[0]) lampIsStatic = true;
+        std::printf("    slot %u: node %llu%s%s%s\n", m.slot, (unsigned long long)m.node,
+                    m.pssm ? " pssm" : "", m.isStatic ? " static" : "", m.dirty ? " dirty" : "");
+    }
+    CHECK(staticSlots == 1, "exactly one slot is static (%d)", staticSlots);
+    CHECK(lampIsStatic, "and it holds the lamp the document marked static");
+
+    // SETTLED: nothing moves, nothing changes, so the static map must cost
+    // nothing while the dynamic one keeps paying every frame.
+    unsigned staticRenders = 0, totalPasses = 0;
+    for (int i = 0; i < 30; ++i) {
+        render(e, 1);
+        st = e->shadowStatus();
+        staticRenders += st.staticMapRendersLastFrame;
+        totalPasses += st.shadowPassesLastFrame;
+    }
+    std::printf("    30 settled frames: static-map passes %u, shadow passes total %u\n",
+                staticRenders, totalPasses);
+    CHECK(staticRenders == 0u, "a settled static map costs ZERO passes over 30 frames (%u)",
+          staticRenders);
+    CHECK(totalPasses > 0u, "...while the scene's other shadow maps keep rendering (%u)",
+          totalPasses);
+
+    // RULE 1: the light itself moved.
+    room.scene->setNodeTransform(room.lamps[0],
+                                 Vec3(kQuadX[0] * 1.30f, 4.7f, kQuadZ[0] * 1.35f), Quat(),
+                                 Vec3(1, 1, 1));
+    unsigned afterMove = 0;
+    for (int i = 0; i < 4; ++i) { render(e, 1); afterMove += e->shadowStatus().staticMapRendersLastFrame; }
+    std::printf("    after moving the light: static-map passes %u over 4 frames\n", afterMove);
+    CHECK(afterMove > 0u, "moving the light re-renders its static map");
+
+    // ...and it settles again.
+    unsigned afterSettle = 0;
+    for (int i = 0; i < 10; ++i) { render(e, 1); afterSettle += e->shadowStatus().staticMapRendersLastFrame; }
+    CHECK(afterSettle == 0u, "and then stops again (%u passes over 10 frames)", afterSettle);
+
+    // RULE 3: a CASTER moved. The engine cannot see that by itself (the
+    // document owns the scene graph), so the host says so — this call is
+    // exactly what SceneMirror makes when the transform-write counter moves.
+    room.scene->dirtyStaticShadows();
+    unsigned afterCaster = 0;
+    for (int i = 0; i < 4; ++i) { render(e, 1); afterCaster += e->shadowStatus().staticMapRendersLastFrame; }
+    std::printf("    after dirtyStaticShadows(): static-map passes %u over 4 frames\n", afterCaster);
+    CHECK(afterCaster > 0u, "the host's dirty flag re-renders the static map");
+
+    // The manual button.
+    for (int i = 0; i < 8; ++i) render(e, 1);
+    CHECK(e->refreshShadows(), "refreshShadows() reports work to do");
+    unsigned afterRefresh = 0;
+    for (int i = 0; i < 4; ++i) { render(e, 1); afterRefresh += e->shadowStatus().staticMapRendersLastFrame; }
+    CHECK(afterRefresh > 0u, "world.refreshShadows()'s engine call re-renders it (%u)", afterRefresh);
+
+    // AND THE PICTURE IS STILL RIGHT — the static map survived ~60 frames of
+    // its atlas neighbours being cleared and redrawn around it.
+    render(e, 4);
+    Image img;
+    if (v->readPixels(img)) {
+        const double r0 = lampShadowRatio(img, 0), r1 = lampShadowRatio(img, 1);
+        std::printf("    shadow/lit ratios: static lamp %.2f, dynamic lamp %.2f\n", r0, r1);
+        CHECK(r0 < 0.35, "the STATIC lamp's shadow is still on screen (%.2f)", r0);
+        CHECK(r1 < 0.35, "and the dynamic one's too (%.2f)", r1);
+    } else { std::printf("FAIL: readPixels\n"); ++failures; }
+
+    // Turning the flag off hands the slot back to the dynamic sort.
+    LightDesc d;
+    d.type = LightType::Point;
+    d.intensity = 0.25f;
+    d.range = 12.0f;
+    d.castShadows = true;
+    d.shadowStatic = false;
+    room.scene->setLight(room.lamps[0], d);
+    render(e, 6);
+    st = e->shadowStatus();
+    int stillStatic = 0;
+    for (const ShadowMapInfo &m : st.mapped) if (m.isStatic) ++stillStatic;
+    CHECK(stillStatic == 0, "clearing the flag releases the slot (%d still static)", stillStatic);
+    unsigned dynamicAgain = 0;
+    for (int i = 0; i < 4; ++i) { render(e, 1); dynamicAgain += e->shadowStatus().shadowPassesLastFrame; }
+    CHECK(dynamicAgain > 0u, "and the light is a plain dynamic caster again (%u passes)", dynamicAgain);
+    e->destroyScene(room.scene);
 }
 
 // ---------------------------------------------------------------------------
@@ -356,8 +523,10 @@ int main(int argc, char **argv)
     // (owner decision D4), so the cases that assert a SMALL atlas have to run
     // before the ones that grow it — which is also the honest reading order of
     // the feature: what it was, what it does when it runs out, what it becomes.
+    if (only.empty() || only == "t0")  t0_light_path_parity(engine.get(), v);
     if (only.empty() || only == "t2")  t2_two_casters_keep_the_old_atlas(engine.get(), v);
     if (only.empty() || only == "t4")  t4_over_budget(engine.get(), v);
+    if (only.empty() || only == "t3")  t3_static_map_renders_once(engine.get(), v);
     if (only.empty() || only == "t1")  t1_four_lamps(engine.get(), v);
     if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
     if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
