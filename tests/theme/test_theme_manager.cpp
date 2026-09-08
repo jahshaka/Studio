@@ -293,6 +293,23 @@ int main(int argc, char **argv)
         combo.view();
         QApplication::processEvents();
         CHECK(combo.itemDelegate() != nullptr, "combo: an item delegate is installed");
+        // THE LIVELOCK GUARD (stage gate, 2026-09-08): the deferred install
+        // parents its delegate to the combo, which is itself a ChildAdded on
+        // the combo. Unguarded, the filter re-scheduled an install on every
+        // event-loop turn — a delegate born and destroyed per turn, forever,
+        // and the app's UI thread stalled ~55 s at boot. The test the earlier
+        // cases could not fail: spin the loop and demand the SAME delegate.
+        {
+            const QAbstractItemDelegate *installed = combo.itemDelegate();
+            int churn = 0;
+            for (int turn = 0; turn < 8; ++turn) {
+                QApplication::processEvents(QEventLoop::AllEvents, 50);
+                if (combo.itemDelegate() != installed) ++churn;
+            }
+            CHECK(churn == 0, "combo: the delegate is installed ONCE — eight event-loop turns, no churn");
+            CHECK(combo.itemDelegate() == installed,
+                  "combo: the same delegate object survives the event loop");
+        }
         combo.setCurrentIndex(1);
         CHECK(combo.currentText() == QLatin1String("second"), "combo: selection still works");
         // ...and the popup still gets Qlementine's frameless translucent panel

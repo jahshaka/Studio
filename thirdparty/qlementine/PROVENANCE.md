@@ -109,3 +109,14 @@ pristine import and passes with the fix.
   the constructor, so the map succeeds), and Jahshaka instantiates no `Popover` at all. It
   was once wrongly named as the source of the `mapTo` flood above; left exactly as
   upstream wrote it.
+
+### 2026-09-08 (2) — ComboboxItemViewFilter: the deferred install is guarded
+
+The deferral above turned out to be SELF-FEEDING: `ComboBoxDelegate` is a `QObject`
+parented to the combo, so installing it emits `ChildAdded` on the combo — the very event
+the filter reacts to — and scheduled the next install; one delegate per event-loop turn,
+forever (the stage gate's watchdog measured ~55 s UI-thread stalls at boot; the lane's
+own gate had not caught it because `theme.manager` never spun the loop). Two guards:
+only WIDGET children (the popup container) trigger the install, and the install is
+idempotent (`_delegatePending` + "already a ComboBoxDelegate" check). Covered by the
+new `theme.manager` "installed ONCE — eight event-loop turns, no churn" case.
