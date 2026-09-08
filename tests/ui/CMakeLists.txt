@@ -382,3 +382,34 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
 jah_no_display(ui.selection_cost)
+
+# ui.project_tile — THE OPEN PROJECT'S DARK BLUE CAPTION BAR (owner request
+# 2026-09-08). Renders two real desktop tiles offscreen, one marked open, and
+# asserts the bar colour IN PIXELS (QWidget::grab) in both themes: dark blue
+# and readable under white text for the open tile, black for every other tile,
+# black for BOTH under the archived Classic theme. Also pins the live path
+# (setOpenProject / removeHighlight repaint an existing tile — the desktop
+# rebuilds on open/close, the tile must not depend on it). Widgets only: no
+# document, no database, no display.
+add_executable(test_project_tile test_project_tile.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/itemgridwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/renameprojectdialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_project_tile PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_project_tile PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs)
+target_include_directories(test_project_tile PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_project_tile PRIVATE Qt6::Widgets Qt6::Test qlementine)
+add_test(NAME ui.project_tile COMMAND test_project_tile
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.project_tile PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")

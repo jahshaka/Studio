@@ -45,6 +45,13 @@ public:
     QWidget *controls;
     ProjectTileData tileData;
 
+    // THE OPEN PROJECT (owner request 2026-09-08): this tile is the project
+    // currently open in the editor. Drives the dashed border, the "[ Open ]"
+    // caption suffix, the Close-instead-of-Play/Edit controls and the DARK BLUE
+    // caption bar that makes the tile spottable on a full desktop. Read back by
+    // desktop.tiles() as the `open` field.
+    bool isOpenProject = false;
+
     // Desktops (DESKTOPS_SPEC.md): the desktop this tile's grid is showing (to disable
     // the current entry in the Move-to submenu) and the freeform layout state.
     int currentDesktop = 1;
@@ -68,7 +75,13 @@ public:
     void setTileSize(QSize size, QSize iSize);
     void updateImage();
     void updateLabel(QString);
-    void removeHighlight();
+
+    // Switches the tile between "ordinary" and "the open project" — every
+    // piece of the open look in one place. The desktop rebuilds its tiles on
+    // open/close (ProjectManager::populateDesktop), so this is also the live
+    // path for a tile that must change state without a rebuild.
+    void setOpenProject(bool open);
+    void removeHighlight();   // setOpenProject(false), kept for its call sites
     QString labelText;
 
     bool eventFilter(QObject *watched, QEvent *event);
@@ -123,6 +136,8 @@ private:
     QGridLayout *gameGridLayout;
     QLabel *gridImageLabel;
     QLabel *gridTextLabel;
+    void applyCaptionBarStyle();
+
     QPixmap image;
     QPixmap oimage;
     QWidget *parent;

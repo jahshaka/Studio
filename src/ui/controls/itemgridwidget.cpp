@@ -25,11 +25,14 @@ For more information see the LICENSE file
 
 #include "ui/dialogs/renameprojectdialog.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 
 // The tile reads as one rounded card: the image supplies the two top rounded
 // corners (clipped here — a stylesheet border-radius does not clip a QLabel's
-// pixmap), the black caption bar supplies the two bottom ones, and the seam
-// between them stays square so they join seamlessly.
+// pixmap), the caption bar supplies the two bottom ones, and the seam between
+// them stays square so they join seamlessly. The bar is black on an ordinary
+// tile and the theme's dark blue on the OPEN project's tile
+// (ThemeManager::tileCaptionBarColor).
 static const int kTileCornerRadius = 3;
 
 static QPixmap roundTopCorners(const QPixmap &src, int radius)
@@ -75,35 +78,11 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     // TODO - don't allow label to be wider than image
     gridTextLabel = new QLabel(this);
 
-    if (highlight) {
-        if (devicePixelRatio() > 1) {
-            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorderHighlight(3));
-        } else {
-            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorderHighlight(5));
-        }
-        gridTextLabel->setText(tileData.name + " [ Open ]");
-    } else {
-        if (devicePixelRatio() > 1) {
-            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(3));
-        } else {
-            gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(5));
-        }
-        gridTextLabel->setText(tileData.name);
-    }
-
     gridImageLabel->setObjectName("image");
 
-    // caption bar: black band spanning the full tile width, white name.
-    // (make things bigger at lower resolutions, as before)
-    const int captionFontSize = devicePixelRatio() > 1 ? 12 : 15;
-    // owner-tuned: top of the bar hugs the text (perfect as-is); the bottom
-    // gets two extra pixels of breathing room
-    gridTextLabel->setStyleSheet(
-        QString("background-color: black; color: white; font-size: %1px;"
-                " padding-bottom: 2px;"
-                " border-bottom-left-radius: %2px; border-bottom-right-radius: %2px;")
-            .arg(captionFontSize)
-            .arg(kTileCornerRadius));
+    // caption bar: a band spanning the full tile width, white name. Its
+    // colour (black, or dark blue for the open project) is pushed by
+    // setOpenProject at the end of this constructor.
     gridTextLabel->setWordWrap(true);
     gridTextLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
 
@@ -207,13 +186,8 @@ ItemGridWidget::ItemGridWidget(ProjectTileData tileData,
     closeContainer->setLayout(l);
     closeContainer->installEventFilter(this);
 
-    if (highlight) {
-        playContainer->setVisible(false);
-        spacer->setVisible(false);
-        editContainer->setVisible(false);
-    } else {
-        closeContainer->setVisible(false);
-    }
+    // the whole open/ordinary look in one call, now that every piece exists
+    setOpenProject(highlight);
 
     olayout->addWidget(playContainer);
     olayout->addWidget(spacer);
@@ -316,25 +290,40 @@ void ItemGridWidget::setTileSize(QSize size, QSize iSize)
 
 void ItemGridWidget::updateLabel(QString text)
 {
-    this->gridTextLabel->setText(text);
     tileData.name = text;
+    this->gridTextLabel->setText(isOpenProject ? text + " [ Open ]" : text);
+}
+
+void ItemGridWidget::applyCaptionBarStyle()
+{
+    // (make things bigger at lower resolutions, as before)
+    const int captionFontSize = devicePixelRatio() > 1 ? 12 : 15;
+    gridTextLabel->setStyleSheet(
+        ThemeManager::tileCaptionBarSheet(captionFontSize, kTileCornerRadius, isOpenProject));
+}
+
+void ItemGridWidget::setOpenProject(bool open)
+{
+    isOpenProject = open;
+
+    const int borderWidth = devicePixelRatio() > 1 ? 3 : 5;
+    gridImageLabel->setStyleSheet(open ? StyleSheet::ItemGridTileBorderHighlight(borderWidth)
+                                       : StyleSheet::ItemGridTileBorder(borderWidth));
+    gridTextLabel->setText(open ? tileData.name + " [ Open ]" : tileData.name);
+
+    // the dark blue caption bar — the one marker that survives the Qlementine
+    // theme, where the dashed accent border above is neutralized to nothing
+    applyCaptionBarStyle();
+
+    playContainer->setVisible(!open);
+    spacer->setVisible(!open);
+    editContainer->setVisible(!open);
+    closeContainer->setVisible(open);
 }
 
 void ItemGridWidget::removeHighlight()
 {
-    if (devicePixelRatio() > 1) {
-        gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(3));
-    } else {
-        gridImageLabel->setStyleSheet(StyleSheet::ItemGridTileBorder(5));
-    }
-    gridTextLabel->setText(tileData.name);
-
-    playContainer->setVisible(true);
-    spacer->setVisible(true);
-
-    editContainer->setVisible(true);
-
-    closeContainer->setVisible(false);
+    setOpenProject(false);
 }
 
 bool ItemGridWidget::eventFilter(QObject *watched, QEvent *event)

@@ -200,7 +200,7 @@ NOT saved with the scene: the classification is re-derived on load from the same
 | `desktop.viewMode() -> mode` | window | Returns the current desktop's view mode: 'rows', 'freeform' or 'sliders' (persisted per desktop). |
 | `desktop.setViewMode(mode) -> bool` | window | Sets the current desktop's view mode: 'rows', 'freeform' or 'sliders'. Persists per desktop; switching is lossless (each mode keeps its own layout). |
 | `desktop.moveTile(guid, row, index=-1) -> bool` | window | Sliders mode: moves the project tile into filmstrip row 1..N at the insert index (0-based within the row; -1 appends). Tiles after the index shift right. The assignment persists. |
-| `desktop.tiles() -> [{guid, name, row, index}]` | window | Lists the current desktop's tiles with their slider assignment (row 1..N, index 0-based; -1/-1 when never assigned). |
+| `desktop.tiles() -> [{guid, name, row, index, open}]` | window | Lists the current desktop's tiles with their slider assignment (row 1..N, index 0-based; -1/-1 when never assigned) and whether each tile is the project currently open in the editor (open: the tile the desktop paints with a dark blue caption bar). |
 | `desktop.sliderRows() -> rows` | window | How many filmstrip rows the Sliders view mode stacks (2..10). A per-user setting, not per desktop. |
 | `desktop.setSliderRows(rows) -> rows` | window | Sets the number of filmstrip rows the Sliders view mode stacks and re-lays the desktop out immediately. Clamped to 2..10; returns the value that took effect. Same setting as Preferences -> Desktop -> Slider Rows. |
 

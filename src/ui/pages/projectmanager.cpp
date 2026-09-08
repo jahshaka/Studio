@@ -541,6 +541,9 @@ QVariantList ProjectManager::sliderTilesForApi() const
         tile["name"]  = widget->tileData.name;
         tile["row"]   = widget->hasSliderPos ? widget->sliderRow + 1 : -1;  // API rows are 1-based
         tile["index"] = widget->hasSliderPos ? widget->sliderIndex : -1;
+        // the tile of the project currently open in the editor — the same
+        // state the dark blue caption bar shows (owner request 2026-09-08)
+        tile["open"]  = widget->isOpenProject;
         tiles.push_back(tile);
     }
     return tiles;
@@ -623,6 +626,12 @@ void ProjectManager::populateDesktop(bool reset)
     }
 
     checkForEmptyState();
+}
+
+void ProjectManager::refreshOpenTiles()
+{
+    foreach (ItemGridWidget *widget, dynamicGrid->originalItems)
+        widget->setOpenProject(isOpenProjectTile(widget->tileData.guid));
 }
 
 bool ProjectManager::checkForEmptyState()

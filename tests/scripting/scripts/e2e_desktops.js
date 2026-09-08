@@ -111,6 +111,22 @@ assert(desktop.setViewMode("freeform") === true, "switch away to freeform");
 assert(desktop.setViewMode("sliders") === true, "and back to sliders");
 assert(tileOf(g3).row === 2 && tileOf(g3).index === 0, "mode switching is lossless");
 
+// ---- the OPEN project is readable from the desktop (owner request
+// 2026-09-08: the open tile wears a dark blue caption bar; the same state is
+// the tiles() `open` field, so a script/MCP session can find it too) ----
+assert(desktop.tiles().every(function (t) { return typeof t.open === "boolean"; }),
+       "every tile carries an open flag");
+
+project.open(g2);
+app.space("desktop");
+var opened = desktop.tiles().filter(function (t) { return t.open; });
+assert(opened.length === 1 && opened[0].guid === g2,
+       "exactly the open project's tile reports open");
+
+project.close();
+assert(desktop.tiles().every(function (t) { return t.open === false; }),
+       "closing the project clears the flag on every tile");
+
 // leave the desktop in rows mode for whoever runs next
 assert(desktop.setViewMode("rows") === true, "restored rows mode");
 console.log("desktop slider verbs e2e: all checks passed");
