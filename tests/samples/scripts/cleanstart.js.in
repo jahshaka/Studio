@@ -194,6 +194,53 @@ function renderSanity(tag) {
     return shot;
 }
 
+// ---- SELECTION MUST NOT LEAK INTO A REFLECTION (Mirror Room only) ---------
+//
+// Owner report 2026-09-08: "selecting the mirror panel turns it gold". The
+// selection highlight is an INVERTED HULL — the same mesh, scaled a few percent,
+// drawn back-faces-only in the selection colour — and it was born carrying
+// kVisibleBit at RQ 10, i.e. as ordinary scene geometry. The planar-reflection
+// RTT (mask kVisibleBit, RQ 0..199) and the PCC probe faces (visibility_mask
+// 0x1, rq_last 200) therefore both captured it, and because a reflected pass
+// inverts vertex winding the hull renders SOLID in there: the panel reflected
+// its own gold shell and flooded.
+//
+// The fix is one call — SceneMirror marks the shell a helper at birth — and
+// this is the gate that keeps it. The measurement is deliberately about the
+// panel's INTERIOR, where only the reflection is visible: the outline band
+// itself lives around the silhouette and is SUPPOSED to appear, so probing the
+// edges would assert the opposite of what we want.
+function fmt(p) { return "(" + p.r + "," + p.g + "," + p.b + ")"; }
+function selectionStaysOutOfTheMirror() {
+    var panel = scene.find("MirrorPanel");
+    assert(!!panel, "the MirrorPanel is findable by name");
+    // Interior probes: the centre and two points a short way off it, all well
+    // inside the panel once frameNode has filled the frame with it.
+    var probes = [{ x: 0.50, y: 0.50 }, { x: 0.45, y: 0.52 }, { x: 0.55, y: 0.48 }];
+    editor.select(null);
+    editor.frameNode(panel, {});
+    editor.frame(30, 1.0 / 60.0);
+    var before = editor.screenshot("mirror_selection_unselected.png", 320, 240, probes);
+    editor.select(panel);
+    assert(editor.selection() === panel, "the panel is selected");
+    editor.frame(30, 1.0 / 60.0);
+    var after = editor.screenshot("mirror_selection_selected.png", 320, 240, probes);
+    for (var i = 0; i < probes.length; i++) {
+        var b = before.probes[i], a = after.probes[i];
+        var dr = Math.abs(a.r - b.r), dg = Math.abs(a.g - b.g), db = Math.abs(a.b - b.b);
+        console.log("  mirror probe " + i + ": " + fmt(b) + " -> " + fmt(a) +
+                    "  delta " + dr + "," + dg + "," + db);
+        // 40/255 per channel. The flood this gate exists for moved the green
+        // channel by ~133 and the blue by ~46 in the diagnosis (86 -> 219 and
+        // 76 -> 30), so the tolerance leaves room for a probe re-capture
+        // landing between the two shots without leaving room for the defect.
+        assert(dr <= 40 && dg <= 40 && db <= 40,
+               "probe " + i + ": selecting the panel did not change its reflection (" +
+               fmt(b) + " -> " + fmt(a) + ")");
+    }
+    editor.select(null);
+}
+
 // ---------------------------------------------------------------------------
 var want = EXPECTED[SAMPLE];
 assert(!!want, "the suite knows what " + SAMPLE + " should contain");
@@ -242,6 +289,7 @@ console.log("resolved texture references: " + textured);
 // 4. RENDER, then read the pump.
 renderSanity("open");
 errorsClean("after open");
+if (SAMPLE === "Mirror Room") selectionStaysOutOfTheMirror();
 var s0 = snapshot();
 
 // 5. SAVE / CLOSE / REOPEN — the field diff.
