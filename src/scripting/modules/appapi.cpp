@@ -214,7 +214,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
-        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries}",
+        { "textureStreaming", "app.textureStreaming() -> {multiLoadThreads, doneStreaming, loadRequests, metadataCacheEntries, channelCacheEntries, waitTimeouts, waitWorstMs, waitBudgetMs}",
           "WHAT THE TEXTURE LOADER IS DOING (SPECS/THREADING_ADOPTION_SPEC.md P2). Since the "
           "batched-loading phase, loading a texture SCHEDULES it and the frame edge waits once "
           "for all of them, instead of the caller blocking on each texture in turn — so N "
@@ -233,7 +233,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "channel-count sidecar (which is what stops every image being decoded twice). Both are "
           "derived data in the shader cache's directory and both die with the Clear Cache "
           "button. NOTE metadataCacheEntries is the one expensive field: the backend exposes no "
-          "size() for that map, so asking exports it to count the rows.",
+          "size() for that map, so asking exports it to count the rows. "
+          "`waitTimeouts` IS THE HEALTH FIELD and it MUST be 0: the frame's texture wait is "
+          "bounded (Engine.h's texture-wait contract), and a non-zero count means the wait gave "
+          "up on a pending set that had stopped shrinking and at least one frame was drawn "
+          "without its textures. `waitWorstMs` is the longest single wait this process has "
+          "performed and `waitBudgetMs` the resolved no-progress budget (JAH_TEXTURE_WAIT_MS "
+          "overrides it). All three are plain members — free to ask.",
           Needs::Engine },
         { "waitForTextures", "app.waitForTextures() -> {waitedMs, loadRequests, doneStreaming}",
           "Blocks until every scheduled texture load has finished, and reports how long that "
@@ -605,6 +611,9 @@ QVariantMap AppApi::textureStreaming()
     out.insert("loadRequests", QVariant::fromValue(qulonglong(engine->textureLoadRequests())));
     out.insert("metadataCacheEntries", engine->textureMetadataCacheEntries());
     out.insert("channelCacheEntries", engine->textureChannelCacheEntries());
+    out.insert("waitTimeouts", engine->textureWaitTimeouts());
+    out.insert("waitWorstMs", engine->textureWaitWorstMs());
+    out.insert("waitBudgetMs", engine->textureWaitBudgetMs());
     return out;
 }
 
