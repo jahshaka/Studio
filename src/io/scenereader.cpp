@@ -465,6 +465,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         // written before this phase was rendered with.
         scene->giRayMarchStepScale =
             float(qBound(1.0, sceneObj["giRayMarchStepScale"].toDouble(1.0), 8.0));
+        // DDGI (GI_UNIFIED_SPEC.md §4 P1). Absent in every document written
+        // before this phase, and the fallbacks ARE the constructor's values —
+        // -1 (auto, which resolves OFF while there is no Rayon tier) is what
+        // makes those documents render exactly as they always did.
+        scene->giDdgi = qBound(-1, sceneObj["giDdgi"].toInt(-1), 1);
+        scene->giDdgiIntensity =
+            float(qBound(0.0, sceneObj["giDdgiIntensity"].toDouble(1.0), 64.0));
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
     // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd

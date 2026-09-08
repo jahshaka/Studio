@@ -223,3 +223,24 @@ add_dependencies(test_gi_pcc_stability JahshakaEngineMedia)
 add_test(NAME gi.pcc_stability COMMAND test_gi_pcc_stability
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pcc_stability PROPERTIES TIMEOUT 900 LABELS "engine")
+
+# DDGI — the irradiance-field diffuse layer (GI_UNIFIED_SPEC.md §4 P1). Its own
+# binary for the same process-wide-binding reason as gi.pcc_mirror: the field
+# binds to HlmsPbs globally (setIrradianceField), so it must not share a
+# process with another suite's scene. It also RE-RUNS ITSELF (argv[1] == "hash")
+# to prove cross-process byte determinism, which no in-process re-render can.
+add_executable(test_gi_ddgi test_gi_ddgi.cpp)
+set_target_properties(test_gi_ddgi PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_ddgi PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_ddgi PRIVATE JahshakaEngine)
+add_dependencies(test_gi_ddgi JahshakaEngineMedia)
+add_test(NAME gi.ddgi COMMAND test_gi_ddgi
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ddgi PROPERTIES TIMEOUT 900 LABELS "engine")

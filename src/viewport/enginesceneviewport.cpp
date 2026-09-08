@@ -1402,6 +1402,10 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.probesClampedToRegion    = st.probesClampedToRegion;
     out.worstProbeShapeCellRatio = st.worstProbeShapeCellRatio;
     out.reusedLastRefresh    = st.reusedLastRefresh;
+    out.ifdBound             = st.ifdBound;
+    out.ifdProbes            = st.ifdProbes;
+    out.ifdConverged         = st.ifdConverged;
+    out.ifdProbesPerFrame    = st.ifdProbesPerFrame;
     return out;
 }
 

@@ -113,6 +113,12 @@ add_script_e2e(gi_status e2e_gi_status.js)
 # world.refreshGi. Engine UP for the same reason as gi_status: the interesting
 # numbers are the renderer's, not the document's.
 add_script_e2e(gi_bounds e2e_gi_bounds.js)
+# GI_UNIFIED_SPEC.md §4 P1: the DDGI verb surface — world.gi's {ddgi,
+# ddgiIntensity} and the four ifd* readings on world.giStatus(). Engine UP for
+# the same reason as the two above: "asked for a field" and "the shader is
+# sampling one" are different readings, and only the renderer knows the second.
+# The pixel half is the gi.ddgi engine suite.
+add_script_e2e(gi_ddgi e2e_gi_ddgi.js)
 # PARTICLES_FX2_SPEC §11 phase 2: the emitter verbs. scene.addParticles with a
 # recipe, every scalar row through the shared node.setProperty, the two over-life
 # ramps (which no Property kind can carry), the scene clock, the save round trip
