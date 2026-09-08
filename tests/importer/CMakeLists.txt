@@ -195,3 +195,50 @@ jah_no_display(importer.security)
 # imported asset leaks its AssetNodeObject and the mesh subtree under it).
 jah_lsan_lane(importer.fbx)
 jah_lsan_blocked(importer.security)
+
+# MATERIAL-IMPORT suite (the GLB material defects of 2026-09-08): the glTF
+# workflow shapes — KHR_materials_pbrSpecularGlossiness, no PBR block at all,
+# a present metallic-roughness block, KHR_materials_unlit — through the REAL
+# import path, the emissiveIntensity round trip through the asset blob, and
+# PIXELS (the imported spec-gloss material against the full-metal reading it
+# used to get). Renders, so it needs the engine and a reachable DISPLAY.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
+add_executable(test_importer_materials test_importer_materials.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/enginethumbnailrenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    # database.cpp's link closure (same as tests/importer's other suites)
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_importer_materials PROPERTIES AUTOMOC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_importer_materials PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_importer_materials PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_importer_materials PRIVATE IrisGL JahshakaEngine
+    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
+add_dependencies(test_importer_materials JahshakaEngineMedia)
+add_test(NAME importer.materials COMMAND test_importer_materials
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.materials PROPERTIES
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "importer")

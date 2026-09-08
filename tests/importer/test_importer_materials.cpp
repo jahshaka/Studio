@@ -1,0 +1,337 @@
+// GLB MATERIAL-IMPORT suite (the material defects of 2026-09-08).
+//
+// The owner's report was "the GLB importer is losing the textures and the
+// materials". The textures were BOUND; the models rendered BLACK, because of
+// what the importer read into the shading factors:
+//
+//   1. A KHR_materials_pbrSpecularGlossiness model has no pbrMetallicRoughness
+//      block at all — but assimp reports metallicFactor/roughnessFactor for
+//      every glTF material anyway (its own struct defaults, 1.0/1.0), so the
+//      importer's `if (assimp reported it)` test was always true and every
+//      spec-gloss model imported as FULL METAL, FULL ROUGH. A metal with no
+//      environment to reflect is black.
+//   2. A material with NO workflow block at all landed on the same 1.0/1.0.
+//      Policy (irisgl/document/assets/mesh.h): that is a dielectric.
+//   3. KHR_materials_unlit was ignored, and unlit exports that carry their
+//      artwork in the EMISSIVE slot (with a black base colour) therefore
+//      imported as a black, lit surface.
+//   4. emissiveIntensity was never set on an import, so an emissive colour or
+//      map was multiplied by the document default 0 and emitted nothing.
+//
+// Fixture: fixtures/material_workflows.glb, five quads with one material shape
+// each (fixtures/make_material_fixtures.py documents them and regenerates it).
+// Sections:
+//   1. The conversion formula itself (unit).
+//   2. The five materials through the REAL import path
+//      (AssetHelper::extractTexturesAndMaterialFromMesh).
+//   3. emissiveIntensity round trip: import -> SceneWriter blob ->
+//      AssetHelper::updateNodeMaterial (the reopen path for a model asset).
+//   4. PIXELS: the spec-gloss quad rendered as imported versus rendered with
+//      the pre-fix reading (metallic 1 / roughness 1) of the SAME mesh, and
+//      the unlit quad, through EngineThumbnailRenderer.
+#include <QApplication>
+#include <QColor>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QImage>
+#include <QJsonObject>
+#include <QTemporaryDir>
+#include <cmath>
+#include <cstdio>
+
+#include "irisgl/irisglfwd.h"
+#include "irisgl/document/assets/mesh.h"
+#include "irisgl/document/scenegraph/nodegraph.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/materialhelper.h"
+#include "irisgl/mirror/scenemirror.h"
+#include "jahshaka/engine/Engine.h"
+
+#include "bridge/enginethumbnailrenderer.h"
+#include "io/scenewriter.h"
+#include "services/assethelper.h"
+
+using namespace jahshaka::engine;
+
+static int failures = 0;
+#define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
+
+static QString fixture(const char *name)
+{
+    return QString(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/") + name;
+}
+
+static bool nearly(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) < eps; }
+
+/// The imported quad named `name` (one node per material in the fixture).
+static iris::PbrMaterialPtr materialNamed(const iris::SceneNodePtr &root, const QString &name)
+{
+    if (!root) return iris::PbrMaterialPtr();
+    if (root->getSceneNodeType() == iris::SceneNodeType::Mesh && root->name == name)
+        return root.staticCast<iris::MeshNode>()->getMaterial().dynamicCast<iris::PbrMaterial>();
+    for (auto child : root->children()) {
+        auto found = materialNamed(child, name);
+        if (found) return found;
+    }
+    return iris::PbrMaterialPtr();
+}
+
+static iris::MeshNodePtr meshNodeNamed(const iris::SceneNodePtr &root, const QString &name)
+{
+    if (!root) return iris::MeshNodePtr();
+    if (root->getSceneNodeType() == iris::SceneNodeType::Mesh && root->name == name)
+        return root.staticCast<iris::MeshNode>();
+    for (auto child : root->children()) {
+        auto found = meshNodeNamed(child, name);
+        if (found) return found;
+    }
+    return iris::MeshNodePtr();
+}
+
+/// Mean luminance of a rendered tile, counting only what is not the background.
+static double meanSubjectLuma(const QImage &img)
+{
+    const Colour bg = EngineThumbnailRenderer::backgroundColour();
+    double sum = 0.0;
+    int n = 0;
+    for (int y = 0; y < img.height(); ++y)
+        for (int x = 0; x < img.width(); ++x) {
+            const QColor c = img.pixelColor(x, y);
+            if (std::fabs(float(c.redF()) - bg.r) < 0.04f &&
+                std::fabs(float(c.greenF()) - bg.g) < 0.04f &&
+                std::fabs(float(c.blueF()) - bg.b) < 0.04f)
+                continue;
+            sum += 0.2126 * c.red() + 0.7152 * c.green() + 0.0722 * c.blue();
+            ++n;
+        }
+    return n ? sum / n : 0.0;
+}
+
+int main(int argc, char **argv)
+{
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    QApplication app(argc, argv);
+
+    // A document node IS an engine node (SCENEGRAPH_SPEC D2) and this suite
+    // needs BOTH halves — imported documents AND pixels — so the document graph
+    // is staged onto the ONE engine (Ogre::Root is a singleton), created first
+    // and destroyed last.
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test_importer_materials-ogre.log";
+    std::string err;
+    std::shared_ptr<Engine> engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    iris::graph::setStagingScene(
+        reinterpret_cast<iris::graph::SceneHandle>(engine->documentGraphScene()));
+
+    // ================= 1. the conversion formula =================
+    // KHR_materials_pbrSpecularGlossiness appendix B, the same arithmetic
+    // Blender and three.js run. The two ends of it are what matter here: a
+    // BLACK specular colour cannot be metal (it is below the 4% every
+    // dielectric has), a WHITE one can only be metal.
+    {
+        const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const float black3[3] = { 0.0f, 0.0f, 0.0f };
+        const float white3[3] = { 1.0f, 1.0f, 1.0f };
+        QColor base;
+        float metallic = -1.0f, roughness = -1.0f;
+
+        // The tails-model input: specular [0,0,0], glossiness 0.0178.
+        iris::MaterialHelper::specularGlossinessToMetallicRoughness(
+            white, black3, 0.0177827941f, base, metallic, roughness);
+        CHECK(nearly(metallic, 0.0f), "1: black specular converts to metallic 0 (a dielectric)");
+        CHECK(nearly(roughness, 0.9822f, 2e-3f), "1: roughness is 1 - glossiness (0.982)");
+        CHECK(base.red() > 240 && base.green() > 240 && base.blue() > 240,
+              "1: a white diffuse factor stays a white base colour");
+
+        iris::MaterialHelper::specularGlossinessToMetallicRoughness(
+            white, white3, 0.75f, base, metallic, roughness);
+        CHECK(nearly(metallic, 1.0f, 1e-2f), "1: white specular converts to metallic 1 (a metal)");
+        CHECK(nearly(roughness, 0.25f), "1: ... with roughness 1 - 0.75");
+    }
+
+    // ================= 2. the five workflows through the real import =================
+    QTemporaryDir tmp;
+    iris::SceneNodePtr imported;
+    {
+        CHECK(tmp.isValid(), "2: temp dir for import");
+        const QString model = QDir(tmp.path()).filePath("material_workflows.glb");
+        CHECK(QFile::copy(fixture("material_workflows.glb"), model), "2: fixture copied");
+
+        QStringList texNames, texPaths;
+        bool hasEmbedded = false;
+        imported = AssetHelper::extractTexturesAndMaterialFromMesh(model, texNames, texPaths,
+                                                                   hasEmbedded, nullptr, tmp.path());
+        CHECK(!imported.isNull(), "2: import produced a node");
+        if (imported.isNull()) return 1;
+
+        // --- DEFECT 1: spec-gloss must not import as full metal.
+        auto specgloss = materialNamed(imported, "specgloss");
+        CHECK(!specgloss.isNull(), "2: specgloss quad imports as a PbrMaterial");
+        if (specgloss) {
+            std::printf("    specgloss: metallic %.3f roughness %.3f base %s map %d\n",
+                        specgloss->metallicFactor, specgloss->roughnessFactor,
+                        specgloss->baseColor.name().toUtf8().constData(),
+                        int(specgloss->useBaseColorMap));
+            CHECK(nearly(specgloss->metallicFactor, 0.0f),
+                  "2: spec-gloss with black specular imports metallic 0 (was 1 = black model)");
+            CHECK(nearly(specgloss->roughnessFactor, 0.9822f, 2e-3f),
+                  "2: ... roughness 1 - glossiness (was 1.0)");
+            CHECK(specgloss->useBaseColorMap,
+                  "2: ... and its diffuse texture is bound as the base-colour map");
+            CHECK(specgloss->shadingModel == 0, "2: ... as a LIT material");
+        }
+
+        // The conversion is a conversion, not a floor: a spec-gloss material
+        // that really is metal still imports as metal.
+        auto specglossMetal = materialNamed(imported, "specgloss_metal");
+        CHECK(!specglossMetal.isNull(), "2: specgloss_metal quad imports");
+        if (specglossMetal) {
+            CHECK(nearly(specglossMetal->metallicFactor, 1.0f, 1e-2f),
+                  "2: spec-gloss with white specular imports metallic 1");
+            CHECK(nearly(specglossMetal->roughnessFactor, 0.25f),
+                  "2: ... roughness 1 - 0.75");
+        }
+
+        // --- DEFECT 2: no workflow block at all is a DIELECTRIC, by policy.
+        auto nopbr = materialNamed(imported, "nopbr");
+        CHECK(!nopbr.isNull(), "2: block-less material still imports as a PbrMaterial");
+        if (nopbr) {
+            std::printf("    nopbr:     metallic %.3f roughness %.3f\n",
+                        nopbr->metallicFactor, nopbr->roughnessFactor);
+            CHECK(nearly(nopbr->metallicFactor, 0.0f),
+                  "2: a material with NO pbr block imports as a dielectric (was metallic 1)");
+            CHECK(nearly(nopbr->roughnessFactor, 0.5f), "2: ... at the neutral roughness 0.5");
+        }
+
+        // ... while a PRESENT block keeps glTF's own defaults: an omitted
+        // metallicFactor IS 1.0 (lotus_elise.glb is a real metallic car).
+        auto mrDefault = materialNamed(imported, "mr_default");
+        CHECK(!mrDefault.isNull(), "2: metallic-roughness quad imports");
+        if (mrDefault) {
+            CHECK(nearly(mrDefault->metallicFactor, 1.0f),
+                  "2: a PRESENT pbrMetallicRoughness block keeps glTF's metallicFactor default 1");
+            CHECK(nearly(mrDefault->roughnessFactor, 0.4f), "2: ... and its authored roughness");
+            CHECK(std::abs(mrDefault->baseColor.red() - 204) <= 2,
+                  "2: ... and its authored base colour (0.8 -> 204)");
+        }
+
+        // --- DEFECT 3: KHR_materials_unlit.
+        auto unlit = materialNamed(imported, "unlit");
+        CHECK(!unlit.isNull(), "2: unlit quad imports");
+        if (unlit) {
+            std::printf("    unlit:     shadingModel %d base %s map %d emissiveIntensity %.2f\n",
+                        unlit->shadingModel, unlit->baseColor.name().toUtf8().constData(),
+                        int(unlit->useBaseColorMap), unlit->emissiveIntensity);
+            CHECK(unlit->shadingModel == 1,
+                  "3: KHR_materials_unlit imports as the UNLIT shading model");
+            CHECK(unlit->useBaseColorMap,
+                  "3: ... with the emissive artwork bound as the colour map "
+                  "(Unlit consumes no emissive input)");
+            CHECK(unlit->baseColor.red() > 240 && unlit->baseColor.green() > 240,
+                  "3: ... and a black baseColorFactor yields to the emissive factor");
+        }
+    }
+
+    // ================= 3. emissiveIntensity round trip =================
+    // DEFECT 4. The import path used to set emissiveColor and leave the
+    // intensity at the document default 0 — emission multiplied by zero. The
+    // round trip is the one a model asset really takes on reopen: the material
+    // is written into the asset blob by SceneWriter and rebuilt from it by
+    // AssetHelper::updateNodeMaterial.
+    {
+        auto unlitNode = meshNodeNamed(imported, "unlit");
+        CHECK(!unlitNode.isNull(), "4: emissive subject found");
+        if (unlitNode) {
+            auto mat = unlitNode->getMaterial().dynamicCast<iris::PbrMaterial>();
+            CHECK(mat && nearly(mat->emissiveIntensity, 1.0f),
+                  "4: an imported emissive material carries emissiveIntensity 1 (was 0)");
+            CHECK(mat && mat->emissiveColor != QColor(Qt::black),
+                  "4: ... with a non-black emissive colour");
+
+            QJsonObject matObj;
+            SceneWriter::writeSceneNodeMaterial(matObj, unlitNode->getMaterial(), false);
+            const QJsonObject values = matObj.value(QStringLiteral("values")).toObject();
+            CHECK(nearly(float(values.value(QStringLiteral("emissiveIntensity")).toDouble()), 1.0f),
+                  "4: the saved material blob carries emissiveIntensity 1");
+            CHECK(values.value(QStringLiteral("shadingModel")).toInt() == 1,
+                  "4: ... and the unlit shading model");
+
+            QJsonObject definition;
+            definition[QStringLiteral("material")] = matObj;
+            iris::SceneNodePtr reopened = iris::MeshNode::create();
+            AssetHelper::updateNodeMaterial(reopened, definition, nullptr);
+            auto rebuilt = reopened.staticCast<iris::MeshNode>()
+                               ->getMaterial().dynamicCast<iris::PbrMaterial>();
+            CHECK(rebuilt && nearly(rebuilt->emissiveIntensity, 1.0f),
+                  "4: reopening the asset preserves emissiveIntensity (was 0 on every model)");
+            CHECK(rebuilt && rebuilt->shadingModel == 1,
+                  "4: ... and the unlit shading model");
+        }
+    }
+
+    // ================= 4. PIXELS =================
+    // The defect was visible, so the fix is proven visibly: the SAME imported
+    // mesh, rendered with the material as imported and with the pre-fix
+    // reading of it (metallic 1 / roughness 1), through the thumbnail path.
+    {
+        {
+            View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0));
+            Scene *primaryScene = engine->createScene("primary");
+            primary->setScene(primaryScene);
+            {
+                EngineThumbnailRenderer renderer(engine);
+
+                auto node = meshNodeNamed(imported, "specgloss");
+                CHECK(!node.isNull(), "5: spec-gloss subject found");
+                if (node) {
+                    auto mat = node->getMaterial().dynamicCast<iris::PbrMaterial>();
+                    const QImage fixedShot = renderer.renderNode(node, QSize(96, 96));
+                    const double fixedLuma = meanSubjectLuma(fixedShot);
+
+                    // The pre-fix reading, on the same mesh and the same maps.
+                    mat->setValue(QStringLiteral("metallic"), 1.0f);
+                    mat->setValue(QStringLiteral("roughness"), 1.0f);
+                    const QImage brokenShot = renderer.renderNode(node, QSize(96, 96));
+                    const double brokenLuma = meanSubjectLuma(brokenShot);
+                    // Leave the document as it was imported.
+                    mat->setValue(QStringLiteral("metallic"), 0.0f);
+                    mat->setValue(QStringLiteral("roughness"), 0.9822f);
+
+                    std::printf("    spec-gloss quad: imported luma %.1f, pre-fix (metal 1/rough 1) luma %.1f\n",
+                                fixedLuma, brokenLuma);
+                    CHECK(!fixedShot.isNull() && fixedShot.size() == QSize(96, 96),
+                          "5: the spec-gloss quad renders");
+                    CHECK(fixedLuma > 40.0,
+                          "5: the imported spec-gloss material is LIT (not the black model)");
+                    CHECK(fixedLuma > brokenLuma * 1.5,
+                          "5: ... and is far brighter than the full-metal reading it used to get");
+                }
+
+                auto unlitNode = meshNodeNamed(imported, "unlit");
+                CHECK(!unlitNode.isNull(), "5: unlit subject found");
+                if (unlitNode) {
+                    const QImage shot = renderer.renderNode(unlitNode, QSize(96, 96));
+                    const double luma = meanSubjectLuma(shot);
+                    std::printf("    unlit quad: luma %.1f\n", luma);
+                    CHECK(luma > 40.0,
+                          "5: the unlit quad renders its texture (was a black surface)");
+                }
+            }
+            engine->destroyView(primary);
+            engine->destroyScene(primaryScene);
+        }
+    }
+
+    // Every document handle dies before the engine that owns it.
+    imported.reset();
+    iris::graph::setStagingScene(nullptr);
+    engine.reset();
+
+    std::printf(failures ? "\nFAILED: %d checks\n" : "\nall checks passed\n", failures);
+    return failures ? 1 : 0;
+}

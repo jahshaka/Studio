@@ -228,29 +228,23 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
             return !p.isEmpty() && QFileInfo::exists(p) && QFileInfo(p).isFile();
         };
 
-        // glTF/GLB (and any source with pbrMetallicRoughness data) imports as
-        // a REAL PbrMaterial — factors and maps straight from the file. The
-        // old path forced everything into the legacy Default.shader
-        // CustomMaterial, whose shininess round-trip faked roughness to ~0.1
-        // (GLB importer fix phase 0; serialization handles "pbr" natively).
+        // glTF/GLB (and any source with PBR data) imports as a REAL
+        // PbrMaterial — factors and maps straight from the file. The old path
+        // forced everything into the legacy Default.shader CustomMaterial,
+        // whose shininess round-trip faked roughness to ~0.1 (GLB importer fix
+        // phase 0; serialization handles "pbr" natively).
+        //
+        // ONE CONVERSION, NOT TWO (2026-09-08). This used to be a SECOND copy
+        // of BuiltinMaterials::fromMeshData, and it had drifted: it set
+        // emissiveColor but never emissiveIntensity, so every model imported
+        // through the pipeline — this is the pipeline's own path — got a white
+        // emissive colour multiplied by intensity 0, and no import could carry
+        // emission at all. Duplicated policy is how that happens; the copy is
+        // gone.
         if (data.hasPbr) {
-            auto pbr = iris::PbrMaterial::create();
-            pbr->setValue("baseColor", data.baseColorFactor);
-            pbr->setValue("metallic",  data.metallicFactor);
-            pbr->setValue("roughness", data.roughnessFactor);
-            pbr->setValue("emissiveColor", data.emissionColor);
-
-            if (isFile(data.baseColorTexture)) {
+            if (isFile(data.baseColorTexture))
                 hasEmbeddedTexture = hasEmbeddedTexture || data.hasEmbeddedDiffTexture;
-                pbr->setValue("baseColorMap", data.baseColorTexture);
-                // A sampled base colour multiplies with the factor; imports
-                // keep the authored factor (glTF semantics) as-is.
-            }
-            if (isFile(data.metallicTexture))  pbr->setValue("metallicMap",  data.metallicTexture);
-            if (isFile(data.roughnessTexture)) pbr->setValue("roughnessMap", data.roughnessTexture);
-            if (isFile(data.normalTexture))    pbr->setValue("normalMap",    data.normalTexture);
-            if (isFile(data.emissiveTexture))  pbr->setValue("emissiveMap",  data.emissiveTexture);
-            return iris::MaterialPtr(pbr);
+            return iris::MaterialPtr(BuiltinMaterials::fromMeshData(data));
         }
 
         // No pbrMetallicRoughness in the source: the legacy Blinn fields go
