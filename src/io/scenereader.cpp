@@ -1254,6 +1254,27 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
     cameraNode->focusPlaneVisible   = nodeObj["focusPlaneVisible"].toBool(false);
     cameraNode->outputHeight  = qBound(1, nodeObj["outputHeight"].toInt(1080), 16384);
     cameraNode->bodyVisible   = nodeObj["bodyVisible"].toBool(true);
+    // CAMERA_LENS_SPEC §4. Absent = "inherit", which is what every file written
+    // before this phase existed means, and it is bit-for-bit the old behaviour.
+    const QString exposureMode = nodeObj["exposureMode"].toString("inherit");
+    cameraNode->exposureMode = exposureMode == QLatin1String("auto")   ? iris::CameraExposureMode::Auto
+                             : exposureMode == QLatin1String("manual") ? iris::CameraExposureMode::Manual
+                                                                       : iris::CameraExposureMode::Inherit;
+    cameraNode->exposure    = (float) nodeObj["exposure"].toDouble(0.0);
+    cameraNode->exposureMin = (float) nodeObj["exposureMin"].toDouble(-3.5);
+    cameraNode->exposureMax = (float) nodeObj["exposureMax"].toDouble(3.5);
+    if (cameraNode->exposureMax < cameraNode->exposureMin)
+        std::swap(cameraNode->exposureMin, cameraNode->exposureMax);
+    // CAMERA_LENS_SPEC §5. SANITISED, not trusted: a file may name a key this
+    // build does not have (an older or newer Jahshaka, or a hand edit), and an
+    // unknown override would otherwise sit in the document forever, be written
+    // back out, and mean nothing. setPostOverride is the same door the verbs
+    // and the panel use, so the file cannot express anything they cannot.
+    {
+        const QJsonObject overrides = nodeObj["postOverrides"].toObject();
+        for (auto it = overrides.constBegin(); it != overrides.constEnd(); ++it)
+            cameraNode->setPostOverride(it.key(), it.value().toVariant());
+    }
 
     return cameraNode;
 }

@@ -97,6 +97,15 @@ public:
     Q_INVOKABLE QVariantList filmbackPresets();
     Q_INVOKABLE QVariantList lensPresets();
     Q_INVOKABLE QVariantMap focusInfo(const QString &id);
+    // ---- CAMERA_LENS_SPEC §5: per-camera post overrides ------------------
+    // TRI-STATE, so it cannot ride camera.settings: every settings key has a
+    // value, while an override key is either present or ABSENT, and "absent"
+    // is the information. Hence a verb that reports both what is overridden
+    // and what the world currently resolves to, and one that removes an
+    // override (which no write to a value could express).
+    Q_INVOKABLE QVariantMap postFx(const QString &id, const QVariant &options = QVariant());
+    Q_INVOKABLE QVariantMap clearPostOverride(const QString &id,
+                                              const QVariant &row = QVariant());
     Q_INVOKABLE bool lookAt(const QString &id, const QVariant &target);
     Q_INVOKABLE QVariantMap screenshot(const QString &id, const QString &path,
                                        const QVariantMap &options = QVariantMap());

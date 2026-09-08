@@ -29,6 +29,7 @@ class LightPropertyWidget;
 class DecalPropertyWidget;
 class FogPropertyWidget;
 class EmitterPropertyWidget;
+class CameraPostFxPropertyWidget;
 class NodePropertyWidget;
 class MeshPropertyWidget;
 class PhysicsPropertyWidget;
@@ -108,6 +109,8 @@ private:
 
     MaterialPropertyWidget* materialPropView;
     EmitterPropertyWidget* emitterPropView;
+    /// The camera panel's "Exposure & Post" section (CAMERA_LENS_SPEC §4/§5).
+    CameraPostFxPropertyWidget* cameraPostFxPropView;
     // NodePropertyWidget* nodePropView;
     LightPropertyWidget* lightPropView;
     DecalPropertyWidget* decalPropView;

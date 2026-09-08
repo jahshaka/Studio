@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/worldskypropertywidget.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
 #include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
+#include "ui/panels/propertywidgets/camerapostfxpropertywidget.h"
 #include "ui/panels/propertywidgets/worldaapropertywidget.h"
 #include "ui/panels/propertywidgets/worldmodespropertywidget.h"
 #include "ui/panels/propertywidgets/worldshadowpropertywidget.h"
@@ -150,6 +151,13 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     emitterPropView->setDatabase(db);
     emitterPropView->expand();
 
+    // CAMERA_LENS_SPEC §4/§5: a selected scene camera grades its own shot.
+    // This is the camera's first properties section — cameras had none before
+    // (the transform editor was all a selected camera showed).
+    cameraPostFxPropView = new CameraPostFxPropertyWidget();
+    cameraPostFxPropView->setPanelTitle("Exposure & Post");
+    cameraPostFxPropView->expand();
+
     shaderPropView = new ShaderPropertyWidget();
     shaderPropView->setPanelTitle("Shader Definitions");
     shaderPropView->setDatabase(db);
@@ -262,6 +270,14 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
 
                     widgetPropertyLayout->addWidget(meshPropView);
                     widgetPropertyLayout->addWidget(materialPropView);
+                    break;
+                }
+
+                case iris::SceneNodeType::Camera: {
+                    cameraPostFxPropView->setParent(this);
+                    cameraPostFxPropView->setSceneView(sceneView);
+                    cameraPostFxPropView->setSceneNode(sceneNode);
+                    widgetPropertyLayout->addWidget(cameraPostFxPropView);
                     break;
                 }
 
