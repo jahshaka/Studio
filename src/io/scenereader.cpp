@@ -1195,6 +1195,9 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     //shadow data
     auto shadowMap = lightNode->shadowMap;
     shadowMap->bias = (float)nodeObj["shadowBias"].toDouble(0.0015f);
+    // Absent in every scene written before static shadow maps: false, which is
+    // also the default for a new light (owner decision D2).
+    shadowMap->staticMap = nodeObj["shadowStatic"].toBool(false);
     // ensure shadow map size isnt too big ro too small
     auto res = qBound(512, nodeObj["shadowSize"].toInt(1024), 4096);
     shadowMap->setResolution(res);
