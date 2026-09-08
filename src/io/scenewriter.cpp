@@ -657,7 +657,8 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
                 ? QString()
                 : (QFileInfo(source).isAbsolute() ? source
                                                   : staticRelativeBase.absoluteFilePath(source));
-            const QString sourceGuid = assetGuidForTexturePath(absolute);
+            const QString sourceGuid = assetGuidForTexturePath(
+                absolute, AssetCas::GuidPreference::Any);
             if (!sourceGuid.isEmpty()) skelObj["guid"] = sourceGuid;
             if (!source.isEmpty() && QFileInfo(source).isAbsolute())
                 source = staticRelativeBase.relativeFilePath(source);
@@ -798,7 +799,8 @@ void SceneWriter::writeParticleData(QJsonObject& sceneNodeObject, iris::Particle
     sceneNodeObject["scaleKeys"] = scaleKeys;
 }
 
-QString SceneWriter::assetGuidForTexturePath(const QString &path)
+QString SceneWriter::assetGuidForTexturePath(const QString &path,
+                                            AssetCas::GuidPreference prefer)
 {
     if (path.isEmpty()) return QString();
     // CAS first: a resolved path is <store>/objects/<xx>/<sha256>.<ext>, whose
@@ -810,7 +812,7 @@ QString SceneWriter::assetGuidForTexturePath(const QString &path)
     if (projectHandle && !projectHandle->getProjectGuid().isEmpty()) {
         const QString guid = AssetCas::guidForStorePath(
             QSqlDatabase::database(), AssetStorePaths::root(), path,
-            projectHandle->getProjectGuid());
+            projectHandle->getProjectGuid(), prefer);
         if (!guid.isEmpty()) return guid;
     }
     // Legacy fallback: files that still sit in a project folder under their own

@@ -220,6 +220,37 @@ void SceneReader::readPostProcessData(QJsonObject &projectObj, iris::PostProcess
 	*/
 }
 
+/// THE GLB TEXTURE-LOSS REPAIR (2026-09-09), reader half.
+///
+/// Between 2026-09-03 and this fix, SceneWriter stored the wrong guid in every
+/// texture slot of an imported model: the writer recovered the guid from the
+/// resolved store path, and the tie between the .glb Object's role='texture'
+/// row and the member Texture's role='source' row over the SAME oid was broken
+/// by insertion order, which the Object won (AssetCas::guidForStorePath now
+/// spells the order out). The reader then resolved that guid the other way —
+/// source-role first — and got the .glb itself, so `baseColorMap` pointed at a
+/// model file and every imported model, Mixamo avatars included, reopened
+/// untextured.
+///
+/// Scenes saved in that week are already on disk, and no user-data migration
+/// framework exists (the app ships new). So this is a TOLERANT READER: a
+/// texture slot naming a non-Texture asset is resolved to the object's texture
+/// member that the slot must have meant, one log line each, and the count is
+/// what makes the project dirty so the next save writes it correctly. Nothing
+/// is written to the catalog here.
+QString SceneReader::repairTextureSlot(const QString &stored, const QString &slotName)
+{
+    if (stored.isEmpty()) return stored;
+    const QString repaired = AssetCas::textureGuidForSlot(QSqlDatabase::database(),
+                                                          stored, slotName);
+    if (repaired.isEmpty()) return stored;
+    ++repairedSlots;
+    irisLog(QString("scene reader: %1 named the object '%2' instead of a texture "
+                    "(the 2026-09-03 save defect) - repaired to '%3'")
+                .arg(slotName, stored, repaired));
+    return repaired;
+}
+
 QString SceneReader::resolveAssetPath(const QString &guid)
 {
     if (guid.isEmpty()) return QString();
@@ -1473,7 +1504,7 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			// does (asset name joined onto the project folder / asset directory),
 			// and fall back to treating the value as a path relative to the scene
 			// file. An empty result clears the map.
-			const QString stored = val.toString();
+			const QString stored = repairTextureSlot(val.toString(), prop->name);
 			QString path;
 			if (!stored.isEmpty()) {
 				path = resolveAssetPath(stored);

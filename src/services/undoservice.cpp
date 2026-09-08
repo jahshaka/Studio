@@ -50,7 +50,9 @@ void UndoService::clear()
 
 bool UndoService::isDirty() const
 {
-    return !mStack->isClean();
+    // A load-time repair counts as an edit: nothing was pushed, but the
+    // in-memory document no longer matches the stored one (markContentRepaired).
+    return !mStack->isClean() || mContentRepaired;
 }
 
 int UndoService::count() const
@@ -61,9 +63,11 @@ int UndoService::count() const
 void UndoService::markSaved()
 {
     mSavedCount = mStack->count() != 0 ? 1 : 0;
+    mContentRepaired = false;
 }
 
 bool UndoService::savedCountMatchesCurrent() const
 {
+    if (mContentRepaired) return false;
     return mSavedCount == (mStack->count() != 0 ? 1 : 0);
 }

@@ -137,7 +137,23 @@ iris::ScenePtr ProjectService::readProjectScene(EditorData **editorData,
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
         blob = db->getSceneBlobGlobal(project->getProjectGuid());
     }
-    return reader->readScene(project->getProjectFolder(), blob, postMan, editorData);
+    iris::ScenePtr scene = reader->readScene(project->getProjectFolder(), blob,
+                                             postMan, editorData);
+
+    // A REPAIRED LOAD IS A DIRTY DOCUMENT (the GLB texture-loss defect,
+    // io/scenereader.cpp): the reader healed texture slots that the stored
+    // blob still has wrong, so what is in memory is right and what is on disk
+    // is not. Nothing was pushed on the undo stack — there is no command — so
+    // say it explicitly, or the close prompt discards the repair and the next
+    // open pays for it again.
+    if (reader->repairedTextureSlots() > 0) {
+        JahLog::write(JahLog::scene, JahLog::Level::Display,
+                      QStringLiteral("=== SCENE REPAIR === %1 texture slot(s) named an "
+                                     "object instead of a texture; save to make it stick")
+                          .arg(reader->repairedTextureSlots()));
+        if (undo) undo->markContentRepaired();
+    }
+    return scene;
 }
 
 QStringList ProjectService::plannedModelPaths() const

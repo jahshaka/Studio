@@ -242,3 +242,54 @@ add_test(NAME importer.materials COMMAND test_importer_materials
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(importer.materials PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "importer")
+
+# TEXTURE-GUID suite (the owner's "GLB imports come in without textures",
+# 2026-09-09): the SAVE + REOPEN half of an imported model. The textures are
+# right after import and were lost on the way back in, because one stored
+# object backs two assets (the .glb Object's role='texture' row and the member
+# Texture's role='source' row) and the writer's tie-break did not say which.
+# Runs the REAL import pipeline into a throwaway store/db, saves a material the
+# way a scene save does, reopens it, and drives the reader-side repair for
+# scenes already saved wrong. No engine, no display, no GPU.
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia Concurrent)
+add_executable(test_importer_texture_guids test_importer_texture_guids.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimportservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/import/assetimporters.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    # database.cpp's link closure (same as tests/importer's other suites)
+    ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+set_target_properties(test_importer_texture_guids PROPERTIES AUTOMOC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_importer_texture_guids PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/zip/src
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_importer_texture_guids PRIVATE
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_importer_texture_guids PRIVATE IrisGL
+    Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
+add_test(NAME importer.texture_guids COMMAND test_importer_texture_guids
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(importer.texture_guids PROPERTIES
+                     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "importer")
+jah_no_display(importer.texture_guids)

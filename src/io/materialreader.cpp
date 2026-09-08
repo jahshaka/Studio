@@ -247,7 +247,24 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			// Stored as an asset guid (saved against the project database) or
 			// as a path. Resolve the guid to the project/global file the same
 			// way parseMaterial does; fall back to treating it as a path.
-			const QString stored = val.toString();
+			// The stored guid is REPAIRED first when it names the model a
+			// texture was imported inside rather than the texture itself —
+			// the same defect SceneReader::repairTextureSlot documents, on the
+			// other reader. A material ASSET definition written by the import
+			// pipeline was never wrong (the importer substitutes member guids
+			// itself); one re-saved through SceneWriter between 2026-09-03 and
+			// 2026-09-09 was.
+			QString stored = val.toString();
+			if (!stored.isEmpty()) {
+				const QString repaired = AssetCas::textureGuidForSlot(
+					QSqlDatabase::database(), stored, prop->name);
+				if (!repaired.isEmpty()) {
+					irisLog(QString("material reader: %1 named the object '%2' instead "
+									"of a texture - repaired to '%3'")
+								.arg(prop->name, stored, repaired));
+					stored = repaired;
+				}
+			}
 				QString path;
 				if (!stored.isEmpty()) {
 					path = resolveTextureGuid(stored, db);

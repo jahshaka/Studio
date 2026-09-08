@@ -18,8 +18,10 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QSqlQuery>
 #include <QUuid>
+#include <QVector>
 
 #ifdef Q_OS_UNIX
 #include <unistd.h>   // link(2) — hardlink migration, preflight §3.3
@@ -27,6 +29,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/logger.h"
 #include "data/database/casschema.h"
+#include "data/project.h"          // ModelTypes — the asset `type` column
 #include "services/assetstorepaths.h"
 #include "services/filewriteatomic.h"
 
@@ -390,7 +393,7 @@ QString resolvePinned(QSqlDatabase conn, const QString &root,
 }
 
 QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &path,
-                         const QString &projectGuid)
+                         const QString &projectGuid, GuidPreference prefer)
 {
     // THE INVERSE of resolvePinned/resolveSource, and the reason it has to
     // exist: the document holds RESOLVED PATHS (the renderer opens files), the
@@ -411,17 +414,164 @@ QString guidForStorePath(QSqlDatabase conn, const QString &root, const QString &
     if (oid.length() != 64) return QString();
 
     // One object can back SEVERAL assets (content dedup is the whole point of
-    // the store), so prefer the one THIS project pins; the plain row otherwise.
+    // the store), so the row has to be CHOSEN, not taken. Schema facts the
+    // ordering below rests on:
+    //
+    //   * asset_files is (asset_guid, role, oid, name), PK (guid, role, name),
+    //     with the only index on oid — so an unordered lookup by oid answers
+    //     in index/rowid order, which is INSERTION order, which is an accident
+    //     of the importer's append sequence.
+    //   * An imported model writes its textures twice: {Object, 'texture'}
+    //     first, {member Texture, 'source'} second (assetimporters.cpp).
+    //   * ProjectAssets::addToProject pins the WHOLE dependency closure, so
+    //     both of those rows are pinned by the project — pinnedness cannot
+    //     break that tie (the GLB texture-loss defect: the Object won, the
+    //     writer stored the .glb's guid in every map slot, and the reader
+    //     resolved it straight back to the .glb).
+    //
+    // Order: pinned first (a project's own content beats a library sibling's),
+    // then the KIND the caller asked for, then role='source' — the row the
+    // readers resolve through (resolveSource) — then the guid itself, so two
+    // otherwise equal candidates always answer the same way on every machine.
+    const int wantType = (prefer == GuidPreference::Texture)
+                             ? static_cast<int>(ModelTypes::Texture) : -1;
     QSqlQuery query(conn);
     query.prepare("SELECT AF.asset_guid FROM asset_files AF "
                   "LEFT JOIN project_assets PA ON PA.asset_guid = AF.asset_guid "
                   "                           AND PA.project_guid = ? "
+                  "LEFT JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.oid = ? "
-                  "ORDER BY (PA.asset_guid IS NOT NULL) DESC");
+                  "ORDER BY (PA.asset_guid IS NOT NULL) DESC, "
+                  "         CASE WHEN ? >= 0 AND A.type = ? THEN 0 ELSE 1 END, "
+                  "         CASE AF.role WHEN 'source' THEN 0 ELSE 1 END, "
+                  "         AF.asset_guid");
     query.addBindValue(projectGuid);
     query.addBindValue(oid);
+    query.addBindValue(wantType);
+    query.addBindValue(wantType);
     if (query.exec() && query.next()) return query.value(0).toString();
     return QString();
+}
+
+namespace {
+
+/// Every `values` block in a stored asset blob (a serialized scene node: the
+/// node's own material, and its children's, at any depth).
+void collectMaterialValues(const QJsonValue &value, QVector<QJsonObject> &out)
+{
+    if (value.isObject()) {
+        const QJsonObject obj = value.toObject();
+        const QJsonValue values = obj.value(QStringLiteral("values"));
+        if (values.isObject()) out.append(values.toObject());
+        for (auto it = obj.constBegin(); it != obj.constEnd(); ++it)
+            collectMaterialValues(it.value(), out);
+    } else if (value.isArray()) {
+        for (const QJsonValue &child : value.toArray()) collectMaterialValues(child, out);
+    }
+}
+
+/// The words a texture's FILE NAME carries when it fills a given map slot.
+/// Last resort only — the blob route above is exact when it answers.
+QStringList slotKeywords(const QString &slotName)
+{
+    const QString slot = slotName.toLower();
+    if (slot.contains(QStringLiteral("basecolor")) || slot.contains(QStringLiteral("diffuse"))
+        || slot.contains(QStringLiteral("albedo")))
+        return { "basecolor", "base_color", "albedo", "diffuse", "_col", "_d.", "color" };
+    if (slot.contains(QStringLiteral("normal")))
+        return { "normal", "_nrm", "_n.", "_norm" };
+    if (slot.contains(QStringLiteral("metal")))
+        return { "metal", "metallic", "_m." };
+    if (slot.contains(QStringLiteral("rough")))
+        return { "rough", "_r.", "gloss", "smooth" };
+    if (slot.contains(QStringLiteral("emissi")))
+        return { "emissi", "emit", "_e." };
+    if (slot.contains(QStringLiteral("occlusion")) || slot == QStringLiteral("aomap"))
+        return { "occlusion", "_ao", "ambient" };
+    return {};
+}
+
+int assetTypeOf(QSqlDatabase conn, const QString &guid)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT type FROM assets WHERE guid = ?");
+    query.addBindValue(guid);
+    if (query.exec() && query.next()) return query.value(0).toInt();
+    return -1;
+}
+
+} // namespace
+
+QString textureGuidForSlot(QSqlDatabase conn, const QString &storedGuid,
+                           const QString &slotName)
+{
+    if (storedGuid.isEmpty()) return QString();
+    const int type = assetTypeOf(conn, storedGuid);
+    // Nothing to repair: the slot already names a Texture, or names a guid this
+    // catalog has never heard of (a path, a foreign scene's asset) — in which
+    // case guessing would be inventing content, not healing it.
+    if (type < 0 || type == static_cast<int>(ModelTypes::Texture)) return QString();
+
+    // The object's texture members: assets rows whose bytes ALSO hang off the
+    // object (role 'texture'), joined back through the shared oid. That join
+    // is exactly the ambiguity the writer used to lose, read deliberately.
+    struct Member { QString guid, name; };
+    QVector<Member> members;
+    {
+        QSqlQuery query(conn);
+        query.prepare("SELECT DISTINCT M.asset_guid, M.name FROM asset_files OBJ "
+                      "JOIN asset_files M ON M.oid = OBJ.oid AND M.asset_guid <> OBJ.asset_guid "
+                      "JOIN assets A ON A.guid = M.asset_guid "
+                      "WHERE OBJ.asset_guid = ? AND A.type = ? "
+                      "ORDER BY M.name");
+        query.addBindValue(storedGuid);
+        query.addBindValue(static_cast<int>(ModelTypes::Texture));
+        if (query.exec())
+            while (query.next())
+                members.append({ query.value(0).toString(), query.value(1).toString() });
+    }
+    if (members.isEmpty()) return QString();
+
+    // ROUTE 1 — the object's own blob. The importer rewrote every material's
+    // texture values to the member texture guids before storing it, so the
+    // blob still holds the mapping the scene lost. Accept it only when the
+    // slot resolves to ONE member across the whole object (a model whose
+    // materials disagree about, say, normalMap cannot be repaired from a guid
+    // that no longer says which material it belonged to).
+    {
+        QSqlQuery query(conn);
+        query.prepare("SELECT asset FROM assets WHERE guid = ?");
+        query.addBindValue(storedGuid);
+        if (query.exec() && query.next()) {
+            const QJsonDocument doc = QJsonDocument::fromJson(query.value(0).toByteArray());
+            QVector<QJsonObject> valueBlocks;
+            collectMaterialValues(doc.isArray() ? QJsonValue(doc.array())
+                                                : QJsonValue(doc.object()), valueBlocks);
+            QSet<QString> candidates;
+            for (const QJsonObject &values : valueBlocks) {
+                const QString ref = values.value(slotName).toString();
+                if (ref.isEmpty()) continue;
+                for (const Member &member : members)
+                    if (member.guid == ref) candidates.insert(ref);
+            }
+            if (candidates.size() == 1) return *candidates.constBegin();
+        }
+    }
+
+    // ROUTE 2 — the file names. One texture on the whole object can only ever
+    // have been this slot's; otherwise the name has to say so.
+    if (members.size() == 1) return members.first().guid;
+    const QStringList words = slotKeywords(slotName);
+    QString match;
+    for (const Member &member : members) {
+        const QString name = member.name.toLower();
+        bool hit = false;
+        for (const QString &word : words) if (name.contains(word)) { hit = true; break; }
+        if (!hit) continue;
+        if (!match.isEmpty() && match != member.guid) return QString();  // ambiguous
+        match = member.guid;
+    }
+    return match;
 }
 
 bool writeStoreInfo(const QString &root, QString *errorOut)
