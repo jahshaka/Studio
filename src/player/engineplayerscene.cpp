@@ -156,10 +156,10 @@ void EnginePlayerScene::step(float dt, int width, int height)
         mMirror->applySky(mView);
         mMirror->applyEnvironment(mView, mEngine.lock().get());
         // The player's fly camera is a FREE camera and takes the wide-aspect
-        // FOV cap; applyCamera drops it by itself if the active-camera seam
+        // framing hold; applyCamera drops it by itself if the active-camera seam
         // substitutes an AUTHORED camera underneath (a playing scene shooting
         // through its own camera keeps that camera's lens exactly).
-        mMirror->applyCamera(cam, mView, freecam::kFreeCameraMaxHorizontalFovDegrees);
+        mMirror->applyCamera(cam, mView, freecam::kFreeCameraFramingAspect);
     }
 }
 
@@ -212,7 +212,7 @@ QImage EnginePlayerScene::takeScreenshot(int width, int height, int grade)
         // request off a square page does not photograph a squashed world.
         const float saved = cam->aspectRatio;
         cam->setAspectRatio(height > 0 ? float(width) / float(height) : 1.0f);
-        mMirror->applyCamera(cam, shot, freecam::kFreeCameraMaxHorizontalFovDegrees);
+        mMirror->applyCamera(cam, shot, freecam::kFreeCameraFramingAspect);
         cam->setAspectRatio(saved);
         // The three grades (IEditorViewport::ScreenshotGrade), exactly as the
         // editor's takeScreenshot resolves them — the player is the other
