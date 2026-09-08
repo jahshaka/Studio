@@ -181,10 +181,26 @@ file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME cameras.e2e
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_cameras.js
          WORKING_DIRECTORY ${_home}/run)
+# TIMEOUT, not RESOURCE_LOCK — recorded decision (N7, ENGINEERING_DEBT_SPEC
+# re-audit). The observed failure is a TIMEOUT under GI-rebuild contention: the
+# engine compiles shaders and PSOs on a parallel pool
+# (OGRE_SHADER_COMPILATION_THREADING_MODE=2) and a concurrent gi.* suite
+# voxelizing a scene starves it, so this app-spawning script run takes minutes
+# it normally does not (JOURNAL 2026-09-08). It is not a wrong answer, it is a
+# slow one.
+#
+# A RESOURCE_LOCK would express the contention directly, but a lock is only
+# real when EVERY participant carries the same name — the lock would have to be
+# added to tests/gi/CMakeLists.txt too, and it would serialize this suite
+# against the longest-running family in the tree for a hazard that costs
+# nothing but wall clock. The cheap, honest fix is to let the slow case finish:
+# 900 s is what cameras.exposure (the same engine, the same compile pool)
+# already allows. If cameras.e2e ever fails with an ASSERTION under contention
+# rather than a timeout, that reasoning is void and the lock is the answer.
 set_tests_properties(cameras.e2e PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
-    TIMEOUT 300)
+    TIMEOUT 900)
 
 # ---- cameras.e2e.lens -----------------------------------------------------
 # CAMERA_LENS_SPEC §3 (P1 + P2) through the verbs in the real binary: the preset

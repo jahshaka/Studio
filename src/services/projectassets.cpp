@@ -294,5 +294,16 @@ QString ProjectAssets::copyOnWrite(const QString &guid, const QString &newConten
         if (errorOut) *errorOut = QStringLiteral("could not move the project pin");
         return QString();
     }
+    // The new object is reachable ONLY through the pin (the asset_files link
+    // insert above is ignored when the edited file keeps its name), so the
+    // store's recovery record has to be rewritten right here or the edited
+    // bytes exist in no sidecar at all — item 1c'. writeSidecar now carries
+    // the pins; a failure to rewrite it does not invalidate the edit itself,
+    // so it is reported through the log rather than failing the write.
+    QString sidecarError;
+    if (!AssetCas::writeSidecar(conn, root, guid, &sidecarError)) {
+        qWarning("ProjectAssets::copyOnWrite: could not refresh the sidecar for %s (%s)",
+                 qUtf8Printable(guid), qUtf8Printable(sidecarError));
+    }
     return oid;
 }

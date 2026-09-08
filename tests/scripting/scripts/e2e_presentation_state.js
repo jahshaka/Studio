@@ -66,6 +66,17 @@ if (st.state === "offscreen") {
     // ---- phase B: opening a world restarts it ----
     assert(project.save(), "project.save");
     assert(project.close(), "project.close");
+
+    // A5a (ENGINEERING_DEBT_SPEC addendum 5): closing a project must RELEASE
+    // the world. MainWindow::closeProject never called removeScene() — its one
+    // caller was the open path — so the viewport kept the closed world's scene,
+    // mirror and datablocks alive behind the desktop and this state was
+    // unreachable through the ordinary close. "noscene" is the whole assertion:
+    // it is the state the viewport reports only when nothing is bound.
+    var closed = state("after close");
+    assert(closed.state === "noscene",
+        "project.close releases the viewport's world (got " + closed.state + ")");
+
     assert(project.open(name), "project.open(" + name + ")");
 
     var reopened = state("after reopen");

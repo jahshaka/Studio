@@ -55,3 +55,31 @@ add_dependencies(test_editor_player_parity JahshakaEngineMedia)
 add_test(NAME player.editor_parity COMMAND ${CMAKE_BINARY_DIR}/bin/test_editor_player_parity
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(player.editor_parity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+
+# ---- player.playback_routing (A1.6) --------------------------------------
+# The play/edit STATE MACHINE — PlaybackService's routing into the viewport,
+# per call and per flag. No engine, no GL, no display: it subclasses the
+# SHIPPING HeadlessEditorViewport (the --headless stand-in) and records what
+# the service asked for, which is why the interface's size costs this suite
+# nothing. AUTOMOC is on for the one target in this directory that needs it:
+# PlaybackService is a QObject and the suite asserts on its mode signals.
+# ieditorviewport.h is listed as a SOURCE so AUTOMOC generates the moc for
+# EditorViewportEvents — HeadlessEditorViewport's constructor creates one, and
+# nothing else in this target would pull its vtable in.
+add_executable(test_playback_routing test_playback_routing.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/playbackservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h)
+set_target_properties(test_playback_routing PROPERTIES
+    AUTOMOC ON AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_playback_routing PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_playback_routing PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+add_test(NAME player.playback_routing COMMAND ${CMAKE_BINARY_DIR}/bin/test_playback_routing
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(player.playback_routing PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "services")
+jah_no_display(player.playback_routing)

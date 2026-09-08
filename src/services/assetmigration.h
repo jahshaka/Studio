@@ -50,6 +50,7 @@ struct RebuildReport
     int assets = 0;             // asset rows written from sidecars
     int files = 0;              // files rows
     int links = 0;              // asset_files rows
+    int pins = 0;               // project_assets rows (pin-only objects, item 1c')
     int skipped = 0;            // tombstones: sidecars whose objects are all gone
     qint64 elapsedMs = 0;
 
@@ -61,8 +62,8 @@ struct RebuildReport
 /// bit-rot and missing objects, with counts and bytes.
 VerifyReport verify(const QString &dbPath, const QString &storeRoot);
 
-/// Reconstruct catalog rows (assets + files + asset_files) from
-/// sidecar/*.json into dbPath — the honest I2 test and the
+/// Reconstruct catalog rows (assets + files + asset_files + project_assets
+/// pins) from sidecar/*.json into dbPath — the honest I2 test and the
 /// Unity-Library-delete recovery story. Existing rows with the same guid are
 /// left untouched (INSERT OR IGNORE); thumbnails are not recoverable from
 /// sidecars (they are regenerable).

@@ -152,6 +152,149 @@ int main(int argc, char **argv)
         physScene.reset(); body.reset();
     }
 
+    // --- A1.4: a physics body on a node that is NOT a mesh must not crash.
+    // PhysicsHelper::createPhysicsBody used to open with an unguarded
+    // `sceneNode.staticCast<iris::MeshNode>()` and the three geometry shapes
+    // then called getMesh() on it. The UI only sets isPhysicsBody on meshes —
+    // but SceneReader reads "physicsObject" for EVERY node kind, so a
+    // hand-authored file (which is exactly what this block builds) reached it.
+    {
+        auto physScene = iris::Scene::create();
+
+        // (i) a LIGHT asking for a convex hull — the crash case
+        auto lamp = iris::LightNode::create();
+        lamp->setGUID("a14-light-hull");
+        lamp->setLocalPos(iris::Vec3(0, 3, 0));
+        lamp->isPhysicsBody = true;
+        lamp->physicsProperty.objectMass = 1.0f;
+        lamp->physicsProperty.shape = iris::PhysicsCollisionShape::ConvexHull;
+        lamp->physicsProperty.type = iris::PhysicsType::RigidBody;
+        physScene->getRootNode()->addChild(lamp);
+
+        // (ii) a plain empty asking for a triangle mesh
+        auto empty = iris::SceneNode::create();
+        empty->setGUID("a14-empty-trimesh");
+        empty->isPhysicsBody = true;
+        empty->physicsProperty.objectMass = 0.0f;
+        empty->physicsProperty.shape = iris::PhysicsCollisionShape::TriangleMesh;
+        empty->physicsProperty.type = iris::PhysicsType::Static;
+        physScene->getRootNode()->addChild(empty);
+
+        // (iii) a camera asking for a compound (no mesh anywhere in its subtree)
+        auto cam = iris::CameraNode::create();
+        cam->setGUID("a14-camera-compound");
+        cam->isPhysicsBody = true;
+        cam->physicsProperty.objectMass = 0.0f;
+        cam->physicsProperty.shape = iris::PhysicsCollisionShape::Compound;
+        cam->physicsProperty.type = iris::PhysicsType::Static;
+        physScene->getRootNode()->addChild(cam);
+
+        // (iv) a real MeshNode with NO mesh loaded — same hole, mesh-typed
+        auto emptyMesh = iris::MeshNode::create();
+        emptyMesh->setGUID("a14-meshnode-no-mesh");
+        emptyMesh->isPhysicsBody = true;
+        emptyMesh->physicsProperty.objectMass = 1.0f;
+        emptyMesh->physicsProperty.shape = iris::PhysicsCollisionShape::TriangleMesh;
+        emptyMesh->physicsProperty.type = iris::PhysicsType::RigidBody;
+        physScene->getRootNode()->addChild(emptyMesh);
+
+        // (v) the shapes that never needed a mesh must still work on a non-mesh
+        auto sphereLight = iris::LightNode::create();
+        sphereLight->setGUID("a14-light-sphere");
+        sphereLight->setLocalPos(iris::Vec3(2, 8, 0));
+        sphereLight->isPhysicsBody = true;
+        sphereLight->physicsProperty.objectMass = 1.0f;
+        sphereLight->physicsProperty.shape = iris::PhysicsCollisionShape::Sphere;
+        sphereLight->physicsProperty.type = iris::PhysicsType::RigidBody;
+        physScene->getRootNode()->addChild(sphereLight);
+
+        auto env = physScene->getPhysicsEnvironment();
+        env->initializePhysicsWorldFromScene(physScene->getRootNode());
+        CHECK(true, "A1.4: a non-mesh node with a mesh-shaped physics body does not crash");
+        CHECK(env->hashBodies.contains("a14-light-hull")
+                  && env->hashBodies.contains("a14-empty-trimesh")
+                  && env->hashBodies.contains("a14-camera-compound")
+                  && env->hashBodies.contains("a14-meshnode-no-mesh"),
+              "A1.4: every degraded body still exists in the world (constraints and "
+              "transform sync keep resolving)");
+        CHECK(env->hashBodies.contains("a14-light-sphere"),
+              "A1.4: the mesh-free shapes still build on a non-mesh node");
+
+        // it still simulates: the degraded bodies collide with nothing, the
+        // sphere falls.
+        env->simulatePhysics();
+        const float y0 = sphereLight->getLocalPos().y();
+        for (int i = 0; i < 60; ++i) physScene->update(1.0f / 60.0f);
+        CHECK(sphereLight->getLocalPos().y() < y0 - 0.5f,
+              "A1.4: the world still steps with degraded bodies in it");
+        env->stopPhysics();
+        env->destroyPhysicsWorld();
+        physScene.reset();
+    }
+
+    // --- A1.5: Scene::removeNode's typed registries. The four reverse lookups
+    // became O(1) guid removals; the SEMANTICS asserted here are what must not
+    // change — the node leaves every registry it was in, its children leave
+    // with it, and removing a node the scene never had touches nothing.
+    {
+        auto s2 = iris::Scene::create();
+        auto lamp = iris::LightNode::create();       lamp->setGUID("a15-light");
+        auto mesh2 = iris::MeshNode::create();       mesh2->setGUID("a15-mesh");
+        auto parts = iris::ParticleSystemNode::create(); parts->setGUID("a15-particles");
+        auto cam2 = iris::CameraNode::create();      cam2->setGUID("a15-camera");
+        auto child = iris::MeshNode::create();       child->setGUID("a15-child");
+
+        s2->getRootNode()->addChild(lamp);
+        s2->getRootNode()->addChild(mesh2);
+        s2->getRootNode()->addChild(parts);
+        s2->getRootNode()->addChild(cam2);
+        mesh2->addChild(child);
+
+        CHECK(s2->lights.contains("a15-light") && s2->meshes.contains("a15-mesh")
+                  && s2->particleSystems.contains("a15-particles")
+                  && s2->cameras.contains("a15-camera")
+                  && s2->meshes.contains("a15-child"),
+              "A1.5: addNode registers each node under its own guid");
+
+        // A node the scene never saw: removing it must not evict anything —
+        // and specifically not the entry keyed with the EMPTY string, which is
+        // what `hash.remove(hash.key(missing))` did (QHash::key() returns a
+        // default-constructed QString when the value is absent). The unnamed
+        // light below is registered under "" precisely so that bug has
+        // something to destroy.
+        auto unnamed = iris::LightNode::create(); unnamed->setGUID(QString());
+        s2->getRootNode()->addChild(unnamed);
+        CHECK(s2->lights.contains(QString()),
+              "A1.5: a guid-less light registers under the empty key");
+        auto stranger = iris::LightNode::create(); stranger->setGUID("a15-stranger");
+        const int lightsBefore = s2->lights.size();
+        s2->removeNode(stranger);
+        CHECK(s2->lights.size() == lightsBefore && s2->lights.contains("a15-light"),
+              "A1.5: removing an unregistered node evicts nothing");
+        CHECK(s2->lights.contains(QString()),
+              "A1.5: and specifically not the empty-keyed entry (the old reverse "
+              "lookup removed it)");
+
+        s2->removeNode(lamp);
+        CHECK(!s2->lights.contains("a15-light") && !s2->nodes.contains("a15-light"),
+              "A1.5: a light leaves both the light registry and the node map");
+
+        s2->removeNode(parts);
+        CHECK(!s2->particleSystems.contains("a15-particles"), "A1.5: particles deregister");
+
+        CHECK(s2->setActiveCamera("a15-camera"), "A1.5: the camera can be made active");
+        s2->removeNode(cam2);
+        CHECK(!s2->cameras.contains("a15-camera"), "A1.5: cameras deregister");
+        CHECK(s2->getActiveCameraGuid().isEmpty(),
+              "A1.5: deleting the ACTIVE camera clears the active guid");
+
+        s2->removeNode(mesh2);
+        CHECK(!s2->meshes.contains("a15-mesh") && !s2->meshes.contains("a15-child"),
+              "A1.5: removeNode recurses — the child left the mesh registry too");
+        CHECK(!s2->nodes.contains("a15-child"), "A1.5: and the node map");
+        s2.reset();
+    }
+
     // --- Reflection round-trip (IRISGL_ARCHITECTURE_AUDIT 3.1): every field the
     // node types newly reflect must be reachable through all three methods —
     // advertised by getProperties(), written by setPropertyValue(), read back

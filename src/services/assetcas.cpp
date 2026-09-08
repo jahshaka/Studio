@@ -279,6 +279,39 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     }
     sidecar["files"] = files;
 
+    // PIN-ONLY OBJECTS (item 1c', ENGINEERING_DEBT_SPEC §1 item 1c point 4).
+    // The manifest above enumerates asset_files, and a copy-on-write edit does
+    // NOT produce an asset_files row: ProjectAssets::copyOnWrite ingests the
+    // edited bytes and moves the project's pin, while the link insert
+    // (INSERT OR IGNORE, PK (asset_guid, role, name)) is IGNORED because the
+    // edited file keeps its name. The bytes the project actually renders were
+    // therefore recorded in NO sidecar, so assets.rebuildCatalog — the
+    // "somebody deleted the database" recovery path — could not bring a
+    // COW-edited asset back: it rebuilt the row pointing at the pre-edit
+    // object and dropped the pin entirely.
+    //
+    // Pins are recorded as their own array rather than folded into `files`
+    // because they are a per-PROJECT fact, not a library one: rebuildCatalog
+    // restores the files row plus the project_assets pin, and the asset's
+    // library mapping stays exactly where the manifest put it.
+    QJsonArray pins;
+    QSqlQuery pinQuery(conn);
+    pinQuery.prepare("SELECT PA.project_guid, PA.oid_pin, F.size, F.ext "
+                     "FROM project_assets PA LEFT JOIN files F ON F.oid = PA.oid_pin "
+                     "WHERE PA.asset_guid = ? AND PA.oid_pin IS NOT NULL AND PA.oid_pin <> '' "
+                     "ORDER BY PA.project_guid");
+    pinQuery.addBindValue(guid);
+    pinQuery.exec();
+    while (pinQuery.next()) {
+        QJsonObject pin;
+        pin["projectGuid"] = pinQuery.value(0).toString();
+        pin["oid"] = pinQuery.value(1).toString();
+        pin["size"] = pinQuery.value(2).toDouble();
+        pin["ext"] = pinQuery.value(3).toString();
+        pins.append(pin);
+    }
+    sidecar["pins"] = pins;
+
     // Atomic, like every other artifact the store owns: this used to truncate
     // the live sidecar and then write, so an interrupted import left a
     // zero/half-length JSON that rebuildCatalog would read as an asset with no

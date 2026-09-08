@@ -23,6 +23,8 @@
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -263,11 +265,17 @@ int main(int argc, char **argv)
     const auto rebuild = AssetMigration::rebuildCatalog(rebuiltDb, root);
     CHECK(rebuild.ok, "rebuildCatalog succeeded");
     CHECK(rebuild.assets == 3, "rebuild recovered 3 asset rows");
-    // 2, not 3: the COW edit's object is referenced only by a project PIN,
-    // and sidecars record the asset_files mapping — a rebuilt catalog
-    // recovers the library truth; pin-only objects stay on disk and verify
-    // still walks them (recorded limitation of sidecar-based recovery).
-    CHECK(rebuild.files == 2, "rebuild recovered the 2 library-mapped files rows");
+    // 3, not 2 — item 1c'. The COW edit's object (oidZ) is referenced only by
+    // a project PIN: the asset_files link insert is IGNORED when the edited
+    // file keeps its name, so the sidecar's `files` manifest never mentions
+    // it. That used to be a RECORDED LIMITATION ("pin-only objects stay on
+    // disk"), which in practice meant a rebuilt catalog handed the project
+    // back its PRE-EDIT bytes — a silent content regression on the one path
+    // that exists to recover from a lost database. writeSidecar records the
+    // pins now, and rebuildCatalog restores both the files row and the pin.
+    CHECK(rebuild.files == 3,
+          "rebuild recovered 3 files rows (the 2 library-mapped ones + the pin-only COW object)");
+    CHECK(rebuild.pins == 2, "rebuild recovered both project pins");
     {
         QSqlDatabase check = QSqlDatabase::addDatabase("QSQLITE", "RebuildCheck");
         check.setDatabaseName(rebuiltDb);
@@ -277,9 +285,41 @@ int main(int argc, char **argv)
         CHECK(q.next() && q.value(0).toString() == "b.png" && q.value(1).toInt() == 7
                   && q.value(2).toInt() == 3,
               "rebuilt row matches (name/type/view_filter)");
+
+        // THE ASSERTION THE ITEM EXISTS FOR: resolve the COW-edited asset
+        // through the REBUILT catalog and get the edited bytes back.
+        CHECK(readFile(AssetCas::resolvePinned(check, root, "projQ", "guidA")) == contentZ,
+              "recovery: the COW-edited project still renders its EDITED bytes "
+              "after a full catalog rebuild");
+        CHECK(readFile(AssetCas::resolvePinned(check, root, "projP", "guidA")) == contentX,
+              "recovery: the project pinned to the ORIGINAL still renders those bytes");
+        CHECK(readFile(AssetCas::resolveSource(check, root, "guidA")) == contentX,
+              "recovery: the library mapping came back unchanged");
         check.close();
     }
     QSqlDatabase::removeDatabase("RebuildCheck");
+
+    // ---- the sidecar itself names the pinned objects (item 1c') ----
+    {
+        QFile sidecar(AssetStorePaths::sidecarPathIn(root, "guidA"));
+        CHECK(sidecar.open(QIODevice::ReadOnly), "guidA sidecar readable");
+        const QJsonObject obj = QJsonDocument::fromJson(sidecar.readAll()).object();
+        sidecar.close();
+        const QJsonArray pins = obj.value("pins").toArray();
+        CHECK(pins.size() == 2, "sidecar records both pins");
+        bool sawEdit = false, sawOriginal = false;
+        for (const auto &value : pins) {
+            const QJsonObject pin = value.toObject();
+            if (pin.value("oid").toString() == oidZ && pin.value("projectGuid").toString() == "projQ")
+                sawEdit = true;
+            if (pin.value("oid").toString() == oidX && pin.value("projectGuid").toString() == "projP")
+                sawOriginal = true;
+            CHECK(!pin.value("ext").toString().isEmpty(),
+                  "sidecar pin carries the object's extension (resolvePinned reads it)");
+        }
+        CHECK(sawEdit, "sidecar records the PIN-ONLY object — the one no asset_files row names");
+        CHECK(sawOriginal, "sidecar records the ordinary pin too");
+    }
 
     // ---- updateNodeMaterial resolves guid texture references (2026-08-31) ----
     // The library rebuild path (ProjectAssets::addToProject in a fresh
