@@ -24,6 +24,7 @@ For more information see the LICENSE file
 // project or the editor scene's clock. avatar.spawn/list/info/setClipRole are
 // Part 1's.
 
+#include <QHash>
 #include <QImage>
 #include <QVariantList>
 #include <QVariantMap>
@@ -31,6 +32,8 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "scripting/apimodule.h"
+
+#include "modules/avatar/avatarpreviewmodel.h"   // HeightNormalization (a member)
 
 namespace avatar { class AvatarPreviewModel; }
 namespace iris { class AvatarPossession; class AvatarLocomotion; }
@@ -63,6 +66,9 @@ public:
     void setSubjectDelegate(std::function<void()> fn) { mSubjectChanged = std::move(fn); }
 
     Q_INVOKABLE QVariant loadPreview(const QString &path);
+    /// Explicit height override for the preview subject (metres); <= 0 re-runs
+    /// the automatic rule. Returns the same map `preview()` does.
+    Q_INVOKABLE QVariant setCharacterHeight(double metres);
     Q_INVOKABLE QVariant loadAnimation(const QString &path);
     Q_INVOKABLE bool clearPreview();
     Q_INVOKABLE QVariantList history();
@@ -158,6 +164,10 @@ private:
     bool record(const QString &message);
 
     QString mLastError;
+    /// What avatar.spawn's height normalization did, per spawned node guid.
+    /// SESSION state on purpose: the scale itself lives on the node and is
+    /// serialized, so this is only the story of how it got there.
+    QHash<QString, avatar::HeightNormalization> mNormalized;
 
     avatar::AvatarPreviewModel *mModel = nullptr;
     SnapshotFn mSnapshot;
