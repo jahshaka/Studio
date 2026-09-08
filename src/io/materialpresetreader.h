@@ -19,7 +19,7 @@ namespace iris {
     class Material;
 }
 
-class MaterialPreset;
+struct MaterialPreset;
 
 /**
  * This class parses material definitions from json files

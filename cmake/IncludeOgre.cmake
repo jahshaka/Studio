@@ -82,6 +82,19 @@ target_include_directories(OgreNext INTERFACE
     # Overlay component (STATS_OVERLAY_SPEC D1): the engine-drawn stats readout
     # and loading cover. Its headers include each other by bare name too.
     ${OGRE_NEXT_PREFIX}/include/OGRE-Next/Overlay)
+
+set(_ogre_library_paths "${OGRE_NEXT_PREFIX}/lib")
+set(OGRE_NEXT_PLUGIN_SUFFIX "")
+if(WIN32)
+    list(APPEND _ogre_library_paths
+        "${OGRE_NEXT_PREFIX}/lib/Debug"
+        "${OGRE_NEXT_PREFIX}/lib/Release"
+        "${OGRE_NEXT_PREFIX}/lib/RelWithDebInfo"
+        "${OGRE_NEXT_PREFIX}/lib/MinSizeRel")
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(OGRE_NEXT_PLUGIN_SUFFIX "_d")
+    endif()
+endif()
 # Plain -I, deliberately NOT SYSTEM: OGRE_BUILD_COMPONENT_PLANAR_REFLECTIONS is
 # #ifdef-ed inside OgreHlmsPbs.h, so the installed OgreBuildSettings.h changes
 # HlmsPbs's member LAYOUT. generateAbiCookie() does not hash component defines,
@@ -100,8 +113,8 @@ foreach(_lib OgreNextMain OgreNextHlmsPbs OgreNextHlmsUnlit OgreNextAtmosphere
              OgreNextPlanarReflections OgreNextOverlay)
     # Never trust a cached hit: a changed OGRE_NEXT_PREFIX must re-resolve.
     unset(OGRE_NEXT_${_lib}_LIB CACHE)
-    find_library(OGRE_NEXT_${_lib}_LIB NAMES ${_lib}
-                 PATHS ${OGRE_NEXT_PREFIX}/lib NO_DEFAULT_PATH)
+    find_library(OGRE_NEXT_${_lib}_LIB NAMES ${_lib}${OGRE_NEXT_PLUGIN_SUFFIX}
+                 PATHS ${_ogre_library_paths} NO_DEFAULT_PATH)
     if(NOT OGRE_NEXT_${_lib}_LIB)
         message(FATAL_ERROR
             "Ogre-Next library ${_lib} not found in ${OGRE_NEXT_PREFIX}/lib.\n"
@@ -116,7 +129,15 @@ endforeach()
 # Runtime locations. These are DEFAULTS the host may fall back to; the engine
 # itself takes them at runtime through EngineConfig (see engine/CMakeLists.txt,
 # which exposes them to the host and stages the Hlms templates next to the exe).
-if(EXISTS "${OGRE_NEXT_PREFIX}/lib/OGRE-Next")
+if(WIN32)
+    # Ogre's Windows install places renderer and plugin DLLs beside the other
+    # configuration-specific runtime binaries, not under lib/.
+    set(_ogre_runtime_config "${CMAKE_BUILD_TYPE}")
+    if(NOT _ogre_runtime_config)
+        set(_ogre_runtime_config "RelWithDebInfo")
+    endif()
+    set(OGRE_NEXT_PLUGIN_DIR "${OGRE_NEXT_PREFIX}/bin/${_ogre_runtime_config}")
+elseif(EXISTS "${OGRE_NEXT_PREFIX}/lib/OGRE-Next")
     set(OGRE_NEXT_PLUGIN_DIR "${OGRE_NEXT_PREFIX}/lib/OGRE-Next")
 else()
     # macOS: the install puts RenderSystem_*.dylib directly in lib/ (no subdir).

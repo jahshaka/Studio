@@ -18,6 +18,10 @@ if (WIN32)
     if(NOT QT6_WINDEPLOYQT_EXECUTABLE)
         message(FATAL_ERROR "windeployqt not found in PATH. Please make sure Qt/bin is in your system PATH.")
     endif()
+    file(GLOB _ogre_runtime_dlls "${OGRE_NEXT_PLUGIN_DIR}/*.dll")
+    if(NOT _ogre_runtime_dlls)
+        message(FATAL_ERROR "Ogre runtime DLLs not found in ${OGRE_NEXT_PLUGIN_DIR}")
+    endif()
 
     add_custom_command(
         OUTPUT "${DEPLOY_STAMP}"
@@ -25,6 +29,10 @@ if (WIN32)
                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                 --dir "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
                 -multimedia
+
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_ogre_runtime_dlls}
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/"
 
         COMMAND ${CMAKE_COMMAND} -E touch "${DEPLOY_STAMP}"
         DEPENDS ${CMAKE_PROJECT_NAME}
