@@ -57,6 +57,20 @@ var cube = scene.addPrimitive("cube", { position: [0, 1, 0] });
 var d = styleDelta(cube, "cube");
 assert(d >= 1, "a builtin primitive's highlight draws (style toggle moved " + d + " probes)");
 
+// LET GLOBAL ILLUMINATION SETTLE FIRST (added 2026-09-08 with the
+// project.create stall fix). The ground assertion below is an EXACT pixel
+// equality between two shots, and GI is a progressive system: the probe grid
+// re-captures updateBudget probes per frame (18 probes at one a frame) and the
+// irradiance field re-integrates after every geometry change — so the cube this
+// script just added is still propagating through both when the ground shots are
+// taken. It used to be settled by then only because the initial thumbnail built
+// GI inside project.create; that build is now deferred to the live viewport
+// (ProjectService::saveInitialScene — a 7.4 s freeze in project creation), which
+// moves the whole sequence one build later and left the two ground shots one
+// probe and one or two levels apart. Forty frames is more than two full passes
+// of the grid; measured 3/3 stable with it and 3/3 unstable without.
+editor.frame(40);
+
 // The surviving owner ask: the GROUND gets no highlight in either style, so
 // the style toggle must change nothing (its gizmo is in both shots).
 var ground = scene.nodes().filter(function (n) { return n.name === "Ground"; })[0];

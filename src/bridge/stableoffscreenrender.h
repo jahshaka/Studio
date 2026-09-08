@@ -50,6 +50,13 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
     unsigned long long seen = engine->textureLoadRequests();
     for (unsigned extra = 0; extra < maxExtra; ++extra) {
         engine->waitForTextureLoads();
+        // A WAIT THAT GAVE UP ENDS THE LOOP (defect 2026-09-08). Engine.h's
+        // texture-wait contract says the wait is bounded: it drains while the
+        // pending set shrinks and then stops, loudly. If that happened, the
+        // load-request counter can keep moving without anything ever becoming
+        // resident, and re-rendering would only spend maxExtra more frames
+        // learning the same thing. The caller gets the picture it can have.
+        if (engine->textureWaitTimeouts() > 0u) break;
         const unsigned long long now = engine->textureLoadRequests();
         if (now == seen) break;
         seen = now;

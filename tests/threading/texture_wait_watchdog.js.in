@@ -1,0 +1,56 @@
+// threading.texture_wait_watchdog — the bounded wait's give-up path, proven.
+//
+// WHY A FAULT INJECTION. The frame's texture wait used to be
+// TextureGpuManager::waitForStreamingCompletion, an unbounded loop around an
+// event with no timeout; on 2026-09-08 a load request that no worker could ever
+// complete held the UI thread inside it for twelve minutes. The fix is a drain
+// with a no-progress deadline, and the ONLY part of it that never runs in a
+// healthy process is the part that matters: the deadline expiring, the pending
+// textures being logged, the latch that stops the next frame paying again. The
+// real trigger cannot be used to test it — a group-less texture kills the
+// decode worker outright — so the engine carries JAH_TEXTURE_WAIT_FAULT, which
+// makes the drain refuse to agree that it is finished. That is exactly what a
+// stuck queue looks like from inside the loop.
+//
+// WHAT THIS ASSERTS:
+//   1. THE APP IS STILL RUNNING. Reaching line one of this script already
+//      proves it: with the old wait, a stuck queue never returned and the
+//      process would be sitting in the deadlock the suite's TIMEOUT catches.
+//   2. The wait gave up (waitTimeouts >= 1) rather than blocking forever.
+//   3. It gave up ONCE and latched: after the first timeout the frame stops
+//      waiting at all, so twenty more frames must not add twenty more timeouts.
+//      A watchdog that re-paid its budget every frame would leave the editor
+//      just as unusable, only noisily so.
+//   4. The budget was honoured: the worst single wait is near it, not orders of
+//      magnitude past it.
+//
+// The budget is passed in as 300 ms (see the CMake entry) to keep the suite
+// short; the shipped default is 8 s.
+
+function fail(msg) { throw new Error("texture_wait_watchdog: " + msg); }
+
+var ts = app.textureStreaming();
+if (ts.waitBudgetMs !== 300)
+    fail("expected the injected 300 ms budget, engine reports " + ts.waitBudgetMs +
+         " — JAH_TEXTURE_WAIT_MS did not reach the engine");
+
+// Frames have already been drawn by the time a script runs, so the timeout has
+// already happened; ask for a few more to prove the latch.
+editor.frame(4);
+var afterFirst = app.textureStreaming();
+if (afterFirst.waitTimeouts < 1)
+    fail("the injected stuck queue produced no timeout at all (waitTimeouts=" +
+         afterFirst.waitTimeouts + ") — the fault hook or the deadline is not working");
+
+editor.frame(20);
+var afterMore = app.textureStreaming();
+if (afterMore.waitTimeouts !== afterFirst.waitTimeouts)
+    fail("the wait did not latch: " + afterFirst.waitTimeouts + " timeout(s) grew to " +
+         afterMore.waitTimeouts + " over 20 more frames — every frame is paying the budget");
+
+// One budget, not many: the first (and only) wait should be about the budget.
+if (afterMore.waitWorstMs < 200 || afterMore.waitWorstMs > 5000)
+    fail("worst wait " + afterMore.waitWorstMs + " ms is not the 300 ms budget");
+
+JSON.stringify({ waitTimeouts: afterMore.waitTimeouts, waitWorstMs: afterMore.waitWorstMs,
+                 waitBudgetMs: afterMore.waitBudgetMs });

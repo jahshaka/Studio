@@ -118,3 +118,97 @@ set_tests_properties(threading.mode_pixels PROPERTIES
 # on subject and quarantined on toolchain — threading.staging_race is the member
 # that actually carries this program's coverage in the lane.
 jah_tsan_blocked(threading.mode threading.mode_serial)
+
+# threading.import_soak / threading.newproject_stall — THE TWO HANGS
+# (defect wave 2026-09-08; the mechanisms are in the scripts' own headers).
+#
+# Both drive the REAL binary through --script with the engine up, because both
+# subjects only exist in the GUI path: a thumbnail render inside an import, and
+# the environment push inside project creation. Both get a VIRGIN HOME, for
+# opposite reasons — the soak so its twenty imports cannot dedupe against
+# another suite's asset store, the stall so its untimed warm-up create is
+# genuinely the first world of the process (a shared shader cache would hide
+# what the timed one is really paying).
+#
+# RUN_SERIAL on both: newproject_stall asserts a wall-clock budget, and
+# import_soak's iteration budget is a hang detector that four concurrent
+# Vulkan apps would turn into a flake.
+configure_file(import_soak.js.in ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js @ONLY)
+configure_file(texture_wait_watchdog.js.in ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js @ONLY)
+configure_file(newproject_stall.js.in ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js @ONLY)
+
+set(_thr_home_soak ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_import_soak)
+set(_thr_home_stall ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_newproject_stall)
+
+add_test(NAME threading.freshhome.import_soak
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_soak}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(threading.freshhome.import_soak PROPERTIES
+    FIXTURES_SETUP threading_home_import_soak LABELS "threading")
+
+add_test(NAME threading.import_soak
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/import_soak.js
+         WORKING_DIRECTORY ${_thr_home_soak}/run)
+set_tests_properties(threading.import_soak PROPERTIES
+    ENVIRONMENT "HOME=${_thr_home_soak}"
+    FIXTURES_REQUIRED threading_home_import_soak
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 900)
+
+add_test(NAME threading.freshhome.newproject_stall
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_stall}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(threading.freshhome.newproject_stall PROPERTIES
+    FIXTURES_SETUP threading_home_newproject_stall LABELS "threading")
+
+add_test(NAME threading.newproject_stall
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/newproject_stall.js
+         WORKING_DIRECTORY ${_thr_home_stall}/run)
+set_tests_properties(threading.newproject_stall PROPERTIES
+    ENVIRONMENT "HOME=${_thr_home_stall}"
+    FIXTURES_REQUIRED threading_home_newproject_stall
+    LABELS "threading" RUN_SERIAL TRUE TIMEOUT 600)
+
+# threading.texture_wait_watchdog — the give-up path itself, under the engine's
+# JAH_TEXTURE_WAIT_FAULT hook (the script's header says why a hook is the only
+# way). Its own HOME: the run deliberately renders frames whose textures are
+# declared stuck, and nothing it writes should be handed to another suite.
+# TIMEOUT is the real assertion here — with the pre-fix unbounded wait this run
+# would never end.
+set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_watchdog)
+
+add_test(NAME threading.freshhome.texture_wait_watchdog
+         COMMAND ${CMAKE_COMMAND} -DHOME_DIR=${_thr_home_wd}
+                 -P ${CMAKE_SOURCE_DIR}/tests/samples/freshhome.cmake)
+set_tests_properties(threading.freshhome.texture_wait_watchdog PROPERTIES
+    FIXTURES_SETUP threading_home_texture_wait_watchdog LABELS "threading")
+
+add_test(NAME threading.texture_wait_watchdog
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js
+         WORKING_DIRECTORY ${_thr_home_wd}/run)
+set_tests_properties(threading.texture_wait_watchdog PROPERTIES
+    ENVIRONMENT "HOME=${_thr_home_wd};JAH_TEXTURE_WAIT_FAULT=1;JAH_TEXTURE_WAIT_MS=300"
+    FIXTURES_REQUIRED threading_home_texture_wait_watchdog
+    LABELS "threading" TIMEOUT 300)
+
+# The SEGV's precondition, greped off the logs both runs just wrote
+# (nogrouplesstexture.cmake carries the mechanism). FIXTURES_REQUIRED on the run
+# it inspects, so it can never pass by looking at an empty directory.
+add_test(NAME threading.import_soak.no_groupless_texture
+         COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_soak}/run/logs
+                 -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
+set_tests_properties(threading.import_soak.no_groupless_texture PROPERTIES
+    DEPENDS threading.import_soak LABELS "threading" TIMEOUT 60)
+
+add_test(NAME threading.newproject_stall.no_groupless_texture
+         COMMAND ${CMAKE_COMMAND} -DLOG_DIR=${_thr_home_stall}/run/logs
+                 -P ${CMAKE_SOURCE_DIR}/tests/threading/nogrouplesstexture.cmake)
+set_tests_properties(threading.newproject_stall.no_groupless_texture PROPERTIES
+    DEPENDS threading.newproject_stall LABELS "threading" TIMEOUT 60)
+
+# Same toolchain quarantine as threading.mode: the real binary cannot start
+# under GCC 15's libtsan.
+jah_tsan_blocked(threading.import_soak threading.newproject_stall
+                 threading.texture_wait_watchdog)

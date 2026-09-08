@@ -1,0 +1,85 @@
+// threading.newproject_stall — creating a project must not freeze the editor.
+//
+// WHAT WAS MEASURED (2026-09-08). `project.create` on the default new scene
+// stalled the UI thread for 7.4 seconds, and the whole of it was inside
+// ProjectService::saveInitialScene -> viewport->takeScreenshot ->
+// SceneMirror::applyEnvironment -> OgreScene::setGlobalIllumination ->
+// rebuildVct -> buildPcc -> PccPerPixelGridPlacement::buildStart. New scenes
+// are born at the epic Rayon tier, so pushing the environment into the
+// thumbnail's shot view was the first thing in the process to build a voxel
+// volume and a per-pixel reflection-probe grid — synchronously, for a 256-pixel
+// tile in which not one probe is visible. saveInitialScene now parks GI at OFF
+// across the thumbnail and restores it after, which leaves the first arm to the
+// live viewport.
+//
+// WHAT THE BUDGET INCLUDES, honestly. The measured create is the FIRST of the
+// process, so it also writes the default scene's asset rows and compiles part
+// of this world's shaders. Those are different subjects with different fixes,
+// and they are inside the number on purpose: the number IS the time the editor
+// was frozen, and a budget that excluded them would be measuring a fiction.
+// Measured on the reference box, three runs each, fresh HOME every time:
+// 1211/1218/1223 ms with the initial thumbnail arming GI, 554/577/561 ms
+// without it. 1000 ms sits between them with roughly 1.8x headroom.
+//
+// CONTENTION-SENSITIVE, therefore RUN_SERIAL, and worth a solo retry before
+// blaming the code: the same binary measured 3709 ms while four other Vulkan
+// builds and gates were running on the box.
+//
+// THE ASSERTION IS ON THE VERB'S OWN WALL CLOCK, and that is exactly the UI
+// stall: scripts run on the UI thread, so the interval around a synchronous
+// verb IS the time the editor was unresponsive.
+
+var kBudgetMs = 1000;
+
+function fail(msg) { throw new Error("newproject_stall: " + msg); }
+
+// THE FIRST CREATE OF THE PROCESS IS THE MEASURED ONE, and it has to be: the
+// mirror pushes GI on CHANGE, so a second project with the same world settings
+// re-uses the arm the first one paid for and would measure nothing at all (it
+// lands at ~650 ms with the defect fully present — measured, which is how this
+// suite nearly shipped as a no-op).
+var born = world.rayon();
+if (!born.enabled || born.tier !== "epic")
+    fail("a new scene should be born epic with Rayon on, got enabled=" + born.enabled +
+         " tier=" + born.tier + " — this suite would be measuring nothing");
+
+var t0 = Date.now();
+project.create("stall_measured_" + Math.floor(Math.random() * 1e9));
+var createMs = Date.now() - t0;
+
+// THE DEFERRAL IS A DEFERRAL, NOT A CANCELLATION, and this is the assertion
+// that says so. The instant project.create returns, the born-epic scene's GI is
+// deliberately NOT built yet — measured: pccBound false, probeCount 0, where
+// the same read before the fix returned true and 18. Give the viewport its
+// frames and it must arm: a "fix" that simply left global illumination off
+// would pass every timing budget in this file and ruin every scene.
+var giAtReturn = world.giStatus();
+editor.frame(4);
+var gi = world.giStatus();
+if (!gi.live || !gi.pccBound || !gi.vctBound || gi.probeCount <= 0)
+    fail("global illumination never armed after project creation (live=" + gi.live +
+         " pccBound=" + gi.pccBound + " vctBound=" + gi.vctBound +
+         " probeCount=" + gi.probeCount + ") — the initial thumbnail's GI park did not " +
+         "restore");
+
+var after = world.rayon();
+if (!after.enabled || after.tier !== "epic")
+    fail("GI was not restored after the initial thumbnail: enabled=" + after.enabled +
+         " tier=" + after.tier);
+
+console.log("newproject_stall: project.create took " + createMs + " ms (budget " +
+            kBudgetMs + " ms)");
+
+if (createMs >= kBudgetMs)
+    fail("project.create blocked the UI for " + createMs + " ms (budget " + kBudgetMs +
+         " ms) at the epic tier — the initial thumbnail is building GI again");
+
+// The engine's own view of it: the frame's texture wait must not have been part
+// of the cost either.
+var ts = app.textureStreaming();
+if (ts.waitTimeouts !== 0)
+    fail("the texture wait gave up " + ts.waitTimeouts + " time(s) during project creation");
+
+JSON.stringify({ createMs: createMs, budgetMs: kBudgetMs, tier: after.tier,
+                 waitWorstMs: ts.waitWorstMs,
+                 probesAtReturn: giAtReturn.probeCount, probesAfterFrames: gi.probeCount });

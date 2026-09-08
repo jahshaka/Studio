@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
+#include "irisgl/document/scenegraph/scene.h"
 #include "viewport/ieditorviewport.h"
 #include "io/scenereader.h"
 #include "io/scenewriter.h"
@@ -269,7 +270,28 @@ void ProjectService::saveInitialScene(const QString &projectPath)
     // legacy widget's takeScreenshot would touch a GL context that isn't there.
     QByteArray thumb;
     if (viewport->isInitialized()) {
+        // A 256-PIXEL TILE DOES NOT NEED GLOBAL ILLUMINATION (defect
+        // 2026-09-08). takeScreenshot pushes the document's environment into
+        // the shot view, and pushing it is what ARMS GI for the scene — so on a
+        // brand-new project at the default Epic tier this line was the first
+        // thing in the process to build a VCT volume and a per-pixel PCC probe
+        // grid, synchronously, on the UI thread: measured 7.4 s inside
+        // PccPerPixelGridPlacement::buildStart, all of it charged to
+        // `project.create`, for a thumbnail in which not one probe is visible.
+        //
+        // So the first arm is DEFERRED, not skipped: the document's GI mode is
+        // parked at OFF for the length of the shot and restored immediately
+        // after, which leaves the live viewport's next environment push to arm
+        // GI on a frame the user is actually waiting on rather than inside
+        // project creation. The mirror pushes GI on CHANGE
+        // (scenemirror.cpp:3330), so the restore is what re-arms it, and
+        // nothing is torn down here: on a new project GI has never been built
+        // when this runs.
+        const iris::ScenePtr scene = sceneProvider();
+        const iris::GiMode parkedGi = scene ? scene->giMode : iris::GiMode::OFF;
+        if (scene) scene->giMode = iris::GiMode::OFF;
         auto img = viewport->takeScreenshot(Constants::TILE_SIZE * 2);
+        if (scene) scene->giMode = parkedGi;
         if (!img.isNull()) {
             QBuffer buffer(&thumb);
             buffer.open(QIODevice::WriteOnly);

@@ -1,0 +1,91 @@
+// threading.import_soak — THE GLB IMPORT HANG, made into a gate.
+//
+// WHAT THIS REPRODUCES. A GLB import runs the one import pipeline and then
+// renders the asset's thumbnail on the engine: AssetsApi::importFile ->
+// refreshThumbnail -> EngineThumbnailRenderer::render -> renderStableFrames ->
+// Engine::renderOneFrame -> the frame's texture wait. On 2026-09-08 that wait
+// was `TextureGpuManager::waitForStreamingCompletion`, whose loop parks on an
+// event with no timeout, and a load request that no worker could complete held
+// the UI thread there for twelve minutes with every decode worker idle. It
+// reproduced in 1 of 2 identical runs, so the gate is a SOAK: twenty imports,
+// each followed by an explicit thumbnail rebuild, which is the same path again.
+//
+// WHAT IT ASSERTS, in the order the failures matter:
+//   1. NO HANG. Every iteration is timed and one over kIterationBudgetMs throws
+//      with its number. The ctest TIMEOUT is the outer net; this is the inner
+//      one, and it exists so the failure says WHICH iteration and how long,
+//      instead of "the suite timed out".
+//   2. app.textureStreaming().waitTimeouts === 0. The wait is bounded now
+//      (Engine.h's texture-wait contract), so a hang shows up as a TIMEOUT
+//      rather than as a dead process — and a timeout is a defect, not a slow
+//      disk: the budget only expires once the pending set stops shrinking.
+//   3. Every import actually produced a node. A soak that silently imported
+//      nothing would pass every timing assertion.
+//
+// GI IS OFF for the duration. The subject is the texture wait; leaving the
+// scene at the born-epic tier would spend the whole runtime rebuilding probes
+// after each placement and would tell us nothing extra. project.create's own
+// GI cost has its own gate (threading.newproject_stall).
+
+var FIXTURES = [
+    "@SOURCE_DIR@/tests/importer/fixtures/textured_pbr_quad.glb",
+    "@SOURCE_DIR@/tests/importer/fixtures/mislabeled_embedded.glb",
+    "@SOURCE_DIR@/tests/importer/fixtures/scaled_two_meshes.glb",
+    "@SOURCE_DIR@/tests/importer/fixtures/ticks_anim.glb"
+];
+var N = 20;
+// Generous on purpose: a debug build importing a GLB and rendering a thumbnail
+// is tens to hundreds of milliseconds, and the failure this guards against was
+// TWELVE MINUTES. Anything in between is a different bug and should be reported
+// as a slow iteration rather than caught here.
+var kIterationBudgetMs = 30000;
+
+function fail(msg) { throw new Error("import_soak: " + msg); }
+
+project.create("import_soak_" + Math.floor(Math.random() * 1e9));
+world.rayon({ enabled: false });
+
+var requestsBefore = app.textureStreaming().loadRequests;
+var worstMs = 0, worstIdx = -1, totalMs = 0;
+for (var i = 0; i < N; ++i) {
+    var path = FIXTURES[i % FIXTURES.length];
+    var t0 = Date.now();
+    var r = assets.importAndPlace(path, { position: [i * 2, 0, 0] });
+    if (!r || !r.nodeId) fail("iteration " + i + ": " + path + " imported no node");
+    if (!r.assetGuid) fail("iteration " + i + ": " + path + " produced no asset row");
+    // The thumbnail render is the half that hung. importAndPlace already did one
+    // on the first sighting of each file; ask for it again so every iteration
+    // pays it, dedupe or not.
+    if (!assets.refreshThumbnail(r.assetGuid))
+        fail("iteration " + i + ": refreshThumbnail(" + r.assetGuid + ") failed");
+    var dt = Date.now() - t0;
+    totalMs += dt;
+    if (dt > worstMs) { worstMs = dt; worstIdx = i; }
+    if (dt > kIterationBudgetMs)
+        fail("iteration " + i + " took " + dt + " ms (budget " + kIterationBudgetMs +
+             " ms) — this is the import hang");
+}
+
+var ts = app.textureStreaming();
+if (ts.waitTimeouts !== 0)
+    fail("the frame's texture wait gave up " + ts.waitTimeouts + " time(s) — see the ERROR " +
+         "line naming the pending textures (worst wait " + ts.waitWorstMs + " ms, budget " +
+         ts.waitBudgetMs + " ms)");
+if (!ts.doneStreaming)
+    fail("textures still streaming after the soak — the wait did not do its job");
+// A SOAK THAT LOADED NO TEXTURES WOULD PASS EVERYTHING ABOVE. The fixtures are
+// small on purpose (they are the importer suite's, and the mechanism does not
+// care about megabytes), but they must actually reach the streaming path or
+// this file is exercising an import pipeline and nothing else.
+if (ts.loadRequests <= requestsBefore)
+    fail("the soak raised no texture load requests at all (" + requestsBefore + " -> " +
+         ts.loadRequests + ") — the fixtures are not reaching the streaming path");
+
+var nodes = scene.nodes({});
+if (nodes.length < N) fail("expected at least " + N + " nodes, scene has " + nodes.length);
+
+JSON.stringify({
+    imports: N, totalMs: totalMs, worstMs: worstMs, worstIteration: worstIdx,
+    waitTimeouts: ts.waitTimeouts, waitWorstMs: ts.waitWorstMs, waitBudgetMs: ts.waitBudgetMs,
+    multiLoadThreads: ts.multiLoadThreads, nodes: nodes.length
+});
