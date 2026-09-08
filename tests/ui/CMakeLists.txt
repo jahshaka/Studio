@@ -274,3 +274,111 @@ add_test(NAME ui.rayon_panel COMMAND test_rayon_panel
 set_tests_properties(ui.rayon_panel PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
 jah_no_display(ui.rayon_panel)
+
+# ui.selection_cost — a selection change costs the same at switch 200 as at
+# switch 1 (the 1 fps / 2-7 s stall regression, owner session 2026-09-08).
+#
+# The subject is the REAL properties panel under the REAL Qlementine style: the
+# regression lived in the interaction between SceneNodePropertiesWidget's
+# blade recycling (setParent(nullptr) per selection) and the focus-frame event
+# filter that watches ancestors, and neither half is visible without the other.
+# So this target links the whole property-panel slice — every blade the panel
+# builds in its constructor — with the same link stubs the other panel suites
+# use for the Sql/io layer. Offscreen, no display; the document nodes need the
+# headless graph like every other document suite.
+add_executable(test_selection_cost
+    test_selection_cost.cpp
+    test_stubs.cpp
+    test_selection_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldskypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/camerapostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lightpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/decalpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/emitterpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/textinputwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/labelwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/filepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragvaluewidgets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/particlerampwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/sunlink.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/sunlightlinkcommand.cpp
+    # Headers whose Q_OBJECT classes have no .cpp of their own in this target:
+    # AUTOMOC only pairs a header with a source of the same name, so the two
+    # signal-only classes the panels connect to have to be named here.
+    ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/basepropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_selection_cost PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_selection_cost PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_selection_cost PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_selection_cost
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_selection_cost)
+add_test(NAME ui.selection_cost COMMAND test_selection_cost
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.selection_cost PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+jah_no_display(ui.selection_cost)

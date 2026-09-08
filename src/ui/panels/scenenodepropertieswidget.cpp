@@ -168,8 +168,53 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
     shaderPropView->setDatabase(db);
     shaderPropView->expand();
 
+    // SELECTION COST (perf regression, owner session 2026-09-08: 1 fps and
+    // 2-7 s UI stalls after an hour). Every blade above is a PERMANENT child of
+    // this panel from here on, and selection only ever changes which of them
+    // the layout holds — see clearLayout() for why that matters. Adopting them
+    // here is the one and only reparent each of them will ever see, and it
+    // happens before any of them has painted, i.e. before the style has
+    // attached a single focus frame.
+    for (QWidget *blade : bladeWidgets()) {
+        adoptBlade(blade);
+    }
 
     setLayout(widgetPropertyLayout);
+}
+
+/// Every blade this panel owns for the lifetime of the window. The material
+/// blade is NOT here: it is built on demand (the first mesh selection) and
+/// adopted then.
+QVector<QWidget *> SceneNodePropertiesWidget::bladeWidgets() const
+{
+    return {
+        fogPropView, worldPropView, skyPropView, worldSkyPropView,
+        worldModesPropView, worldGiPropView, worldPostFxPropView,
+        worldAaPropView, worldShadowPropView, transformPropView,
+        physicsPropView, meshPropView, lightPropView, decalPropView,
+        emitterPropView, cameraPostFxPropView, shaderPropView
+    };
+}
+
+/// Makes a blade a permanent, hidden child. Hidden EXPLICITLY, so that adding
+/// it to the layout later does not show it by accident and — more importantly —
+/// so that Qt's layout machinery leaves its visibility to mount()/clearLayout().
+void SceneNodePropertiesWidget::adoptBlade(QWidget *blade)
+{
+    if (!blade) return;
+    if (blade->parentWidget() != this) blade->setParent(this);
+    blade->hide();
+}
+
+/// Puts an already-adopted blade on screen. The ONLY two things a selection
+/// change does to a blade are this and its inverse in clearLayout(); neither
+/// touches the parent, so neither sends a single QEvent::ParentChange.
+void SceneNodePropertiesWidget::mount(QWidget *blade)
+{
+    if (!blade) return;
+    Q_ASSERT(blade->parentWidget() == this);
+    widgetPropertyLayout->addWidget(blade);
+    blade->show();
 }
 
 void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -194,75 +239,79 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
         clearLayout(this->layout());
 
         if (sceneNode->isRootNode()) {
-            fogPropView->setParent(this);
             fogPropView->setScene(sceneNode->getScene());
-            worldPropView->setParent(this);
             worldPropView->setScene(sceneNode->getScene());
-            worldModesPropView->setParent(this);
             worldModesPropView->setSceneView(sceneView);
             worldModesPropView->setScene(sceneNode->getScene());
-            worldGiPropView->setParent(this);
             worldGiPropView->setScene(sceneNode->getScene());
-            worldPostFxPropView->setParent(this);
             worldPostFxPropView->setSceneView(sceneView);
             worldPostFxPropView->setScene(sceneNode->getScene());
-            worldAaPropView->setParent(this);
             worldAaPropView->setSceneView(sceneView);
             worldAaPropView->setScene(sceneNode->getScene());
-            worldShadowPropView->setParent(this);
             worldShadowPropView->setSceneView(sceneView);
             worldShadowPropView->setScene(sceneNode->getScene());
-            widgetPropertyLayout->addWidget(worldPropView);
-            widgetPropertyLayout->addWidget(worldSkyPropView);
-            widgetPropertyLayout->addWidget(worldModesPropView);
-            widgetPropertyLayout->addWidget(worldGiPropView);
-            widgetPropertyLayout->addWidget(worldPostFxPropView);
-            widgetPropertyLayout->addWidget(worldAaPropView);
-            widgetPropertyLayout->addWidget(worldShadowPropView);
-            widgetPropertyLayout->addWidget(fogPropView);
+            mount(worldPropView);
+            mount(worldSkyPropView);
+            mount(worldModesPropView);
+            mount(worldGiPropView);
+            mount(worldPostFxPropView);
+            mount(worldAaPropView);
+            mount(worldShadowPropView);
+            mount(fogPropView);
         }
         else {
-            transformPropView->setParent(this);
             transformWidget->setSceneNode(sceneNode);
-            widgetPropertyLayout->addWidget(transformPropView);
+            mount(transformPropView);
 
             switch (sceneNode->getSceneNodeType()) {
                 case iris::SceneNodeType::Light: {
-                    lightPropView->setParent(this);
                     lightPropView->setSceneNode(sceneNode);
-                    widgetPropertyLayout->addWidget(lightPropView);
+                    mount(lightPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::Decal: {
-                    decalPropView->setParent(this);
                     decalPropView->setDatabase(db);
                     decalPropView->setProject(project);
                     decalPropView->setServices(services);
                     decalPropView->setSceneNode(sceneNode);
-                    widgetPropertyLayout->addWidget(decalPropView);
+                    mount(decalPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::Empty: {
-                    physicsPropView->setParent(this);
                     physicsPropView->setSceneNode(sceneNode);
                     physicsPropView->setSceneView(sceneView);
-                    widgetPropertyLayout->addWidget(physicsPropView);
+                    mount(physicsPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::Mesh: {
-                    materialPropView = new MaterialPropertyWidget();
-                    materialPropView->setPanelTitle("Material");
+                    // THE LEAK behind the session-long slowdown: this panel was
+                    // built fresh for EVERY mesh selection and the old one was
+                    // handed to clearLayout(), which orphaned it with
+                    // setParent(nullptr) — a live, parentless widget tree that
+                    // nothing ever deleted. An hour of clicking around left
+                    // hundreds of them (and their focus frames, their event
+                    // filters and their property listeners) alive in the
+                    // process. Build it ONCE and refill it; the rebuild-per-node
+                    // that made it look disposable is what clearPanel() does,
+                    // and materialChanged() has always used exactly that path on
+                    // the live panel.
+                    if (!materialPropView) {
+                        materialPropView = new MaterialPropertyWidget();
+                        materialPropView->setPanelTitle("Material");
+                        materialPropView->expand();
+                        adoptBlade(materialPropView);
+                    }
                     materialPropView->setDatabase(db);
                     materialPropView->setProject(project);
                     materialPropView->setServices(services);
-                    materialPropView->expand();
+                    // Drop the previous node's rows (deleteLater, so nothing is
+                    // freed under a signal that is still on the stack) before
+                    // the new ones are appended.
+                    materialPropView->clearPanel(materialPropView->layout());
 
-                    physicsPropView->setParent(this);
-                    meshPropView->setParent(this);
-                    materialPropView->setParent(this);
                     physicsPropView->setSceneNode(sceneNode);
                     physicsPropView->setSceneView(sceneView);
                     meshPropView->setSceneView(sceneView);
@@ -270,26 +319,24 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
                     materialPropView->setSceneNode(sceneNode);
 
                     if (!(services && services->playback && services->playback->isSimulationRunning())) {
-                        widgetPropertyLayout->addWidget(physicsPropView);
+                        mount(physicsPropView);
                     }
 
-                    widgetPropertyLayout->addWidget(meshPropView);
-                    widgetPropertyLayout->addWidget(materialPropView);
+                    mount(meshPropView);
+                    mount(materialPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::Camera: {
-                    cameraPostFxPropView->setParent(this);
                     cameraPostFxPropView->setSceneView(sceneView);
                     cameraPostFxPropView->setSceneNode(sceneNode);
-                    widgetPropertyLayout->addWidget(cameraPostFxPropView);
+                    mount(cameraPostFxPropView);
                     break;
                 }
 
                 case iris::SceneNodeType::ParticleSystem: {
-                    emitterPropView->setParent(this);
                     emitterPropView->setSceneNode(sceneNode);
-                    widgetPropertyLayout->addWidget(emitterPropView);
+                    mount(emitterPropView);
                     break;
                 }
 
@@ -310,25 +357,24 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
 
     if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Shader)) {
         clearLayout(this->layout());
-        shaderPropView->setParent(this);
         shaderPropView->setShaderGuid(item->data(MODEL_GUID_ROLE).toString());
-        widgetPropertyLayout->addWidget(shaderPropView);
+        mount(shaderPropView);
         widgetPropertyLayout->addStretch();
     }
     else if (item->data(MODEL_TYPE_ROLE) == static_cast<int>(ModelTypes::Sky))
     {
         clearLayout(this->layout());
-		skyPropView->setParent(this);
 		skyPropView->setSkyAlongWithProperties(item->data(MODEL_GUID_ROLE).toString(),
 											   static_cast<iris::SkyType>(item->data(SKY_TYPE_ROLE).toInt()));
-		widgetPropertyLayout->addWidget(skyPropView);
+		mount(skyPropView);
 		widgetPropertyLayout->addStretch();
     }
 }
 
 void SceneNodePropertiesWidget::refreshMaterial(const QString &matName)
 {
-    if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
+    if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh
+        && materialPropView) {
         materialPropView->forceShaderRefresh(matName);
     }
 }
@@ -406,7 +452,29 @@ void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList 
 }
 
 /**
- * clears layout and child layouts and deletes child widget
+ * Takes every blade back off the layout, WITHOUT reparenting any of them.
+ *
+ * THE PERF REGRESSION (owner session 2026-09-08 — 1 fps, 2-7 s UI stalls after
+ * an hour of use; watchdog backtraces all in
+ * WidgetWithFocusFrameEventFilter::refreshFocusFrame under this function):
+ * this used to call `widget->setParent(nullptr)` on each blade, i.e. it
+ * DETACHED a live widget subtree on every single selection change and
+ * re-attached it a few lines later in setSceneNode(). Each of those two
+ * reparents sends a QEvent::ParentChange to the blade, and Qlementine installs
+ * one WidgetWithFocusFrameEventFilter per focusable descendant, every one of
+ * which watches its ancestors — so ONE selection change fired the ancestor
+ * handler dozens of times, twice, and each firing re-derived and re-parented a
+ * QFocusFrame and re-installed its event filters along the whole chain. It also
+ * left the frames stranded in a hierarchy their widget had left, which is the
+ * "QWidget::mapTo(): parent must be in parent hierarchy" flood (164,651
+ * warnings in 13 minutes) the qlementine fork was pulled in to fix.
+ *
+ * Hiding instead of orphaning is the honest shape: the blades are this panel's
+ * permanent children (adopted in the constructor / at first use), a selection
+ * change only decides which of them the layout holds, and the widget hierarchy
+ * never changes at all. Zero ParentChange events, zero focus-frame work, no
+ * growth.
+ *
  * @param layout
  */
 void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
@@ -415,8 +483,9 @@ void SceneNodePropertiesWidget::clearLayout(QLayout *layout)
 
     while (auto item = layout->takeAt(0)) {
         if (auto widget = item->widget()) {
-            //delete widget;
-            widget->setParent(0);
+            // NOT setParent(nullptr) — see above. Explicitly hidden, so the
+            // next mount() has to show it deliberately.
+            widget->hide();
         }
 
         if (auto childLayout = item->layout()) this->clearLayout(childLayout);

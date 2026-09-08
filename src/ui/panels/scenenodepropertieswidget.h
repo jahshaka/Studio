@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QListWidgetItem>
 #include <QVBoxLayout>
 #include <QSharedPointer>
+#include <QVector>
 
 namespace iris {
     class SceneNode;
@@ -97,6 +98,18 @@ private:
 	Project *project = nullptr;
     void clearLayout(QLayout*);
 
+    /// The blades this panel owns permanently (everything built in the
+    /// constructor). SELECTION COST, 2026-09-08: a selection change moves
+    /// blades in and out of the LAYOUT and never in and out of the widget
+    /// HIERARCHY — see clearLayout()'s comment for the regression that shape
+    /// fixes.
+    QVector<QWidget *> bladeWidgets() const;
+    /// Makes a blade a permanent hidden child of this panel. Called once per
+    /// blade, ever.
+    void adoptBlade(QWidget *blade);
+    /// Adds an adopted blade to the layout and shows it.
+    void mount(QWidget *blade);
+
 private:
     QSharedPointer<iris::SceneNode> sceneNode;
 
@@ -107,7 +120,9 @@ private:
     AccordianBladeWidget* transformPropView;
     TransformEditor* transformWidget;
 
-    MaterialPropertyWidget* materialPropView;
+    /// Built on the first mesh selection and REUSED (it used to be rebuilt per
+    /// selection and orphaned, which leaked a whole widget tree every time).
+    MaterialPropertyWidget* materialPropView = nullptr;
     EmitterPropertyWidget* emitterPropView;
     /// The camera panel's "Exposure & Post" section (CAMERA_LENS_SPEC §4/§5).
     CameraPostFxPropertyWidget* cameraPostFxPropView;
@@ -123,7 +138,7 @@ private:
 
     QSharedPointer<iris::Scene> scene;
 
-    Database *db;
+    Database *db = nullptr;   // was uninitialized: the ctor forwards it to panels before setDatabase()
 	ShaderPropertyWidget *shaderPropView;
     IEditorViewport *sceneView = nullptr;   // was uninitialized: read before setSceneView() on some paths
 
