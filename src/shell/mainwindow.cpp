@@ -187,6 +187,7 @@ For more information see the LICENSE file
 #include "services/assetservice.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
+#include "ui/style/panelmetrics.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -1047,6 +1048,8 @@ void MainWindow::switchSpace(WindowSpaces space, bool force)
 			assetDock->setVisible(widgetStates[(int)Widget::ASSETS]);
 			animationDock->setVisible(widgetStates[(int)Widget::TIMELINE]);
 			playerControls->setVisible(false);
+
+			applyRightColumnWidthOnce();
 
 			this->sceneView->setWindowSpace(space);
             playSceneBtn->show();
@@ -2112,7 +2115,11 @@ void MainWindow::setupDockWidgets()
 
     QWidget *sceneNodeDockWidgetContents = new QWidget(viewPort);
     QScrollArea *sceneNodeScrollArea = new QScrollArea(sceneNodeDockWidgetContents);
-    sceneNodeScrollArea->setMinimumWidth(326);
+    // THE RIGHT COLUMN IS ONE COLUMN (ui/style/panelmetrics.h): this dock and
+    // the Presets panel below it are sized from the same number. The minimum is
+    // a contract — there is no horizontal scrollbar below, so a panel that does
+    // not fit here is CLIPPED (ui.properties_width).
+    sceneNodeScrollArea->setMinimumWidth(PanelMetrics::rightColumnMinWidth);
     sceneNodeScrollArea->setStyleSheet("border: 0");
     sceneNodeScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
     sceneNodeScrollArea->setWidget(sceneNodePropertiesWidget);
@@ -2149,7 +2156,7 @@ void MainWindow::setupDockWidgets()
 
     presetsTabWidget = new QTabWidget;
     presetsTabWidget->setObjectName("PresetsTabWidget");
-    presetsTabWidget->setMinimumWidth(396);
+    presetsTabWidget->setMinimumWidth(PanelMetrics::presetsPanelWidth);
     presetsTabWidget->addTab(assetModelPanel, "Models");
     presetsTabWidget->addTab(assetMaterialPanel, "Materials");
     presetsTabWidget->addTab(skyPresets, "Skyboxes");
@@ -2206,6 +2213,7 @@ void MainWindow::setupDockWidgets()
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, presetsDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
 
+
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
 
@@ -2214,6 +2222,33 @@ QFont MainWindow::headerGlyphFont() const
 	// 28px of the icon font — the size Help and Preferences always had, now
 	// the size all three header glyphs share.
 	return fontIcons->font(28);
+}
+
+/// THE RIGHT COLUMN OPENS AT ITS WIDTH (owner, 2026-09-08: "make the presets
+/// right column the same width as the presets panel on the main screen — a
+/// little wider to match it"). It used to open at whatever the dock's old
+/// 326 px minimum and the viewport's stretch produced — 299 px measured on the
+/// rig, visibly narrower than the Presets panel it shares the column with.
+///
+/// NOT in setupDockWidgets: a dock that is made visible is re-laid-out from its
+/// widget's sizeHint, and every entry to the editor page shows these docks, so
+/// a resizeDocks from the constructor (queued or not) is simply undone —
+/// measured twice on the rig before this landed. It has to run after the page
+/// is up, which is why it is queued, and it has to run for BOTH ways the editor
+/// page appears: a user switching space, and the scripted/MCP boot, which shows
+/// the page directly (beginEngineSelftest) and never calls switchSpace.
+///
+/// ONCE per session. After that the user's drag is the answer — this is a
+/// starting size, not a constraint.
+void MainWindow::applyRightColumnWidthOnce()
+{
+    if (rightColumnSized) return;
+    rightColumnSized = true;
+    QTimer::singleShot(0, this, [this]() {
+        if (!viewPort || !sceneNodePropertiesDock) return;
+        viewPort->resizeDocks({ sceneNodePropertiesDock },
+                              { PanelMetrics::rightColumnWidth }, Qt::Horizontal);
+    });
 }
 
 void MainWindow::setupViewPort()
@@ -3614,6 +3649,10 @@ bool MainWindow::beginEngineSelftest(QString &why)
     }
     newScene();
     sceneView->begin();
+    // The scripted/MCP boot shows this page without switchSpace(), so it needs
+    // its own call — a screenshot taken over MCP must show the layout a user
+    // gets, not a narrower one.
+    applyRightColumnWidthOnce();
     return true;
 }
 

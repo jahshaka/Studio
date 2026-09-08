@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QLayout>
+#include <QResizeEvent>
+#include <QScrollArea>
 
 #include "irisgl/document/scenegraph/scenenode.h"
 
@@ -46,6 +48,18 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 {
     widgetPropertyLayout = new QVBoxLayout(this);
     widgetPropertyLayout->setContentsMargins(0, 0, 0, 0);
+
+    // THE PANEL TRACKS ITS DOCK, IT NEVER PUSHES BACK (owner report
+    // 2026-09-08). The dock hosts this widget in a QScrollArea with
+    // widgetResizable(true) and NO horizontal scrollbar, so its width is the
+    // viewport's — unless its minimumSizeHint is bigger, in which case the
+    // scroll area lays it out WIDER than the viewport and everything past the
+    // right edge is silently unreachable. Nothing here may carry a minimum
+    // width of its own; the blades' rows are fitted on the way in
+    // (ui/controls/rowfit.h) and warnIfWiderThanDock() makes a regression
+    // audible instead of invisible.
+    setMinimumWidth(0);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
     fogPropView = new FogPropertyWidget();
     fogPropView->setPanelTitle("Fog");
@@ -345,10 +359,51 @@ void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sce
         }
 
         widgetPropertyLayout->addStretch();
+        warnIfWiderThanDock();
     }
     else {
         clearLayout(this->layout());
     }
+}
+
+/// THE FAILURE IS NEVER SILENT AGAIN. A panel wider than its dock is invisible
+/// by construction: the rows are laid out past the right edge of a scroll area
+/// that has no horizontal bar, so they are on screen, not hidden, and not
+/// reachable (root cause of "the World blades show no controls", 2026-09-08 —
+/// one label row asked for 3674 px of a 315 px dock and took every other row
+/// with it). Nothing about that shows up in a screenshot, a visibility dump or
+/// a widget count, so it says so in the log, naming the blade that did it.
+void SceneNodePropertiesWidget::warnIfWiderThanDock()
+{
+    QWidget *viewport = nullptr;
+    for (QWidget *p = parentWidget(); p; p = p->parentWidget()) {
+        if (auto *area = qobject_cast<QScrollArea *>(p)) { viewport = area->viewport(); break; }
+    }
+    const int budget = viewport ? viewport->width() : width();
+    if (budget <= 0) return;
+
+    const int need = minimumSizeHint().width();
+    if (need <= budget) { lastWidthWarning.clear(); return; }
+
+    QString worst;
+    int worstWidth = 0;
+    for (QWidget *blade : bladeWidgets()) {
+        if (!blade || !blade->isVisibleTo(this)) continue;
+        const int w = blade->minimumSizeHint().width();
+        if (w > worstWidth) { worstWidth = w; worst = blade->metaObject()->className(); }
+    }
+    const QString key = QStringLiteral("%1/%2/%3").arg(worst).arg(need).arg(budget);
+    if (key == lastWidthWarning) return;   // once per offender, not once per resize
+    lastWidthWarning = key;
+    qWarning("Properties panel does not fit its dock: needs %d px, has %d px "
+             "(widest section: %s, %d px). Rows past the right edge are unreachable.",
+             need, budget, qPrintable(worst), worstWidth);
+}
+
+void SceneNodePropertiesWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    warnIfWiderThanDock();
 }
 
 void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)

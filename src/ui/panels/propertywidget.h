@@ -98,6 +98,10 @@ private:
 
     void updatePane();
 
+    /// The one place a property row enters this panel; fits it to the dock
+    /// (ui/controls/rowfit.h) on the way in.
+    void addRow(QWidget *row);
+
     Ui::PropertyWidget *ui;
 };
 

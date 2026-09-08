@@ -131,20 +131,32 @@ void WorldGiPropertyWidget::rebuild()
     // much machinery", the budget answers "how fast may it keep up", and a
     // scene that wants GI paused wants it paused at every quality.
     {
-        this->addLabel(tr("GI Update Budget"),
-                       tr("How much work global illumination may spend per frame keeping "
-                          "up with the scene. 0 PAUSES it: nothing re-solves and no "
-                          "reflection probe re-captures until world.refreshGi() asks. "
-                          "1 (the default) is a realtime editor — at High and Epic it "
-                          "re-captures one reflection probe per frame, so the whole "
-                          "grid refreshes over as many frames as it has probes, the ones "
-                          "nearest you and the ones around whatever just moved going "
-                          "first, for about 2 ms a frame. Higher costs that again per "
-                          "unit. Note that any budget above 0 makes the renderer prefer "
-                          "the probes to cone-traced reflections inside the probe region, "
-                          "so rough metal reflects the probes."));
+        // THE EXPLANATION IS A TOOLTIP, NOT A ROW VALUE (the World Mode rows'
+        // pattern, worldmodespropertywidget.cpp). It used to be passed as the
+        // label row's VALUE, and a 700-character value in a non-wrapping QLabel
+        // demanded 3674 px of a 315 px dock — which stretched every row in the
+        // panel and pushed the World section's controls right off the visible
+        // dock. That is the defect the owner reported as "the World blades show
+        // no controls"; LabelWidget wraps now as well, so neither half can come
+        // back.
+        auto *budgetRow = this->addLabel(tr("GI Update Budget"),
+                                         tr("0 pauses · 1 is realtime"));
+        const QString budgetTip =
+            tr("How much work global illumination may spend per frame keeping "
+               "up with the scene. 0 PAUSES it: nothing re-solves and no "
+               "reflection probe re-captures until world.refreshGi() asks. "
+               "1 (the default) is a realtime editor — at High and Epic it "
+               "re-captures one reflection probe per frame, so the whole "
+               "grid refreshes over as many frames as it has probes, the ones "
+               "nearest you and the ones around whatever just moved going "
+               "first, for about 2 ms a frame. Higher costs that again per "
+               "unit. Note that any budget above 0 makes the renderer prefer "
+               "the probes to cone-traced reflections inside the probe region, "
+               "so rough metal reflects the probes.");
+        if (budgetRow) budgetRow->setToolTip(budgetTip);
         updateBudget = this->addFloatValueSlider(QString(), 0.0f, 8.0f,
                                                  float(qBound(0, scene->giUpdateBudget, 8)));
+        updateBudget->setToolTip(budgetTip);
         // Shown even with Rayon off — it is one of the three rows this section
         // promises — but there is nothing to budget then, so it greys out the
         // same way the tier does.

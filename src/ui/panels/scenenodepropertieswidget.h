@@ -93,7 +93,17 @@ public:
 public slots:
 	void acceptCubemapTexturesFromSkyPresets(QStringList guids);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
+    /// Logs (once per offender) when the panel's minimum width does not fit the
+    /// dock it is scrolled in — the shape of failure that made the World
+    /// sections look empty in 2026-09-08: rows laid out past the right edge of
+    /// a scroll area with no horizontal bar, present and unreachable.
+    void warnIfWiderThanDock();
+    QString lastWidthWarning;
+
 	StudioServices *services = nullptr;
 	Project *project = nullptr;
     void clearLayout(QLayout*);

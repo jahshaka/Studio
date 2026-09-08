@@ -10,6 +10,7 @@ add_executable(test_material_panel
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
@@ -220,6 +221,7 @@ add_executable(test_rayon_panel
     ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
@@ -312,6 +314,7 @@ add_executable(test_selection_cost
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
@@ -382,3 +385,114 @@ add_test(NAME ui.selection_cost COMMAND test_selection_cost
 set_tests_properties(ui.selection_cost PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
 jah_no_display(ui.selection_cost)
+
+
+# ui.properties_width — THE PROPERTIES PANEL FITS ITS DOCK (owner report
+# 2026-09-08: "the settings run off the right side of the panel and I can't see
+# some of them").
+#
+# The dock's scroll area has NO horizontal scrollbar, so a row that cannot
+# shrink to the dock's width is not scrolled to — it is clipped away. The suite
+# lays the REAL panel out at the three widths the column can have and asserts,
+# for every kind of selection, that the content's minimum width fits the
+# viewport and that no visible row's right edge falls outside it.
+#
+# Same slice, stubs and style as ui.selection_cost (the row minimums ARE style
+# metrics, so the theme has to be the real one). Offscreen, no display.
+add_executable(test_properties_width
+    test_properties_width.cpp
+    test_stubs.cpp
+    test_selection_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/scenenodepropertieswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/materialpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/fogpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldskypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldpostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldaapropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldmodespropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldshadowpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/camerapostfxpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/lightpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/decalpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/emitterpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/meshpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/physicspropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/skypropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/shaderpropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/rowfit.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/textinputwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/labelwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/filepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragvaluewidgets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/lightchannelswidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/particlerampwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/sunlink.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/lightbindings.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/planarreflectors.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/sunlightlinkcommand.cpp
+    # Headers whose Q_OBJECT classes have no .cpp of their own in this target:
+    # AUTOMOC only pairs a header with a source of the same name, so the two
+    # signal-only classes the panels connect to have to be named here.
+    ${CMAKE_SOURCE_DIR}/src/viewport/ieditorviewport.h
+    ${CMAKE_SOURCE_DIR}/src/services/subscriber.h
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/changematerialpropertycommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/worldmodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/basepropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
+set_target_properties(test_properties_width PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_properties_width PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_properties_width PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_properties_width
+    PRIVATE IrisGL Qt6::Widgets Qt6::Sql qlementine)
+jah_document_graph(test_properties_width)
+add_test(NAME ui.properties_width COMMAND test_properties_width
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.properties_width PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 300 LABELS "ui")
+jah_no_display(ui.properties_width)

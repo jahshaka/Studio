@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "ui_propertywidget.h"
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
+#include "ui/controls/rowfit.h"
 
 
 // TODO - omit height calculation
@@ -51,12 +52,31 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     connect(ui->toggle, SIGNAL(toggled(bool)), SLOT(onPanelToggled()));
 
     ui->toggle->setIconSize(QSize(24, 24));
+
+    // The section NAME is a row too — "Rayon — Realtime Global Illumination" is
+    // 250 px of text, and a QLabel's minimum width is the whole of it. Elide it
+    // like every other label instead of letting the title decide how wide the
+    // dock has to be.
+    RowFit::fitLabel(ui->content_title);
+
 	collapse();
 }
 
 AccordianBladeWidget::~AccordianBladeWidget()
 {
     delete ui;
+}
+
+/// EVERY ROW A BLADE SHOWS GOES THROUGH HERE, which is what makes "the panel
+/// fits its dock" a property of the accordion rather than of seventeen panels
+/// (owner report 2026-09-08, ui.properties_width). RowFit gives the row the
+/// size behaviour a docked property row needs: names elide, controls shrink,
+/// nothing forces the panel wider than the column it lives in.
+void AccordianBladeWidget::addRow(QWidget *row)
+{
+    if (!row) return;
+    RowFit::fitRow(row);
+    ui->contentpane->layout()->addWidget(row);
 }
 
 void AccordianBladeWidget::clearPanel(QLayout *layout)
@@ -97,7 +117,7 @@ TransformEditor* AccordianBladeWidget::addTransformControls()
 
     minimum_height += height;
 
-    ui->contentpane->layout()->addWidget(transformEditor);
+    addRow(transformEditor);
     ui->contentpane->layout()->setContentsMargins(0, 0, 0,0);
 
     return transformEditor;
@@ -110,7 +130,7 @@ ColorValueWidget* AccordianBladeWidget::addColorPicker(const QString& name)
 
     minimum_height += colorpicker->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(colorpicker);
+    addRow(colorpicker);
     return colorpicker;
 }
 
@@ -122,7 +142,7 @@ TexturePickerWidget* AccordianBladeWidget::addTexturePicker(const QString& name)
 
     minimum_height += texpicker->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(texpicker);
+    addRow(texpicker);
     return texpicker;
 }
 
@@ -134,7 +154,7 @@ FilePickerWidget* AccordianBladeWidget::addFilePicker(const QString &name)
 
     minimum_height += filePicker->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(filePicker);
+    addRow(filePicker);
     return filePicker;
 }
 
@@ -143,7 +163,7 @@ Widget2D * AccordianBladeWidget::addVector2Widget(const QString &, float xValue,
 	auto widget = new Widget2D;
 	widget->setValues(xValue, yValue);
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -152,7 +172,7 @@ Widget3D * AccordianBladeWidget::addVector3Widget(const QString &, float xValue,
 	auto widget = new Widget3D;
 	widget->setValues(xValue, yValue, zValue);
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -166,7 +186,7 @@ DragFloatWidget *AccordianBladeWidget::addDragFloat(const QString &title, double
 	widget->setPerPixelStep(perPixelStep);
 	widget->setValue(value);
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -180,7 +200,7 @@ DragVector3Widget *AccordianBladeWidget::addDragVector3(const QString &title, co
 	widget->setPerPixelStep(perPixelStep);
 	widget->setValues(value);
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -189,7 +209,7 @@ Widget4D * AccordianBladeWidget::addVector4Widget(const QString &, float xValue,
 	auto widget = new Widget4D;
 	widget->setValues(xValue, yValue, zValue, wValue);
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -199,7 +219,7 @@ CubeMapWidget* AccordianBladeWidget::addCubeMapWidget(QStringList list)
 	widget->project = project;
 	widget->addCubeMapImages(list);
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -208,7 +228,7 @@ CubeMapWidget* AccordianBladeWidget::addCubeMapWidget()
 	auto widget = new CubeMapWidget(this);
 	widget->project = project;
 	minimum_height += widget->height() + stretch;
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	return widget;
 }
 
@@ -221,7 +241,7 @@ PropertyWidget *AccordianBladeWidget::addPropertyWidget()
 {
     PropertyWidget *props = new PropertyWidget;
     props->project = project;
-    ui->contentpane->layout()->addWidget(props);
+    addRow(props);
     return props;
 }
 
@@ -238,7 +258,7 @@ HFloatSliderWidget* AccordianBladeWidget::addFloatValueSlider(
 
     minimum_height += slider->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(slider);
+    addRow(slider);
     return slider;
 }
 
@@ -249,7 +269,7 @@ CheckBoxWidget* AccordianBladeWidget::addCheckBox(const QString& title, bool val
 
     minimum_height += checkbox->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(checkbox);
+    addRow(checkbox);
     return checkbox;
 }
 
@@ -257,7 +277,7 @@ void AccordianBladeWidget::addWidgetToContent(QWidget *widget)
 {
     if (!widget) return;
     minimum_height += widget->sizeHint().height() + stretch;
-    ui->contentpane->layout()->addWidget(widget);
+    addRow(widget);
 }
 
 ComboBoxWidget* AccordianBladeWidget::addComboBox(const QString& title)
@@ -267,7 +287,7 @@ ComboBoxWidget* AccordianBladeWidget::addComboBox(const QString& title)
 
     minimum_height += combobox->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(combobox);
+    addRow(combobox);
     return combobox;
 }
 
@@ -278,7 +298,7 @@ TextInputWidget* AccordianBladeWidget::addTextInput(const QString& title)
 
     minimum_height += textInput->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(textInput);
+    addRow(textInput);
     return textInput;
 }
 
@@ -290,7 +310,7 @@ LabelWidget* AccordianBladeWidget::addLabel(const QString& title, const QString&
 
     minimum_height += label->height() + stretch;
 
-    ui->contentpane->layout()->addWidget(label);
+    addRow(label);
     return label;
 }
 
