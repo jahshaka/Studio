@@ -55,6 +55,7 @@ public:
     Q_INVOKABLE QVariantMap planarReflections();
     Q_INVOKABLE QVariantMap setPlanarReflections(const QVariantMap &params);
     Q_INVOKABLE bool sky(const QString &type, const QVariantMap &params = QVariantMap());
+    Q_INVOKABLE QString sunLight(const QVariant &light = QVariant());
     Q_INVOKABLE QVariantMap get();
 
     // ---- World Modes (POST_CHAIN_SPEC.md §9.6) -----------------------------
@@ -85,6 +86,7 @@ public:
     Q_INVOKABLE QVariantMap setRayon(const QVariantMap &params = QVariantMap())
     { return rayon(params); }
     Q_INVOKABLE bool setAmbientFromSky(bool enabled) { return ambientFromSky(enabled); }
+    Q_INVOKABLE QString setSunLight(const QVariant &light) { return sunLight(light); }
     Q_INVOKABLE bool setSky(const QString &type, const QVariantMap &params = QVariantMap())
     { return sky(type, params); }
     Q_INVOKABLE QString setMode(const QVariantMap &params = QVariantMap()) { return mode(params); }
@@ -100,6 +102,7 @@ private:
     /// One undo step for one World Mode gesture. See WorldModeCommand — a tier
     /// switch is thirteen field writes, so the command snapshots the state
     /// rather than inventing thirteen inverses.
+    void pushSunLinkUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid);
     void pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
                            const WorldModeCommand::Snapshot &before);
     /// Applies a Rayon state as ONE undoable step (the tier rewrites three

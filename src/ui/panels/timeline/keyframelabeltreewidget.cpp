@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 
 #include "ui/panels/timeline/animationwidget.h"
+#include "ui/style/thememanager.h"
 
 
 class KeyFrameGroup
@@ -36,6 +37,11 @@ KeyFrameLabelTreeWidget::KeyFrameLabelTreeWidget(QWidget *parent) :
     ui(new Ui::KeyFrameLabelTreeWidget)
 {
     ui->setupUi(this);
+    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
+    // here, before any runtime sheet is applied, so the QStyle paints instead of
+    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
+    // no-op under the Classic theme, which those sheets ARE).
+    ThemeManager::clearClassicSheets(this);
 
     connect(ui->treeWidget, SIGNAL(itemCollapsed(QTreeWidgetItem*)), this, SLOT(itemCollapsed(QTreeWidgetItem*)));
     connect(ui->treeWidget, SIGNAL(itemExpanded(QTreeWidgetItem*)), this, SLOT(itemExpanded(QTreeWidgetItem*)));

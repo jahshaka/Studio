@@ -29,6 +29,9 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/services.h"
+#include "services/selectionservice.h"
+#include "services/sunlink.h"
 #include <QSqlDatabase>
 
 namespace {
@@ -138,6 +141,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			connect(turbidity, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onTurbidityChanged);
 			connect(sunAzimuth, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunAzimuthChanged);
 			connect(sunElevation, &HFloatSliderWidget::valueChanged, this, &SkyPropertyWidget::onSunElevationChanged);
+			addSunLinkRow();
 
 			if (skyDefinition.isEmpty()) {
 				realisticDefinition.insert("luminance", luminance->getValue());
@@ -259,6 +263,39 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 		updateAssetAndKeys();
 	}
 
+}
+
+void SkyPropertyWidget::addSunLinkRow()
+{
+	// Sun coupling (re-audit F5), the same row the World panel's sky section
+	// carries — these two panels are near-duplicates by history (F6 records the
+	// dedup as debt). Offered only when this asset is the OPEN SCENE's sky: a
+	// library sky has no scene and therefore no light to drive.
+	sunDrivesLight = nullptr;
+	if (!scene || scene->skyGuid != skyGuid) return;
+	sunDrivesLight = this->addCheckBox("Drive Selected Directional Light",
+									   !scene->sunLightGuid.isEmpty());
+	// addCheckBox drops its `value` argument (accordionbladewidget.cpp:216).
+	sunDrivesLight->setValue(!scene->sunLightGuid.isEmpty());
+	sunDrivesLight->setToolTip(QStringLiteral(
+		"Point a directional light down the sky's sun: the Sun Azimuth and Sun Elevation dials "
+		"then drive its rotation, so the shadows and the lighting follow the sky. Uses the "
+		"selected directional light, or the scene's first one if the selection is something "
+		"else. Turning it off gives the light back the rotation it had before it was linked."));
+	connect(sunDrivesLight, &CheckBoxWidget::valueChanged,
+			this, &SkyPropertyWidget::onSunDrivesLightChanged);
+}
+
+void SkyPropertyWidget::onSunDrivesLightChanged(bool on)
+{
+	if (!scene) return;
+	const iris::SceneNodePtr selected =
+		(services && services->selection) ? services->selection->selected() : iris::SceneNodePtr();
+	const QString linked = sunlink::setDriven(scene, services, on, selected);
+	if (on && linked.isEmpty() && sunDrivesLight) {
+		QSignalBlocker block(sunDrivesLight);
+		sunDrivesLight->setValue(false);
+	}
 }
 
 void SkyPropertyWidget::onSlotChanged(QString value, QString guid, int index)

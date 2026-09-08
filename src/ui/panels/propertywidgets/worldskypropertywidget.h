@@ -35,6 +35,7 @@ namespace iris {
 }
 
 class IEditorViewport;
+struct StudioServices;
 
 class WorldSkyPropertyWidget: public AccordianBladeWidget
 {
@@ -45,6 +46,10 @@ public:
     WorldSkyPropertyWidget();
     void setScene(QSharedPointer<iris::Scene> scene);
     void setDatabase(Database *);
+    /// Selection + undo, for the sun-coupling row (re-audit F5). Injected by
+    /// the properties panel; null in headless hosts, where the row still works
+    /// (it just applies without an undo step).
+    void setServices(StudioServices *s) { this->services = s; }
 
 public slots:
     void setEquiMap(const QString &guid);
@@ -65,6 +70,7 @@ public slots:
     void onSunElevationChanged(float val);
     void onSkyDetailChanged(int row);
     void onAmbientFromSkyChanged(bool on);
+    void onSunDrivesLightChanged(bool on);
 
 	void onGradientTopColorChanged(QColor color);
 	void onGradientMidColorChanged(QColor color);
@@ -72,7 +78,12 @@ public slots:
 	void onGradientOffsetChanged(float offset);
 
 private:
+    /// Adds the "Drive Selected Directional Light" row (realistic sky only —
+    /// no other sky has a sun).
+    void addSunLinkRow();
+
     Database *db;
+    StudioServices *services = nullptr;
     QSharedPointer<iris::Scene> scene;
 
 	void updateAssetAndKeys();
@@ -109,6 +120,7 @@ private:
     HFloatSliderWidget *sunAzimuth = nullptr;
     HFloatSliderWidget *sunElevation = nullptr;
     ComboBoxWidget *skyDetail = nullptr;          // realistic-sky bake width
+    CheckBoxWidget *sunDrivesLight = nullptr;     // sun coupling (re-audit F5)
     CheckBoxWidget *ambientFromSky = nullptr;     // sky-driven ambient (item 3b)
 
 	QJsonObject singleColorDefinition;

@@ -28,6 +28,12 @@ QVector<VerbInfo> DesktopApi::verbs() const
         { "tiles", "desktop.tiles() -> [{guid, name, row, index}]",
           "Lists the current desktop's tiles with their slider assignment (row 1..N, index 0-based; -1/-1 when never assigned).",
           Needs::Window },
+        { "sliderRows", "desktop.sliderRows() -> rows",
+          "How many filmstrip rows the Sliders view mode stacks (2..10). A per-user setting, not per desktop.",
+          Needs::Window },
+        { "setSliderRows", "desktop.setSliderRows(rows) -> rows",
+          "Sets the number of filmstrip rows the Sliders view mode stacks and re-lays the desktop out immediately. Clamped to 2..10; returns the value that took effect. Same setting as Preferences -> Desktop -> Slider Rows.",
+          Needs::Window },
     };
 }
 
@@ -54,6 +60,20 @@ bool DesktopApi::moveTile(const QString &guid, int row, int index)
     if (!host.projectManager->moveTileToSliderPos(guid, row - 1, index))
         return fail(QStringLiteral("desktop.moveTile: no tile '%1' on the current desktop").arg(guid));
     return true;
+}
+
+int DesktopApi::sliderRows()
+{
+    if (!host.projectManager) { fail("desktop: not available in this session"); return 0; }
+    return host.projectManager->sliderRows();
+}
+
+int DesktopApi::setSliderRows(int rows)
+{
+    if (!host.projectManager) { fail("desktop: not available in this session"); return 0; }
+    if (rows < 2 || rows > 10)
+        { fail(QStringLiteral("desktop.setSliderRows: rows must be 2..10 (got %1)").arg(rows)); return 0; }
+    return host.projectManager->setSliderRows(rows);
 }
 
 QVariantList DesktopApi::tiles()

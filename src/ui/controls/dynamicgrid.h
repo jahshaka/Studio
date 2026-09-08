@@ -43,6 +43,13 @@ public:
     void moveTileToRow(ItemGridWidget *widget, int row, int index = -1);
     const SliderLayoutModel &sliderLayoutModel() const { return sliderModel; }
     int activeSliderRows() const { return sliderRows; }
+    /// Sets the "slider_rows" user setting and re-lays the desktop out NOW
+    /// (VISUAL_PARITY re-audit F8: Preferences used to write the setting and
+    /// stop, so the number of filmstrip rows only changed on the next populate
+    /// or mode switch). Clamped to 2..10; returns the value that took effect.
+    /// A desktop that is not in Sliders mode still records the setting — it
+    /// picks it up when it next enters the mode, exactly as before.
+    int setSliderRowCount(int rows);
 
     bool eventFilter(QObject *watched, QEvent *event) override;
     QSize tileSize;

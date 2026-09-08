@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/assets/texture2d.h"
+#include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/core/geometry/boundingsphere.h"
 #include <functional>
@@ -37,6 +38,7 @@ For more information see the LICENSE file
 #include "services/gibounds.h"
 #include "services/undoservice.h"
 #include "commands/worldmodecommand.h"
+#include "commands/sunlightlinkcommand.h"
 #include "services/jahlog.h"
 
 using namespace scriptmod;
@@ -129,6 +131,9 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: color {color}; gradient {top, mid, bottom, offset}; realistic {luminance, reileigh, mieCoefficient, mieDirectionalG, turbidity, azimuth, elevation | sunPosX, sunPosY, sunPosZ, detail}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = asset guids or file names in the project). For the realistic sky, azimuth (degrees clockwise from +Z) and elevation (degrees above the horizon) are the readable way to place the sun and win over raw sunPos*; turbidity is Preetham's 1..20 haze; detail is the equirect bake width (256, 512 or 1024).",
           Needs::Document },
+        { "sunLight", "world.sunLight([id|null]) -> id",
+          "Sun coupling: the DIRECTIONAL light the realistic sky's sun drives, by node id. Called with no argument it reads the current link (empty string = none). Given a node id it links that light — its rotation follows the sky's sun angles from then on, in the editor and in the player. Given null or an empty string it unlinks and the light goes back to manual control with the rotation it had before it was linked. One undo step either way; only the realistic sky has a sun, so the link is inert (but remembered) under any other sky type.",
+          Needs::Document },
         { "get", "world.get() -> {ambient, gravity, fog, shadows, gi, sky, mode, settings}",
           "Reads the current world settings.",
           Needs::Document },
@@ -174,6 +179,8 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Alias of world.ambientFromSky — same arguments, same result.", Needs::Document },
         { "setSky", "world.setSky(type, {...}) -> bool",
           "Alias of world.sky — same arguments, same result.", Needs::Document },
+        { "setSunLight", "world.setSunLight(id|null) -> id",
+          "Alias of world.sunLight — same arguments, same result.", Needs::Document },
         { "setMode", "world.setMode({mode}) -> string",
           "Alias of world.mode — same arguments, same result (and, called with no argument, the "
           "same read).", Needs::Document },
@@ -673,6 +680,53 @@ QVariantMap WorldApi::fitGiBounds(const QVariantMap &params)
                         { QStringLiteral("boundsMax"), vecToJs(mx) } };
 }
 
+QString WorldApi::sunLight(const QVariant &light)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.sunLight"));
+    if (!scene) return QString();
+
+    // No argument at all = read. (An explicit null/"" is an UNLINK, which is
+    // why "is it valid?" and "was it given?" are different questions here.)
+    if (!light.isValid()) return scene->sunLightGuid;
+
+    const QString id = light.isNull() ? QString() : light.toString();
+    if (id.isEmpty()) {
+        if (scene->sunLightGuid.isEmpty()) return QString();
+        pushSunLinkUndo(QStringLiteral("Unlink Sun Light"), scene, QString());
+        return QString();
+    }
+
+    auto node = findNodeByGuid(scene->getRootNode(), id);
+    if (!node) { fail(QStringLiteral("world.sunLight: no node with id '%1'").arg(id)); return QString(); }
+    auto lightNode = node.dynamicCast<iris::LightNode>();
+    if (!lightNode) {
+        fail(QStringLiteral("world.sunLight: node '%1' is not a light").arg(id));
+        return QString();
+    }
+    if (lightNode->lightType != iris::LightType::Directional) {
+        // The sun is infinitely far away: only a directional light can stand in
+        // for it, and silently accepting a point light would "work" (the guid
+        // sticks) while nothing ever moved.
+        fail(QStringLiteral("world.sunLight: '%1' is not a DIRECTIONAL light — the sky's sun can "
+                            "only drive a directional light").arg(id));
+        return QString();
+    }
+
+    if (scene->sunLightGuid != id)
+        pushSunLinkUndo(QStringLiteral("Link Sun Light"), scene, id);
+    return scene->sunLightGuid;
+}
+
+void WorldApi::pushSunLinkUndo(const QString &text, const iris::ScenePtr &scene, const QString &guid)
+{
+    // The command IS the edit (its redo() writes the guid), so a session with
+    // no undo stack — headless, tests — applies it once by hand instead.
+    auto *cmd = new SunLightLinkCommand(text, scene, guid);
+    if (host.services && host.services->undo) { host.services->undo->push(cmd); return; }
+    cmd->redo();
+    delete cmd;
+}
+
 int WorldApi::antiAliasing()
 {
     auto scene = sceneOrFail(QStringLiteral("world.antiAliasing"));
@@ -1006,6 +1060,10 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         def.insert("sunPosZ", double(r.sunPosZ));
         scene->skyData.insert("Realistic", def);
         scene->skyType = iris::SkyType::REALISTIC;
+        // Sun coupling (re-audit F5): the linked light follows the sun HERE and
+        // not only on the next Scene::update, so a headless script sees the new
+        // rotation the moment this call returns.
+        scene->applySunCoupling();
     } else if (t == "equirectangular" || t == "equirect") {
         if (!requireProject()) return false;   // texture resolution needs the project folder
         QString guid, path;
@@ -1136,6 +1194,8 @@ QVariantMap WorldApi::get()
         sky["elevation"] = scene->skyRealistic.sunElevation();
     }
     sky["detail"] = scene->skyBakeResolution;
+    // The light the sun drives, if any (re-audit F5) — empty string = none.
+    sky["sunLight"] = scene->sunLightGuid;
     out["sky"] = sky;
     return out;
 }

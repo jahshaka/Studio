@@ -18,14 +18,21 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferences/assetssettingswidget.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
+#include "ui/pages/projectmanager.h"
 #include "ui/dialogs/aboutdialog.h"
 #include "ui/style/stylesheet.h"
+#include "ui/style/thememanager.h"
 
 PreferencesDialog::PreferencesDialog(QWidget* parent, Database *handle, SettingsManager* settings) :
     QDialog(parent),
     ui(new Ui::PreferencesDialog)
 {
     ui->setupUi(this);
+    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
+    // here, before any runtime sheet is applied, so the QStyle paints instead of
+    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
+    // no-op under the Classic theme, which those sheets ARE).
+    ThemeManager::clearClassicSheets(this);
 
 	this->setWindowFlags(Qt::FramelessWindowHint);
 	setWindowModality(Qt::ApplicationModal);
@@ -83,6 +90,13 @@ void PreferencesDialog::wireMcp(McpServer *server, MainWindow *mainWindow)
 void PreferencesDialog::wireShortcuts(ShortcutRegistry *registry)
 {
     if (worldSettings) worldSettings->setShortcutRegistry(registry);
+}
+
+void PreferencesDialog::wireDesktop(ProjectManager *projectManager)
+{
+    if (!worldSettings || !projectManager) return;
+    connect(worldSettings, &WorldSettingsWidget::sliderRowsSettingChanged,
+            projectManager, [projectManager](int rows) { projectManager->setSliderRows(rows); });
 }
 
 PreferencesDialog::~PreferencesDialog()

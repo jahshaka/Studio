@@ -196,6 +196,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     project = Project::createNew();
 
     ui->setupUi(this);
+    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
+    // here, before any runtime sheet is applied, so the QStyle paints instead of
+    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
+    // no-op under the Classic theme, which those sheets ARE).
+    ThemeManager::clearClassicSheets(this);
 
 	settings = SettingsManager::getDefaultManager();
 	SnapSettings::bindSettings(settings->settings);   // snap sizes persist beside the shortcuts
@@ -2759,6 +2764,10 @@ void MainWindow::setupDesktop()
 	pmContainer = new ProjectManager(db, project, this);
 	pmContainer->mainWindow = this;
 	projectService->setProjectManager(pmContainer);
+	// Preferences -> Desktop -> Slider Rows applies LIVE (re-audit F8): the
+	// page's signal reaches the desktop through the same ProjectManager entry
+	// point desktop.setSliderRows uses.
+	if (prefsDialog) prefsDialog->wireDesktop(pmContainer);
 	// The Assets page: AssetView gets an EngineAssetViewer (a third engine
 	// Scene with its own preview document), or none in headless runs.
 	IAssetViewer *assetBackend = nullptr;

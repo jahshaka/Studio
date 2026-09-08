@@ -12,12 +12,18 @@ For more information see the LICENSE file
 #include "ui/dialogs/loadmeshdialog.h"
 #include "ui_loadmeshdialog.h"
 #include <QFileDialog>
+#include "ui/style/thememanager.h"
 
 LoadMeshDialog::LoadMeshDialog(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::LoadMeshDialog)
 {
     ui->setupUi(this);
+    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
+    // here, before any runtime sheet is applied, so the QStyle paints instead of
+    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
+    // no-op under the Classic theme, which those sheets ARE).
+    ThemeManager::clearClassicSheets(this);
 
     connect(ui->loadMesh,SIGNAL(pressed()),this,SLOT(loadMesh()));
     connect(ui->loadTexture,SIGNAL(pressed()),this,SLOT(loadTexture()));

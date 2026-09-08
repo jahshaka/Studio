@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/materials/defaultmaterial.h"
 #include "irisgl/core/properties/property.h"
 
@@ -593,27 +594,10 @@ int materialFor(Ctx &c, iris::Material *material, iris::FaceCullingMode cullMode
 
 // ---- sky bakes -------------------------------------------------------------
 
-// Bake the 3-stop gradient to a narrow equirect strip — the identical ramp the
-// engine mirror bakes (scenemirror.cpp applySky, gradient branch).
-QImage bakeGradientSky(const iris::ScenePtr &scene)
-{
-    const float middle = std::min(0.99f, std::max(0.01f, scene->gradientOffset));
-    const QColor top = scene->gradientTop, mid = scene->gradientMid, bot = scene->gradientBot;
-    const int H = 256, W = 4;
-    QImage strip(W, H, QImage::Format_RGB888);
-    for (int rIdx = 0; rIdx < H; ++rIdx) {
-        const float offset = 1.0f - float(rIdx) / (H - 1);
-        float t; const QColor *c0, *c1;
-        if (offset <= middle) { t = offset / middle;                   c0 = &bot; c1 = &mid; }
-        else                  { t = (offset - middle) / (1 - middle);  c0 = &mid; c1 = &top; }
-        const int rr = int(std::min(255.0f, std::max(0.0f, float(c0->redF()   + (c1->redF()   - c0->redF())   * t) * 255.0f)));
-        const int gg = int(std::min(255.0f, std::max(0.0f, float(c0->greenF() + (c1->greenF() - c0->greenF()) * t) * 255.0f)));
-        const int bb = int(std::min(255.0f, std::max(0.0f, float(c0->blueF()  + (c1->blueF()  - c0->blueF())  * t) * 255.0f)));
-        uchar *line = strip.scanLine(rIdx);
-        for (int x = 0; x < W; ++x) { line[x * 3] = uchar(rr); line[x * 3 + 1] = uchar(gg); line[x * 3 + 2] = uchar(bb); }
-    }
-    return strip;
-}
+// The 3-stop gradient ramp is iris::bakeGradientSky — the identical bake
+// the engine viewport uses, called rather than re-implemented (re-audit F10:
+// this file used to carry its own copy of the interpolation, so "the export
+// matches the editor" was a claim nothing enforced).
 
 // Stitch six cube faces (+X,-X,+Y,-Y,+Z,-Z) into one equirect image so the
 // viewer has a single sky path (audit §1 "Sky: cubemap" — pre-stitch, simpler
@@ -678,7 +662,9 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c)
     case iris::SkyType::GRADIENT:
         sky["type"] = "equirect";
         sky["source"] = "gradient";
-        sky["image"] = imageToDataUri(bakeGradientSky(scene), false);
+        sky["image"] = imageToDataUri(iris::bakeGradientSky(scene->gradientTop, scene->gradientMid,
+                                                           scene->gradientBot, scene->gradientOffset)
+                                          .convertToFormat(QImage::Format_RGB888), false);
         break;
     case iris::SkyType::EQUIRECTANGULAR: {
         sky["type"] = "equirect";

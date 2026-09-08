@@ -31,6 +31,7 @@ class IEditorViewport;
 class ShortcutRegistry;
 class MainWindow;
 class Database;
+class ProjectManager;
 
 class PreferencesDialog : public QDialog
 {
@@ -54,6 +55,11 @@ public:
     void wireMcp(McpServer *server, MainWindow *mainWindow);
     /// Forwards the shortcut registry to the Shortcuts page (created after the dialog).
     void wireShortcuts(ShortcutRegistry *registry);
+    /// Connects the desktop page to the live desktop so Preferences ->
+    /// Desktop -> Slider Rows re-lays it out as the spin box moves
+    /// (VISUAL_PARITY re-audit F8). Called by the shell once the project
+    /// manager exists.
+    void wireDesktop(ProjectManager *projectManager);
     ~PreferencesDialog();
 
 	WorldSettingsWidget* worldSettings;
