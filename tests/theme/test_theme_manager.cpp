@@ -322,6 +322,144 @@ int main(int argc, char **argv)
               "combo: the popup keeps the drop-shadow margins the polish sets");
     }
 
+    // ---- the focus frame refresh is COALESCED and CHEAP ---------------------
+    // THE 1 fps REGRESSION (owner session 2026-09-08). The fix above made the
+    // frame follow its widget's ancestry; what it did NOT do is make that
+    // cheap. Every WidgetWithFocusFrameEventFilter under a reparented ancestor
+    // answered the ParentChange INSIDE the dispatch with a full
+    // setWidget(nullptr)/setWidget() cycle — a QWidget::setParent of the frame
+    // plus install/remove of the frame's own event filters along the whole
+    // chain. A properties panel that detaches its blades and re-attaches them
+    // in the SAME turn therefore paid that twice per focusable control per
+    // selection change, and the owner's watchdog caught the UI thread inside
+    // refreshFocusFrame() with 2-7 s stalls.
+    //
+    // The refresh is now deferred to the end of the event-loop turn and
+    // coalesced to one per filter, and it re-derives in a single walk that
+    // early-outs when nothing moved. So a detach+re-attach inside one turn
+    // costs ZERO frame re-parenting: the ancestry the deferred check sees is
+    // the ancestry it started from.
+    {
+        settings->settings->remove(ThemeManager::settingsKey());
+        ThemeManager::applyAtStartup(app);
+
+        QWidget host;
+        host.setLayout(new QVBoxLayout);
+        auto *scrollPtr = new QScrollArea(&host);
+        QScrollArea &scroll = *scrollPtr;
+        host.layout()->addWidget(scrollPtr);
+        auto *content = new QWidget;
+        content->setLayout(new QVBoxLayout);
+        scroll.setWidget(content);
+        scroll.setWidgetResizable(true);
+
+        auto *blade = new QWidget;
+        blade->setLayout(new QVBoxLayout);
+        auto *row = new QWidget(blade);
+        row->setLayout(new QVBoxLayout);
+        auto *button = new QPushButton(QStringLiteral("probe"), row);
+        row->layout()->addWidget(button);
+        blade->layout()->addWidget(row);
+        content->layout()->addWidget(blade);
+
+        host.resize(320, 240);
+        host.show();
+        auto settle = [&]() {
+            for (int i = 0; i < 10; ++i) {
+                host.grab();
+                QApplication::processEvents();
+                QApplication::sendPostedEvents();
+            }
+        };
+        settle();
+
+        auto *frame = button->window()->findChild<QFocusFrame *>();
+        QWidget *const viewport = scroll.viewport();
+        CHECK(frame && frame->parentWidget() == viewport,
+              "focus frame (cheap): attached to the viewport to begin with");
+
+        // Counts QWidget::setParent on the FRAME itself — the expensive half of
+        // a re-derivation, and the thing the backtraces were standing in.
+        struct FrameReparentCounter : QObject {
+            int count = 0;
+            bool eventFilter(QObject *o, QEvent *e) override {
+                if (e->type() == QEvent::ParentChange && qobject_cast<QFocusFrame *>(o)) ++count;
+                return QObject::eventFilter(o, e);
+            }
+        } counter;
+        app.installEventFilter(&counter);
+
+        static int mapToWarnings = 0;
+        mapToWarnings = 0;
+        auto *prev = qInstallMessageHandler(
+            [](QtMsgType, const QMessageLogContext &, const QString &msg) {
+                if (msg == QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy"))
+                    ++mapToWarnings;
+            });
+
+        // ONE TURN, detached and back: the shape SceneNodePropertiesWidget used
+        // to have (and the shape any host that rebuilds a layout has).
+        for (int i = 0; i < 20; ++i) {
+            content->layout()->removeWidget(blade);
+            blade->setParent(nullptr);
+            blade->setParent(content);
+            content->layout()->addWidget(blade);
+            blade->show();
+            settle();
+        }
+        CHECK(counter.count == 0,
+              "focus frame (cheap): a detach+re-attach in one turn re-parents no frame at all");
+        CHECK(frame && frame->parentWidget() == viewport,
+              "focus frame (cheap): and it is still on the viewport afterwards");
+        CHECK(mapToWarnings == 0, "focus frame (cheap): no mapTo warnings over 20 round trips");
+
+        // THE SHAPE THE APP USES NOW: hide the blade and take it off the layout
+        // instead of orphaning it. No ParentChange exists at all, so nothing to
+        // coalesce — this pins that hiding an ancestor does not disturb the
+        // frame or its watch list either.
+        counter.count = 0;
+        mapToWarnings = 0;
+        for (int i = 0; i < 20; ++i) {
+            content->layout()->removeWidget(blade);
+            blade->hide();
+            settle();
+            content->layout()->addWidget(blade);
+            blade->show();
+            settle();
+        }
+        CHECK(counter.count == 0,
+              "focus frame (cheap): hiding and re-showing an ancestor re-parents no frame");
+        CHECK(mapToWarnings == 0, "focus frame (cheap): and produces no mapTo warnings");
+        CHECK(frame && frame->parentWidget() == viewport,
+              "focus frame (cheap): the frame is still the viewport's child");
+        CHECK(button->window()->findChildren<QFocusFrame *>().size() == 1,
+              "focus frame (cheap): still exactly ONE frame — nothing accumulated");
+
+        // The correctness case from the block above must survive the deferral:
+        // an ancestor that is orphaned and STAYS orphaned still has to take the
+        // frame with it, one turn later.
+        counter.count = 0;
+        mapToWarnings = 0;
+        content->layout()->removeWidget(blade);
+        blade->setParent(nullptr);
+        settle();
+        host.resize(420, 300);
+        settle();
+        CHECK(frame && frame->parentWidget() != viewport,
+              "focus frame (cheap): a lasting orphaning still moves the frame out");
+        CHECK(mapToWarnings == 0,
+              "focus frame (cheap): and still produces no mapTo warnings");
+        content->layout()->addWidget(blade);
+        blade->show();
+        settle();
+        CHECK(frame && frame->parentWidget() == viewport,
+              "focus frame (cheap): re-attaching brings it home again");
+
+        qInstallMessageHandler(prev);
+        app.removeEventFilter(&counter);
+        host.hide();
+    }
+
     // ---- the same glyph buttons under Classic --------------------------------
     // LAST, because it flips ThemeManager's own live flag (the getters read
     // that one, not StyleSheet's mirror) and the classic branch of

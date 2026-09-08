@@ -120,3 +120,36 @@ own gate had not caught it because `theme.manager` never spun the loop). Two gua
 only WIDGET children (the popup container) trigger the install, and the install is
 idempotent (`_delegatePending` + "already a ComboBoxDelegate" check). Covered by the
 new `theme.manager` "installed ONCE — eight event-loop turns, no churn" case.
+
+### 2026-09-08 (3) — WidgetWithFocusFrameEventFilter: the refresh is COALESCED, and the frame is DESTROYED with its widget
+
+The ancestor-watching fix above was correct and expensive. Two changes, both in
+`lib/src/style/eventFilters/WidgetWithFocusFrameEventFilter.hpp`:
+
+1. **The re-derivation is deferred one event-loop turn and coalesced** (`_refreshPending`
+   + `QTimer::singleShot(0, this, …)`, the same shape the combo filter uses), and it now
+   derives the frame's parent and the ancestor watch list in ONE walk that early-outs when
+   neither changed. A host that detaches a subtree and re-attaches it inside the same turn
+   — which is what a properties panel rebuilding its layout does — used to pay a full
+   `setWidget(nullptr)/setWidget()` cycle per focusable descendant per `ParentChange`,
+   i.e. a `QWidget::setParent` of the frame plus install/remove of the frame's own event
+   filters along the whole chain, twice per selection change. Deferred, the pair of
+   `ParentChange`s collapses into one check that finds the ancestry back where it started
+   and does nothing at all. Measured in Jahshaka (`ui.selection_cost`, 200 selection
+   switches over a 15-node scene): **0 focus-frame re-derivations, down from a storm that
+   grew the cost of a single selection from 105 ms to 1.43 s inside one session.**
+
+2. **The frame is deleted with the filter.** `QFocusFrame` is born a child of the watched
+   widget, but `setWidget()` REPARENTS it to the enclosing scroll area's viewport, so the
+   widget's destruction no longer takes it along: Qt clears the frame's pointer and leaves
+   an invisible widget behind that still filters events on every ancestor it watched. Any
+   host that rebuilds a panel's rows therefore leaks one frame — and one more entry on the
+   shared ancestors' event-filter lists — per row per rebuild, for the life of the process
+   (measured: **+1188 live `QFocusFrame`s over 180 selection changes**, all of them on the
+   scroll viewport). The filter is a child of the widget, so it dies exactly when the
+   widget does; `_focusFrame` became a `QPointer` to cover the other destruction order.
+
+Covered by `theme.manager` ("focus frame (cheap): …" cases — the first of them fails
+against the previous revision) and by Jahshaka's `ui.selection_cost` suite. The
+correctness cases of the earlier entry are unchanged and still green: an ancestor that is
+orphaned and STAYS orphaned still takes the frame with it, one turn later.
