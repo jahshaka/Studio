@@ -44,6 +44,35 @@ will need to fine tune it once the app is working properly."*
 
 Newest first.
 
+### 2026-09-08 — `lib/src/style/eventFilters/ComboboxItemViewFilter.hpp`
+
+`ComboboxItemViewFilter::eventFilter` no longer calls `QComboBox::view()` (nor
+`setItemDelegate()`, which goes the same way) synchronously from its `ChildAdded`
+handler; it defers the delegate installation one event-loop turn.
+
+Both accessors run through `QComboBoxPrivate::viewContainer()`, which **creates** the
+popup container on demand — and Qt emits exactly this `ChildAdded` from that container's
+constructor (`QComboBoxPrivateContainer` → `QFrame` → `QWidgetPrivate::init` →
+`QWidget::setParent`), i.e. before `QComboBoxPrivate::container` has been assigned. So
+`view()` built a second container, whose constructor emitted another `ChildAdded`, and so
+on: on Qt 6.10 the first `addItem()` on a combo that had never opened its popup recursed
+until the stack overflowed and the process died with SIGSEGV. Captured stack:
+
+    QComboBox::view() → QComboBoxPrivate::viewContainer()
+      → QComboBoxPrivateContainer::QComboBoxPrivateContainer(...) → QFrame::QFrame
+      → QWidgetPrivate::init → QWidget::setParent → sendThroughObjectEventFilters
+      → ComboboxItemViewFilter::eventFilter → QComboBox::view() → ...
+
+Jahshaka carried an app-side workaround for this from 2026-08-31 (`JahQlementineStyle`
+in `src/ui/style/thememanager.cpp` deferred the popup item view's whole polish by a
+tick). That workaround is REMOVED in the same commit: the popup is polished inline again,
+exactly as upstream intended. Guarded by the `combo:` cases in `tests/theme`, which also
+pin the popup's translucent frameless panel and its drop-shadow margins.
+
+`ComboboxFilter` (same header) has the same `child == _comboBox->view()` shape but
+filters the POPUP, not the combo, so its `view()` call always runs after the container
+exists. Left untouched.
+
 ### 2026-09-08 — `lib/src/style/eventFilters/WidgetWithFocusFrameEventFilter.hpp`
 
 The focus frame now re-derives its parent whenever the watched widget's **ancestry**

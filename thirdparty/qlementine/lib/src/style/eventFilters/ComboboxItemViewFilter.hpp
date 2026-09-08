@@ -13,7 +13,9 @@
 #include <QTreeView>
 #include <QAbstractItemView>
 #include <QChildEvent>
+#include <QPointer>
 #include <QScreen>
+#include <QTimer>
 
 namespace oclero::qlementine {
 // Event filter for the item view in the QComboBox's popup.
@@ -44,13 +46,30 @@ protected:
     switch (evt->type()) {
       case QEvent::Type::ChildAdded: {
         if (watchedObject == _comboBox) {
-          const auto* childEvent = static_cast<QChildEvent*>(evt);
-          const auto* child = childEvent->child();
-          if (child == _comboBox->view()) {
-            if (auto* qlementine = qobject_cast<QlementineStyle*>(_comboBox->style())) {
-              _comboBox->setItemDelegate(new ComboBoxDelegate(_comboBox, *qlementine));
+          // JAHSHAKA DIVERGENCE (2026-09-08) — see PROVENANCE.md.
+          //
+          // NOTHING here may call QComboBox::view() or setItemDelegate()
+          // synchronously. Both go through QComboBoxPrivate::viewContainer(),
+          // which CREATES the popup container on demand — and Qt emits this
+          // very ChildAdded from that container's constructor
+          // (QComboBoxPrivateContainer -> QFrame -> QWidgetPrivate::init ->
+          // QWidget::setParent), i.e. BEFORE QComboBoxPrivate::container is
+          // assigned. So view() built another container, whose constructor
+          // emitted another ChildAdded, ... : on Qt 6.10 a single addItem() on
+          // a combo that had never opened its popup recursed until the stack
+          // overflowed and the process died with SIGSEGV.
+          //
+          // Deferring one event-loop turn is enough: by then the container is
+          // installed and view() is an ordinary getter. The delegate this
+          // installs is a cosmetic upgrade, so a turn's delay costs nothing.
+          QPointer<QComboBox> combo(_comboBox);
+          QTimer::singleShot(0, this, [combo]() {
+            if (!combo)
+              return;
+            if (auto* qlementine = qobject_cast<QlementineStyle*>(combo->style())) {
+              combo->setItemDelegate(new ComboBoxDelegate(combo, *qlementine));
             }
-          }
+          });
         }
       } break;
       case QEvent::Type::Show:

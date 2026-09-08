@@ -4,6 +4,8 @@
 // Qlementine QStyle owns rendering. Runs offscreen; no style is applied.
 
 #include <QApplication>
+#include <QAbstractItemView>
+#include <QComboBox>
 #include <QFocusFrame>
 #include <QFont>
 #include <QImage>
@@ -266,6 +268,41 @@ int main(int argc, char **argv)
               "focus frame: it sits on the button, margins and all");
 
         host.hide();
+    }
+
+    // ---- the FIRST addItem on a fresh combo (Qt 6.10 recursion trap) ---------
+    // Qlementine's ComboboxItemViewFilter answers ChildAdded on the QComboBox by
+    // calling QComboBox::view(). Qt 6.10's QComboBoxPrivateContainer emits that
+    // ChildAdded from its own constructor, BEFORE QComboBoxPrivate::container is
+    // assigned — so view() builds another container, which emits another
+    // ChildAdded... until the stack overflows. It takes exactly one addItem() on
+    // a combo that has never opened its popup.
+    {
+        settings->settings->remove(ThemeManager::settingsKey());
+        ThemeManager::applyAtStartup(app);
+
+        QComboBox combo;
+        QApplication::style()->polish(&combo);
+        combo.addItem(QStringLiteral("first"));      // the trap
+        combo.addItem(QStringLiteral("second"));
+        CHECK(combo.count() == 2, "combo: the first addItem on a fresh combo survives");
+        CHECK(combo.view() != nullptr, "combo: the popup view is reachable afterwards");
+        // The filter's real job: the popup gets Qlementine's item delegate. It is
+        // installed when the view appears, so make the popup exist first.
+        combo.view();
+        QApplication::processEvents();
+        CHECK(combo.itemDelegate() != nullptr, "combo: an item delegate is installed");
+        combo.setCurrentIndex(1);
+        CHECK(combo.currentText() == QLatin1String("second"), "combo: selection still works");
+        // ...and the popup still gets Qlementine's frameless translucent panel
+        // (the polish that the app used to defer a tick to dodge the recursion).
+        auto *popup = combo.view() ? combo.view()->parentWidget() : nullptr;
+        CHECK(popup && popup->inherits("QComboBoxPrivateContainer"),
+              "combo: the popup container is reachable");
+        CHECK(popup && popup->testAttribute(Qt::WA_TranslucentBackground),
+              "combo: the popup keeps Qlementine's translucent frameless panel");
+        CHECK(popup && popup->layout() && popup->layout()->contentsMargins().left() > 0,
+              "combo: the popup keeps the drop-shadow margins the polish sets");
     }
 
     // ---- the same glyph buttons under Classic --------------------------------
