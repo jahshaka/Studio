@@ -1,5 +1,7 @@
 # out-of-source build directories
 build-linux/
+build-*/
+/Testing/
 build-macos/
 build-macos-rel/
 build-mcp/
