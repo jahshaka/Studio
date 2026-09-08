@@ -281,10 +281,15 @@ iris::PbrMaterialPtr fromMeshData(const iris::MeshMaterialData &data)
         if (!path.isEmpty() && QFileInfo(path).isFile()) mat->setValue(row, path);
     };
 
+    const auto isFile = [](const QString &p) {
+        return !p.isEmpty() && QFileInfo(p).isFile();
+    };
+
     if (data.hasPbr) {
-        // The source really was metallic-roughness (glTF): use it verbatim
+        // The source really was a PBR one (glTF): use its values verbatim
         // rather than round-tripping through assimp's lossy shininess
-        // back-conversion, which is what produced near-mirror imports.
+        // back-conversion, which is what produced near-mirror imports. A
+        // spec-gloss source arrives already converted (MaterialHelper).
         mat->setValue(QStringLiteral("baseColor"), data.baseColorFactor);
         mat->setValue(QStringLiteral("metallic"), data.metallicFactor);
         mat->setValue(QStringLiteral("roughness"), data.roughnessFactor);
@@ -293,9 +298,47 @@ iris::PbrMaterialPtr fromMeshData(const iris::MeshMaterialData &data)
         bindIfFile(QStringLiteral("roughnessMap"), data.roughnessTexture);
         bindIfFile(QStringLiteral("normalMap"),    data.normalTexture);
         bindIfFile(QStringLiteral("emissiveMap"),  data.emissiveTexture);
-        if (data.emissionColor.isValid() && data.emissionColor != QColor(Qt::black)) {
+
+        // EMISSIVE INTENSITY IS PART OF "THERE IS EMISSION" (2026-09-08).
+        // emissiveColor without emissiveIntensity is emission multiplied by
+        // zero — the mirror pushes colour*intensity (scenemirror.cpp) — and
+        // the import path that Studio actually uses set the colour and left
+        // the intensity at the document default 0, so every model came back
+        // with "#ffffff at 0". The two travel together or not at all.
+        //
+        // A BLACK emissive factor stays dark, map or no map: glTF's
+        // emissiveFactor defaults to [0,0,0] and multiplies the emissive
+        // texture, so "there is an emissive map" is NOT on its own a
+        // statement that the surface emits. Inventing white emission for one
+        // would light up every model whose exporter wrote a map the artist
+        // muted. (Unlit is the one place a black factor is overridden, below,
+        // and for a different reason: there the map is the COLOUR.)
+        const bool emissiveMap = isFile(data.emissiveTexture);
+        const bool emissiveTinted =
+            data.emissionColor.isValid() && data.emissionColor != QColor(Qt::black);
+        if (emissiveTinted) {
             mat->setValue(QStringLiteral("emissiveColor"), data.emissionColor);
             mat->setValue(QStringLiteral("emissiveIntensity"), 1.0f);
+        }
+
+        // KHR_materials_unlit. The engine's Unlit family consumes NO lighting
+        // inputs at all — no emissive, no maps but the colour one
+        // (PbrMaterial::rowsUnusedWhenUnlit) — so an unlit material's visible
+        // colour has to end up on baseColor/baseColorMap or it is lost. The
+        // common unlit export (Sketchfab and friends) leaves baseColorFactor
+        // BLACK and puts the artwork in emissiveTexture/emissiveFactor: read
+        // literally that is a black model, which is exactly how those files
+        // imported. So on an unlit material the emissive slot BECOMES the
+        // colour slot when the base-colour one is empty or black.
+        if (data.unlit) {
+            mat->setValue(QStringLiteral("shadingModel"), 1);
+            const bool baseIsBlack = !data.baseColorFactor.isValid() ||
+                                     data.baseColorFactor == QColor(Qt::black);
+            if (!isFile(data.baseColorTexture) && emissiveMap)
+                mat->setValue(QStringLiteral("baseColorMap"), data.emissiveTexture);
+            if (baseIsBlack && (emissiveTinted || emissiveMap))
+                mat->setValue(QStringLiteral("baseColor"),
+                              emissiveTinted ? data.emissionColor : QColor(Qt::white));
         }
         return mat;
     }
