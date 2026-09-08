@@ -13,18 +13,12 @@ For more information see the LICENSE file
 #include "ui_assetpickerwidget.h"
 #include "services/thumbnailmanager.h"
 #include "data/constants.h"
-#include "ui/style/thememanager.h"
 
 AssetPickerWidget::AssetPickerWidget(ModelTypes type, QDialog *parent) :
     QDialog(parent),
     ui(new Ui::AssetPickerWidget)
 {
     ui->setupUi(this);
-    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
-    // here, before any runtime sheet is applied, so the QStyle paints instead of
-    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
-    // no-op under the Classic theme, which those sheets ARE).
-    ThemeManager::clearClassicSheets(this);
 
     setWindowTitle("Select Asset");
     ui->viewButton->setCheckable(true);

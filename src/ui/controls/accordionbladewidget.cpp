@@ -35,7 +35,6 @@ For more information see the LICENSE file
 #include "ui_propertywidget.h"
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
-#include "ui/style/thememanager.h"
 
 
 // TODO - omit height calculation
@@ -44,11 +43,6 @@ AccordianBladeWidget::AccordianBladeWidget(QWidget* parent) :
     ui(new Ui::AccordianBladeWidget)
 {
     ui->setupUi(this);
-    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
-    // here, before any runtime sheet is applied, so the QStyle paints instead of
-    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
-    // no-op under the Classic theme, which those sheets ARE).
-    ThemeManager::clearClassicSheets(this);
 
     stretch = 0;
     setMinimumHeight(ui->bg->height());

@@ -14,16 +14,10 @@ For more information see the LICENSE file
 
 #include <QApplication>
 #include <QWindow>
-#include "ui/style/thememanager.h"
 
 ProgressDialog::ProgressDialog(QWidget *parent) : QDialog(parent), ui(new Ui::ProgressDialog)
 {
     ui->setupUi(this);
-    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
-    // here, before any runtime sheet is applied, so the QStyle paints instead of
-    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
-    // no-op under the Classic theme, which those sheets ARE).
-    ThemeManager::clearClassicSheets(this);
     // Qt::Dialog keeps this a top-level window now that callers parent us
     // (bare FramelessWindowHint has no window-type bit — a parented dialog
     // would collapse into an embedded child widget). Parenting matters:

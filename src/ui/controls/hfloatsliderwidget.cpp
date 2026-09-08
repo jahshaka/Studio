@@ -15,18 +15,12 @@ For more information see the LICENSE file
 #include "ui_hfloatsliderwidget.h"
 
 #include <QSignalBlocker>
-#include "ui/style/thememanager.h"
 
 HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     BaseWidget(parent),
     ui(new Ui::HFloatSliderWidget)
 {
     ui->setupUi(this);
-    // Qlementine owns this subtree: drop the .ui-embedded classic sheets right
-    // here, before any runtime sheet is applied, so the QStyle paints instead of
-    // dark-on-dark #212121 blocks nothing can reach (VISUAL_PARITY re-audit F3;
-    // no-op under the Classic theme, which those sheets ARE).
-    ThemeManager::clearClassicSheets(this);
     connect(ui->spinbox,    SIGNAL(valueChanged(double)),   SLOT(onValueSpinboxChanged(double)));
     connect(ui->spinbox,    SIGNAL(editingFinished()),      SLOT(onSpinboxEditingFinished()));
     connect(ui->slider,     SIGNAL(valueChanged(int)),      SLOT(onValueSliderChanged(int)));
@@ -39,19 +33,7 @@ HFloatSliderWidget::HFloatSliderWidget(QWidget* parent) :
     // 176 of them in a single run of ui.material_panel, which is one properties
     // panel. Parent it to the widget so the row frees it with everything else.
     // (Found by the LeakSanitizer lane, scripts/sanitize.sh lsan.)
-    //
-    // NO EXPLICIT BASE STYLE (VISUAL_PARITY re-audit F3, and it is load-bearing):
-    // this used to be `CustomStyle(this->style())`, which only ever worked by
-    // accident. The .ui sheet above gave the row its OWN QStyleSheetStyle, so
-    // `this->style()` handed back a per-row object and each proxy wrapped a
-    // private base. Clearing that sheet — which is the whole point of the sweep
-    // above — makes `this->style()` the SHARED application style, and ~200
-    // per-row proxies over the one QlementineStyle desynchronise its per-widget
-    // polish/focus-frame bookkeeping: a reproducible SIGSEGV in
-    // QFocusFrame::eventFilter while the dock widgets are torn down at exit.
-    // A QProxyStyle with no base tracks the application style the way Qt
-    // intends, and the override below is a pure styleHint anyway.
-    auto *sliderStyle = new CustomStyle();
+    auto *sliderStyle = new CustomStyle(this->style());
     sliderStyle->setParent(this);
     setStyle(sliderStyle);
 
