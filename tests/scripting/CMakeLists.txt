@@ -746,3 +746,23 @@ jah_no_display(
     scripting.e2e.world_modes
     scripting.e2e.rayon
     scripting.e2e.folders)
+
+# scripting.e2e.glb_textures — the owner's "the glb imports still don't work,
+# they import without the textures" (2026-09-09), as the round trip it really
+# is: import + place, read the material's maps, save/close/REOPEN, read them
+# again. The textures were never lost at import; the SAVE stored the .glb
+# Object's guid in every map slot (one stored object backs both the Object and
+# the member Texture, and the writer's tie-break did not say which), and the
+# reader resolved it straight back to the model file. Compared by store file
+# NAME — in the CAS that name is the content's sha256. Document verbs only ->
+# --headless.
+configure_file(scripts/e2e_glb_textures.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-glb_textures)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.glb_textures
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_glb_textures.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.glb_textures PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 180)
