@@ -13,7 +13,7 @@
         "unsupportedNodes": [
         ],
         "values": {
-            "roughness": 0
+            "roughness": 0.9
         }
     },
     "properties": [
@@ -74,7 +74,7 @@
                 "id": "c778f192-10c0-4ae1-9064-ff5d8f4a8d6d",
                 "title": "Float Property",
                 "type": "float",
-                "value": 1,
+                "value": 0.1,
                 "x": -599.5,
                 "y": 71
             },
@@ -118,7 +118,7 @@
             "name": "input_property3",
             "type": "float",
             "uniform": "input_property3",
-            "value": 1
+            "value": 0.1
         }
     ],
     "vertex_shader": ":assets/shaders/surface.vert",

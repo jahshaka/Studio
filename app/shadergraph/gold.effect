@@ -20,7 +20,7 @@
                 "g": 0.8500038385391235,
                 "r": 1
             },
-            "roughness": 0
+            "roughness": 0.25
         }
     },
     "properties": [
@@ -71,7 +71,7 @@
                 "id": "67a3e0de-7fc0-4e9c-a62f-417fac9915cd",
                 "title": "Float",
                 "type": "float",
-                "value": 1,
+                "value": 0.75,
                 "x": -83.52001190185547,
                 "y": 276.4800109863281
             },
