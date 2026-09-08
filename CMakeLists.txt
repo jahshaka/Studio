@@ -720,8 +720,10 @@ if(JAHSHAKA_BUILD_TESTS)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif()
 
-# Qlementine (thirdparty/qlementine submodule, MIT © Olivier Cléro, pinned v1.4.2):
-# the app-wide QStyle that replaces the per-widget dark stylesheets. Library only —
+# Qlementine (thirdparty/qlementine, MIT © Olivier Cléro): the app-wide QStyle that
+# replaces the per-widget dark stylesheets. VENDORED SOURCE since 2026-09-08 — it was a
+# submodule pinned to upstream v1.4.2, it is now ordinary tracked files we edit
+# (provenance + divergence log: thirdparty/qlementine/PROVENANCE.md). Library only —
 # QLEMENTINE_SANDBOX/QLEMENTINE_SHOWCASE stay off.
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/qlementine)
 
