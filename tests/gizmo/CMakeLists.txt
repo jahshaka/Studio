@@ -18,3 +18,26 @@ target_link_libraries(test_gizmo_overlay PRIVATE IrisGL JahshakaEngine Qt6::Gui 
 add_dependencies(test_gizmo_overlay JahshakaEngineMedia)
 add_test(NAME gizmo.overlay COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_overlay WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(gizmo.overlay PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600 LABELS "mirror")
+
+# gizmo.screen_size — "the gizmo is the same size on screen, everywhere"
+# (owner requirement 2026-09-08). Document-only: it projects the gizmo's REAL
+# draw items through the DOCUMENT camera's own matrices, so it needs the
+# headless graph (NULL render system) and no display at all — jah_no_display
+# below is the proof of that claim.
+add_executable(test_gizmo_screen_size test_gizmo_screen_size.cpp test_stubs.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/gizmomeshes.cpp ${CMAKE_SOURCE_DIR}/src/viewport/translationgizmo.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/rotationgizmo.cpp ${CMAKE_SOURCE_DIR}/src/viewport/scalegizmo.cpp)
+set_target_properties(test_gizmo_screen_size PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+target_include_directories(test_gizmo_screen_size PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gizmo_screen_size PRIVATE IrisGL Qt6::Gui Qt6::OpenGL Qt6::Widgets)
+jah_document_graph(test_gizmo_screen_size)
+add_test(NAME gizmo.screen_size COMMAND ${CMAKE_BINARY_DIR}/bin/test_gizmo_screen_size
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set_tests_properties(gizmo.screen_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 300 LABELS "document")
+jah_no_display(gizmo.screen_size)

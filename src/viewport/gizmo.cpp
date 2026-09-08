@@ -31,40 +31,76 @@ Gizmo::Gizmo()
 
 // Screen-constant gizmo sizing.
 //
-// TWO BUGS IN ONE LINE, both live since 2016 and both fixed here (owner report
-// 2026-09-07, root-caused on the rig):
+// THE CONTRACT (owner requirement, 2026-09-08): the gizmo is the SAME SIZE ON
+// SCREEN in every scene, on every window shape, and it never changes size when
+// the camera dollies in or out — Unreal's and Maya's behaviour. Everything
+// below exists to make that one sentence true.
 //
-//  1. DEGREES INTO qTan. `camera->angle` is the vertical angle of view in
-//     DEGREES (cameranode.h: "Degrees are always used internally"), and qTan
-//     takes RADIANS. At the default 45 the expression evaluated tan(22.5 rad)
-//     = +0.557 — a positive number by pure luck, which is why the gizmo looked
-//     roughly right forever. At fov 75 it evaluates tan(37.5 rad) = -0.199:
-//     gizmoScale goes NEGATIVE, every handle transform is mirrored (the visual
-//     flip pushTransform launders into a 180-degree rotation) and every hit
-//     radius — `gizmo->getGizmoScale() * handleScale` in the three gizmos'
-//     isHit — goes negative too, so no arrow can be picked at all.
-//  2. IT DIVIDES. Screen-constant sizing means the gizmo's world size must
-//     GROW with the angle of view: the same on-screen fraction of a wider
-//     frustum is more world units. `d / tan(fov/2)` shrinks it instead.
+// The maths: a world segment of length L, perpendicular to the view, at
+// distance d, covers
 //
-// The corrected form is the textbook one — world size = distance * tan(half
-// angle) * k — with k chosen so the default 45-degree camera keeps EXACTLY
-// today's look: the old expression gave 1/tan(22.5 rad) = 1.7935 * d, and
-// 4.33 * tan(22.5 deg) = 4.33 * 0.41421 = 1.7935. So nothing moves at 45 and
-// every other fov becomes correct instead of arbitrary.
+//     L / (2 * d * tan(vfov / 2))
+//
+// of the frame's height. Making that a CONSTANT means making L proportional to
+// d * tan(vfov/2), which is exactly what this function computes — the k below
+// is the constant of proportionality, so the fraction it produces is
+// independent of BOTH the distance and the angle of view. tests/gizmo's
+// gizmo.screen_size suite measures the projected fraction across distances
+// 2/5/20, angles 30/45/75 and aspects 16:9 and 2.4:1: invariant to the last
+// digit across distance, and identical across window shapes at a matched
+// rendered angle (the rest is perspective, and is bounded there).
+//
+// THREE BUGS IN ONE LINE, all now fixed:
+//
+//  1. DEGREES INTO qTan (2016-2026-09-07). `camera->angle` is the vertical
+//     angle of view in DEGREES (cameranode.h: "Degrees are always used
+//     internally"), and qTan takes RADIANS. At the default 45 the expression
+//     evaluated tan(22.5 rad) = +0.557 — a positive number by pure luck, which
+//     is why the gizmo looked roughly right forever. At fov 75 it evaluates
+//     tan(37.5 rad) = -0.199: gizmoScale goes NEGATIVE, every handle transform
+//     is mirrored (the visual flip pushTransform launders into a 180-degree
+//     rotation) and every hit radius — `gizmo->getGizmoScale() * handleScale`
+//     in the three gizmos' isHit — goes negative too, so no arrow can be picked
+//     at all.
+//  2. IT DIVIDED. Screen-constant sizing means the gizmo's world size must GROW
+//     with the angle of view: the same on-screen fraction of a wider frustum is
+//     more world units. `d / tan(fov/2)` shrinks it instead.
+//  3. IT READ THE AUTHORED ANGLE, NOT THE RENDERED ONE (the 2026-09-08 half of
+//     the owner report: "the gizmo is huge on the four silver balls"). A FREE
+//     camera on a window wider than its framing aspect is DRAWN at a narrowed
+//     vertical angle (freecamerapolicy.h), so `camera->angle` is not the
+//     frustum on screen: in the Grand Showroom's 75-degree camera the picture
+//     was 59 degrees tall on a 2.4:1 window while the gizmo sized itself for
+//     75, i.e. 1.35x too big — and the same mismatch made the gizmo's world
+//     size disagree with the pick rays cast through the rendered frustum.
+//     `effectiveFovDegrees()` IS the rendered angle (it is what
+//     updateCameraMatrices projects with), so the two can no longer diverge.
+//     Never read `camera->angle` here again.
+//
+// The k: world size = distance * tan(half angle) * k, with k chosen so the
+// default 45-degree camera keeps EXACTLY the pre-2026-09-07 look: the old
+// expression gave 1/tan(22.5 rad) = 1.7935 * d, and 4.33 * tan(22.5 deg) =
+// 4.33 * 0.41421 = 1.7935. So nothing moves at 45 and every other fov becomes
+// correct instead of arbitrary.
 void Gizmo::updateSize(iris::CameraNodePtr camera)
 {
 	if (!!selectedNode) {
 		if (camera->getProjection() == iris::CameraProjection::Perspective) {
 			float distToCam = (selectedNode->getGlobalPosition() - camera->getGlobalPosition()).length();
+			// THE ANGLE THAT IS ACTUALLY RENDERED, never the authored one
+			// (bug 3 above). With no framing hold, and on any window at or
+			// below the hold aspect, this IS `camera->angle`, bit for bit.
+			//
 			// Guard the ends of the range the way Ogre does (setFOVy is clamped
 			// to (0, 180) upstream): a zero or 180-degree angle has no tangent.
-			const float fovDeg = qBound(1.0f, camera->angle, 179.0f);
+			const float fovDeg = qBound(1.0f, camera->effectiveFovDegrees(), 179.0f);
 			gizmoScale = kGizmoScreenFraction * distToCam
 			           * qTan(qDegreesToRadians(fovDeg * 0.5f));
 		}
 		else {
-			//camera->orthoSize
+			// ORTHOGRAPHIC: there is no distance and no angle — the frame's
+			// height IS 2 * orthoSize at every depth, so a fixed multiple of it
+			// is already screen-constant. Unchanged since 2016 on purpose.
 			gizmoScale = camera->orthoSize * 5.0;
 		}
 	}

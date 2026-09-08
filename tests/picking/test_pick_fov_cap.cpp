@@ -1,40 +1,50 @@
-// PICKING AGREES WITH THE PICTURE ON A WIDE WINDOW (owner report 2026-09-07).
+// PICKING AGREES WITH THE PICTURE ON A WIDE WINDOW (owner report 2026-09-07;
+// the policy re-scoped 2026-09-08, see below).
 //
 // THE DEFECT this suite exists to stop coming back. The engine renders a FREE
-// camera through the wide-aspect FOV clamp — `verticalFovForHorizontalCap`
-// narrows the vertical angle once the target's aspect would take the horizontal
-// one past 95 degrees (OgreView.cpp, CameraDesc::maxHorizontalFovDegrees) —
-// while EVERY pick ray was unprojected through the DOCUMENT camera's UNCLAMPED
+// camera through the wide-aspect FRAMING HOLD — `verticalFovForFramingAspect`
+// narrows the vertical angle on a target WIDER than 16:9 so the horizontal
+// extent stays the 16:9 one (OgreView.cpp, CameraDesc::framingAspect) — while
+// EVERY pick ray was unprojected through the DOCUMENT camera's UNHELD
 // projection (ScenePicker::screenSegment -> CameraNode::updateCameraMatrices).
 // Two different frusta, one window. The error is zero at the centre of the
 // frame and grows towards the edges, so it reads as "picking is subtly wrong"
-// rather than "picking is off", and it bites at ANY aspect past the camera's
-// own threshold: the shipped Grand Showroom's 75-degree camera crosses it at
-// 1.42:1, i.e. on every ordinary monitor. The rig measured a chrome sphere
-// DRAWN at x = 2829 selecting a column eleven units behind it.
+// rather than "picking is off". The rig measured a chrome sphere DRAWN at
+// x = 2829 selecting a column eleven units behind it.
+//
+// THE 2026-09-08 RE-SCOPE, which this suite now also gates. The hold first
+// shipped as a FIXED 95-degree horizontal cap, which bites as a function of the
+// LENS: the shipped Grand Showroom's 75-degree camera crossed it at 1.42:1, so
+// the scene rendered at 63 degrees vertical instead of 75 on every ordinary
+// monitor — everything zoomed in by 1.25x. The policy is now an ASPECT (16:9):
+// at or below it the picture is the authored one, bit for bit, for EVERY lens.
+// So this suite runs its 75-degree camera at 16:9 as well, where the hold must
+// be the identity and picking must still land.
 //
 // WHY THIS SUITE IS NOT CIRCULAR. It does not compare the fix against itself:
 // it RENDERS the scene through the engine at the disputed aspect, finds where
 // each object actually LANDED IN THE PIXELS, and then asks the document picker
 // for the ray at that pixel. The assertion is a world-space one — the ray must
 // pass through the object's centre — so it is independent of the projection
-// maths on both sides, and it would fail identically if the engine's clamp
-// moved instead of the document's.
+// maths on both sides, and it would fail identically if the engine's hold moved
+// instead of the document's.
 //
 // WHAT IS PINNED
-//   1. Wide aspects (2.36:1 = 1264x536 and 5.94:1 = 3184x536, the rig's own
-//      two): the ray at every object's DRAWN centroid passes through that
-//      object's centre.
-//   2. The defect's own signature: with the cap taken OFF the document camera
-//      (i.e. the shipped behaviour before this fix) the same rays miss by
-//      units, not by a pixel. Without this the suite could pass on a build
-//      where the clamp never engaged at all.
-//   3. THE IDENTITY NEGATIVE: at 16:9 with the default 45-degree lens the
-//      projection matrix is BIT-IDENTICAL with the cap set and unset. The
-//      common case must not move by one ulp — every 16:9 pixel assertion in the
-//      tree depends on it.
-//   4. The control: a 45-degree camera at 16:9 picks exactly, capped or not.
-//   5. The cap is TRANSIENT — an authored camera never carries one, and a
+//   1. 16:9 (1280x720), where the hold is the IDENTITY: the ray at every
+//      object's drawn centroid passes through that object, and the held and
+//      unheld cameras cast the SAME ray.
+//   2. Wide aspects (2.40:1 = 1288x536, the owner's ultrawide shape, and
+//      5.94:1 = 3184x536, the rig's own): same assertion, with the hold now
+//      doing something.
+//   3. The defect's own signature: with the hold taken OFF the document camera
+//      the same rays miss by units, not by a pixel. Without this the suite
+//      could pass on a build where the hold never engaged at all.
+//   4. THE IDENTITY NEGATIVE: at 16:9 the projection matrix is BIT-IDENTICAL
+//      with the hold set and unset, at 45 AND at the Showroom's 75. The common
+//      case must not move by one ulp — every 16:9 pixel assertion in the tree
+//      depends on it, and the 2026-09-08 regression was exactly this promise
+//      being false.
+//   5. The hold is TRANSIENT — an authored camera never carries one, and a
 //      duplicate never inherits one.
 #include <QGuiApplication>
 
@@ -171,9 +181,9 @@ int main(int argc, char **argv)
     // the engine camera and the document one below.
     const Vec3 kCamPos(0.0f, 0.0f, 12.0f);
     const float kShowroomFov = 75.0f;
-    const float kCap = freecam::kFreeCameraMaxHorizontalFovDegrees;
+    const float kHold = freecam::kFreeCameraFramingAspect;
 
-    auto documentCamera = [&](float fovDeg, float aspect, float cap) {
+    auto documentCamera = [&](float fovDeg, float aspect, float hold) {
         auto cam = iris::CameraNode::create();
         cam->setLocalPos(toIris(kCamPos));
         cam->lookAt(iris::Vec3(0, 0, 0));
@@ -181,14 +191,18 @@ int main(int argc, char **argv)
         cam->nearClip = 0.1f;
         cam->farClip = 1000.0f;
         cam->setAspectRatio(aspect);
-        cam->setHorizontalFovCap(cap);
+        cam->setFramingAspect(hold);
         cam->update(0.0f);
         return cam;
     };
 
     struct Case { const char *name; int w, h; };
     const Case kCases[] = {
-        { "1264x536 (2.36:1, the owner's window)", 1264, 536 },
+        // 16:9 FIRST, and it is not decoration: under the new policy this is
+        // the case where the hold must do NOTHING, and picking must land
+        // anyway. It is the case the 2026-09-08 defect broke.
+        { "1280x720 (16:9, the hold is the identity here)", 1280, 720 },
+        { "1288x536 (2.40:1, the owner's ultrawide)", 1288, 536 },
         { "3184x536 (5.94:1, the rig's wide repro)", 3184, 536 },
     };
 
@@ -200,14 +214,14 @@ int main(int argc, char **argv)
         view->setScene(s);
 
         // EXACTLY what the app pushes for its explorer (scenemirror.cpp
-        // applyCamera + enginesceneviewport freeCameraFovCap).
+        // applyCamera + enginesceneviewport freeCameraFramingAspect).
         CameraDesc cd;
         cd.position = kCamPos;
         cd.orientation = Quat();          // identity: looking down -Z
         cd.fovDegrees = kShowroomFov;
         cd.nearClip = 0.1f;
         cd.farClip = 1000.0f;
-        cd.maxHorizontalFovDegrees = kCap;
+        cd.framingAspect = kHold;
         view->setCamera(cd);
 
         for (int i = 0; i < 3; ++i) engine->renderOneFrame();
@@ -216,27 +230,33 @@ int main(int argc, char **argv)
         const std::vector<Centroid> drawn = drawnCentroids(img);
 
         const float aspect = float(c.w) / float(c.h);
-        auto capped   = documentCamera(kShowroomFov, aspect, kCap);
-        auto uncapped = documentCamera(kShowroomFov, aspect, 0.0f);
+        auto held   = documentCamera(kShowroomFov, aspect, kHold);
+        auto unheld = documentCamera(kShowroomFov, aspect, 0.0f);
+        const bool engages = aspect > kHold;
 
-        // The cap must actually be doing something here, or the rest proves
-        // nothing: state the two angles out loud.
-        const float vCap = iris::lens::verticalFovDegForHorizontalCap(kShowroomFov, aspect, kCap);
-        std::printf("   aspect %.3f: authored vfov %.1f -> capped vfov %.2f "
-                    "(hfov %.1f -> %.1f)\n", double(aspect), double(kShowroomFov), double(vCap),
+        // State the two angles out loud: below 16:9 the hold must be the
+        // identity, above it it must actually be doing something. The rest of
+        // the case proves nothing without this line.
+        const float vHeld = iris::lens::verticalFovDegForFramingAspect(kShowroomFov, aspect, kHold);
+        std::printf("   aspect %.3f: authored vfov %.1f -> rendered vfov %.2f "
+                    "(hfov %.1f -> %.1f)\n", double(aspect), double(kShowroomFov), double(vHeld),
                     double(iris::lens::horizontalFovDeg(kShowroomFov, aspect)),
-                    double(iris::lens::horizontalFovDeg(vCap, aspect)));
-        CHECK(vCap < kShowroomFov - 1.0f, "the wide-aspect clamp engages at this aspect");
-        // ...and that the DOCUMENT and the ENGINE compute the same clamp. Two
+                    double(iris::lens::horizontalFovDeg(vHeld, aspect)));
+        if (engages)
+            CHECK(vHeld < kShowroomFov - 1.0f, "the framing hold engages past 16:9");
+        else
+            CHECK(vHeld == kShowroomFov,
+                  "at 16:9 the framing hold is the identity: the authored 75 degrees is rendered");
+        // ...and that the DOCUMENT and the ENGINE compute the same angle. Two
         // implementations (double-precision lens helpers document side, float
         // trig engine side) that must never disagree by anything that matters.
-        const float vEngine = verticalFovForHorizontalCap(kShowroomFov, aspect, kCap);
-        std::printf("   engine clamp %.6f vs document clamp %.6f (delta %.2e)\n",
-                    double(vEngine), double(vCap), double(std::fabs(vEngine - vCap)));
-        CHECK(std::fabs(vEngine - vCap) < 1e-3f,
-              "the document's clamp and the engine's agree to a thousandth of a degree");
+        const float vEngine = verticalFovForFramingAspect(kShowroomFov, aspect, kHold);
+        std::printf("   engine %.6f vs document %.6f (delta %.2e)\n",
+                    double(vEngine), double(vHeld), double(std::fabs(vEngine - vHeld)));
+        CHECK(std::fabs(vEngine - vHeld) < 1e-4f,
+              "the document's framing hold and the engine's agree to 1e-4 degrees");
 
-        float worstCapped = 0.0f, worstUncapped = 0.0f;
+        float worstHeld = 0.0f, worstUnheld = 0.0f;
         for (size_t i = 0; i < kNumMarkers; ++i) {
             if (drawn[i].n < 50) {
                 std::printf("FAIL: marker '%s' did not render (%ld px)\n", kMarkers[i].name, drawn[i].n);
@@ -246,76 +266,85 @@ int main(int argc, char **argv)
             const QPointF pt(drawn[i].x, drawn[i].y);
             const iris::Vec3 centre = toIris(kMarkers[i].pos);
             iris::Vec3 a, b;
-            ScenePicker::screenSegment(capped, c.w, c.h, pt, a, b);
-            const float dCap = distancePointToRay(centre, a, b);
-            ScenePicker::screenSegment(uncapped, c.w, c.h, pt, a, b);
+            ScenePicker::screenSegment(held, c.w, c.h, pt, a, b);
+            const float dHeld = distancePointToRay(centre, a, b);
+            ScenePicker::screenSegment(unheld, c.w, c.h, pt, a, b);
             const float dRaw = distancePointToRay(centre, a, b);
-            std::printf("   %-10s drawn at (%7.1f,%6.1f)  ray miss: capped %.4f  uncapped %.4f\n",
-                        kMarkers[i].name, drawn[i].x, drawn[i].y, double(dCap), double(dRaw));
-            if (dCap > worstCapped) worstCapped = dCap;
-            if (dRaw > worstUncapped) worstUncapped = dRaw;
+            std::printf("   %-10s drawn at (%7.1f,%6.1f)  ray miss: held %.4f  unheld %.4f\n",
+                        kMarkers[i].name, drawn[i].x, drawn[i].y, double(dHeld), double(dRaw));
+            if (dHeld > worstHeld) worstHeld = dHeld;
+            if (dRaw > worstUnheld) worstUnheld = dRaw;
         }
         // 0.25 world units at 12 units of range is about 40 pixels of the
         // narrow case and 40 of the wide one — far looser than the centroid
         // measurement and far tighter than the defect (which misses by units).
-        CHECK(worstCapped < 0.25f, "every ray cast at a DRAWN centroid passes through that object");
-        CHECK(worstUncapped > 1.0f, "the pre-fix (uncapped) ray misses by world units — the defect is real");
+        CHECK(worstHeld < 0.25f, "every ray cast at a DRAWN centroid passes through that object");
+        if (engages)
+            CHECK(worstUnheld > 1.0f,
+                  "the pre-fix (unheld) ray misses by world units — the defect is real");
+        else
+            CHECK(worstUnheld == worstHeld,
+                  "at 16:9 the held and unheld cameras cast exactly the same rays");
 
         engine->destroyView(view);
     }
 
-    // ---- 3. THE IDENTITY NEGATIVE ------------------------------------------
+    // ---- 4. THE IDENTITY NEGATIVE ------------------------------------------
     //
-    // 16:9 with the default lens is inside the cap, so setting one must not
-    // perturb a single bit of the projection. Compared as RAW BYTES, because
-    // "close enough" is exactly the claim that would let a pixel suite drift.
+    // At or below 16:9 the hold does nothing, so setting one must not perturb a
+    // single bit of the projection — at ANY lens, which is the promise the
+    // 95-degree cap broke. Compared as RAW BYTES, because "close enough" is
+    // exactly the claim that would let a pixel suite drift.
     {
-        const float aspect = 16.0f / 9.0f;
-        auto plain = documentCamera(45.0f, aspect, 0.0f);
-        auto withCap = documentCamera(45.0f, aspect, kCap);
-        CHECK(std::memcmp(&plain->projMatrix, &withCap->projMatrix, sizeof(iris::Mat4)) == 0,
-              "at 16:9 the 45-degree projection matrix is BIT-IDENTICAL with the cap set");
-        CHECK(withCap->effectiveFovDegrees() == 45.0f,
-              "an angle inside the cap is returned bit-for-bit, no arithmetic");
-        CHECK(withCap->angle == 45.0f, "the AUTHORED angle is never rewritten by the cap");
-
-        // ...and the same at the Showroom's own lens on a NARROW window, which
-        // is the other half of "the common case does not move".
-        auto plain43 = documentCamera(kShowroomFov, 4.0f / 3.0f, 0.0f);
-        auto cap43 = documentCamera(kShowroomFov, 4.0f / 3.0f, kCap);
-        CHECK(std::memcmp(&plain43->projMatrix, &cap43->projMatrix, sizeof(iris::Mat4)) == 0,
-              "at 4:3 the 75-degree projection matrix is BIT-IDENTICAL with the cap set");
+        const float ordinary[] = { 4.0f/3.0f, 3.0f/2.0f, 16.0f/10.0f, 16.0f/9.0f };
+        const float lenses[]   = { 45.0f, 60.0f, 70.0f, kShowroomFov, 90.0f };
+        bool identical = true;
+        for (float lens : lenses) {
+            for (float a : ordinary) {
+                auto plain = documentCamera(lens, a, 0.0f);
+                auto free  = documentCamera(lens, a, kHold);
+                if (std::memcmp(&plain->projMatrix, &free->projMatrix, sizeof(iris::Mat4)) != 0 ||
+                    free->effectiveFovDegrees() != lens || free->angle != lens) {
+                    identical = false;
+                    std::printf("   MOVED: lens %.0f at aspect %.3f (effective %.4f)\n",
+                                double(lens), double(a), double(free->effectiveFovDegrees()));
+                }
+            }
+        }
+        CHECK(identical,
+              "4:3 / 3:2 / 16:10 / 16:9 projections are BIT-IDENTICAL with the hold set, "
+              "for lenses 45..90 — including the Showroom's 75 (the 2026-09-08 defect)");
     }
 
-    // ---- 4. the control: 45 degrees at 16:9 picks exactly either way --------
+    // ---- 5. the control: 45 degrees at 16:9 picks exactly either way --------
     {
         const int W = 1920, H = 1080;
         const float aspect = float(W) / float(H);
         auto plain = documentCamera(45.0f, aspect, 0.0f);
-        auto withCap = documentCamera(45.0f, aspect, kCap);
+        auto free  = documentCamera(45.0f, aspect, kHold);
         // The exact centre of the frame and a point 30% out: analytic, because
         // this case is about the two cameras agreeing with EACH OTHER.
         float worst = 0.0f;
         for (const QPointF pt : { QPointF(W * 0.5, H * 0.5), QPointF(W * 0.8, H * 0.35) }) {
             iris::Vec3 a0, b0, a1, b1;
             ScenePicker::screenSegment(plain, W, H, pt, a0, b0);
-            ScenePicker::screenSegment(withCap, W, H, pt, a1, b1);
+            ScenePicker::screenSegment(free, W, H, pt, a1, b1);
             const float d = ((b1 - a1).normalized() - (b0 - a0).normalized()).length();
             if (d > worst) worst = d;
         }
         std::printf("   16:9 / 45 deg: worst ray-direction difference %.3e\n", double(worst));
-        CHECK(worst == 0.0f, "a 45-degree camera at 16:9 casts the SAME ray capped or not");
+        CHECK(worst == 0.0f, "a 45-degree camera at 16:9 casts the SAME ray held or not");
     }
 
-    // ---- 5. the cap is transient -------------------------------------------
+    // ---- 6. the hold is transient -------------------------------------------
     {
         auto authored = iris::CameraNode::create();
-        CHECK(authored->horizontalFovCap() == 0.0f,
-              "a camera is born UNCAPPED — every authored camera keeps its lens");
-        authored->setHorizontalFovCap(kCap);
+        CHECK(authored->framingAspect() == 0.0f,
+              "a camera is born UNHELD — every authored camera keeps its lens");
+        authored->setFramingAspect(kHold);
         auto copy = authored->createDuplicate().staticCast<iris::CameraNode>();
-        CHECK(copy && copy->horizontalFovCap() == 0.0f,
-              "a duplicate does NOT inherit the cap (it is a host's statement, not the document's)");
+        CHECK(copy && copy->framingAspect() == 0.0f,
+              "a duplicate does NOT inherit the hold (it is a host's statement, not the document's)");
     }
 
     engine->destroyScene(s);

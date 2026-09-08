@@ -1158,10 +1158,11 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
     return true;
 }
 
-// THE WIDE-ASPECT FOV CAP, for this viewport's OWN camera only
-// (viewport/freecamerapolicy.h). The explorer is a free camera and gets the cap;
-// a PILOTED scene camera is authored and never does — its lens is the shot.
-float EngineSceneViewport::freeCameraFovCap() const
+// THE WIDE-ASPECT FRAMING HOLD, for this viewport's OWN camera only
+// (viewport/freecamerapolicy.h). The explorer is a free camera and gets the
+// hold; a PILOTED scene camera is authored and never does — its lens is the
+// shot.
+float EngineSceneViewport::freeCameraFramingAspect() const
 {
     // ONE SOURCE OF TRUTH, and it is the camera itself (2026-09-07 picking fix).
     // adoptEditorCamera stamps the policy onto the explorer and onto nothing
@@ -1169,14 +1170,14 @@ float EngineSceneViewport::freeCameraFovCap() const
     // through — the document's projection and the engine's now read the same
     // field instead of two hosts agreeing by convention.
     const iris::CameraNodePtr cam = viewCamera();
-    return cam ? cam->horizontalFovCap() : 0.0f;
+    return cam ? cam->framingAspect() : 0.0f;
 }
 
 void EngineSceneViewport::adoptEditorCamera(iris::CameraNodePtr camera)
 {
     if (!camera) return;
     mEditorCam = camera;
-    mEditorCam->setHorizontalFovCap(freecam::kFreeCameraMaxHorizontalFovDegrees);
+    mEditorCam->setFramingAspect(freecam::kFreeCameraFramingAspect);
 }
 
 void EngineSceneViewport::setPipEnabled(bool on)
@@ -1340,7 +1341,7 @@ void EngineSceneViewport::syncFrame(float dtOverride)
     }
     if (mMirror) mMirror->applySky(view());
     if (mMirror) mMirror->applyEnvironment(view(), mEngine.get());
-    if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFovCap());
+    if (mMirror && viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
     syncPip();
     // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
     // particles too. They are simulated inside the engine now, from the
@@ -1498,7 +1499,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
         // Textured skies are scene geometry and show up regardless.
         mMirror->applySky(shot);
         mMirror->applyEnvironment(shot);
-        if (viewCamera()) mMirror->applyCamera(viewCamera(), shot, freeCameraFovCap());
+        if (viewCamera()) mMirror->applyCamera(viewCamera(), shot, freeCameraFramingAspect());
         // applyEnvironment pushed the scene's post-fx description, which an
         // offscreen view ignores unless it is told otherwise (POST_CHAIN_SPEC
         // §7.3). `grade` is that opt-in, and it has three answers because the
@@ -1874,7 +1875,7 @@ void EngineSceneViewport::primeSceneEnvironment()
         LoadTimeline::Accumulate env(QStringLiteral("engine:applyEnvironment"));
         mMirror->applyEnvironment(view(), mEngine.get());
     }
-    if (viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFovCap());
+    if (viewCamera()) mMirror->applyCamera(viewCamera(), view(), freeCameraFramingAspect());
 }
 
 unsigned EngineSceneViewport::warmUpShaders()

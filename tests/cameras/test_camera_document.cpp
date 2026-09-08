@@ -31,11 +31,13 @@
 #include <QVariant>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Types.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/core/properties/property.h"
+#include "irisgl/document/scenegraph/cameralens.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
@@ -350,19 +352,27 @@ int main(int argc, char **argv)
               "and points its -Z axis at the target");
     }
 
-    // ---- 9. THE WIDE-ASPECT FOV CLAMP (owner report 2026-09-07) -----------
-    // The policy, as a pure function: `angle` is VERTICAL, so the horizontal
-    // angle of view grows with the target's aspect and an ultra-wide window
-    // fisheyes a free camera (45 vertical is 118 degrees wide at 32:9). Past
-    // the aspect where a 95-degree horizontal cap bites, the vertical angle
-    // narrows to hold it there.
+    // ---- 9. THE WIDE-ASPECT FRAMING HOLD ---------------------------------
+    // (owner report 2026-09-07; the policy RE-SCOPED 2026-09-08 after the
+    // first version shipped a fixed 95-degree horizontal cap and zoomed every
+    // wide-lens scene in — the Grand Showroom's 75-degree camera rendered at
+    // 63 degrees vertical on any monitor wider than 3:2, which the owner saw as
+    // "imported assets have the wrong scale".)
     //
-    // The load-bearing half is what the clamp does NOT do: at and below 16:9 it
-    // returns the authored angle BIT-IDENTICALLY, which is what lets every
-    // existing pixel suite stay byte-exact.
+    // THE POLICY, as a pure function: hold the 16:9 framing beyond 16:9. `angle`
+    // is VERTICAL, so the horizontal angle of view grows with the target's
+    // aspect and an ultra-wide window fisheyes a free camera (45 vertical is
+    // 118 degrees wide at 32:9). ABOVE the framing aspect the vertical angle
+    // narrows just enough to keep the horizontal extent the shot has AT that
+    // aspect; at or below it nothing happens at all.
+    //
+    // The load-bearing half is what the hold does NOT do: at and below 16:9 it
+    // returns the authored angle BIT-IDENTICALLY, for EVERY lens — which is
+    // what lets every existing pixel suite stay byte-exact, and is precisely
+    // what a degree cap could not promise.
     {
-        using jahshaka::engine::verticalFovForHorizontalCap;
-        const float cap = 95.0f;
+        using jahshaka::engine::verticalFovForFramingAspect;
+        const float hold = 16.0f / 9.0f;
         const float authored = 45.0f;
         const auto hfov = [](float vfovDeg, float aspect) {
             const float k = float(M_PI) / 180.0f;
@@ -370,64 +380,143 @@ int main(int argc, char **argv)
         };
 
         // Off is the identity, in every spelling.
-        CHECK(verticalFovForHorizontalCap(authored, 1.777f, 0.0f) == authored,
-              "fov clamp: a zero cap is the identity, bit for bit");
-        CHECK(verticalFovForHorizontalCap(authored, 0.0f, cap) == authored,
-              "fov clamp: a zero aspect is the identity");
+        CHECK(verticalFovForFramingAspect(authored, 1.777f, 0.0f) == authored,
+              "framing hold: a zero hold aspect is the identity, bit for bit");
+        CHECK(verticalFovForFramingAspect(authored, 0.0f, hold) == authored,
+              "framing hold: a zero target aspect is the identity");
 
-        // Normal aspects: UNTOUCHED, and the equality is exact (==, not near).
+        // ORDINARY WINDOWS, EVERY LENS: UNTOUCHED, and the equality is exact
+        // (==, not near). This is the assertion the 95-degree cap could not
+        // make: it held for a 45-degree lens and failed for a 75-degree one.
         const float normal[] = { 1.0f, 4.0f/3.0f, 3.0f/2.0f, 16.0f/10.0f, 16.0f/9.0f };
+        const float lenses[] = { 30.0f, 45.0f, 60.0f, 70.0f, 75.0f, 90.0f };
         bool identical = true;
-        for (float a : normal) {
-            const float out = verticalFovForHorizontalCap(authored, a, cap);
-            if (out != authored) { identical = false; printf("    aspect %.3f -> %.6f\n", a, out); }
-        }
-        CHECK(identical, "fov clamp: 1:1 through 16:9 return the authored angle BIT-IDENTICALLY");
-        printf("    16:9  hfov = %.2f deg (cap %.0f) -> vfov stays %.2f\n",
-               hfov(authored, 16.0f/9.0f), cap, verticalFovForHorizontalCap(authored, 16.0f/9.0f, cap));
-
-        // THE SWEEP. Below the cap nothing moves; at and above it the
-        // horizontal angle is held AT the cap (not merely under it) and the
-        // vertical one narrows to do it. MEASURED, so the sweep also documents
-        // where the cap actually starts to bite for the default 45-degree lens:
-        // 21:9 is 88 degrees wide and untouched, 32:9 is 112 and clamped.
-        const float sweep[] = { 4.0f/3.0f, 16.0f/9.0f, 2.0f, 21.0f/9.0f, 2.5f,
-                                32.0f/9.0f, 4.0f, 5.0f };
-        bool held = true;
-        for (float a : sweep) {
-            const float before = hfov(authored, a);
-            const float v = verticalFovForHorizontalCap(authored, a, cap);
-            const float after = hfov(v, a);
-            printf("    aspect %.3f: hfov %.2f -> %.2f deg (vfov %.2f -> %.2f)%s\n",
-                   a, before, after, authored, v, before > cap ? "  CLAMPED" : "");
-            if (before <= cap) {
-                // Inside the cap: the identity, exactly.
-                if (v != authored) held = false;
-            } else {
-                if (!near(after, cap, 0.01f)) held = false;
-                if (!(v < authored) || !(v > 1.0f)) held = false;
+        for (float lens : lenses) {
+            for (float a : normal) {
+                const float out = verticalFovForFramingAspect(lens, a, hold);
+                if (out != lens) {
+                    identical = false;
+                    printf("    lens %.0f at aspect %.3f -> %.6f\n", lens, a, out);
+                }
             }
         }
-        CHECK(held, "fov clamp: inside the cap nothing moves; past it the HORIZONTAL angle is "
-                    "held AT the cap and the vertical angle narrows to do it");
+        CHECK(identical, "framing hold: 1:1 through 16:9 return the authored angle "
+                         "BIT-IDENTICALLY, for lenses 30..90");
+        printf("    16:9  hfov = %.2f deg -> vfov stays %.2f (45-degree lens)\n",
+               hfov(authored, 16.0f/9.0f), verticalFovForFramingAspect(authored, 16.0f/9.0f, hold));
+
+        // THE SWEEP. Below the hold nothing moves; above it the HORIZONTAL
+        // extent is held at exactly the 16:9 one and the vertical angle narrows
+        // to do it. MEASURED, so the sweep also documents what the free camera
+        // now does on the panels people actually own: 21:9 keeps 72.7 degrees
+        // of horizontal view (not 88), 32:9 keeps 72.7 (not 112).
+        const float sweep[] = { 4.0f/3.0f, 16.0f/9.0f, 2.0f, 21.0f/9.0f, 2.4f,
+                                32.0f/9.0f, 4.0f, 5.0f };
+        const float heldHfov = hfov(authored, hold);
+        bool ok = true;
+        for (float a : sweep) {
+            const float before = hfov(authored, a);
+            const float v = verticalFovForFramingAspect(authored, a, hold);
+            const float after = hfov(v, a);
+            printf("    aspect %.3f: hfov %.2f -> %.2f deg (vfov %.2f -> %.2f)%s\n",
+                   a, before, after, authored, v, a > hold ? "  HELD" : "");
+            if (a <= hold) {
+                if (v != authored) ok = false;      // the identity, exactly
+            } else {
+                if (!near(after, heldHfov, 0.01f)) ok = false;
+                if (!(v < authored) || !(v > 1.0f)) ok = false;
+            }
+        }
+        CHECK(ok, "framing hold: at or below 16:9 nothing moves; above it the HORIZONTAL "
+                  "extent is held at the 16:9 one and the vertical angle narrows to do it");
 
         // Monotonic: wider target, narrower vertical angle. No inversions.
         float prev = 1e9f;
         bool monotonic = true;
         for (float a = 1.0f; a <= 6.0f; a += 0.25f) {
-            const float v = verticalFovForHorizontalCap(authored, a, cap);
+            const float v = verticalFovForFramingAspect(authored, a, hold);
             if (v > prev + 1e-4f) monotonic = false;
             prev = v;
         }
-        CHECK(monotonic, "fov clamp: the vertical angle never widens as the target widens");
+        CHECK(monotonic, "framing hold: the vertical angle never widens as the target widens");
 
-        // An AUTHORED wide lens is still capped when a FREE camera carries it,
-        // and left alone when the cap is off — which is the whole rule the
+        // An AUTHORED wide lens is still held when a FREE camera carries it,
+        // and left alone when the hold is off — which is the whole rule the
         // mirror enforces by passing 0 for authored cameras.
-        CHECK(verticalFovForHorizontalCap(90.0f, 32.0f/9.0f, 0.0f) == 90.0f,
-              "fov clamp: an authored 90-degree lens at 32:9 is untouched with the cap off");
-        CHECK(verticalFovForHorizontalCap(90.0f, 32.0f/9.0f, cap) < 90.0f,
-              "fov clamp: ...and IS narrowed when a free camera carries it");
+        CHECK(verticalFovForFramingAspect(90.0f, 32.0f/9.0f, 0.0f) == 90.0f,
+              "framing hold: an authored 90-degree lens at 32:9 is untouched with the hold off");
+        CHECK(verticalFovForFramingAspect(90.0f, 32.0f/9.0f, hold) < 90.0f,
+              "framing hold: ...and IS narrowed when a free camera carries it");
+
+        // THE DOCUMENT AND THE ENGINE ARE ONE POLICY. Two implementations —
+        // double-precision lens helpers here, float trig in the engine header —
+        // that must never disagree about what is on screen, because one draws
+        // the frame and the other casts the pick ray through it.
+        float worst = 0.0f;
+        for (float lens : lenses) {
+            for (float a = 1.0f; a <= 6.0f; a += 0.1f) {
+                const float d = iris::lens::verticalFovDegForFramingAspect(lens, a, hold);
+                const float e = verticalFovForFramingAspect(lens, a, hold);
+                worst = std::max(worst, std::fabs(d - e));
+            }
+        }
+        printf("    document vs engine, 300 (lens, aspect) pairs: worst delta %.3e deg\n", worst);
+        CHECK(worst < 1e-4f, "framing hold: document and engine agree to 1e-4 degrees everywhere");
+
+        // ---- THE PROJECTION IS BIT-IDENTICAL AT ORDINARY ASPECTS ----------
+        // The function above is the policy; THIS is the promise the rest of the
+        // app depends on. A free camera (hold set) and an authored one (hold
+        // off) must produce the same projection MATRIX, byte for byte, at every
+        // ordinary aspect and every lens — that is what makes "the cap made my
+        // scene zoom in" impossible to reintroduce.
+        {
+            bool bitIdentical = true;
+            for (float lens : lenses) {
+                for (float a : normal) {
+                    auto plain = iris::CameraNode::create();
+                    auto free  = iris::CameraNode::create();
+                    for (auto &c : { plain, free }) {
+                        c->angle = lens;
+                        c->nearClip = 0.1f;
+                        c->farClip = 1000.0f;
+                        c->setAspectRatio(a);
+                    }
+                    free->setFramingAspect(hold);
+                    plain->updateCameraMatrices();
+                    free->updateCameraMatrices();
+                    if (std::memcmp(&plain->projMatrix, &free->projMatrix, sizeof(iris::Mat4)) != 0) {
+                        bitIdentical = false;
+                        printf("    MOVED: lens %.0f at aspect %.3f\n", lens, a);
+                    }
+                    if (free->effectiveFovDegrees() != lens) {
+                        bitIdentical = false;
+                        printf("    effective fov %.4f != authored %.0f at aspect %.3f\n",
+                               free->effectiveFovDegrees(), lens, a);
+                    }
+                }
+            }
+            CHECK(bitIdentical,
+                  "framing hold: 4:3 / 3:2 / 16:10 / 16:9 projections are BIT-IDENTICAL "
+                  "with the hold set, for lenses 30..90 (the 2026-09-08 regression gate)");
+
+            // ...and on a WIDER window it does engage, on the same camera, with
+            // the AUTHORED angle left alone. The Grand Showroom's own numbers.
+            auto showroom = iris::CameraNode::create();
+            showroom->angle = 75.0f;
+            showroom->setAspectRatio(2.4f);
+            showroom->setFramingAspect(hold);
+            showroom->updateCameraMatrices();
+            printf("    Showroom lens 75 at 2.40:1 -> effective vfov %.2f (was 63.13 under the "
+                   "95-degree cap, at EVERY aspect past 1.42:1)\n",
+                   showroom->effectiveFovDegrees());
+            CHECK(showroom->effectiveFovDegrees() < 75.0f && showroom->angle == 75.0f,
+                  "framing hold: past 16:9 the rendered angle narrows and the AUTHORED one does not");
+            showroom->setAspectRatio(16.0f / 9.0f);
+            showroom->updateCameraMatrices();
+            CHECK(showroom->effectiveFovDegrees() == 75.0f,
+                  "framing hold: the SAME free camera renders its authored 75 degrees at 16:9 "
+                  "(the owner-blocking defect: it rendered 63.13)");
+        }
     }
 
     printf(failures == 0 ? "\nALL CAMERA DOCUMENT CHECKS PASSED\n"

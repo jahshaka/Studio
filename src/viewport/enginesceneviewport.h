@@ -85,10 +85,10 @@ public:
     void onFlySpeedChanged() override { emit mEvents.flySpeedChanged(); }
 
 private:
-    /// The wide-aspect horizontal FOV cap for the camera this view is currently
-    /// rendering: the policy value for the EXPLORER, zero (off) for a piloted
-    /// scene camera (viewport/freecamerapolicy.h).
-    float freeCameraFovCap() const;
+    /// The wide-aspect FRAMING HOLD aspect for the camera this view is
+    /// currently rendering: the policy value (16:9) for the EXPLORER, zero
+    /// (off) for a piloted scene camera (viewport/freecamerapolicy.h).
+    float freeCameraFramingAspect() const;
     /// Takes ownership of the explorer camera and STAMPS THE FREE-CAMERA POLICY
     /// ON IT (freecamerapolicy.h). Every assignment to `mEditorCam` goes through
     /// here — a fresh camera, a project's remembered one, a scripted one — so
