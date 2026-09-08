@@ -136,6 +136,10 @@ void EditorCameraController::onMouseMove(int x,int y)
     // camera back on the orbit sphere so the pivot stays put on screen. The
     // free camera keeps its own orientation model — this is a temporary
     // orbit for the duration of the drag only.
+    // THE AXIS-VIEW LOCK, gesture 1 of 2 (Alt+LMB orbit). Ignored outright in
+    // an axis view: the drag turns nothing and pans nothing (canLeftMouseDrag
+    // refuses while Alt is orbiting), which is Unreal's and Maya's answer.
+    if (altOrbit && leftMouseDown && rotationLocked) return;
     if (altOrbit && leftMouseDown && camera) {
         this->yaw += x / 10.0f;
         this->pitch += y / 10.0f;
@@ -147,7 +151,10 @@ void EditorCameraController::onMouseMove(int x,int y)
         return;   // never also pan/look on the same drag
     }
 
-    if(rightMouseDown)
+    // Gesture 2 of 2: the RMB look. Locked, the right button still means "I am
+    // flying" (it is what arms the fly keys and the wheel's speed step) — it
+    // just cannot turn the camera any more.
+    if(rightMouseDown && !rotationLocked)
     {
         //rotate camera
         this->yaw += x/10.0f;
@@ -181,13 +188,15 @@ void EditorCameraController::onMouseMove(int x,int y)
     // moving the cursor over the viewport rewrote the camera's rotation from
     // (pitch, yaw, 0) and levelled any roll it had. The pan branch above
     // already moved the camera and called update(0); its rotation is unchanged.
-    if (rightMouseDown) updateCameraRot();
+    if (rightMouseDown && !rotationLocked) updateCameraRot();
 }
 
 void EditorCameraController::setAltOrbit(bool active, const iris::Vec3 &pivot)
 {
 	CameraControllerBase::setAltOrbit(active, pivot);
-	if (!active || !camera) return;
+	// LOCKED (an axis view): ignored, set-up included — see the arcball's
+	// setAltOrbit for why the SET-UP is the part that could still be felt.
+	if (!active || !camera || rotationLocked) return;
 	// Capture the orbit radius at drag start so the first frame cannot jump;
 	// a camera sitting exactly on the pivot gets a sane default distance.
 	altOrbitDistance = camera->getGlobalPosition().distanceToPoint(pivot);
@@ -313,21 +322,51 @@ void EditorCameraController::update(float dt)
 {
     if (!camera || !rightMouseDown || heldKeys.isEmpty()) return;
 
+    const iris::Quat rot = camera->getLocalRot();
     const iris::Vec3 worldUp(0, 1, 0);
-    const iris::Vec3 forward = camera->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
-    const iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
+    const iris::Vec3 forward = rot.rotatedVector(iris::Vec3(0, 0, -1));
+    const iris::Vec3 camRight = rot.rotatedVector(iris::Vec3(1, 0, 0));
+    const iris::Vec3 camUp = rot.rotatedVector(iris::Vec3(0, 1, 0));
+    // Strafe stays HORIZONTAL in free flight (right = forward x worldUp), which
+    // is the whole point of flying against the world's up rather than the
+    // camera's — except that the cross product DEGENERATES when the camera
+    // looks straight up or straight down: Vec3::normalized() returns a ZERO
+    // vector there, so A and D silently did nothing at the poles (found while
+    // building the axis-view lock, 2026-09-08 — a top view is exactly that
+    // pose). Falling back to the camera's own right vector is the same
+    // direction everywhere else and the only defined one there.
+    iris::Vec3 right = iris::Vec3::crossProduct(forward, worldUp).normalized();
+    if (right.isNull()) right = camRight;
 
     const auto held = [this](int a, int b) {
         return heldKeys.contains(a) || heldKeys.contains(b);
     };
 
     iris::Vec3 move;
-    if (held(Qt::Key_W, Qt::Key_Up))    move += forward;
-    if (held(Qt::Key_S, Qt::Key_Down))  move -= forward;
-    if (held(Qt::Key_D, Qt::Key_Right)) move += right;
-    if (held(Qt::Key_A, Qt::Key_Left))  move -= right;
-    if (heldKeys.contains(Qt::Key_E)) move += worldUp;
-    if (heldKeys.contains(Qt::Key_Q)) move -= worldUp;
+    if (rotationLocked) {
+        // AXIS VIEW: the fly keys become a PAN of the view plane plus a dolly
+        // along its normal, on the camera's own basis (AXIS_VIEW_LOCK, owner
+        // report 2026-09-08). W/S pan up and down the screen — "forward" on a
+        // map is up the map, and moving along the view normal is invisible in
+        // an orthographic view, so mapping W to it would read as a dead key.
+        // A/D strafe in-plane exactly as they do in perspective. Q/E become the
+        // dolly: E backs the camera out along the view normal (up, in a top
+        // view — the direction "up" still means to the person looking), Q
+        // pushes it in. Nothing here can change the camera's ROTATION.
+        if (held(Qt::Key_W, Qt::Key_Up))    move += camUp;
+        if (held(Qt::Key_S, Qt::Key_Down))  move -= camUp;
+        if (held(Qt::Key_D, Qt::Key_Right)) move += camRight;
+        if (held(Qt::Key_A, Qt::Key_Left))  move -= camRight;
+        if (heldKeys.contains(Qt::Key_E)) move -= forward;
+        if (heldKeys.contains(Qt::Key_Q)) move += forward;
+    } else {
+        if (held(Qt::Key_W, Qt::Key_Up))    move += forward;
+        if (held(Qt::Key_S, Qt::Key_Down))  move -= forward;
+        if (held(Qt::Key_D, Qt::Key_Right)) move += right;
+        if (held(Qt::Key_A, Qt::Key_Left))  move -= right;
+        if (heldKeys.contains(Qt::Key_E)) move += worldUp;
+        if (heldKeys.contains(Qt::Key_Q)) move -= worldUp;
+    }
     if (move.isNull()) return;
 
     const float boost = heldKeys.contains(Qt::Key_Shift) ? 3.0f : 1.0f;

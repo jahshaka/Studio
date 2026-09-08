@@ -56,7 +56,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
           Needs::Engine },
         { "focusSelection", "editor.focusSelection() -> bool",
-          "Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept.",
+          "Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. "
+          "IN A ROTATION-LOCKED AXIS VIEW it CENTRES instead: the camera keeps its axis orientation, slides along the view axis until the node is centred, and the framing is done by the ortho zoom "
+          "(backing off is invisible in an orthographic projection) — turning to face the node there would tilt a \"top\" view off the axis it is named after.",
           Needs::Engine },
         { "gameView", "editor.gameView(enabled) -> bool",
           "Game View (the G key): hides every in-viewport editor helper — grid, light wires, selection outline, gizmo. Docks stay; not persisted.",
@@ -64,7 +66,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "isGameView", "editor.isGameView() -> bool",
           "Whether Game View is active.",
           Needs::Engine },
-        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume}",
+        { "overlays", "editor.overlays() -> {grid, lightWires, selectionWireframe, stats, physicsDebug, gameView, giVolume, gridPlane}",
           "The viewport's editor helpers, as they are right now: `grid` the ground grid, "
           "`lightWires` the light icons and their range wires, `selectionWireframe` the selection "
           "highlight style (true = polygon wireframe, false = silhouette outline), `stats` the "
@@ -74,7 +76,11 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`giVolume` the wireframe boxes around the GI lit volume and the reflection-probe "
           "region world.giStatus() reports (off by default, drawn only while GI is on — the lit "
           "volume is the one thing in a GI scene a user cannot otherwise see, and an object "
-          "outside it gets no bounce), `gameView` the "
+          "outside it gets no bounce), `gridPlane` which plane the grid is drawn in — \"floor\" (the XZ "
+          "ground: every perspective view, and top/bottom), \"frontXY\" (front/back) or \"sideYZ\" "
+          "(left/right). It follows the canonical VIEW and never the camera's pose, so panning inside "
+          "an axis view cannot tip the grid out of the view plane; it is READ-ONLY — editor.setView "
+          "moves it and editor.setOverlays refuses it like any other unknown key. `gameView` the "
           "master switch that hides the HELPERS all at once. `stats` is deliberately NOT one of the "
           "things gameView hides: it is a diagnostic, not an editor helper, and \"what is my frame "
           "time in the game view\" is the question people actually ask. Read app.renderStats() for "
@@ -94,13 +100,19 @@ QVector<VerbInfo> EditorApi::verbs() const
           "does; `physicsDebug` is the exception, its menu checkmark follows.",
           Needs::Engine },
         { "setView", "editor.setView(\"top\"|\"bottom\"|\"left\"|\"right\"|\"front\"|\"back\"|\"perspective\") -> bool",
-          "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes.",
+          "Snaps the editor camera to a canonical view (the toolbar Views dropdown / X, Y, Z keys). Each view remembers its camera between visits: \"perspective\" returns to its remembered free/orbit pose, each ortho view to its own pan and zoom (a first visit gets the standard axis framing). Session-only memory; works in both camera modes. "
+          "The six AXIS views are ROTATION-LOCKED: they are orthographic measuring views that stay pointed down their axis, so rotation gestures are ignored there until you return to \"perspective\" (editor.camera().rotationLocked reports it).",
           Needs::Engine },
         { "view", "editor.view() -> string",
           "The last canonical view requested via editor.setView (\"perspective\" until one is set). Informational — free orbiting afterwards does not reset it.",
           Needs::Engine },
-        { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize}",
-          "The editor camera's current pose: local position, local rotation quaternion, projection mode and ortho zoom. Read-only — the pixel-free way to assert camera moves (focus, view switches).",
+        { "camera", "editor.camera() -> {position:{x,y,z}, rotation:{x,y,z,scalar}, projection:\"perspective\"|\"orthogonal\", orthoSize, rotationLocked}",
+          "The editor camera's current pose: local position, local rotation quaternion, projection mode and ortho zoom. Read-only — the pixel-free way to assert camera moves (focus, view switches). "
+          "`rotationLocked` is the AXIS-VIEW LOCK: true while the viewport is in one of the six axis views (editor.view()), which are orthographic measuring views and stay pointed down their axis. "
+          "Locked, the rotation GESTURES do nothing — the right-mouse look drag, the Alt+left-mouse orbit and the arcball's own drag are ignored rather than answered by dropping out of the view — "
+          "while panning (middle-mouse drag), zooming (the wheel, which moves `orthoSize`) and the fly keys keep working; the fly keys move on the camera's own basis there, so W/S pan up and down "
+          "the screen and Q/E dolly along the view axis. It constrains GESTURES only: editor.setCamera and editor.frameNode still write any pose they are given, and a camera being PILOTED is never "
+          "locked. editor.setView(\"perspective\") clears it and restores the remembered perspective pose.",
           Needs::Engine },
         { "setCamera", "editor.setCamera({position?, lookAt? | rotation?, fov?}) -> {position, rotation, projection, orthoSize, fov}",
           "Places the editor camera and returns the pose that resulted (the same shape editor.camera() reports, plus `fov`). "
@@ -411,6 +423,9 @@ QVariantMap EditorApi::overlays()
     out["physicsDebug"] = host.viewport->getShowDebugDrawFlags();
     out["gameView"] = host.viewport->isGameView();
     out["giVolume"] = host.viewport->getShowGiVolume();
+    // READ-ONLY (it is a consequence of editor.setView, not a setting):
+    // setOverlays refuses "gridPlane" like any other unknown key.
+    out["gridPlane"] = host.viewport->gridPlane();
     return out;
 }
 
@@ -509,6 +524,10 @@ QVariantMap EditorApi::camera()
     out["projection"] = cam->projMode == iris::CameraProjection::Perspective
                             ? QStringLiteral("perspective") : QStringLiteral("orthogonal");
     out["orthoSize"] = cam->orthoSize;
+    // THE AXIS-VIEW LOCK, as a readback (owner report 2026-09-08). It is the
+    // only way a script — or a user asking "why will my drag not turn the
+    // camera" — can tell a locked view from a broken mouse.
+    out["rotationLocked"] = host.viewport->cameraRotationLocked();
     return out;
 }
 

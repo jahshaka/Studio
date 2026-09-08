@@ -83,7 +83,14 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 	// every cursor move with no button down: writing unconditionally rebuilt
 	// the pose from (pitch, yaw, 0) and levelled any roll the camera had.
 	bool navigated = false;
-	if (previewMode && (leftMouseDown || rightMouseDown)) {
+	// THE AXIS-VIEW LOCK (owner report 2026-09-08). Every branch below that
+	// turns the arcball is gated on it: in an axis view the drag is IGNORED,
+	// the pivot pan underneath keeps working, and yaw/pitch stay exactly at the
+	// axis angles setAxisView put there — so updateCameraRot() rebuilds the
+	// SAME rotation while it follows the pivot. The lock never reaches the
+	// material-preview arcball (previewMode): only the editor viewport sets it.
+	const bool locked = rotationLocked;
+	if (previewMode && !locked && (leftMouseDown || rightMouseDown)) {
 		// in case lerping is still in progress, match the values with their targets
 		yaw = targetYaw;
 		pitch = targetPitch;
@@ -95,7 +102,7 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		targetPitch = pitch;
 		navigated = true;
 	}
-	else if (!previewMode && altOrbit && leftMouseDown) {
+	else if (!previewMode && !locked && altOrbit && leftMouseDown) {
 		// Alt+LMB orbit: the arcball already orbits — just route Alt+LMB
 		// into the same branch, around the pivot the viewport handed us
 		// (the selection's centre).
@@ -107,7 +114,7 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 		targetPitch = pitch;
 		navigated = true;
 	}
-	else if (!previewMode && rightMouseDown) {
+	else if (!previewMode && !locked && rightMouseDown) {
 		// in case lerping is still in progress, match the values with their targets
 		yaw = targetYaw;
 		pitch = targetPitch;
@@ -136,7 +143,14 @@ void OrbitalCameraController::onMouseMove(int x,int y)
 void OrbitalCameraController::setAltOrbit(bool active, const iris::Vec3 &newPivot)
 {
 	CameraControllerBase::setAltOrbit(active, newPivot);
-	if (!active || !camera) return;
+	// LOCKED (an axis view): the gesture is ignored, and that has to include
+	// its SET-UP. Re-pointing the pivot at the selection and re-deriving the
+	// orbit radius from it changes nothing on its own — but the next MMB pan
+	// rebuilds the camera from pivot + radius, so an Alt+LMB that "did nothing"
+	// visibly TELEPORTED the camera on the following pan (caught by
+	// input.axis_view_lock, 2026-09-08). altOrbit itself stays armed, which is
+	// what keeps the same drag from falling through to the LMB pan.
+	if (!active || !camera || rotationLocked) return;
 	// Orbit around the requested point, keeping the camera where it is: the
 	// distance is re-derived so the first drag frame cannot jump.
 	pivot = newPivot;
@@ -164,6 +178,24 @@ bool OrbitalCameraController::canLeftMouseDrag()
  */
 void OrbitalCameraController::onMouseWheel(int delta)
 {
+	// ORTHOGRAPHIC (every axis view): the wheel is the ZOOM, and the zoom is
+	// orthoSize — the orbit radius is not a zoom there at all, because moving
+	// an orthographic camera along its own view axis changes nothing on screen.
+	//
+	// It used to ASSIGN the orbit radius to orthoSize (setOrthagonalZoom(
+	// distFromPivot)), so the first notch of the wheel in an axis view snapped
+	// the zoom from wherever it was to whatever the orbit distance happened to
+	// be — 10 to 13.8 on a default camera, i.e. scrolling IN zoomed OUT once
+	// and then behaved. Stepping orthoSize itself, by the same unit-per-notch
+	// the free camera uses, makes the two controllers zoom identically in an
+	// axis view (found building the axis-view lock, 2026-09-08).
+	if (camera && camera->projMode == iris::CameraProjection::Orthogonal) {
+		float zoom = camera->orthoSize - delta / 120.0f;
+		if (zoom < 0.1f) zoom = 0.1f;
+		camera->setOrthagonalZoom(zoom);
+		return;
+	}
+
     //qDebug()<<delta;
     auto zoomSpeed = 0.01f;
     distFromPivot += -delta * zoomSpeed;
@@ -173,15 +205,7 @@ void OrbitalCameraController::onMouseWheel(int delta)
     if(distFromPivot<0)
         distFromPivot = 0;
 
-
-	if (camera->projMode == iris::CameraProjection::Orthogonal) {
-		if (distFromPivot <= 0.1f) distFromPivot = .01f;
-		camera->setOrthagonalZoom(distFromPivot);
-	}else{
-		updateCameraRot();   // navigation: the orbit radius changed
-
-	}
-
+	updateCameraRot();   // navigation: the orbit radius changed
 }
 
 // The lerp that animates an axis-view snap — and NOTHING ELSE. It used to write

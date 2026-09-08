@@ -135,6 +135,20 @@ public:
     /// until one is set). Purely informational — free orbiting afterwards
     /// does not reset it.
     virtual QString cameraView() const { return QStringLiteral("perspective"); }
+    /// True while the editor camera's ROTATION is LOCKED to the current view:
+    /// an axis view (top/bottom/left/right/front/back) that is not being
+    /// piloted. Rotation GESTURES — the RMB look drag, the Alt+LMB orbit, the
+    /// arcball's drag — do nothing while it is true; panning, zooming and the
+    /// fly keys keep working, and the placement verbs (editor.setCamera,
+    /// editor.frameNode) are unaffected. editor.setView("perspective") clears
+    /// it and restores the remembered perspective pose. Reported by
+    /// editor.camera().rotationLocked. Optional; stand-in viewports never lock.
+    virtual bool cameraRotationLocked() const { return false; }
+    /// Which plane the editor grid was last drawn in: "floor" (XZ — every
+    /// perspective view and top/bottom), "frontXY" (front/back) or "sideYZ"
+    /// (left/right). It follows the canonical VIEW, never the camera pose, so
+    /// it cannot change under a pan. Reported by editor.overlays().gridPlane.
+    virtual QString gridPlane() const { return QStringLiteral("floor"); }
     /// Place the editor camera directly (editor.setCamera). Implementations
     /// MUST resync the active camera controller afterwards — both existing
     /// camera movers (focusOnNode, restoreViewState) do, and a pose written

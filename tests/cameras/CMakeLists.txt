@@ -246,3 +246,22 @@ set_tests_properties(cameras.e2e.pilot PROPERTIES
     ENVIRONMENT "HOME=${_pilot_home}"
     LABELS "scripting"
     TIMEOUT 300)
+
+# ---- cameras.e2e.axis_lock ------------------------------------------------
+# THE AXIS-VIEW ROTATION LOCK (owner report 2026-09-08) through the verbs, in
+# the real binary: editor.camera().rotationLocked following editor.setView for
+# all six axis views, the orthographic projection and the view-plane grid
+# (editor.overlays().gridPlane) surviving a pan, the perspective round trip
+# restoring the remembered pose, BOTH camera controllers armed, the pilot
+# exception, and F-focus centring instead of turning. The GESTURES themselves
+# are pinned by input.axis_view_lock, which drives the controllers directly.
+# Same scratch-HOME contract as cameras.e2e.
+set(_axis_home ${CMAKE_CURRENT_BINARY_DIR}/axislock-home)
+file(MAKE_DIRECTORY ${_axis_home}/run)
+add_test(NAME cameras.e2e.axis_lock
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_axis_view_lock.js
+         WORKING_DIRECTORY ${_axis_home}/run)
+set_tests_properties(cameras.e2e.axis_lock PROPERTIES
+    ENVIRONMENT "HOME=${_axis_home}"
+    LABELS "scripting"
+    TIMEOUT 300)

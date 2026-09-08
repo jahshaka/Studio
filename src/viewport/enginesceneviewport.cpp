@@ -131,6 +131,9 @@ void EngineSceneViewport::setCameraController(CameraControllerBase *c)
         mCamController->setCamera(viewCamera());   // the piloted camera while piloting
         mCamController->start();
     }
+    // Free <-> arcball inside an axis view: the incoming controller has to
+    // arrive already locked, or the first drag after the switch would rotate.
+    applyRotationLock();
 }
 
 void EngineSceneViewport::setFreeCameraMode()   { setCameraController(mFreeCam); }
@@ -221,19 +224,71 @@ void EngineSceneViewport::pushGridForView(bool helpers)
     mMirror->setGridColours(minor, major);
     mMirror->setGridFloorOffset(gridFloorOffsetForView(mCameraView));
     mMirror->setGrid(on && helpers, SnapSettings::translateSize(), plane);
+    // What was actually pushed, for editor.overlays().gridPlane: the plane
+    // follows the VIEW, never the camera's pose, so panning inside an axis view
+    // can never tip the grid out of the view plane — and a script can now
+    // assert that instead of taking it on trust.
+    mGridPlanePushed = plane == SceneMirror::GridPlane::FrontXY ? QStringLiteral("frontXY")
+                     : plane == SceneMirror::GridPlane::SideYZ  ? QStringLiteral("sideYZ")
+                                                                : QStringLiteral("floor");
+}
+
+// The canonical AXIS views and the orientation each one snaps to. File scope
+// because two questions need it: which view a name IS (setCameraView) and
+// whether the current view is an axis one (the rotation lock).
+namespace {
+struct AxisView { const char *name; float yaw; float pitch; };
+const AxisView kAxisViews[] = {
+    { "top", 0.f, -90.f }, { "bottom", 0.f, 90.f },
+    { "left", 90.f, 0.f }, { "right", -90.f, 0.f },
+    { "front", 0.f, 0.f }, { "back", 180.f, 0.f },
+};
+const AxisView *findAxisView(const QString &view)
+{
+    for (const auto &v : kAxisViews)
+        if (view == QLatin1String(v.name)) return &v;
+    return nullptr;
+}
+}   // namespace
+
+// THE AXIS-VIEW ROTATION LOCK (owner report 2026-09-08: "when in Top/Left/
+// Right/Bottom views we should not be able to rotate the camera — only pan and
+// zoom; the camera should be locked top-down, bottom-up etc").
+//
+// An axis view is a MEASURING view: it is orthographic, its grid is turned into
+// the view plane, and the one thing every editor guarantees about it is that it
+// keeps looking down its axis. Rotating out of it left the user in a tilted
+// orthographic view that still called itself "top" — the state the owner
+// reported. So while an axis view is current, rotation GESTURES are ignored
+// (the controllers do the ignoring — CameraControllerBase::setRotationLocked).
+//
+// PILOTING is the exception: a piloted scene camera is being FLOWN, and the
+// canonical view the explorer was left in says nothing about it (setCameraView
+// refuses while piloting for the same reason). Placement VERBS are the other:
+// editor.setCamera/frameNode write the pose they are given — the lock is about
+// what a drag may do, not about what the camera may ever be.
+bool EngineSceneViewport::cameraRotationLocked() const
+{
+    if (mPilot || !findAxisView(mCameraView)) return false;
+    // AND STILL ORTHOGRAPHIC. The lock's subject is the orthographic measuring
+    // view, not the name — and the toolbar's projection button flips the
+    // projection on its own, without going through setCameraView (it does not
+    // update the Views label either; reported upward, MainWindow is another
+    // lane's file). Reading the projection here means the lock can never
+    // outlive the state it exists to protect, whoever changed it.
+    return mEditorCam && mEditorCam->projMode == iris::CameraProjection::Orthogonal;
+}
+
+void EngineSceneViewport::applyRotationLock()
+{
+    const bool locked = cameraRotationLocked();
+    if (mFreeCam) mFreeCam->setRotationLocked(locked);
+    if (mOrbitCam) mOrbitCam->setRotationLocked(locked);
 }
 
 bool EngineSceneViewport::setCameraView(const QString &view)
 {
-    struct AxisView { const char *name; float yaw; float pitch; };
-    static const AxisView axisViews[] = {
-        { "top", 0.f, -90.f }, { "bottom", 0.f, 90.f },
-        { "left", 90.f, 0.f }, { "right", -90.f, 0.f },
-        { "front", 0.f, 0.f }, { "back", 180.f, 0.f },
-    };
-    const AxisView *axis = nullptr;
-    for (const auto &v : axisViews)
-        if (view == QLatin1String(v.name)) { axis = &v; break; }
+    const AxisView *axis = findAxisView(view);
     const bool persp = (view == QLatin1String("perspective"));
     if (!axis && !persp) return false;   // unknown name: refuse before touching state
     // Canonical views are the EXPLORER's — its per-view camera memory, its
@@ -256,6 +311,7 @@ bool EngineSceneViewport::setCameraView(const QString &view)
 
     if (switching && restoreViewState(view)) {
         mCameraView = view;
+        applyRotationLock();
         return true;
     }
 
@@ -263,12 +319,17 @@ bool EngineSceneViewport::setCameraView(const QString &view)
     // the current orientation — it only ever lands here before its pose has
     // been saved once, i.e. when it IS the current pose already.
     if (axis) {
+        // The snap itself is a navigation and must not be refused by the lock
+        // it is about to arm — arm it AFTER the camera has been placed. (The
+        // arcball's snap is a lerp inside update(); it does not consult the
+        // lock either, which is why the order only matters for reading well.)
         if (mCamController == mOrbitCam && mOrbitCam)
             mOrbitCam->setAxisView(axis->yaw, axis->pitch);
         else if (mFreeCam)
             mFreeCam->setAxisView(axis->yaw, axis->pitch);
     }
     mCameraView = view;
+    applyRotationLock();
     return true;
 }
 
@@ -309,6 +370,7 @@ void EngineSceneViewport::clearViewStates()
 {
     mViewStates.clear();
     mCameraView = QStringLiteral("perspective");
+    applyRotationLock();   // back to perspective: the camera turns again
 }
 
 // The resync every camera mover in this file owes the active controller: the
@@ -1023,12 +1085,38 @@ void EngineSceneViewport::focusOnNode(iris::SceneNodePtr sceneNode)
     }
     const float dist = qMax(1.0f, preview::framingDistance(radius, cam->angle));
 
+    float nearClip, farClip;
+    preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
+
+    // IN A LOCKED AXIS VIEW, F CENTRES — IT DOES NOT TURN (the axis-view lock,
+    // owner report 2026-09-08). The lookAt below is a rotation, and in a top
+    // view it would tilt the camera off its axis while the view still called
+    // itself "top": the same defect the drag lock exists to remove, reached
+    // with a key instead of the mouse. So the orientation is kept, the eye
+    // slides along the view axis until the subject is centred, and the FRAMING
+    // is done by the ortho zoom — backing off is invisible in an orthographic
+    // projection, which is what makes this a different operation rather than
+    // the same one with the turn removed.
+    if (cameraRotationLocked()) {
+        const iris::Vec3 fwd = cam->getLocalRot().rotatedVector(iris::Vec3(0, 0, -1));
+        cam->setLocalPos(target - fwd * dist);
+        // orthoSize is HALF the vertical extent (Types.h), so the radius plus a
+        // small margin is exactly "the node fills the view".
+        cam->setOrthagonalZoom(qMax(0.1f, radius * 1.2f));
+        cam->farClip = qMax(cam->farClip, farClip);
+        cam->update(0.0f);
+        // NOT OrbitalCameraController::focusOnNode here: that one lookAt()s the
+        // node, which is the rotation this branch exists to avoid. Handing the
+        // controller the moved camera plus the orbit distance re-derives its
+        // pivot from the pose it already has.
+        resyncCameraController(dist);
+        return;
+    }
+
     iris::Vec3 dir = (cam->getGlobalPosition() - target).normalized();
     if (dir.isNull()) dir = iris::Vec3(0.45f, 0.45f, 0.77f);
     cam->setLocalPos(target + dir * dist);
     cam->lookAt(target);
-    float nearClip, farClip;
-    preview::clipPlanesForFraming(dist, radius, nearClip, farClip);
     cam->farClip = qMax(cam->farClip, farClip);
     cam->update(0.0f);
 
@@ -1153,6 +1241,9 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
     // The controller must steer the camera the view now renders, and the
     // orbital one must re-derive its pivot from that camera's pose.
     resyncCameraController();
+    // A piloted camera is never rotation-locked, and ejecting back into an
+    // axis view re-arms the lock (cameraRotationLocked's pilot exception).
+    applyRotationLock();
     // The engine's letterbox flag rides the CameraDesc, so it follows on the
     // next applyCamera; nothing else here has to know about it.
     return true;
