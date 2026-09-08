@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include <QTimer>
 #include <QVector>
 
+#include <array>
 #include <cstdio>
 
 namespace JahLog {
@@ -907,20 +908,35 @@ std::atomic<bool> gHandlerInstalled { false };
 // session stops writing 57,000 copies of a warning nobody can act on.
 // Honesty rule: nothing here may match by substring or category — exact text
 // only, so a genuinely new problem can never hide behind an entry.
+//
+// THE TABLE IS EMPTY, and that is the point: a suppression must never outlive
+// the bug it hides. Its only entry was Qt's
+// "QWidget::mapTo(): parent must be in parent hierarchy" — 164,651 lines in one
+// 13-minute session — attributed to qlementine's Popover. That attribution was
+// WRONG (this app never instantiates a Popover): the flood came from
+// qlementine's focus-frame event filter leaving a QFocusFrame parented outside
+// the watched widget's hierarchy when the properties panel orphans its
+// accordion blades. Qlementine is vendored source since 2026-09-08, so it was
+// fixed there (thirdparty/qlementine/PROVENANCE.md) and the entry removed in
+// the same commit. The machinery stays for the next genuinely unfixable
+// upstream flood — and stays TESTED: the log suite compiles this file with
+// JAH_KNOWN_NOISE_SELFTEST, which adds the synthetic entry below.
 struct KnownNoise {
     const char *exactText;   // the full message, byte-exact
     const char *anchor;      // where the upstream defect lives
     std::atomic<quint64> suppressed { 0 };
     std::atomic<bool> announced { false };
 };
-KnownNoise gKnownNoise[] = {
-    // Qlementine v1.4.2 Popover.cpp:538: _frame->mapTo(this, ...) with _frame
-    // not parented to the popover — fires once per paint, harmless (Qt
-    // returns (0,0) and the popover renders fine). Vendored submodule; fix
-    // upstream or at a bump, not here.
-    { "QWidget::mapTo(): parent must be in parent hierarchy",
-      "qlementine Popover.cpp:538", {}, {} },
-};
+#ifdef JAH_KNOWN_NOISE_SELFTEST
+std::array<KnownNoise, 1> gKnownNoise = { {
+    // Test-only. No real defect wears this text; the log suite emits it five
+    // times and asserts one annotated line plus one shutdown summary.
+    { "jahlog selftest: synthetic known-noise flood",
+      "tests/log/test_jahlog.cpp (synthetic entry)", {}, {} },
+} };
+#else
+std::array<KnownNoise, 0> gKnownNoise = {};
+#endif
 
 // Matches msg against the table. Returns true when the message must be
 // dropped (already announced once); false when it should pass through —

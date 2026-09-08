@@ -1,0 +1,35 @@
+name: Windows
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+  pull_request:
+    branches:
+      - master
+      - dev
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check Out
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.2"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+
+      - name: Build the library.
+        run: |
+          cmake --preset windows -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
+          cmake --build --preset windows --target install
+
+      - name: Build the Sandbox app.
+        run: cmake --build --preset windows-sandbox

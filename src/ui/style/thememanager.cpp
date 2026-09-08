@@ -19,12 +19,10 @@ For more information see the LICENSE file
 
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
-#include <QAbstractItemView>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QMetaObject>
-#include <QPointer>
 #include <QPushButton>
 #include <QWidgetAction>
 
@@ -34,16 +32,14 @@ static bool s_classicActive = false;
 
 namespace {
 
-// Qt 6.10 + Qlementine v1.4.2 crash workaround (verified by backtrace,
-// 2026-08-31): QComboBoxPrivateContainer's constructor calls ensurePolished()
-// BEFORE QComboBoxPrivate::container is assigned. QlementineStyle::polish of
-// the popup's item view reparents the popup (setWindowFlag) and installs a
-// ComboboxItemViewFilter whose ChildAdded handler calls QComboBox::view() —
-// which, container still null, constructs a SECOND container, recursing until
-// the stack overflows on the first QComboBox::addItem of the app (upstream dev
-// branch has the same code). Deferring that one polish by an event-loop tick
-// lets the container pointer land first; the deferred polish then behaves
-// exactly as upstream intended. Everything else passes straight through.
+// (The Qt 6.10 + Qlementine combo-popup stack overflow used to be worked around
+// here, by deferring the popup item view's polish one event-loop tick. It is
+// FIXED AT THE SOURCE since 2026-09-08 — qlementine is vendored, and its
+// ComboboxItemViewFilter no longer calls the container-creating
+// QComboBox::view() from a ChildAdded handler that Qt emits from the
+// container's own constructor. See thirdparty/qlementine/PROVENANCE.md; the
+// combo cases in tests/theme guard it. The deferral is gone: the popup is now
+// polished inline, exactly as upstream intended.)
 class JahQlementineStyle : public oclero::qlementine::QlementineStyle
 {
 public:
@@ -82,19 +78,6 @@ public:
             return;
         }
 
-        if (auto *itemView = qobject_cast<QAbstractItemView *>(w)) {
-            auto *popup = itemView->parentWidget();
-            if (popup && popup->inherits("QComboBoxPrivateContainer")) {
-                QPointer<QWidget> guard(itemView);
-                QMetaObject::invokeMethod(
-                    this,
-                    [this, guard]() {
-                        if (guard) oclero::qlementine::QlementineStyle::polish(guard.data());
-                    },
-                    Qt::QueuedConnection);
-                return;
-            }
-        }
         oclero::qlementine::QlementineStyle::polish(w);
     }
 
