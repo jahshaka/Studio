@@ -318,6 +318,7 @@ set(SRCS
     src/ui/panels/timeline/keyframelabeltreewidget.cpp 
     src/viewport/keyboardstate.cpp 
     src/io/scenereader.cpp 
+    src/io/skyassetdefinition.cpp
     src/ui/panels/propertywidgets/emitterpropertywidget.cpp 
     src/ui/panels/propertywidgets/nodepropertywidget.cpp
     src/ui/controls/labelwidget.cpp
@@ -548,6 +549,7 @@ set(HEADERS
     src/ui/panels/propertywidgets/cubemapwidget.h
     src/io/scenewriter.h 
     src/io/scenereader.h 
+    src/io/skyassetdefinition.h
     src/ui/panels/propertywidgets/scenepropertywidget.h 
     src/services/thumbnailmanager.h 
     src/ui/panels/propertywidgets/fogpropertywidget.h 

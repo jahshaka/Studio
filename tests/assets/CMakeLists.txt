@@ -6,6 +6,11 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 add_executable(test_engine_asset_viewer test_engine_asset_viewer.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/engineassetscene.cpp
+    # The sky-asset switch the Assets viewer drives (VISUAL_PARITY re-audit F1).
+    # Deliberately Database-free — the guid->path step is the caller's lambda —
+    # so this suite drives the shipped code path, not a copy of it.
+    ${CMAKE_SOURCE_DIR}/src/io/skyassetdefinition.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(test_engine_asset_viewer PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

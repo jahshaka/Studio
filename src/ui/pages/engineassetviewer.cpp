@@ -23,6 +23,7 @@
 #include "data/project.h"
 #include "data/database/database.h"
 #include "io/scenereader.h"
+#include "io/skyassetdefinition.h"
 #include "io/materialreader.h"
 #include "ui/dialogs/progressdialog.h"
 #include "irisgl/core/irisutils.h"
@@ -295,33 +296,26 @@ void EngineAssetViewer::applyJafSky(const QString &guid)
     if (!mDb) return;
     auto scene = mScene->document();
     scene->skyGuid = guid;
-    QJsonObject skyProperties = QJsonDocument::fromJson(mDb->fetchAsset(guid).properties).object().value("sky").toObject();
-    QJsonObject skyData = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
-    scene->skyType = static_cast<iris::SkyType>(skyProperties.value("type").toInt());
-    if (scene->skyType == iris::SkyType::SINGLE_COLOR) {
-        scene->skyColor = SceneReader::readColor(skyData.value("skyColor").toObject());
-    }
-    else if (scene->skyType == iris::SkyType::EQUIRECTANGULAR) {
-        QStringList dependency = mDb->fetchAssetDependeesByType(guid, ModelTypes::Texture);
-        if (!dependency.isEmpty()) {
-            // The TEXTURE's own bytes, by ITS guid. The old join built
-            // <root>/<skyGuid>/<textureName> — the sky asset's folder with
-            // the texture asset's file name, which only ever resolved because
-            // the pre-CAS .jaf import dropped both in one directory.
-            const QString image = AssetCas::resolveSource(
-                QSqlDatabase::database(), AssetStorePaths::root(), dependency.first());
-            if (!image.isEmpty() && QFileInfo(image).isFile())
-                scene->setSkyTexture(iris::Texture2D::load(image, false));
-        }
-    }
-    else if (scene->skyType == iris::SkyType::GRADIENT) {
-        scene->gradientTop = SceneReader::readColor(skyData.value("gradientTop").toObject());
-        scene->gradientMid = SceneReader::readColor(skyData.value("gradientMid").toObject());
-        scene->gradientBot = SceneReader::readColor(skyData.value("gradientBot").toObject());
-        scene->gradientOffset = skyData.value("gradientOffset").toDouble();
-    }
-    // Realistic, cubemap and material skies are not on the engine yet
-    // (MORNING_CHECKLIST: known gaps); the view keeps its background colour.
+
+    const QJsonObject skyProperties =
+        QJsonDocument::fromJson(mDb->fetchAsset(guid).properties).object().value("sky").toObject();
+    const QJsonObject skyData = QJsonDocument::fromJson(mDb->fetchAssetData(guid)).object();
+    const auto type = static_cast<iris::SkyType>(skyProperties.value("type").toInt());
+
+    // EVERY sky type the mirror can render, which is every type the document
+    // has: the old body handled colour/equirect/gradient and dropped realistic
+    // and cubemap behind a "not on the engine yet" comment that had been false
+    // since the sky branches landed (scenemirror.cpp applySky) — so those two
+    // previewed as a flat background (VISUAL_PARITY re-audit F1). The switch
+    // itself is skyassets::applyToScene, shared and testable; all this side
+    // owns is turning a texture-asset guid into a path.
+    const QStringList dependees = mDb->fetchAssetDependeesByType(guid, ModelTypes::Texture);
+    skyassets::applyToScene(scene, type, skyData,
+                            [](const QString &textureGuid) {
+                                return AssetCas::resolveSource(QSqlDatabase::database(),
+                                                               AssetStorePaths::root(), textureGuid);
+                            },
+                            dependees);
 }
 
 // ---- materials the mirror can render ----

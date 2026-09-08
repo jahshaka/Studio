@@ -22,6 +22,11 @@
 #include "jahshaka/engine/Engine.h"
 #include "bridge/engineassetscene.h"
 #include "viewport/previewframing.h"
+#include "io/skyassetdefinition.h"
+#include <QDir>
+#include <QHash>
+#include <QImage>
+#include <QJsonObject>
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -238,6 +243,113 @@ int main(int argc, char **argv)
         const iris::AABB sbox = preview::worldBoundingBox(scaled);
         CHECK((spivotCam - sbox.getCenter()).length() > sbox.getMinimalEnclosingSphere().radius,
               "the camera stands outside the scaled model");
+
+        // ---- 7. SKY ASSETS preview on every type (VISUAL_PARITY re-audit F1) ----
+        // EngineAssetViewer::applyJafSky used to handle colour/equirect/gradient
+        // and drop REALISTIC and CUBEMAP behind a stale "not on the engine yet"
+        // comment, so those two library assets previewed as a FLAT BACKGROUND.
+        // The switch is skyassets::applyToScene now — exactly what the viewer
+        // calls, with only the guid->path lambda left on its side — so this
+        // drives the shipped code path with a fixture store on disk.
+        {
+            auto doc = assets.document();
+            assets.setSubject(iris::SceneNodePtr(), false, true);   // sky only
+
+            // A sky asset's blob is the same per-type block the scene format
+            // stores. Realistic: the eight Preetham keys.
+            QJsonObject realistic;
+            realistic["luminance"] = 1.1;
+            realistic["reileigh"] = 2.0;
+            realistic["mieCoefficient"] = 0.005;
+            realistic["mieDirectionalG"] = 0.8;
+            realistic["turbidity"] = 4.0;
+            {
+                iris::SkyRealistic sun = iris::SkyRealistic::defaults();
+                sun.setSunAngles(180.0f, 25.0f);   // in front of the framing camera
+                realistic["sunPosX"] = double(sun.sunPosX);
+                realistic["sunPosY"] = double(sun.sunPosY);
+                realistic["sunPosZ"] = double(sun.sunPosZ);
+            }
+            CHECK(skyassets::applyToScene(doc, iris::SkyType::REALISTIC, realistic,
+                                          [](const QString &) { return QString(); }),
+                  "sky asset: a REALISTIC definition applies to the preview document");
+            CHECK(doc->skyType == iris::SkyType::REALISTIC &&
+                  std::fabs(doc->skyRealistic.turbidity - 4.0f) < 1e-4f &&
+                  std::fabs(doc->skyRealistic.sunElevation() - 25.0f) < 0.5f,
+                  "sky asset: the eight realistic keys land on the document");
+
+            Image sky = render(assets, *engine, view, 4);
+            show("realistic sky asset", sky, W / 2, 4);
+            // NOT A FLAT BACKGROUND: an analytic sky is a gradient with a sun in
+            // it, so the picture must vary top to bottom AND must not be the
+            // preview's (25,25,25) clear colour anywhere along that line.
+            float lo = 2.0f, hi = -1.0f;
+            bool anyNonBackground = false;
+            for (unsigned y = 0; y < sky.height; ++y) {
+                const Colour c = sky.at(unsigned(W / 2), y);
+                const float l = (c.r + c.g + c.b) / 3.0f;
+                lo = std::min(lo, l); hi = std::max(hi, l);
+                if (!isBackground(c)) anyNonBackground = true;
+            }
+            std::printf("    %-34s luminance %.3f..%.3f\n", "realistic sky column", lo, hi);
+            CHECK(anyNonBackground, "realistic sky asset renders something (not the flat background)");
+            CHECK(hi - lo > 0.05f, "realistic sky asset has a real vertical gradient");
+
+            // Cubemap: six texture-asset guids under their face roles, resolved
+            // to files by the caller's lambda (the Database/CAS join in the app).
+            const QString dir = QDir::current().absolutePath();
+            struct Face { const char *role; QColor colour; };
+            const Face faces[6] = {
+                { "front",  QColor(255,  40,  40) }, { "back",   QColor( 40, 255,  40) },
+                { "top",    QColor( 40,  40, 255) }, { "bottom", QColor(255, 255,  40) },
+                { "left",   QColor(255,  40, 255) }, { "right",  QColor( 40, 255, 255) },
+            };
+            QJsonObject cubemap;
+            QHash<QString, QString> store;
+            for (const Face &f : faces) {
+                const QString guid = QStringLiteral("guid-face-%1").arg(QLatin1String(f.role));
+                const QString path = QDir(dir).filePath(QStringLiteral("skyasset_%1.png").arg(QLatin1String(f.role)));
+                QImage im(32, 32, QImage::Format_RGBA8888);
+                im.fill(f.colour);
+                im.save(path);
+                cubemap[QLatin1String(f.role)] = guid;
+                store.insert(guid, path);
+            }
+            auto resolver = [&store](const QString &guid) { return store.value(guid); };
+
+            CHECK(skyassets::applyToScene(doc, iris::SkyType::CUBEMAP, cubemap, resolver),
+                  "sky asset: a CUBEMAP definition applies to the preview document");
+            CHECK(doc->skyType == iris::SkyType::CUBEMAP && !!doc->skyTexture &&
+                  doc->skyTexture->isCubeMap(),
+                  "sky asset: the six faces became a cubemap texture on the document");
+
+            Image cube6 = render(assets, *engine, view, 4);
+            show("cubemap sky asset", cube6, W / 2, 4);
+            bool sawFace = false;
+            for (unsigned y = 0; y < cube6.height && !sawFace; ++y) {
+                const Colour c = cube6.at(unsigned(W / 2), y);
+                // Any of the six faces is strongly coloured; the background is
+                // neutral (25,25,25), so a channel spread is proof of the sky.
+                const float spread = std::max({c.r, c.g, c.b}) - std::min({c.r, c.g, c.b});
+                if (spread > 0.2f) sawFace = true;
+            }
+            CHECK(sawFace, "cubemap sky asset renders its faces (not the flat background)");
+
+            // A definition whose textures cannot be resolved is REFUSED, not
+            // half-applied: the caller learns the preview will be blank.
+            CHECK(!skyassets::applyToScene(doc, iris::SkyType::CUBEMAP, cubemap,
+                                           [](const QString &) { return QString(); }),
+                  "sky asset: an unresolvable cubemap is refused");
+            QJsonObject noFaces;
+            noFaces["front"] = QStringLiteral("guid-face-front");
+            CHECK(!skyassets::applyToScene(doc, iris::SkyType::CUBEMAP, noFaces, resolver),
+                  "sky asset: a PARTIAL cubemap is refused (createCubeMap needs all six)");
+
+            // Back to the flat preview background for whatever runs next.
+            doc->skyType = iris::SkyType::SINGLE_COLOR;
+            doc->skyColor = QColor(25, 25, 25);
+            render(assets, *engine, view, 2);
+        }
 
         // ---- 6. saved orbit round-trips ----
         QJsonObject props = assets.sceneProperties();
