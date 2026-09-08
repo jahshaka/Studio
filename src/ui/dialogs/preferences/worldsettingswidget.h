@@ -99,6 +99,14 @@ private slots:
 	void sliderRowsChanged(int rows);
 	void shadowMeshOptimizationChanged(bool on);
 
+signals:
+	/// The Slider Rows spin box moved. VISUAL_PARITY re-audit F8:
+	/// sliderRowsChanged() only wrote the setting, so the desktop kept its old
+	/// row count until the next populate — the shell connects this to
+	/// ProjectManager::setSliderRows (the same path desktop.setSliderRows
+	/// takes) to make it live.
+	void sliderRowsSettingChanged(int rows);
+
 public slots:
 	void saveSettings();
 	void rebuildShortcutsTable();

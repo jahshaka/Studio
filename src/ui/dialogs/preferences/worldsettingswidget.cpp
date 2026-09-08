@@ -542,7 +542,8 @@ void WorldSettingsWidget::configureDesktop()
 {
 	// Desktop section (DESKTOP_SLIDER_SPEC.md): how many filmstrip rows the
 	// Sliders view mode stacks. Per user (jahsettings.ini), not per desktop;
-	// applied the next time a sliders desktop lays out (populate/mode switch).
+	// applied LIVE — the spin box re-lays the desktop out as it moves
+	// (VISUAL_PARITY re-audit F8, sliderRowsSettingChanged -> the shell).
 	auto layout = new QGridLayout;
 	desktopWidget->setLayout(layout);
 
@@ -568,7 +569,11 @@ void WorldSettingsWidget::configureDesktop()
 
 void WorldSettingsWidget::sliderRowsChanged(int rows)
 {
+	// The setting is written here so that a session with no desktop page (and
+	// the very first run) still persists the choice; the shell's connection
+	// writes it again through ProjectManager, which is idempotent.
 	settings->setValue("slider_rows", rows);
+	emit sliderRowsSettingChanged(rows);
 }
 
 void WorldSettingsWidget::configureEditor()

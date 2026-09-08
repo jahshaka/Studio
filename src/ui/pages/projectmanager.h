@@ -80,6 +80,13 @@ public:
     bool setDesktopViewMode(const QString &name);
     bool moveTileToSliderPos(const QString &guid, int row, int index);   // 0-based row
     QVariantList sliderTilesForApi() const;
+    /// The number of filmstrip rows the Sliders view mode stacks (a per-user
+    /// setting, not per desktop). setSliderRows re-lays the live desktop out
+    /// immediately and returns the clamped (2..10) value that took effect —
+    /// the one path Preferences, the desktop API and any future caller share
+    /// (VISUAL_PARITY re-audit F8).
+    int sliderRows() const;
+    int setSliderRows(int rows);
 
     /// Synchronous, dialog-free version of loadProjectAssets() for the scripting
     /// API (project.open): same DB sweeps and AssetManager registrations as the

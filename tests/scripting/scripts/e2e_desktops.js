@@ -19,7 +19,8 @@ function throws(fn, msg) {
 var mods = api.verbs().filter(function (m) { return m.module === "desktop"; });
 assert(mods.length === 1, "desktop module registered");
 var names = mods[0].verbs.map(function (v) { return v.name; }).sort().join(",");
-assert(names === "moveTile,setViewMode,tiles,viewMode", "desktop verbs: " + names);
+assert(names === "moveTile,setSliderRows,setViewMode,sliderRows,tiles,viewMode",
+       "desktop verbs: " + names);
 
 // ---- fixtures: three fresh (never-assigned) projects on desktop 1 ----
 var t = Date.now();
@@ -67,6 +68,36 @@ assert(tileOf(g3).index === 0, "insert at 0 takes the head");
 assert(tileOf(g1).index === 1, "existing tile shifted right");
 
 throws(function () { desktop.moveTile("not-a-guid", 1, 0); }, "moveTile rejects an unknown guid");
+
+// ---- slider ROWS apply LIVE (VISUAL_PARITY re-audit F8) ----
+// Preferences used to write "slider_rows" and stop, so the row count only
+// changed on the next populate/mode switch. Both it and this verb now go
+// through ProjectManager::setSliderRows -> DynamicGrid::setSliderRowCount,
+// which re-lays the live desktop out: the proof below is a tile parked in row
+// 8 that is inside 1..2 the moment a shrink returns — no repopulate, no mode
+// switch, nothing else touched in between.
+var rowsBefore = desktop.sliderRows();
+assert(rowsBefore >= 2 && rowsBefore <= 10, "sliderRows reads the live count: " + rowsBefore);
+throws(function () { desktop.setSliderRows(1); }, "setSliderRows rejects 1");
+throws(function () { desktop.setSliderRows(11); }, "setSliderRows rejects 11");
+
+assert(desktop.setSliderRows(8) === 8, "setSliderRows(8) takes effect");
+assert(desktop.sliderRows() === 8, "sliderRows reads back 8");
+assert(desktop.moveTile(g1, 8, 0) === true, "park g1 in row 8 of the 8-row layout");
+assert(tileOf(g1).row === 8, "g1 sits in row 8");
+
+assert(desktop.setSliderRows(2) === 2, "setSliderRows(2) takes effect");
+assert(desktop.sliderRows() === 2, "sliderRows reads back 2");
+assert(tileOf(g1).row <= 2, "g1 re-folded into the 2-row layout LIVE (row " + tileOf(g1).row + ")");
+desktop.tiles().forEach(function (t) {
+    assert(t.row >= 1 && t.row <= 2, "every tile is inside the new row range");
+});
+
+// Restore the count this session started with, then re-place the two tiles the
+// persistence checks below read.
+assert(desktop.setSliderRows(rowsBefore) === rowsBefore, "row count restored");
+assert(desktop.moveTile(g3, 2, 0) === true, "re-place g3 after the row-count churn");
+assert(desktop.moveTile(g1, 2, 1) === true, "re-place g1 after the row-count churn");
 
 // ---- persistence: survives a desktop switch (full repopulate from the DB) ----
 app.desktop(2);

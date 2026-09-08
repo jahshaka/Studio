@@ -197,6 +197,25 @@ void DynamicGrid::scheduleSliderRelayout()
     });
 }
 
+int DynamicGrid::setSliderRowCount(int rows)
+{
+    const int clamped = qBound(2, rows, 10);
+    settings->setValue("slider_rows", clamped);
+    if (clamped == sliderRows) return clamped;
+    if (mode != LayoutMode::Sliders) {
+        // Not showing filmstrips: rebuildSliderModel reads the setting when the
+        // mode is next entered. Keep the field in step anyway so
+        // activeSliderRows() never lies about what the desktop would build.
+        sliderRows = clamped;
+        return clamped;
+    }
+    // Rows-order seed: the stored per-tile assignments still win, and tiles
+    // whose row no longer exists fold into the rows that do.
+    rebuildSliderModel(LayoutMode::Sliders);
+    applySliderLayout();
+    return clamped;
+}
+
 void DynamicGrid::rebuildSliderModel(LayoutMode seedFrom)
 {
     // "Slider rows" is a user setting (Settings -> Desktop), not per desktop

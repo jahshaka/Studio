@@ -522,6 +522,16 @@ bool ProjectManager::moveTileToSliderPos(const QString &guid, int row, int index
     return false;
 }
 
+int ProjectManager::sliderRows() const
+{
+    return dynamicGrid ? dynamicGrid->activeSliderRows() : 0;
+}
+
+int ProjectManager::setSliderRows(int rows)
+{
+    return dynamicGrid ? dynamicGrid->setSliderRowCount(rows) : 0;
+}
+
 QVariantList ProjectManager::sliderTilesForApi() const
 {
     QVariantList tiles;

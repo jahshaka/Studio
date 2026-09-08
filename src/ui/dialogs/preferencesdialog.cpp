@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferences/assetssettingswidget.h"
 #include "data/settingsmanager.h"
 #include "data/database/database.h"
+#include "ui/pages/projectmanager.h"
 #include "ui/dialogs/aboutdialog.h"
 #include "ui/style/stylesheet.h"
 
@@ -83,6 +84,13 @@ void PreferencesDialog::wireMcp(McpServer *server, MainWindow *mainWindow)
 void PreferencesDialog::wireShortcuts(ShortcutRegistry *registry)
 {
     if (worldSettings) worldSettings->setShortcutRegistry(registry);
+}
+
+void PreferencesDialog::wireDesktop(ProjectManager *projectManager)
+{
+    if (!worldSettings || !projectManager) return;
+    connect(worldSettings, &WorldSettingsWidget::sliderRowsSettingChanged,
+            projectManager, [projectManager](int rows) { projectManager->setSliderRows(rows); });
 }
 
 PreferencesDialog::~PreferencesDialog()
