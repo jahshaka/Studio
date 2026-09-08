@@ -114,6 +114,34 @@ add_test(NAME cameras.body COMMAND test_camera_body
 set_tests_properties(cameras.body PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 600 LABELS "mirror")
 
+# ---- cameras.pip ----------------------------------------------------------
+# THE PiP TONEMAP (CAMERAS_SPEC §7.2 Route C, POST_CHAIN_SPEC §14's fourth
+# consumer): the inset renders into its own RGBA16F target and goes through the
+# SAME tonemapper the main chain uses, so a graded world is graded in the inset
+# and a PIPPED CAMERA'S OWN exposure appears in its preview and nowhere else.
+# Real backend, real frames, through the host route (SceneMirror::applyPip).
+add_executable(test_camera_pip test_camera_pip.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_camera_pip PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_camera_pip PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_compile_definitions(test_camera_pip PRIVATE
+    JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_camera_pip PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
+add_dependencies(test_camera_pip JahshakaEngineMedia)
+add_test(NAME cameras.pip COMMAND test_camera_pip
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(cameras.pip PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 600 LABELS "mirror")
+
 # ---- cameras.exposure -----------------------------------------------------
 # CAMERA_LENS_SPEC §4/§5 (P3 + P4): the per-VIEW post-chain globals listener and
 # everything that rides it. Real engine, real frames. The headline is two views

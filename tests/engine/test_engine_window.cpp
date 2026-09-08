@@ -224,6 +224,81 @@ int main() {
     CHECK_MSG(v->width() == 400 && v->height() == 300,
               "coalesced MSAA+resize landed at 400x300, got %ux%u", v->width(), v->height());
 
+    // ---- 5: a GRADED INSET on the swapchain (CAMERAS_SPEC §7.2 Route C) ------
+    // Every other PiP assertion in the tree reads pixels back, which means every
+    // other PiP assertion runs on an RTT. Route C gives the inset a LOCAL
+    // TEXTURE sized as a fraction of the target — and on this path the target is
+    // a SWAPCHAIN, which is recreated under the compositor on every resize. So
+    // the swapchain is where "the texture follows the window for free" has to be
+    // true, and where a wrong answer would show up as a validation error or a
+    // view that stops presenting rather than as a wrong pixel.
+    {
+        PostFxDesc fx;
+        fx.hdr = true;                  // the on-screen view grades...
+        fx.tonemapFixed = true;         // ...deterministically
+        v->setPostFx(fx);
+        ViewPipDesc pip;
+        pip.enabled = true;
+        pip.tonemap = true;             // ...and so does the inset
+        pip.camera.position = Vec3(0.0f, 1.2f, 3.0f);
+        v->setPip(pip);
+        render(3);
+        const unsigned builtPip = v->pipGeneration();
+        CHECK_MSG(builtPip > 0, "a graded inset builds on the swapchain (pipGeneration %u)",
+                  builtPip);
+        const unsigned long long afterPip = v->framesPresented();
+        render(5);
+        CHECK_MSG(v->framesPresented() >= afterPip + 5,
+                  "still presenting with the inset up (%llu -> %llu)",
+                  afterPip, v->framesPresented());
+        CHECK_MSG(v->pipGeneration() == builtPip,
+                  "…and 5 steady frames rebuilt nothing (pipGeneration %u)", v->pipGeneration());
+
+        // THE RESIZE. The inset's texture is a FRACTION of the target, so the
+        // swapchain recreate must carry it — no rebuild, no lost frames.
+        host.resize(512, 384);
+        v->resize(512, 384);
+        render(3);
+        CHECK_MSG(v->width() == 512 && v->height() == 384,
+                  "the window resized under the inset: %ux%u", v->width(), v->height());
+        CHECK_MSG(v->framesPresented() > afterPip + 5,
+                  "presenting after the resize with the inset up (%llu)", v->framesPresented());
+        // A WINDOW RESIZE REBUILDS THE INSET, ONCE — and the reason is a
+        // VALIDATION FINDING, not tidiness. Ogre re-creates a fraction-sized
+        // local texture when the final target resizes, but the SECOND workspace
+        // on a window is not re-analyzed with it, so the barrier for the
+        // recreated texture is issued inside the frame's open render pass:
+        // "vkCmdPipelineBarrier(): Barriers cannot be set during subpass 0 ...
+        // with no self-dependency", twice, measured under
+        // VK_LAYER_KHRONOS_validation (zero with the inset off, zero on the
+        // pre-Route-C inset, which had no local texture to re-create).
+        // Rebuilding the inset costs one workspace on a frame that is already
+        // rebuilding a swapchain, and it stays rebuild-ON-CHANGE.
+        CHECK_MSG(v->pipGeneration() == builtPip + 1,
+                  "A WINDOW RESIZE REBUILDS THE INSET EXACTLY ONCE (%u -> %u): its local "
+                  "texture is sized from the target", builtPip, v->pipGeneration());
+        const unsigned afterWindowResize = v->pipGeneration();
+        render(4);
+        CHECK_MSG(v->pipGeneration() == afterWindowResize,
+                  "…and holding the new window size rebuilds nothing further (%u)",
+                  v->pipGeneration());
+
+        // ...while resizing the RECT does, exactly once — the other half of the
+        // same rule, on the swapchain this time.
+        pip.width = 0.20f; pip.height = 0.22f;
+        v->setPip(pip);
+        render(2);
+        CHECK_MSG(v->pipGeneration() == afterWindowResize + 1,
+                  "a RECT resize rebuilds the inset once (%u -> %u)",
+                  afterWindowResize, v->pipGeneration());
+
+        v->setPip(ViewPipDesc());
+        v->setPostFx(PostFxDesc());
+        render(2);
+        CHECK_MSG(v->framesPresented() > afterPip,
+                  "and the view is still alive with the inset gone");
+    }
+
     // ---- teardown, in the mandated order ------------------------------------
     engine->destroyView(v);
     engine->destroyScene(s);
