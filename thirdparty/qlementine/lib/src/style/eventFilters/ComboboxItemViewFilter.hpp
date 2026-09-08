@@ -62,10 +62,32 @@ protected:
           // Deferring one event-loop turn is enough: by then the container is
           // installed and view() is an ordinary getter. The delegate this
           // installs is a cosmetic upgrade, so a turn's delay costs nothing.
+          //
+          // SECOND DIVERGENCE (2026-09-08, the stage gate): the deferral above
+          // is SELF-FEEDING unless guarded. ComboBoxDelegate is a QObject
+          // parented to the combo, so installing it emits ChildAdded on the
+          // combo, which lands right here and scheduled another install —
+          // one delegate created and destroyed per event-loop turn, forever
+          // (the old stack recursion turned into a UI-thread livelock; the
+          // app's watchdog measured ~55 s stalls). Two guards, both needed:
+          // the child that matters is the popup CONTAINER, a widget — plain
+          // QObject children (the delegate, connections, filters) are not a
+          // reason to touch the popup; and the install is idempotent — one
+          // pending turn at a time, and never over a delegate already ours.
+          const auto* childEvt = static_cast<const QChildEvent*>(evt);
+          const auto* child = childEvt->child();
+          if (!child || !child->isWidgetType() || _delegatePending)
+            break;
+          _delegatePending = true;
           QPointer<QComboBox> combo(_comboBox);
-          QTimer::singleShot(0, this, [combo]() {
+          QPointer<ComboboxItemViewFilter> self(this);
+          QTimer::singleShot(0, this, [combo, self]() {
+            if (self)
+              self->_delegatePending = false;
             if (!combo)
               return;
+            if (dynamic_cast<ComboBoxDelegate*>(combo->itemDelegate()))
+              return;  // already ours: nothing to do, nothing to re-schedule
             if (auto* qlementine = qobject_cast<QlementineStyle*>(combo->style())) {
               combo->setItemDelegate(new ComboBoxDelegate(combo, *qlementine));
             }
@@ -162,6 +184,7 @@ private:
   QComboBox* _comboBox{ nullptr };
   QAbstractItemView* _view{ nullptr };
   int _initialMaxHeight{ 0 };
+  bool _delegatePending{ false };  // JAHSHAKA: one deferred delegate install at a time
   QModelIndex _clickedIndex{};
 };
 
