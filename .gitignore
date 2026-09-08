@@ -30,3 +30,5 @@ jahsettings.ini
 jahshaka-ogre.log
 *.log
 build-web/
+/.claude/worktrees/
+/.claude/scratch/
