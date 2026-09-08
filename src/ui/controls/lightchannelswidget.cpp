@@ -28,11 +28,27 @@ LightChannelsWidget::LightChannelsWidget(QWidget *parent) : QWidget(parent)
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(2);
 
+    // TWO LINES, NOT ONE (properties-width lane, 2026-09-08). Eight check boxes,
+    // a name and two buttons on ONE line cannot go below ~373 px: a check box's
+    // minimum is its indicator plus its digit, and nothing about that shrinks.
+    // The Properties dock has no horizontal scrollbar, so a row that cannot fit
+    // is CLIPPED (ui.properties_width) — and this was the widest row left in the
+    // Light and Mesh blades once the prose rows were fixed. The name and the two
+    // buttons take the first line, the eight boxes the second: 284 px for the
+    // whole panel, inside every width the column allows.
     auto *line = new QHBoxLayout;
     line->setContentsMargins(0, 0, 0, 0);
     line->setSpacing(2);
     line->addWidget(new QLabel(tr("Channels"), this));
     line->addStretch();
+
+    auto *boxLine = new QHBoxLayout;
+    boxLine->setContentsMargins(0, 0, 0, 0);
+    // No spacing between the boxes: a check box carries its own padding, and the
+    // eight of them are the widest thing left in these blades — the 14 px of
+    // spacing was the difference between fitting the column's minimum width and
+    // being clipped at it.
+    boxLine->setSpacing(0);
     for (int i = 0; i < 8; ++i) {
         // The label is the CHANNEL INDEX the scripting verb speaks (0..7), not
         // a 1-based display number: a user who reads the panel and then writes
@@ -44,8 +60,9 @@ LightChannelsWidget::LightChannelsWidget(QWidget *parent) : QWidget(parent)
             emitMask(on ? (mMask | bit) : (mMask & ~bit));
         });
         mBoxes[i] = box;
-        line->addWidget(box);
+        boxLine->addWidget(box);
     }
+    boxLine->addStretch();
     mAll = new QPushButton(tr("All"), this);
     mNone = new QPushButton(tr("None"), this);
     for (QPushButton *b : {mAll, mNone}) {
@@ -58,6 +75,7 @@ LightChannelsWidget::LightChannelsWidget(QWidget *parent) : QWidget(parent)
     connect(mAll, &QPushButton::clicked, this, [this]() { emitMask(kAll); });
     connect(mNone, &QPushButton::clicked, this, [this]() { emitMask(0u); });
     outer->addLayout(line);
+    outer->addLayout(boxLine);
 
     mDescription = new QLabel(this);
     mDescription->setWordWrap(true);

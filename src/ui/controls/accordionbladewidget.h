@@ -109,6 +109,11 @@ private slots:
     void onPanelToggled();
 
 private:
+    /// The one place a row enters a blade. Fits the row to the dock
+    /// (ui/controls/rowfit.h) and then adds it to the content pane — every
+    /// add*() helper above goes through here.
+    void addRow(QWidget *row);
+
     Ui::AccordianBladeWidget *ui;
 };
 

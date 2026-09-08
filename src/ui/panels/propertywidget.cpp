@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include <QDir>
 #include "data/database/database.h"
+#include "ui/controls/rowfit.h"
 
 PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::PropertyWidget)
 {
@@ -37,6 +38,17 @@ PropertyWidget::PropertyWidget(QWidget *parent) : QWidget(parent), ui(new Ui::Pr
 PropertyWidget::~PropertyWidget()
 {
     delete ui;
+}
+
+/// The material list's rows enter the panel HERE, so they get the same
+/// dock-fitting the accordion's rows get (ui/controls/rowfit.h): a texture or
+/// preset name elides, it does not push the Properties dock wider than the
+/// column (owner report 2026-09-08).
+void PropertyWidget::addRow(QWidget *row)
+{
+    if (!row) return;
+    RowFit::fitRow(row);
+    ui->contentpane->layout()->addWidget(row);
 }
 
 HFloatSliderWidget* PropertyWidget::addFloatValueSlider(const QString& name, float min, float max)
@@ -94,7 +106,7 @@ void PropertyWidget::addFloatProperty(iris::Property *prop)
 
     fltWidget->index = prop->id;
     fltWidget->setValue(fltProp->getValue().toFloat());
-    ui->contentpane->layout()->addWidget(fltWidget);
+    addRow(fltWidget);
     properties.append(prop);
     rowByName.insert(prop->name, fltWidget);
 
@@ -151,7 +163,7 @@ void PropertyWidget::addEnumProperty(iris::Property *prop)
     combo->index = prop->id;
     combo->setCurrentIndex(listProp->getValue().toInt());
     progressiveHeight += combo->height() + stretch;
-    ui->contentpane->layout()->addWidget(combo);
+    addRow(combo);
     properties.append(prop);
     rowByName.insert(prop->name, combo);
 
@@ -180,7 +192,7 @@ void PropertyWidget::addIntProperty(iris::Property *prop)
 
     intWidget->index = prop->id;
     intWidget->setValue(float(intProp->getValue().toInt()));
-    ui->contentpane->layout()->addWidget(intWidget);
+    addRow(intWidget);
     properties.append(prop);
     rowByName.insert(prop->name, intWidget);
 
@@ -224,7 +236,7 @@ void PropertyWidget::addColorProperty(iris::Property *prop)
 
     colorWidget->index = prop->id;
     colorWidget->setColorValue(colorProp->getValue().value<QColor>());
-    ui->contentpane->layout()->addWidget(colorWidget);
+    addRow(colorWidget);
     properties.append(prop);
     rowByName.insert(prop->name, colorWidget);
 
@@ -257,7 +269,7 @@ void PropertyWidget::addBoolProperty(iris::Property *prop)
 
     boolWidget->index = prop->id;
     boolWidget->setValue(boolProp->getValue().toBool());
-    ui->contentpane->layout()->addWidget(boolWidget);
+    addRow(boolWidget);
     properties.append(prop);
     rowByName.insert(prop->name, boolWidget);
 
@@ -286,7 +298,7 @@ void PropertyWidget::addTextureProperty(iris::Property *prop)
 	auto texturePath = prop->getValue().toString();
 
     textureWidget->setTexture(texturePath);
-    ui->contentpane->layout()->addWidget(textureWidget);
+    addRow(textureWidget);
     properties.append(prop);
     rowByName.insert(prop->name, textureWidget);
 
@@ -316,7 +328,7 @@ void PropertyWidget::addFileProperty(iris::Property *prop)
 
     fileWidget->index = prop->id;
     fileWidget->setFilepath(fileProp->getValue().toString());
-    ui->contentpane->layout()->addWidget(fileWidget);
+    addRow(fileWidget);
     properties.append(prop);
 
     connect(fileWidget, &FilePickerWidget::onPathChanged, this, [this, fileProp](QString value) {
@@ -335,7 +347,7 @@ void PropertyWidget::addVector2Property(iris::Property *prop)
 	auto vecProp = static_cast<iris::Vec2Property*>(prop);
 	auto widget = addVector2Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y());
 	auto holder = addWidgetHolder(vecProp->displayName, widget);
-	ui->contentpane->layout()->addWidget(holder);
+	addRow(holder);
 	properties.append(vecProp);
 
 	connect(widget, &Widget2D::valueChanged, [=](iris::Vec2 value) {
@@ -351,7 +363,7 @@ void PropertyWidget::addVector3Property(iris::Property *prop)
 	auto vecProp = static_cast<iris::Vec3Property*>(prop);
 	auto widget = addVector3Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z());
 	auto holder = addWidgetHolder(vecProp->displayName, widget);
-	ui->contentpane->layout()->addWidget(holder);
+	addRow(holder);
 	properties.append(vecProp);
 
 	connect(widget, &Widget3D::valueChanged, [=](iris::Vec3 value) {
@@ -367,7 +379,7 @@ void PropertyWidget::addVector4Property(iris::Property *prop)
 	auto vecProp = static_cast<iris::Vec4Property*>(prop);
 	auto widget = addVector4Widget(vecProp->displayName, vecProp->value.x(), vecProp->value.y(), vecProp->value.z(), vecProp->value.w());
 	auto holder = addWidgetHolder(vecProp->displayName, widget);
-	ui->contentpane->layout()->addWidget(holder);
+	addRow(holder);
 	properties.append(vecProp);
 
 	connect(widget, &Widget4D::valueChanged, [=](iris::Vec4 value) {
@@ -382,7 +394,7 @@ Widget2D * PropertyWidget::addVector2Widget(const QString &, float xValue, float
 {
 	auto widget = new Widget2D;
 	widget->setValues(xValue, yValue);
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	progressiveHeight += widget->height() + stretch;
 
 	return widget;
@@ -392,7 +404,7 @@ Widget3D * PropertyWidget::addVector3Widget(const QString &, float xValue, float
 {
 	auto widget = new Widget3D;
 	widget->setValues(xValue, yValue, zValue);
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	progressiveHeight += widget->height() + stretch;
 
 	return widget;
@@ -402,7 +414,7 @@ Widget4D * PropertyWidget::addVector4Widget(const QString &, float xValue, float
 {
 	auto widget = new Widget4D;
 	widget->setValues(xValue, yValue, zValue, wValue);
-	ui->contentpane->layout()->addWidget(widget);
+	addRow(widget);
 	progressiveHeight += widget->height() + stretch;
 
 	return widget;

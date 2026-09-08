@@ -696,6 +696,11 @@ private:
     SceneNodePropertiesWidget *sceneNodePropertiesWidget;
 
     QDockWidget *presetsDock;
+    /// Gives the Properties dock the right column's width, once per session
+    /// (ui/style/panelmetrics.h). Called from both ways the editor page opens.
+    void applyRightColumnWidthOnce();
+    /// Whether that has happened — after it has, a user's drag wins.
+    bool rightColumnSized = false;
     QTabWidget *presetsTabWidget;
 
     QDockWidget *assetDock;
