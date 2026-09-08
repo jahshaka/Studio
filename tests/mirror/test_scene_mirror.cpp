@@ -34,6 +34,7 @@
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/scenegraph/scenepicking.h"
+#include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/scenegraph/nodegraph.h"
 
 using namespace jahshaka::engine;
@@ -1887,6 +1888,38 @@ int main(int argc, char **argv)
         sunMirror.setSource(nullptr);
         engine->destroyView(sunView);
         engine->destroyScene(sunScene);
+    }
+
+    // ---- ONE gradient ramp, shared with the exporter (F10) -----------------
+    // iris::bakeGradientSky is what the mirror's gradient sky path uploads and
+    // what src/export/gltfexporter.cpp writes into the web sky; the ramp used
+    // to be written out twice. Pin its contract here (row 0 = zenith = the top
+    // stop, last row = the bottom stop, the middle stop at `offset`) so the two
+    // callers cannot silently disagree again.
+    {
+        const QColor top(255, 0, 0), mid(0, 255, 0), bot(0, 0, 255);
+        const QImage strip = iris::bakeGradientSky(top, mid, bot, 0.5f, 4, 256);
+        CHECK(!strip.isNull() && strip.width() == 4 && strip.height() == 256,
+              "gradient bake: 4x256 equirect strip");
+        CHECK(strip.format() == QImage::Format_RGBA8888,
+              "gradient bake: RGBA8888, so constBits() is a straight upload");
+        const QColor first = strip.pixelColor(0, 0);
+        const QColor last  = strip.pixelColor(0, 255);
+        const QColor middle = strip.pixelColor(0, 128);
+        std::printf("    gradient bake rows: top %d,%d,%d  mid %d,%d,%d  bottom %d,%d,%d\n",
+                    first.red(), first.green(), first.blue(),
+                    middle.red(), middle.green(), middle.blue(),
+                    last.red(), last.green(), last.blue());
+        CHECK(first.red() > 250 && first.green() < 5 && first.blue() < 5,
+              "gradient bake: row 0 is the ZENITH stop");
+        CHECK(last.blue() > 250 && last.red() < 5 && last.green() < 5,
+              "gradient bake: the last row is the nadir stop");
+        CHECK(middle.green() > 250 && middle.red() < 8 && middle.blue() < 8,
+              "gradient bake: offset 0.5 puts the middle stop at the equator");
+        // Degenerate offsets are clamped, never divided by zero.
+        CHECK(!iris::bakeGradientSky(top, mid, bot, 0.0f).isNull() &&
+              !iris::bakeGradientSky(top, mid, bot, 1.0f).isNull(),
+              "gradient bake: offsets 0 and 1 are clamped, not division by zero");
     }
 
     mirror.setSource(nullptr);
