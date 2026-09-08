@@ -1,9 +1,0 @@
-﻿  Automatic MOC and UIC for target downloader
-  Building Custom Rule C:/work/qt/Studio/extras/downloader/CMakeLists.txt
-  mocs_compilation_Debug.cpp
-  main.cpp
-  mainwindow.cpp
-  progressbar.cpp
-C:\work\qt\Studio\extras\downloader\progressbar.cpp(212,18): warning C4996: 'QMouseEvent::globalPos': Use globalPosition()
-C:\work\qt\Studio\extras\downloader\main.cpp(6,36): warning C4996: 'Qt::AA_EnableHighDpiScaling': High-DPI scaling is always enabled. This attribute no longer has any effect.
-  downloader.vcxproj -> C:\work\qt\Studio\build_vs\bin\Debug\downloader.exe

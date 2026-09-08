@@ -15,64 +15,11 @@ For more information see the LICENSE file
 #include <vtkActor.h>
 #include <vtkNew.h>
 
-#include <QDebug>
 #include <QMouseEvent>
 
 #include "constants.h"
-// #include "uimanager.h"
-// #include "widgets/sceneviewwidget.h"
-// #include "irisgl/Graphics.h"
-// #include "irisgl/SceneGraph.h"
-// #include "irisgl/Physics.h"
-// #include "irisgl/Vr.h"
-// #include "irisgl/Content.h"
-// #include "playervrcontroller.h"
-// #include "playermousecontroller.h"
 #include "src/core/keyboardstate.h"
-//#include "playback.h"
-
-class VtkPlayBackSim : public QObject
-{
-public:
-    bool playing = false;
-    void init(vtkRenderer*) { /* ... */ }
-    void setScene(void*) { /* ... */ }
-    void renderScene(int, float) { /* ... 模拟物理/动画更新 */ }
-    void playScene() { playing = true; qDebug() << "VTK Scene Playing"; }
-    void stopScene() { playing = false; qDebug() << "VTK Scene Stopped"; }
-    bool isScenePlaying() const { return playing; }
-
-    // 模拟事件传递
-    void mousePressEvent(QMouseEvent * evt) {
-        qDebug() << "Mouse Pressed handled by Playback sim.";
-        // 实际上这里应该调用 VTK 交互器的方法
-    }
-
-    void mouseMoveEvent(QMouseEvent * evt) {
-        qDebug() << "Mouse Pressed handled by Playback sim.";
-        // 实际上这里应该调用 VTK 交互器的方法
-    }
-
-    void mouseReleaseEvent(QMouseEvent * evt) {
-        qDebug() << "Mouse Pressed handled by Playback sim.";
-        // 实际上这里应该调用 VTK 交互器的方法
-    }
-
-    void wheelEvent(QWheelEvent * evt) {
-        qDebug() << "Mouse Pressed handled by Playback sim.";
-        // 实际上这里应该调用 VTK 交互器的方法
-    }
-
-    void keyPressEvent(QKeyEvent *event) {
-
-    }
-
-    void keyReleaseEvent(QKeyEvent *event) {
-
-    }
-    // ... 其他事件方法
-    void getMouseController() {} // 占位符
-};
+#include "vtkplaybackmanager.h"
 
 PlayerView::PlayerView(QWidget* parent) :
     QVTKOpenGLNativeWidget(parent)
@@ -96,7 +43,8 @@ PlayerView::PlayerView(QWidget* parent) :
     this->setRenderWindow(render_window_);
     render_window_->AddRenderer(renderer_);
 
-    playback = new VtkPlayBackSim();
+    playback_ = new VtkPlaybackManager(this);
+    playback_->setRenderer(renderer_.Get());
 
 	// needed in order to get mouse events
 	setMouseTracking(true);
@@ -110,10 +58,6 @@ PlayerView::PlayerView(QWidget* parent) :
     // 启动计时器，频率可根据需要调整
     update_timer_->start(Constants::FPS_90); // 约 90 FPS
 
-    fps_timer_ = new QElapsedTimer();
-    fps_timer_->start();
-
-    playback->init(renderer_.Get());
 }
 
 void PlayerView::setSceneData()
@@ -124,13 +68,12 @@ void PlayerView::setSceneData()
     vtkNew<vtkPolyDataMapper> mapper;
     mapper->SetInputConnection(sphereSource->GetOutputPort());
 
-    vtkNew<vtkActor> actor;
+    vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
     actor->SetMapper(mapper);
 
     renderer_->AddActor(actor);
+    playback_->addSceneActor(actor);
     renderer_->ResetCamera(); // 确保相机能看到物体
-
-    playback->setScene(nullptr); // 模拟设置场景
 }
 
 
@@ -164,24 +107,16 @@ void PlayerView::end()
 
 void PlayerView::renderScene()
 {
-    float elapsedNs = fps_timer_->nsecsElapsed();
-    fps_timer_->restart();
-
-    float dt = std::max(0.001f, static_cast<float>(elapsedNs) / (1000.0f * 1000.0f * 1000.0f));
-    playback->renderScene(0, dt);
-
     this->renderWindow()->Render();
 }
 
 void PlayerView::mousePressEvent(QMouseEvent * evt)
 {
-	playback->mousePressEvent(evt);
     QVTKOpenGLNativeWidget::mousePressEvent(evt);
 }
 
 void PlayerView::mouseMoveEvent(QMouseEvent * evt)
 {
-	playback->mouseMoveEvent(evt);
     QVTKOpenGLNativeWidget::mouseMoveEvent(evt);
 }
 
@@ -191,13 +126,11 @@ void PlayerView::mouseDoubleClickEvent(QMouseEvent * evt)
 
 void PlayerView::mouseReleaseEvent(QMouseEvent *evt)
 {
-	playback->mouseReleaseEvent(evt);
     QVTKOpenGLNativeWidget::mouseReleaseEvent(evt);
 }
 
 void PlayerView::wheelEvent(QWheelEvent *event)
 {
-	playback->wheelEvent(event);
     QVTKOpenGLNativeWidget::wheelEvent(event);
 }
 
@@ -208,21 +141,23 @@ PlayerView::~PlayerView()
 
 bool PlayerView::isScenePlaying()
 {
-	return playback->isScenePlaying();
+    return playback_->isScenePlaying();
 }
 
 void PlayerView::playScene()
 {
-	if (!playback->isScenePlaying())
-		playback->playScene();
+    if (!playback_->isScenePlaying()) {
+        playback_->startPlayback();
+    }
 }
 
 
 void PlayerView::pause() {}
 void PlayerView::stopScene()
 {
-	if (playback->isScenePlaying())
-		playback->stopScene();
+    if (playback_->isScenePlaying()) {
+        playback_->stopPlayback();
+    }
 }
 
 void PlayerView::updateRendering()
@@ -234,13 +169,13 @@ void PlayerView::updateRendering()
 void PlayerView::keyPressEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = true;
-	playback->keyPressEvent(event);
+    QVTKOpenGLNativeWidget::keyPressEvent(event);
 }
 
 void PlayerView::keyReleaseEvent(QKeyEvent *event)
 {
 	KeyboardState::keyStates[event->key()] = false;
-	playback->keyReleaseEvent(event);
+    QVTKOpenGLNativeWidget::keyReleaseEvent(event);
 }
 
 void PlayerView::focusOutEvent(QFocusEvent * event)

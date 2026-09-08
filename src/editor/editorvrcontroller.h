@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include "../irisgl/src/irisglfwd.h"
 #include "cameracontrollerbase.h"
 #include <QMatrix4x4>
+#include <QQuaternion>
 
 class VrHand
 {

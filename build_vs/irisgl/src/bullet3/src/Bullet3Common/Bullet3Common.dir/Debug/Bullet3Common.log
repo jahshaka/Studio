@@ -1,7 +1,0 @@
-﻿  Automatic MOC and UIC for target Bullet3Common
-  Building Custom Rule C:/work/qt/Studio/irisgl/src/bullet3/src/Bullet3Common/CMakeLists.txt
-  mocs_compilation_Debug.cpp
-  b3AlignedAllocator.cpp
-  b3Vector3.cpp
-  b3Logging.cpp
-  Bullet3Common.vcxproj -> C:\work\qt\Studio\build_vs\lib\Debug\Bullet3Commond.lib

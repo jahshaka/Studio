@@ -1,6 +1,0 @@
-C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad_autogen\mocs_compilation_Debug.cpp;C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad.dir\Debug\mocs_compilation_Debug.obj
-C:\work\qt\Studio\thirdparty\breakpad\breakpad\src\client\windows\handler\exception_handler.cc;C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad.dir\Debug\exception_handler.obj
-C:\work\qt\Studio\thirdparty\breakpad\breakpad\src\client\windows\crash_generation\crash_generation_client.cc;C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad.dir\Debug\crash_generation_client.obj
-C:\work\qt\Studio\thirdparty\breakpad\breakpad\src\common\windows\guid_string.cc;C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad.dir\Debug\guid_string.obj
-C:\work\qt\Studio\thirdparty\breakpad\breakpad\src\client\windows\sender\crash_report_sender.cc;C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad.dir\Debug\crash_report_sender.obj
-C:\work\qt\Studio\thirdparty\breakpad\breakpad\src\common\windows\http_upload.cc;C:\work\qt\Studio\build_vs\thirdparty\breakpad\breakpad.dir\Debug\http_upload.obj

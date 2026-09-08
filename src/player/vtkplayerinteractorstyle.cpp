@@ -25,8 +25,6 @@ void cleanupPickingConstraint() { /* ... */ }
 
 VtkPlayerInteractorStyle::VtkPlayerInteractorStyle()
 {
-    return;
-
     picker_ = vtkSmartPointer<vtkPropPicker>::New();
     this->SetMotionFactor(10.0);
 
