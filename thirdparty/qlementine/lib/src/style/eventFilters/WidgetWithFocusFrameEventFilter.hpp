@@ -114,20 +114,36 @@ private:
   /// detached subtree's root and its re-attachment is what has to bring the
   /// frame home.
   void watchAncestors() {
-    for (const auto& watched : _watchedAncestors) {
-      if (watched) {
-        watched->removeEventFilter(this);
-      }
-    }
-    _watchedAncestors.clear();
-
+    QList<QWidget*> chain;
     auto* const frameParent = deriveFrameParent(_widget);
     for (auto* p = _widget->parentWidget(); p; p = p->parentWidget()) {
-      p->installEventFilter(this);
-      _watchedAncestors.append(p);
+      chain.append(p);
       if (p == frameParent || p->isWindow()) {
         break;
       }
+    }
+
+    // Touch only what actually changed. This runs from inside an ancestor's own
+    // ParentChange dispatch, and QObject::installEventFilter() compacts and
+    // prepends to the very list QCoreApplicationPrivate::sendThroughObjectEventFilters()
+    // is walking — reinstalling wholesale would shift that walk under itself and
+    // could skip a sibling filter (a panel holds one of these per focusable
+    // control, so there are dozens on the same ancestors).
+    for (const auto& watched : _watchedAncestors) {
+      if (watched && !chain.contains(watched.data())) {
+        watched->removeEventFilter(this);
+      }
+    }
+    for (auto* p : chain) {
+      if (!_watchedAncestors.contains(p)) {
+        p->installEventFilter(this);
+      }
+    }
+
+    _watchedAncestors.clear();
+    _watchedAncestors.reserve(chain.size());
+    for (auto* p : chain) {
+      _watchedAncestors.append(p);
     }
   }
 
