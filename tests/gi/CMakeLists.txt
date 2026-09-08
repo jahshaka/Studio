@@ -278,3 +278,26 @@ add_test(NAME gi.tiers COMMAND test_gi_tiers
 set_tests_properties(gi.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document" TIMEOUT 300)
 jah_no_display(gi.tiers)
+
+# gi.ddgi_ambient — THE RAYON AMBIENT FIX (GI_UNIFIED_SPEC.md ADDENDUM
+# CORRECTION; the upstream mechanism is in SPECS/OGRE_UPSTREAM_ISSUES.md's
+# "Vct_piece_ps.any: volume-local ambient blend commented out" entry). Its own
+# binary for the same process-wide-binding reason as gi.ddgi — and separate from
+# gi.ddgi deliberately: that suite pins the field's BOUNCE and must keep its
+# ambient at zero to do so, while this one is about the ambient and needs three
+# scenes with a non-degenerate hemisphere pair.
+add_executable(test_gi_ddgi_ambient test_gi_ddgi_ambient.cpp)
+set_target_properties(test_gi_ddgi_ambient PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_ddgi_ambient PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_ddgi_ambient PRIVATE JahshakaEngine)
+add_dependencies(test_gi_ddgi_ambient JahshakaEngineMedia)
+add_test(NAME gi.ddgi_ambient COMMAND test_gi_ddgi_ambient
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.ddgi_ambient PROPERTIES TIMEOUT 900 LABELS "engine")

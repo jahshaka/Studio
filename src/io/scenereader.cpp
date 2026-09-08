@@ -475,6 +475,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giDdgi = qBound(-1, sceneObj["giDdgi"].toInt(-1), 1);
         scene->giDdgiIntensity =
             float(qBound(0.0, sceneObj["giDdgiIntensity"].toDouble(1.0), 64.0));
+        // The ambient sky-visibility strength (the Rayon ambient fix). Absent
+        // in every document written before it: the fallback 1.0 turns the fix
+        // ON for them, deliberately — it corrects a term those documents were
+        // MISSING, and the sealed-room invariance gate is what says that is
+        // safe for the scenes it cannot change.
+        scene->giDdgiAmbient =
+            float(qBound(0.0, sceneObj["giDdgiAmbient"].toDouble(1.0), 8.0));
         // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
         // document written before the unification — those are DERIVED from the
         // fields above, below, once the World Mode is known.
