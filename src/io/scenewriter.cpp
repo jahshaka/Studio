@@ -241,6 +241,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // defaults, so a document that never touched them reopens identical.
     sceneObj["giDdgi"] = scene->giDdgi;
     sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
+    sceneObj["giDdgiAmbient"] = scene->giDdgiAmbient;
     // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
     // and spelled out here for the same reason (this file must not pull the
     // services layer into a dozen headless test targets): an ordinal would

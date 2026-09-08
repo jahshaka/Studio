@@ -110,8 +110,30 @@ assert(world.gi({ ddgiIntensity: 2.5 }), "world.gi({ddgiIntensity:2.5})");
 editor.frame(3);
 assert(Math.abs(world.get().gi.ddgiIntensity - 2.5) < 1e-4, "the document echoes intensity 2.5");
 
-// ---- phase D: refusals and the tri-state --------------------------------
+// ---- phase C2: the ambient sky-visibility dial ---------------------------
+// The Rayon ambient fix's one knob. The PIXEL contract is gi.ddgi_ambient's
+// (recovery on an open scene, invariance in a sealed one); what belongs here is
+// that the verb exists, round-trips through the document, and refuses nonsense
+// — the API-first half.
+assert(Math.abs(world.get().gi.ddgiAmbient - 1.0) < 1e-6,
+       "ddgiAmbient defaults to 1.0 — the fix is ON, because it corrects a term every "
+       + "DDGI scene was MISSING");
+assert(world.gi({ ddgiAmbient: 0 }), "world.gi({ddgiAmbient:0})");
+editor.frame(3);
+st = world.giStatus();
+assert(st.ifdBound === true,
+       "ambient 0 leaves the field BOUND — like the intensity, it is a shader scalar and "
+       + "0 is exactly 'DDGI as it behaved before the fix'");
+assert(Math.abs(world.get().gi.ddgiAmbient) < 1e-6, "the document echoes ambient 0");
+assert(world.gi({ ddgiAmbient: 1 }), "world.gi({ddgiAmbient:1}) — back to the reconstruction");
+editor.frame(3);
+assert(Math.abs(world.get().gi.ddgiAmbient - 1.0) < 1e-4, "the document echoes ambient 1");
 var threw = "";
+try { world.gi({ ddgiAmbient: 9 }); } catch (e) { threw = String(e); }
+assert(threw.indexOf("ddgiAmbient") >= 0,
+       "world.gi refuses an out-of-range ddgiAmbient: " + threw);
+
+// ---- phase D: refusals and the tri-state --------------------------------
 try { world.gi({ ddgiIntensity: 100 }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("ddgiIntensity") >= 0,
        "world.gi refuses an out-of-range ddgiIntensity: " + threw);

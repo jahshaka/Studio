@@ -60,6 +60,7 @@ protected slots:
     void onUpdateBudgetChanged(float value);
     void onDdgiToggled(bool on);
     void onDdgiIntensityChanged(float value);
+    void onDdgiAmbientChanged(float value);
     void onFitBoundsClicked();
     void onResetAdvancedClicked();
 
@@ -79,6 +80,7 @@ private:
     HFloatSliderWidget *updateBudget = nullptr;
     CheckBoxWidget *ddgiToggle = nullptr;
     HFloatSliderWidget *ddgiIntensity = nullptr;
+    HFloatSliderWidget *ddgiAmbient = nullptr;
     QPushButton *fitBoundsButton = nullptr;
     QPushButton *advancedButton = nullptr;
     QPushButton *resetAdvancedButton = nullptr;

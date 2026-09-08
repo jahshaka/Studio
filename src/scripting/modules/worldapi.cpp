@@ -80,7 +80,7 @@ QVector<VerbInfo> WorldApi::verbs() const
           "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
           "(world.setShadowResolution, node.setProperty on the light).",
           Needs::Document },
-        { "gi", "world.gi({tier, mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity}) -> bool",
+        { "gi", "world.gi({tier, mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity, ddgiAmbient}) -> bool",
           "Global illumination — the full surface, of which world.rayon is the product-named shorthand. "
           "'tier' is RAYON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality and whether the irradiance field is on, all at once — low = Instant Radiosity, medium = VCT, high = VCT + probes with HDR shadowed captures, epic = that plus the irradiance field. Setting it does NOT turn GI on or off (world.rayon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
           "The individual knobs: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
@@ -89,16 +89,17 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'rayMarchStepScale' (>= 1.0, default 1.0) is how coarsely voxel light injection ray-marches towards each light when working out what is shadowed: bigger is faster and starts losing shadow contact in the bounce. It is the AT-REST value; while you drag something the renderer raises it on its own for the cheap re-injections it throws away a moment later. "
           "'ddgi' turns on the IRRADIANCE FIELD — a grid of probes, built over the same voxel volume, that stores the bounced light arriving from every direction plus a depth map used to decide what each probe can actually see. It is the leak fix: cone-traced bounce blows out corners because a cone cannot tell a wall from empty space, and the field's depth test can. true|false|\"auto\", where \"auto\" hands the decision back to the Rayon tier (which turns it on at epic and off below) and setting it explicitly PINS it through tier switches. Only meaningful in vct and vct_pcc_hybrid — the field is fed by the voxels, and DDGI is deliberately NOT offered without them, because with no voxel lighting bound the shader's ambient term comes back and would be counted twice on top of the field. TURNING IT ON TURNS THE VOXEL-CONE DIFFUSE OFF: the field REPLACES that term rather than adding to it. Reflections, probes, planar and specular are untouched. "
           "'ddgiIntensity' (0..64, default 1) scales that replacement, because the technique itself has no brightness setting and the two diffuse terms are different integrals of the same bounce. Measured on a closed room, the field lands at about 86% of the cone-traced diffuse it takes over from, so the raw value 1.0 is also the calibrated default: raise it to trim the room brighter, lower it to trim it down, and 0 leaves the field bound while contributing nothing (the A/B measurement). world.giStatus()'s ifdBound / ifdProbes / ifdConverged / ifdProbesPerFrame report what the renderer did with all of this. "
+          "'ddgiAmbient' (0..8, default 1) scales the AMBIENT the field would otherwise swallow. Inside a voxel volume the renderer's ordinary ambient term is switched off — the cone-traced bounce carried the ambient instead, weighted by how much sky each surface could see — and turning DDGI on removes that carrier, which used to leave open scenes 15-25% flatter (a sealed room saw no change, because a sealed room has no sky to see). The renderer now rebuilds the missing term from the field's own depth probes: the scene's ambient, times the fraction of the surrounding probes whose view along the surface's normal leaves the volume without hitting anything. 1 is that reconstruction and the default, 0 removes it again (which is exactly how DDGI behaved before this existed, and the A/B for measuring it), and above 1 is a sky-fill trim. The proxy is ONE direction per probe, so a surface tucked into a corner that still faces the sky reads slightly brighter than a full hemisphere integral would give it. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
         { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeHdr, probeShadows, probeUpdatesPerFrame, cubemapProbeSlotsPerCell, probesClampedToRegion, worstProbeShapeCellRatio, reusedLastRefresh, ifdBound, ifdProbes, ifdConverged, ifdProbesPerFrame, live}",
           "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer re-captures each frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked); every probe still refreshes within probeCount / probeUpdatesPerFrame frames. 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. The four ifd* fields are the IRRADIANCE FIELD (world.gi's 'ddgi'), reported the same way: 'ifdBound' is whether the PBR shader is sampling THIS scene's field — asking for DDGI and getting it are two different things, since the field needs a voxel volume to be built from and its compute jobs to be staged; 'ifdProbes' is how many probes it holds; 'ifdConverged' says every probe has been integrated since the last build or light change, and it is true on the frame the field binds (a build converges the whole field in one go) — it reads false only while a progressive re-integration after a light move is still running; 'ifdProbesPerFrame' is how fast that re-integration runs, derived from updateBudget, and 0 when GI is paused or there is no field. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
           Needs::Document },
-        { "rayon", "world.rayon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, ddgiIntensity, updateBudget}",
+        { "rayon", "world.rayon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, ddgiIntensity, ddgiAmbient, updateBudget}",
           "RAYON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
           "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low bounces one light off the scene (Instant Radiosity, no voxels, and emissive surfaces and area lights contribute nothing to it); medium voxelizes the lit volume and cone-traces the bounce out of it; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds the irradiance field, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls. New scenes are born epic. "
           "Called with no argument it reads. 'custom' is true when a setting you pinned deviates from what the tier would give it, and 'deviations' names those settings — the tier is still the tier, your pin still wins, and world.clearOverride({id}) hands one back (ids: giMode, giQuality, giDdgi, rayon). 'technique', 'quality' and 'ddgi' are what the tier and your pins RESOLVED to, in world.gi's spelling. "
-          "KNOWN GAP, because epic is the default and this is where it shows: with the irradiance field bound, ambient light inside the voxel volume comes from nowhere (the field replaces the cone diffuse, the shader's ambient term is gated off inside the volume, and the field's own integration has no ambient input), which reads as a 15-25% darker mid-ground on OPEN scenes — a sealed room is unaffected. Drop to high, or raise ddgiIntensity, if a scene of yours looks flat under it. "
+          "The ambient gap epic used to have — the field replacing the cone diffuse also removed the only live ambient term inside the voxel volume, reading as a 15-25% darker mid-ground on OPEN scenes — is CLOSED: the renderer rebuilds that term from the field's own depth probes. world.gi's 'ddgiAmbient' is the strength, and 0 restores the old behaviour if a scene wants it. "
           "Writes are undoable as one step, exactly like world.mode.",
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
@@ -303,7 +304,8 @@ bool WorldApi::gi(const QVariantMap &params)
         // DDGI (GI_UNIFIED_SPEC.md §4 P1), verb-only for the same reason: the
         // panel is P2's, and until the Rayon tier exists this is an opt-in a
         // script or a suite asks for explicitly.
-        QStringLiteral("ddgi"),      QStringLiteral("ddgiIntensity")
+        QStringLiteral("ddgi"),      QStringLiteral("ddgiIntensity"),
+        QStringLiteral("ddgiAmbient")
     };
     const QString refusal = refuseUnknownKeys(
         QStringLiteral("world.gi"), params, known,
@@ -465,6 +467,20 @@ bool WorldApi::gi(const QVariantMap &params)
                 "measurement."));
         scene->giDdgiIntensity = float(v);
     }
+    if (params.contains("ddgiAmbient")) {
+        const double v = params.value("ddgiAmbient").toDouble();
+        if (v < 0.0 || v > 8.0)
+            return fail(QStringLiteral(
+                "world.gi: ddgiAmbient must be in [0, 8] — how strongly the ambient the "
+                "irradiance field would otherwise swallow is rebuilt. Inside a voxel volume "
+                "the ordinary ambient term is switched off and the cone-traced bounce carried "
+                "the ambient instead; turning DDGI on removes that carrier, so the renderer "
+                "rebuilds the term from the field's own depth probes (the scene's ambient "
+                "times how much sky the surrounding probes can see along the surface normal). "
+                "1 is that reconstruction and the default, 0 removes it again — which is "
+                "exactly how DDGI behaved before this existed, and the A/B for measuring it."));
+        scene->giDdgiAmbient = float(v);
+    }
     return true;
 }
 
@@ -493,6 +509,7 @@ QVariantMap WorldApi::rayonState(const iris::ScenePtr &scene)
           QString::fromLatin1(qualityNames[qBound(0, int(scene->giQuality), 2)]) },
         { QStringLiteral("ddgi"), scene->giDdgi > 0 },
         { QStringLiteral("ddgiIntensity"), double(scene->giDdgiIntensity) },
+        { QStringLiteral("ddgiAmbient"), double(scene->giDdgiAmbient) },
         { QStringLiteral("updateBudget"), scene->giUpdateBudget },
     };
 }
@@ -1178,6 +1195,7 @@ QVariantMap WorldApi::get()
                              { "rayMarchStepScale", scene->giRayMarchStepScale },
                              { "ddgi", giToggleToJs(scene->giDdgi) },
                              { "ddgiIntensity", scene->giDdgiIntensity },
+                             { "ddgiAmbient", scene->giDdgiAmbient },
                              // RAYON's quality tier (GI_UNIFIED_SPEC §2): the
                              // dial the three fields above resolve through.
                              { "tier", worldmodes::rayonTierName(worldmodes::rayonTier(scene)) } };

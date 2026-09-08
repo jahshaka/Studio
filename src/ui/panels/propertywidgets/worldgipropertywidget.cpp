@@ -280,6 +280,18 @@ void WorldGiPropertyWidget::rebuild()
                    "replaces). Raise it to trim a room brighter; 0 leaves the field bound and "
                    "contributing nothing."));
             connect(ddgiIntensity, SIGNAL(valueChanged(float)), SLOT(onDdgiIntensityChanged(float)));
+            ddgiAmbient = this->addFloatValueSlider(tr("Ambient Fill"), 0.0f, 4.0f,
+                                                    qBound(0.0f, scene->giDdgiAmbient, 4.0f));
+            ddgiAmbient->setToolTip(
+                tr("How strongly the ambient the field would otherwise swallow is rebuilt. "
+                   "Inside the lit volume the ordinary ambient term is switched off — the "
+                   "cone-traced bounce carried it instead, weighted by how much sky each "
+                   "surface could see — and the field replacing that bounce used to take the "
+                   "ambient with it, flattening open scenes.\n\n"
+                   "1.0 rebuilds it from the field's own depth probes and is the default; 0 "
+                   "leaves it out, which is how this behaved before the fix. A sealed room "
+                   "sees no difference either way: it has no sky to see."));
+            connect(ddgiAmbient, SIGNAL(valueChanged(float)), SLOT(onDdgiAmbientChanged(float)));
         }
 
         // P1a.3, adapted: the spec asked for "fit to SELECTION", but this panel
@@ -405,6 +417,11 @@ void WorldGiPropertyWidget::onDdgiToggled(bool on)
 void WorldGiPropertyWidget::onDdgiIntensityChanged(float value)
 {
     if (!!scene) scene->giDdgiIntensity = qBound(0.0f, value, 64.0f);
+}
+
+void WorldGiPropertyWidget::onDdgiAmbientChanged(float value)
+{
+    if (!!scene) scene->giDdgiAmbient = qBound(0.0f, value, 8.0f);
 }
 
 void WorldGiPropertyWidget::onFitBoundsClicked()
