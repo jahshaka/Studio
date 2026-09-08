@@ -16,7 +16,7 @@ GlobalSettings:  {
 		P: "FrontAxisSign", "int", "Integer", "",1
 		P: "CoordAxis", "int", "Integer", "",0
 		P: "CoordAxisSign", "int", "Integer", "",1
-		P: "UnitScaleFactor", "double", "Number", "",1
+		P: "UnitScaleFactor", "double", "Number", "",100
 	}
 }
 Definitions:  {

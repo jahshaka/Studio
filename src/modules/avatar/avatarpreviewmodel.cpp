@@ -17,13 +17,19 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QHash>
 #include <QSet>
+#include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
+#include "irisgl/import/importflags.h"
+
+#include "irisgl/core/geometry/aabb.h"
+#include "irisgl/core/logger.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
@@ -78,7 +84,91 @@ bool isPivotChannel(const QString &name)
 // a foreign rig scores 0. Half is a wide gap to fall into.
 const double kRigMatchThreshold = 0.5;
 
+/// Vertical extent of the mesh AABBs under `n`, in WORLD space. Byte for byte
+/// the walk AvatarMovement::fitCapsuleToNode uses for its capsule height
+/// (avatarmovement.cpp mergeExtent) — the two numbers have to agree, because
+/// the page normalizes the subject and the capsule measures what came out.
+void mergeHeight(iris::SceneNode *n, float &minY, float &maxY, bool &any)
+{
+    if (!n) return;
+    if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+        auto *meshNode = static_cast<iris::MeshNode *>(n);
+        if (auto mesh = meshNode->getMesh()) {
+            const iris::Mat4 toWorld = n->getGlobalTransform();
+            const iris::AABB local = mesh->getAABB();
+            const iris::Vec3 mn = local.getMin();
+            const iris::Vec3 mx = local.getMax();
+            for (int c = 0; c < 8; ++c) {
+                const iris::Vec3 w = toWorld * iris::Vec3((c & 1) ? mx.x() : mn.x(),
+                                                          (c & 2) ? mx.y() : mn.y(),
+                                                          (c & 4) ? mx.z() : mn.z());
+                minY = std::min(minY, w.y());
+                maxY = std::max(maxY, w.y());
+                any = true;
+            }
+        }
+    }
+    const int kids = n->childCount();
+    for (int i = 0; i < kids; ++i) mergeHeight(n->childAt(i), minY, maxY, any);
+}
+
 } // namespace
+
+float measureCharacterHeight(const iris::SceneNodePtr &node)
+{
+    if (!node) return 0.0f;
+    float minY = std::numeric_limits<float>::max();
+    float maxY = -std::numeric_limits<float>::max();
+    bool any = false;
+    mergeHeight(node.data(), minY, maxY, any);
+    if (!any) return 0.0f;
+    const float height = maxY - minY;
+    return height > 0.0f ? height : 0.0f;
+}
+
+HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node, float targetHeight)
+{
+    HeightNormalization out;
+    if (!node) return out;
+
+    out.sourceHeight = measureCharacterHeight(node);
+    out.height = out.sourceHeight;
+    out.explicitTarget = targetHeight > 0.0f;
+    // No geometry (an animation-only or skeleton-only file) — there is nothing
+    // to measure, and guessing from bone positions would normalize a rig whose
+    // owner never sees it. Leave it exactly as authored.
+    if (!(out.sourceHeight > 0.0f)) return out;
+
+    float factor = 1.0f;
+    if (out.explicitTarget) {
+        factor = targetHeight / out.sourceHeight;
+    } else if (out.sourceHeight < kMinPlausibleHeight || out.sourceHeight > kMaxPlausibleHeight) {
+        factor = kTargetCharacterHeight / out.sourceHeight;
+    }
+    // A factor that rounds to 1 is not worth a scale node or a log line.
+    if (std::fabs(factor - 1.0f) < 1e-4f) return out;
+
+    // MULTIPLY: a file may carry its own root scale (that is one of the shapes
+    // a mis-declared package arrives in), and it is part of how tall the thing
+    // measured, so it must survive.
+    const iris::Vec3 scale = node->getLocalScale();
+    node->setLocalScale(iris::Vec3(scale.x() * factor, scale.y() * factor, scale.z() * factor));
+    out.applied = true;
+    out.factor = factor;
+    out.height = measureCharacterHeight(node);
+
+    irisLog(QStringLiteral("avatar: '%1' imported %2 m tall — %3 to %4 m (x%5). "
+                           "A character outside %6-%7 m is a unit declaration the file got "
+                           "wrong; re-export or set an explicit height to override.")
+                .arg(node->getName())
+                .arg(double(out.sourceHeight), 0, 'f', 3)
+                .arg(out.explicitTarget ? QStringLiteral("set") : QStringLiteral("normalized"))
+                .arg(double(out.height), 0, 'f', 3)
+                .arg(double(out.factor), 0, 'f', 4)
+                .arg(double(kMinPlausibleHeight), 0, 'f', 1)
+                .arg(double(kMaxPlausibleHeight), 0, 'f', 1));
+    return out;
+}
 
 QString AvatarPreviewModel::displayNameFor(const QString &rawName, const QString &sourceBaseName)
 {
@@ -161,24 +251,107 @@ bool AvatarPreviewModel::setSpaceMode(avatar::SpaceMode mode)
     return true;
 }
 
+bool AvatarPreviewModel::setCharacterHeight(float metres, QString *error)
+{
+    const auto fail = [error](const QString &why) {
+        if (error) *error = why;
+        return false;
+    };
+    if (!mFragment) return fail(QStringLiteral("load a character first"));
+    // A hard sanity range on the REQUEST, not on the file: the AUTO rule's
+    // plausible band is about human bodies, but an explicit height is the
+    // author saying "this one is a mouse / a kaiju", and only a value that
+    // could not be a length at all is refused.
+    if (metres > 0.0f && (metres < 0.001f || metres > 1000.0f))
+        return fail(QStringLiteral("a character height of %1 m is not a length "
+                                   "(0.001 .. 1000)").arg(double(metres)));
+
+    // Everything is decided against the FILE's height, never against the size
+    // an earlier call left behind. That is what makes "go back to automatic"
+    // mean something: re-running the rule on the CURRENT subject would be a
+    // no-op for every override inside the plausible band — i.e. for every sane
+    // override — and the caller would be told it worked while nothing moved
+    // (found by avatar.document H5, 2026-09-09).
+    const float source = mNormalization.sourceHeight > 0.0f
+                             ? mNormalization.sourceHeight
+                             : measureCharacterHeight(mFragment);
+    if (!(source > 0.0f))
+        return fail(QStringLiteral("'%1' has no geometry to measure").arg(mName));
+
+    const bool explicitTarget = metres > 0.0f;
+    const float target = explicitTarget
+                             ? metres
+                             : ((source < kMinPlausibleHeight || source > kMaxPlausibleHeight)
+                                    ? kTargetCharacterHeight
+                                    : source);
+
+    const HeightNormalization step = normalizeCharacterHeight(mFragment, target);
+    if (!(step.sourceHeight > 0.0f))
+        return fail(QStringLiteral("'%1' has no geometry to measure").arg(mName));
+
+    // The record stays anchored to the FILE: `sourceHeight` is what the file
+    // imported as and `factor` is the total from there to now, so a second
+    // call reports the whole story rather than the last step of it.
+    mNormalization.sourceHeight = source;
+    mNormalization.height = step.height;
+    mNormalization.factor = step.height / source;
+    mNormalization.explicitTarget = explicitTarget;
+    mNormalization.applied = std::fabs(mNormalization.factor - 1.0f) > 1e-4f;
+
+    rescaleSpace();
+    mDirty = true;
+    evaluate();
+    return true;
+}
+
 void AvatarPreviewModel::rescaleSpace()
 {
-    if (!mSpaceRoot) return;
-    // The room is designed around a HUMAN-scale subject: 1m tiles, 4m walls,
-    // a 1.8m character. Rigs import at wildly different scales (a Mixamo
-    // character is ~170 UNITS tall) — without this, the room is a knee-high
-    // box at the character's feet, invisible at framing distance. Same idea
-    // as AvatarPreviewScene::applyGrid, from the model's own rig data: the
-    // subject's rest-pose bone height sets the room's scale.
-    float top = 0.0f, bottom = 0.0f;
-    for (const auto &b : mBoneNodes) {
-        if (!b.node) continue;
-        const float y = b.node->getGlobalTransform().column(3).y();
-        top = qMax(top, y);
-        bottom = qMin(bottom, y);
+    // The room is designed around a HUMAN-scale subject: 1 m tiles, a 4 m
+    // interior, a ~1.75 m character (avatarspace.cpp). Scale it to whatever the
+    // subject turned out to be, so a deliberately small or large character
+    // still stands in a room instead of in a knee-high box or a stadium.
+    //
+    // THE NUMBERS CHANGED (2026-09-08). Before the FBX unit fix a Mixamo rig
+    // arrived ~170 units tall and this factor ran to ~100; the clamp was 400,
+    // and the owner's Dreyar (1604 units, wanting 943) was the ONE subject that
+    // hit it — which is why his head, and only his, went through the ceiling.
+    // Now the file's units are honoured at import and the subject is
+    // height-normalized before this runs, so the factor is ~1 for every
+    // character and the bound is no longer a scale policy: it is a guard
+    // against a degenerate measurement.
+    //
+    // THE BOUND, honestly: unclamped, the ceiling is 4 * (height / 1.75) =
+    // 2.29 * height, so it clears any head by construction. 0.05..20 puts a
+    // 9 cm figurine and a 35 m mech in a proportionate room; ABOVE 35 m the
+    // room stops growing, and a subject taller than 80 m would finally touch
+    // the ceiling again. Normalization keeps every automatic subject inside
+    // 0.5..3 m, so only an explicit setCharacterHeight or `normalize: false`
+    // can reach that, and at that size the room is scenery, not a room.
+    //
+    // The MEASURE is the subject's geometry, the same one normalization and
+    // the movement capsule use; the rest-pose bone extent is the fallback for
+    // a rig with no mesh at all (which normalization deliberately leaves
+    // alone), so those still get a room.
+    float height = measureCharacterHeight(mFragment);
+    if (!(height > 0.05f)) {
+        float top = 0.0f, bottom = 0.0f;
+        for (const auto &b : mBoneNodes) {
+            if (!b.node) continue;
+            const float y = b.node->getGlobalTransform().column(3).y();
+            top = qMax(top, y);
+            bottom = qMin(bottom, y);
+        }
+        height = top - bottom;
     }
-    const float height = top - bottom;
-    const float s = height > 0.05f ? qBound(0.02f, height / 1.7f, 400.0f) : 1.0f;
+    const float s = height > 0.05f
+                        ? qBound(0.05f, height / kTargetCharacterHeight, 20.0f)
+                        : 1.0f;
+    // Computed even in Grid mode and with no room built (a headless suite has
+    // no qrc plane mesh): it is the number the "does the head clear the
+    // ceiling" gate reads, and a gate that could only run with a room would
+    // not have caught this defect either.
+    mRoomScale = s;
+    if (!mSpaceRoot) return;
     mSpaceRoot->setLocalScale(iris::Vec3(s, s, s));
     // The ceiling panel light is NOT in the group (its rectangle is a light
     // property, not a transform, so a group scale cannot size it): follow the
@@ -236,6 +409,13 @@ bool AvatarPreviewModel::load(const QString &path, QString *error)
     mDocument->rootNode->addChild(node);
     mFragment = node;
 
+    // AUTO height normalization, BEFORE the rig is collected and before the
+    // room is scaled, so every number the page and the verbs read afterwards
+    // (bone positions, segments, the room scale) is already in the subject's
+    // final scale. A plausible character is untouched and this costs one AABB
+    // walk; an implausible one is scaled here and nowhere else.
+    mNormalization = normalizeCharacterHeight(node);
+
     collectRig();
     captureRestPose();
     rescaleSpace();
@@ -290,6 +470,7 @@ void AvatarPreviewModel::clear()
     mBoneCount = mMeshCount = mVertexCount = 0;
     mFilePath.clear();
     mName.clear();
+    mNormalization = HeightNormalization();
     mTime = 0.0f;
     mPlaying = false;
     mDirty = true;
@@ -467,12 +648,19 @@ bool AvatarPreviewModel::loadAnimation(const QString &path, QString *error, Clip
     // for clips only — which is also the only way an ANIMATION-ONLY export
     // (zero meshes) can be read at all, since every mesh loader rejects those.
     //
-    // No post-processing flags: every step in the canonical preset is
-    // geometry work, and node and channel NAMES — the only thing this path
+    // No GEOMETRY post-processing: every step in the canonical preset is
+    // geometry work, and node and channel NAMES — most of what this path
     // cares about — come out identical either way (measured on Ely +
     // Walking(1).fbx: same 207 node names, same 52 channel names, 3x faster).
+    //
+    // ClipNamesOnly, not 0: a clip's translation keys are in the FILE's units,
+    // and the CHARACTER was parsed with the canonical preset, which honours
+    // them. Reading the clip without the unit factor would drive a metre-scale
+    // rig with centimetre-scale offsets — a rig that flies apart on the first
+    // frame (the FBX unit-scale fix, importflags.h).
     Assimp::Importer importer;
-    const aiScene *scene = importer.ReadFile(path.toStdString().c_str(), 0);
+    const aiScene *scene =
+        importer.ReadFile(path.toStdString().c_str(), iris::ImportFlags::ClipNamesOnly);
     if (!scene)
         return fail(QStringLiteral("could not read %1 (%2)")
                         .arg(info.fileName(), QString::fromUtf8(importer.GetErrorString())));

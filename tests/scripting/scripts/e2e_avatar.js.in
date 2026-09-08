@@ -21,6 +21,8 @@ var RIG = "@SOURCE_DIR@/tests/avatar/fixtures/rig2.glb";
 var WALK = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_walk_anim.glb";
 var MISMATCH = "@SOURCE_DIR@/tests/avatar/fixtures/rig_mismatch_anim.glb";
 var PIVOT_FBX = "@SOURCE_DIR@/tests/skeletal/fixtures/pivot_rig.fbx";
+// rig2.glb rewritten at 17.25 m — the Dreyar case (fixtures/make_scaled_rigs.py).
+var GIANT = "@SOURCE_DIR@/tests/avatar/fixtures/rig2_giant.glb";
 
 // ---- the space exists and the window switches to it ----
 assert(app.space("avatar"), "app.space('avatar')");
@@ -182,6 +184,47 @@ assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
     assert(!!avatar.loadPreview(RIG), "reload the glTF rig for the remaining checks");
 }
 
+// ---- HEIGHT: the unit fix, normalization, and the ceiling -----------------
+// Owner report 2026-09-08: "Dreyar is massively huge, head touches the
+// ceiling". Two faults, one visible symptom — FBX unit scale (fixed at the
+// importer) and a package whose unit DECLARATION is wrong (fixed here, by
+// scaling the subject). This runs the whole thing through the verbs.
+{
+    var here = avatar.preview();          // the 2 m glTF rig, reloaded above
+    assert(Math.abs(here.height - 2.0) < 0.02,
+           "the 2 m rig measures " + here.height.toFixed(3) + " m");
+    assert(here.normalized === false && Math.abs(here.normalizeFactor - 1) < 1e-6,
+           "a plausible character is left EXACTLY as authored");
+
+    var giant = avatar.loadPreview(GIANT);
+    assert(Math.abs(giant.sourceHeight - 17.25) < 0.05,
+           "the giant fixture imports at " + giant.sourceHeight.toFixed(2) + " m (Dreyar's size)");
+    assert(giant.normalized === true && Math.abs(giant.height - 1.75) < 0.02,
+           "... and is normalized to " + giant.height.toFixed(3) + " m (x" +
+           giant.normalizeFactor.toFixed(4) + ")");
+    // THE OWNER'S ORACLE (the debug-runner's REPRO script): head vs ceiling.
+    assert(giant.ceilingHeight > giant.height,
+           "head " + giant.height.toFixed(2) + " m clears the ceiling at " +
+           giant.ceilingHeight.toFixed(2) + " m");
+
+    var tall = avatar.setCharacterHeight(2.4);
+    assert(Math.abs(tall.height - 2.4) < 0.02,
+           "avatar.setCharacterHeight(2.4) -> " + tall.height.toFixed(3) + " m");
+    assert(Math.abs(tall.sourceHeight - 17.25) < 0.05,
+           "... with the report still anchored to the file's height");
+    var back = avatar.setCharacterHeight(0);
+    assert(Math.abs(back.height - 1.75) < 0.02, "avatar.setCharacterHeight(0) re-runs AUTO");
+
+    // The FBX half, through the real app: pivot_rig.fbx DECLARES metres
+    // (UnitScaleFactor 100), so the unit fix leaves it at metre scale — a file
+    // declaring centimetres would arrive 100x smaller.
+    var fbx = avatar.loadPreview(PIVOT_FBX);
+    assert(fbx.height > 0.5 && fbx.height < 3.0,
+           "the metre-declared FBX imports at " + fbx.height.toFixed(3) + " m");
+    assert(fbx.normalized === false, "... so it is not normalized either");
+    assert(!!avatar.loadPreview(RIG), "reload the glTF rig for the remaining checks");
+}
+
 // ---- clear ----
 assert(avatar.clearPreview(), "avatar.clearPreview()");
 assert(!avatar.preview(), "nothing is loaded again");
@@ -220,6 +263,11 @@ assert(knobs.orientRotationToMovement === true, "... orient-to-movement on");
 assert(knobs.capsuleAuto === true, "... and the capsule auto-fitted");
 assert(knobs.capsuleHeight > 0 && knobs.capsuleRadius > 0,
        "... to real dimensions: r=" + knobs.capsuleRadius + " h=" + knobs.capsuleHeight);
+// The height contract on the SCENE side: a plausible character spawns untouched.
+assert(Math.abs(knobs.characterHeight - 2.0) < 0.02,
+       "... and avatar.movement reports the character's height: " + knobs.characterHeight);
+assert(knobs.normalized === false && Math.abs(knobs.normalizeFactor - 1) < 1e-6,
+       "... unnormalized, because 2 m is a plausible character");
 
 // The spawn installed the module's built-in sockets on the rigged mesh inside.
 var socketed = 0;
@@ -299,5 +347,32 @@ assert(after.capsuleAuto === false &&
 var groundAfter = scene.find("Ground");
 assert(node.collision(groundAfter) === false,
        "the COLLISION flag round-tripped too (written only when the user overrode the default)");
+
+// ---- spawn HEIGHT normalization (the Dreyar case, in the scene) -----------
+// Last, so nothing above sees the extra avatars.
+{
+    var gGuid = assets.import(GIANT);
+    assert(assets.addToProject(gGuid) === gGuid, "the 17.25 m character joins the project");
+
+    var big = avatar.spawn(gGuid, { position: { x: 4, y: 0, z: 0 } });
+    var bigKnobs = avatar.movement(big);
+    console.log("spawned giant: " + JSON.stringify(bigKnobs));
+    assert(bigKnobs.normalized === true && Math.abs(bigKnobs.sourceHeight - 17.25) < 0.05,
+           "avatar.spawn normalized the 17.25 m character");
+    assert(Math.abs(bigKnobs.characterHeight - 1.75) < 0.02,
+           "... to " + bigKnobs.characterHeight.toFixed(3) + " m");
+    assert(Math.abs(bigKnobs.capsuleHeight - 1.75) < 0.02,
+           "... and the CAPSULE was fitted to the normalized body, not the raw one");
+
+    var exact = avatar.spawn(gGuid, { position: { x: 6, y: 0, z: 0 }, height: 2.2 });
+    assert(Math.abs(avatar.movement(exact).characterHeight - 2.2) < 0.02,
+           "avatar.spawn({height: 2.2}) sets an exact height");
+
+    var raw = avatar.spawn(gGuid, { position: { x: 8, y: 0, z: 0 }, normalize: false });
+    var rawKnobs = avatar.movement(raw);
+    assert(rawKnobs.normalized === false && rawKnobs.characterHeight > 17,
+           "avatar.spawn({normalize: false}) takes the file's size as authored: " +
+           rawKnobs.characterHeight.toFixed(2) + " m");
+}
 
 console.log("e2e_avatar: OK");

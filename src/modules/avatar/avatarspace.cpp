@@ -101,6 +101,13 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
 
     const float half   = kFloorTiles * kTile * 0.5f;  // 5m
     const float height = kWallRows * kTile;           // 4m
+    // The published interior and the wall rows are one room: if the walls ever
+    // change height, the number the page reports changes with them or this
+    // stops compiling.
+    static_assert(kRoomInteriorHeight == kWallRows * kTile,
+                  "kRoomInteriorHeight must be the wall height");
+    static_assert(kRoomFloorSize == kFloorTiles * kTile,
+                  "kRoomFloorSize must match the floor tiling");
     const float mid    = height * 0.5f;
 
     auto slab = [&](const iris::PbrMaterialPtr &mat, const char *name,
@@ -156,7 +163,9 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     }
 
     // Ceiling: one soft light slab.
-    slab(ceiling, "avatar-ceiling", iris::Vec3(0, height + 0.01f, 0),
+    // Centred 1 cm above the interior height, 2 cm thick: its UNDERSIDE is
+    // kRoomInteriorHeight, flush with the top of the walls.
+    slab(ceiling, "avatar-ceiling", iris::Vec3(0, kRoomInteriorHeight + 0.01f, 0),
          iris::Vec3(half, 0.01f, half));
 
     scene->rootNode->addChild(group);

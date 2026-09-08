@@ -90,6 +90,53 @@ struct BoneInfo
     iris::Vec3 position;      ///< world-space, from getGlobalTransform()
 };
 
+// ---- character-height normalization (the FBX unit-scale fix, 2026-09-08) ---
+//
+// The world is METRES (irisgl/import/importflags.h). Honouring an FBX file's
+// UnitScaleFactor fixed the systematic 100x, but it cannot fix a package whose
+// DECLARATION is wrong: the owner's Dreyar download says centimetres and is
+// authored in millimetres, so it arrives 17.25 m tall — head through the
+// ceiling of a 4 m room — with its clips authored to match. Nothing in the file
+// says which of the two is wrong, so the module measures the character and,
+// when the number is not a plausible human height, scales the SUBJECT (its
+// root node, so the rig, the mesh and every clip that plays on it move
+// together) instead of leaving the page to cope.
+//
+// The bounds are deliberately wide: everything from a toddler (0.5 m) to a
+// three-metre ogre is left EXACTLY as authored, because a character that size
+// is a legitimate art decision. Outside them the file is wrong by orders of
+// magnitude, never by taste.
+
+/// What normalization did, for the verb readback and the log line.
+struct HeightNormalization
+{
+    bool  applied = false;      ///< the subject was scaled
+    float factor = 1.0f;        ///< what its root scale was multiplied by
+    float sourceHeight = 0.0f;  ///< metres, as the file imported
+    float height = 0.0f;        ///< metres, after (== sourceHeight when not applied)
+    bool  explicitTarget = false; ///< a height was asked for, not inferred
+};
+
+/// AUTO leaves anything in [kMinPlausibleHeight, kMaxPlausibleHeight] alone.
+constexpr float kMinPlausibleHeight = 0.5f;
+constexpr float kMaxPlausibleHeight = 3.0f;
+/// What AUTO scales an implausible character TO — and the room's design height.
+constexpr float kTargetCharacterHeight = 1.75f;
+
+/// World-space vertical extent of every mesh under `node`, in metres — the
+/// same measure AvatarMovement::fitCapsuleToNode calls the capsule height, so
+/// the page, the capsule and this agree by construction. 0 when the subtree
+/// carries no geometry (a skeleton-only file), which is NOT normalizable.
+float measureCharacterHeight(const iris::SceneNodePtr &node);
+
+/// Scales `node` so its measured height becomes `targetHeight` metres, or —
+/// with `targetHeight` <= 0, the AUTO default — so an implausible height
+/// becomes kTargetCharacterHeight and a plausible one is left untouched.
+/// MULTIPLIES the existing local scale (a file's own root scale is part of how
+/// tall it is) and logs whenever it changes anything.
+HeightNormalization normalizeCharacterHeight(const iris::SceneNodePtr &node,
+                                             float targetHeight = 0.0f);
+
 /// A drawable bone→parent segment, in world space.
 struct BoneSegment
 {
@@ -129,6 +176,14 @@ public:
     void clear();
     bool isLoaded() const { return !mFragment.isNull(); }
 
+    /// Sets the loaded subject's height in metres, exactly (`metres` > 0), or
+    /// re-runs the AUTO rule (`metres` <= 0). False when nothing is loaded or
+    /// the subject has no geometry to measure.
+    bool setCharacterHeight(float metres, QString *error = nullptr);
+    /// What normalization did to the loaded subject (all zeros when nothing is
+    /// loaded).
+    const HeightNormalization &normalization() const { return mNormalization; }
+
     QString filePath() const { return mFilePath; }
     /// The file's base name — also the fallback display name for junk clips.
     QString name() const { return mName; }
@@ -147,6 +202,15 @@ public:
     /// here — the module owns the setting.
     bool setSpaceMode(avatar::SpaceMode mode);
     avatar::SpaceMode spaceMode() const { return mSpaceMode; }
+    /// What the Modern room is scaled by to fit the loaded subject (1.0 with
+    /// no subject). Tracked in Grid mode and headlessly too — it is the number
+    /// the "head clears the ceiling" gate reads.
+    float roomScale() const { return mRoomScale; }
+    /// The room's ceiling in world metres at the current room scale — the
+    /// ceiling slab's UNDERSIDE, i.e. what the subject's head has to stay under
+    /// (the 2026-09-08 owner defect). 1 u = 1 m, so this is directly comparable
+    /// with measureCharacterHeight (the subject stands on the floor at y = 0).
+    float ceilingHeight() const { return avatar::space::kRoomInteriorHeight * mRoomScale; }
 
     // ---- what the details panel shows -------------------------------------
     int boneCount() const { return mBoneCount; }
@@ -253,11 +317,13 @@ private:
     iris::SceneNodePtr  mSpaceRoot;   // the Modern room group, null in Grid mode
     iris::LightNodePtr  mPanelLight;  // the ceiling area panel — the whole rig
     avatar::SpaceMode   mSpaceMode = avatar::SpaceMode::Grid;
+    float               mRoomScale = 1.0f;
     iris::CameraNodePtr mCamera;
     iris::SceneNodePtr  mFragment;
 
     QString mFilePath;
     QString mName;
+    HeightNormalization mNormalization;
     std::unique_ptr<QTemporaryDir> mScratch;
 
     // Clip display names, in the order they were added: the character file's

@@ -37,6 +37,18 @@ enum class SpaceMode { Grid, Modern };
 
 namespace space {
 
+/// The room's interior, in METRES — 1 unit is 1 m, like everywhere else in the
+/// document. Published because the Avatar page reports the ceiling its subject
+/// has to fit under: "the head touches the ceiling" (owner, 2026-09-08) was a
+/// SCALE defect, and a number nobody outside this file could read was part of
+/// why it went unnoticed.
+constexpr float kRoomFloorSize = 10.0f;   ///< 10x10 m of floor tiles
+/// The INTERIOR height: the floor plate's top surface is y = 0, the walls span
+/// 0..4, and the ceiling slab's UNDERSIDE sits exactly here (the slab itself is
+/// centred 1 cm higher and is 2 cm thick). This is the number a subject's head
+/// has to stay under, which is why it is the interior and not the slab centre.
+constexpr float kRoomInteriorHeight = 4.0f;
+
 /// Builds the Tron room and returns its group node (already parented to the
 /// scene root). Null when the plane primitive is unavailable (headless tests).
 iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene);

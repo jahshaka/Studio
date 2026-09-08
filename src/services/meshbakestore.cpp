@@ -128,14 +128,40 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     if (!query.exec()) return item;
 
     const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid);
+    int stale = 0;
     while (query.next()) {
         const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
                                                            query.value(1).toString());
         if (!QFileInfo::exists(path)) continue;
-        if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
+        if (!iris::MeshBake::headerMatches(path, fingerprint)) { ++stale; continue; }
         item.bakePath = path;
         item.bakeFingerprint = fingerprint;
         return item;
+    }
+    // SAY SO. A bake exists for this model but was produced by a different
+    // importer generation, so the open path silently falls back to parsing the
+    // source — and since 2026-09-08 that parse can produce DIFFERENT GEOMETRY
+    // from the bake it replaced: iris::ImportFlags::Canonical gained
+    // aiProcess_GlobalScale, so an FBX that declares centimetres now imports
+    // 100x smaller than the bake in the library holds. Ships-as-new-app: there
+    // is no migration, and the node transforms in an already-saved scene were
+    // authored against the old size, so RE-IMPORT is the honest path. This
+    // line is how the owner finds out, once per model per session, instead of
+    // wondering why an old scene's character shrank.
+    if (stale > 0) {
+        static QSet<QString> told;
+        static QMutex tellLock;
+        QMutexLocker locked(&tellLock);
+        if (!told.contains(sourceOid)) {
+            told.insert(sourceOid);
+            irisLog(QStringLiteral("mesh bake: '%1' has %2 bake(s) from an older importer "
+                                   "generation — parsing the source instead. If this model is an "
+                                   "FBX imported before the unit-scale fix (2026-09-08) it will "
+                                   "come in at its file's declared units, which is NOT the size "
+                                   "the saved scene was built around: re-import it.")
+                        .arg(QFileInfo(sourcePath).fileName())
+                        .arg(stale));
+        }
     }
     return item;
 }

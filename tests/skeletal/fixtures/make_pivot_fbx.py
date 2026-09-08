@@ -235,9 +235,21 @@ def build():
     w("\tCreator: \"jahshaka tests/skeletal make_pivot_fbx.py\"\n")
     w("}\n")
 
-    # UnitScaleFactor 1 and a Y-up/Z-front/X-right basis, so no axis or unit
-    # conversion is folded into the root node and the bind matrices below are
-    # the transforms the importer really produces.
+    # A Y-up/Z-front/X-right basis, so no axis conversion is folded into the
+    # root node and the bind matrices below are the transforms the importer
+    # really produces.
+    #
+    # UnitScaleFactor 100 = "one unit is 100 cm", i.e. this file is in METRES,
+    # which is what its ~1-unit limbs have always been. It used to say 1
+    # (centimetres) and that was harmless only because nothing read the field:
+    # the canonical preset now carries aiProcess_GlobalScale (the FBX
+    # unit-scale fix, irisgl/import/importflags.h), so a file declaring
+    # centimetres imports at 1/100 scale — correctly, and it would have made
+    # this rig 12 mm tall and every golden pose in
+    # fixtures/golden_document_poses.txt wrong by a factor of 100. Declaring
+    # the unit the fixture is actually authored in keeps it byte-comparable
+    # with those goldens AND makes it the metres half of the unit gate
+    # (the centimetre half is tests/importer/fixtures/unit_cube_cm.fbx).
     w("GlobalSettings:  {\n")
     w("\tVersion: 1000\n")
     w("\tProperties70:  {\n")
@@ -247,7 +259,7 @@ def build():
     w("\t\tP: \"FrontAxisSign\", \"int\", \"Integer\", \"\",1\n")
     w("\t\tP: \"CoordAxis\", \"int\", \"Integer\", \"\",0\n")
     w("\t\tP: \"CoordAxisSign\", \"int\", \"Integer\", \"\",1\n")
-    w("\t\tP: \"UnitScaleFactor\", \"double\", \"Number\", \"\",1\n")
+    w("\t\tP: \"UnitScaleFactor\", \"double\", \"Number\", \"\",100\n")
     w("\t}\n")
     w("}\n")
 
