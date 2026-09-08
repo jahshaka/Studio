@@ -51,6 +51,7 @@ QVariantMap RebuildReport::toMap() const
     map["assets"] = assets;
     map["files"] = files;
     map["links"] = links;
+    map["pins"] = pins;
     map["skipped"] = skipped;
     map["elapsedMs"] = elapsedMs;
     return map;
@@ -169,7 +170,11 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot)
         // them is treated as a tombstone.
         {
             const QJsonArray recorded = sidecar.value("files").toArray();
-            bool anyPresent = recorded.isEmpty();
+            // A pin counts as a recorded object: a COW-edited asset's live
+            // bytes are pin-only (item 1c'), and a store where the pre-edit
+            // source was already reaped would otherwise look like a tombstone.
+            const QJsonArray recordedPins = sidecar.value("pins").toArray();
+            bool anyPresent = recorded.isEmpty() && recordedPins.isEmpty();
             for (const auto &value : recorded) {
                 const QJsonObject fileObj = value.toObject();
                 if (QFileInfo::exists(AssetStorePaths::objectPathIn(
@@ -178,6 +183,14 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot)
                     anyPresent = true;
                     break;
                 }
+            }
+            for (const auto &value : recordedPins) {
+                if (anyPresent) break;
+                const QJsonObject pinObj = value.toObject();
+                if (QFileInfo::exists(AssetStorePaths::objectPathIn(
+                        storeRoot, pinObj.value("oid").toString(),
+                        pinObj.value("ext").toString())))
+                    anyPresent = true;
             }
             if (!anyPresent) { ++report.skipped; continue; }
         }
@@ -217,6 +230,38 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot)
             insertLink.addBindValue(fileObj.value("oid").toString());
             insertLink.addBindValue(fileObj.value("name").toString());
             if (insertLink.exec() && insertLink.numRowsAffected() > 0) ++report.links;
+        }
+
+        // PINS (item 1c'). Without this the recovered catalog resolves every
+        // project through the library mapping — a copy-on-write edit, whose
+        // object is reachable only through project_assets.oid_pin, came back
+        // as the PRE-EDIT bytes. The files row is restored too: the pinned
+        // object usually has no asset_files link at all, so nothing above
+        // would have created it, and AssetCas::resolvePinned reads the ext
+        // straight out of `files`.
+        for (const auto &value : sidecar.value("pins").toArray()) {
+            const QJsonObject pinObj = value.toObject();
+            const QString oid = pinObj.value("oid").toString();
+            const QString projectGuid = pinObj.value("projectGuid").toString();
+            if (oid.isEmpty() || projectGuid.isEmpty()) continue;
+            if (!QFileInfo::exists(AssetStorePaths::objectPathIn(
+                    storeRoot, oid, pinObj.value("ext").toString())))
+                continue;   // the pinned bytes are gone; do not pin at a hole
+
+            QSqlQuery insertFile(conn);
+            insertFile.prepare("INSERT OR IGNORE INTO files (oid, size, ext, refcount) VALUES (?, ?, ?, 0)");
+            insertFile.addBindValue(oid);
+            insertFile.addBindValue(qint64(pinObj.value("size").toDouble()));
+            insertFile.addBindValue(pinObj.value("ext").toString());
+            if (insertFile.exec() && insertFile.numRowsAffected() > 0) ++report.files;
+
+            QSqlQuery insertPin(conn);
+            insertPin.prepare("INSERT OR IGNORE INTO project_assets (project_guid, asset_guid, oid_pin) "
+                              "VALUES (?, ?, ?)");
+            insertPin.addBindValue(projectGuid);
+            insertPin.addBindValue(guid);
+            insertPin.addBindValue(oid);
+            if (insertPin.exec() && insertPin.numRowsAffected() > 0) ++report.pins;
         }
     }
     if (!conn.commit()) {

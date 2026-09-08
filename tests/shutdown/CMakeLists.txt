@@ -39,8 +39,18 @@ set(_watchdog_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-watchdog)
 file(MAKE_DIRECTORY ${_watchdog_home}/run)
 add_test(NAME app.watchdog_stall COMMAND test_watchdog_stall
          WORKING_DIRECTORY ${_watchdog_home}/run)
+# RUN_SERIAL: this is a pure TIMING gate — it blocks the UI thread for 3 s and
+# for 100 ms and asserts the watchdog counted exactly one stall and exactly
+# none. Both halves are wall-clock judgements made INSIDE a spawned app, so a
+# parallel ctest schedule can manufacture a stall the test never asked for (the
+# 100 ms half) or delay the stack capture past the window (the 3 s half). Every
+# other timing gate in the tree already carries it — benchmarks (wall-clock
+# measurements), perf.*, threading.* — and this suite was recorded as a new
+# contention-flake candidate on 2026-09-08 (JOURNAL) for exactly that reason.
+# N7, ENGINEERING_DEBT_SPEC re-audit.
 set_tests_properties(app.watchdog_stall PROPERTIES
     ENVIRONMENT "HOME=${_watchdog_home}"
+    RUN_SERIAL TRUE
     TIMEOUT 300 LABELS "shutdown")
 
 # The race lane (scripts/sanitize.sh tsan): teardown ordering and the watchdog

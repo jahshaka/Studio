@@ -1605,6 +1605,17 @@ void MainWindow::closeProject()
 
     setWindowTitle(originalTitle);
 
+    // A5a (ENGINEERING_DEBT_SPEC addendum 5): the viewport keeps the world it
+    // was showing unless somebody says otherwise, and closeProject never did.
+    // removeScene() had exactly ONE caller — openStageBegin, the load-in-place
+    // path — so a plain close left EngineSceneViewport::mScene, the engine
+    // scene, the mirror and every datablock alive behind the desktop, and the
+    // "noscene" cover state was unreachable through the ordinary close. It
+    // runs BEFORE scene->cleanup(): clearScene() writes the warm-up set down
+    // from the still-live engine scene, and the mirror is dropped while the
+    // document it mirrors still exists.
+    removeScene();
+
     scene->cleanup();
     scene.clear();
 

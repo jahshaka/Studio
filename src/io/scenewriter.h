@@ -28,18 +28,24 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class EditorData;
-class Database;	// this is a temp way to get this working, remove later
 class Project;
 
 class SceneWriter : public AssetIOBase
 {
-	static Database *handle;
-
-	// The live Project (Phase 4: was the Globals::project static). Static to
-	// mirror `handle` above: both project reads live in *static* writer methods
+	// The live Project (Phase 4: was the Globals::project static). Static
+	// because both project reads live in *static* writer methods
 	// (writeParticleData / writeSceneNodeMaterial) that a dozen call sites
 	// invoke unqualified, so there is no instance to hang it off. Wired once by
 	// the shell in MainWindow::setupServices.
+	//
+	// A `static Database *handle` used to sit beside it (ENGINEERING_DEBT_SPEC
+	// item 7). It was DEAD: `setDatabaseHandle` had no caller on a writer (all
+	// seven were SceneReader / asset-panel objects with a setter of the same
+	// name), so it stayed null for the process's whole life while two writer
+	// paths dereferenced it — UB that only ever "worked" because
+	// Database::fetchAssetGUIDByName touches no member. Those two sites call
+	// it on the CLASS now (scenewriter.cpp), which is what they always meant,
+	// and the member is gone.
 	static Project *projectHandle;
 
 	/// The base directory the STATIC writers relativize against.
@@ -47,7 +53,7 @@ class SceneWriter : public AssetIOBase
 	/// AssetIOBase::dir is per instance now (it used to be one static QDir
 	/// shared by every reader and writer in the process — the import worker's
 	/// SceneReader rewrote it under the UI thread's). SceneWriter's write
-	/// family is static for the same reason `handle`/`projectHandle` are: a
+	/// family is static for the same reason `projectHandle` is: a
 	/// dozen call sites invoke it unqualified with no instance in sight
 	/// ("SceneWriter statics", ENGINEERING_DEBT_SPEC). Until that debt is
 	/// paid, the static writers keep their own base, published by
@@ -57,9 +63,6 @@ class SceneWriter : public AssetIOBase
 	/// getRelativePath() for the static writers.
 	static QString relativeToStaticBase(QString filename);
 public:
-	void setDatabaseHandle(Database *db) {
-		this->handle = db;
-	}
 	static void setProject(Project *p) {
 		projectHandle = p;
 	}

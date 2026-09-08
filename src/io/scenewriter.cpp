@@ -61,7 +61,6 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include "viewport/editordata.h"
 
-Database *SceneWriter::handle = 0;
 Project *SceneWriter::projectHandle = nullptr;
 QDir SceneWriter::staticRelativeBase;
 
@@ -817,9 +816,10 @@ QString SceneWriter::assetGuidForTexturePath(const QString &path)
     // Legacy fallback: files that still sit in a project folder under their own
     // name (a pre-store project, a material preset's texture registered under
     // its own file name, the default particle image copied at add time).
-    // Called on the CLASS, not on `handle`: that static is null in the
-    // preset-apply path (nothing constructs a SceneWriter there), and the old
-    // code got away with `handle->` only because the query touches no member.
+    // Called on the CLASS: this used to be `handle->fetchAssetGUIDByName(...)`
+    // through a static Database* nobody ever assigned (item 7 — the setter's
+    // seven callers were all readers), which only escaped a crash because the
+    // query touches no member. Both the pointer and its setter are gone.
     if (projectHandle)
         return Database::fetchAssetGUIDByName(QFileInfo(path).fileName(),
                                               projectHandle->getProjectGuid());
