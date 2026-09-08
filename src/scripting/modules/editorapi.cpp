@@ -149,7 +149,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "`size` its width as a fraction of the viewport (0.08-0.6, persisted), and `camera` the "
           "camera it is showing RIGHT NOW or null. The inset appears bottom-right while a scene "
           "camera is selected and is hidden in Game View, in play, and while piloting that same "
-          "camera — so `camera` can be null while `enabled` is true.",
+          "camera — so `camera` can be null while `enabled` is true. The inset is GRADED like the "
+          "viewport (CAMERAS_SPEC §7.2 Route C): it renders into its own target and goes through "
+          "the same tonemapper, carrying the previewed camera's own exposure and post overrides — "
+          "so what it shows is that camera's shot, not the world's look.",
           Needs::Engine },
         { "setPip", "editor.setPip({enabled?, size?}) -> {enabled, size, camera}",
           "Writes the selection-preview preferences and returns the state that resulted (the same "

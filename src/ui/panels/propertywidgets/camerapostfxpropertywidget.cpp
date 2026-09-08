@@ -254,17 +254,13 @@ void CameraPostFxPropertyWidget::rebuild()
                 });
     }
 
-    // PiP HONESTY (CAMERA_LENS_SPEC §7). The selection inset has no post chain
-    // at all — a fill swatch and one bare scene pass (OgreChain.cpp buildPip) —
-    // so nothing on this panel changes what it shows. Saying so costs one line
-    // and saves the "why does the preview not update" question; the fix is
-    // CAMERAS_SPEC §7.2's Route C, which is deferred.
-    if (auto *hint = this->addLabel(QStringLiteral("Preview inset"),
-                                    QStringLiteral("shows the world's look")))
-        hint->setToolTip(QStringLiteral(
-            "The picture-in-picture inset renders without a post chain, so a camera's own "
-            "exposure and overrides do not appear in it. Pilot the camera (or play through "
-            "it) to see the graded shot in the main viewport."));
+    // THE HINT THAT USED TO LIVE HERE IS GONE, and its absence is the feature:
+    // "Preview inset — shows the world's look" was honest while the inset had no
+    // post chain at all, and it stopped being true with CAMERAS_SPEC §7.2's
+    // Route C (the inset now renders into its own target and goes through the
+    // same tonemapper as the viewport, carrying THIS camera's exposure and
+    // overrides — tests/cameras' cameras.pip asserts it in pixels). A stale
+    // honesty note is worse than none.
 }
 
 void CameraPostFxPropertyWidget::applied(bool rebuildPanel)
