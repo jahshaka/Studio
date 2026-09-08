@@ -44,6 +44,11 @@ public:
     struct Snapshot
     {
         int worldMode = -1;
+        /// RAYON's remembered quality tier (GI_UNIFIED_SPEC §2). It is NOT
+        /// derivable from the rows: while Rayon is off the `rayon` row reads
+        /// "off" and carries no tier, so an undo of "turn Rayon off" would come
+        /// back at whatever tier the scene happened to hold.
+        int rayonTier = 3;
         QJsonObject overrides;
         QHash<QString, int> rowValues;   ///< rowId -> backing-field value
     };

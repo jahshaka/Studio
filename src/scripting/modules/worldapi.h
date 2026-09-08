@@ -41,6 +41,9 @@ public:
     Q_INVOKABLE bool fog(const QVariantMap &params);
     Q_INVOKABLE bool shadows(const QVariantMap &params);
     Q_INVOKABLE bool gi(const QVariantMap &params);
+    /// RAYON (GI_UNIFIED_SPEC §2 / §9 D6) — the product-named view of the same
+    /// resolved model world.gi writes. Reads with no argument.
+    Q_INVOKABLE QVariantMap rayon(const QVariantMap &params = QVariantMap());
     Q_INVOKABLE QVariantMap giStatus();
     Q_INVOKABLE bool refreshGi();
     Q_INVOKABLE QVariantMap fitGiBounds(const QVariantMap &params);
@@ -79,6 +82,8 @@ public:
     Q_INVOKABLE bool setFog(const QVariantMap &params) { return fog(params); }
     Q_INVOKABLE bool setShadows(const QVariantMap &params) { return shadows(params); }
     Q_INVOKABLE bool setGi(const QVariantMap &params) { return gi(params); }
+    Q_INVOKABLE QVariantMap setRayon(const QVariantMap &params = QVariantMap())
+    { return rayon(params); }
     Q_INVOKABLE bool setAmbientFromSky(bool enabled) { return ambientFromSky(enabled); }
     Q_INVOKABLE bool setSky(const QString &type, const QVariantMap &params = QVariantMap())
     { return sky(type, params); }
@@ -97,6 +102,12 @@ private:
     /// rather than inventing thirteen inverses.
     void pushWorldModeUndo(const QString &text, const iris::ScenePtr &scene,
                            const WorldModeCommand::Snapshot &before);
+    /// Applies a Rayon state as ONE undoable step (the tier rewrites three
+    /// backing fields, exactly like a World Mode rewrites thirteen).
+    void applyRayon(const iris::ScenePtr &scene, bool enabled,
+                    worldmodes::RayonTier tier, const QString &undoText);
+    /// world.rayon()'s read shape, shared by the reader and the writer path.
+    static QVariantMap rayonState(const iris::ScenePtr &scene);
 };
 
 #endif // SCRIPTING_WORLDAPI_H

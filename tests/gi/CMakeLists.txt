@@ -244,3 +244,37 @@ add_dependencies(test_gi_ddgi JahshakaEngineMedia)
 add_test(NAME gi.ddgi COMMAND test_gi_ddgi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.ddgi PROPERTIES TIMEOUT 900 LABELS "engine")
+
+# RAYON's tier table, pins and migration (GI_UNIFIED_SPEC.md §2 / P2).
+#
+# The odd one out in this directory, deliberately: it links no engine of its
+# own and renders nothing. Rayon's phase-2 subject is RESOLUTION — which
+# technique, quality and irradiance-field state a tier and its pins produce —
+# and the renderer's half of that is already gated by gi.modes, gi.pcc_mirror
+# and gi.ddgi, none of which this phase touches. Keeping the resolution suite
+# beside them is what makes "gi.* is green" mean the whole GI surface.
+#
+# It compiles the registry straight in (the services layer is not a library),
+# exactly like services.memory compiles the two registries it tests, and runs
+# with no display at all.
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+add_executable(test_gi_tiers test_gi_tiers.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp)
+set_target_properties(test_gi_tiers PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_gi_tiers PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl
+    # iris headers expose assimp and bullet types; these are IrisGL's own include paths
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_gi_tiers PRIVATE IrisGL Qt6::Gui)
+# A document node is an engine node (SCENEGRAPH_SPEC D2), so even this suite
+# boots the NULL-render-system headless graph.
+jah_document_graph(test_gi_tiers)
+add_test(NAME gi.tiers COMMAND test_gi_tiers
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "document" TIMEOUT 300)
+jah_no_display(gi.tiers)

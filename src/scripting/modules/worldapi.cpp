@@ -78,17 +78,26 @@ QVector<VerbInfo> WorldApi::verbs() const
           "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
           "(world.setShadowResolution, node.setProperty on the light).",
           Needs::Document },
-        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity}) -> bool",
-          "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
+        { "gi", "world.gi({tier, mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity}) -> bool",
+          "Global illumination — the full surface, of which world.rayon is the product-named shorthand. "
+          "'tier' is RAYON'S QUALITY TIER (low|medium|high|epic) and it is the setting to reach for first: it picks the technique, the voxel/probe quality and whether the irradiance field is on, all at once — low = Instant Radiosity, medium = VCT, high = VCT + probes with HDR shadowed captures, epic = that plus the irradiance field. Setting it does NOT turn GI on or off (world.rayon({enabled}) or 'mode' do that) and it never overwrites a setting you pinned yourself: any of the keys below, set explicitly, stays pinned through tier switches until world.clearOverride drops it. "
+          "The individual knobs: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
           "The rest are vct_pcc_hybrid probe-capture knobs. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
           "'updateBudget' (0..512, default 1) is the GI UPDATE BUDGET: how many reflection probes the renderer may re-capture per FRAME. It replaced the old 'autoRefresh' switch and the old 'dynamicProbes' count, which were the same question asked twice. 0 PAUSES global illumination — no probe re-captures and nothing re-solves automatically, so the picture is whatever was last built until world.refreshGi() asks for more. 1 (the default) is a realtime editor: one probe's six faces per frame, about 2 ms in a debug build, with the whole grid refreshed within (probes / budget) frames and the probes nearest you — and the ones covering whatever just moved — updated first. Higher trades frame time for latency, linearly. world.giStatus().probeUpdatesPerFrame reports the resolved figure. NOTE, because it changes the picture: above 0 the renderer trusts the probes over cone-traced reflections inside the probe region, so ROUGH metal takes its reflections from the probes; mirror-sharp surfaces are unaffected. "
           "'rayMarchStepScale' (>= 1.0, default 1.0) is how coarsely voxel light injection ray-marches towards each light when working out what is shadowed: bigger is faster and starts losing shadow contact in the bounce. It is the AT-REST value; while you drag something the renderer raises it on its own for the cheap re-injections it throws away a moment later. "
-          "'ddgi' turns on the IRRADIANCE FIELD — a grid of probes, built over the same voxel volume, that stores the bounced light arriving from every direction plus a depth map used to decide what each probe can actually see. It is the leak fix: cone-traced bounce blows out corners because a cone cannot tell a wall from empty space, and the field's depth test can. true|false|\"auto\", default \"auto\", and auto currently resolves to OFF for every scene (it will follow the quality tier when that lands). Only meaningful in vct and vct_pcc_hybrid — the field is fed by the voxels, and DDGI is deliberately NOT offered without them, because with no voxel lighting bound the shader's ambient term comes back and would be counted twice on top of the field. TURNING IT ON TURNS THE VOXEL-CONE DIFFUSE OFF: the field REPLACES that term rather than adding to it. Reflections, probes, planar and specular are untouched. "
+          "'ddgi' turns on the IRRADIANCE FIELD — a grid of probes, built over the same voxel volume, that stores the bounced light arriving from every direction plus a depth map used to decide what each probe can actually see. It is the leak fix: cone-traced bounce blows out corners because a cone cannot tell a wall from empty space, and the field's depth test can. true|false|\"auto\", where \"auto\" hands the decision back to the Rayon tier (which turns it on at epic and off below) and setting it explicitly PINS it through tier switches. Only meaningful in vct and vct_pcc_hybrid — the field is fed by the voxels, and DDGI is deliberately NOT offered without them, because with no voxel lighting bound the shader's ambient term comes back and would be counted twice on top of the field. TURNING IT ON TURNS THE VOXEL-CONE DIFFUSE OFF: the field REPLACES that term rather than adding to it. Reflections, probes, planar and specular are untouched. "
           "'ddgiIntensity' (0..64, default 1) scales that replacement, because the technique itself has no brightness setting and the two diffuse terms are different integrals of the same bounce. Measured on a closed room, the field lands at about 86% of the cone-traced diffuse it takes over from, so the raw value 1.0 is also the calibrated default: raise it to trim the room brighter, lower it to trim it down, and 0 leaves the field bound while contributing nothing (the A/B measurement). world.giStatus()'s ifdBound / ifdProbes / ifdConverged / ifdProbesPerFrame report what the renderer did with all of this. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
         { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeHdr, probeShadows, probeUpdatesPerFrame, cubemapProbeSlotsPerCell, probesClampedToRegion, worstProbeShapeCellRatio, reusedLastRefresh, ifdBound, ifdProbes, ifdConverged, ifdProbesPerFrame, live}",
           "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer re-captures each frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked); every probe still refreshes within probeCount / probeUpdatesPerFrame frames. 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. The four ifd* fields are the IRRADIANCE FIELD (world.gi's 'ddgi'), reported the same way: 'ifdBound' is whether the PBR shader is sampling THIS scene's field — asking for DDGI and getting it are two different things, since the field needs a voxel volume to be built from and its compute jobs to be staged; 'ifdProbes' is how many probes it holds; 'ifdConverged' says every probe has been integrated since the last build or light change, and it is true on the frame the field binds (a build converges the whole field in one go) — it reads false only while a progressive re-integration after a light move is still running; 'ifdProbesPerFrame' is how fast that re-integration runs, derived from updateBudget, and 0 when GI is paused or there is no field. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+          Needs::Document },
+        { "rayon", "world.rayon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, ddgiIntensity, updateBudget}",
+          "RAYON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
+          "'enabled' true|false turns it on and off. Off is the renderer's GI mode set to off and nothing else — no second flag to disagree with it — and the tier is remembered, so turning it back on restores the quality you had. 'tier' is low|medium|high|epic: low bounces one light off the scene (Instant Radiosity, no voxels, and emissive surfaces and area lights contribute nothing to it); medium voxelizes the lit volume and cone-traces the bounce out of it; high adds a grid of parallax-corrected reflection probes captured in HDR with shadows; epic adds the irradiance field, which REPLACES the cone-traced diffuse with probe-stored bounce that cannot leak through walls. New scenes are born epic. "
+          "Called with no argument it reads. 'custom' is true when a setting you pinned deviates from what the tier would give it, and 'deviations' names those settings — the tier is still the tier, your pin still wins, and world.clearOverride({id}) hands one back (ids: giMode, giQuality, giDdgi, rayon). 'technique', 'quality' and 'ddgi' are what the tier and your pins RESOLVED to, in world.gi's spelling. "
+          "KNOWN GAP, because epic is the default and this is where it shows: with the irradiance field bound, ambient light inside the voxel volume comes from nowhere (the field replaces the cone diffuse, the shader's ambient term is gated off inside the volume, and the field's own integration has no ambient input), which reads as a 15-25% darker mid-ground on OPEN scenes — a sealed room is unaffected. Drop to high, or raise ddgiIntensity, if a scene of yours looks flat under it. "
+          "Writes are undoable as one step, exactly like world.mode.",
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
@@ -159,6 +168,8 @@ QVector<VerbInfo> WorldApi::verbs() const
           "Alias of world.shadows — same arguments, same result.", Needs::Document },
         { "setGi", "world.setGi({mode, quality, bounces, ...}) -> bool",
           "Alias of world.gi — same arguments, same result.", Needs::Document },
+        { "setRayon", "world.setRayon({enabled, tier}) -> object",
+          "Alias of world.rayon — same arguments, same result.", Needs::Document },
         { "setAmbientFromSky", "world.setAmbientFromSky(enabled) -> bool",
           "Alias of world.ambientFromSky — same arguments, same result.", Needs::Document },
         { "setSky", "world.setSky(type, {...}) -> bool",
@@ -267,6 +278,10 @@ bool WorldApi::gi(const QVariantMap &params)
     if (!scene) return false;
 
     static const QStringList known = {
+        // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2): the dial that picks
+        // mode + quality + ddgi together. It is applied FIRST below, so a call
+        // may set the tier and pin one of its knobs in the same breath.
+        QStringLiteral("tier"),
         QStringLiteral("mode"),      QStringLiteral("quality"),
         QStringLiteral("bounces"),   QStringLiteral("light"),
         QStringLiteral("boundsMin"), QStringLiteral("boundsMax"),
@@ -291,6 +306,22 @@ bool WorldApi::gi(const QVariantMap &params)
                        "dynamicProbes was trying to say)."));
     if (!refusal.isEmpty()) return fail(refusal);
 
+    // THE TIER FIRST (GI_UNIFIED_SPEC §2): it writes the technique, the quality
+    // and the field through — honouring pins — so an explicit knob in the same
+    // call lands after it and pins itself, which is the order a reader expects
+    // from `world.gi({tier: "high", quality: "medium"})`.
+    if (params.contains("tier")) {
+        bool ok = false;
+        const QString t = params.value("tier").toString();
+        const worldmodes::RayonTier tier = worldmodes::rayonTierFromName(t, &ok);
+        if (!ok)
+            return fail(QStringLiteral("world.gi: unknown tier '%1' (%2) — Rayon's quality dial, "
+                                       "which picks the technique, the voxel/probe quality and the "
+                                       "irradiance field together")
+                            .arg(t, worldmodes::rayonTierNames().join(QStringLiteral(", "))));
+        applyRayon(scene, worldmodes::rayonEnabled(scene), tier,
+                   QStringLiteral("Rayon Quality: %1").arg(worldmodes::rayonTierName(tier)));
+    }
     if (params.contains("mode")) {
         const QString m = params.value("mode").toString().trimmed().toLower();
         if (m == "off")                    scene->giMode = iris::GiMode::OFF;
@@ -399,8 +430,20 @@ bool WorldApi::gi(const QVariantMap &params)
     // value most scenes hold is "let the quality tier decide", which no boolean
     // can say. Today that resolves to OFF (there is no tier yet) — which is
     // exactly why every existing scene renders unchanged.
-    e = readToggle("ddgi", scene->giDdgi);
-    if (!e.isEmpty()) return fail(e);
+    // 'ddgi' is a PIN when it is given a value and an UNPIN when it is given
+    // "auto": with the Rayon tier live, auto means "the tier decides", and the
+    // only way to say that is to drop the override and let the tier write.
+    if (params.contains(QStringLiteral("ddgi"))) {
+        int wanted = scene->giDdgi;
+        e = readToggle("ddgi", wanted);
+        if (!e.isEmpty()) return fail(e);
+        if (wanted < 0) {
+            worldmodes::clearOverride(scene, QStringLiteral("giDdgi"));
+        } else {
+            scene->giDdgi = wanted;
+            worldmodes::pinRowValue(scene, QStringLiteral("giDdgi"), wanted);
+        }
+    }
     if (params.contains("ddgiIntensity")) {
         const double v = params.value("ddgiIntensity").toDouble();
         if (v < 0.0 || v > 64.0)
@@ -416,6 +459,95 @@ bool WorldApi::gi(const QVariantMap &params)
         scene->giDdgiIntensity = float(v);
     }
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// RAYON (GI_UNIFIED_SPEC.md §2, §9 D6) — the product-named view of the SAME
+// resolved model world.gi writes and world.settings reports. It is an alias in
+// the strict sense: not one field of its own, not one rule of its own. What it
+// adds is the two words a user actually thinks in — is it on, and how good.
+
+QVariantMap WorldApi::rayonState(const iris::ScenePtr &scene)
+{
+    static const char *giModeNames[] = { "off", "instant_radiosity", "vct", "vct_pcc_hybrid" };
+    static const char *qualityNames[] = { "low", "medium", "high" };
+    if (!scene) return QVariantMap();
+    const bool on = worldmodes::rayonEnabled(scene);
+    QVariantList deviations;
+    for (const QString &d : worldmodes::rayonDeviations(scene)) deviations.append(d);
+    return QVariantMap{
+        { QStringLiteral("enabled"), on },
+        { QStringLiteral("tier"), worldmodes::rayonTierName(worldmodes::rayonTier(scene)) },
+        { QStringLiteral("custom"), !deviations.isEmpty() },
+        { QStringLiteral("deviations"), deviations },
+        { QStringLiteral("technique"),
+          QString::fromLatin1(giModeNames[qBound(0, int(scene->giMode), 3)]) },
+        { QStringLiteral("quality"),
+          QString::fromLatin1(qualityNames[qBound(0, int(scene->giQuality), 2)]) },
+        { QStringLiteral("ddgi"), scene->giDdgi > 0 },
+        { QStringLiteral("ddgiIntensity"), double(scene->giDdgiIntensity) },
+        { QStringLiteral("updateBudget"), scene->giUpdateBudget },
+    };
+}
+
+void WorldApi::applyRayon(const iris::ScenePtr &scene, bool enabled,
+                          worldmodes::RayonTier tier, const QString &undoText)
+{
+    if (!scene) return;
+    const auto before = WorldModeCommand::capture(scene);
+    worldmodes::setRayon(scene, enabled, tier);
+    pushWorldModeUndo(undoText, scene, before);
+}
+
+QVariantMap WorldApi::rayon(const QVariantMap &params)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.rayon"));
+    if (!scene) return QVariantMap();
+    static const QStringList known = { QStringLiteral("enabled"), QStringLiteral("tier") };
+    const QString refusal = refuseUnknownKeys(
+        QStringLiteral("world.rayon"), params, known,
+        QStringLiteral("Everything the tier consumes — technique, quality, bounces, bounds, the "
+                       "probe grid, the irradiance field's intensity — is world.gi; pinning one "
+                       "there survives tier switches."));
+    if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
+
+    bool enabled = worldmodes::rayonEnabled(scene);
+    worldmodes::RayonTier tier = worldmodes::rayonTier(scene);
+    bool write = false;
+    if (params.contains(QStringLiteral("tier"))) {
+        bool ok = false;
+        const QString t = params.value(QStringLiteral("tier")).toString();
+        tier = worldmodes::rayonTierFromName(t, &ok);
+        if (!ok) {
+            fail(QStringLiteral("world.rayon: unknown tier '%1' (%2)")
+                     .arg(t, worldmodes::rayonTierNames().join(QStringLiteral(", "))));
+            return QVariantMap();
+        }
+        write = true;
+    }
+    if (params.contains(QStringLiteral("enabled"))) {
+        const QVariant v = params.value(QStringLiteral("enabled"));
+        if (v.typeId() == QMetaType::Bool) {
+            enabled = v.toBool();
+        } else {
+            const QString s = v.toString().trimmed().toLower();
+            if (s == QLatin1String("on") || s == QLatin1String("true"))        enabled = true;
+            else if (s == QLatin1String("off") || s == QLatin1String("false")) enabled = false;
+            else {
+                fail(QStringLiteral("world.rayon: 'enabled' takes true or false — got '%1'")
+                         .arg(v.toString()));
+                return QVariantMap();
+            }
+        }
+        write = true;
+    }
+    if (write) {
+        const QString text = params.contains(QStringLiteral("enabled")) && !enabled
+            ? QStringLiteral("Rayon: Off")
+            : QStringLiteral("Rayon: %1").arg(worldmodes::rayonTierName(tier));
+        applyRayon(scene, enabled, tier, text);
+    }
+    return rayonState(scene);
 }
 
 QVariantMap WorldApi::giStatus()
@@ -987,7 +1119,11 @@ QVariantMap WorldApi::get()
                              { "snapSidesMax", scene->giProbeSnapSidesMax },
                              { "rayMarchStepScale", scene->giRayMarchStepScale },
                              { "ddgi", giToggleToJs(scene->giDdgi) },
-                             { "ddgiIntensity", scene->giDdgiIntensity } };
+                             { "ddgiIntensity", scene->giDdgiIntensity },
+                             // RAYON's quality tier (GI_UNIFIED_SPEC §2): the
+                             // dial the three fields above resolve through.
+                             { "tier", worldmodes::rayonTierName(worldmodes::rayonTier(scene)) } };
+    out["rayon"] = rayonState(scene);
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
     sky["type"] = scene->skyTypeToStr.at(typeIndex);
@@ -1181,6 +1317,13 @@ QVariantMap WorldApi::modeTable()
                                                           : QStringLiteral("int");
         row["cost"] = r.cost;
         row["available"] = r.available;
+        // WHICH DIAL OWNS THIS ROW (GI_UNIFIED_SPEC §2). "world" rows resolve
+        // through world.mode's tier; "rayon" rows resolve through the Rayon
+        // quality tier (world.rayon), and their `tiers` map below is therefore
+        // in THAT tier space. Without this the table would read as though a
+        // World Mode set them, which is exactly the double-ownership this
+        // phase removed.
+        row["tierSpace"] = r.rayonTiered ? QStringLiteral("rayon") : QStringLiteral("world");
         if (r.type == worldmodes::RowType::Int) {
             row["min"] = r.minValue;
             row["max"] = r.maxValue;
@@ -1190,7 +1333,11 @@ QVariantMap WorldApi::modeTable()
             options.append(QVariantMap{ { "id", o.id }, { "label", o.label }, { "value", o.value } });
         if (!options.isEmpty()) row["options"] = options;
         QVariantMap tiers;
-        const QStringList names = worldmodes::modeNames();
+        // A Rayon row's four columns are the RAYON tiers; they happen to carry
+        // the same four names, which is exactly why `tierSpace` above says
+        // which set of four these are.
+        const QStringList names = r.rayonTiered ? worldmodes::rayonTierNames()
+                                                : worldmodes::modeNames();
         for (int i = 0; i < names.size(); ++i)
             tiers.insert(names[i], QVariantMap{ { "value", r.tier[i] },
                                                 { "valueId", worldmodes::valueId(r, r.tier[i]) } });

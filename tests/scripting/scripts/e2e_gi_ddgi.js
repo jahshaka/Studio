@@ -34,25 +34,40 @@ assert(box.length > 10, "cube added");
 editor.frame(2);
 
 // ---- phase A: the defaults ----------------------------------------------
+// UPDATED BY THE RAYON UNIFICATION (GI_UNIFIED_SPEC §2 / P2, owner decision
+// D2). This phase used to assert that the field defaults to the string "auto"
+// and resolves OFF "while there is no quality tier". The tier exists now, new
+// scenes are born on its top rung, and Epic is the one rung that turns the
+// field on — so a NEW scene's default is a resolved `true`. The compatibility
+// statement that used to live here has not been dropped, it has moved to where
+// it can still be true: an EXISTING document derives the tier its serialized
+// settings correspond to and never lands on Epic unless it already asked for a
+// field (gi.tiers' migration cases, plus the byte-identical sample opens the
+// lane measured).
 var gi = world.get().gi;
 console.log("gi defaults = " + JSON.stringify(gi));
-assert(gi.ddgi === "auto",
-       "ddgi defaults to \"auto\" — the tri-state, not a bool");
+assert(gi.tier === "epic", "a new scene is born at the Epic tier: " + gi.tier);
+assert(gi.ddgi === true, "and Epic is the tier that turns the irradiance field on");
 assert(Math.abs(gi.ddgiIntensity - 1.0) < 1e-4,
        "ddgiIntensity defaults to 1.0 (the renderer's raw brightness, measured to be the "
        + "right one: the field lands at ~86% of the cone-traced diffuse it replaces)");
 
-assert(world.gi({ mode: "vct", quality: "low", bounces: 1,
+// The rest of this suite is about the VERB, so the scene is put where every
+// pre-Rayon document sits: a plain-VCT tier, whose field is off. That the tier
+// switch alone turns the field off — no explicit ddgi key anywhere — is itself
+// the write-through statement this phase makes.
+assert(world.gi({ tier: "medium", mode: "vct", quality: "low", bounces: 1,
                   boundsMin: { x: -6, y: -1, z: -6 },
-                  boundsMax: { x: 6, y: 6, z: 6 } }), "world.gi(vct)");
+                  boundsMax: { x: 6, y: 6, z: 6 } }), "world.gi(vct at the Medium tier)");
+assert(world.get().gi.ddgi === false, "the Medium tier resolves the field OFF");
 editor.frame(4);
 var st = world.giStatus();
-console.log("giStatus(vct, ddgi auto) = " + JSON.stringify(st));
+console.log("giStatus(vct, field off) = " + JSON.stringify(st));
 assert(st.live === true, "giStatus is LIVE (the engine viewport answered)");
 assert(st.vctBound === true, "VCT is bound");
 assert(st.ifdBound === false,
-       "ddgi \"auto\" resolves OFF while there is no quality tier — no field is bound, "
-       + "which is what makes every scene written before this feature render unchanged");
+       "and no field is bound below Epic — which is what makes every scene written before "
+       + "this feature render unchanged");
 assert(st.ifdProbes === 0 && st.ifdProbesPerFrame === 0 && st.ifdConverged === false,
        "no field means no probes, no batch, and nothing converged");
 
@@ -112,10 +127,15 @@ threw = "";
 try { world.gi({ DDGI: true }); } catch (e) { threw = String(e); }
 assert(threw.indexOf("DDGI") >= 0,
        "world.gi still REFUSES an unknown key by name after the phase added two: " + threw);
-assert(world.gi({ ddgi: "auto" }), "world.gi({ddgi:\"auto\"}) — back to the tier default");
+assert(world.gi({ ddgi: "auto" }), "world.gi({ddgi:\"auto\"}) — back to the tier's answer");
 editor.frame(4);
-assert(world.get().gi.ddgi === "auto", "the document echoes the string \"auto\"");
-assert(world.giStatus().ifdBound === false, "auto unbinds the field again (no tier yet)");
+// "auto" is an INPUT spelling, not a stored state: it drops the pin and hands
+// the decision back to the Rayon tier, which then WRITES ITS ANSWER THROUGH
+// (services/worldmodes.h — a backing field is always the resolved value). The
+// scene is on Medium here, so the answer is off.
+assert(world.get().gi.ddgi === false,
+       "auto hands the decision to the tier, and the tier's answer is what the document holds");
+assert(world.giStatus().ifdBound === false, "so the field is unbound again");
 assert(world.gi({ ddgi: "on" }), "world.gi({ddgi:\"on\"}) — the string form");
 editor.frame(4);
 assert(world.giStatus().ifdBound === true, "\"on\" binds it");

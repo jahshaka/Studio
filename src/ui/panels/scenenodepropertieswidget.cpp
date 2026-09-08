@@ -96,7 +96,12 @@ SceneNodePropertiesWidget::SceneNodePropertiesWidget(QWidget *parent) : QWidget(
 	});
 
 	worldGiPropView = new WorldGiPropertyWidget();
-	worldGiPropView->setPanelTitle("Global Illumination");
+	// RAYON is the product name for realtime global illumination
+	// (GI_UNIFIED_SPEC.md; the naming rule is that it is ALWAYS subtitled, so
+	// nobody reads it as hardware ray tracing). The section is one switch, one
+	// quality dial and the update budget, with everything they consume behind
+	// its own Advanced disclosure.
+	worldGiPropView->setPanelTitle("Rayon — Realtime Global Illumination");
 	worldGiPropView->expand();
 
 	// POST PROCESS (fix wave 2026-09-07 item 8): every post effect and its

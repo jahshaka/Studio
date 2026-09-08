@@ -238,6 +238,15 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // defaults, so a document that never touched them reopens identical.
     sceneObj["giDdgi"] = scene->giDdgi;
     sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
+    // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2), by NAME like worldMode
+    // and spelled out here for the same reason (this file must not pull the
+    // services layer into a dozen headless test targets): an ordinal would
+    // silently re-point if a tier were ever inserted. Its PRESENCE is also what
+    // tells the reader this document has been through the unification and needs
+    // no migration derivation, so it is written unconditionally.
+    static const char *giTierNames[] = { "low", "medium", "high", "epic" };
+    sceneObj["giTier"] = QString::fromLatin1(
+        giTierNames[scene->giTier >= 0 && scene->giTier <= 3 ? scene->giTier : 3]);
 
     // The camera PLAY renders through (CAMERAS_SPEC D6). A guid into the scene
     // graph; empty (and absent, in every scene written before cameras existed)
