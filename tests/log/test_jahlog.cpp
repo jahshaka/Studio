@@ -93,10 +93,20 @@ int childSession(const QString &dir)
     JahLog::installQtMessageHandler();
     qWarning("child: qwarning through the funnel");
 
-    // KNOWN-NOISE SUPPRESSION (owner order 2026-09-07): the qlementine mapTo
-    // flood. Fire it five times: the FIRST must land annotated, the other
-    // four must vanish, and removeQtMessageHandler must write the count.
+    // KNOWN-NOISE SUPPRESSION (owner order 2026-09-07). The machinery is
+    // exercised through a SYNTHETIC entry that only this build of jahlog.cpp
+    // carries (JAH_KNOWN_NOISE_SELFTEST) — the shipping table is empty, and an
+    // entry has to earn its place by naming a defect nobody can fix at source.
+    // Fire it five times: the FIRST must land annotated, the other four must
+    // vanish, and removeQtMessageHandler must write the count.
     for (int i = 0; i < 5; ++i)
+        qWarning("jahlog selftest: synthetic known-noise flood");
+
+    // ...and the message that used to BE the table's only entry must now pass
+    // through untouched: qlementine's focus-frame defect was fixed at source
+    // (2026-09-08), so the suppression that hid it is gone. Fire it twice —
+    // both copies have to appear, neither annotated.
+    for (int i = 0; i < 2; ++i)
         qWarning("QWidget::mapTo(): parent must be in parent hierarchy");
     JahLog::removeQtMessageHandler();
 
@@ -331,17 +341,31 @@ void testSession(const QString &root)
           "funnel: the same qWarning still reaches stderr (the previous handler is chained)");
 
     // Known-noise suppression (owner order 2026-09-07): five copies of the
-    // qlementine mapTo warning went in; exactly ONE annotated line and ONE
-    // shutdown summary may come out, in the file and on stderr alike.
-    CHECK(whole.count(QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy"))
+    // SYNTHETIC entry went in; exactly ONE annotated line and ONE shutdown
+    // summary may come out, in the file and on stderr alike.
+    CHECK(whole.count(QLatin1String("jahlog selftest: synthetic known-noise flood"))
               == 2,   // the annotated first occurrence + the quoted text in the summary
           "known-noise: one annotated occurrence plus one summary, never the flood");
-    CHECK(whole.contains(QLatin1String("[known-noise: qlementine Popover.cpp:538")),
+    CHECK(whole.contains(QLatin1String("[known-noise: tests/log/test_jahlog.cpp (synthetic entry)")),
           "known-noise: the first occurrence carries the annotation");
     CHECK(whole.contains(QLatin1String("known-noise summary: suppressed 4 repeats")),
           "known-noise: the shutdown summary reports the suppressed count");
-    CHECK(childErr.count(QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy")) == 2,
+    CHECK(childErr.count(QLatin1String("jahlog selftest: synthetic known-noise flood")) == 2,
           "known-noise: stderr sees the same single annotated line + summary, not the flood");
+
+    // The suppression must not outlive the bug. The qlementine focus-frame
+    // defect that produced the mapTo flood is fixed at source (2026-09-08), so
+    // its entry is gone and BOTH copies the child emitted must appear, neither
+    // annotated and neither counted into a summary.
+    CHECK(whole.count(QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy")) == 3,
+          // two records + the "repeated 2x" row the close summary writes for
+          // any message seen more than once. A suppressed message would show
+          // ONE annotated record and a "known-noise summary" line instead.
+          "known-noise: the retired qlementine entry no longer suppresses anything");
+    CHECK(whole.contains(QLatin1String("repeated 2x : QWidget::mapTo()")),
+          "known-noise: the mapTo warning is counted like any ordinary record now");
+    CHECK(!whole.contains(QLatin1String("known-noise: qlementine")),
+          "known-noise: nothing annotates the mapTo warning any more");
 
     // The startup header (spec §4). The base rows are asserted by name here;
     // the GPU/device rows belong to phase 3 and are gated by log.engine.

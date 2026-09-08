@@ -4,10 +4,14 @@
 // Qlementine QStyle owns rendering. Runs offscreen; no style is applied.
 
 #include <QApplication>
+#include <QFocusFrame>
 #include <QFont>
+#include <QImage>
 #include <QMenu>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QStyle>
+#include <QVBoxLayout>
 #include <cstdio>
 
 #include "ui/style/thememanager.h"
@@ -138,6 +142,131 @@ int main(int argc, char **argv)
             ++plainQObjectChildren;
     CHECK(plainQObjectChildren == 0,
           "qlementine: no MenuEventFilter children even after a re-polish");
+
+    // ---- the focus frame survives an ANCESTOR being reparented ---------------
+    // Qlementine draws focus OUTSIDE a widget's bounds with a QFocusFrame, and
+    // QFocusFrame::setWidget() caches the frame's parent by walking up to the
+    // enclosing scroll area's viewport (SH_FocusFrame_AboveWidget, which this
+    // style turns on). Qt refreshes that choice when the WIDGET's own parent
+    // changes but not when an INTERMEDIATE ANCESTOR is reparented — and
+    // SceneNodePropertiesWidget::clearLayout() does exactly that: it reuses the
+    // property blades and orphans them with setParent(nullptr) instead of
+    // deleting them. Before the 2026-09-08 fix in the (now vendored) filter,
+    // the frame stayed behind in the viewport and QFocusFramePrivate::updateSize()
+    // mapped coordinates across two unrelated widget trees on every geometry
+    // change: "QWidget::mapTo(): parent must be in parent hierarchy",
+    // 164,651 times in one 13-minute session.
+    {
+        settings->settings->remove(ThemeManager::settingsKey());
+        ThemeManager::applyAtStartup(app);
+
+        // The scroll area is NESTED, as it is in the real panel: Qt's walk
+        // stops at the first window, so a top-level scroll area would park the
+        // frame on the scroll area itself instead of on its viewport.
+        QWidget host;
+        host.setLayout(new QVBoxLayout);
+        auto *scrollPtr = new QScrollArea(&host);
+        QScrollArea &scroll = *scrollPtr;
+        host.layout()->addWidget(scrollPtr);
+        auto *content = new QWidget;
+        content->setLayout(new QVBoxLayout);
+        scroll.setWidget(content);
+        scroll.setWidgetResizable(true);
+
+        // panel -> blade -> row -> button, the shape the properties panel builds.
+        auto *blade = new QWidget;
+        blade->setLayout(new QVBoxLayout);
+        auto *row = new QWidget(blade);
+        row->setLayout(new QVBoxLayout);
+        auto *button = new QPushButton(QStringLiteral("probe"), row);
+        row->layout()->addWidget(button);
+        blade->layout()->addWidget(row);
+        content->layout()->addWidget(blade);
+
+        host.resize(320, 240);
+        host.show();
+        // The filter attaches the frame one event-loop turn after the widget's
+        // FIRST PAINT, so the paint has to actually happen (the offscreen QPA
+        // never flushes one on its own) and the queue has to turn afterwards.
+        auto settle = [&]() {
+            for (int i = 0; i < 10; ++i) {
+                host.grab();
+                QApplication::processEvents();
+                QApplication::sendPostedEvents();
+            }
+        };
+        settle();
+
+        auto *frame = button->window()->findChild<QFocusFrame *>();
+        CHECK(frame != nullptr && frame->widget() == button,
+              "focus frame: qlementine attached one to the button");
+        QWidget *const viewport = scroll.viewport();
+        CHECK(frame && frame->parentWidget() == viewport,
+              "focus frame: upstream parents it to the scroll area's viewport");
+
+        // PIXELS, not just geometry: the ring is what a user sees. Grab the
+        // panel unfocused and focused — the difference IS the ring, so a ring
+        // that stopped painting shows up here and not only in a rectangle.
+        const QImage unfocused = host.grab().toImage();
+        button->setFocus(Qt::TabFocusReason);
+        host.setAttribute(Qt::WA_KeyboardFocusChange, true);
+        settle();
+        const QImage focused = host.grab().toImage();
+        CHECK(!focused.isNull() && focused != unfocused,
+              "focus frame: the ring actually paints around a focused button");
+
+        // Count the exact warning Qt emits from QFocusFramePrivate::updateSize().
+        static int mapToWarnings = 0;
+        mapToWarnings = 0;
+        auto *prev = qInstallMessageHandler(
+            [](QtMsgType, const QMessageLogContext &, const QString &msg) {
+                if (msg == QLatin1String("QWidget::mapTo(): parent must be in parent hierarchy"))
+                    ++mapToWarnings;
+            });
+
+        // Orphan the blade exactly the way clearLayout() does, then make the
+        // detached subtree do geometry work.
+        content->layout()->removeWidget(blade);
+        blade->setParent(nullptr);
+        settle();
+        // Resize the LIVE side. Qt filters the widgets between the button and
+        // the frame's parent — the viewport included — and answers any of their
+        // Move/Resize events with updateSize(), which is where the stale
+        // ancestry gets mapped (the app's stack: dock layout -> scroll area ->
+        // viewport setGeometry -> QFocusFrame::eventFilter -> mapTo).
+        host.resize(420, 300);
+        settle();
+        host.resize(320, 240);
+        settle();
+
+        qInstallMessageHandler(prev);
+        CHECK(mapToWarnings == 0,
+              "focus frame: an orphaned ancestor produces NO mapTo warnings");
+        CHECK(frame && frame->parentWidget() != viewport,
+              "focus frame: it followed the widget out of the scroll area");
+
+        // Re-attached, it must land back exactly where upstream put it — the
+        // ring is drawn in the viewport's coordinates or it is drawn wrong.
+        content->layout()->addWidget(blade);
+        settle();
+        CHECK(frame && frame->parentWidget() == viewport,
+              "focus frame: re-attaching restores the viewport parent");
+        // (No pixel compare across the round trip: QlementineStyle ANIMATES the
+        // focus border width, and a re-shown frame restarts that animation from
+        // zero — an offscreen harness has no running event loop to advance it,
+        // so the ring is simply mid-fade here. Verified not to be a rendering
+        // defect: the post-round-trip grab is byte-identical with and without
+        // this fix. The geometry assertion below is what pins the placement.)
+        CHECK(frame && frame->geometry()
+                  == QRect(button->mapTo(viewport, QPoint(0, 0)), button->size())
+                         .adjusted(-frame->style()->pixelMetric(QStyle::PM_FocusFrameHMargin),
+                                   -frame->style()->pixelMetric(QStyle::PM_FocusFrameVMargin),
+                                   frame->style()->pixelMetric(QStyle::PM_FocusFrameHMargin),
+                                   frame->style()->pixelMetric(QStyle::PM_FocusFrameVMargin)),
+              "focus frame: it sits on the button, margins and all");
+
+        host.hide();
+    }
 
     // ---- the same glyph buttons under Classic --------------------------------
     // LAST, because it flips ThemeManager's own live flag (the getters read

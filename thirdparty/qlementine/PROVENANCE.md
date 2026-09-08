@@ -44,4 +44,39 @@ will need to fine tune it once the app is working properly."*
 
 Newest first.
 
-*(empty at import — this file lands with the pristine v1.4.2 tree)*
+### 2026-09-08 — `lib/src/style/eventFilters/WidgetWithFocusFrameEventFilter.hpp`
+
+The focus frame now re-derives its parent whenever the watched widget's **ancestry**
+changes, not only when the widget's own parent changes.
+
+`QFocusFrame::setWidget()` walks up from the widget to choose the frame's parent — in
+`SH_FocusFrame_AboveWidget` mode, which this style enables, that is the enclosing scroll
+area's viewport, a `QToolBar`, or the window — and caches it. Qt refreshes that choice on
+the *widget's* `ParentChange`, but not when an **intermediate ancestor** is reparented:
+`qfocusframe.cpp`'s `else if (d->showFrameAboveWidget)` branch answers only
+`Move`/`Resize`/`ZOrderChange` for the ancestors it watches. An application that detaches
+a whole subtree while keeping the widgets alive therefore strands the frame in a hierarchy
+the widget has left, and `QFocusFramePrivate::updateSize()` maps coordinates between two
+unrelated widget trees on every geometry change of the live side.
+
+In Jahshaka that is `SceneNodePropertiesWidget::clearLayout()`, which reuses the property
+blades and orphans them with `setParent(nullptr)` instead of deleting them: Qt answered
+with `QWidget::mapTo(): parent must be in parent hierarchy` **164,651 times in one
+13-minute session** (318 in a scripted import + scene open). The warning was suppressed at
+the app's log funnel from 2026-09-07 and MISATTRIBUTED to `Popover.cpp:538`; the
+suppression was removed in the same commit as this fix.
+
+The fix keeps upstream's late-attach behaviour and its exact parent derivation (the
+`p->isWindow() || … || (isScrollArea = …)` short-circuit is copied deliberately) and adds
+a filter on the ancestors between the widget and the frame's parent — the same span Qt
+itself watches, plus that parent — so a `ParentChange` anywhere in the span re-runs the
+derivation. Covered by `theme.manager` ("focus frame: …" cases), which fails on the
+pristine import and passes with the fix.
+
+### Upstream defects known but deliberately NOT patched
+
+- `lib/src/widgets/Popover.cpp:538` — `_frame->mapTo(this, …)` inside `paintEvent`. It is
+  harmless as written (`_frame` is a direct child of the popover, added to its layout in
+  the constructor, so the map succeeds), and Jahshaka instantiates no `Popover` at all. It
+  was once wrongly named as the source of the `mapTo` flood above; left exactly as
+  upstream wrote it.

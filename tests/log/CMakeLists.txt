@@ -22,9 +22,15 @@ target_include_directories(test_jahlog PRIVATE
     ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl)
 # The same build id the shader-cache fingerprint uses — the header row that
 # correlates a log with a cache directory has to be the real one here too.
+# JAH_KNOWN_NOISE_SELFTEST adds ONE synthetic entry to jahlog's known-noise
+# table, in this build of jahlog.cpp only. The shipping table is empty by
+# design (a suppression must never outlive the bug it hides), but the
+# machinery has to stay covered for the day an unfixable upstream flood earns
+# an entry — so the suite drives a message no real defect ever emits.
 target_compile_definitions(test_jahlog PRIVATE
     GIT_COMMIT_HASH="${GIT_COMMIT_HASH}" GIT_COMMIT_DATE="${GIT_COMMIT_DATE}"
-    JAHSHAKA_VERSION="${JAHSHAKA_VERSION}")
+    JAHSHAKA_VERSION="${JAHSHAKA_VERSION}"
+    JAH_KNOWN_NOISE_SELFTEST=1)
 target_link_libraries(test_jahlog PRIVATE IrisGL Qt6::Core Qt6::Gui)
 add_test(NAME log.core COMMAND test_jahlog WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(log.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
