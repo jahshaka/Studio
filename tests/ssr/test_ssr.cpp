@@ -61,9 +61,21 @@
 //      graph is not a frame, so both switches go on and the reflection has to
 //      still be there.
 //
+//  11. IT IS CORRECT UNDER AN ORTHOGRAPHIC CAMERA - the owner report
+//      ("when I am in top view and move the camera the light reflections
+//      change - it should not"). A pan of an ortho camera cannot change any
+//      view-dependent shading, because every pixel of an ortho frame looks the
+//      same way; the frame must therefore be the SAME PICTURE, TRANSLATED. The
+//      section measures the effect's own footprint (on minus off at one pose,
+//      so everything that is not the effect cancels) at two poses 8 px apart
+//      and asserts it translated by exactly that. SSAO gets the same treatment,
+//      because it reconstructs a position from depth the same way and had the
+//      same defect (ogre-patch 0019).
+//
 // TWO ENV-GATED EXTRAS, off in the gate and on when a human needs evidence:
-//   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm and the shadow fixture's two
-//                    frames beside the binary. A number in a log is not pixel
+//   JAH_SSR_DUMP=1   writes ssr-{off,half,hq}.ppm, the shadow fixture's two
+//                    frames and the four orthographic footprints beside the
+//                    binary. A number in a log is not pixel
 //                    evidence; these are.
 //   JAH_SSR_BENCH=1  times 400 steady-state frames of an offscreen view (1080p
 //                    by default; JAH_SSR_BENCH_W/H override it) with SSR off /
@@ -599,6 +611,260 @@ int main()
         std::printf("    pixels differing from the pre-SSR frame: %u of %u\n",
                     diff, plain.width * plain.height);
         CHECK(same, "switching SSR off restores BYTE-IDENTICAL pixels");
+    }
+
+    // ---- 11. THE ORTHOGRAPHIC PAN (orthoview lane) -------------------------
+    // THE OWNER REPORT THIS SECTION EXISTS FOR: "when I am in top view and move
+    // the camera the light reflections change - it should not".
+    //
+    // Under an ORTHOGRAPHIC camera every pixel looks the same way, so a pure
+    // PAN (a translation with no rotation) cannot change any view-dependent
+    // shading: the same surface, seen along the same direction, must reflect
+    // the same thing. The picture as a whole obviously moves - that is what a
+    // pan is - so the assertion is not "the frame is identical" but "the frame
+    // is the SAME PICTURE, translated".
+    //
+    // WHY THE MEASURE IS A DIFFERENCE OF TWO FRAMES. The effect is measured as
+    // (SSR on) minus (SSR off) at the SAME pose. Everything that is not the
+    // reflection - direct light, ambient, the emitter's own colour, and the
+    // HlmsPbs `viewDir = normalize(-inPs.pos)` that is perspective-only in this
+    // pin and is a separate, owner-facing decision - is bit-identical between
+    // the two and cancels. What is left is the SSR term and nothing else, which
+    // is exactly the thing the ortho branch in JahSsrRayMarch_ps.glsl fixes.
+    //
+    // THE PAN IS AN EXACT PIXEL SHIFT, by construction: a 256x256 view with
+    // orthoSize 4 shows 8 world units across, i.e. 32 px per unit, so moving
+    // the camera 0.25 units along its right axis moves the image exactly 8 px
+    // left. Both effects' screen-space noise survives that shift unchanged (the
+    // march's checkerboard jitter keys on pixel parity and 8 is even; SSAO's
+    // rotation tile is 2x2 and wraps every 2 px), so the comparison is a plain
+    // translation with no resampling anywhere.
+    //
+    // BEFORE THE FIX this section fails on its first assertion: the ray origin
+    // is reconstructed as `cameraDir * distance`, and an ortho frustum's
+    // normalized far corner is not a ray (OgreFrustum.cpp:884 takes ratio = 1),
+    // so the origin collapses toward the view axis and the "reflection" is a
+    // smear that MOVES with the camera instead of with the scene.
+    {
+        Scene *os = engine->createScene("ssr-ortho");
+        View  *ov = engine->createOffscreenView("ssr-ortho", 256, 256, Colour(0, 0, 0));
+        if (!os || !ov) {
+            CHECK_MSG(false, "could not build the orthographic fixture");
+        } else {
+        ov->setScene(os);
+        os->setAmbient(Colour(0.15f, 0.15f, 0.15f), Colour(0.10f, 0.10f, 0.10f));
+
+        // The same fixture as the perspective one: a mirror floor and a red
+        // emissive cube above it. Measured with one ruler, deliberately.
+        {
+            PbrParams p;
+            p.albedo = Colour(1.0f, 1.0f, 1.0f);
+            p.metalness = 1.0f;
+            p.roughness = 0.0f;
+            const NodeId n = os->createNode();
+            os->attachMesh(n, os->createMesh(enginetest::unitCubeMesh()),
+                           os->createPbrMaterial(p));
+            enginetest::setNodeScale(os, n, Vec3(12.0f, 0.2f, 12.0f));
+            enginetest::setNodePosition(os, n, Vec3(0.0f, -0.1f, 0.0f));
+        }
+        {
+            PbrParams p;
+            p.albedo = Colour(0.05f, 0.05f, 0.05f);
+            p.emissive = Colour(3.0f, 0.0f, 0.0f);
+            p.roughness = 0.5f;
+            const NodeId n = os->createNode();
+            os->attachMesh(n, os->createMesh(enginetest::unitCubeMesh()),
+                           os->createPbrMaterial(p));
+            enginetest::setNodeScale(os, n, Vec3(1.5f, 1.5f, 1.5f));
+            enginetest::setNodePosition(os, n, Vec3(0.0f, 2.2f, 0.0f));
+        }
+        // A matte box RESTING on the floor: the AO half of this section needs a
+        // contact corner, and a rough box cannot itself be reflected sharply.
+        {
+            PbrParams p;
+            p.albedo = Colour(0.6f, 0.6f, 0.6f);
+            p.roughness = 0.9f;
+            const NodeId n = os->createNode();
+            os->attachMesh(n, os->createMesh(enginetest::unitCubeMesh()),
+                           os->createPbrMaterial(p));
+            enginetest::setNodeScale(os, n, Vec3(1.6f, 1.6f, 1.6f));
+            enginetest::setNodePosition(os, n, Vec3(-2.6f, 0.8f, 1.0f));
+        }
+        enginetest::addDirectionalLight(os, Vec3(-0.3f, -1.0f, -0.4f), 3.0f);
+
+        // 32 px per world unit; the pan is 0.25 units = exactly 8 px.
+        const float kOrthoSize = 4.0f;
+        const float kPanWorld  = 0.25f;
+        const int   kPanPixels = 8;
+
+        auto poseAt = [&](float dx) {
+            CameraDesc c = enginetest::testCameraDescLookAt(Vec3(dx, 5.0f, 7.0f),
+                                                            Vec3(dx, 0.0f, 0.0f));
+            c.orthographic = true;
+            c.orthoSize    = kOrthoSize;
+            return c;
+        };
+
+        // The effect's own footprint, in FLOAT and not in an 8-bit Image: these
+        // are differences of two frames, and quantising a difference to 1/255
+        // throws away most of what is being measured.
+        const unsigned kW = 256u, kH = 256u;
+        auto capture = [&](const CameraDesc &c, const PostFxDesc &fxOn,
+                           std::vector<float> &out) {
+            ov->setCamera(c);
+            // The resolve pass reads the PREVIOUS frame's colour, so the history
+            // has to settle at the new pose before the frame is read.
+            ov->setPostFx(PostFxDesc());
+            render(engine.get(), 4);
+            Image off;
+            if (!ov->readPixels(off)) return false;
+            ov->setPostFx(fxOn);
+            render(engine.get(), 4);
+            Image on;
+            if (!ov->readPixels(on)) return false;
+            if (on.width != kW || on.height != kH) return false;
+            out.assign(size_t(kW) * kH, 0.0f);
+            for (unsigned y = 0; y < kH; ++y)
+                for (unsigned x = 0; x < kW; ++x) {
+                    const Colour a = on.at(x, y), b = off.at(x, y);
+                    out[size_t(y) * kW + x] =
+                        std::fabs(a.r - b.r) + std::fabs(a.g - b.g) + std::fabs(a.b - b.b);
+                }
+            return true;
+        };
+
+        // Total footprint and its horizontal centroid, ignoring the noise floor
+        // (one 8-bit level on one channel is 0.004; 0.02 is five of them).
+        auto footprint = [&](const std::vector<float> &d, float *outMass) {
+            double sum = 0.0, weighted = 0.0;
+            for (unsigned y = 0; y < kH; ++y)
+                for (unsigned x = 0; x < kW; ++x) {
+                    const float v = d[size_t(y) * kW + x];
+                    if (v < 0.02f) continue;
+                    sum += v;
+                    weighted += double(x) * v;
+                }
+            if (outMass) *outMass = float(sum);
+            return sum > 0.0 ? float(weighted / sum) : -1.0f;
+        };
+
+        // Sum |D1(x) - D0(x + shift)| over the interior as a FRACTION of the
+        // effect's own magnitude there: 0 is a perfect translation, 1 is "the
+        // two frames have nothing to do with each other".
+        auto shiftedMismatch = [&](const std::vector<float> &d0,
+                                   const std::vector<float> &d1, int shift) {
+            double err = 0.0, mag = 0.0;
+            for (unsigned y = 0; y < kH; ++y)
+                for (int x = 16; x + shift < int(kW) - 16; ++x) {
+                    const float a = d1[size_t(y) * kW + unsigned(x)];
+                    const float b = d0[size_t(y) * kW + unsigned(x + shift)];
+                    err += std::fabs(a - b);
+                    mag += (a > b ? a : b);
+                }
+            return mag > 0.0 ? float(err / mag) : 0.0f;
+        };
+
+        // Only for the human-facing dump: the footprint as a viewable image.
+        auto deltaPpm = [&](const std::vector<float> &d, const char *path) {
+            Image img;
+            img.width = kW; img.height = kH;
+            img.rgba.assign(size_t(kW) * kH * 4u, 255u);
+            for (size_t i = 0; i < size_t(kW) * kH; ++i) {
+                const float v = d[i] / 3.0f;
+                const unsigned char g =
+                    (unsigned char)(v <= 0.0f ? 0 : (v >= 1.0f ? 255 : v * 255.0f + 0.5f));
+                img.rgba[i * 4u] = img.rgba[i * 4u + 1] = img.rgba[i * 4u + 2] = g;
+            }
+            writePpm(img, path);
+        };
+
+        // ---- SSR ----------------------------------------------------------
+        {
+            PostFxDesc ofx;
+            ofx.allowOffscreen = true;
+            ofx.ssr = 1;
+            std::vector<float> d0, d1;
+            const bool got = capture(poseAt(0.0f), ofx, d0) &&
+                             capture(poseAt(kPanWorld), ofx, d1);
+            CHECK(got, "ortho SSR: both poses rendered and read back");
+            if (got) {
+                float m0 = 0.0f, m1 = 0.0f;
+                const float c0 = footprint(d0, &m0);
+                const float c1 = footprint(d1, &m1);
+                const float mism = shiftedMismatch(d0, d1, kPanPixels);
+                std::printf("   ortho SSR: mass %.1f -> %.1f, centroid %.2f -> %.2f "
+                            "(expected %.2f), shifted mismatch %.3f\n",
+                            m0, m1, c0, c1, c0 - float(kPanPixels), mism);
+                if (envOn("JAH_SSR_DUMP")) {
+                    deltaPpm(d0, "ssr-ortho-delta-0.ppm");
+                    deltaPpm(d1, "ssr-ortho-delta-1.ppm");
+                }
+                CHECK_MSG(m0 > 5.0f,
+                          "SSR produces a reflection under an ORTHOGRAPHIC camera "
+                          "at all (footprint %.1f)", m0);
+                CHECK_MSG(c0 > 0.0f && std::fabs(c1 - (c0 - float(kPanPixels))) < 2.0f,
+                          "the reflection PANS WITH THE SCENE: centroid %.2f -> %.2f, "
+                          "expected %.2f", c0, c1, c0 - float(kPanPixels));
+                CHECK_MSG(m0 > 0.0f && std::fabs(m1 - m0) / m0 < 0.20f,
+                          "the reflection keeps its strength across the pan "
+                          "(%.1f -> %.1f)", m0, m1);
+                CHECK_MSG(mism < 0.30f,
+                          "the panned frame IS the first one translated: shifted "
+                          "mismatch %.3f", mism);
+            }
+        }
+
+        // ---- SSAO ---------------------------------------------------------
+        // The same statement for the other effect that reconstructs a position
+        // from depth (ogre-patch 0019). Its buffer is kept at full resolution so
+        // the 8 px pan is 8 px there too.
+        {
+            PostFxDesc ofx;
+            ofx.allowOffscreen = true;
+            ofx.ssao = true;
+            ofx.ssaoScale = 1.0f;
+            std::vector<float> d0, d1;
+            const bool got = capture(poseAt(0.0f), ofx, d0) &&
+                             capture(poseAt(kPanWorld), ofx, d1);
+            CHECK(got, "ortho SSAO: both poses rendered and read back");
+            if (got) {
+                float m0 = 0.0f, m1 = 0.0f;
+                const float c0 = footprint(d0, &m0);
+                const float c1 = footprint(d1, &m1);
+                const float mism = shiftedMismatch(d0, d1, kPanPixels);
+                std::printf("   ortho SSAO: mass %.1f -> %.1f, centroid %.2f -> %.2f "
+                            "(expected %.2f), shifted mismatch %.3f\n",
+                            m0, m1, c0, c1, c0 - float(kPanPixels), mism);
+                if (envOn("JAH_SSR_DUMP")) {
+                    deltaPpm(d0, "ssao-ortho-delta-0.ppm");
+                    deltaPpm(d1, "ssao-ortho-delta-1.ppm");
+                }
+                CHECK_MSG(m0 > 5.0f,
+                          "SSAO occludes something under an ORTHOGRAPHIC camera "
+                          "at all (footprint %.1f)", m0);
+                CHECK_MSG(c0 > 0.0f && std::fabs(c1 - (c0 - float(kPanPixels))) < 2.0f,
+                          "the occlusion PANS WITH THE SCENE: centroid %.2f -> %.2f, "
+                          "expected %.2f", c0, c1, c0 - float(kPanPixels));
+                CHECK_MSG(mism < 0.30f,
+                          "the panned AO frame IS the first one translated: shifted "
+                          "mismatch %.3f", mism);
+            }
+        }
+
+        // ---- THE FALLBACK SWITCH ------------------------------------------
+        // JAH_ORTHO_POSTFX=off restores the plain gate (OgreView::chainDesc):
+        // an axis view then gets no SSR and no SSAO at all, which is the safe
+        // answer if the branch above ever misbehaves on a driver. The switch is
+        // read once per process, so a suite cannot flip it mid-run - this only
+        // records where it lives.
+        std::printf("   (fallback: JAH_ORTHO_POSTFX=off gates both effects off "
+                    "under an orthographic camera)\n");
+
+        ov->setPostFx(PostFxDesc());
+        render(engine.get(), 2);
+        engine->destroyView(ov);
+        engine->destroyScene(os);
+        }
     }
 
     // ---- teardown with the chain live --------------------------------------

@@ -12,7 +12,9 @@
 //    workflow/fog/albedo/metal/rough sequence addTestCube inlined);
 //  - testCameraAt reproduces setCameraPosition-without-lookAt (identity
 //    orientation, i.e. looking down -Z, default 45° vertical fov);
-//  - testCameraLookAt reproduces setCameraPosition+lookAt (+Y up).
+//  - testCameraLookAt reproduces setCameraPosition+lookAt (+Y up), and
+//    testCameraDescLookAt hands back the same CameraDesc unpushed, for a
+//    suite that needs to vary one field of it (projection, clips, lens).
 
 #include <cmath>
 #include <map>
@@ -133,7 +135,10 @@ inline void testCameraAt(View *v, const Vec3 &pos)
 }
 
 /// setCameraPosition + lookAt(target), +Y up.
-inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
+/// The DESCRIPTION testCameraLookAt pushes, so a suite that needs a variant of
+/// it (an ORTHOGRAPHIC camera at the same pose, tests/ssr's ortho fixture) can
+/// build one without a second copy of the quaternion.
+inline CameraDesc testCameraDescLookAt(const Vec3 &pos, const Vec3 &target)
 {
     const Vec3 f0{ target.x - pos.x, target.y - pos.y, target.z - pos.z };
     const float fl = std::sqrt(f0.x * f0.x + f0.y * f0.y + f0.z * f0.z);
@@ -165,7 +170,12 @@ inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
     CameraDesc c;
     c.position = pos;
     c.orientation = q;
-    v->setCamera(c);
+    return c;
+}
+
+inline void testCameraLookAt(View *v, const Vec3 &pos, const Vec3 &target)
+{
+    v->setCamera(testCameraDescLookAt(pos, target));
 }
 
 }  // namespace enginetest
