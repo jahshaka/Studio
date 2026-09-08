@@ -78,15 +78,17 @@ QVector<VerbInfo> WorldApi::verbs() const
           "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
           "(world.setShadowResolution, node.setProperty on the light).",
           Needs::Document },
-        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale}) -> bool",
+        { "gi", "world.gi({mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity}) -> bool",
           "Global illumination: mode off|instant_radiosity|vct|vct_pcc_hybrid, quality low|medium|high, bounces 1-4, light = driving light guid ('' = auto, instant_radiosity only), boundsMin/boundsMax = lit volume corners (equal = fit the scene), pccGrid = {x,y,z} reflection-probe counts 1-8 per axis (hybrid only). "
           "The rest are vct_pcc_hybrid probe-capture knobs. 'probeHdr' captures probes in floating point instead of 8-bit, so a light or emissive surface brighter than white keeps its brightness in the reflection instead of clipping to flat white; it doubles probe VRAM. 'probeShadows' renders the scene's shadows into every probe face, so reflections show the room's shadows; it multiplies the capture cost by the shadow passes. Both are true|false|\"auto\", and \"auto\" (the default) means FOLLOW THE QUALITY DIAL — on at high, off below — so most scenes never set them. 'overlap' (0..8, default 1.25) is how far each probe's influence stretches past its share of the region: 1.0 leaves visible seams between probes, higher blends more smoothly and puts more probes over each pixel. 'snapDeviation', 'snapSidesMin' and 'snapSidesMax' (defaults 0.05/0.25/0.25) are relative tolerances for snapping a probe's depth-fitted shape back out to the region — raise them when the walls of a room have no reflections, 0 disables snapping. "
           "'updateBudget' (0..512, default 1) is the GI UPDATE BUDGET: how many reflection probes the renderer may re-capture per FRAME. It replaced the old 'autoRefresh' switch and the old 'dynamicProbes' count, which were the same question asked twice. 0 PAUSES global illumination — no probe re-captures and nothing re-solves automatically, so the picture is whatever was last built until world.refreshGi() asks for more. 1 (the default) is a realtime editor: one probe's six faces per frame, about 2 ms in a debug build, with the whole grid refreshed within (probes / budget) frames and the probes nearest you — and the ones covering whatever just moved — updated first. Higher trades frame time for latency, linearly. world.giStatus().probeUpdatesPerFrame reports the resolved figure. NOTE, because it changes the picture: above 0 the renderer trusts the probes over cone-traced reflections inside the probe region, so ROUGH metal takes its reflections from the probes; mirror-sharp surfaces are unaffected. "
           "'rayMarchStepScale' (>= 1.0, default 1.0) is how coarsely voxel light injection ray-marches towards each light when working out what is shadowed: bigger is faster and starts losing shadow contact in the bounce. It is the AT-REST value; while you drag something the renderer raises it on its own for the cheap re-injections it throws away a moment later. "
+          "'ddgi' turns on the IRRADIANCE FIELD — a grid of probes, built over the same voxel volume, that stores the bounced light arriving from every direction plus a depth map used to decide what each probe can actually see. It is the leak fix: cone-traced bounce blows out corners because a cone cannot tell a wall from empty space, and the field's depth test can. true|false|\"auto\", default \"auto\", and auto currently resolves to OFF for every scene (it will follow the quality tier when that lands). Only meaningful in vct and vct_pcc_hybrid — the field is fed by the voxels, and DDGI is deliberately NOT offered without them, because with no voxel lighting bound the shader's ambient term comes back and would be counted twice on top of the field. TURNING IT ON TURNS THE VOXEL-CONE DIFFUSE OFF: the field REPLACES that term rather than adding to it. Reflections, probes, planar and specular are untouched. "
+          "'ddgiIntensity' (0..64, default 1) scales that replacement, because the technique itself has no brightness setting and the two diffuse terms are different integrals of the same bounce. Measured on a closed room, the field lands at about 86% of the cone-traced diffuse it takes over from, so the raw value 1.0 is also the calibrated default: raise it to trim the room brighter, lower it to trim it down, and 0 leaves the field bound while contributing nothing (the A/B measurement). world.giStatus()'s ifdBound / ifdProbes / ifdConverged / ifdProbesPerFrame report what the renderer did with all of this. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
-        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeHdr, probeShadows, probeUpdatesPerFrame, cubemapProbeSlotsPerCell, probesClampedToRegion, worstProbeShapeCellRatio, reusedLastRefresh, live}",
-          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer re-captures each frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked); every probe still refreshes within probeCount / probeUpdatesPerFrame frames. 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
+        { "giStatus", "world.giStatus() -> {mode, requestedMode, probeCount, pccBound, vctBound, boundsMin, boundsMax, probeRegionMin, probeRegionMax, probeShapeMin, probeShapeMax, probeHdr, probeShadows, probeUpdatesPerFrame, cubemapProbeSlotsPerCell, probesClampedToRegion, worstProbeShapeCellRatio, reusedLastRefresh, ifdBound, ifdProbes, ifdConverged, ifdProbesPerFrame, live}",
+          "What global illumination is ACHIEVING in the renderer, as opposed to what world.gi asked for — the same \"the renderer beats the request\" reading as world.antiAliasing(). 'mode' is the mode actually in force and 'requestedMode' the document's; 'probeCount' is how many parallax-corrected reflection probes exist (the pccGrid product in vct_pcc_hybrid, 0 otherwise); 'pccBound' and 'vctBound' say whether this scene's probe grid and voxel lighting are the ones the PBR shader is sampling. It exists because the hybrid can DEGRADE to plain VCT silently — pccBound false while mode reads vct_pcc_hybrid is exactly that failure. 'boundsMin'/'boundsMax' are the lit volume the renderer actually used, which is the ONLY way to see what the automatic fit decided — the scene's own bounds rows stay at zero until someone pins them. 'probeRegionMin'/'probeRegionMax' are the reflection probes' region, which is deliberately a DIFFERENT and tighter box than the lit volume: probes are placed in the FREE SPACE (no margin, pulled in to the room's walls), because handing them a padded volume makes their parallax boxes overshoot the room and the hybrid then discards them. 'probeShapeMin'/'probeShapeMax' are the union of the probes' fitted parallax boxes — the shapes the shader reprojects reflection rays onto — and they must lie INSIDE the probe region, which the renderer enforces. Being a UNION it is a weak reading: it equals the clamp box whenever any probe was clamped, so use 'probesClampedToRegion' for how degenerate the fit actually was. 'probeHdr' and 'probeShadows' are what the probe captures RESOLVED to, which the request cannot tell you: both default to \"auto\" (follow the quality dial) and the shadow half additionally falls back to false when the scene has no shadow node to recalculate. 'probeUpdatesPerFrame' is how many probes the renderer re-captures each frame (world.gi's updateBudget, clamped to the probes that exist, and 0 until a camera has been tracked); every probe still refreshes within probeCount / probeUpdatesPerFrame frames. 'cubemapProbeSlotsPerCell' is the Forward+ per-cell reflection-probe budget: the renderer culls probes through a screen-space cluster grid and a cell that sees MORE probes than this drops the rest silently, which paints hard-edged black rectangles on reflective surfaces wherever it happens (they move with the camera, because the grid does). The renderer grows the budget to hold the probe grid it built, so a value below probeCount is a defect and not a setting. 'probesClampedToRegion' is how many of those probes had their depth-fitted parallax box corrected back into the probe region at the last build — the honest measure of how degenerate the shrink-fit was in this scene (it fits from ONE averaged depth sample per cube face, which means nothing once anything stands between a probe and a wall); it is not itself an artifact, the clamp handles it, but a high count says the fit is not doing the work here. 'worstProbeShapeCellRatio' is how far the worst probe's parallax box reaches past its own share of the region, as a multiple of that share — a diagnostic, because a probe standing in a room is RIGHT to have a room-sized box. 'reusedLastRefresh' says whether the last full refresh re-used the existing voxel arm instead of rebuilding it from scratch, which is the difference between a fast refresh and a slow one. The four ifd* fields are the IRRADIANCE FIELD (world.gi's 'ddgi'), reported the same way: 'ifdBound' is whether the PBR shader is sampling THIS scene's field — asking for DDGI and getting it are two different things, since the field needs a voxel volume to be built from and its compute jobs to be staged; 'ifdProbes' is how many probes it holds; 'ifdConverged' says every probe has been integrated since the last build or light change, and it is true on the frame the field binds (a build converges the whole field in one go) — it reads false only while a progressive re-integration after a light move is still running; 'ifdProbesPerFrame' is how fast that re-integration runs, derived from updateBudget, and 0 when GI is paused or there is no field. 'live' is false without an engine viewport, and the other fields are then the document's request rather than a measurement.",
           Needs::Document },
         { "refreshGi", "world.refreshGi() -> bool",
           "Re-solves the CURRENT global illumination against the scene as it stands now, without waiting. The renderer already does this on its own once an edit settles, as long as world.gi's updateBudget is above 0; this verb is what to call when it is 0 (GI paused), or when a script wants the solve to have happened before its next read rather than a few frames later. Expensive: a full re-voxelize plus, in vct_pcc_hybrid, every probe re-rendered. Does nothing with GI off. It performs no document edit beyond bumping a refresh counter, so it is not undoable and does not dirty the project. Headless (no engine viewport) it succeeds and is a no-op.",
@@ -275,7 +277,11 @@ bool WorldApi::gi(const QVariantMap &params)
         QStringLiteral("probeHdr"),  QStringLiteral("probeShadows"),
         QStringLiteral("overlap"),   QStringLiteral("snapDeviation"),
         QStringLiteral("snapSidesMin"), QStringLiteral("snapSidesMax"),
-        QStringLiteral("rayMarchStepScale")
+        QStringLiteral("rayMarchStepScale"),
+        // DDGI (GI_UNIFIED_SPEC.md §4 P1), verb-only for the same reason: the
+        // panel is P2's, and until the Rayon tier exists this is an opt-in a
+        // script or a suite asks for explicitly.
+        QStringLiteral("ddgi"),      QStringLiteral("ddgiIntensity")
     };
     const QString refusal = refuseUnknownKeys(
         QStringLiteral("world.gi"), params, known,
@@ -388,6 +394,27 @@ bool WorldApi::gi(const QVariantMap &params)
         if (v < 0.0) return fail(QStringLiteral("world.gi: snapSidesMax must be >= 0 (default 0.25)"));
         scene->giProbeSnapSidesMax = float(v);
     }
+    // ---- DDGI (GI_UNIFIED_SPEC.md §4 P1) -----------------------------------
+    // Same tri-state shape as the probe toggles, and for the same reason: the
+    // value most scenes hold is "let the quality tier decide", which no boolean
+    // can say. Today that resolves to OFF (there is no tier yet) — which is
+    // exactly why every existing scene renders unchanged.
+    e = readToggle("ddgi", scene->giDdgi);
+    if (!e.isEmpty()) return fail(e);
+    if (params.contains("ddgiIntensity")) {
+        const double v = params.value("ddgiIntensity").toDouble();
+        if (v < 0.0 || v > 64.0)
+            return fail(QStringLiteral(
+                "world.gi: ddgiIntensity must be in [0, 64] — how brightly the irradiance "
+                "field's diffuse is applied. It exists because turning DDGI on turns the "
+                "voxel-cone diffuse OFF (the field REPLACES it, it does not add to it), and "
+                "the two are different integrals of the same bounce: measured, the field lands "
+                "at about 86% of what it takes over, so 1.0 — the renderer's raw value — is "
+                "also the default. Raise it to trim the room brighter, lower it to trim it "
+                "down; 0 leaves the field bound and contributing nothing, which is the A/B "
+                "measurement."));
+        scene->giDdgiIntensity = float(v);
+    }
     return true;
 }
 
@@ -427,6 +454,10 @@ QVariantMap WorldApi::giStatus()
                             { QStringLiteral("probesClampedToRegion"), 0 },
                             { QStringLiteral("worstProbeShapeCellRatio"), 0.0 },
                             { QStringLiteral("reusedLastRefresh"), false },
+                            { QStringLiteral("ifdBound"), false },
+                            { QStringLiteral("ifdProbes"), 0 },
+                            { QStringLiteral("ifdConverged"), false },
+                            { QStringLiteral("ifdProbesPerFrame"), 0 },
                             { QStringLiteral("live"), false } };
     return QVariantMap{ { QStringLiteral("mode"), st.mode },
                         { QStringLiteral("requestedMode"), requested },
@@ -446,6 +477,17 @@ QVariantMap WorldApi::giStatus()
                         { QStringLiteral("probesClampedToRegion"), st.probesClampedToRegion },
                         { QStringLiteral("worstProbeShapeCellRatio"), st.worstProbeShapeCellRatio },
                         { QStringLiteral("reusedLastRefresh"), st.reusedLastRefresh },
+                        // DDGI (GI_UNIFIED_SPEC.md §4 P1), reported under the
+                        // renderer's own name for the technique — the
+                        // irradiance field — because that is what these four
+                        // numbers describe: whether the PBR shader is sampling
+                        // one, how many probes it holds, whether they have all
+                        // been integrated since the last light change, and how
+                        // fast a re-integration is running.
+                        { QStringLiteral("ifdBound"), st.ifdBound },
+                        { QStringLiteral("ifdProbes"), st.ifdProbes },
+                        { QStringLiteral("ifdConverged"), st.ifdConverged },
+                        { QStringLiteral("ifdProbesPerFrame"), st.ifdProbesPerFrame },
                         { QStringLiteral("live"), true } };
 }
 
@@ -943,7 +985,9 @@ QVariantMap WorldApi::get()
                              { "snapDeviation", scene->giProbeSnapDeviation },
                              { "snapSidesMin", scene->giProbeSnapSidesMin },
                              { "snapSidesMax", scene->giProbeSnapSidesMax },
-                             { "rayMarchStepScale", scene->giRayMarchStepScale } };
+                             { "rayMarchStepScale", scene->giRayMarchStepScale },
+                             { "ddgi", giToggleToJs(scene->giDdgi) },
+                             { "ddgiIntensity", scene->giDdgiIntensity } };
     QVariantMap sky;
     const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
     sky["type"] = scene->skyTypeToStr.at(typeIndex);

@@ -233,6 +233,11 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["giProbeSnapSidesMin"] = scene->giProbeSnapSidesMin;
     sceneObj["giProbeSnapSidesMax"] = scene->giProbeSnapSidesMax;
     sceneObj["giRayMarchStepScale"] = scene->giRayMarchStepScale;   // FIX WAVE B5
+    // DDGI (GI_UNIFIED_SPEC.md §4 P1). Tri-state toggle + our intensity scalar,
+    // written like the probe knobs above: always, and read back onto the same
+    // defaults, so a document that never touched them reopens identical.
+    sceneObj["giDdgi"] = scene->giDdgi;
+    sceneObj["giDdgiIntensity"] = scene->giDdgiIntensity;
 
     // The camera PLAY renders through (CAMERAS_SPEC D6). A guid into the scene
     // graph; empty (and absent, in every scene written before cameras existed)

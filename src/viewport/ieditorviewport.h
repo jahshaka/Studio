@@ -369,6 +369,18 @@ public:
         /// Whether the last full refresh RE-USED the voxel arm instead of
         /// rebuilding it from scratch (FIX WAVE B4).
         bool reusedLastRefresh = false;
+        /// DDGI — the irradiance field (GI_UNIFIED_SPEC.md §4 P1). Same
+        /// "achieved, not requested" contract as pccBound: the request can be
+        /// refused for reasons no caller can see (no voxel volume to feed the
+        /// field, DDGI media not staged, a construction that threw), so a
+        /// scene asking for it and a scene getting it are two different
+        /// readings. `ifdConverged` is false only while a progressive
+        /// re-converge after a light move is still in flight — a field is
+        /// converged on the frame it binds.
+        bool ifdBound = false;
+        int  ifdProbes = 0;
+        bool ifdConverged = false;
+        int  ifdProbesPerFrame = 0;
     };
     virtual GiStatusInfo giStatus() const { return {}; }
 
