@@ -204,3 +204,73 @@ add_test(NAME ui.drag_owner COMMAND test_drag_owner
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.drag_owner PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+
+# ui.rayon_panel — the World panel's Rayon section (GI_UNIFIED_SPEC.md §2 / P2).
+#
+# The unification's promise is a UI one ("one switch, engine picks the
+# techniques, hide the settings it consumes"), so it is asserted on the REAL
+# widget: how many rows it puts on the visible surface, that the disclosure
+# hides the rest, and that every gesture writes through services/worldmodes
+# into the document instead of inventing panel state. Offscreen, no display.
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(test_rayon_panel
+    test_rayon_panel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/worldgipropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/worldmodes.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/gibounds.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/accordionbladewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/hfloatsliderwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorvaluewidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/colorview.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/texturepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetpickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/checkboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/comboboxwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/textinputwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/labelwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/filepickerwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragspinbox.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dragvaluewidgets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/transformeditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets/cubemapwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/transformscenenodecommand.cpp
+    ${CMAKE_SOURCE_DIR}/src/commands/staticstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/undoservice.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/thumbnailmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/propertywidgetbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/propertywidgets/basepropertywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesome.cpp
+    ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp
+    test_stubs.cpp)
+set_target_properties(test_rayon_panel PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_property(TARGET test_rayon_panel PROPERTY AUTOUIC_SEARCH_PATHS
+    ${CMAKE_SOURCE_DIR}/src/ui/controls
+    ${CMAKE_SOURCE_DIR}/src/ui/panels
+    ${CMAKE_SOURCE_DIR}/src/ui/panels/propertywidgets)
+target_include_directories(test_rayon_panel PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_rayon_panel PRIVATE IrisGL Qt6::Widgets Qt6::Sql)
+# A document node is an engine node (SCENEGRAPH_SPEC D2): the headless graph.
+jah_document_graph(test_rayon_panel)
+add_test(NAME ui.rayon_panel COMMAND test_rayon_panel
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.rayon_panel PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.rayon_panel)

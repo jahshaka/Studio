@@ -472,6 +472,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         scene->giDdgi = qBound(-1, sceneObj["giDdgi"].toInt(-1), 1);
         scene->giDdgiIntensity =
             float(qBound(0.0, sceneObj["giDdgiIntensity"].toDouble(1.0), 64.0));
+        // RAYON's quality tier (GI_UNIFIED_SPEC §2 / P2). Absent in every
+        // document written before the unification — those are DERIVED from the
+        // fields above, below, once the World Mode is known.
+        if (sceneObj.contains("giTier")) {
+            bool ok = false;
+            const auto t = worldmodes::rayonTierFromName(sceneObj["giTier"].toString(), &ok);
+            scene->giTier = ok ? int(t) : 3;
+        }
     }
     scene->shadowEnabled = sceneObj["shadowEnabled"].toBool(true);
     // Anti-aliasing: absent (older scenes) means off (1 sample); anything odd
@@ -546,6 +554,20 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             // The fields above were just read from the document and ARE the
             // resolved values; no tier is re-applied, so a pinned row and a
             // hand-edited field both survive a round trip untouched.
+
+            // RAYON MIGRATION (GI_UNIFIED_SPEC §2 / P2). A document written
+            // before the GI dial existed carries no `giTier`: derive which tier
+            // its settings correspond to and pin whatever deviates, so the
+            // scene renders IDENTICALLY and the panel still has an honest tier
+            // to show. It runs HERE, after worldMode is known, because whether
+            // the tier row needs a pin depends on what the scene's World Mode
+            // would otherwise resolve it to.
+            //
+            // The branch above (a pre-World-Modes document) deliberately does
+            // NOT derive: it applies the Epic tier wholesale, which is what it
+            // has always done, and preserving its old GI settings as pins would
+            // pin every row of every old document for ever.
+            if (!sceneObj.contains("giTier")) worldmodes::deriveRayonFromDocument(scene);
         }
     }
     // Realistic-sky bake width: 256 (absent/older scenes), 512 or 1024.

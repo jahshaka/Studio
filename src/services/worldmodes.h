@@ -72,6 +72,17 @@ struct Row {
     int      tier[4] = { 0, 0, 0, 0 };  ///< Low, Medium, High, Epic
     QString  cost;                     ///< one line, shown as the row tooltip
     bool     available = true;         ///< false = declared but not yet implemented
+    /// TIER SPACE (GI_UNIFIED_SPEC.md §2 — the Rayon unification). A row is
+    /// resolved by the WORLD mode by default; a `rayonTiered` row is resolved by
+    /// the scene's RAYON tier instead, and its `tier[]` columns are the Rayon
+    /// tiers (Low/Medium/High/Epic of the GI dial), not the world's.
+    ///
+    /// It exists because two dials must never own one backing field. Rayon's
+    /// technique, quality and DDGI rows used to be world-mode rows; the world
+    /// mode now drives the single `rayon` row, and THAT row writes these three
+    /// through. setMode() therefore skips them (the rayon row already wrote
+    /// them, honouring their pins) and tierValue() reads their Rayon column.
+    bool     rayonTiered = false;
 
     /// The backing field. Both are null for a row with no backing field yet
     /// (`available == false`): its value lives only in worldOverrides.
@@ -117,6 +128,84 @@ const QStringList &postFxRowIds();
 const QVector<Row> &rows();
 /// The row with this id, or null.
 const Row *row(const QString &id);
+
+// ---------------------------------------------------------------------------
+// RAYON — the unified realtime-GI switch (GI_UNIFIED_SPEC.md §2 / P2).
+//
+// ONE dial where there were five: the World panel shows an on/off toggle, a
+// quality tier and the update budget, and everything the tier consumes moves
+// under an Advanced disclosure. NOTHING new was invented to do it — a Rayon
+// tier is a registry row (`rayon`) whose write-through targets are three other
+// registry rows (`giMode`, `giQuality`, `giDdgi`, all `rayonTiered`). The
+// invariant is the same one line as everywhere else in this file:
+//
+//     a backing field is ALWAYS the resolved value.
+//
+// THE TABLE (spec §2, with the phase's decided contents):
+//
+//   tier    technique                voxels/probes   DDGI
+//   Low     Instant Radiosity (D1)   quality low     off
+//   Medium  VCT                      quality medium  off
+//   High    VCT + probes (hybrid)    quality high    off   (HDR + shadowed
+//                                                           probe captures come
+//                                                           from quality high)
+//   Epic    VCT + probes (hybrid)    quality high    ON  @ ddgiIntensity 1.0
+//
+// The GI UPDATE BUDGET is deliberately NOT in the table: it is a "how fast may
+// this keep up" control, not a "how much machinery" one, and it stays a visible
+// row of its own (owner decision D5).
+//
+// WHETHER RAYON IS ON is `scene->giMode != OFF` — there is no second flag.
+// `scene->giTier` remembers the quality across an off/on trip.
+enum class RayonTier { Low = 0, Medium = 1, High = 2, Epic = 3 };
+
+/// The registry id of the tier row, and of the three rows it writes through.
+QString     rayonRowId();
+QStringList rayonRowIds();
+
+QString     rayonTierName(RayonTier t);        ///< "low" | "medium" | "high" | "epic"
+RayonTier   rayonTierFromName(const QString &name, bool *ok = nullptr);
+QStringList rayonTierNames();
+
+/// The scene's Rayon tier (what quality it comes back at), whether GI is on or
+/// off; and whether GI is on at all.
+RayonTier rayonTier(const iris::ScenePtr &scene);
+bool      rayonEnabled(const iris::ScenePtr &scene);
+
+/// What the tier resolves each of its rows to. `technique` is a GiMode ordinal,
+/// `quality` a GiQuality ordinal, `ddgi` 0/1.
+int rayonTechnique(RayonTier t);
+int rayonQuality(RayonTier t);
+int rayonDdgi(RayonTier t);
+
+/// Applies a Rayon state: records the tier, writes each `rayonTiered` row's
+/// tier value into its backing field EXCEPT rows the user pinned, and writes
+/// giMode (OFF when disabled, the resolved technique when enabled).
+///
+/// Turning Rayon OFF drops a pinned TECHNIQUE (`giMode`): the pin and the
+/// enable share one field, and remembering "off, but pinned to VCT" would be a
+/// state nothing can render. Everything else — a pinned quality, a pinned DDGI
+/// — survives the trip, which is what makes the toggle non-destructive.
+void setRayon(const iris::ScenePtr &scene, bool enabled, RayonTier tier);
+
+/// True when a `rayonTiered` row RESOLVES to something other than the tier's
+/// value — the honest "Custom" indicator for the tier row. False whenever Rayon
+/// is off (there is nothing to deviate from: the picture is no GI either way).
+bool rayonCustom(const iris::ScenePtr &scene);
+/// The labels of the deviating rows, for the tier row's tooltip.
+QStringList rayonDeviations(const iris::ScenePtr &scene);
+/// Drops the pins on the `rayonTiered` rows and re-applies the tier.
+void clearRayonOverrides(const iris::ScenePtr &scene);
+
+/// MIGRATION (spec §2's table), for a document written before the tier existed:
+/// derives the tier its serialized GI settings correspond to, PINS every field
+/// that deviates from that tier, and pins the tier row itself when the scene's
+/// World Mode would resolve it to something else. It writes no field it is not
+/// preserving, so the scene renders IDENTICALLY by construction — that is the
+/// whole acceptance criterion. Redundant pins (a pinned value that IS the
+/// derived tier's) are dropped, so a migrated scene reads as its tier and not
+/// as "Custom".
+void deriveRayonFromDocument(const iris::ScenePtr &scene);
 
 QString    modeName(Mode m);            ///< "custom" | "low" | "medium" | "high" | "epic"
 Mode       modeFromName(const QString &name, bool *ok = nullptr);
