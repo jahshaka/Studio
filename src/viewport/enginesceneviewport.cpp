@@ -1510,6 +1510,14 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
             jahshaka::engine::PostFxDesc fx = shot->postFx();
             fx.allowOffscreen = true;
             shot->setPostFx(fx);
+            // A ONE-SHOT RENDER CANNOT ADAPT (CAMERA_LENS_SPEC §4). The HDR
+            // chain's auto exposure is a temporal filter seeded at workspace
+            // build and converging at ~75%/s; this view lives for two frames,
+            // so without this the shot grades at the SEED and the exposure the
+            // caller asked for — the world's, or the driving camera's own —
+            // barely reaches the picture. Re-seeding from the description just
+            // pushed makes the first frame the right frame.
+            shot->resetExposureHistory();
         } else if (grade == ScreenshotGrade::Tonemap) {
             secondaryfx::apply(shot, true);
         }

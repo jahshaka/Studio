@@ -1072,6 +1072,22 @@ void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNode
     sceneNodeObject["focusPlaneVisible"] = cameraNode->focusPlaneVisible;
     sceneNodeObject["outputHeight"] = cameraNode->outputHeight;
     sceneNodeObject["bodyVisible"] = cameraNode->bodyVisible;
+    // CAMERA_LENS_SPEC §4, the exposure block. A STRING for the mode, like
+    // focusMode and sensorFit; the three numbers are STOPS (the conversion into
+    // the post chain's own axis happens at the mirror and is never stored).
+    sceneNodeObject["exposureMode"] =
+        cameraNode->exposureMode == iris::CameraExposureMode::Auto   ? "auto"
+      : cameraNode->exposureMode == iris::CameraExposureMode::Manual ? "manual"
+                                                                     : "inherit";
+    sceneNodeObject["exposure"] = cameraNode->exposure;
+    sceneNodeObject["exposureMin"] = cameraNode->exposureMin;
+    sceneNodeObject["exposureMax"] = cameraNode->exposureMax;
+    // CAMERA_LENS_SPEC §5, the tri-state post overrides. Written only when
+    // there ARE any: an empty object in every camera of every file would be
+    // noise, and "absent" already means the only thing it could mean (inherit
+    // everything). The reader tolerates both.
+    if (!cameraNode->postOverrides.isEmpty())
+        sceneNodeObject["postOverrides"] = cameraNode->postOverrides;
 }
 
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)

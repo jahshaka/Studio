@@ -17,6 +17,10 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+// CAMERA_LENS_SPEC §5: the override slots the DOCUMENT declares are joined to
+// the World rows' labels, ranges and availability here — one table for both
+// panels and both verbs, so a camera can never offer a row the world does not.
+#include "services/worldmodes.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/ieditorviewport.h"
@@ -44,6 +48,16 @@ QString focusModeName(iris::CameraFocusMode m)
     case iris::CameraFocusMode::Manual: break;
     }
     return QStringLiteral("manual");
+}
+
+QString exposureModeName(iris::CameraExposureMode m)
+{
+    switch (m) {
+    case iris::CameraExposureMode::Auto:   return QStringLiteral("auto");
+    case iris::CameraExposureMode::Manual: return QStringLiteral("manual");
+    case iris::CameraExposureMode::Inherit: break;
+    }
+    return QStringLiteral("inherit");
 }
 
 QString sensorFitName(iris::CameraSensorFit f)
@@ -84,6 +98,10 @@ const QStringList &settingsKeys()
         QStringLiteral("focusSmoothingSpeed"), QStringLiteral("minFocusDistance"),
         QStringLiteral("bladeCount"), QStringLiteral("focusPlaneVisible"),
         QStringLiteral("outputHeight"), QStringLiteral("bodyVisible"),
+        // CAMERA_LENS_SPEC §4, the exposure block. In STOPS, unlike
+        // world.postFx's `exposure` — see the verb doc.
+        QStringLiteral("exposureMode"), QStringLiteral("exposure"),
+        QStringLiteral("exposureMin"), QStringLiteral("exposureMax"),
     };
     return keys;
 }
@@ -133,6 +151,11 @@ QVariantMap settingsToJs(const iris::CameraNodePtr &cam)
         out["outputWidth"] = qMax(2, w % 2 == 0 ? w : w + 1);
     }
     out["bodyVisible"] = cam->bodyVisible;
+    // CAMERA_LENS_SPEC §4.
+    out["exposureMode"] = exposureModeName(cam->exposureMode);
+    out["exposure"] = cam->exposure;
+    out["exposureMin"] = cam->exposureMin;
+    out["exposureMax"] = cam->exposureMax;
     return out;
 }
 
@@ -221,6 +244,24 @@ QString applySettings(const iris::CameraNodePtr &cam, const QVariantMap &params,
             else if (value.typeId() == QMetaType::QString)
                 return QStringLiteral("%1: projMode is \"perspective\" or \"orthogonal\", got '%2'")
                            .arg(verb, s);
+        } else if (key == QLatin1String("exposureMode")) {
+            const QString s = value.toString().trimmed().toLower();
+            if (s == QLatin1String("inherit"))     value = int(iris::CameraExposureMode::Inherit);
+            else if (s == QLatin1String("auto"))   value = int(iris::CameraExposureMode::Auto);
+            else if (s == QLatin1String("manual")) value = int(iris::CameraExposureMode::Manual);
+            else if (value.typeId() == QMetaType::QString)
+                return QStringLiteral("%1: exposureMode is \"inherit\", \"auto\" or \"manual\", "
+                                      "got '%2'").arg(verb, s);
+        } else if (key == QLatin1String("exposure") || key == QLatin1String("exposureMin") ||
+                   key == QLatin1String("exposureMax")) {
+            // STOPS, and a camera that is 20 stops off is a typo rather than a
+            // shot. The range is generous (a real scene spans maybe 14) and it
+            // exists so a bad number is refused instead of producing a black or
+            // white frame nobody can explain.
+            const float v = value.toFloat();
+            if (v < -20.0f || v > 20.0f)
+                return QStringLiteral("%1: %2 is in STOPS and lives in [-20, 20], got %3")
+                           .arg(verb, key, QString::number(v));
         } else if (key == QLatin1String("focusTarget")) {
             // A tracked target must exist: focusing on a guid that names
             // nothing is a shot that silently never pulls focus.
@@ -251,7 +292,8 @@ QVector<VerbInfo> CameraApi::verbs() const
                       "projMode, orthoSize, nearClip, farClip, aspectRatio, "
                       "constrainAspect, dofEnabled, focusMode, focusDistance, focusTarget, fStop, "
                       "focusOffset, smoothFocus, focusSmoothingSpeed, minFocusDistance, "
-                      "bladeCount, focusPlaneVisible, outputHeight, outputWidth, bodyVisible}",
+                      "bladeCount, focusPlaneVisible, outputHeight, outputWidth, bodyVisible, "
+                      "exposureMode, exposure, exposureMin, exposureMax}",
           "Reads a scene camera's whole settings block, or writes part of it and returns the "
           "result. `angle` is the VERTICAL field of view in degrees and `focalLength` is the same "
           "value in millimetres, bound through the sensor HEIGHT "
@@ -273,7 +315,21 @@ QVector<VerbInfo> CameraApi::verbs() const
           "there; lens shift is the one row in this group that moves pixels, because it offsets "
           "the projection itself. `outputHeight` (with aspectRatio) sizes RENDERS and "
           "EXPORTS only; the viewport ignores it, and the reported `outputWidth` is derived, not "
-          "stored. Every row is also a reflected node property, so node.setProperty and keyframe "
+          "stored. "
+          "`exposureMode` is \"inherit\" (the default — the world's exposure reaches the view "
+          "untouched), \"auto\" (this camera's own auto-exposure midpoint and window) or "
+          "\"manual\" (a pinned grade that measures nothing). `exposure`, `exposureMin` and "
+          "`exposureMax` are in STOPS — NOT the same unit as world.postFx's `exposure`, which "
+          "is the post chain's own natural-log value; 0 stops IS the default world grade and "
+          "+1 is one doubling, converted once at the mirror. In manual mode the window is "
+          "ignored (the clamp is pinned to a fixed reference, which is what makes one authored "
+          "stop move the picture by exactly one stop). A camera's exposure applies while it is "
+          "the one DRIVING a view — piloted, played through, or an opted-in "
+          "camera.screenshot({postFx:true}) — and never to a thumbnail, a preview or a pixel "
+          "suite. Cutting to a camera re-seeds the auto-exposure history so the new grade "
+          "arrives on the cut instead of fading in over a second. Per-camera BLOOM, AO and the "
+          "rest of the chain are camera.postFx's tri-state overrides, not settings keys. "
+          "Every row is also a reflected node property, so node.setProperty and keyframe "
           "animation reach the same fields. NOTE the read block also carries `id`, `name` and "
           "the derived `outputWidth`, which are NOT settings — strip those three before writing "
           "a read block back, or the write is refused (unknown keys always are, rather than "
@@ -343,6 +399,48 @@ QVector<VerbInfo> CameraApi::verbs() const
           "with isFinite() (JSON.stringify renders it as null). In \"track\" focus mode "
           "`focusDistance` is whatever the last synced frame resolved from focusTarget, so step "
           "editor.frame(1) after moving the rig before reading it.",
+          Needs::Document },
+        { "postFx", "camera.postFx(id, {hdr?, bloom?, bloomThreshold?, ssao?, ssaoPower?, "
+                    "ssaoRadius?, smaa?, ssr?, refractions?}?) -> "
+                    "{id, overrides, resolved, available}",
+          "The camera's PER-CAMERA POST OVERRIDES over the world's post chain "
+          "(CAMERA_LENS_SPEC §5), read or written. Each row is TRI-STATE: a key present "
+          "here overrides the world while this camera is the one driving a view (piloted, "
+          "played through, or an opted-in camera.screenshot({postFx:true})); a key ABSENT "
+          "inherits. Pass null as a value to go back to inheriting — that is the only way to "
+          "say it, which is why a plain value write cannot express this block and why it is "
+          "not a camera.settings key. There is NO blend weight between cameras and there will "
+          "not be one: half of this chain is compositor SHAPE (a workspace rebuild), not a "
+          "float anything could cross-fade, so a weight would lie about what it did. "
+          "The read returns `overrides` (only what THIS camera pins), `resolved` (what each "
+          "row actually evaluates to right now — the override if there is one, the world's "
+          "value otherwise) and `available` (false for a row the renderer declares but does "
+          "not serve yet; it may still be authored, so files stay forward-compatible). "
+          "BLOOM is the headline: a bloomy world with one clean camera, or a clean world with "
+          "one blooming camera, is `camera.postFx(id, {bloom:true})`. "
+          "EXPOSURE IS NOT HERE — a camera's exposure is its own block, in STOPS, with a mode "
+          "(camera.settings' exposureMode/exposure/exposureMin/exposureMax), because it is a "
+          "camera setting and not a value layered over the world's. "
+          "SMAA takes only -1 (off): the PRESET is a shader recompile and a per-camera one "
+          "would hitch on every cut, so it stays world-level (world.setAntiAliasing), and so "
+          "does MSAA. "
+          "REFRACTIONS is the one row whose override is not purely local: a refractive "
+          "material must be offered refractions by EVERY view drawing the scene or the engine "
+          "downgrades it to plain glass for all of them (the interlock in "
+          "OgreScene::setRefractionsActive), so a camera that switches refractions off while "
+          "another view is showing the same scene changes that view too. Overriding it to "
+          "\"auto\" (1) means \"whatever the world resolved\", which is the same as inheriting. "
+          "Rows, ranges and labels come from the same table the World > Post "
+          "Process panel is generated from. Undoable: each row is one step of the run's undo "
+          "macro. NEVER applies to thumbnails, previews or the pixel suites — those render "
+          "through offscreen views, which discard the whole post description by construction.",
+          Needs::Document },
+        { "clearPostOverride", "camera.clearPostOverride(id, row?) -> {id, cleared}",
+          "Drops one per-camera post override, or ALL of them when `row` is omitted — "
+          "\"put this camera back on the world\". Identical to passing null for the row "
+          "through camera.postFx, and offered separately because \"stop overriding\" is a "
+          "thing a user does to a whole camera and not row by row. Returns the rows that "
+          "were actually cleared (a row that was already inheriting is not one). Undoable.",
           Needs::Document },
         { "lookAt", "camera.lookAt(id, target) -> bool",
           "Points a camera at a target, which is either a node id or a world position {x,y,z}. "
@@ -716,6 +814,169 @@ QVariantMap CameraApi::focusInfo(const QString &id)
     // render it as null, which is why the doc string says so.
     out["farLimit"] = info.farLimit;
     out["cocLimit"] = info.cocLimit;
+    return out;
+}
+
+// ---- CAMERA_LENS_SPEC §5: the per-camera post overrides -------------------
+//
+// THE DOCUMENT owns which keys exist (iris::cameraPostKeys) and refuses
+// everything else; WORLDMODES owns what each one is called, what it costs, what
+// range it lives in and whether the renderer serves it at all. This verb is the
+// join, and it is the same join the camera panel makes — neither of them
+// invents a row, a label or a range, which is why the panel and the verb cannot
+// disagree about what a camera can override.
+
+namespace {
+
+/// Every override key, in the document's order, as script-facing names.
+QString postKeyNames()
+{
+    int count = 0;
+    const iris::CameraPostKey *table = iris::cameraPostKeys(count);
+    QStringList names;
+    for (int i = 0; i < count; ++i) names << QString::fromLatin1(table[i].id);
+    return names.join(QStringLiteral(", "));
+}
+
+/// What the WORLD currently says for a key — the value a camera that does not
+/// override it inherits. Reads through the same worldmodes tables the World
+/// panel and world.postFx use.
+QVariant worldPostValue(const iris::ScenePtr &scene, const QString &key)
+{
+    if (!scene) return QVariant();
+    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key))
+        return p->get ? QVariant(p->get(scene)) : QVariant();
+    if (const worldmodes::Row *r = worldmodes::row(key))
+        return QVariant(worldmodes::resolved(scene, *r));
+    return QVariant();
+}
+
+/// Is the effect this key belongs to actually served by the renderer? A row
+/// declared-but-not-implemented (POST_CHAIN_SPEC §9.2 — SSR was one) may still
+/// be AUTHORED so files are forward-compatible, but the verb says so.
+bool postKeyAvailable(const QString &key)
+{
+    const worldmodes::ParamRow *p = worldmodes::postFxParam(key);
+    const QString rowId = p ? p->ownerRowId : key;
+    const worldmodes::Row *r = worldmodes::row(rowId);
+    return r ? r->available : true;
+}
+
+}   // namespace
+
+QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
+{
+    QVariantMap out;
+    auto cam = cameraOrFail(id, QStringLiteral("camera.postFx"));
+    if (!cam) return out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+
+    const QVariant normalized = normalizeJs(options);
+    QVariantMap params;
+    if (normalized.isValid() && !normalized.isNull()) {
+        if (normalized.typeId() != QMetaType::QVariantMap) {
+            fail("camera.postFx: the second argument is an object of overrides to write "
+                 "(a null value clears one)");
+            return out;
+        }
+        params = normalized.toMap();
+    }
+
+    // VALIDATE THE WHOLE BLOCK BEFORE WRITING ANY OF IT: a call that names one
+    // good key and one bad one must not leave the camera half-changed.
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        if (!iris::cameraPostKey(it.key())) {
+            const bool isExposure = it.key().startsWith(QLatin1String("exposure"));
+            fail(isExposure
+                     ? QStringLiteral("camera.postFx: '%1' is not an override — a camera's "
+                                      "exposure is its own block (camera.settings' exposureMode, "
+                                      "exposure, exposureMin, exposureMax, in STOPS), not a "
+                                      "value layered over the world's").arg(it.key())
+                     : QStringLiteral("camera.postFx: unknown override '%1' (known: %2)")
+                           .arg(it.key(), postKeyNames()));
+            return out;
+        }
+    }
+
+    UndoService *undo = host.services ? host.services->undo : nullptr;
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        const QString key = it.key();
+        const QVariant value = normalizeJs(it.value());
+        const QString property = QStringLiteral("postFx.") + key;
+        const QVariant before = cam->getPropertyValue(property);
+        // A NULL CLEARS. "Inherit" has to be sayable through the same door that
+        // overrides, or a script could only ever turn overrides on.
+        if (!value.isValid() || value.isNull()) {
+            if (!cam->clearPostOverride(key)) continue;   // was not overridden: nothing to record
+        } else if (!cam->setPostOverride(key, value)) {
+            if (key == QLatin1String("smaa")) {
+                fail("camera.postFx: a camera may switch SMAA OFF (-1) but not to another "
+                     "PRESET — the preset is a shader recompile, so a per-camera one would "
+                     "hitch on every cut. The preset stays world-level (world.setAntiAliasing).");
+            } else {
+                fail(QStringLiteral("camera.postFx: '%1' cannot hold %2")
+                         .arg(key, value.toString()));
+            }
+            return out;
+        }
+        if (undo)
+            undo->push(new SetNodePropertyCommand(cam, property, before,
+                                                  cam->getPropertyValue(property)));
+    }
+
+    // ---- the read side: what is overridden, and what it all RESOLVES to ----
+    QVariantMap overrides, resolved, available;
+    int count = 0;
+    const iris::CameraPostKey *table = iris::cameraPostKeys(count);
+    for (int i = 0; i < count; ++i) {
+        const QString key = QString::fromLatin1(table[i].id);
+        const QVariant own = cam->postOverride(key);
+        if (own.isValid()) overrides.insert(key, own);
+        const QVariant world = worldPostValue(scene, key);
+        resolved.insert(key, own.isValid() ? own : world);
+        available.insert(key, postKeyAvailable(key));
+    }
+    out["id"] = cam->getGUID();
+    out["overrides"] = overrides;
+    out["resolved"] = resolved;
+    out["available"] = available;
+    return out;
+}
+
+QVariantMap CameraApi::clearPostOverride(const QString &id, const QVariant &row)
+{
+    QVariantMap out;
+    auto cam = cameraOrFail(id, QStringLiteral("camera.clearPostOverride"));
+    if (!cam) return out;
+
+    const QVariant normalized = normalizeJs(row);
+    QStringList keys;
+    if (!normalized.isValid() || normalized.isNull()) {
+        // No row named: clear the lot. "Put this camera back on the world" is
+        // one action a user takes, and asking for it key by key is not it.
+        keys = cam->postOverrides.keys();
+    } else {
+        const QString key = normalized.toString();
+        if (!iris::cameraPostKey(key)) {
+            fail(QStringLiteral("camera.clearPostOverride: unknown override '%1' (known: %2)")
+                     .arg(key, postKeyNames()));
+            return out;
+        }
+        keys << key;
+    }
+
+    UndoService *undo = host.services ? host.services->undo : nullptr;
+    QVariantList cleared;
+    for (const QString &key : keys) {
+        const QString property = QStringLiteral("postFx.") + key;
+        const QVariant before = cam->getPropertyValue(property);
+        if (!cam->clearPostOverride(key)) continue;
+        cleared << key;
+        if (undo) undo->push(new SetNodePropertyCommand(cam, property, before, QVariant()));
+    }
+    out["id"] = cam->getGUID();
+    out["cleared"] = cleared;
     return out;
 }
 
