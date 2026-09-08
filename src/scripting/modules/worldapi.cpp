@@ -75,10 +75,21 @@ QVector<VerbInfo> WorldApi::verbs() const
           "both curves are half fogged). `start` no longer affects rendering on its own. "
           "An unknown key is REFUSED with the list of the ones that exist.",
           Needs::Document },
-        { "shadows", "world.shadows({enabled}) -> bool",
-          "Toggles shadow rendering. `enabled` is the only key this verb takes — anything else is "
-          "REFUSED, because shadow RESOLUTION and the per-light filters live on their own verbs "
-          "(world.setShadowResolution, node.setProperty on the light).",
+        { "shadows", "world.shadows({enabled, mapBudget}) -> bool",
+          "Shadow rendering for the scene. 'enabled' toggles it. "
+          "'mapBudget' is HOW MANY POINT AND SPOT LIGHTS MAY HOLD A SHADOW MAP AT ONCE — 2..16, or "
+          "\"auto\" (the default) to follow the World Mode tier, which asks for 2/4/8/8 at "
+          "low/medium/high/epic. It matters because the renderer keeps ONE shadow atlas with a fixed "
+          "number of point/spot maps and fills them with the casters closest to the camera, dropping "
+          "the rest in silence: with a budget of two, a room with three shadow-casting lamps shows "
+          "two shadows, and WHICH lamp is missing changes as you move. It is a CEILING, not an "
+          "allocation — the renderer counts the scene's casters, steps the atlas {2,4,8,16} up to "
+          "this value, and never shrinks it again within a session (the memory comes back when the "
+          "scene closes). Empty maps cost no shaders; each map that a POINT light fills costs six "
+          "cube-face renders and a copy every frame, which is the real price. A light beyond the "
+          "budget still LIGHTS the scene, it just casts no shadow; world.shadowStatus() names those "
+          "lights. The resolution is world.setShadowResolution and the per-light filter/bias rows "
+          "are node.setProperty on the light; any other key here is REFUSED.",
           Needs::Document },
         { "gi", "world.gi({tier, mode, quality, bounces, light, boundsMin, boundsMax, pccGrid, updateBudget, probeHdr, probeShadows, overlap, snapDeviation, snapSidesMin, snapSidesMax, rayMarchStepScale, ddgi, ddgiIntensity, ddgiAmbient}) -> bool",
           "Global illumination — the full surface, of which world.rayon is the product-named shorthand. "
@@ -270,13 +281,33 @@ bool WorldApi::shadows(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.shadows"));
     if (!scene) return false;
-    static const QStringList known = { QStringLiteral("enabled") };
+    static const QStringList known = { QStringLiteral("enabled"), QStringLiteral("mapBudget") };
     const QString refusal = refuseUnknownKeys(
         QStringLiteral("world.shadows"), params, known,
         QStringLiteral("Shadow RESOLUTION is world.setShadowResolution; the per-light filter and "
                        "bias rows are node.setProperty on the light."));
     if (!refusal.isEmpty()) return fail(refusal);
     if (params.contains("enabled")) scene->shadowEnabled = params.value("enabled").toBool();
+    // HOW MANY point/spot lights may hold a shadow map at once
+    // (SHADOW_TOOLING_SPEC.md §4.1). A CEILING: the engine derives the actual
+    // count from the scene's casters, steps it {2,4,8,16} up to this value and
+    // never shrinks it again within a session. "auto" (or 0) hands the decision
+    // back to the World Mode tier.
+    if (params.contains("mapBudget")) {
+        const QVariant v = params.value("mapBudget");
+        int budget = 0;
+        if (v.typeId() == QMetaType::QString) {
+            if (v.toString().compare(QStringLiteral("auto"), Qt::CaseInsensitive) != 0)
+                return fail(QStringLiteral("world.shadows: mapBudget must be 2..16 or \"auto\""));
+        } else {
+            budget = v.toInt();
+            if (budget != 0 && (budget < 2 || budget > 16))
+                return fail(QStringLiteral("world.shadows: mapBudget must be 2..16 or \"auto\" "
+                                           "(got %1)").arg(budget));
+        }
+        scene->shadowMapBudget = budget;
+        worldmodes::pinRowValue(scene, QStringLiteral("shadowMapBudget"), budget);
+    }
     return true;
 }
 
@@ -1151,6 +1182,7 @@ QVariantMap WorldApi::get()
     out["shadows"] = scene->shadowEnabled;
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
+    out["shadowMapBudget"] = scene->shadowMapBudget;     // 0 = Auto (the World Mode tier's value)
     out["ambientFromSky"] = scene->ambientFromSky;
     // Resolved, not raw: the three document fields carry "follow" sentinels and
     // a caller reading world.get() wants what the renderer will do.

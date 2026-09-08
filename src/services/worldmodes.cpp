@@ -268,6 +268,41 @@ QVector<Row> buildRows()
     }
     {
         Row r;
+        r.id = QStringLiteral("shadowMapBudget");
+        r.label = QStringLiteral("Shadow Map Budget");
+        r.group = QStringLiteral("Shadows");
+        r.type = RowType::Enum;
+        r.options = { { QStringLiteral("auto"), QStringLiteral("Auto"), 0 },
+                      { QStringLiteral("2"),    QStringLiteral("2 lights"),  2 },
+                      { QStringLiteral("4"),    QStringLiteral("4 lights"),  4 },
+                      { QStringLiteral("8"),    QStringLiteral("8 lights"),  8 },
+                      { QStringLiteral("16"),   QStringLiteral("16 lights"), 16 } };
+        // THE DEFECT THIS ROW EXISTS FOR (SHADOW_TOOLING_SPEC.md §1): the atlas
+        // used to hold exactly TWO point/spot shadow maps, forever, and Ogre
+        // fills them with the casters closest to the camera and drops the rest
+        // without a word. The shipped Showroom has three shadow-casting lamps;
+        // one of them has never cast a shadow, and which one changed as the
+        // camera moved.
+        //
+        // TIERS 2/4/8/8 (owner decision D1). Low keeps today's two; Medium's
+        // four covers the ordinary "a lamp in each corner" room; High and Epic
+        // sit at eight, which is where the shadow-pass cost — six cube faces
+        // plus a copy for EVERY mapped point light — starts to be the thing
+        // you are paying for rather than the atlas.
+        r.tier[0] = 2; r.tier[1] = 4; r.tier[2] = 8; r.tier[3] = 8;
+        r.cost = QStringLiteral("A ceiling, not an allocation: the engine grows the atlas in "
+                                "steps (2, 4, 8, 16) to fit the scene's shadow-casting point and "
+                                "spot lights, and never shrinks it again in one session. Each "
+                                "focused map costs R x R of the atlas (at 2048: ~17 MB) and, for "
+                                "a POINT light, six cube-face renders plus a copy every frame. "
+                                "Empty maps cost no shaders. Lights beyond the budget still light "
+                                "the scene; they simply cast no shadow.");
+        r.get = [](const iris::ScenePtr &s) { return s->shadowMapBudget; };
+        r.set = [](const iris::ScenePtr &s, int v) { s->shadowMapBudget = v; };
+        out.append(r);
+    }
+    {
+        Row r;
         r.id = QStringLiteral("shadowFilter");
         r.label = QStringLiteral("Shadow Softness");
         r.group = QStringLiteral("Shadows");

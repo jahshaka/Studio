@@ -1444,6 +1444,54 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     refreshOverlay();
 }
 
+IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
+{
+    ShadowStatusInfo out;
+    if (!mEngine) return out;                 // available stays false
+    const jahshaka::engine::ShadowStatus st = mEngine->shadowStatus();
+    out.available = st.live;
+    out.resolution = int(st.resolution);
+    out.maps = int(st.maps);
+    out.pssmSplits = int(st.pssmSplits);
+    out.focusedMaps = int(st.focusedMaps);
+    out.lightSlots = int(st.lightSlots);
+    out.casters = int(st.casters);
+    out.budget = int(st.budget);
+    out.requestedBudget = int(st.requestedBudget);
+    out.atlasWidth = int(st.atlasWidth);
+    out.atlasHeight = int(st.atlasHeight);
+    out.atlasBytes = qint64(st.atlasBytes);
+    out.shadowPassesLastFrame = int(st.shadowPassesLastFrame);
+    out.staticMapRendersLastFrame = int(st.staticMapRendersLastFrame);
+    // The engine speaks NodeIds; the panel and the verb speak guids. The map is
+    // built from the scene's own light list rather than from a second index in
+    // the mirror: a scene has a handful of lights, this runs on a readback, and
+    // an index that has to stay honest through every node removal is a bug
+    // waiting for a rainy day.
+    QHash<quint64, QString> guidOf;
+    if (mMirror && !mScene.isNull()) {
+        for (const auto &l : mScene->lights) {
+            if (l.isNull()) continue;
+            const jahshaka::engine::NodeId id = mMirror->engineNode(l.data());
+            if (id) guidOf.insert(quint64(id), l->getGUID());
+        }
+    }
+    for (const jahshaka::engine::ShadowMapInfo &m : st.mapped) {
+        ShadowMapEntry e;
+        e.slot = int(m.slot);
+        e.node = guidOf.value(quint64(m.node));
+        e.isStatic = m.isStatic;
+        e.dirty = m.dirty;
+        e.pssm = m.pssm;
+        out.mapped.push_back(e);
+    }
+    for (jahshaka::engine::NodeId id : st.unmapped) {
+        const QString guid = guidOf.value(quint64(id));
+        if (!guid.isEmpty()) out.unmapped.push_back(guid);
+    }
+    return out;
+}
+
 IEditorViewport::MirrorStats EngineSceneViewport::mirrorStats() const
 {
     MirrorStats s;

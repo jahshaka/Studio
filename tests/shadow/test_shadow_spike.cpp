@@ -537,6 +537,9 @@ static void r3Case()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); ++failures; return; }
     View *v = engine->createOffscreenView("spike", 160, 160, Colour(0, 0, 0));
     auto *impl = static_cast<OgreEngine *>(engine.get());
+    // Hold the derivation still: this mode is about the EXPLICIT rebuild that a
+    // Shadow Quality change performs, between frames.
+    engine->setShadowMapBudget(2u);
     Room room = buildRoom(engine.get(), v, "roomGi", 3, false);
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;

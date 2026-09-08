@@ -27,3 +27,21 @@ add_test(NAME shadow.layout COMMAND test_shadow_spike layout
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.layout PROPERTIES TIMEOUT 120 LABELS "document")
 jah_no_display(shadow.layout)
+
+# THE GATE SUITE (SHADOW_TOOLING_SPEC.md §7): the budget, the derivation, the
+# status readback and the rebuild churn, through the PUBLIC engine API only.
+add_executable(test_shadow_maps test_shadow_maps.cpp)
+set_target_properties(test_shadow_maps PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_shadow_maps PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_shadow_maps PRIVATE JahshakaEngine)
+add_dependencies(test_shadow_maps JahshakaEngineMedia)
+add_test(NAME lights.shadows COMMAND test_shadow_maps
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(lights.shadows PROPERTIES TIMEOUT 900 LABELS "engine")

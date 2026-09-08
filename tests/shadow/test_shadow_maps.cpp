@@ -1,0 +1,368 @@
+// THE SHADOW-MAP BUDGET, through the public engine API only
+// (SPECS/SHADOW_TOOLING_SPEC.md §7 — suite `lights.shadows`).
+//
+// What it pins, in the spec's own numbering:
+//   T1  a four-lamp room: with a budget of four every lamp casts a shadow;
+//       with two, exactly two do. That second half is the defect as shipped.
+//   T2  the negative: at two casters the atlas is the historical 2048 x 7168
+//       strip with the maps in their historical places, so every pixel suite
+//       captured before this program keeps its bytes. (The pixel half of T2 —
+//       the same frame rendered through upstream's own shadow node and ours,
+//       byte for byte — lives in test_shadow_spike's `ab` mode, which can
+//       swap the definition because it sees EnginePrivate.)
+//   T4  over budget: shadowStatus() names the lights that got no map.
+//   T5  the rebuild survives churn: casters 1 -> 8 -> 1 with a resolution
+//       change interleaved, and again with hybrid GI's shadowed probe captures
+//       live (risk R3, which was a SEGV before the fix).
+#include "jahshaka/engine/Engine.h"
+#include "../support/enginetesthelpers.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <string>
+#include <vector>
+
+using namespace jahshaka::engine;
+
+static int failures = 0;
+#define CHECK(cond, ...)                                                        \
+    do {                                                                        \
+        if (cond) { std::printf("ok: "); std::printf(__VA_ARGS__); }            \
+        else { std::printf("FAIL: "); std::printf(__VA_ARGS__); ++failures; }   \
+        std::printf("\n");                                                      \
+    } while (0)
+
+static void render(Engine *e, int frames = 8) { for (int i = 0; i < frames; ++i) e->renderOneFrame(); }
+
+// The room: a floor, and `lamps` pillars in the far corners each lit from above
+// and outward by its own shadow-casting point light. The quadrants are far
+// enough apart that one lamp's pool does not reach another's pillar, which is
+// what lets a single readback say which lamps got a shadow map.
+static const float kQuadX[4] = { -6.0f, 6.0f, -6.0f, 6.0f };
+static const float kQuadZ[4] = { -6.0f, -6.0f, 6.0f, 6.0f };
+static const float kCamHeight = 22.0f;
+static const float kHalfExtent = 12.702f;      // kCamHeight * tan(30 degrees)
+
+struct Room { Scene *scene = nullptr; NodeId lamps[4] = {0,0,0,0}; };
+
+static Room buildRoom(Engine *e, View *v, const char *name, int lamps)
+{
+    Room room;
+    room.scene = e->createScene(name);
+    if (!room.scene) return room;
+    Scene *s = room.scene;
+    v->setScene(s);
+    s->setAmbient(Colour(0.02f, 0.02f, 0.025f), Colour(0.01f, 0.01f, 0.015f));
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams white; white.albedo = Colour(0.85f, 0.85f, 0.85f); white.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(white);
+    const NodeId floor = s->createNode();
+    s->attachMesh(floor, mesh, mat);
+    s->setNodeTransform(floor, Vec3(0, -0.1f, 0), Quat(), Vec3(40.0f, 0.2f, 40.0f));
+    for (int i = 0; i < lamps; ++i) {
+        const NodeId pillar = s->createNode();
+        s->attachMesh(pillar, mesh, mat);
+        s->setNodeTransform(pillar, Vec3(kQuadX[i], 1.0f, kQuadZ[i]), Quat(), Vec3(1.2f, 2.0f, 1.2f));
+        const NodeId lamp = s->createNode();
+        LightDesc d;
+        d.type = LightType::Point;
+        d.intensity = 0.25f;
+        d.range = 12.0f;
+        d.castShadows = true;
+        s->setLight(lamp, d);
+        s->setNodeTransform(lamp, Vec3(kQuadX[i] * 1.35f, 4.5f, kQuadZ[i] * 1.35f), Quat(), Vec3(1,1,1));
+        room.lamps[i] = lamp;
+    }
+    CameraDesc c;
+    c.position = Vec3(0.0f, kCamHeight, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);   // straight down
+    c.fovDegrees = 60.0f;
+    v->setCamera(c);
+    v->setShadows(true);
+    return room;
+}
+
+static int lum(const Image &img, unsigned x, unsigned y)
+{
+    const Colour c = img.at(x, y);
+    return int((c.r + c.g + c.b) / 3.0f * 255.0f + 0.5f);
+}
+
+static int probe(const Image &img, float x, float z)
+{
+    const int px = int(((x / kHalfExtent) * 0.5f + 0.5f) * float(img.width));
+    const int py = int(((z / kHalfExtent) * 0.5f + 0.5f) * float(img.height));
+    if (px < 1 || py < 1 || px >= int(img.width) - 1 || py >= int(img.height) - 1) return -1;
+    int sum = 0;
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) sum += lum(img, unsigned(px + dx), unsigned(py + dy));
+    return sum / 9;
+}
+
+/// shadowed/lit for lamp `i`: the pillar's cast shadow covers the floor between
+/// r = 4.6 and r = 7.6 along that quadrant's diagonal, so r = 6.1 is inside it
+/// and the same point three units sideways is not, at nearly the same distance
+/// from the lamp. A RATIO, because the absolute level is not comparable across
+/// map counts: winning a map also moves a light from the Forward+ path to the
+/// pass buffer, and the two do not agree on brightness (a pin-level
+/// inconsistency this program measured but did not cause).
+static double lampShadowRatio(const Image &img, int i)
+{
+    const float sx = kQuadX[i] < 0 ? -1.0f : 1.0f;
+    const float sz = kQuadZ[i] < 0 ? -1.0f : 1.0f;
+    const float ux = sx * 0.70711f, uz = sz * 0.70711f;
+    const float wx = sx * 0.70711f, wz = -sz * 0.70711f;
+    const int shadowed = probe(img, ux * 6.1f, uz * 6.1f);
+    const int lit      = probe(img, ux * 6.1f + wx * 3.0f, uz * 6.1f + wz * 3.0f);
+    return lit > 0 ? double(shadowed) / double(lit) : 1.0;
+}
+
+static int countShadowed(const Image &img, int lamps)
+{
+    int n = 0;
+    for (int i = 0; i < lamps; ++i) {
+        const double r = lampShadowRatio(img, i);
+        std::printf("    lamp %d shadow/lit ratio %.2f\n", i, r);
+        if (r < 0.35) ++n;
+    }
+    return n;
+}
+
+// ---------------------------------------------------------------------------
+static void t1_four_lamps(Engine *e, View *v)
+{
+    std::printf("-- T1: four lamps, budget 2 then 4\n");
+    Room room = buildRoom(e, v, "t1", 4);
+    if (!room.scene) { std::printf("FAIL: scene\n"); ++failures; return; }
+
+    e->setShadowMapBudget(2u);
+    render(e, 10);
+    Image two;
+    if (!v->readPixels(two)) { std::printf("FAIL: readPixels\n"); ++failures; return; }
+    const ShadowStatus st2 = e->shadowStatus();
+    std::printf("    status: casters %u, focusedMaps %u, unmapped %zu\n",
+                st2.casters, st2.focusedMaps, st2.unmapped.size());
+    CHECK(st2.casters == 4u, "the status counts all four casters (%u)", st2.casters);
+    CHECK(st2.focusedMaps == 2u, "at budget 2 the atlas keeps two focused maps (%u)", st2.focusedMaps);
+    const int shadowedAt2 = countShadowed(two, 4);
+    CHECK(shadowedAt2 == 2, "exactly two lamps cast with two maps (%d) — the shipped defect",
+          shadowedAt2);
+
+    // The derivation does the rest: raising the ceiling is all the caller does,
+    // and the engine grows the atlas from the light list it is about to draw.
+    e->setShadowMapBudget(8u);
+    render(e, 10);
+    Image four;
+    v->readPixels(four);
+    const ShadowStatus st4 = e->shadowStatus();
+    std::printf("    status: casters %u, focusedMaps %u, unmapped %zu, atlas %ux%u (%llu MB)\n",
+                st4.casters, st4.focusedMaps, st4.unmapped.size(), st4.atlasWidth, st4.atlasHeight,
+                (unsigned long long)(st4.atlasBytes / (1024ull * 1024ull)));
+    CHECK(st4.focusedMaps == 4u, "four casters step the allocation to FOUR maps, not eight (%u)",
+          st4.focusedMaps);
+    CHECK(st4.unmapped.empty(), "no caster is left without a map (%zu unmapped)", st4.unmapped.size());
+    const int shadowedAt4 = countShadowed(four, 4);
+    CHECK(shadowedAt4 == 4, "all four lamps cast with four maps (%d)", shadowedAt4);
+    e->destroyScene(room.scene);
+}
+
+static void t2_two_casters_keep_the_old_atlas(Engine *e, View *v)
+{
+    std::printf("-- T2 (negative): two casters keep the historical layout\n");
+    Room room = buildRoom(e, v, "t2", 2);
+    e->setShadowMapBudget(8u);
+    e->setShadowResolution(2048u);
+    render(e, 10);
+    const ShadowStatus st = e->shadowStatus();
+    std::printf("    atlas %ux%u, focusedMaps %u, casters %u\n",
+                st.atlasWidth, st.atlasHeight, st.focusedMaps, st.casters);
+    CHECK(st.focusedMaps == 2u, "two casters never grow the atlas (%u maps)", st.focusedMaps);
+    CHECK(st.atlasWidth == 2048u && st.atlasHeight == 7168u,
+          "the atlas is the historical 2048 x 7168 strip (%ux%u)", st.atlasWidth, st.atlasHeight);
+    e->destroyScene(room.scene);
+}
+
+static void t4_over_budget(Engine *e, View *v)
+{
+    std::printf("-- T4: more casters than the budget allows\n");
+    Room room = buildRoom(e, v, "t4", 4);
+    e->setShadowMapBudget(2u);
+    render(e, 10);
+    const ShadowStatus st = e->shadowStatus();
+    std::printf("    casters %u, budget %u, unmapped %zu\n", st.casters, st.budget, st.unmapped.size());
+    CHECK(st.budget == 2u, "the effective budget is what was asked for (%u)", st.budget);
+    CHECK(st.unmapped.size() == 2u, "the two lights with no map are NAMED (%zu)", st.unmapped.size());
+    bool everyUnmappedIsALamp = true;
+    for (NodeId n : st.unmapped) {
+        const bool known = n == room.lamps[0] || n == room.lamps[1] ||
+                           n == room.lamps[2] || n == room.lamps[3];
+        if (!known) everyUnmappedIsALamp = false;
+    }
+    CHECK(everyUnmappedIsALamp, "the unmapped ids are the scene's own lamps");
+    // ...and the mapped list accounts for every map the atlas has.
+    CHECK(st.mapped.size() == st.lightSlots && st.lightSlots == 1u + st.focusedMaps,
+          "the status describes every light slot (%zu of %u)", st.mapped.size(), st.lightSlots);
+    e->destroyScene(room.scene);
+}
+
+static void t5_rebuild_churn(Engine *e, View *v)
+{
+    std::printf("-- T5: caster churn 1 -> 8 -> 1 with a resolution change\n");
+    Scene *s = e->createScene("t5");
+    v->setScene(s);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.02f, 0.02f, 0.02f));
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams white; white.albedo = Colour(0.8f, 0.8f, 0.8f); white.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(white);
+    const NodeId floor = s->createNode();
+    s->attachMesh(floor, mesh, mat);
+    s->setNodeTransform(floor, Vec3(0, -0.1f, 0), Quat(), Vec3(30.0f, 0.2f, 30.0f));
+    const NodeId block = s->createNode();
+    s->attachMesh(block, mesh, mat);
+    s->setNodeTransform(block, Vec3(0, 1.0f, 0), Quat(), Vec3(1.5f, 2.0f, 1.5f));
+    CameraDesc c;
+    c.position = Vec3(0, 14, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+    v->setCamera(c);
+    v->setShadows(true);
+    e->setShadowMapBudget(8u);
+
+    std::vector<NodeId> lamps;
+    const auto addLamp = [&](int i) {
+        const NodeId lamp = s->createNode();
+        LightDesc d;
+        d.type = (i % 2) ? LightType::Spot : LightType::Point;
+        d.intensity = 0.2f;
+        d.range = 12.0f;
+        d.spotAngleDegrees = 50.0f;
+        d.castShadows = true;
+        s->setLight(lamp, d);
+        const float a = float(i) * 0.7854f;
+        s->setNodeTransform(lamp, Vec3(6.0f * std::cos(a), 5.0f, 6.0f * std::sin(a)), Quat(), Vec3(1,1,1));
+        lamps.push_back(lamp);
+    };
+    addLamp(0);
+    render(e, 6);
+    for (int i = 1; i < 8; ++i) addLamp(i);
+    render(e, 10);
+    ShadowStatus st = e->shadowStatus();
+    std::printf("    8 casters -> %u maps, atlas %ux%u\n", st.focusedMaps, st.atlasWidth, st.atlasHeight);
+    CHECK(st.focusedMaps == 8u, "eight casters step to eight maps (%u)", st.focusedMaps);
+    e->setShadowResolution(1024u);
+    render(e, 6);
+    st = e->shadowStatus();
+    std::printf("    after 1024: %u maps, atlas %ux%u\n", st.focusedMaps, st.atlasWidth, st.atlasHeight);
+    CHECK(st.focusedMaps == 8u, "the count survives a resolution change (%u)", st.focusedMaps);
+    for (size_t i = 1; i < lamps.size(); ++i) s->removeLight(lamps[i]);
+    render(e, 10);
+    st = e->shadowStatus();
+    CHECK(st.casters == 1u, "one caster left (%u)", st.casters);
+    CHECK(st.focusedMaps == 8u, "the atlas does NOT shrink in-session (%u maps) — owner D4",
+          st.focusedMaps);
+    Image img;
+    CHECK(v->readPixels(img), "the view still renders after the churn");
+    int lit = 0;
+    for (size_t i = 0; i + 3 < img.rgba.size(); i += 4) if (img.rgba[i] > 20) ++lit;
+    CHECK(lit > 100, "and the picture is not black (%d lit pixels)", lit);
+    e->setShadowResolution(2048u);
+    e->destroyScene(s);
+}
+
+// The R3 regression: the hybrid's SHADOWED probe captures instantiate the same
+// shadow node, so a rebuild used to delete the definition under them and the
+// next frame died in Hlms::preparePassHashBase. Kept small on purpose — this is
+// a lifetime test, not a GI test.
+static void t5b_rebuild_under_hybrid_gi(Engine *e, View *v)
+{
+    std::printf("-- T5b (risk R3): rebuild the atlas under hybrid-GI probe workspaces\n");
+    Scene *s = e->createScene("t5b");
+    v->setScene(s);
+    s->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.02f, 0.02f, 0.02f));
+    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
+    PbrParams white; white.albedo = Colour(0.8f, 0.8f, 0.8f); white.roughness = 0.9f;
+    const MaterialId mat = s->createPbrMaterial(white);
+    const NodeId floor = s->createNode();
+    s->attachMesh(floor, mesh, mat);
+    s->setNodeTransform(floor, Vec3(0, -0.1f, 0), Quat(), Vec3(12.0f, 0.2f, 12.0f));
+    const NodeId block = s->createNode();
+    s->attachMesh(block, mesh, mat);
+    s->setNodeTransform(block, Vec3(0, 1.0f, 0), Quat(), Vec3(1.5f, 2.0f, 1.5f));
+    for (int i = 0; i < 3; ++i) {
+        const NodeId lamp = s->createNode();
+        LightDesc d;
+        d.type = LightType::Point;
+        d.intensity = 0.3f;
+        d.range = 10.0f;
+        d.castShadows = true;
+        s->setLight(lamp, d);
+        const float a = float(i) * 2.094f;
+        s->setNodeTransform(lamp, Vec3(4.0f * std::cos(a), 4.0f, 4.0f * std::sin(a)), Quat(), Vec3(1,1,1));
+    }
+    CameraDesc c;
+    c.position = Vec3(0, 10, 0.01f);
+    c.orientation = Quat(-0.7071068f, 0, 0, 0.7071068f);
+    v->setCamera(c);
+    v->setShadows(true);
+    e->setShadowMapBudget(2u);          // hold the derivation still
+    GiParams gi;
+    gi.mode = GiMode::VctPccHybrid;
+    // DELIBERATELY THE CHEAPEST HYBRID THAT STILL SHADOWS ITS PROBES: Low
+    // quality (a small voxel volume) with probeShadows pinned On rather than
+    // left to follow the dial, and a 2x1x2 probe grid. This case is about a
+    // DEFINITION LIFETIME, not about GI quality, and a fat probe grid only
+    // makes it a VRAM test on a shared machine.
+    gi.quality = GiQuality::Low;
+    gi.probeShadows = GiToggle::On;
+    gi.pccProbesX = 2; gi.pccProbesY = 1; gi.pccProbesZ = 2;
+    gi.updateBudget = 1;
+    s->setGlobalIllumination(gi);
+    render(e, 8);
+    const GiStatus g = s->giStatus();
+    std::printf("    gi: probes %d, probeShadows %d\n", g.probeCount, int(g.probeShadows));
+    CHECK(g.probeShadows, "the probe captures are shadowed (the precondition for R3)");
+    // THE REBUILD, through the path a Shadow Quality change takes — the one
+    // that could always fire this, and that the derived count would have made
+    // routine. (The count itself cannot be relied on to rebuild here: the atlas
+    // never shrinks, so by this point in the suite it may already be at eight.)
+    const unsigned before = e->shadowStatus().focusedMaps;
+    e->setShadowResolution(1024u);
+    render(e, 8);
+    Image img;
+    CHECK(v->readPixels(img), "the engine survived the rebuild under shadowed probes");
+    const ShadowStatus st = e->shadowStatus();
+    CHECK(st.resolution == 1024u && st.focusedMaps == before,
+          "the atlas was rebuilt at 1024 with its map count intact (%u -> %u maps)",
+          before, st.focusedMaps);
+    e->setShadowResolution(2048u);
+    render(e, 4);
+    e->destroyScene(s);
+}
+
+int main(int argc, char **argv)
+{
+    const std::string only = argc > 1 ? argv[1] : std::string();
+    std::string err;
+    EngineConfig cfg;
+    cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
+    cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
+    cfg.logFile = "test-shadow-maps-ogre.log";
+    auto engine = Engine::create(cfg, err);
+    if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    View *v = engine->createOffscreenView("shadowmaps", 200, 200, Colour(0, 0, 0));
+    if (!v) { std::printf("FAIL: offscreen view\n"); return 1; }
+
+    // ORDER IS PART OF THE TEST. The atlas never shrinks within a session
+    // (owner decision D4), so the cases that assert a SMALL atlas have to run
+    // before the ones that grow it — which is also the honest reading order of
+    // the feature: what it was, what it does when it runs out, what it becomes.
+    if (only.empty() || only == "t2")  t2_two_casters_keep_the_old_atlas(engine.get(), v);
+    if (only.empty() || only == "t4")  t4_over_budget(engine.get(), v);
+    if (only.empty() || only == "t1")  t1_four_lamps(engine.get(), v);
+    if (only.empty() || only == "t5")  t5_rebuild_churn(engine.get(), v);
+    if (only.empty() || only == "t5b") t5b_rebuild_under_hybrid_gi(engine.get(), v);
+
+    engine.reset();
+    std::printf(failures ? "%d FAILURES\n" : "all ok\n", failures);
+    return failures ? 1 : 0;
+}
