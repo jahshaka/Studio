@@ -77,9 +77,32 @@ public:
     virtual void setAltOrbit(bool active, const iris::Vec3 &pivot);
     bool isAltOrbiting() const { return altOrbit; }
 
+    /// THE AXIS-VIEW LOCK (owner report 2026-09-08: "when in Top/Left/Right/
+    /// Bottom views we should not be able to rotate the camera — only pan and
+    /// zoom; the camera should be locked top-down, bottom-up etc").
+    ///
+    /// While it is on, no GESTURE may turn the camera: the RMB look drag, the
+    /// Alt+LMB orbit and the arcball's own drag are IGNORED — not redirected,
+    /// not answered by dropping out of the view (Blender snaps back to
+    /// perspective there; Unreal and Maya ignore, and so do we — a gesture
+    /// that silently changes which view you are in is the surprising answer).
+    /// Panning, zooming and the fly keys keep working; the fly keys move on the
+    /// camera's OWN basis instead of the world's while locked, so a top view
+    /// pans across the map rather than dollying into the floor.
+    ///
+    /// The lock is a VIEWPORT decision (EngineSceneViewport::cameraRotationLocked:
+    /// an axis view, and not piloting a scene camera), pushed to BOTH editor
+    /// controllers so a camera-mode switch cannot lose it. It constrains
+    /// gestures only — editor.setCamera and the other placement verbs still
+    /// write whatever pose they are given, and editor.setView("perspective")
+    /// unlocks and restores the remembered perspective pose.
+    void setRotationLocked(bool locked) { rotationLocked = locked; }
+    bool isRotationLocked() const { return rotationLocked; }
+
 protected:
     bool altOrbit = false;
     iris::Vec3 altOrbitPivot;
+    bool rotationLocked = false;
 
     QSharedPointer<iris::CameraNode> camera;
 

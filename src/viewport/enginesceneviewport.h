@@ -70,6 +70,8 @@ public:
     QString cameraMode() const override;
     bool setCameraView(const QString &view) override;
     QString cameraView() const override { return mCameraView; }
+    bool cameraRotationLocked() const override;
+    QString gridPlane() const override { return mGridPlanePushed; }
     bool setCameraPose(const EditorCameraPose &pose) override;
     bool frameNode(iris::SceneNodePtr sceneNode, const EditorFraming &framing) override;
     void setEditorData(EditorData *data) override;
@@ -291,6 +293,13 @@ private:
     /// `helpers` is the caller's "editor helpers are drawable now" state.
     void pushGridForView(bool helpers);
 
+    /// Pushes cameraRotationLocked() onto BOTH camera controllers — the active
+    /// one and the idle one, so switching camera mode inside an axis view
+    /// cannot hand the user a controller that never heard about the lock.
+    /// Called from every place that can change the answer: the view switch,
+    /// the controller switch, pilot enter/leave and the scene reset.
+    void applyRotationLock();
+
     /// Per-view camera memory (Views dropdown / editor.setView): each canonical
     /// view keeps its own camera between visits for the life of the viewport —
     /// perspective its full free/orbit pose, each ortho view its pan + zoom.
@@ -425,6 +434,10 @@ private:
     /// a thing you turn on while chasing a lighting question.
     bool mShowGiVolume = false;
     QString mCameraView = QStringLiteral("perspective"); // last canonical view requested
+    /// The grid plane pushGridForView last PUSHED to the mirror (not what a
+    /// caller asked for) — what editor.overlays().gridPlane reports, so a
+    /// script can assert the axis views' grid orientation survives a pan.
+    QString mGridPlanePushed = QStringLiteral("floor");
     QHash<QString, ViewCameraState> mViewStates; // per-view camera memory (session-only)
     bool mGameView = false;             // G: helpers hidden; never persisted
     bool mSelectionWireframe = false;   // false = silhouette outline (default)
