@@ -241,6 +241,34 @@ QString ThemeManager::chromeCompactButtonSheet()
         "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }");
 }
 
+QColor ThemeManager::tileCaptionBarColor(bool openProject)
+{
+    // Classic is archived and renders bit-for-bit as it shipped: black in both
+    // states. Only the Qlementine theme marks the open tile. (The kill-switch
+    // flag, not s_classicActive: same value — applyAtStartup sets both from one
+    // read — but this one is settable, so the suites can exercise both themes.)
+    if (!openProject || StyleSheet::classicThemeActive()) return QColor(Qt::black);
+
+    // The theme primary (#3498db, app/themes/jahshaka-dark.json) taken down to
+    // ~40% value: unmistakably blue beside the black bars of every other tile,
+    // and still ~12:1 contrast against the white caption text (the primary
+    // itself is only ~2.9:1 under white and would fail to read).
+    return QColor(0x14, 0x39, 0x5c);
+}
+
+QString ThemeManager::tileCaptionBarSheet(int fontSize, int cornerRadius, bool openProject)
+{
+    // Geometry identical for both states (owner-tuned: the top of the bar hugs
+    // the text, the bottom gets two extra pixels) — only the background moves.
+    return QStringLiteral("background-color: %1; color: white; font-size: %2px;"
+                          " padding-bottom: 2px;"
+                          " border-bottom-left-radius: %3px;"
+                          " border-bottom-right-radius: %3px;")
+        .arg(tileCaptionBarColor(openProject).name(),
+             QString::number(fontSize),
+             QString::number(cornerRadius));
+}
+
 QString ThemeManager::headerGlyphButtonSheet(const QFont &iconFont)
 {
     if (s_classicActive) return QString();

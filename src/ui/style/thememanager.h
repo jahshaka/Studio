@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef JAH_THEMEMANAGER_H
 #define JAH_THEMEMANAGER_H
 
+#include <QColor>
 #include <QString>
 
 class QApplication;
@@ -91,6 +92,21 @@ public:
     // One call site for all three header glyphs, so they cannot drift apart.
     static void applyHeaderGlyphButton(class QPushButton *button,
                                        const QFont &iconFont);
+
+    // THE DESKTOP TILE'S CAPTION BAR — the band under a project thumbnail that
+    // carries the project name (src/ui/controls/itemgridwidget.cpp). Ordinary
+    // tiles keep the black band they always had; the tile of the project that
+    // is currently OPEN gets the theme's dark blue instead, so the open project
+    // is spottable across a full desktop (owner request 2026-09-08). Under
+    // Classic BOTH states stay black — that theme is archived and must render
+    // bit-for-bit as it shipped.
+    static QColor tileCaptionBarColor(bool openProject);
+
+    // The whole caption-bar sheet built around that colour: the geometry
+    // (font size, bottom padding, the two bottom corner radii that close the
+    // tile card) is IDENTICAL for both states, so nothing but the background
+    // moves when a project opens.
+    static QString tileCaptionBarSheet(int fontSize, int cornerRadius, bool openProject);
 
     // Qlementine mode: replaces every checkable QAction in the menu with a
     // qlementine Switch row (QWidgetAction). The original QAction stays alive

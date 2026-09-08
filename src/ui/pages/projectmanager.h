@@ -64,6 +64,17 @@ public:
 	void updateTile(const QString &id, const QByteArray &arr);
 	void addImportedTileToDesktop(const QString &guid);
     void populateDesktop(bool reset = false);
+
+    // Re-reads the OPEN state of the live tiles in place — no rebuild, no
+    // thumbnail decode, no layout churn (ItemGridWidget::setOpenProject).
+    // populateDesktop(true) does this too, as a side effect of rebuilding
+    // everything, but the CLOSE edge has no repopulate at all: closing from
+    // the desktop returns early in MainWindow::closeProject, and the
+    // switchSpace(DESKTOP) path's repopulate is gated on a scene being open —
+    // which it no longer is. Without this call the closed project's tile kept
+    // its "[ Open ]" caption, its dark blue bar and its Close control.
+    void refreshOpenTiles();
+
     bool checkForEmptyState();
     void cleanupOnClose();
 

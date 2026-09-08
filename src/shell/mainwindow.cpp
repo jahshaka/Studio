@@ -1591,6 +1591,16 @@ void MainWindow::closeProject()
     }
 
     projectService->setSceneOpen(false);
+
+    // The desktop's tiles carry the open marker (dark blue caption bar,
+    // "[ Open ]" caption, Close instead of Play/Edit). Refresh them the moment
+    // the flag goes false: NEITHER exit path below rebuilds the grid — closing
+    // while already on the desktop returns early, and switchSpace(DESKTOP)'s
+    // repopulate is gated on a scene being open, which it no longer is. Found
+    // by scripting.e2e.desktops' open-flag assertion (2026-09-08); the stale
+    // marker predates the blue bar, it was just less visible.
+    if (pmContainer) pmContainer->refreshOpenTiles();
+
     playbackService->setPlaying(false);
     ui->actionClose->setDisabled(false);
     refreshClaudeChatContext();   // D1: an open chat loses its project
