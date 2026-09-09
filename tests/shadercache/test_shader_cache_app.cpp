@@ -43,6 +43,11 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     QProcess app;
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert("HOME", home);
+    // The data-root override (hygiene batch, 2026-09-09) moves the settings file
+    // beside the DB/store/cache. Without it a QT_DEBUG build writes
+    // build-linux/bin/jahsettings.ini — the OWNER's file — from this suite (the
+    // final gate of 2026-09-09 caught it as the last remaining writer).
+    env.insert("JAHSHAKA_DATA_ROOT", home + "/.local/share/Jahshaka");
     // The NVIDIA driver keeps a shader cache of its own and it is worth ~9% of
     // a launch (SHADER_CACHE_SPEC §2.6). It cannot change this test's PASS/FAIL
     // — we assert compile COUNTS, not wall time — but pinning it keeps the
