@@ -51,6 +51,93 @@ ClipboardResolveReport ClipboardResolver::apply(const Envelope &envelope,
 
 namespace {
 
+// ---------------------------------------------------------------------------
+// PAYLOAD VALIDATION. Everything in an envelope is UNTRUSTED INPUT: the text
+// arrives from another machine, another build, a chat window, or a text editor
+// somebody typed in. Three of these fields are used to BUILD FILESYSTEM PATHS
+// and one becomes a database key, so they are checked against their alphabets
+// before a path exists — not after, and never by trusting that our own writer
+// produced them.
+//
+// The concrete hole this closes: an `oid` of "../../../../home/u/.ssh/id_rsa"
+// with an empty `ext` made AssetStorePaths::objectPathIn hand back a path
+// OUTSIDE the store, QFileInfo::exists said yes, and registerAsset ingested
+// that file into the CAS under a guid the payload also chose. A clipboard
+// payload could exfiltrate any readable file into the library.
+
+/// A content id is exactly 64 lowercase hex characters — the sha256 the store
+/// names objects by. Nothing else can address an object, so nothing else is
+/// accepted (an uppercase spelling is refused rather than folded: the store
+/// lowercases on write, so a mixed-case oid never named one of our objects).
+bool validOid(const QString &oid)
+{
+    if (oid.size() != 64) return false;
+    for (const QChar c : oid) {
+        const bool hex = (c >= QLatin1Char('0') && c <= QLatin1Char('9')) ||
+                         (c >= QLatin1Char('a') && c <= QLatin1Char('f'));
+        if (!hex) return false;
+    }
+    return true;
+}
+
+/// An extension as the store writes them: lowercase alphanumerics, at most 8.
+/// EMPTY IS LEGAL — a stored file may have no extension at all (a LICENSE, a
+/// .mtl-less mesh) and objectPathIn then names the object by its oid alone.
+bool validExt(const QString &ext)
+{
+    if (ext.isEmpty()) return true;
+    if (ext.size() > 8) return false;
+    for (const QChar c : ext) {
+        const bool ok = (c >= QLatin1Char('a') && c <= QLatin1Char('z')) ||
+                        (c >= QLatin1Char('0') && c <= QLatin1Char('9'));
+        if (!ok) return false;
+    }
+    return true;
+}
+
+/// A display / staging file name with any path in it removed. "../../x" and
+/// "/etc/passwd" both collapse to their last component; empty means the field
+/// carried nothing usable and the caller falls back to the oid.
+QString safeFileName(const QString &name)
+{
+    if (name.isEmpty()) return QString();
+    // Backslashes first: on a POSIX box QFileInfo does not treat them as
+    // separators, so "..\\..\\x" would survive fileName() intact.
+    QString cleaned = name;
+    cleaned.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    cleaned = QFileInfo(cleaned).fileName();
+    // A name made only of dots is a directory reference, not a file name.
+    bool onlyDots = !cleaned.isEmpty();
+    for (const QChar c : cleaned) if (c != QLatin1Char('.')) { onlyDots = false; break; }
+    if (onlyDots) return QString();
+    return cleaned;
+}
+
+/// Why an entry was refused before anything was built from it. Empty = fine.
+QString rejectReason(const ClipAsset &asset)
+{
+    if (!assetrefs::isGuidValue(asset.guid))
+        return QStringLiteral("its id is not a guid");
+    if (!asset.parent.isEmpty() && !assetrefs::isGuidValue(asset.parent))
+        return QStringLiteral("its parent id is not a guid");
+    // The row's TYPE is a ModelTypes value and becomes the catalog's type
+    // column; an absent or negative one would register an Undefined row that
+    // nothing can open.
+    if (asset.typeId < 0)
+        return QStringLiteral("it carries no asset type");
+    if (safeFileName(asset.name).isEmpty())
+        return QStringLiteral("it carries no usable name");
+    for (const ClipFile &file : asset.files) {
+        if (!validExt(file.ext))
+            return QStringLiteral("a file extension is not a store extension");
+        if (file.inlineData.isEmpty() && !validOid(file.oid))
+            return QStringLiteral("a file names no valid content id");
+        if (!file.inlineData.isEmpty() && !file.oid.isEmpty() && !validOid(file.oid))
+            return QStringLiteral("a file names no valid content id");
+    }
+    return QString();
+}
+
 /// Which item referenced which guid, for the missing report ("neededBy").
 QHash<QString, QString> neededByMap(const Envelope &envelope)
 {
@@ -86,7 +173,12 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
     // and is it the store it claims to be? Identity is the store id, never the
     // path (a copied library at a different path is a different store).
     QString siblingRoot;
+    // The hint is a PATH FROM THE PAYLOAD: absolute, existing, different from
+    // ours, and identifying itself as the store the payload claims. A relative
+    // path would resolve against this process's working directory, which is
+    // whatever the app was launched from.
     if (!envelope.source.storeRoot.isEmpty() && !envelope.source.storeId.isEmpty() &&
+        QDir::isAbsolutePath(envelope.source.storeRoot) &&
         envelope.source.storeRoot != localRoot && QDir(envelope.source.storeRoot).exists()) {
         QString siblingId;
         if (AssetCas::readStoreInfo(envelope.source.storeRoot, &siblingId, nullptr) &&
@@ -107,6 +199,24 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
         if (asset.guid.isEmpty() || assetrefs::isReservedGuid(asset.guid)) continue;
         // Only what the caller is going to use (see plan()'s note).
         if (limitTo && !limitTo->contains(asset.guid)) continue;
+
+        // VALIDATE BEFORE ANYTHING IS BUILT FROM IT (see the note above the
+        // validators). A refused entry is reported exactly like content we
+        // cannot find — the paste refuses the items that needed it — because
+        // from the caller's side that is the same outcome.
+        const QString reject = rejectReason(asset);
+        if (!reject.isEmpty()) {
+            ClipboardMissing refused;
+            refused.guid = it.key();
+            refused.name = safeFileName(asset.name);
+            refused.type = asset.type;
+            refused.neededBy = QStringLiteral("refused: %1").arg(reject);
+            report.missing.append(refused);
+            if (report.error.isEmpty())
+                report.error = QStringLiteral("the clipboard payload describes an asset this "
+                                              "build will not accept (%1)").arg(reject);
+            continue;
+        }
 
         // ---- step 1: known here, at the right type -------------------------
         const AssetRecord record = db->fetchAsset(asset.guid);
@@ -131,22 +241,28 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
         bool anyUnresolved = false;
         for (const ClipFile &file : asset.files) {
             QString path;
+            // Both branches build a path, so both use the CHECKED fields only:
+            // the staged name is the payload's name with any path stripped
+            // (index-prefixed, so two files cannot collide), and an object path
+            // is only formed from a 64-hex oid and a store extension.
+            const QString stagedName = safeFileName(file.name);
             if (!file.inlineData.isEmpty()) {                       // step 2
                 if (!commit) {
                     // The dry run knows the bytes are here; it does not need
                     // them on disk to say so.
                     path = QStringLiteral(":inline:");
                 } else if (staging && staging->isValid()) {
-                    const QString name = file.name.isEmpty()
-                                             ? QStringLiteral("%1.%2").arg(file.oid, file.ext)
-                                             : file.name;
+                    const QString name = !stagedName.isEmpty()
+                                             ? stagedName
+                                             : (validOid(file.oid) ? file.oid
+                                                                   : QStringLiteral("payload"));
                     path = QDir(staging->path()).filePath(
                         QStringLiteral("%1-%2").arg(located.size()).arg(name));
                     QFile out(path);
                     if (out.open(QIODevice::WriteOnly)) out.write(file.inlineData);
                     else path.clear();
                 }
-            } else if (!file.oid.isEmpty()) {
+            } else if (validOid(file.oid)) {
                 const QString local = AssetStorePaths::objectPathIn(localRoot, file.oid, file.ext);
                 if (QFileInfo::exists(local)) path = local;         // step 3
                 else if (!siblingRoot.isEmpty()) {                  // step 4
@@ -234,7 +350,8 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
             const auto entry = envelope.assets.constFind(sourceGuid);
             if (entry == envelope.assets.constEnd()) continue;
             for (const QString &dependee : entry->dependencies) {
-                if (dependee.isEmpty() || assetrefs::isReservedGuid(dependee)) continue;
+                if (assetrefs::isReservedGuid(dependee)) continue;
+                if (!assetrefs::isGuidValue(dependee)) continue;   // payload input
                 db->createDependency(typeOf(sourceGuid), typeOf(dependee),
                                      guid, localGuid(dependee), QString());
             }
@@ -244,6 +361,7 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
     // ---- pins (outside undo, idempotent) -----------------------------------
     if (commit && project && !project->getProjectGuid().isEmpty()) {
         for (const QString &guid : toPin) {
+            if (!assetrefs::isGuidValue(guid)) continue;           // payload input
             const auto result = ProjectAssets::addToProject(guid, db, project,
                                                             ProjectAssets::AddKind::Binding);
             if (result.ok()) {
@@ -268,18 +386,25 @@ bool ClipboardResolver::registerAsset(const ClipAsset &asset,
     // it commits (invariant I2).
     DbTransaction tx(conn);
 
-    db->createAssetEntry(asset.guid, asset.name, asset.typeId, asset.parent,
-                         QString(), QString(), QString(), QByteArray(),
+    // The row is stamped with the CURRENT project, exactly as the import spine
+    // stamps an import (assetimportservice.cpp:304) — a clipboard paste is an
+    // import, and a row with no project guid is a row the Assets page files
+    // differently from every other imported asset.
+    const QString projectGuid = project ? project->getProjectGuid() : QString();
+    db->createAssetEntry(asset.guid, safeFileName(asset.name), asset.typeId, asset.parent,
+                         projectGuid, QString(), QString(), QByteArray(),
                          asset.properties, QByteArray(), asset.blob,
                          asset.viewFilter >= 0 ? static_cast<AssetViewFilter>(asset.viewFilter)
                                                : AssetViewFilter::AssetsView);
 
     for (const auto &pair : files) {
         QString oid;
+        const QString name = safeFileName(pair.first.name);
         if (!AssetCas::ingestFile(conn, root, pair.second, asset.guid,
                                   pair.first.role.isEmpty() ? QStringLiteral("source")
                                                             : pair.first.role,
-                                  pair.first.name, &oid, errorOut))
+                                  name.isEmpty() ? QFileInfo(pair.second).fileName() : name,
+                                  &oid, errorOut))
             return false;
     }
 

@@ -410,11 +410,14 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
 
     ClipboardResolver resolver(db, project);
     const ClipboardResolveReport plan = resolver.plan(envelope, &candidateNeeds);
+    result.missing = plan.missing;
     if (!plan.error.isEmpty()) {
+        // A payload this build will not accept (a malformed entry) or no
+        // library at all: refuse loudly, and still say WHICH asset caused it —
+        // an error with no `missing` list leaves the user nothing to act on.
         result.error = plan.error;
         return result;
     }
-    result.missing = plan.missing;
     QSet<QString> missingGuids;
     for (const auto &missing : plan.missing) missingGuids.insert(missing.guid);
 

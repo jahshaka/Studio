@@ -137,6 +137,78 @@ var anyway = clipboard.paste({ allowMissing: true });
 assert(anyway.pasted.length === 1, "allowMissing pastes it anyway (Unreal's behaviour)");
 assert(anyway.missing.length === 1, "and still reports the gap");
 
+// ---- A HOSTILE PAYLOAD (the path-traversal class) -------------------------
+//
+// Every field in an envelope is untrusted input — the text comes from another
+// machine, a chat window or a text editor. Three of them build FILESYSTEM
+// PATHS. A crafted `oid` of "../../../<something readable>" with an empty `ext`
+// made the store's object path resolve OUTSIDE the store, QFileInfo::exists
+// said yes, and the paste ingested that file into this library under a guid the
+// payload also chose. The validators refuse the entry before a path exists.
+//
+// The file named here is this test's own script — readable, certainly present,
+// and outside the store, which is the whole point.
+var hostile = JSON.parse(clipboard.text());
+var evilGuid = "beef0000-0000-4000-8000-00000000000e";
+var evilEntry = {
+    name: "../../../../etc/passwd", type: "texture", typeId: 2, viewFilter: 2,
+    dependencies: [],
+    files: [{ role: "source", name: "../../../../etc/passwd", ext: "",
+              size: 1, oid: "../../../../etc/passwd" }]
+};
+hostile.assets = {};
+hostile.assets[evilGuid] = evilEntry;
+hostile.items = [{ kind: "node", node: hostile.items[0].node, parent: "", index: -1 }];
+hostile.items[0].node.material.values.baseColorMap = evilGuid;
+assert(clipboard.setText(JSON.stringify(hostile)).valid,
+       "a hostile payload is still just text — it parses");
+
+var hostilePlan = clipboard.resolve();
+console.log("hostile resolve -> " + J(hostilePlan));
+assert(hostilePlan.importable.length === 0,
+       "the traversal entry is NOT importable: " + J(hostilePlan.importable));
+assert(hostilePlan.missing.length === 1 && hostilePlan.missing[0].guid === evilGuid,
+       "it is refused, with a reason: " + J(hostilePlan.missing));
+assert(hostilePlan.missing[0].neededBy.indexOf("refused") === 0,
+       "and the reason says it was refused, not that it went looking: " +
+       hostilePlan.missing[0].neededBy);
+
+var hostilePaste = clipboard.paste();
+console.log("hostile paste -> " + J(hostilePaste));
+assert(hostilePaste.pasted.length === 0, "the paste lands nothing");
+assert(hostilePaste.imported.length === 0 && hostilePaste.pinned.length === 0,
+       "and ingests nothing: " + J(hostilePaste));
+assert(typeof hostilePaste.error === "string" && hostilePaste.error.length > 0,
+       "the verb refuses out loud: " + hostilePaste.error);
+assert(hostilePaste.missing.length === 1 && hostilePaste.missing[0].guid === evilGuid,
+       "and names the entry it refused, so there is something to act on: " +
+       J(hostilePaste.missing));
+assert(assets.list({ scope: "store" }).every(function (a) { return a.guid !== evilGuid; }),
+       "no row was created for the payload's chosen guid");
+
+// The same guard, one field at a time: an entry with no type, a non-guid id,
+// and an oid that is not a content id are each refused on their own.
+function refuses(mutate, what) {
+    var payload = JSON.parse(JSON.stringify(hostile));
+    payload.assets = {};
+    var guid = "beef0000-0000-4000-8000-00000000001" + (refuses.n = (refuses.n || 0) + 1);
+    var entry = { name: "x.png", type: "texture", typeId: 2, viewFilter: 2, dependencies: [],
+                  files: [{ role: "source", name: "x.png", ext: "png",
+                            size: 1, oid: "0000000000000000000000000000000000000000000000000000000000000000" }] };
+    mutate(entry);
+    payload.assets[guid] = entry;
+    payload.items[0].node.material.values.baseColorMap = guid;
+    assert(clipboard.setText(JSON.stringify(payload)).valid, "payload accepted (" + what + ")");
+    var plan = clipboard.resolve();
+    assert(plan.importable.length === 0 && plan.missing.length === 1,
+           "refused: " + what + " -> " + J(plan.missing));
+}
+refuses(function (e) { delete e.typeId; }, "an entry with no asset type");
+refuses(function (e) { e.name = "..."; }, "an entry whose name is only dots");
+refuses(function (e) { e.files[0].oid = "NOTAHASH"; }, "a file whose oid is not a content id");
+refuses(function (e) { e.files[0].ext = "../x"; }, "a file whose extension is a path");
+refuses(function (e) { e.parent = "not-a-guid"; }, "an entry whose parent id is not a guid");
+
 // ---- a node paste aimed at the Assets page pins nothing -------------------
 //
 // Same rule from the other side: the items cannot land there, so the closure
