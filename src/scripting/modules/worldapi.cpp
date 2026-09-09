@@ -175,8 +175,8 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "clearOverrides", "world.clearOverrides() -> object",
           "Drops every pinned row and re-applies the current mode. Returns world.settings(). Undoable.",
           Needs::Document },
-        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
-          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
+        { "postFx", "world.postFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius}) -> object",
+          "The post chain's CONTINUOUS tuning, as opposed to its on/off rows (those are World Mode rows — world.override). exposure is the auto-exposure midpoint, used as e^(exposure-2), so +0.69 is one doubling; exposureMin and exposureMax are the WINDOW the automatic exposure may adapt within around it — setting them equal PINS the exposure, which is the deterministic setting the secondary surfaces (thumbnails, previews, screenshots) grade with; bloomThreshold is where the bright pass starts, in tonemapper units (high reads as highlight bloom, low as haze) and bloomKnee is how WIDE the ramp above it is (a narrow knee is a hard cut, a wide one fades the effect in — the renderer's bright pass has always taken two thresholds and 2.0 is the width that used to be hard-coded); ssaoPower is the contrast of the occlusion term and ssaoRadius how far it looks, in metres. Called with no argument it reads them. The panel row, the range and the clamp for every one of these live in ONE table (services/worldmodes.h postFxParams) that the World > Post Process section is generated from too, so the verb and the panel cannot disagree.",
           Needs::Document },
         { "modeTable", "world.modeTable() -> object",
           "The World Mode registry itself: every row's id, label, group, type, options, per-tier values, cost note and availability. This is what the World panel and the docs are generated from.",
@@ -207,7 +207,7 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "setMode", "world.setMode({mode}) -> string",
           "Alias of world.mode — same arguments, same result (and, called with no argument, the "
           "same read).", Needs::Document },
-        { "setPostFx", "world.setPostFx({exposure, exposureMin, exposureMax, bloomThreshold, ssaoPower, ssaoRadius}) -> object",
+        { "setPostFx", "world.setPostFx({exposure, exposureMin, exposureMax, bloomThreshold, bloomKnee, ssaoPower, ssaoRadius}) -> object",
           "Alias of world.postFx — same arguments, same result.", Needs::Document },
     };
 }

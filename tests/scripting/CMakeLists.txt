@@ -71,6 +71,22 @@ add_script_e2e(pbs_knobs e2e_pbs_knobs.js)
 # authored colour, a lit one does not), that the switch is one undo step, and
 # that every value the family cannot use survives the round trip.
 add_script_e2e(shading_model e2e_shading_model.js)
+# MATERIAL_GAPS_SPEC GAP 1: the per-material SPECULAR / FRESNEL WORKFLOW. The
+# I-1 fence lives here — metalness and F0 are the SAME float in the renderer's
+# datablock and our engine is built with NDEBUG, so nothing but a dumpDatablock
+# assertion notices a push that writes both. Also asserts Metallic is still the
+# default (the renderer's own default is Specular; ours is what every existing
+# material has), the enum accepts its vocabulary BY NAME, and the workflow
+# reaches pixels.
+add_script_e2e(workflows e2e_workflows.js)
+# MATERIAL_GAPS_SPEC GAP 1 ACCEPTANCE (§2.7): Ogre's own PbsMaterials 8x8
+# roughness x fresnel grid, rebuilt FROM OUR DOCUMENT MODEL through the verbs.
+# Deterministic by construction — one directional light, no sky, GI off, raw
+# (post-chain-free) readbacks and a FIXED camera — and asserted as monotonic
+# relations inside one frame plus a metallic-workflow CONTROL, never as absolute
+# colours.
+add_script_e2e(workflow_grid e2e_workflow_grid.js)
+
 # MATERIALS_EVALUATOR_SPEC: graph verbs -> bakeInfo/bake -> BakedMaps PNGs ->
 # toMaterial/save/regenerate; baked maps land inside the project folder (and
 # so ride the recursive .jaf zip).
@@ -799,3 +815,23 @@ set_tests_properties(scripting.e2e.avatar_assets PROPERTIES
     ENVIRONMENT "HOME=${_home}"
     LABELS "scripting"
     TIMEOUT 400)
+
+# MATERIAL_GAPS_SPEC GAP 2 (P6 + P7): DETAIL LAYERS end to end, and the §3.7
+# acceptance port — Ogre's own `Marble` material (detail_map0 MRAMOR6X6.jpg at
+# offset/scale 0 0 5 5, roughness_map MRAMOR-bump.jpg) rebuilt from OUR document
+# model through the verbs. Both images come in through the ordinary import
+# pipeline from the ogre-next submodule, which is half of what the port proves.
+# Asserts the one-setter-table rule (material.set and material.setDetail write
+# the same rows), the thirteen-mode blend vocabulary BY NAME, that the per-layer
+# scale is the detail-tiling knob, and — the byte-identical argument as a test —
+# that an unauthored layer at its defaults changes nothing.
+configure_file(scripts/e2e_detail_layers.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-detail_layers)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.detail_layers
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_detail_layers.js
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.detail_layers PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 240)

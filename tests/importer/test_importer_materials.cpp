@@ -18,7 +18,15 @@
 //   4. emissiveIntensity was never set on an import, so an emissive colour or
 //      map was multiplied by the document default 0 and emitted nothing.
 //
-// Fixture: fixtures/material_workflows.glb, five quads with one material shape
+// MATERIAL_GAPS_SPEC GAP 1 SUPERSEDES DEFECT 1's REMEDY (§2.5): spec-gloss is
+// no longer CONVERTED to metallic-roughness, it imports into the renderer's own
+// Specular workflow, losslessly, with its map bound instead of dropped. The
+// conversion function stays — as the EXPORT fallback for targets with no
+// workflow concept — and section 1 still asserts it. Two more materials join
+// the fixture for the extensions the switch makes importable:
+// KHR_materials_specular (-> Specular-as-Fresnel) and KHR_materials_ior.
+//
+// Fixture: fixtures/material_workflows.glb, seven quads with one material shape
 // each (fixtures/make_material_fixtures.py documents them and regenerates it).
 // Sections:
 //   1. The conversion formula itself (unit).
@@ -169,32 +177,85 @@ int main(int argc, char **argv)
         CHECK(!imported.isNull(), "2: import produced a node");
         if (imported.isNull()) return 1;
 
-        // --- DEFECT 1: spec-gloss must not import as full metal.
+        // --- DEFECT 1, NOW SUPERSEDED BY GAP 1 (MATERIAL_GAPS_SPEC §2.5).
+        // Spec-gloss used to be CONVERTED to metallic-roughness because that
+        // was the only workflow the renderer had. It now imports NATIVELY into
+        // the renderer's own Specular workflow, which is lossless: the diffuse
+        // factor is the base colour, specularFactor is kS, roughness is exactly
+        // 1 - glossiness, and the spec-gloss MAP finally has a home (the shared
+        // metallic/specular texture unit) instead of being dropped with a
+        // warning. The conversion function is still built and still asserted in
+        // section 1 — it is the EXPORT fallback now, for targets with no
+        // workflow concept.
         auto specgloss = materialNamed(imported, "specgloss");
         CHECK(!specgloss.isNull(), "2: specgloss quad imports as a PbrMaterial");
         if (specgloss) {
-            std::printf("    specgloss: metallic %.3f roughness %.3f base %s map %d\n",
-                        specgloss->metallicFactor, specgloss->roughnessFactor,
+            std::printf("    specgloss: workflow %d roughness %.3f base %s spec %s map %d\n",
+                        specgloss->workflow, specgloss->roughnessFactor,
                         specgloss->baseColor.name().toUtf8().constData(),
+                        specgloss->specularColor.name().toUtf8().constData(),
                         int(specgloss->useBaseColorMap));
-            CHECK(nearly(specgloss->metallicFactor, 0.0f),
-                  "2: spec-gloss with black specular imports metallic 0 (was 1 = black model)");
+            CHECK(specgloss->workflow == 1,
+                  "2: spec-gloss imports NATIVELY into the Specular workflow (no conversion)");
             CHECK(nearly(specgloss->roughnessFactor, 0.9822f, 2e-3f),
-                  "2: ... roughness 1 - glossiness (was 1.0)");
+                  "2: ... roughness is exactly 1 - glossiness");
+            CHECK(specgloss->specularColor.red() == 0 && specgloss->specularColor.green() == 0 &&
+                  specgloss->specularColor.blue() == 0,
+                  "2: ... and specularFactor [0,0,0] arrives as kS verbatim, not as 'metallic 0'");
             CHECK(specgloss->useBaseColorMap,
                   "2: ... and its diffuse texture is bound as the base-colour map");
             CHECK(specgloss->shadingModel == 0, "2: ... as a LIT material");
         }
 
-        // The conversion is a conversion, not a floor: a spec-gloss material
-        // that really is metal still imports as metal.
+        // A spec-gloss material that really is metal keeps its WHITE kS rather
+        // than being re-derived as metalness. The conversion's own metal arm is
+        // still asserted in section 1; here the point is that nothing is
+        // re-derived at all any more.
         auto specglossMetal = materialNamed(imported, "specgloss_metal");
         CHECK(!specglossMetal.isNull(), "2: specgloss_metal quad imports");
         if (specglossMetal) {
-            CHECK(nearly(specglossMetal->metallicFactor, 1.0f, 1e-2f),
-                  "2: spec-gloss with white specular imports metallic 1");
+            CHECK(specglossMetal->workflow == 1, "2: it too imports in the Specular workflow");
+            CHECK(specglossMetal->specularColor.red() > 250 &&
+                  specglossMetal->specularColor.blue() > 250,
+                  "2: specularFactor [1,1,1] arrives as a white kS");
             CHECK(nearly(specglossMetal->roughnessFactor, 0.25f),
                   "2: ... roughness 1 - 0.75");
+        }
+
+        // --- GAP 1: KHR_materials_specular -> Specular-as-Fresnel.
+        // specularColorFactor is an F0 TINT (the pin's own docs call this
+        // workflow "what most PBRs mean by specular"), so it lands on the
+        // fresnel colour multiplied by specularFactor — not on kS.
+        auto specExt = materialNamed(imported, "spec_ext");
+        CHECK(!specExt.isNull(), "2: spec_ext quad imports");
+        if (specExt) {
+            std::printf("    spec_ext:  workflow %d useFresnelColor %d fresnel %s ior %.2f\n",
+                        specExt->workflow, int(specExt->useFresnelColor),
+                        specExt->fresnelColor.name().toUtf8().constData(), specExt->ior);
+            CHECK(specExt->workflow == 2,
+                  "2: KHR_materials_specular imports as Specular-as-Fresnel");
+            CHECK(specExt->useFresnelColor,
+                  "2: ... with F0 authored directly (specularColorFactor is an F0 tint)");
+            // [1.0, 0.5, 0.25] * specularFactor 0.5 = [0.5, 0.25, 0.125]
+            CHECK(std::abs(specExt->fresnelColor.red() - 128) <= 2 &&
+                  std::abs(specExt->fresnelColor.green() - 64) <= 2 &&
+                  std::abs(specExt->fresnelColor.blue() - 32) <= 2,
+                  "2: ... F0 = specularColorFactor * specularFactor");
+            CHECK(nearly(specExt->roughnessFactor, 0.3f),
+                  "2: ... and the metallic-roughness base's roughness is kept");
+        }
+
+        // --- GAP 1: KHR_materials_ior, alone, on a metallic material.
+        // Stored even though it is INERT while metallic — the same "values
+        // survive the switch" rule clear coat follows, so switching workflow in
+        // the editor restores what the file said.
+        auto iorGlass = materialNamed(imported, "ior_glass");
+        CHECK(!iorGlass.isNull(), "2: ior_glass quad imports");
+        if (iorGlass) {
+            CHECK(iorGlass->workflow == 0,
+                  "2: KHR_materials_ior alone does NOT change the workflow");
+            CHECK(nearly(iorGlass->ior, 1.8f),
+                  "2: ... but the IOR is stored (inert while metallic, restored by a switch)");
         }
 
         // --- DEFECT 2: no workflow block at all is a DIELECTRIC, by policy.
@@ -293,12 +354,16 @@ int main(int argc, char **argv)
                     const QImage fixedShot = renderer.renderNode(node, QSize(96, 96));
                     const double fixedLuma = meanSubjectLuma(fixedShot);
 
-                    // The pre-fix reading, on the same mesh and the same maps.
+                    // The pre-fix reading, on the same mesh and the same maps:
+                    // the metallic workflow at full metal / full rough, which
+                    // is what assimp's always-present keys used to produce.
+                    mat->setValue(QStringLiteral("workflow"), 0);
                     mat->setValue(QStringLiteral("metallic"), 1.0f);
                     mat->setValue(QStringLiteral("roughness"), 1.0f);
                     const QImage brokenShot = renderer.renderNode(node, QSize(96, 96));
                     const double brokenLuma = meanSubjectLuma(brokenShot);
                     // Leave the document as it was imported.
+                    mat->setValue(QStringLiteral("workflow"), 1);
                     mat->setValue(QStringLiteral("metallic"), 0.0f);
                     mat->setValue(QStringLiteral("roughness"), 0.9822f);
 

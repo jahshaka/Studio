@@ -57,6 +57,8 @@ public:
     Q_INVOKABLE QVariantList scaleKeys(const QString &id);
     Q_INVOKABLE bool setScaleKeys(const QString &id, const QVariant &keys);
     Q_INVOKABLE double timeScale(const QVariant &scale = QVariant());
+    Q_INVOKABLE bool setColourRamp(const QString &id, const QString &assetGuid);
+    Q_INVOKABLE QVariantMap colourRamp(const QString &id);
 
 private:
     /// The emitter with this guid, or null with a JS error already thrown.

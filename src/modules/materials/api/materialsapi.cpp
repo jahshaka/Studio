@@ -80,13 +80,29 @@ QVector<MaterialPreset> loadPresets()
 // function-statics inside set(), which is how the "unknown property" error and
 // the set of keys that actually work drift apart.
 const QStringList kColorKeys = { "baseColor", "emissiveColor",
-                                 "ambientColor", "diffuseColor", "specularColor" };
+                                 "ambientColor", "diffuseColor", "specularColor",
+                                 // MATERIAL_GAPS_SPEC GAP 1: F0 as a colour.
+                                 "fresnelColor" };
 /// The PBR texture slots. PbrMaterial::createProperties DOES declare all six as
 /// rows today (verified at this pin), so they arrive through the declared path;
 /// this list is what keeps material.set working on a material whose property
 /// list does not carry them, and what the F7 refusal message quotes.
-const QStringList kPbrMapKeys = { "baseColorMap", "metallicMap", "roughnessMap",
-                                  "normalMap", "emissiveMap" };
+QStringList makePbrMapKeys()
+{
+    QStringList keys = { "baseColorMap", "metallicMap", "roughnessMap",
+                         "normalMap", "emissiveMap" };
+    // MATERIAL_GAPS_SPEC GAP 2: the detail maps take file paths and asset guids
+    // exactly like the base ones, so they belong in the SAME list — that is
+    // what makes material.set resolve a guid through the CAS for them, and what
+    // the writableKeys answer quotes.
+    for (int i = 0; i < iris::PbrMaterial::kDetailLayers; ++i) {
+        keys << iris::PbrMaterial::detailRow(i, "Map");
+        keys << iris::PbrMaterial::detailRow(i, "NormalMap");
+    }
+    keys << QStringLiteral("detailWeightMap");
+    return keys;
+}
+const QStringList kPbrMapKeys = makePbrMapKeys();
 /// The RETIRED builtin shaders' texture spellings (Default.shader declared them
 /// as uniforms). They name nothing on a PbrMaterial — which is now the only
 /// material class there is — and are REFUSED by name (F7) rather than falling
@@ -434,6 +450,26 @@ QVector<VerbInfo> MaterialApi::verbs() const
           "actually consults. The legacy shader spellings (diffuseTexture, normalTexture, …) are "
           "NOT writable on a PBR material and are refused by name.",
           Needs::Document },
+        { "setDetail", "material.setDetail(nodeId, layer, {map, normalMap, blend, offset:{x,y}, scale:{x,y}, weight, normalWeight}) -> bool",
+          "One DETAIL LAYER, ergonomically. A detail layer is a second diffuse map blended into "
+          "the base colour by one of thirteen modes, optionally with its own normal map, its own "
+          "UV offset/scale and its own weight — fields on the same renderer material, not a "
+          "second material model. There are 2 layers (0 and 1); the renderer has four and the "
+          "other two are reserved. `blend` takes a NAME (\"Overlay\", \"Multiply2x\", …, "
+          "material.properties lists them on the detailNBlend row) or its index. This is a "
+          "convenience over material.set and writes through exactly the SAME rows — "
+          "detail0Map, detail0Blend, detail0OffsetU … — so the two can never disagree; "
+          "material.set is the flat-key path every existing script idiom uses. "
+          "DETAIL TILING IS PER LAYER: `scale` is the detail map's own tiling and is unrelated to "
+          "the material's textureScale, which tiles the BASE maps only and deliberately does not "
+          "reach detail UVs. An unauthored layer costs nothing at all — the renderer sets no "
+          "shader property for it — so adding a layer to one material cannot move another's "
+          "pixels. Undoable (one step per written row, inside the run's macro).",
+          Needs::Document },
+        { "detail", "material.detail(nodeId) -> [{map, normalMap, blend, blendName, offset, scale, weight, normalWeight}]",
+          "All of the material's detail layers, in order — the read counterpart of "
+          "material.setDetail. `blend` is the stored index and `blendName` its vocabulary entry.",
+          Needs::Document },
         { "dumpDatablock", "material.dumpDatablock(nodeId) -> string",
           "DIAGNOSTIC: what the RENDERER's material for this node actually ends up holding, as "
           "text, read off the live datablock. The document says one thing, the mirror translates "
@@ -591,7 +627,38 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         QList<iris::Property *> props = declaredProperties(material);
         bool known = false;
         for (auto prop : props) {
-            if (prop->name == key) { oldValue = prop->getValue(); known = true; break; }
+            if (prop->name != key) continue;
+            oldValue = prop->getValue(); known = true;
+            // ENUM ROWS ACCEPT THEIR OWN VOCABULARY, not just the index.
+            // ListProperty::setValue is `value.toInt()`, so a script that wrote
+            // the label — `{workflow: "Specular"}`, `{alphaMode: "Glass"}` —
+            // silently stored 0 and reported success. The labels ride the row
+            // (that is the whole point of the type), so match them here and
+            // REFUSE an unknown name rather than coerce it to zero. Applies to
+            // every enum row on every material: workflow, alphaMode,
+            // shadingModel, brdf.
+            if (auto *list = dynamic_cast<iris::ListProperty *>(prop)) {
+                if (newValue.typeId() == QMetaType::QString) {
+                    const QString label = newValue.toString();
+                    int index = -1;
+                    for (int i = 0; i < list->labels.size(); ++i)
+                        if (list->labels[i].compare(label, Qt::CaseInsensitive) == 0) { index = i; break; }
+                    if (index < 0)
+                        return fail(QStringLiteral("material.set: '%1' is not a value of '%2' "
+                                                   "— accepted: %3")
+                                        .arg(label, key, list->labels.join(QStringLiteral(", "))));
+                    newValue = index;
+                } else {
+                    // An out-of-range ordinal is the same silent-wrong class.
+                    const int index = newValue.toInt();
+                    if (!list->labels.isEmpty() && (index < 0 || index >= list->labels.size()))
+                        return fail(QStringLiteral("material.set: %1 is out of range for '%2' "
+                                                   "— accepted: %3")
+                                        .arg(QString::number(index), key,
+                                             list->labels.join(QStringLiteral(", "))));
+                }
+            }
+            break;
         }
         if (!known) {
             // A PbrMaterial map key is legal even if its Property row were
@@ -612,6 +679,86 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         host.services->undo->push(new ChangeMaterialPropertyCommand(material, key, oldValue, newValue));
     }
     return true;
+}
+
+// ONE LAYER, THROUGH THE SAME ROWS material.set writes (MATERIAL_GAPS_SPEC
+// §3.4's verb shape). Deliberately not a second write path: this translates the
+// ergonomic shape into flat keys and calls set(), so the undo command, the
+// validation, the colour/texture coercion and the enum-name handling are all
+// the ones material.set already has — the PUBLISH_AUDIT #4 lesson (one table,
+// N consumers) applied to a verb rather than to a vocabulary.
+bool MaterialApi::setDetail(const QString &nodeId, int layer, const QVariantMap &values)
+{
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.setDetail"));
+    if (!meshNode) return false;
+    if (layer < 0 || layer >= iris::PbrMaterial::kDetailLayers)
+        return fail(QStringLiteral("material.setDetail: layer %1 does not exist — this material "
+                                   "has %2 (0..%3)")
+                        .arg(layer).arg(iris::PbrMaterial::kDetailLayers)
+                        .arg(iris::PbrMaterial::kDetailLayers - 1));
+    if (values.isEmpty())
+        return fail(QStringLiteral("material.setDetail: expected an object with at least one of "
+                                   "map, normalMap, blend, offset, scale, weight, normalWeight"));
+
+    QVariantMap flat;
+    const auto row = [layer](const char *suffix) {
+        return iris::PbrMaterial::detailRow(layer, suffix);
+    };
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+        const QString &k = it.key();
+        if      (k == QLatin1String("map"))          flat[row("Map")] = it.value();
+        else if (k == QLatin1String("normalMap"))    flat[row("NormalMap")] = it.value();
+        else if (k == QLatin1String("blend"))        flat[row("Blend")] = it.value();
+        else if (k == QLatin1String("weight"))       flat[row("Weight")] = it.value();
+        else if (k == QLatin1String("normalWeight")) flat[row("NormalWeight")] = it.value();
+        else if (k == QLatin1String("offset") || k == QLatin1String("scale")) {
+            // {x, y} or [x, y] — the two shapes every vector argument in the
+            // registry accepts.
+            const QVariant v = normalizeJs(it.value());
+            const bool isOffset = k == QLatin1String("offset");
+            QVariant xv, yv;
+            if (v.typeId() == QMetaType::QVariantList) {
+                const QVariantList l = v.toList();
+                if (l.size() >= 2) { xv = l.at(0); yv = l.at(1); }
+            } else {
+                const QVariantMap m = v.toMap();
+                if (m.contains(QStringLiteral("x"))) xv = m.value(QStringLiteral("x"));
+                if (m.contains(QStringLiteral("y"))) yv = m.value(QStringLiteral("y"));
+            }
+            if (!xv.isValid() && !yv.isValid())
+                return fail(QStringLiteral("material.setDetail: '%1' expects {x, y} or [x, y]")
+                                .arg(k));
+            if (xv.isValid()) flat[row(isOffset ? "OffsetU" : "ScaleU")] = xv;
+            if (yv.isValid()) flat[row(isOffset ? "OffsetV" : "ScaleV")] = yv;
+        }
+        else
+            return fail(QStringLiteral("material.setDetail: unknown key '%1' — accepted: map, "
+                                       "normalMap, blend, offset, scale, weight, normalWeight")
+                            .arg(k));
+    }
+    return set(nodeId, flat);
+}
+
+QVariantList MaterialApi::detail(const QString &nodeId)
+{
+    QVariantList out;
+    auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.detail"));
+    if (!meshNode) return out;
+    auto pbr = meshNode->getMaterial().dynamicCast<iris::PbrMaterial>();
+    if (!pbr) { fail("material.detail: the node has no PBR material"); return out; }
+    const auto &names = iris::PbrMaterial::detailBlendNames();
+    for (int i = 0; i < iris::PbrMaterial::kDetailLayers; ++i) {
+        const auto &d = pbr->detail[i];
+        out.append(QVariantMap{
+            { "map", d.map }, { "normalMap", d.normalMap },
+            { "blend", d.blend },
+            { "blendName", QString::fromLatin1(names.value(d.blend, names.value(0))) },
+            { "offset", QVariantMap{ { "x", d.offsetU }, { "y", d.offsetV } } },
+            { "scale",  QVariantMap{ { "x", d.scaleU },  { "y", d.scaleV } } },
+            { "weight", d.weight }, { "normalWeight", d.normalWeight },
+        });
+    }
+    return out;
 }
 
 QVariantMap MaterialApi::properties(const QString &nodeId)

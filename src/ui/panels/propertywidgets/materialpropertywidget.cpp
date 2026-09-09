@@ -78,8 +78,41 @@ void MaterialPropertyWidget::setWidgetProperties()
     materialPropWidget->setListener(this);
 
     auto mat = currentMaterial();
-    if (!!mat)
-        materialPropWidget->setProperties(mat->properties);
+    if (!mat) return;
+
+    // ---- MATERIAL_GAPS_SPEC GAP 2: detail layers get their OWN section ----
+    // Two layers x eight rows plus the weight map is seventeen rows, and they
+    // are all secondary to the base surface. They go in a nested accordion
+    // blade that starts COLLAPSED, so a material that uses no detail layer
+    // shows exactly the panel it always did plus one closed header.
+    //
+    // The split is by ROW NAME, from the document's own naming rule
+    // (PbrMaterial::detailRow), not by index or position: adding a base row
+    // later must not silently push a detail row into the wrong section.
+    QList<iris::Property *> base, details;
+    for (auto *prop : mat->properties) {
+        if (!prop) continue;
+        const bool isDetail = prop->name.startsWith(QStringLiteral("detail"));
+        (isDetail ? details : base).append(prop);
+    }
+
+    materialPropWidget->setProperties(base);
+
+    if (!details.isEmpty()) {
+        auto *section = this->addSection(tr("Detail Layers"));
+        detailPropWidget = section->addPropertyWidget();
+        detailPropWidget->setListener(this);
+        detailPropWidget->setProperties(details);
+        // The one thing a user cannot see from the rows: detail tiling is the
+        // per-layer Scale, NOT the material's Texture Scale (D-5 / §3.3).
+        section->setToolTip(tr(
+            "A detail layer is a second map blended into the base colour, with its own "
+            "blend mode, tiling and weight.\n"
+            "Tile a detail map with its own Scale rows — the material's Texture Scale "
+            "tiles the BASE maps only and deliberately does not reach detail UVs.\n"
+            "A detail Normal Map needs a mesh with tangents, and only ever adds to the "
+            "base normal map."));
+    }
 }
 
 void MaterialPropertyWidget::materialChanged(const QString &text)

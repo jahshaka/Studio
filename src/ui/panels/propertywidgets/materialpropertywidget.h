@@ -68,6 +68,10 @@ private:
     QSharedPointer<iris::MeshNode> meshNode;
     ComboBoxWidget* materialSelector;
     PropertyWidget* materialPropWidget;
+    /// The rows of the collapsible "Detail Layers" section (GAP 2). Held so the
+    /// listener can tell which widget a change came from; null when the
+    /// material declares no detail rows.
+    PropertyWidget* detailPropWidget = nullptr;
 
     void setupShaderSelector();
     void updateTextureDependency(iris::Property*);

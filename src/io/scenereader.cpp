@@ -559,6 +559,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
                                       sceneObj["exposureMax"].toDouble(2.5), 8.0));
     scene->bloomEnabled = sceneObj["bloomEnabled"].toBool(false);
     scene->bloomThreshold = float(sceneObj["bloomThreshold"].toDouble(5.0));
+    scene->bloomKnee = float(sceneObj["bloomKnee"].toDouble(2.0));   // absent = the old hard-coded width
     scene->ssaoEnabled = sceneObj["ssaoEnabled"].toBool(false);
     scene->ssaoScale = float(qBound(0.25, sceneObj["ssaoScale"].toDouble(1.0), 1.0));
     scene->ssaoPower = float(qBound(0.1, sceneObj["ssaoPower"].toDouble(1.5), 8.0));
@@ -1421,6 +1422,16 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         particleNode->emitColourStart = readColor(nodeObj["emitColourStart"].toObject());
     if (nodeObj.contains("emitColourEnd"))
         particleNode->emitColourEnd = readColor(nodeObj["emitColourEnd"].toObject());
+    // ADDENDUM A-4, tolerant-absent: an old scene has none of these keys and
+    // every default is the neutral value, so it loads unchanged.
+    if (nodeObj.contains("colourFade1"))
+        particleNode->colourFade1 = readColor(nodeObj["colourFade1"].toObject());
+    if (nodeObj.contains("colourFade2"))
+        particleNode->colourFade2 = readColor(nodeObj["colourFade2"].toObject());
+    particleNode->colourFadeSwitch  = (float) nodeObj["colourFadeSwitch"].toDouble(0.0);
+    particleNode->colourRampGuid    = nodeObj["colourRampGuid"].toString();
+    particleNode->scaleRate         = (float) nodeObj["scaleRate"].toDouble(0.0);
+    particleNode->scaleRateMultiply = nodeObj["scaleRateMultiply"].toBool(false);
 
     particleNode->colourKeys.clear();
     for (const QJsonValue &v : nodeObj["colourKeys"].toArray()) {

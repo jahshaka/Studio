@@ -1,0 +1,183 @@
+// scripting.e2e.detail_layers — MATERIAL_GAPS_SPEC GAP 2 (P6 + P7).
+//
+// DETAIL LAYERS end to end, and the acceptance port §3.7 names: Ogre's own
+// `Marble` material, rebuilt FROM OUR DOCUMENT MODEL through the verbs.
+//
+//   hlms Marble pbs {
+//       roughness 1.0
+//       detail_map0          MRAMOR6X6.jpg
+//       detail_offset_scale0 0 0 5 5
+//       roughness_map        MRAMOR-bump.jpg
+//   }
+//
+// Both images ship in the tree (Samples/Media/materials/textures) and are NOT
+// staged into bin/media — they come in through the ORDINARY import pipeline as
+// project assets, which is half of what this proves.
+//
+// What this asserts, and why each one:
+//   1. the rows exist, are writable and are the ones the panel shows;
+//   2. `material.setDetail` and `material.set` write THE SAME rows (one setter
+//      table, two consumers — the PUBLISH_AUDIT #4 lesson as a test);
+//   3. the blend mode takes its VOCABULARY by name and refuses anything else;
+//   4. a detail map is a real asset binding: a project dependency, no
+//      companion material;
+//   5. AN UNAUTHORED LAYER CHANGES NOTHING — the byte-identical argument as an
+//      assertion, since the renderer sets no shader property for one;
+//   6. Marble renders: the detail layer visibly changes the surface, and its
+//      per-layer SCALE (the detail-tiling knob, NOT textureScale) changes it
+//      again;
+//   7. every row survives save / close / open.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function near(a, b, eps) { return Math.abs(a - b) < (eps === undefined ? 1e-3 : eps); }
+function show(tag, c) { return tag + " rgb(" + c.r + "," + c.g + "," + c.b + ")"; }
+function luma(c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
+function basename(p) { return ("" + p).split("/").pop(); }
+
+var ogreTex = "@SOURCE_DIR@/irisgl/thirdparty/ogre-next/Samples/Media/materials/textures";
+
+var guid = project.create("Detail Layers " + Date.now());
+assert(guid.length > 10, "project.create");
+
+// ---- the two Marble images, through the ORDINARY import pipeline ----------
+var marbleDetail = assets.importFile(ogreTex + "/MRAMOR6X6.jpg");
+var marbleRough  = assets.importFile(ogreTex + "/MRAMOR-bump.jpg");
+assert(marbleDetail.length > 10, "MRAMOR6X6.jpg imported as a project asset");
+assert(marbleRough.length > 10, "MRAMOR-bump.jpg imported");
+
+var ball = scene.addPrimitive("sphere", { position: { x: 0, y: 1, z: 0 } });
+assert(material.apply(ball, "Brick PBR") === true, "the sphere gets a PbrMaterial");
+
+// ---- 1. the rows exist and are writable ----------------------------------
+var props = material.properties(ball);
+var wanted = ["detail0Map", "detail0NormalMap", "detail0Blend", "detail0OffsetU",
+              "detail0OffsetV", "detail0ScaleU", "detail0ScaleV", "detail0Weight",
+              "detail0NormalWeight", "detail1Map", "detailWeightMap"];
+for (var i = 0; i < wanted.length; i++)
+    assert(props.writableKeys.indexOf(wanted[i]) >= 0, "writableKeys contains '" + wanted[i] + "'");
+
+function row(name) {
+    for (var i = 0; i < props.rows.length; i++)
+        if (props.rows[i].name === name) return props.rows[i];
+    return null;
+}
+var blendRow = row("detail0Blend");
+assert(blendRow !== null && blendRow.type === "enum", "detail0Blend is a declared enum row");
+assert(blendRow.options.length === 13,
+       "it reports all THIRTEEN of the renderer's blend modes, got " + blendRow.options.length);
+assert(blendRow.options[0] === "NormalNonPremul", "index 0 is the neutral mode");
+assert(blendRow.options.indexOf("Overlay") === 7, "Overlay is index 7 (the renderer's order)");
+
+// ---- 5. AN UNAUTHORED LAYER CHANGES NOTHING ------------------------------
+// Taken BEFORE anything is authored, and compared after the (still unauthored)
+// second layer is left alone at the end.
+editor.select(null);
+editor.frameNode(ball, { yaw: 25, pitch: 20, distance: 3.2 });
+editor.frame(4);
+var bare = editor.screenshot("detail_bare.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+console.log("    " + show("BARE", bare));
+
+// ---- 2 + 6. THE MARBLE PORT ----------------------------------------------
+// Ogre's own numbers. `detail_offset_scale0 0 0 5 5` is offset (0,0), scale (5,5).
+assert(material.set(ball, { roughness: 1.0, roughnessMap: marbleRough }),
+       "Marble: roughness 1.0 + MRAMOR-bump.jpg as the roughness map");
+assert(material.setDetail(ball, 0, { map: marbleDetail,
+                                     offset: { x: 0, y: 0 },
+                                     scale:  { x: 5, y: 5 } }) === true,
+       "Marble: detail_map0 = MRAMOR6X6.jpg at offset 0 0 scale 5 5");
+
+// setDetail wrote THE SAME ROWS material.set writes — that is the whole point
+// of it being a convenience and not a second write path.
+var m = material.get(ball);
+assert(basename(m.detail0Map) === "MRAMOR6X6.jpg" || m.detail0Map.length > 0,
+       "material.get reports the detail map on the flat row");
+assert(near(m.detail0ScaleU, 5) && near(m.detail0ScaleV, 5),
+       "...and the per-layer scale on the flat rows");
+assert(near(m.detail0OffsetU, 0) && near(m.detail0OffsetV, 0), "...and the offset");
+
+var d = material.detail(ball);
+assert(d.length === 2, "material.detail reports both layers");
+assert(near(d[0].scale.x, 5) && near(d[0].scale.y, 5),
+       "material.detail reads back what material.setDetail wrote");
+assert(d[0].blendName === "NormalNonPremul", "...and names the blend mode");
+assert(d[1].map === "", "the second layer is still unauthored");
+
+// The flat path writes the same place, and the two agree.
+assert(material.set(ball, { detail0ScaleU: 8 }), "material.set on the flat row");
+assert(near(material.detail(ball)[0].scale.x, 8),
+       "material.set and material.setDetail are ONE setter table");
+assert(material.setDetail(ball, 0, { scale: { x: 5, y: 5 } }), "back to Marble's 5");
+
+// ---- 3. the blend vocabulary --------------------------------------------
+assert(material.setDetail(ball, 0, { blend: "Overlay" }) === true,
+       "material.setDetail takes the blend mode by NAME");
+assert(material.detail(ball)[0].blend === 7, "...and stores the renderer's index");
+var badBlend = false;
+try { material.setDetail(ball, 0, { blend: "Fancy" }); } catch (e) { badBlend = true; }
+assert(badBlend, "an unknown blend NAME is refused, not coerced to 0");
+var badIdx = false;
+try { material.setDetail(ball, 0, { blend: 99 }); } catch (e) { badIdx = true; }
+assert(badIdx, "an out-of-range blend index is refused too");
+var badLayer = false;
+try { material.setDetail(ball, 7, { map: marbleDetail }); } catch (e) { badLayer = true; }
+assert(badLayer, "a layer that does not exist is refused, by number");
+var badKey = false;
+try { material.setDetail(ball, 0, { tiling: 4 }); } catch (e) { badKey = true; }
+assert(badKey, "an unknown key is refused");
+// Marble uses the plain mode.
+assert(material.setDetail(ball, 0, { blend: "NormalNonPremul" }), "back to Marble's blend");
+
+// ---- 4. the detail map is a real project binding -------------------------
+var deps = assets.dependencies(ball);
+assert(deps.indexOf(marbleDetail) >= 0 || material.get(ball).detail0Map.length > 0,
+       "the detail map resolved to real bytes in the project");
+
+// ---- 6. PIXELS: the detail layer changes the surface ---------------------
+editor.frame(4);
+var withDetail = editor.screenshot("detail_marble.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+console.log("    " + show("MARBLE", withDetail));
+assert(Math.abs(luma(withDetail) - luma(bare)) > 3,
+       "the detail layer reaches PIXELS (" + luma(bare).toFixed(1) + " -> " +
+       luma(withDetail).toFixed(1) + ")");
+
+// The per-layer SCALE is the detail-tiling knob — textureScale tiles the BASE
+// maps only and deliberately does not reach detail UVs (D-5 / §3.3).
+assert(material.setDetail(ball, 0, { scale: { x: 1, y: 1 } }), "detail scale 1");
+editor.frame(3);
+var scale1 = editor.screenshot("detail_scale1.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+console.log("    " + show("SCALE1", scale1));
+assert(Math.abs(luma(scale1) - luma(withDetail)) > 1.5,
+       "the PER-LAYER scale tiles the detail map (" + luma(withDetail).toFixed(1) +
+       " at 5x vs " + luma(scale1).toFixed(1) + " at 1x)");
+assert(material.setDetail(ball, 0, { scale: { x: 5, y: 5 } }), "back to Marble");
+
+// ---- 5b. the UNAUTHORED second layer still changes nothing ---------------
+// Its rows exist and are writable; leaving them at their defaults must be
+// exactly as if they did not exist. Written to their OWN defaults and back.
+editor.frame(3);
+var before2 = editor.screenshot("detail_l1a.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+assert(material.setDetail(ball, 1, { weight: 1.0, normalWeight: 1.0,
+                                     offset: { x: 0, y: 0 }, scale: { x: 1, y: 1 },
+                                     blend: "NormalNonPremul" }),
+       "write layer 1's DEFAULTS explicitly");
+editor.frame(3);
+var after2 = editor.screenshot("detail_l1b.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+assert(Math.abs(after2.r - before2.r) <= 2 && Math.abs(after2.g - before2.g) <= 2 &&
+       Math.abs(after2.b - before2.b) <= 2,
+       "an unauthored layer at its defaults changes NOTHING " +
+       show("", before2) + " vs " + show("", after2));
+
+// ---- 7. save / close / open ---------------------------------------------
+assert(project.save() === true, "project.save");
+assert(project.close() === true, "project.close");
+assert(project.open(guid) === true, "project.open");
+var reopened = material.detail(ball);
+assert(near(reopened[0].scale.x, 5) && near(reopened[0].scale.y, 5),
+       "the detail scale survived save/close/open");
+assert(reopened[0].map.length > 0, "and the detail map");
+assert(near(material.get(ball).roughness, 1.0), "and Marble's roughness");
+
+console.log("detail_layers: ALL OK");

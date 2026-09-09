@@ -540,6 +540,47 @@ void PropertyWidget::applyRowConstraints()
             constrain(name, !unlit, why);
     }
 
+    // ---- 1b. the WORKFLOW (MATERIAL_GAPS_SPEC GAP 1) ----
+    // The renderer's metalness and F0 are THE SAME FLOAT in the datablock, so
+    // exactly one of them is live per material and the other reaches nothing.
+    // Grey the dead half rather than let a user drag it. Values are kept, so
+    // switching workflow brings them back.
+    //
+    // The workflow also RENAMES a map row: PBSM_METALLIC and PBSM_SPECULAR are
+    // one renderer texture unit reinterpreted by the workflow, so the document's
+    // single `metallicMap` row means metalness in one workflow and specular in
+    // the other two (I-4). One table (sharedMapDisplayName) names it, the same
+    // table that decides the map's colour space.
+    bool haveWorkflow = false;
+    const int workflow = valueOf(QStringLiteral("workflow"), &haveWorkflow);
+    if (haveWorkflow && !unlit) {
+        const bool metallic = workflow == 0;
+        const QString whyMetallic =
+            tr("Not used by the Metallic workflow — metalness and the fresnel term are the "
+               "same value in the renderer. The value is kept and returns with the workflow.");
+        const QString whySpecular =
+            tr("Not used by a Specular workflow — the specular map and fresnel replace "
+               "metalness. The value is kept and returns with the workflow.");
+        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenMetallic())
+            constrain(name, !metallic, whyMetallic);
+        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenSpecular())
+            constrain(name, metallic, whySpecular);
+        // F0 comes from EITHER the IOR or the colour, never both.
+        bool haveUseFresnel = false;
+        const bool useColour = valueOf(QStringLiteral("useFresnelColor"), &haveUseFresnel) != 0;
+        if (haveUseFresnel && !metallic) {
+            constrain(QStringLiteral("ior"), !useColour,
+                      tr("Fresnel Color is supplying F0 directly; turn it off to author by IOR."));
+            constrain(QStringLiteral("fresnelColor"), useColour,
+                      tr("F0 is computed from the Index of Refraction; turn on Use Fresnel Color "
+                         "to author it directly."));
+        }
+        if (auto *w = qobject_cast<TexturePickerWidget *>(
+                rowByName.value(QStringLiteral("metallicMap"))))
+            w->ui->label->setText(
+                QString::fromLatin1(iris::PbrMaterial::sharedMapDisplayName(workflow)));
+    }
+
     // ---- 2. the clear coat's BRDF family (HLMS_ADOPTION P1) ----
     // Clear coat is only representable on the renderer's Default BRDF family
     // (the diffuse-fresnel variants of Default included).

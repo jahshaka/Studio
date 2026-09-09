@@ -400,7 +400,7 @@ QVector<VerbInfo> CameraApi::verbs() const
           "`focusDistance` is whatever the last synced frame resolved from focusTarget, so step "
           "editor.frame(1) after moving the rig before reading it.",
           Needs::Document },
-        { "postFx", "camera.postFx(id, {hdr?, bloom?, bloomThreshold?, ssao?, ssaoPower?, "
+        { "postFx", "camera.postFx(id, {hdr?, bloom?, bloomThreshold?, bloomKnee?, ssao?, ssaoPower?, "
                     "ssaoRadius?, smaa?, ssr?, refractions?}?) -> "
                     "{id, overrides, resolved, available}",
           "The camera's PER-CAMERA POST OVERRIDES over the world's post chain "
