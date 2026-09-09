@@ -507,6 +507,15 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
     const bool macro = nodeItems.size() > 1 && undo && undo->stack();
     if (macro) undo->stack()->beginMacro(tr("Paste %1 objects").arg(nodeItems.size()));
     QList<iris::SceneNodePtr> pastedNodes;
+    // THE WHOLE COPY IS ONE COPY. Each fragment is re-pointed against its own
+    // subtree (a reference outside it keeps its guid — the "second camera on
+    // the same character" rule), so a camera in one item that tracks a node in
+    // ANOTHER item of the same selection, or a physics constraint whose other
+    // end is a sibling item, still named the ORIGINAL after the per-fragment
+    // pass. Copying two constrained bodies and pasting them gave a pair bolted
+    // to the originals. The combined map fixes that in a second pass, once
+    // every fragment's new guids are known.
+    QHash<QString, QString> setGuidMap;
     for (const ClipItem *item : nodeItems) {
         SceneFragment fragment;
         fragment.node = item->nodeObject();
@@ -520,12 +529,17 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
         // insertFragment mints fresh node guids, applies the Cube -> Cube2
         // naming rule and pushes the same AddSceneNodeCommand every other add
         // uses — the node domain's implementation, unchanged (spec §8).
-        if (auto node = sceneEdit->insertFragment(fragment, parent, index)) {
+        if (auto node = sceneEdit->insertFragment(fragment, parent, index, &setGuidMap)) {
             pastedNodes.append(node);
             result.pasted.append(node->getGUID());
             if (index >= 0) ++index;   // keep the payload's order in the tree
         }
     }
+    // The cross-item pass. Harmless for a single item (its own references were
+    // already re-pointed and a second lookup of a FRESH guid finds nothing —
+    // the map is keyed on the originals).
+    if (pastedNodes.size() > 1)
+        for (const auto &node : pastedNodes) node->remapNodeReferences(setGuidMap);
     if (macro) undo->stack()->endMacro();
 
     if (selection && !pastedNodes.isEmpty()) selection->select(pastedNodes);

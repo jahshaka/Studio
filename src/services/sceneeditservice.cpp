@@ -41,7 +41,8 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
 
-namespace { void regenerateGuids(const iris::SceneNodePtr &root); }
+namespace { void regenerateGuids(const iris::SceneNodePtr &root,
+                                 QHash<QString, QString> *guidMapOut = nullptr); }
 #include "irisgl/document/scenegraph/decalnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -845,7 +846,7 @@ namespace {
 /// physics constraint endpoints and a camera's focus target; the last two were
 /// the recorded gap, open on BOTH paths, and closing it in the document meant
 /// Duplicate and Paste could not drift apart afterwards.
-void regenerateGuids(const iris::SceneNodePtr &root)
+void regenerateGuids(const iris::SceneNodePtr &root, QHash<QString, QString> *guidMapOut)
 {
     QHash<QString, QString> guidMap;
     std::function<void(const iris::SceneNodePtr &)> assign = [&](const iris::SceneNodePtr &n) {
@@ -858,13 +859,15 @@ void regenerateGuids(const iris::SceneNodePtr &root)
     };
     assign(root);
     root->remapNodeReferences(guidMap);
+    if (guidMapOut) guidMapOut->insert(guidMap);
 }
 
 } // namespace
 
 iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragment,
                                                    iris::SceneNodePtr parent,
-                                                   int index)
+                                                   int index,
+                                                   QHash<QString, QString> *guidMapOut)
 {
     auto sc = scene();
     if (!sc) return iris::SceneNodePtr();
@@ -873,7 +876,7 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     // A PASTE, not a restore: fresh identity. (Undo does not come through here
     // — it calls rebuildFragment directly, because restoring a deleted node
     // must give back the guid the rest of the document still refers to.)
-    regenerateGuids(node);
+    regenerateGuids(node, guidMapOut);
     if (!parent) parent = sc->getRootNode();
     // ...and a fresh NAME when the one it carries is already taken under that
     // parent — the same rule Duplicate uses, because a paste is a copy too

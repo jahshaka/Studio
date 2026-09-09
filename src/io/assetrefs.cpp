@@ -165,48 +165,6 @@ void visitAssetSlots(QJsonObject &nodeObj, const QString &prefix, Fn fn)
     }
 }
 
-/// The same for NODE guid slots.
-template <typename Fn>
-void visitNodeGuidSlots(QJsonObject &nodeObj, Fn fn)
-{
-    const auto visitString = [&](QJsonObject &owner, const QString &key) {
-        const auto it = owner.find(key);
-        if (it == owner.end() || !it->isString()) return false;
-        const QString before = it->toString();
-        const QString after = fn(before);
-        if (after == before) return false;
-        owner[key] = after;
-        return true;
-    };
-
-    visitString(nodeObj, QStringLiteral("guid"));
-    visitString(nodeObj, QStringLiteral("focusTarget"));
-
-    if (nodeObj.contains(QStringLiteral("socketAttachment"))) {
-        QJsonObject attachment = nodeObj.value(QStringLiteral("socketAttachment")).toObject();
-        if (visitString(attachment, QStringLiteral("owner")))
-            nodeObj[QStringLiteral("socketAttachment")] = attachment;
-    }
-
-    if (nodeObj.contains(QStringLiteral("physicsProperties"))) {
-        QJsonObject physics = nodeObj.value(QStringLiteral("physicsProperties")).toObject();
-        QJsonArray constraints = physics.value(QStringLiteral("constraints")).toArray();
-        bool changed = false;
-        for (int i = 0; i < constraints.size(); ++i) {
-            QJsonObject constraint = constraints.at(i).toObject();
-            bool one = visitString(constraint, QStringLiteral("constraintFrom"));
-            one = visitString(constraint, QStringLiteral("constraintTo")) || one;
-            if (!one) continue;
-            constraints.replace(i, constraint);
-            changed = true;
-        }
-        if (changed) {
-            physics[QStringLiteral("constraints")] = constraints;
-            nodeObj[QStringLiteral("physicsProperties")] = physics;
-        }
-    }
-}
-
 /// Walks `nodeObj` and every descendant, applying `fn` to the subtree object.
 template <typename Fn>
 void walkSubtree(QJsonObject &nodeObj, const QString &prefix, Fn fn)
@@ -257,21 +215,6 @@ int remapAssetGuids(QJsonObject &nodeObj, const QHash<QString, QString> &map)
     int rewritten = 0;
     walkSubtree(nodeObj, QString(), [&](QJsonObject &node, const QString &prefix) {
         visitAssetSlots(node, prefix, [&](const QString &, const QString &value) {
-            const auto it = map.constFind(value);
-            if (it == map.constEnd()) return value;
-            ++rewritten;
-            return it.value();
-        });
-    });
-    return rewritten;
-}
-
-int remapNodeGuids(QJsonObject &nodeObj, const QHash<QString, QString> &map)
-{
-    if (map.isEmpty()) return 0;
-    int rewritten = 0;
-    walkSubtree(nodeObj, QString(), [&](QJsonObject &node, const QString &) {
-        visitNodeGuidSlots(node, [&](const QString &value) {
             const auto it = map.constFind(value);
             if (it == map.constEnd()) return value;
             ++rewritten;

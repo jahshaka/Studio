@@ -198,28 +198,22 @@ void testAssetRefs()
                   .value(QStringLiteral("owner")).toString() == QLatin1String(kOwnerGuid),
           "a NODE guid is never touched by the asset remap, even when the map names it");
 
-    // ---- node remap: the four node-guid slots, including the two that were
-    //      the recorded gap (constraint endpoints, camera focus target) -------
-    QHash<QString, QString> nodeMap;
-    nodeMap.insert(QString::fromLatin1(kNodeGuid), QStringLiteral("fresh-node"));
-    nodeMap.insert(QString::fromLatin1(kOwnerGuid), QStringLiteral("fresh-owner"));
-    nodeMap.insert(QString::fromLatin1(kFocusGuid), QStringLiteral("fresh-focus"));
-    QJsonObject nodeRemapped = node;
-    const int nodeRewrites = assetrefs::remapNodeGuids(nodeRemapped, nodeMap);
-    CHECK(nodeRewrites == 5, "own guid + socket owner + both constraint endpoints + focus target "
-                             "were re-pointed (5 values here; the child's own guid was not in "
-                             "the map)");
-    CHECK(nodeRemapped.value(QStringLiteral("physicsProperties")).toObject()
-                      .value(QStringLiteral("constraints")).toArray().at(0).toObject()
-                      .value(QStringLiteral("constraintTo")).toString()
-              == QLatin1String("fresh-owner"),
-          "a physics constraint endpoint follows the copy (the gap shared with Duplicate)");
-    CHECK(nodeRemapped.value(QStringLiteral("children")).toArray().at(0).toObject()
-                      .value(QStringLiteral("focusTarget")).toString()
-              == QLatin1String("fresh-focus"),
-          "a camera focus target follows the copy");
-    CHECK(nodeRemapped.value(QStringLiteral("mesh")).toString() == QLatin1String(kMeshGuid),
-          "and an ASSET guid is never touched by the node remap");
+    // ---- the two tables are DISJOINT --------------------------------------
+    //
+    // The JSON-side node-guid remap this file used to drive is gone (it had no
+    // production caller: the remap belongs to the document, where
+    // iris::SceneNode::remapNodeReferences does it for Duplicate and Paste
+    // alike, and scripting.e2e.clipboard asserts it there on real nodes). What
+    // still matters here is that the two key tables cannot overlap: a key in
+    // both would be an asset guid a paste rewrites, or a node guid that travels
+    // in a closure — the two worst outcomes this table exists to prevent.
+    for (const QString &nodeKey : assetrefs::nodeGuidKeys()) {
+        const QString leaf = nodeKey.section(QLatin1Char('.'), -1);
+        CHECK(!assetrefs::nodeAssetKeys().contains(leaf) &&
+              !assetrefs::materialAssetKeys().contains(leaf),
+              qPrintable(QStringLiteral("the node-guid key '%1' is not also an asset key")
+                             .arg(nodeKey)));
+    }
 
     CHECK(assetrefs::isGuidValue(QString::fromLatin1(kMeshGuid)), "a bare UUID reads as a guid");
     CHECK(!assetrefs::isGuidValue(QStringLiteral("Textures/rough.png")), "a path does not");

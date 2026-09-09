@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QHash>
 #include <QList>
 
 #include "irisgl/irisglfwd.h"
@@ -282,9 +283,18 @@ public:
     /// Rebuilds a fragment and attaches it — undoable, as one "Paste" entry,
     /// through the same AddSceneNodeCommand every other add uses. `parent` null
     /// means the scene root; `index` -1 appends. Returns the new subtree's root.
+    ///
+    /// `guidMapOut`, when given, receives this fragment's OLD guid -> NEW guid
+    /// map. A caller pasting SEVERAL fragments needs it: each fragment is
+    /// re-pointed against its own subtree only (a reference outside the copy
+    /// keeps its guid, which is the "second camera on the same character"
+    /// rule), so a camera in one fragment that tracks a node in ANOTHER
+    /// fragment of the same copy still names the original until the caller
+    /// re-points the whole set with the combined map.
     iris::SceneNodePtr insertFragment(const SceneFragment &fragment,
                                       iris::SceneNodePtr parent,
-                                      int index = -1);
+                                      int index = -1,
+                                      QHash<QString, QString> *guidMapOut = nullptr);
 
     /// Applies a material preset to the selection. The selection may be a
     /// single mesh OR a container (an imported model roots at an Empty — the

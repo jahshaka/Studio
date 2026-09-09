@@ -32,10 +32,31 @@ For more information see the LICENSE file
 // broken since regenerateGuids landed, so a pasted node exported with no
 // dependencies at all).
 //
-// THE TEST IS THE POINT. tests/services/test_clipboard.cpp asserts this table
-// against a node object the real SceneWriter emitted for every node type, so a
-// new reference key added to the writer without a row here FAILS a suite
-// instead of silently dropping an asset out of every closure.
+// WHAT IS ASSERTED, AND WHERE — because "there is a table" is worth nothing
+// without a test that the table is the writer's:
+//
+//   * tests/services/test_clipboard.cpp (headless, no database) asserts the
+//     table's SHAPE: materialAssetKeys() covers every row of
+//     iris::PbrMaterial::mapRowNames(), so a texture slot added to the material
+//     model joins the closure walk with no second spelling; the asset and
+//     node-guid tables are disjoint; and both walks touch exactly their own
+//     keys on a hand-built node object that carries one value in each.
+//   * scripting.e2e.clipboard_xproject asserts the table against the REAL
+//     WRITER: it builds a mesh with a texture and a light with an IES profile
+//     and a projector texture, serializes them through
+//     SceneWriter::captureFragment (node.serialize), and requires that EVERY
+//     guid-shaped value in the writer's output is either a node in that scene,
+//     a reserved builtin, or an asset the payload's closure carries. A new
+//     reference key that the walker does not know fails there.
+//
+// THE GAP, recorded rather than claimed away: that e2e covers the node types it
+// can build through the verbs (mesh + material, light bindings, camera, an
+// avatar link where a fixture exists), not every type the writer can emit —
+// decals and particle ramps in particular are bound by panels, not verbs, and
+// their keys are in the table on the strength of a read of scenewriter.cpp.
+// Closing it needs either those verbs or a writer-linked unit suite (the writer
+// pulls in the database and the project, which is why this one does not link
+// it).
 
 #include <QHash>
 #include <QJsonObject>
@@ -64,7 +85,13 @@ const QStringList &materialAssetKeys();
 
 /// Keys whose value is a NODE guid. Never an asset: these are what a PASTE
 /// rewrites and what the closure walker must not report. Listed for the same
-/// reason the asset keys are — so the two sets are one document.
+/// reason the asset keys are — so the two sets are ONE document and a reader
+/// can see that they are disjoint (a test asserts exactly that).
+///
+/// Nothing here rewrites them: the node-guid remap belongs to the DOCUMENT,
+/// where a paste has already rebuilt the subtree
+/// (iris::SceneNode::remapNodeReferences, called by both Duplicate and Paste).
+/// A JSON-side twin existed here briefly and had no production caller.
 const QStringList &nodeGuidKeys();
 
 /// True for a guid this build reserves (`00000000-0000-0000-0000-…`): the
@@ -92,12 +119,6 @@ QStringList collectAssetGuids(const QJsonObject &nodeObj);
 /// map does not name is untouched — the map is only ever non-empty when a
 /// cross-library resolve had to land an asset under a new id.
 int remapAssetGuids(QJsonObject &nodeObj, const QHash<QString, QString> &map);
-
-/// Rewrites the NODE guids named by `map` (the node's own `guid`, socket
-/// owners, physics constraint endpoints, camera focus targets). The document
-/// half of a paste does this on live nodes (iris::SceneNode::remapNodeReferences);
-/// this is the JSON half, for envelopes that are rewritten before they are read.
-int remapNodeGuids(QJsonObject &nodeObj, const QHash<QString, QString> &map);
 
 } // namespace assetrefs
 

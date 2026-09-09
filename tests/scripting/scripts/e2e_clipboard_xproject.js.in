@@ -63,6 +63,64 @@ assert(payload.assets[tex].files[0].inline.length > 0, "and its bytes, base64");
 assert(payload.source.storeRoot.length > 0,
        "the payload records the source store root as a same-machine fetch hint");
 
+// ---- THE WALKER'S KEY TABLE vs THE REAL WRITER (src/io/assetrefs.h) -------
+//
+// The table is only worth something if it is the WRITER's. So: bind assets of
+// several kinds, serialize the nodes through SceneWriter::captureFragment (which
+// is what node.serialize returns), and require that EVERY guid-shaped value in
+// the writer's output is accounted for — a node in this scene, a reserved
+// builtin id, or an asset the payload's closure carries. A reference key the
+// walker does not know shows up here as a guid that is none of those.
+var ies = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/ring_profile.ies");
+assert(ies.length > 10, "an IES profile imported");
+var lamp = scene.addLight("spot", { position: { x: 0, y: 3, z: 0 } });
+assert(node.setLightProfile(lamp, ies), "the profile bound to the light");
+assert(node.setLightTexture(lamp, tex), "and a projector texture too");
+var lensCam = scene.addCamera ? scene.addCamera() : null;
+
+editor.select(lensCam ? [cube, lamp, lensCam] : [cube, lamp]);
+var sweepCopy = clipboard.copy();
+assert(sweepCopy.items >= 2, "the mesh and the light copied together");
+var sweepPayload = JSON.parse(clipboard.text());
+var closureGuids = Object.keys(sweepPayload.assets);
+var sceneIds = scene.nodes().map(function (n) { return n.id; });
+
+function collectGuids(value, path, out) {
+    if (typeof value === "string") {
+        if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value))
+            out.push({ value: value, path: path });
+    } else if (Array.isArray(value)) {
+        for (var i = 0; i < value.length; ++i) collectGuids(value[i], path + "[" + i + "]", out);
+    } else if (value && typeof value === "object") {
+        for (var k in value) if (value.hasOwnProperty(k)) collectGuids(value[k], path + "." + k, out);
+    }
+}
+
+var sweepTargets = lensCam ? [cube, lamp, lensCam] : [cube, lamp];
+var swept = 0;
+for (var t = 0; t < sweepTargets.length; ++t) {
+    var frag = node.serialize(sweepTargets[t]);
+    var found = [];
+    collectGuids(frag.node, "node", found);
+    for (var f = 0; f < found.length; ++f) {
+        var g = found[f];
+        var accounted = sceneIds.indexOf(g.value) >= 0 ||
+                        closureGuids.indexOf(g.value) >= 0 ||
+                        g.value.indexOf("00000000-0000-0000-0000-") === 0;
+        assert(accounted,
+               "the writer emitted a guid at " + g.path + " that is neither a node in this " +
+               "scene nor an asset in the payload's closure — assetrefs.h is missing that key " +
+               "(" + g.value + ")");
+        ++swept;
+    }
+}
+assert(swept >= 4, "the sweep actually looked at guids (" + swept + " of them)");
+assert(closureGuids.indexOf(tex) >= 0 && closureGuids.indexOf(ies) >= 0,
+       "and the closure carries both bound assets: " + J(closureGuids));
+
+// Back to the single textured cube for the rest of the suite.
+editor.select(cube);
+clipboard.copy();
 var resolveA = clipboard.resolve();
 assert(resolveA.known.indexOf(tex) >= 0, "resolve(): this library already has the texture");
 assert(resolveA.missing.length === 0, "and nothing is missing");
