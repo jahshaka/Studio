@@ -82,12 +82,20 @@
 using namespace jahshaka::engine;
 using Clock = std::chrono::steady_clock;
 
-// THE STRUCTURAL GATE (AVATAR_RIG_PERF_SPEC §7 P3), armed by the phase that
-// earns it. At P0 the bench only RECORDS: the three equalities below are false
-// by construction on the unmodified code (five instances, five clip pushes and
-// five whole-rig bone streams per character), which is the entire point of
-// recording them first.
-static constexpr bool kStructuralGateArmed = false;
+// THE STRUCTURAL GATE (AVATAR_RIG_PERF_SPEC §7 P3) — ARMED, by the phases that
+// earned it. On the unmodified code all three equalities were false by
+// construction (one instance, one clip push and one whole-rig bone stream per
+// PIECE), which is what rigperf-before-linux.json records; they now hold, and
+// this is what keeps them holding:
+//
+//   instances     == characters                    (P1b, shareSkeleton)
+//   clip pushes   == characters, per frame         (P1b, the mirror skips followers)
+//   streamed bones == characters x Sigma piece-local bones   (P1a, the remap)
+//
+// The `--no-share` arm deliberately does NOT run them: it exists to reproduce
+// the old arrangement for the record, and asserting the new one against it would
+// be asserting that the measurement failed.
+static constexpr bool kStructuralGateArmed = true;
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -249,7 +257,13 @@ int main(int argc, char **argv)
     const int iters = quick ? 30 : 240;
     std::vector<double> syncMs, tickMs;
     syncMs.reserve(size_t(iters)); tickMs.reserve(size_t(iters));
-    const quint64 pushesBefore = mirror.clipStatePushes();
+    // The push counter is sampled AFTER the warm-up, and that is not a way of
+    // hiding anything: the first sync of a clip set costs one EXTRA push per
+    // node (attachClipsFor disables whatever was playing before it attaches, so
+    // that Ogre's addAnimationsFromSkeleton cannot go stale under a playing
+    // clip). What this metric is about is the STEADY state — the per-frame cost
+    // — so it is measured where the steady state is.
+    quint64 pushesBefore = 0;
     float t = 0.0f;
     for (int i = 0; i < warmup + iters; ++i) {
         t += 1.0f / 60.0f;
@@ -260,7 +274,7 @@ int main(int argc, char **argv)
         const double sync = msSince(tick0);
         engine->renderOneFrame();
         const double tick = msSince(tick0);
-        if (i < warmup) continue;
+        if (i < warmup) { pushesBefore = mirror.clipStatePushes(); continue; }
         syncMs.push_back(sync);
         tickMs.push_back(tick);
     }

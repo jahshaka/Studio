@@ -5,36 +5,36 @@
     "commit": "171615c5",
     "compiler": "GNU 15.2.0",
     "counters": {
-        "r.clip_pushes_frame": 4.083333333333333,
+        "r.clip_pushes_frame": 4,
         "r.instances": 4,
         "r.rigged_nodes": 20,
         "r.shared": 16,
         "r.streamed_bones": 56,
         "render.draws": 1,
-        "render.frame_ms": 0.6828840655891093,
+        "render.frame_ms": 0.619086428129861,
         "render.triangles": 112,
         "scene.characters": 4,
         "scene.pieces": 20
     },
     "metrics": {
         "t.sync_ms": {
-            "max_ms": 0.236689,
-            "mean_ms": 0.12270039999999997,
-            "median_ms": 0.113515,
-            "min_ms": 0.107942,
+            "max_ms": 0.156033,
+            "mean_ms": 0.11260203750000003,
+            "median_ms": 0.1108625,
+            "min_ms": 0.107814,
             "n": 240,
-            "rcv": 0.05549546227370835
+            "rcv": 0.023878067876874534
         },
         "t.tick_ms": {
-            "max_ms": 0.899603,
-            "mean_ms": 0.5503600291666667,
-            "median_ms": 0.5189735,
-            "min_ms": 0.482595,
+            "max_ms": 0.838523,
+            "mean_ms": 0.5249670124999999,
+            "median_ms": 0.49648749999999997,
+            "min_ms": 0.47604,
             "n": 240,
-            "rcv": 0.087167904526917
+            "rcv": 0.048002809738412366
         }
     },
-    "note": "AFTER: the character rig (union + per-piece remap) and one shared SkeletonInstance per character. Recorded back-to-back with rigperf-before-linux.json on a quiet box, private Xvfb :91, Debug + ASan build. The BEFORE file is the same binary with --no-share.",
-    "recorded": "2026-09-09T02:53:01Z",
+    "note": "AFTER: character rig + one shared instance per character. Back-to-back with rigperf-before-linux.json, private Xvfb :91, Debug + ASan.",
+    "recorded": "2026-09-09T02:54:24Z",
     "schema": 1
 }
