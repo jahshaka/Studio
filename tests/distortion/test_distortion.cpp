@@ -137,6 +137,29 @@ static void meanColour(const Image &img, double &r, double &g, double &b)
     r /= n; g /= n; b /= n;
 }
 
+/// A camera-facing quad WITH UVS, which the shared unit-cube helper does not
+/// have ("positions + per-face normals, no uvs", enginetesthelpers.h).
+///
+/// It exists because without UVs an HlmsUnlit datablock has no coordinate to
+/// sample its texture at, so the displacement field would be CONSTANT over the
+/// emitter — and a test that passes on a constant field is not a test that the
+/// map is read at all. With UVs the ramp below displaces the left edge one way
+/// and the right edge the other, which is a claim about the TEXTURE.
+static MeshData uvQuadMesh()
+{
+    MeshData d;
+    const float h = 0.5f;
+    const float v[4][3] = { { -h, -h, 0.0f }, { h, -h, 0.0f }, { h, h, 0.0f }, { -h, h, 0.0f } };
+    const float uv[4][2] = { { 0.0f, 1.0f }, { 1.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f } };
+    for (int i = 0; i < 4; ++i) {
+        d.positions.insert(d.positions.end(), { v[i][0], v[i][1], v[i][2] });
+        d.normals.insert(d.normals.end(), { 0.0f, 0.0f, 1.0f });
+        d.uvs.insert(d.uvs.end(), { uv[i][0], uv[i][1] });
+    }
+    d.indices = { 0, 1, 2, 0, 2, 3 };
+    return d;
+}
+
 /// A tangent-space normal map with a strong horizontal gradient: R sweeps from
 /// 0 to 1 across the tile, so the decoded x offset sweeps from -1 to +1. That
 /// is a displacement field with an unmistakable direction, which is what makes
@@ -221,10 +244,12 @@ int main()
         REQUIRE(distortMat);
         REQUIRE(s->setPbrTexture(distortMat, PbrTextureSlot::Normal, map));
     }
+    const MeshId quadMesh = s->createMesh(uvQuadMesh());
+    REQUIRE(quadMesh);
     const NodeId emitter = s->createNode();
-    REQUIRE(emitter && s->attachMesh(emitter, cubeMesh, distortMat));
-    // A flat slab covering the middle third of the frame, in FRONT of the wall.
-    enginetest::setNodeScale(s, emitter, Vec3(1.2f, 1.2f, 0.05f));
+    REQUIRE(emitter && s->attachMesh(emitter, quadMesh, distortMat));
+    // A flat quad covering the middle of the frame, in FRONT of the wall.
+    enginetest::setNodeScale(s, emitter, Vec3(1.6f, 1.6f, 1.0f));
     enginetest::setNodePosition(s, emitter, Vec3(0.0f, 0.0f, -1.0f));
 
     // ---- 5. THE PASSTHROUGH NEGATIVE ---------------------------------------
@@ -290,6 +315,18 @@ int main()
         CHECK_MSG(inside > outside * 4,
                   "the warp is LOCAL to the emitter: %u pixels changed inside it, %u outside",
                   inside, outside);
+
+        // THE MAP IS READ PER-TEXEL, not sampled once. The ramp displaces the
+        // emitter's left edge one way and its right edge the other, so the two
+        // halves of the warped region must BOTH have moved — a constant field
+        // (which is what an emitter with no UVs would produce) moves the whole
+        // region one way and would pass every other assertion here.
+        unsigned leftIn = 0, leftOut = 0, rightIn = 0, rightOut = 0;
+        diffInsideOutside(wallOnly, warped, 24, 24, 64, 104, leftIn, leftOut);
+        diffInsideOutside(wallOnly, warped, 64, 24, 104, 104, rightIn, rightOut);
+        CHECK_MSG(leftIn > 0 && rightIn > 0,
+                  "the displacement MAP is sampled across the emitter, not once "
+                  "(%u pixels moved in its left half, %u in its right)", leftIn, rightIn);
 
         // 3. the emitter contributed no colour of its own: the frame's mean is
         // still the wall's. A displacement map drawn as colour (pale blue,

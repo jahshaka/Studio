@@ -90,8 +90,22 @@ var worldParams = world.postFx();
 var worldRows = world.settings();
 var camKeys = Object.keys(post.resolved);
 assert(camKeys.length > 0, "the camera declares " + camKeys.length + " override slots");
+// THE JOIN IS THREE-WAY since POST_LOOKS (§4.1 / §7 R10). `looks` is a STACK
+// key: deliberately NOT a World Mode row — looks are an art choice and a tier
+// switch must never silently drop somebody's Old Movie — and not a ParamRow
+// either, because it is an ordered array rather than a number. What answers for
+// it on the world side is world.looks(), so that is what the join checks.
+var worldLooks = world.looks();
 for (var ck = 0; ck < camKeys.length; ck++) {
     var key = camKeys[ck];
+    if (key === "looks") {
+        // Length-tested rather than Object.prototype.toString'd: a QVariantList
+        // crosses into QJSEngine as an array-LIKE value whose class tag is not
+        // "Array", and asserting the tag tests the bridge rather than the verb.
+        assert(worldLooks !== undefined && typeof worldLooks.length === "number",
+               "override 'looks' is answered by world.looks() (a stack, not a row)");
+        continue;
+    }
     assert(typeof worldParams[key] !== "undefined" || typeof worldRows[key] !== "undefined",
            "override '" + key + "' is a real World row or parameter");
 }
@@ -312,8 +326,8 @@ assert(post.overrides.looks.length === 1,
        "an unknown look and a duplicate are dropped (" + post.overrides.looks.length + " left)");
 
 // The reflected (keyframeable) half reaches the same field.
-var reflected = node.getProperty(fresh, "postFx.looks");
-assert(reflected && reflected.length === 1, "node.getProperty reads the stack back");
+var reflected = node.property(fresh, "postFx.looks");
+assert(reflected && reflected.length === 1, "node.property reads the stack back");
 node.setProperty(fresh, "postFx.looks", []);
 assert(camera.postFx(fresh).overrides.looks.length === 0,
        "node.setProperty writes it too");

@@ -227,10 +227,42 @@ int main()
     fx.v->setScene(fx.s);
     fx.s->setAmbient(Colour(0.05f, 0.05f, 0.05f), Colour(0.05f, 0.05f, 0.05f));
 
-    // ONE EMISSIVE CUBE, strongly coloured and strongly asymmetric across the
-    // three channels: a desaturate has to have something to remove, and a
-    // grade has to have something to tint. Emissive so no light, shadow or
-    // ambient term can move the number.
+    // A CONTINUOUS-TONE COLOUR RAMP, as an 8x8 wall of flat emissive cubes.
+    //
+    // The fixture's shape is driven by what the ASSERTIONS need, and the first
+    // version of it (two flat cubes) could not carry half of them: a frame with
+    // three distinct colours cannot be shown to POSTERIZE, and a frame whose
+    // only contrast is one silhouette in the middle cannot be shown to BLUR
+    // (radial blur deliberately leaves the centre sharp). A ramp gives
+    //   * continuous tone, so quantisation is measurable;
+    //   * an edge at every tile boundary, everywhere in the frame, so a blur
+    //     and a sharpen both have something to act on out to the corners;
+    //   * strong chroma that varies across the frame, so a desaturate and a
+    //     grade are measurable and a WARP is visible.
+    // Emissive, so no light, shadow or ambient term can move a pixel.
+    {
+        const MeshId mesh = fx.s->createMesh(enginetest::unitCubeMesh());
+        REQUIRE(mesh);
+        for (int gy = 0; gy < 8; ++gy) {
+            for (int gx = 0; gx < 8; ++gx) {
+                const float u = float(gx) / 7.0f, v = float(gy) / 7.0f;
+                PbrParams p;
+                p.albedo = Colour(0.0f, 0.0f, 0.0f);
+                p.emissive = Colour(0.05f + 0.85f * u, 0.05f + 0.60f * v,
+                                    0.05f + 0.50f * (1.0f - u));
+                p.roughness = 1.0f;
+                const MaterialId mat = fx.s->createPbrMaterial(p);
+                const NodeId n = fx.s->createNode();
+                REQUIRE(mat && n && fx.s->attachMesh(n, mesh, mat));
+                enginetest::setNodeScale(fx.s, n, Vec3(0.62f, 0.62f, 0.1f));
+                enginetest::setNodePosition(fx.s, n,
+                                            Vec3((u - 0.5f) * 5.0f, (v - 0.5f) * 5.0f, -3.0f));
+            }
+        }
+    }
+    // ...and ONE bright cube in front of it, so there is a silhouette with a
+    // very different colour on either side of it: the hardest thing for a warp
+    // to move without it being obvious, and the strongest edge for sharpen.
     {
         const NodeId cube = fx.s->createNode();
         PbrParams p;
@@ -240,23 +272,8 @@ int main()
         const MaterialId mat = fx.s->createPbrMaterial(p);
         const MeshId mesh = fx.s->createMesh(enginetest::unitCubeMesh());
         REQUIRE(cube && mat && mesh && fx.s->attachMesh(cube, mesh, mat));
-        enginetest::setNodeScale(fx.s, cube, Vec3(2.0f, 2.0f, 2.0f));
-        enginetest::setNodePosition(fx.s, cube, Vec3(0.0f, 0.0f, 0.0f));
-    }
-    // A second, differently coloured cube off to one side, so the frame has an
-    // EDGE in it — sharpen and the warps need a gradient to act on, and the
-    // colour-count measures need more than one colour.
-    {
-        const NodeId cube = fx.s->createNode();
-        PbrParams p;
-        p.albedo = Colour(0.0f, 0.0f, 0.0f);
-        p.emissive = Colour(0.10f, 0.55f, 0.80f);
-        p.roughness = 1.0f;
-        const MaterialId mat = fx.s->createPbrMaterial(p);
-        const MeshId mesh = fx.s->createMesh(enginetest::unitCubeMesh());
-        REQUIRE(cube && mat && mesh && fx.s->attachMesh(cube, mesh, mat));
-        enginetest::setNodeScale(fx.s, cube, Vec3(1.0f, 3.0f, 1.0f));
-        enginetest::setNodePosition(fx.s, cube, Vec3(1.6f, 0.0f, 0.6f));
+        enginetest::setNodeScale(fx.s, cube, Vec3(1.4f, 1.4f, 0.2f));
+        enginetest::setNodePosition(fx.s, cube, Vec3(0.0f, 0.0f, -1.0f));
     }
     enginetest::testCameraLookAt(fx.v, Vec3(0.0f, 0.5f, 5.0f), Vec3(0, 0, 0));
 
@@ -440,8 +457,16 @@ int main()
           look(LookKind::GlassWarp, 1.0f, 4.0f),
           look(LookKind::GlassWarp, 0.0f, 4.0f) },
         { "radialBlur",
-          look(LookKind::RadialBlur, 1.0f, 0.5f, 0.5f, 1.0f),
-          look(LookKind::RadialBlur, 0.0f, 0.5f, 0.5f, 1.0f) },
+          // THE CENTRE IS OFF THE FRAME, deliberately. Radial blur's own
+          // attenuation leaves the middle sharp — that is the feature, and it
+          // is why a centred blur barely moves this fixture's mean gradient
+          // (measured: 0.01628 -> 0.01596, a 2% change that would make the
+          // assertion a coin toss). A centre outside the frame is a documented
+          // use of the parameter ("streaks everything one way") and puts the
+          // whole image past the falloff's minimum radius, where the effect
+          // being asserted actually happens.
+          look(LookKind::RadialBlur, 1.0f, -0.4f, 0.5f, 1.0f),
+          look(LookKind::RadialBlur, 0.0f, -0.4f, 0.5f, 1.0f) },
         { "oldMovie",
           look(LookKind::OldMovie, 1.0f, 0.5f, 0.5f, 0.5f),
           look(LookKind::OldMovie, 0.0f, 0.5f, 0.5f, 0.5f) },
