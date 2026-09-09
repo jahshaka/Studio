@@ -24,7 +24,7 @@ to `-j2` while another Vulkan instance is live (a sibling gate, the owner's app)
 
 ## 2. Every gate, regardless of tier
 
-- Its OWN Xvfb display, `DISPLAY=:NN` explicit on every ctest/app command line (never the
+- Its OWN Xvfb display AT 1920x1080 (`Xvfb :NN -screen 0 1920x1080x24`; framing-dependent pixel suites move with the window aspect — a 1600x1000 display reds scripting.e2e.particles), `DISPLAY=:NN` explicit on every ctest/app command line (never the
   inherited environment, never `:0`).
 - `JAHSHAKA_DATA_ROOT=<scratch>` + a scratch `HOME` on every invocation, EXCEPT
   `app.data_root`, whose child is deliberately un-overridden: run it with
