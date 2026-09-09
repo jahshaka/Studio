@@ -46,22 +46,49 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 
+// WHAT THE SHOWN MATERIAL'S TEXTURE ROWS HELD, recorded fresh every time the
+// shown material changes.
+//
+// This map is the "before" side of updateTextureDependency: when an edit clears
+// a texture row, the project dependency to be DELETED is looked up from the
+// path the row used to hold. It was only ever inserted into — never cleared,
+// and never retaken when the MATERIAL PICKER swapped the material under the
+// same panel — while the properties panel keeps its blades as hidden children
+// and reuses them across selections (the selection-stall fix), so one instance
+// sees every mesh the user ever clicks. Two consequences, both real:
+//
+//   * selecting a light, a camera or an empty takes the early return in
+//     setSceneNode and used to leave the previous MESH's texture paths in
+//     place, describing a material the panel is no longer showing;
+//   * picking a different material in the dropdown replaces `material` and used
+//     to leave this map describing the OLD one, so the first texture edit
+//     afterwards deleted a dependency belonging to the material just left.
+//
+// So it is retaken at every point where the shown material changes, and emptied
+// when there is no material to describe.
+void MaterialPropertyWidget::snapshotTextures()
+{
+    existingTextures.clear();
+    if (!material) return;
+    for (auto prop : material->properties)
+        if (prop->type == iris::PropertyType::Texture)
+            existingTextures.insert(prop->name, prop->getValue().toString());
+}
+
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!(!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)) {
         meshNode.clear();
         material.clear();
+        snapshotTextures();
         return;
     }
 
     meshNode = sceneNode.staticCast<iris::MeshNode>();
     material = meshNode->getMaterial();
     meshNodeGuid = meshNode->getGUID();
+    snapshotTextures();
     if (!material) return;
-
-    for (auto prop : material->properties)
-        if (prop->type == iris::PropertyType::Texture)
-            existingTextures.insert(prop->name, prop->getValue().toString());
 
     setupShaderSelector();
     setWidgetProperties();
@@ -111,6 +138,9 @@ void MaterialPropertyWidget::materialChanged(int index)
     picked->setName(materialSelector->getCurrentItem());
     picked->setGuid(guid);
     material = picked;
+    // The shown material just changed, so the texture-row snapshot describes
+    // the wrong material until it is retaken.
+    snapshotTextures();
     meshNode->setMaterial(material);
     setupShaderSelector();
 

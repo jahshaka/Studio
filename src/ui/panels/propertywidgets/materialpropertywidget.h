@@ -60,6 +60,13 @@ public:
     }
 
 
+    /// The texture paths the CURRENT material had when this panel adopted it —
+    /// the "before" side of updateTextureDependency's project bookkeeping.
+    /// Public so the blade-reuse contract is assertable: the properties panel
+    /// keeps its blades as hidden children and reuses them across selections,
+    /// so this must be a snapshot of ONE material and never an accumulation.
+    const QMap<QString, QString> &shownTextures() const { return existingTextures; }
+
 protected slots:
     void materialChanged(int);
     void materialChanged(const QString&);
@@ -70,6 +77,9 @@ private:
     PropertyWidget* materialPropWidget;
 
     void setupShaderSelector();
+    /// Re-reads `existingTextures` from the material currently shown (empty when
+    /// there is none). Called wherever the shown material changes.
+    void snapshotTextures();
     void updateTextureDependency(iris::Property*);
     void onPropertyChanged(iris::Property*) override;
     void onPropertyChangeStart(iris::Property*) override;

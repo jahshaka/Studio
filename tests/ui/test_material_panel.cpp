@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include <functional>
 #include <new>
 
+#include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/core/properties/property.h"
@@ -513,6 +514,55 @@ static void testShadingModelRowConstraints()
     CHECK(rig.pbr->shadingModel == 0, "shadingModel: redo re-applies it");
 }
 
+// THE BLADE-REUSE SNAPSHOT (hygiene lane, 2026-09-09).
+//
+// `existingTextures` is what updateTextureDependency reads to find the project
+// dependency an EMPTIED texture row used to point at. It was only ever inserted
+// into. The properties panel keeps its blades as hidden children and reuses
+// them across selections (the selection-stall fix), so one widget sees every
+// mesh the user clicks — and selecting anything that is NOT a mesh (a light, a
+// camera, an empty) takes setSceneNode's early return, which left the previous
+// mesh's texture paths behind. The panel then described a material it was no
+// longer showing, and the next texture edit deleted a dependency belonging to a
+// different object.
+static void testTextureSnapshotDoesNotAccumulate()
+{
+    QTemporaryDir dir;
+    const QString imgPath = dir.filePath("snapshot.png");
+    QImage img(4, 4, QImage::Format_RGBA8888);
+    img.fill(Qt::magenta);
+    img.save(imgPath);
+
+    PanelRig rig([&](const QSharedPointer<iris::PbrMaterial> &m) {
+        m->setValue(QStringLiteral("baseColorMap"), imgPath);
+    });
+    CHECK(rig.panel.shownTextures().value("baseColorMap") == imgPath,
+          "snapshot: the shown material's texture row is recorded");
+
+    // A NON-MESH selection: nothing is shown, so nothing may be remembered.
+    auto light = iris::SceneNode::create();          // an Empty, not a mesh
+    rig.panel.setSceneNode(light);
+    CHECK(rig.panel.shownTextures().isEmpty(),
+          "snapshot: selecting a non-mesh node forgets the previous mesh's maps");
+
+    // ...and a mesh whose material carries no maps leaves nothing behind either.
+    auto plain = iris::PbrMaterial::create();
+    auto second = iris::MeshNode::create();
+    second->setMaterial(plain);
+    rig.panel.setSceneNode(second);
+    for (auto it = rig.panel.shownTextures().constBegin();
+         it != rig.panel.shownTextures().constEnd(); ++it)
+        CHECK(it.value() != imgPath, "snapshot: no row anywhere still holds the old path");
+
+    // A MESH WITH NO MATERIAL AT ALL is the same statement: nothing shown,
+    // nothing remembered. (setSceneNode returns early here too.)
+    rig.panel.setSceneNode(second);
+    auto bare = iris::MeshNode::create();
+    rig.panel.setSceneNode(bare);
+    CHECK(rig.panel.shownTextures().isEmpty(),
+          "snapshot: a mesh with no material leaves an empty snapshot");
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -528,6 +578,7 @@ int main(int argc, char *argv[])
     testIntRow();
     testBrdfRowAndClearCoatConstraint();
     testShadingModelRowConstraints();
+    testTextureSnapshotDoesNotAccumulate();
 
     printf(failures == 0 ? "ALL PASS\n" : "%d FAILURE(S)\n", failures);
     return failures == 0 ? 0 : 1;
