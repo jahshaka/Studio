@@ -48,11 +48,34 @@ assert(project.create("Mirror Room").length > 0, "created the project");
     if (stray) assert(node.remove(stray), "removed the default-scene '" + n + "'");
 });
 
-// ROOM SCALE (owner 2026-09-07): the room reviewed too small at 1x — every
-// dimension below is authored in the original units and multiplied by S, which
-// matches the shipped archive's in-place 1.75x resize (commit a799312a).
-var S = 1.75;
+// ROOM SCALE.
+//
+// 2026-09-07: the room reviewed too small at 1x and was resized 1.75x in place
+// (commit a799312a), which made its interior 14.9 m x 14.9 m under a 6.1 m
+// ceiling with a 5.25 m mirror ball, photographed through a 70-degree lens.
+//
+// 2026-09-09 (lane-samplescale, owner's SCENE-SCALE CONVENTION of 2026-09-08):
+// back to S = 1 — 1 unit = 1 METRE, an 8.5 m x 8.5 m room under a 3.5 m
+// ceiling, which is a room a person fits in, and the saved camera drops to the
+// default explorer lens (45 degrees vertical). The two changes nearly cancel:
+// tan(35) / tan(22.5) = 1.69 against the 1.75x shrink, so the same camera
+// POSITION frames the smaller room almost exactly as the wide lens framed the
+// big one. That is why the numbers below did not move.
+//
+// The 2026-09-07 "too small" reading was taken while the viewport re-derived
+// every camera's vertical FOV against a fixed 95-degree cap (fixed 2026-09-08,
+// CLAUDE.md free-camera framing): the room looked zoomed and its gizmo 1.7x
+// too big on an ordinary monitor, and growing the room was the compensation.
+var S = 1.0;
 function sv(v) { return { x: v.x * S, y: v.y * S, z: v.z * S }; }
+
+// RANGE SCALES WITH THE ROOM. The engine's point-light falloff is
+// 1 / (0.5 + 0.5 * d^2 / r^2) (OgreScene.cpp: the authored range IS the range),
+// invariant under a uniform scale only if the range scales with the distances —
+// so the picture the 1.75x room shipped with (both lights at the default range
+// 40) is reproduced here at 40 * S / 1.75. Intensity, by the same algebra, does
+// not change.
+var LIGHT_RANGE = 40 * S / 1.75;
 
 function slab(name, pos, scale, color, rough, metal) {
     var id = scene.addPrimitive("cube", { position: sv(pos) });
@@ -108,9 +131,11 @@ material.set(tp, { baseColor: "#20a040", roughness: 0.4, metallic: 0.0 });
 var l1 = scene.addLight("point", { position: sv({ x: 0, y: 3.2, z: 0 }) });
 node.setProperty(l1, "name", "KeyLight");
 node.setProperty(l1, "intensity", 1.4);
+node.setProperty(l1, "distance", LIGHT_RANGE);
 var l2 = scene.addLight("point", { position: sv({ x: -2.5, y: 2.8, z: -2.5 }) });
 node.setProperty(l2, "name", "FillLight");
 node.setProperty(l2, "intensity", 1.1);
+node.setProperty(l2, "distance", LIGHT_RANGE);
 
 // ---- global illumination ---------------------------------------------------
 // Bounds pinned to the ROOM: auto-fit spreads the probes over inflated bounds
@@ -134,8 +159,11 @@ node.transform(mirror, { rotation: { x: 0, y: 28, z: 0 } });
 assert(node.setPlanarReflector(mirror, true), "the MirrorPanel is a live planar reflector");
 console.log("planar: " + JSON.stringify(world.planarReflections()));
 
+// THE CONVENTION LENS (45 degrees vertical = 72.7 horizontal at 16:9, already a
+// 24 mm-equivalent wide angle): from this corner it covers the room's full
+// height at 8 m without the 70-degree ultra-wide's stretch.
 editor.setCamera({ position: sv({ x: 3.6, y: 2.4, z: 3.6 }),
-                   lookAt: sv({ x: -1.4, y: 1.3, z: -2.6 }), fov: 70 });
+                   lookAt: sv({ x: -1.4, y: 1.3, z: -2.6 }), fov: 45 });
 editor.select(null);
 editor.setOverlays({ lightWires: false });
 editor.frame(20);

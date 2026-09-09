@@ -53,3 +53,34 @@ foreach(SAMPLE IN LISTS _samples)
         LABELS "scripting"
         TIMEOUT 480)
 endforeach()
+
+# ---------------------------------------------------------------------------
+# samples.scale.* — the SCENE-SCALE CONVENTION, one test per shipped sample.
+#
+# The owner's convention (2026-09-08): 1 unit = 1 metre, human-scale rooms, the
+# default explorer lens on the saved camera, so one fly speed and one gizmo size
+# serve every scene. The samples had drifted to 2x (Showroom, Mirror Room) and
+# 4x (Skeletal Animation's centimetre rig) life size, each drift hidden by a
+# widened or pulled-back saved camera — which is why this gate reads NUMBERS
+# (scene.bounds, editor.camera) and not pixels.
+#
+# HEADLESS, and cheap: every verb is a document verb, so these need no display,
+# no GPU and no fresh HOME fixture — they import into whatever library the HOME
+# already has (a re-import of an already-present sample is fine here; proving
+# the virgin-machine import is samples.cleanstart's job, next door).
+foreach(SAMPLE IN LISTS _samples)
+    string(REPLACE " " "_" _slug "${SAMPLE}")
+    configure_file(scripts/scale.js.in
+                   ${CMAKE_CURRENT_BINARY_DIR}/scale_${_slug}.js @ONLY)
+    set(_scalehome ${CMAKE_CURRENT_BINARY_DIR}/scalehome-${_slug})
+    file(MAKE_DIRECTORY ${_scalehome}/run)
+
+    add_test(NAME samples.scale.${_slug}
+             COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     --script ${CMAKE_CURRENT_BINARY_DIR}/scale_${_slug}.js --headless
+             WORKING_DIRECTORY ${_scalehome}/run)
+    set_tests_properties(samples.scale.${_slug} PROPERTIES
+        ENVIRONMENT "HOME=${_scalehome};JAHSHAKA_DATA_ROOT=${_scalehome}/.local/share/Jahshaka"
+        LABELS "scripting"
+        TIMEOUT 300)
+endforeach()

@@ -1,0 +1,242 @@
+// samples.scale.<sample> — ONE shipped sample, measured against the SCENE-SCALE
+// CONVENTION. Headless: every verb here is a document verb, so this suite needs
+// no display and no GPU.
+//
+// THE CONVENTION (owner, 2026-09-08, after the Showroom "looked zoomed and its
+// gizmo huge"): "we need a default scene size and to respect it for all sample
+// scenes we make so the sample scenes don't make things go weird". It reads:
+//
+//   * 1 unit = 1 METRE. Rooms are human-scale, objects are the size the same
+//     object is in the world.
+//   * the SAVED editor camera uses the default explorer lens — 45 degrees
+//     VERTICAL, which is already 72.7 degrees horizontal at 16:9 (a 24 mm
+//     equivalent). The free-camera framing policy renders the authored vertical
+//     angle exactly at or below 16:9 and holds the 16:9 horizontal extent
+//     beyond it (CLAUDE.md), so this number is what the picture is.
+//   * one fly speed therefore feels the same in every sample, and a gizmo is
+//     the same size on screen in every sample — which is what the convention
+//     was asked for.
+//
+// WHY A SUITE AND NOT A REVIEW. The samples drifted to 2x and 4x life size one
+// edit at a time (a 23.5 m hall with 3.4 m display spheres, a 7.2 m dancer),
+// and each drift was invisible on its own because the SAVED CAMERA was widened
+// or pulled back to compensate — the two errors hide each other in every
+// screenshot. Numbers do not hide: this suite reads the geometry through
+// scene.bounds and the lens through editor.camera, so a sample that grows
+// cannot be re-framed back to green.
+//
+// WHAT IT DOES NOT DO: pixels. Showroom, Particles, Physics and Skeletal are
+// not open-to-open pixel-deterministic (GI, particle RNG, physics), and the
+// scale of a scene is not a pixel question anyway.
+
+var SAMPLE = "@SAMPLE@";
+var ZIP = "@SOURCE_DIR@/scenes/" + SAMPLE + ".zip";
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: [" + SAMPLE + "] " + msg);
+    console.log("ok: [" + SAMPLE + "] " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function near(actual, want, tol, what) {
+    var lo = want * (1 - tol), hi = want * (1 + tol);
+    assert(actual >= lo && actual <= hi,
+           what + " = " + actual.toFixed(2) + " m, pinned at " + want +
+           " +-" + Math.round(tol * 100) + "% [" + lo.toFixed(2) + ", " + hi.toFixed(2) + "]");
+}
+
+// ---------------------------------------------------------------------------
+// THE ENVELOPE — the part that is true of EVERY shipped sample, with the reason
+// each bound is where it is. These are limits, not pins: they say "this scene
+// is authored in metres and photographed with a scene lens", and nothing else.
+var ENVELOPE = {
+    // 40..60 degrees VERTICAL. 45 is the default explorer lens; below 40 a
+    // sample would ship a telephoto nobody can navigate, above 60 (= 100+
+    // degrees horizontal at 16:9) is the fisheye the 2x rooms needed to fit
+    // themselves in frame, which is exactly the drift this suite exists for.
+    fovMin: 40, fovMax: 60,
+    // The scene's own geometry, ground plane excluded, in metres. 40 m is a
+    // city block: a SAMPLE bigger than that is not a sample of anything. The
+    // floor of 0.5 m catches the opposite failure (an archive that opened
+    // empty measures nothing).
+    extentMax: 40.0, extentMin: 0.5,
+    // The saved eye. Below 0.3 m the camera is in the floor; above 25 m it is
+    // a satellite. (Physics deliberately watches a drop tower from 16 m.)
+    cameraHeightMin: 0.3, cameraHeightMax: 25.0,
+    // A saved camera has to be LOOKING AT its own scene: no further from the
+    // content's centre than 4 radii. This is what catches "the room shrank and
+    // the camera did not" — the failure mode where the numbers move but every
+    // screenshot still looks plausible because the subject is a speck.
+    cameraDistanceRadii: 4.0
+};
+
+// PER-SAMPLE PINS. Measured on the shipped archives (lane-samplescale,
+// 2026-09-09) and re-measured after the re-stage. `extent` is the world AABB of
+// the sample's geometry WITHOUT the built-in 1024 m ground plane; `objects`
+// pins the size of each sample's signature object, which is where "human
+// scale" is actually visible; `room` (the two built-from-primitives samples)
+// pins the INTERIOR — wall to wall, floor top to ceiling bottom.
+//
+// A deliberate re-stage updates this table in the same commit that re-stages,
+// with before/after numbers in the message. That is the whole contract.
+var EXPECTED = {
+    "Matcaps": {
+        extent: { x: 4.78, y: 3.37, z: 2.14 }, cameraHeight: 5.69, fov: 45,
+        objects: { "StanfordDragon": { y: 3.37 } }
+    },
+    "Mirror Room": {
+        // Re-staged 2026-09-09: 1.75x -> 1x (an 8.5 m room, not 14.9 m).
+        // The floor and ceiling slabs are 18 m squares that overhang the walls
+        // — that is what makes the aggregate extent bigger than the room.
+        extent: { x: 18.0, y: 5.5, z: 18.0 }, cameraHeight: 2.4, fov: 45,
+        room: { width: 8.5, depth: 8.5, height: 3.5 },
+        objects: { "MirrorSphere": { y: 3.0 }, "GreenTeapot": { x: 2.12 } }
+    },
+    "Particles": {
+        extent: { x: 7.14, y: 4.99, z: 7.14 }, cameraHeight: 11.04, fov: 45,
+        objects: { "Fire Pit": { x: 7.14 } }
+    },
+    "Physics": {
+        // The drop tower: metric objects (2 m pipes, a 2.5 m ball) stacked to
+        // 17 m so they can fall. Big, but every object in it is life size.
+        extent: { x: 11.31, y: 12.0, z: 21.0 }, cameraHeight: 16.11, fov: 45,
+        objects: { "ball": { y: 2.48 }, "pipe": { y: 2.0 } }
+    },
+    "Showroom": {
+        // Re-staged 2026-09-09: 2x -> 1x (an 11.75 m gallery under a 3.25 m
+        // ceiling, with 1.7 m display spheres), lens 75 -> 45 degrees.
+        extent: { x: 24.0, y: 4.25, z: 24.0 }, cameraHeight: 2.5, fov: 45,
+        room: { width: 11.75, depth: 11.75, height: 3.25 },
+        objects: { "Sphere_r0": { y: 1.7 }, "GreenTeapot": { x: 1.93 } }
+    },
+    "Skeletal Animation": {
+        // Re-staged 2026-09-09: the Collada rig is in CENTIMETRES and its root
+        // carried scale 0.04, so the dancer stood 7.2 m tall. 0.01 is cm -> m.
+        extent: { x: 1.94, y: 1.81, z: 0.31 }, cameraHeight: 1.28, fov: 45,
+        objects: { "capoeira": { y: 1.81 } }
+    },
+    "World Background": {
+        // Three dragon statues on the shared ground plane; the sample is about
+        // the SKY behind them, so the statues are all the geometry there is —
+        // which is why the aggregate extent IS the object pin here.
+        //
+        // NO PER-OBJECT PIN, and the reason is a DEFECT worth knowing about
+        // (found by this suite, 2026-09-09): the sample's three dragons are all
+        // named "SceneNode24" and the FIRST of them carries an EMPTY guid, so
+        // scene.find("SceneNode24") returns "" and no guid-addressed verb can
+        // reach that node at all. Reported; the data is not this lane's to
+        // re-author.
+        extent: { x: 8.78, y: 3.37, z: 10.14 }, cameraHeight: 4.14, fov: 45
+    }
+};
+
+// Pin tolerance. Tight enough that a 2x re-scale, a 4x rig-unit slip or a
+// re-framed camera fails; loose enough that a rotated node's AABB, a mesh
+// re-bake or a float32 round trip does not.
+var TOL = 0.15;
+
+// ---------------------------------------------------------------------------
+var want = EXPECTED[SAMPLE];
+assert(!!want, "the suite knows what scale " + SAMPLE + " is authored at");
+
+var imported = project.importArchive(ZIP);
+assert(imported && imported.guid, "importArchive -> " + (imported ? imported.guid : "null"));
+assert(project.open(imported.guid) === true, "project.open");
+
+// ---- the geometry ----------------------------------------------------------
+// The ground plane is excluded by NAME here rather than by the built-in mesh
+// path the C++ side uses (services/sceneextents.h), because a script has no
+// window into meshPath — and every shipped sample calls it "Ground". It is a
+// 1024 m backdrop present in every scene: left in, it is the only number any
+// measurement would ever report.
+var rootId = scene.root();
+var roots = scene.nodes({ depth: 1 });   // the root itself plus its children
+var ids = [];
+for (var i = 0; i < roots.length; i++) {
+    if (roots[i].id === rootId) continue;          // measuring it measures everything
+    if (roots[i].name === "Ground") continue;
+    ids.push(roots[i].id);
+}
+assert(ids.length > 0, "the scene has something to measure (" + ids.length + " root nodes)");
+
+var b = scene.bounds({ nodes: ids });
+console.log("bounds: " + J(b));
+assert(b.nodes > 0, "scene.bounds measured geometry (" + b.nodes + " nodes)");
+
+// THE ENVELOPE, then the pins.
+var axes = ["x", "y", "z"];
+for (i = 0; i < axes.length; i++) {
+    var a = axes[i];
+    assert(b.size[a] <= ENVELOPE.extentMax,
+           "extent." + a + " " + b.size[a].toFixed(2) + " m is inside the envelope (<= " +
+           ENVELOPE.extentMax + " m)");
+}
+var biggest = Math.max(b.size.x, b.size.y, b.size.z);
+assert(biggest >= ENVELOPE.extentMin,
+       "the scene has size at all (largest axis " + biggest.toFixed(2) + " m)");
+for (i = 0; i < axes.length; i++)
+    near(b.size[axes[i]], want.extent[axes[i]], TOL, "extent." + axes[i]);
+
+// ---- the signature objects -------------------------------------------------
+for (var name in (want.objects || {})) {
+    var id = scene.find(name);
+    assert(!!id, "the '" + name + "' node is in the scene");
+    var ob = scene.bounds({ nodes: [id] });
+    assert(ob.nodes > 0, name + " has geometry to measure");
+    console.log("  " + name + " size: " + J(ob.size));
+    for (var axis in want.objects[name])
+        near(ob.size[axis], want.objects[name][axis], TOL, name + "." + axis);
+}
+
+// ---- the room (the samples built from primitives) --------------------------
+// Interior, not outline: the floor and ceiling slabs overhang the walls, so the
+// only honest reading of "how big is this room" is wall face to wall face and
+// floor top to ceiling bottom. A room is human-scale when a person fits in it —
+// 2.4 m is a domestic ceiling, 4.5 m is a gallery, and anything above that is
+// the drift this suite exists to stop.
+if (want.room) {
+    var floor = scene.bounds({ nodes: [scene.find("Floor")] });
+    var ceiling = scene.bounds({ nodes: [scene.find("Ceiling")] });
+    var height = ceiling.min.y - floor.max.y;
+    console.log("  interior height: " + height.toFixed(2) + " m");
+    assert(height >= 2.4 && height <= 4.5,
+           "the ceiling is at a human height (" + height.toFixed(2) + " m, envelope 2.4-4.5)");
+    near(height, want.room.height, TOL, "room height");
+
+    var wallNames = SAMPLE === "Showroom" ? ["WallW", "WallE", "WallS", "WallN"]
+                                          : ["WallW", "WallE", "BlueWall", "RedWall"];
+    var w = scene.bounds({ nodes: [scene.find(wallNames[0])] });
+    var e = scene.bounds({ nodes: [scene.find(wallNames[1])] });
+    var s = scene.bounds({ nodes: [scene.find(wallNames[2])] });
+    var n = scene.bounds({ nodes: [scene.find(wallNames[3])] });
+    var width = e.min.x - w.max.x, depth = n.min.z - s.max.z;
+    console.log("  interior floor: " + width.toFixed(2) + " x " + depth.toFixed(2) + " m");
+    near(width, want.room.width, TOL, "room width");
+    near(depth, want.room.depth, TOL, "room depth");
+}
+
+// ---- the saved camera ------------------------------------------------------
+// editor.camera() is a DOCUMENT verb (lane-samplescale): the stand-in viewport
+// a headless run boots holds exactly the camera the scene file loaded, lens
+// included, which is the only way the saved lens can be asserted without a GPU.
+var cam = editor.camera();
+console.log("camera: " + J(cam));
+assert(cam.projection === "perspective", "the saved camera is perspective");
+assert(cam.fov >= ENVELOPE.fovMin && cam.fov <= ENVELOPE.fovMax,
+       "the saved lens is a scene lens (" + cam.fov + " deg, envelope " +
+       ENVELOPE.fovMin + "-" + ENVELOPE.fovMax + ")");
+assert(cam.fov === want.fov, "the saved lens is the pinned " + want.fov + " deg (" + cam.fov + ")");
+
+assert(cam.position.y >= ENVELOPE.cameraHeightMin && cam.position.y <= ENVELOPE.cameraHeightMax,
+       "the eye is at a usable height (" + cam.position.y.toFixed(2) + " m)");
+near(cam.position.y, want.cameraHeight, TOL, "camera height");
+
+var dx = cam.position.x - b.center.x, dy = cam.position.y - b.center.y,
+    dz = cam.position.z - b.center.z;
+var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+var radius = 0.5 * Math.sqrt(b.size.x * b.size.x + b.size.y * b.size.y + b.size.z * b.size.z);
+console.log("  camera distance " + dist.toFixed(2) + " m, content radius " + radius.toFixed(2) + " m");
+assert(dist <= radius * ENVELOPE.cameraDistanceRadii,
+       "the saved camera is looking at its own scene (" + dist.toFixed(2) + " m <= " +
+       (radius * ENVELOPE.cameraDistanceRadii).toFixed(2) + " m)");
+
+console.log("samples.scale[" + SAMPLE + "]: ALL OK");
