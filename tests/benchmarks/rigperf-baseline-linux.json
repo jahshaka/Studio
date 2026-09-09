@@ -1,0 +1,40 @@
+{
+    "arm": "after (character rig + one shared instance per character)",
+    "build_type": "Debug",
+    "characters": 4,
+    "commit": "171615c5",
+    "compiler": "GNU 15.2.0",
+    "counters": {
+        "r.clip_pushes_frame": 4.083333333333333,
+        "r.instances": 4,
+        "r.rigged_nodes": 20,
+        "r.shared": 16,
+        "r.streamed_bones": 56,
+        "render.draws": 1,
+        "render.frame_ms": 0.6828840655891093,
+        "render.triangles": 112,
+        "scene.characters": 4,
+        "scene.pieces": 20
+    },
+    "metrics": {
+        "t.sync_ms": {
+            "max_ms": 0.236689,
+            "mean_ms": 0.12270039999999997,
+            "median_ms": 0.113515,
+            "min_ms": 0.107942,
+            "n": 240,
+            "rcv": 0.05549546227370835
+        },
+        "t.tick_ms": {
+            "max_ms": 0.899603,
+            "mean_ms": 0.5503600291666667,
+            "median_ms": 0.5189735,
+            "min_ms": 0.482595,
+            "n": 240,
+            "rcv": 0.087167904526917
+        }
+    },
+    "note": "AFTER: the character rig (union + per-piece remap) and one shared SkeletonInstance per character. Recorded back-to-back with rigperf-before-linux.json on a quiet box, private Xvfb :91, Debug + ASan build. The BEFORE file is the same binary with --no-share.",
+    "recorded": "2026-09-09T02:53:01Z",
+    "schema": 1
+}

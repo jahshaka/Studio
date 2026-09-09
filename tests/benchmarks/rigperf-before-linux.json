@@ -1,0 +1,40 @@
+{
+    "arm": "before (pieces nudged apart: one instance and one clip push per piece)",
+    "build_type": "Debug",
+    "characters": 4,
+    "commit": "171615c5",
+    "compiler": "GNU 15.2.0",
+    "counters": {
+        "r.clip_pushes_frame": 20.416666666666668,
+        "r.instances": 20,
+        "r.rigged_nodes": 20,
+        "r.shared": 0,
+        "r.streamed_bones": 56,
+        "render.draws": 1,
+        "render.frame_ms": 0.7756810925947291,
+        "render.triangles": 112,
+        "scene.characters": 4,
+        "scene.pieces": 20
+    },
+    "metrics": {
+        "t.sync_ms": {
+            "max_ms": 0.301208,
+            "mean_ms": 0.21451173750000002,
+            "median_ms": 0.210013,
+            "min_ms": 0.206821,
+            "n": 240,
+            "rcv": 0.014373270226128831
+        },
+        "t.tick_ms": {
+            "max_ms": 1.230689,
+            "mean_ms": 0.6463724374999998,
+            "median_ms": 0.6022965,
+            "min_ms": 0.5777,
+            "n": 240,
+            "rcv": 0.04557612239154636
+        }
+    },
+    "note": "BEFORE: pieces nudged 1 mm apart so the mirror refuses to share (the shipped rule), i.e. one SkeletonInstance and one clip push PER PIECE \u2014 the pre-program per-frame cost. Recorded back-to-back with the baseline file on a quiet box, private Xvfb :91, Debug + ASan build.",
+    "recorded": "2026-09-09T02:53:02Z",
+    "schema": 1
+}

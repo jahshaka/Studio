@@ -35,6 +35,18 @@
 //   --assert               the gate. P0: sanity only (the scene really is
 //                          rigged and animating, the dispersion is usable).
 //                          P3 arms the structural equalities.
+//   --no-share             THE BEFORE ARM for the per-frame cost. Nudges every
+//                          piece a millimetre off its master, which is above the
+//                          mirror's world-transform tolerance, so sharing is
+//                          refused for all of them — by the shipped rule ("a
+//                          piece the user MOVES un-shares itself"), not by a
+//                          second code path kept alive to measure against. The
+//                          result is one SkeletonInstance and one clip push PER
+//                          PIECE, which is exactly what every character cost
+//                          before this program. (The blend-index remap is not
+//                          disabled by it: that half is a per-pass GPU upload,
+//                          counted as `r.streamed_bones`, and its before-value
+//                          is arithmetic — pieces x union, 20 x 8 = 160.)
 //   --record <file>        write the JSON result/baseline file.
 //   --characters N         scene size (default 4).
 //   --quick                short budgets, for editing this file.
@@ -137,7 +149,7 @@ static void recordCounter(const char *id, double v)
 
 int main(int argc, char **argv)
 {
-    bool assertMode = false, quick = false;
+    bool assertMode = false, quick = false, noShare = false;
     int characters = 4;
     std::string recordPath, note;
     for (int i = 1; i < argc; ++i) {
@@ -146,6 +158,7 @@ int main(int argc, char **argv)
         else if (a == "--quick") quick = true;
         else if (a == "--record" && i + 1 < argc) recordPath = argv[++i];
         else if (a == "--characters" && i + 1 < argc) characters = std::atoi(argv[++i]);
+        else if (a == "--no-share") noShare = true;
         else if (a == "--note" && i + 1 < argc) note = argv[++i];
         else { std::printf("bench_rigperf [--assert] [--record <file>] [--characters N] "
                            "[--note <text>] [--quick]\n"); return 2; }
@@ -181,6 +194,15 @@ int main(int argc, char **argv)
     std::vector<multipiece::Character> cast;
     for (int i = 0; i < characters; ++i) {
         multipiece::Character c = multipiece::buildCharacter(QString("char%1").arg(i));
+        if (noShare) {
+            // A millimetre apart: above the mirror's world-transform tolerance,
+            // so no piece may share the master's instance (Ogre's shared bones
+            // carry the MASTER's node transform, so a piece that is not where
+            // the master is may not use them). One instance and one clip push
+            // per piece — the pre-program cost.
+            for (int p = 0; p < c.pieces.size(); ++p)
+                c.pieces[p]->setLocalPos(iris::Vec3(0.001f * float(p + 1), 0, 0));
+        }
         c.root->setLocalPos(iris::Vec3(float(i) * 1.5f - float(characters - 1) * 0.75f, 0, 0));
         auto clip = multipiece::buildCharacterClip();
         clip->setName("Walk");
@@ -215,6 +237,8 @@ int main(int argc, char **argv)
     recordCounter("r.streamed_bones", double(streamed));
     CHECK(rigged == size_t(characters) * size_t(multipiece::pieces().size()),
           "every piece of every character is rigged engine-side");
+    std::printf("    arm: %s\n", noShare ? "BEFORE (one instance + one clip push per piece)"
+                                          : "AFTER (one per character)");
     CHECK(rs.streamedBones == streamed, "rigStats agrees with the per-node stream counts");
 
     // ---- the per-tick measurement ---------------------------------------
@@ -257,7 +281,7 @@ int main(int argc, char **argv)
     if (assertMode) {
         CHECK(computeStats(tickMs).rcv < 0.35, "tick measurement is usable (rcv < 0.35)");
         CHECK(pushesPerFrame > 0.5, "the scene really is pushing clips every frame");
-        if (kStructuralGateArmed) {
+        if (kStructuralGateArmed && !noShare) {
             CHECK(rs.instances == size_t(characters),
                   "one SkeletonInstance per character (P1b)");
             CHECK(std::fabs(pushesPerFrame - double(characters)) < 0.02,
@@ -275,6 +299,8 @@ int main(int argc, char **argv)
         root["build_type"] = QString::fromLatin1(BENCH_BUILD_TYPE);
         root["compiler"] = QString::fromLatin1(BENCH_COMPILER);
         root["characters"] = characters;
+    root["arm"] = noShare ? "before (pieces nudged apart: one instance and one clip push per piece)"
+                          : "after (character rig + one shared instance per character)";
         root["note"] = QString::fromStdString(note);
         root["metrics"] = gMetrics;
         root["counters"] = gCounters;
