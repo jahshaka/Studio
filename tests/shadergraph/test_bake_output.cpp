@@ -228,6 +228,130 @@ int main(int argc, char** argv)
               "uvTransform: (3,3) white — the repeated fixture's corner");
     }
 
+    // ---- 3c. the Texture node's OWN UV input (MATERIAL_UV_NODES_SPEC B1) ---
+    // Same picture as 3b, with the sampler node deleted: `uv(tile 2) ->
+    // texture.UV`, `texture.RGBA -> Base Color`. This is the owner's shape —
+    // one node with a UV pin — and it has to bake the same texels the
+    // two-node chain does.
+    {
+        const QString texPath = baseDir + "/fixture2x2_texuv.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.setPixelColor(0, 0, QColor(255, 0, 0));
+        fix.setPixelColor(1, 0, QColor(0, 255, 0));
+        fix.setPixelColor(0, 1, QColor(0, 0, 255));
+        fix.setPixelColor(1, 1, QColor(255, 255, 255));
+        CHECK(fix.save(texPath), "texture.UV: 2x2 fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget;
+        widget["tileX"] = 2.0; widget["tileY"] = 2.0;
+        uv->deserializeWidgetValue(widget);
+        r.graph->addConnection(uv, 0, tex, 0);   // UV -> texture.UV (input 0)
+        r.toMaster(tex, 1, 0);                   // texture.RGBA (out 1) -> Base Color
+
+        auto res = bake(r, baseDir + "/texuv", 4);
+        CHECK(res.maps.contains("baseColorMap"),
+              "texture.UV: a UV-transformed Texture node bakes a map");
+        QImage img(res.eval.values["baseColorMap"].toString());
+        img = img.convertToFormat(QImage::Format_RGBA8888);
+        CHECK(img.width() == 4 && img.height() == 4, "texture.UV: 4x4 output");
+        CHECK(qRed(img.pixel(0, 0)) == 255 && qGreen(img.pixel(0, 0)) == 0,
+              "texture.UV: (0,0) red");
+        CHECK(qGreen(img.pixel(1, 0)) == 255 && qRed(img.pixel(1, 0)) == 0,
+              "texture.UV: (1,0) green");
+        CHECK(qRed(img.pixel(2, 0)) == 255 && qGreen(img.pixel(2, 0)) == 0,
+              "texture.UV: (2,0) red again — u wrapped");
+        CHECK(qRed(img.pixel(3, 3)) == 255 && qGreen(img.pixel(3, 3)) == 255,
+              "texture.UV: (3,3) white — the repeated fixture's corner");
+    }
+
+    // ---- 3d. an UNTOUCHED Texture node still passes through ----------------
+    // The whole index-discipline argument in one assertion: out 0 with nothing
+    // on the UV pin binds the source image, no bake, no resample — which is
+    // what every shipped .effect connects.
+    {
+        const QString texPath = baseDir + "/fixture2x2_pass.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.fill(QColor(10, 20, 30));
+        CHECK(fix.save(texPath), "texture passthrough: fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        r.toMaster(tex, 0, 0); // texture out 0 -> Base Color
+
+        auto res = bake(r, baseDir + "/texpass", 4);
+        CHECK(res.maps.isEmpty(), "texture passthrough: nothing baked");
+        CHECK(res.passthrough["baseColorMap"].toString() == texPath,
+              "texture passthrough: the source image binds directly");
+    }
+
+    // ---- 3e. a UV node at its DEFAULTS is the bake UV ----------------------
+    // `texCoords` merged into `uv` (D-3), and the identity transform has to
+    // keep the Passthrough it always had — otherwise every graph that ever
+    // used the old coordinate node silently starts resampling.
+    {
+        const QString texPath = baseDir + "/fixture2x2_ident.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.fill(QColor(40, 50, 60));
+        CHECK(fix.save(texPath), "uv identity: fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");                  // defaults: tile 1, offset 0, rot 0
+        auto sampler = r.add("textureSampler");
+        r.graph->addConnection(tex, 0, sampler, 0);
+        r.graph->addConnection(uv, 0, sampler, 1);
+        r.toMaster(sampler, 0, 0);
+
+        auto res = bake(r, baseDir + "/uvident", 4);
+        CHECK(res.maps.isEmpty(), "uv identity: nothing baked");
+        CHECK(res.passthrough["baseColorMap"].toString() == texPath,
+              "uv identity: uv(defaults) -> sampler stays passthrough");
+    }
+
+    // ---- 3f. rotation (D-5): 90 degrees turns the fixture's axes ----------
+    {
+        const QString texPath = baseDir + "/fixture2x2_rot.png";
+        QImage fix(2, 2, QImage::Format_RGBA8888);
+        fix.setPixelColor(0, 0, QColor(255, 0, 0));
+        fix.setPixelColor(1, 0, QColor(0, 255, 0));
+        fix.setPixelColor(0, 1, QColor(0, 0, 255));
+        fix.setPixelColor(1, 1, QColor(255, 255, 255));
+        CHECK(fix.save(texPath), "uv rotation: 2x2 fixture written");
+
+        Rig r;
+        auto tex = r.add("texture");
+        static_cast<TextureNode*>(tex)->setTexturePath(texPath);
+        auto uv = r.add("uv");
+        QJsonObject widget;
+        widget["rotation"] = 90.0;
+        uv->deserializeWidgetValue(widget);
+        r.graph->addConnection(uv, 0, tex, 0);
+        r.toMaster(tex, 1, 0);
+
+        auto res = bake(r, baseDir + "/uvrot", 2);
+        CHECK(res.maps.contains("baseColorMap"), "uv rotation: rotation breaks passthrough");
+        QImage img(res.eval.values["baseColorMap"].toString());
+        img = img.convertToFormat(QImage::Format_RGBA8888);
+        // Source R G / B W (row 0 = v 0). uv' = R(90) * (uv - 0.5) + 0.5, so
+        // output (0,0) at uv (.25,.25) samples source (.75,.25) = G, and the
+        // whole 2x2 rotates a quarter turn: G W / R B.
+        CHECK(img.width() == 2 && img.height() == 2, "uv rotation: 2x2 output");
+        CHECK(qGreen(img.pixel(0, 0)) == 255 && qRed(img.pixel(0, 0)) == 0,
+              "uv rotation: (0,0) reads the green texel (quarter turn)");
+        CHECK(qRed(img.pixel(1, 0)) == 255 && qGreen(img.pixel(1, 0)) == 255,
+              "uv rotation: (1,0) reads white");
+        CHECK(qRed(img.pixel(0, 1)) == 255 && qBlue(img.pixel(0, 1)) == 0,
+              "uv rotation: (0,1) reads red");
+        CHECK(qBlue(img.pixel(1, 1)) == 255 && qRed(img.pixel(1, 1)) == 0,
+              "uv rotation: (1,1) reads blue");
+    }
+
     // ---- 4. varying alpha packs into baseColorMap.A ------------------------
     {
         Rig r;

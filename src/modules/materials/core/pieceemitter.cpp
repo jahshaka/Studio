@@ -114,7 +114,7 @@ const QStringList &emittableOps()
 		"reflect", "dot", "length", "distance", "normalize",
 		"splitvector", "composevector", "makeColor",
 		// uv + normals
-		"texCoords", "uvTransform", "panner", "flipbook",
+		"uv", "texCoords", "uvTransform", "panner", "flipbook",
 		"normalintensity", "combinenormals",
 		// the clock
 		"time", "pulsate",
@@ -178,7 +178,9 @@ int arityOf(const BakeOp &op)
 	    t == "time" || t == "pulsate")
 		return 1;
 	if (t == "composevector" || t == "makeColor") return 4;
-	if (t == "texCoords" || t == "uvTransform" || t == "panner" || t == "flipbook") return 2;
+	if (t == "uv" || t == "texCoords" || t == "uvTransform" || t == "panner" ||
+	    t == "flipbook")
+		return 2;
 	if (t == "normalintensity") return 3;
 	if (t == "smoothstep" || t == "clamp") return in(2);
 	// everything else is componentwise over its FIRST input (cw1/cw2/lerp/
@@ -321,7 +323,26 @@ private:
 			           .arg(scalar(op, 0), scalar(op, 1), scalar(op, 2));
 		else if (t == "texCoords")
 			expr = QStringLiteral("float4( jahUv, 0.0, 0.0 )");
-		// uv * tiling + offset
+		// THE UV NODE: R(rot) * ((uv * tiling + offset) - 0.5) + 0.5, rotation
+		// in degrees about the texture centre. The zero-rotation form is the
+		// plain uv*s+o — chosen from BakeOp::uvRotationIsZero, the SAME flag the
+		// CPU evaluator reads, so the two backends never disagree by the ulp
+		// that a (x - 0.5) + 0.5 round-trip costs (shadergraph.emitter_parity).
+		else if (t == "uv") {
+			const QString tiled = QStringLiteral("((%1).xy * (%2).xy + (%3).xy)")
+			                          .arg(input(op, 0), input(op, 1), input(op, 2));
+			if (op.uvRotationIsZero) {
+				expr = QStringLiteral("float4( %1, 0.0, 0.0 )").arg(tiled);
+			}
+			else {
+				const QString rad = QStringLiteral("(%1 * 0.01745329252)").arg(scalar(op, 3));
+				expr = QStringLiteral(
+				           "float4( float2( cos( %1 ) * ((%2).x - 0.5) - sin( %1 ) * ((%2).y - 0.5) + 0.5,"
+				           " sin( %1 ) * ((%2).x - 0.5) + cos( %1 ) * ((%2).y - 0.5) + 0.5 ), 0.0, 0.0 )")
+				           .arg(rad, tiled);
+			}
+		}
+		// uv * tiling + offset (the retired `uvTransform` node's op)
 		else if (t == "uvTransform")
 			expr = QStringLiteral("float4( (%1).xy * (%2).xy + (%3).xy, 0.0, 0.0 )")
 			           .arg(input(op, 0), input(op, 1), input(op, 2));

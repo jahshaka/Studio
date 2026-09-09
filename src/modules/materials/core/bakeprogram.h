@@ -119,7 +119,26 @@ struct BakeOp
 	QImage image;             // the texture this op samples (RGBA8888)
 	QString imagePath;        // resolved source path
 	QString imageStamp;       // path|mtime|size - cache-key ingredient
-	bool isTextureCarrier = false; // texture node / texture-property out 0
+	bool isTextureCarrier = false; // texture node out 0 with no UV connected
+
+	// THE `uv` NODE'S TRANSFORM, RESOLVED AT COMPILE TIME
+	// (MATERIAL_UV_NODES_SPEC §3.2). True only when this op is a `uv` op whose
+	// UV input is the bake UV and whose Tiling/Offset/Rotation are literal —
+	// i.e. exactly the shape the render-time fold can carry on the material,
+	// and the shape the identity case (1,1 / 0,0 / 0) needs so that
+	// `texture -> uv(defaults) -> sampler` stays PASSTHROUGH the way a bare
+	// `texCoords` chain always was.
+	bool uvOpKnown = false;
+	double uvScaleX = 1, uvScaleY = 1;
+	double uvOffsetX = 0, uvOffsetY = 0;
+	double uvRotationDeg = 0;
+	int uvSet = 0;            // persisted UV-set index; every set bakes as UV0
+	/// The Rotation input is a literal ZERO — the case both backends short to
+	/// the plain `uv * s + o`, skipping the (x - 0.5) + 0.5 centre round-trip.
+	/// It exists so the CPU and the GLSL emitter make the SAME choice: a
+	/// backend that takes the shortcut while the other does not disagrees by an
+	/// ulp, and the parity oracle is right to care.
+	bool uvRotationIsZero = false;
 
 	// classification flags, propagated through inputs at compile time
 	bool varying = false;
@@ -163,6 +182,26 @@ public:
 	QByteArray signature() const;
 
 	static QString classToString(SocketClass c);
+
+	/// True when `op` is a `uv` op with a compile-time-known IDENTITY transform
+	/// over the bake UV — the coordinate source and nothing else.
+	static bool isIdentityUvOp(const BakeOp& op);
+
+	/// The UV transform this whole program applies to EVERY texture it samples,
+	/// when there is exactly one and it is uniform — the render-time fold
+	/// (MATERIAL_UV_NODES_SPEC §3.2, D-1). `valid == false` means "bake it".
+	struct UvFold
+	{
+		bool valid = false;
+		double scaleX = 1, scaleY = 1;
+		double offsetX = 0, offsetY = 0;
+		double rotationDeg = 0;
+		int samplers = 0;      // how many sampler ops the transform covers
+		QString reason;        // why not, when !valid and a sampler exists
+	};
+	/// The fold this program alone admits. GraphBaker intersects the per-socket
+	/// answers into the material's one transform.
+	UvFold uvFold() const;
 
 	// GLSL-parity bilinear sample with repeat wrap of an RGBA8888 image.
 	static Value sampleImage(const QImage& image, double u, double v);

@@ -170,57 +170,10 @@ MakeColorNode::MakeColorNode() {
 }
 
 
-TextureCoordinateNode::TextureCoordinateNode()
-{
-	setNodeType(NodeCategory::Input);
-
-	title = "Texture Coordinate";
-	typeName = "texCoords";
-
-	combo = new QComboBox();
-	combo->addItem("TexCoord0");
-	combo->addItem("TexCoord1");
-	combo->addItem("TexCoord2");
-	combo->addItem("TexCoord3");
-
-	connect(combo, &QComboBox::currentTextChanged,
-		this, &TextureCoordinateNode::comboTextChanged);
-
-	combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	combo->setStyleSheet(StyleSheet::QComboBox());
-
-	auto containerWidget = new QWidget();
-	auto layout = new QVBoxLayout;
-	containerWidget->setMaximumSize(170, 55);
-	containerWidget->setLayout(layout);
-	containerWidget->setStyleSheet("background:rgba(0,0,0,0);");
-	layout->addWidget(combo);
-	layout->setSpacing(0);
-
-	this->widget = containerWidget;
-
-	addOutputSocket(new Vector2SocketModel("UV"));
-	uv = "v_texCoord";
-}
-
-
-void TextureCoordinateNode::comboTextChanged(const QString& text)
-{
-	if (text == "TexCoord0") {
-		uv = "v_texCoord";
-	}
-	else if (text == "TexCoord1") {
-		uv = "v_texCoord1";
-	}
-	else if (text == "TexCoord2") {
-		uv = "v_texCoord2";
-	}
-	else if (text == "TexCoord3") {
-		uv = "v_texCoord3";
-	}
-
-	emit valueChanged(this, 0);
-}
+// TextureCoordinateNode is GONE (MATERIAL_UV_NODES_SPEC D-3): `texCoords`
+// merged into the one UV node (nodes/texture.cpp, typeName "uv"), which owns
+// the coordinate source AND the tiling/offset/rotation its own combo never had.
+// The typeName survives as a hidden library alias, so saved graphs still load.
 
 
 TextureSamplerNode::TextureSamplerNode()
@@ -228,7 +181,12 @@ TextureSamplerNode::TextureSamplerNode()
 	setNodeType(NodeCategory::Input);
 
 
-	title = "Sample Texture";
+	// "Texture Sample" (D-2): Unreal's name, and it sorts beside "Texture" in
+	// an alphabetical drawer instead of hiding under S. The socket LAYOUT is
+	// deliberately untouched — moving the UV input to index 0 would re-point
+	// every saved connection by index (nodegraph.cpp) for no gain now that the
+	// Texture node samples on its own.
+	title = "Texture Sample";
 	typeName = "textureSampler";
 
 	addInputSocket(new TextureSocketModel("Texture"));
@@ -282,7 +240,25 @@ TextureNode::TextureNode()
 	texture->setStyleSheet("background:rgba(0,0,0,0); border : 2px solid rgba(50,50,50,.3);");
 
 
+	// THE UV INPUT (MATERIAL_UV_NODES_SPEC, owner's ask + D-2 option B1).
+	// The Texture node is now a SAMPLER as well as a reference, so the common
+	// case — "tile this image" — is one node with a UV pin at the top left,
+	// opposite its output, exactly like Unreal's TextureSample.
+	//
+	// INDEX DISCIPLINE (spec I-2/I-3). The node had NO inputs, so input 0 is an
+	// index no saved connection can name — free. The RGBA output is APPENDED at
+	// index 1: out 0 stays the texture REFERENCE that every shipped .effect,
+	// every `texelsize` chain and `materials.createFromImage` connect to, so
+	// their Passthrough classification is bit-for-bit unchanged.
+	//   out 0 `texture` — the image itself (map-slot binding, texelsize)
+	//   out 1 `RGBA`    — the image SAMPLED at the UV input
+	// With the UV input connected, out 0 samples too (bakeprogram.cpp): a
+	// texture reference cannot carry UV math into a map binding, so the chain
+	// resamples — or, when the transform is uniform, folds onto the material.
+	addInputSocket(new Vector2SocketModel("UV", "v_texCoord"));
+
 	addOutputSocket(new TextureSocketModel("texture"));
+	addOutputSocket(new Vector4SocketModel("RGBA"));
 
 }
 

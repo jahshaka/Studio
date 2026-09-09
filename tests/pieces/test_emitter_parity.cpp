@@ -527,17 +527,31 @@ int main(int argc, char **argv)
         r.connect(r.addFloat(0.6), 0, op, 2);
         r.toBaseColor(op);
     });
-    oracle("texCoords (uv 0,0)", { "texCoords" }, [](Rig &r) {
+    // "texCoords" and "uvTransform" both construct the one `uv` node now
+    // (MATERIAL_UV_NODES_SPEC D-3), so these two fixtures exercise the same op
+    // key from the two ends of the merge: bare coordinates, and a transform.
+    oracle("uv (bare coordinates, uv 0,0)", { "uv" }, [](Rig &r) {
         auto op = r.add("add");
         r.connect(r.add("texCoords"), 0, op, 0);
         r.connect(r.addVec(3, 0.3, 0.5, 0.7), 0, op, 1);
         r.toBaseColor(op);
     });
-    oracle("uvTransform", { "uvTransform" }, [](Rig &r) {
+    oracle("uv (tiling + offset)", { "uv" }, [](Rig &r) {
         auto op = r.add("uvTransform");
         r.connect(r.add("texCoords"), 0, op, 0);
         r.connect(r.addVec(2, 2.0, 2.0), 0, op, 1);
         r.connect(r.addVec(2, 0.4, 0.6), 0, op, 2);
+        r.toBaseColor(op);
+    });
+    // ROTATION (D-5, spec I-8): the CPU rotates about (0.5,0.5) in degrees and
+    // the piece has to produce the same number — this is the fixture that says
+    // so. A CONNECTED rotation socket, so the emitter takes its non-zero form.
+    oracle("uv (rotation 30 deg)", { "uv" }, [](Rig &r) {
+        auto op = r.add("uv");
+        r.connect(r.add("uv"), 0, op, 0);
+        r.connect(r.addVec(2, 2.0, 2.0), 0, op, 1);
+        r.connect(r.addVec(2, 0.1, 0.2), 0, op, 2);
+        r.connect(r.addFloat(30.0), 0, op, 3);
         r.toBaseColor(op);
     });
     oracle("panner", { "panner" }, [](Rig &r) {

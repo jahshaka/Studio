@@ -65,14 +65,18 @@ void LibraryV1::initTest()
 	});
 
 
-	// uv
-	lib->addNode("texCoords", "Texture Coordinate", iconPath, type, []()
+	// uv — ONE node (MATERIAL_UV_NODES_SPEC D-3): coordinate source + tiling +
+	// offset + rotation + UV set, replacing "Texture Coordinate" AND
+	// "UV Transform". Both old typeNames are registered as HIDDEN ALIASES
+	// (below) so every saved graph, shipped preset and script still constructs.
+	lib->addNode("uv", "UV", iconPath, type, []()
 	{
-		return new TextureCoordinateNode();
+		return new UVNode();
 	});
+	lib->addAlias("texCoords", "uv");
 
 	//sample texture
-	lib->addNode("textureSampler", "Sample Texture", iconPath, type, []() {
+	lib->addNode("textureSampler", "Texture Sample", iconPath, type, []() {
 		return new TextureSamplerNode();
 	});
 
@@ -256,9 +260,9 @@ void LibraryV1::initTexture()
 		return new TexelSizeNode();
 	});
 
-	addNode("uvTransform", "UV Transform", iconPath, type, []() {
-		return new UVTransformNode();
-	});
+	// "uvTransform" merged into the "uv" node registered in initTest(); the
+	// typeName stays constructible as a hidden alias so saved graphs load.
+	addAlias("uvTransform", "uv");
 
 	addNode("flipbook", "Flipbook Animation", iconPath, type, []() {
 		return new FlipbookUVAnimationNode();

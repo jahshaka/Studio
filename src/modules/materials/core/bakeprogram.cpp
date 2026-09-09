@@ -284,8 +284,15 @@ const QHash<QString, EvalFn>& evalRegistry()
 			if (op.image.isNull()) return Value(0.0, 0.0, 0.0, 0.0); // GLSL-documented: unconnected -> vec4(0)
 			return BakeProgram::sampleImage(op.image, in[0].x, in[0].y);
 		};
-		r["texture"] = [](const BakeOp&, const Value*, const EvalContext&) {
-			return Value(0.0, 0.0, 0.0, 0.0); // image carrier; consumers read op.image
+		r["texture"] = [](const BakeOp& op, const Value* in, const EvalContext&) {
+			// Out 0 with nothing on its UV input is a REFERENCE: consumers read
+			// op.image and the master binds it directly (Passthrough).
+			if (op.isTextureCarrier) return Value(0.0, 0.0, 0.0, 0.0);
+			// Otherwise the node samples itself (D-2 option B1): out 1 RGBA, or
+			// out 0 with a UV connected. Same GLSL-documented empty-slot value
+			// as textureSampler.
+			if (op.image.isNull()) return Value(0.0, 0.0, 0.0, 0.0);
+			return BakeProgram::sampleImage(op.image, in[0].x, in[0].y);
 		};
 		r["texelsize"] = [](const BakeOp& op, const Value*, const EvalContext&) {
 			const double w = op.image.isNull() ? 0.0 : op.image.width();
@@ -302,9 +309,35 @@ const QHash<QString, EvalFn>& evalRegistry()
 			default: return Value(w > 0 ? h / w : 0.0);  // 1/Aspect
 			}
 		};
+		// THE UV NODE (MATERIAL_UV_NODES_SPEC D-3). Inputs: UV, Tiling, Offset,
+		// Rotation(degrees). The formula is
+		//     uv' = R(theta) * ((uv * s + o) - 0.5) + 0.5
+		// rotating about the texture centre (Unreal's CustomRotator default),
+		// positive = counter-clockwise in UV space. THE RENDER-TIME FOLD
+		// COMPUTES THE SAME EXPRESSION (OgreMaterials userValue + the
+		// custom_ps_uv_modifier_macros piece), which is what lets the baker
+		// choose either route without the picture changing.
+		r["uv"] = [](const BakeOp& op, const Value* in, const EvalContext&) {
+			const double x = in[0].x * in[1].x + in[2].x;
+			const double y = in[0].y * in[1].y + in[2].y;
+			const double deg = in[3].x;
+			// A LITERAL zero rotation is the overwhelmingly common case AND the
+			// one that must stay bit-identical to the old uv*tiling+offset
+			// node: skip the centre round-trip rather than trust (a-0.5)+0.5.
+			// The flag, not `deg == 0`, because the GLSL emitter can only
+			// decide at compile time and the two backends must decide alike.
+			if (op.uvRotationIsZero) return Value(x, y);
+			const double kPi = 3.14159265358979323846;
+			const double th = deg * kPi / 180.0;
+			const double c = std::cos(th), sn = std::sin(th);
+			const double tx = x - 0.5, ty = y - 0.5;
+			return Value(c * tx - sn * ty + 0.5, sn * tx + c * ty + 0.5);
+		};
+		// The two typeNames "uv" absorbed. Nothing constructs them any more
+		// (the library aliases them and NodeGraph::deserialize renames on
+		// load); kept so a program compiled from a hand-built node with the
+		// old typeName still evaluates instead of silently reading zero.
 		r["uvTransform"] = [](const BakeOp&, const Value* in, const EvalContext&) {
-			// uv * tiling + offset (IMAGE_PLANE_SPEC option C.1 — Unreal's
-			// TexCoord -> Multiply -> Constant2Vector chain as one node)
 			return Value(in[0].x * in[1].x + in[2].x,
 			             in[0].y * in[1].y + in[2].y);
 		};
@@ -458,6 +491,65 @@ struct Compiler
 		return ref;
 	}
 
+	// Resolves the literal value behind one input ref, if there is one.
+	bool literalInput(const BakeOp& op, int index, Value& out) const
+	{
+		if (index >= op.inputs.size()) return false;
+		const auto& ref = op.inputs[index];
+		if (ref.op < 0) {
+			if (ref.fallbackKind != BakeInputRef::Literal) return false;
+			out = ref.fallback;
+			return true;
+		}
+		const BakeOp& src = program.ops[ref.op];
+		if (!src.hasLiteral) return false;
+		out = src.literal.coerced(ref.arity);
+		return true;
+	}
+
+	// Records the `uv` op's transform when it is KNOWABLE without evaluating:
+	// the UV input is the bake UV and Tiling/Offset/Rotation are literal (the
+	// inline editors' socket defaults, or a constant node). That is the exact
+	// shape the render-time fold can carry (MATERIAL_UV_NODES_SPEC §3.2), and
+	// the identity case is what keeps `texture -> uv(defaults) -> sampler`
+	// Passthrough — a bare coordinate node, which is what `texCoords` was.
+	//
+	// A CHAIN of two uv nodes is deliberately NOT composed: two rotations
+	// compose into a transform whose offset is not either node's, and getting
+	// that subtly wrong is worse than baking. Chains bake.
+	void recordUvTransform(BakeOp& op, NodeModel* node)
+	{
+		// Read through the SERIALIZED widget value, not a downcast: the
+		// evaluator slice is compiled into test targets that do not include
+		// nodes/texture.cpp, and a dynamic_cast to UVNode there is an
+		// undefined typeinfo at link time. The widget JSON is the node's own
+		// contract and is what the file carries anyway.
+		op.uvSet = qBound(0, node->serializeWidgetValue().toObject()["uvSet"].toInt(0), 3);
+		if (op.uvSet > 0) {
+			// I-7: every UV set evaluates as UV0 until BAKE_LIGHTING phase 0
+			// gives the document a second UV stream. Say so rather than render
+			// a lie quietly.
+			op.approximated = true;
+			approximated.insert(QStringLiteral("uv (UV set %1 evaluates as UV 0)").arg(op.uvSet));
+		}
+		if (op.inputs.isEmpty()) return;
+		Value rotationOnly;
+		if (literalInput(op, 3, rotationOnly) && rotationOnly.x == 0.0)
+			op.uvRotationIsZero = true;
+		const auto& uvRef = op.inputs[0];
+		if (uvRef.op >= 0 || uvRef.fallbackKind != BakeInputRef::Uv) return;
+		Value tiling, offset, rotation;
+		if (!literalInput(op, 1, tiling) || !literalInput(op, 2, offset)
+		    || !literalInput(op, 3, rotation))
+			return;
+		op.uvOpKnown = true;
+		op.uvScaleX = tiling.x;
+		op.uvScaleY = tiling.y;
+		op.uvOffsetX = offset.x;
+		op.uvOffsetY = offset.y;
+		op.uvRotationDeg = rotation.x;
+	}
+
 	int addOp(BakeOp& op)
 	{
 		program.ops.append(op);
@@ -503,17 +595,37 @@ struct Compiler
 			op.hasLiteral = true;
 		}
 		else if (type == "texture") {
-			// image carrier; consumers read op.image, the master binds it directly
 			auto texNode = static_cast<TextureNode*>(node);
 			const QString stored = texNode->getTexturePath();
 			const QString path = (resolve && !stored.isEmpty()) ? resolve(stored) : stored;
-			op.isTextureCarrier = true;
 			if (!path.isEmpty()) {
 				op.imagePath = path;
 				op.imageStamp = imageStampFor(path);
 				QImage image(path);
 				if (!image.isNull())
 					op.image = image.convertToFormat(QImage::Format_RGBA8888);
+			}
+			// THE TEXTURE NODE IS A SAMPLER TOO (D-2 option B1). Two ops share
+			// one node, told apart by what is asked of it:
+			//   out 1 (RGBA)            -> always a sample at the UV input
+			//   out 0 with UV connected -> a sample as well: a texture
+			//                              REFERENCE cannot carry UV math into
+			//                              a map binding, so the chain has to
+			//                              resample (or fold, §3.2)
+			//   out 0, UV unconnected   -> the carrier it has always been, so
+			//                              every shipped .effect and
+			//                              materials.createFromImage keep their
+			//                              Passthrough classification exactly
+			const bool uvConnected = !node->inSockets.isEmpty()
+			                         && node->inSockets[0]->hasConnection();
+			if (op.outIndex == 1 || uvConnected) {
+				op.inputs.append(makeRef(op, node, 0)); // UV (defaults to the bake UV)
+				// no image -> vec4(0) everywhere; a constant is not varying no
+				// matter what feeds the UV (same rule as textureSampler)
+				if (op.image.isNull() && op.unsupportedReason.isEmpty()) op.varying = false;
+			}
+			else {
+				op.isTextureCarrier = true;
 			}
 		}
 		else if (type == "textureSampler") {
@@ -542,6 +654,11 @@ struct Compiler
 				op.inputs.append(ref);
 			}
 			op.inputs.append(makeRef(op, node, 1)); // Power
+		}
+		else if (type == "uv") {
+			for (int i = 0; i < node->inSockets.size(); ++i)
+				op.inputs.append(makeRef(op, node, i));
+			recordUvTransform(op, node);
 		}
 		else if (evalRegistry().contains(type)) {
 			// generic op: every input socket in order becomes a ref
@@ -616,11 +733,18 @@ BakeProgram BakeProgram::compile(SocketModel* masterInput, const TextureResolver
 		program.passthroughStamp = root.imageStamp;
 		return program;
 	}
-	if (root.typeName == "textureSampler" && !root.image.isNull() && root.inputs.size() == 1) {
+	// A SAMPLER ROOT over the bake UV is the same picture as binding the source
+	// image, so it passes through too. Two node shapes reach here now: the
+	// dedicated sampler, and the Texture node sampling itself (out 1, or out 0
+	// with a UV connected — D-2 option B1).
+	const bool samplerRoot = root.typeName == "textureSampler"
+	                         || (root.typeName == "texture" && !root.isTextureCarrier);
+	if (samplerRoot && !root.image.isNull() && root.inputs.size() == 1) {
 		const auto& uvRef = root.inputs[0];
 		const bool uvIsBakeUv =
 		    (uvRef.op < 0 && uvRef.fallbackKind == BakeInputRef::Uv) ||
-		    (uvRef.op >= 0 && program.ops[uvRef.op].typeName == "texCoords");
+		    (uvRef.op >= 0 && (program.ops[uvRef.op].typeName == "texCoords"
+		                       || isIdentityUvOp(program.ops[uvRef.op])));
 		if (uvIsBakeUv) {
 			program.classification = SocketClass::Passthrough;
 			program.passthroughPath = root.imagePath;
@@ -734,6 +858,109 @@ QByteArray BakeProgram::signature() const
 		sig += ";";
 	}
 	return sig.toUtf8();
+}
+
+// ------------------------------------------------------------------- the fold
+
+bool BakeProgram::isIdentityUvOp(const BakeOp& op)
+{
+	return op.uvOpKnown && op.uvScaleX == 1.0 && op.uvScaleY == 1.0
+	       && op.uvOffsetX == 0.0 && op.uvOffsetY == 0.0 && op.uvRotationDeg == 0.0;
+}
+
+// THE FOLD DETECTOR (MATERIAL_UV_NODES_SPEC §3.2, decision D-1a).
+//
+// WHY IT EXISTS AT ALL. Baking a tiled texture RESAMPLES it: a 2048-square
+// source tiled 4x into the default 1024-square bake keeps 256 px per tile — an
+// 8x downsample of what the user gave us — while the render-time path samples
+// the full source, mip-mapped, every tile. The whole point of a UV input is
+// tiling, so the common case must not be the lossy one.
+//
+// FOLDABLE iff every sampler in this program reads its UV either from the bake
+// UV through ONE `uv` node with a literal transform, or (the degenerate case)
+// straight from the bake UV; all of them share the SAME transform; and no other
+// op consumes a `uv` output (a `uv -> split -> Roughness` chain would see
+// transformed UVs in the bake and untransformed ones at render time — two
+// different pictures from one graph, which is the one outcome worth refusing).
+BakeProgram::UvFold BakeProgram::uvFold() const
+{
+	UvFold fold;
+	bool first = true;
+
+	// Every op that reads a `uv` op's output, and how.
+	QVector<bool> uvOpConsumedBySampler(ops.size(), false);
+	QVector<bool> uvOpConsumedByOther(ops.size(), false);
+
+	for (const auto& op : ops) {
+		const bool isSampler = op.typeName == "textureSampler"
+		                       || (op.typeName == "texture" && !op.isTextureCarrier);
+		for (int i = 0; i < op.inputs.size(); ++i) {
+			const int src = op.inputs[i].op;
+			if (src < 0 || src >= ops.size()) continue;
+			if (ops[src].typeName != "uv") continue;
+			// a sampler's UV input is index 1 on textureSampler, 0 on texture
+			const bool uvSlot = isSampler
+			                    && i == (op.typeName == "textureSampler" ? 1 : 0);
+			if (uvSlot) uvOpConsumedBySampler[src] = true;
+			else uvOpConsumedByOther[src] = true;
+		}
+	}
+
+	for (int i = 0; i < ops.size(); ++i) {
+		if (ops[i].typeName != "uv") continue;
+		if (!uvOpConsumedByOther[i]) continue;
+		fold.reason = QStringLiteral("a UV node feeds something other than a texture, "
+		                             "so the transform has to be evaluated per texel");
+		return fold;
+	}
+
+	for (int i = 0; i < ops.size(); ++i) {
+		const BakeOp& op = ops[i];
+		const bool isSampler = op.typeName == "textureSampler"
+		                       || (op.typeName == "texture" && !op.isTextureCarrier);
+		if (!isSampler) continue;
+		if (op.image.isNull()) continue; // an empty slot samples vec4(0); it tiles nothing
+		const int uvIndex = op.typeName == "textureSampler" ? 1 : 0;
+		if (uvIndex >= op.inputs.size()) continue;
+		const auto& ref = op.inputs[uvIndex];
+
+		double sx = 1, sy = 1, ox = 0, oy = 0, rot = 0;
+		if (ref.op < 0) {
+			if (ref.fallbackKind != BakeInputRef::Uv) {
+				fold.reason = QStringLiteral("a texture samples a computed UV, not the mesh's");
+				return fold;
+			}
+		}
+		else {
+			const BakeOp& src = ops[ref.op];
+			if (src.typeName != "uv" || !src.uvOpKnown) {
+				fold.reason = QStringLiteral("a texture's UV comes from math the material "
+				                             "cannot carry (only one UV node with constant "
+				                             "tiling/offset/rotation folds)");
+				return fold;
+			}
+			sx = src.uvScaleX; sy = src.uvScaleY;
+			ox = src.uvOffsetX; oy = src.uvOffsetY;
+			rot = src.uvRotationDeg;
+		}
+
+		if (first) {
+			fold.scaleX = sx; fold.scaleY = sy;
+			fold.offsetX = ox; fold.offsetY = oy;
+			fold.rotationDeg = rot;
+			first = false;
+		}
+		else if (fold.scaleX != sx || fold.scaleY != sy || fold.offsetX != ox
+		         || fold.offsetY != oy || fold.rotationDeg != rot) {
+			fold.reason = QStringLiteral("two textures use different UV transforms; the "
+			                             "material carries one, so these bake");
+			return fold;
+		}
+		++fold.samplers;
+	}
+
+	fold.valid = !first;
+	return fold;
 }
 
 QString BakeProgram::classToString(SocketClass c)

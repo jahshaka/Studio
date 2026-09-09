@@ -11,6 +11,9 @@
 //
 // No GL, no engine. QT_QPA_PLATFORM=offscreen.
 #include <QApplication>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -170,6 +173,106 @@ int main(int argc, char** argv)
         f->deserializeWidgetValue(QJsonValue(0.7));
         CHECK(near(f->serializeWidgetValue().toDouble(), 0.7),
               "float: inline editor value round-trips through (de)serialize");
+    }
+
+    // ------------------------------------------ the UV merge (D-3) load path
+    {
+        // A graph saved with the two RETIRED typeNames loads as the one `uv`
+        // node with every connection intact. Connections are stored BY INDEX,
+        // so this is the assertion that the alias is index-safe: `uvTransform`
+        // kept 0/1/2 in and 0 out, `texCoords` only ever saved out 0.
+        auto graph = new NodeGraph();
+        graph->setNodeLibrary(new LibraryV1());
+        auto master = new PbrMasterNode();
+        graph->addNode(master);
+        graph->setMasterNode(master);
+        auto uvt = graph->library->createNode("uv");
+        graph->addNode(uvt);
+        auto coords = graph->library->createNode("uv");
+        graph->addNode(coords);
+        graph->addConnection(coords, 0, uvt, 0);  // coords.UV -> uvt.UV
+        graph->addConnection(uvt, 0, master, 0);  // uvt.UV    -> Base Color
+
+        auto json = graph->serialize();
+        auto nodes = json["nodes"].toArray();
+        int renamed = 0;
+        for (int i = 0; i < nodes.size(); ++i) {
+            auto obj = nodes[i].toObject();
+            if (obj["type"].toString() != "uv") continue;
+            // one of each old spelling, with the titles they used to carry
+            obj["type"] = (renamed == 0) ? "uvTransform" : "texCoords";
+            obj["title"] = (renamed == 0) ? "UV Transform" : "Texture Coordinate";
+            nodes[i] = obj;
+            ++renamed;
+        }
+        json["nodes"] = nodes;
+        CHECK(renamed == 2, "uv merge: two nodes rewritten to the legacy typeNames");
+
+        auto loaded = NodeGraph::deserialize(json, new LibraryV1());
+        CHECK(loaded != nullptr, "uv merge: a graph of texCoords + uvTransform loads");
+        int uvNodes = 0;
+        int staleTitles = 0;
+        for (auto node : loaded->nodes.values()) {
+            if (node->typeName == "uv") ++uvNodes;
+            if (node->title == "UV Transform" || node->title == "Texture Coordinate")
+                ++staleTitles;
+        }
+        CHECK(uvNodes == 2, "uv merge: both legacy nodes load as the `uv` node");
+        CHECK(staleTitles == 0, "uv merge: the retired default titles do not survive");
+        CHECK(loaded->connections.size() == 2, "uv merge: both connections re-attach by index");
+    }
+
+    // ------------------------------ the shipped presets keep Passthrough
+    {
+        // THE REGRESSION THIS EXISTS FOR. Giving the Texture node a UV input
+        // and an RGBA output is an index change on a node every shipped
+        // .effect uses. If out 0 stopped being the texture REFERENCE, or the
+        // new input demoted the chain, every preset would silently start
+        // RESAMPLING its texture into a baked map — same picture at first
+        // glance, permanently lower resolution. So: load them all, classify
+        // every master socket, and refuse any "baked".
+        QStringList files;
+        QDirIterator it(QString(JAHSHAKA_TEST_APP_DIR), { "*.effect" }, QDir::Files,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) files.append(it.next());
+        CHECK(files.size() >= 17, "shipped: found the preset .effect files");
+
+        int baked = 0, passthrough = 0, loadedCount = 0;
+        for (const auto& file : files) {
+            QFile f(file);
+            if (!f.open(QIODevice::ReadOnly)) continue;
+            const auto doc = QJsonDocument::fromJson(f.readAll());
+            f.close();
+            auto obj = doc.object();
+            if (obj.contains("shadergraph")) obj = obj["shadergraph"].toObject();
+            auto graph = NodeGraph::deserialize(obj, new LibraryV1());
+            if (!graph || !graph->getMasterNode()) continue;
+            ++loadedCount;
+            // The presets store their images as names beside the .effect, and
+            // this test slice has no database to resolve them through
+            // (test_stubs.cpp), so point each texture node at the real file —
+            // otherwise every textured socket classifies "unconnected" and the
+            // gate would prove nothing.
+            for (auto node : graph->getNodesByTypeName("texture")) {
+                const QString stored = node->serializeWidgetValue().toString();
+                if (stored.isEmpty()) continue;
+                const QString abs = QString(JAHSHAKA_TEST_APP_DIR) + stored;
+                if (QFileInfo::exists(abs))
+                    static_cast<TextureNode*>(node)->setTexturePath(abs);
+            }
+            const auto info = PbrGraphEvaluator::bakeInfo(graph, nullptr)["perSocket"].toObject();
+            for (auto s = info.begin(); s != info.end(); ++s) {
+                if (s.value().toString() == "baked") {
+                    std::printf("      %s: %s baked\n", qPrintable(QFileInfo(file).fileName()),
+                                qPrintable(s.key()));
+                    ++baked;
+                }
+                if (s.value().toString() == "passthrough") ++passthrough;
+            }
+        }
+        CHECK(loadedCount == files.size(), "shipped: every .effect loads");
+        CHECK(baked == 0, "shipped: no preset socket resamples — Passthrough unchanged");
+        CHECK(passthrough > 0, "shipped: the textured presets DO pass their images through");
     }
 
     if (failures == 0) std::printf("ALL OK\n");

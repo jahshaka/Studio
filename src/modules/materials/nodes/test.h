@@ -107,16 +107,8 @@ public:
 
 };
 
-class TextureCoordinateNode : public NodeModel
-{
-	QComboBox* combo;
-	QString uv;
-public:
-	TextureCoordinateNode();
-
-
-	void comboTextChanged(const QString& text);
-};
+// TextureCoordinateNode merged into UVNode (nodes/texture.h) — see the note
+// in test.cpp. `texCoords` remains constructible as a hidden library alias.
 
 class TextureSamplerNode : public NodeModel
 {
