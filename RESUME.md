@@ -34,11 +34,20 @@ Headless suites + `--headless` script runs only, EXPLICIT DISPLAY on every invoc
   with the text-field yield in MainWindow::selectAllActiveSpace.
   Verified headless: scripting.e2e.multiselect PASS. app.multiselect_keys PART 5 written, UNRUN.
 
-## REMAINING (needs the lead's GO — VRAM law)
-Vulkan/display gate: full ctest on my own Xvfb. Specifically new/changed and unrun:
-  app.multiselect_outline (extended), app.multiselect_keys (PART 5), app.navigation_keys (NEW),
-  mirror.document_to_engine, mirror.skinned_outline, cameras.camera_body,
-  scripting.e2e.editor_controls, app.selection_outline (must be unchanged).
+## VULKAN GATE (GO received 2026-09-09) — my own Xvfb :220
+Ordered run, all green:
+  app.selection_outline        PASS (single selection unchanged)
+  app.multiselect_outline      PASS after fixing the PROBE LATTICE (not the code):
+                               primary=left 200/0, primary=right 0/192, single 0/0
+  app.navigation_keys (NEW)    PASS after fixing `jq -r` in the suite:
+                               Up 7.832u, PageUp +7.688u, W 0u + gizmo->translate, E 0u
+  app.multiselect_keys PART 5  PASS after making the console focus deterministic
+                               (Ctrl+` now focuses its input — a real defect, fixed)
+  mirror.document_to_engine / mirror.skinned_outline / cameras.body /
+  cameras.e2e.axis_lock / scripting.e2e.editor_controls   PASS
+Full ctest pass 1: 296/298. shortcuts.registry = intended move, re-pinned.
+                             scenegraph.benchmark = external-load flake, solo-green (365 s).
+Full ctest pass 2: see below.
 
-## HEADLESS GATE (2026-09-09, before the Vulkan gate)
-82/82 no-display suites PASS (`ctest -R <the 82 jah_no_display tests>` with DISPLAY unset, -j4).
+## LAST STEP
+Remove RESUME.md in the final commit (lead's instruction).
