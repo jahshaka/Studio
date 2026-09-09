@@ -2371,15 +2371,25 @@ void pbr_workflow_writes_exactly_one_of_metalness_and_fresnel() {
 // entry with it.
 void texture_cache_keys_on_colour_space() {
     Fixture fx;
+    // A VIEW FIRST, even though this test renders nothing: a render window must
+    // exist before createSceneManager or the backend segfaults (the engine's
+    // documented ordering contract). Without it this passes in a full run —
+    // where an earlier test made the window — and fails alone.
+    View *v = fx.view("srgbkey-view", 32, 32, kBlue); REQUIRE(v);
     Scene *s = fx.scene("srgbkey-scene"); REQUIRE(s);
+    v->setScene(s);
     // A mid-grey image: sRGB and linear decodes of the same bytes are visibly
     // different values, which is the whole reason the key matters.
+    // The header is ONE LINE and the image is not tiny, matching the other .ppm
+    // fixtures in this file: a multi-line header and a 2x2 image both fail to
+    // load through FreeImage here, and the failure presents as "cannot open
+    // file", which reads like the file is missing when it is not.
     const std::string path = "srgbkey.ppm";
     {
         std::FILE *f = std::fopen(path.c_str(), "wb");
         REQUIRE(f != nullptr);
-        std::fprintf(f, "P6\n4 4\n255\n");
-        for (int i = 0; i < 16; ++i) { const unsigned char q[3] = { 128, 128, 128 }; std::fwrite(q, 1, 3, f); }
+        std::fprintf(f, "P6 8 8 255\n");
+        for (int i = 0; i < 64; ++i) { const unsigned char q[3] = { 128, 128, 128 }; std::fwrite(q, 1, 3, f); }
         std::fclose(f);
     }
     const TextureId srgb = s->loadTexture(path, true);
@@ -2399,7 +2409,19 @@ void texture_cache_keys_on_colour_space() {
               "destroying the sRGB texture did not evict the linear one's index entry");
     const TextureId srgb2 = s->loadTexture(path, true);
     CHECK_MSG(srgb2 != 0 && srgb2 != linear, "and the sRGB one loads again as its own texture");
-    std::remove(path.c_str());
+    // DESTROY BEFORE DELETING THE FILE. Ogre keeps a texture-metadata cache
+    // keyed by file name and revisits it at shutdown; a live TextureGpu whose
+    // source file has vanished aborts the process there, long after the test
+    // has passed. (Found exactly that way.)
+    CHECK(s->destroyTexture(linear));
+    CHECK(s->destroyTexture(srgb2));
+    // THE FIXTURE FILE IS DELIBERATELY LEFT ON DISK. Ogre re-opens every file
+    // it has ever loaded a texture from when it writes its TEXTURE METADATA
+    // CACHE at shutdown; a DESTROYED texture whose source file has since
+    // vanished throws there and takes the teardown with it (`free(): invalid
+    // pointer`, long after this test has passed). The sky fixtures in this file
+    // may delete theirs because they never destroy the texture. 200 bytes in
+    // the test's own working directory is the cheap, honest answer.
 }
 
 // RUNTIME TEXTURE WRITES (ADDENDUM A-1) and the ordering claim that makes them
@@ -2478,16 +2500,19 @@ void update_texture_rewrites_pixels_without_a_flush() {
     {
         std::FILE *f = std::fopen(path.c_str(), "wb");
         REQUIRE(f != nullptr);
-        std::fprintf(f, "P6\n2 2\n255\n");
-        for (int i = 0; i < 4; ++i) { const unsigned char q[3] = { 200, 100, 50 }; std::fwrite(q, 1, 3, f); }
+        std::fprintf(f, "P6 8 8 255\n");   // one-line header, like the other fixtures here
+        for (int i = 0; i < 64; ++i) { const unsigned char q[3] = { 200, 100, 50 }; std::fwrite(q, 1, 3, f); }
         std::fclose(f);
     }
     const TextureId fileTex = s->loadTexture(path, true);
     CHECK_MSG(fileTex != 0, "loadTexture: %s", fx.e->lastError().c_str());
-    CHECK_MSG(!s->updateTexture(fileTex, 2, 2, pix.data()),
+    CHECK_MSG(!s->updateTexture(fileTex, 8, 8, pix.data()),
               "a FILE-LOADED texture is refused — its format and mips come from the file "
               "and it is pooled by path");
-    std::remove(path.c_str());
+    // Destroyed, and the file LEFT ON DISK — see the note in
+    // texture_cache_keys_on_colour_space: Ogre's shutdown metadata-cache write
+    // re-opens it, and a destroyed texture whose file is gone aborts teardown.
+    if (fileTex) CHECK(s->destroyTexture(fileTex));
 }
 
 // PER-MATERIAL REFLECTION CUBEMAP (ADDENDUM A-5).

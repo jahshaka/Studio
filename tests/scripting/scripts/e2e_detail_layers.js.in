@@ -48,8 +48,24 @@ var marbleRough  = assets.importFile(ogreTex + "/MRAMOR-bump.jpg");
 assert(marbleDetail.length > 10, "MRAMOR6X6.jpg imported as a project asset");
 assert(marbleRough.length > 10, "MRAMOR-bump.jpg imported");
 
+// A DETERMINISTIC, WELL-LIT world. The default scene's lighting leaves a
+// sphere's centre pixel near black, where a detail map's contribution is
+// unmeasurable — the first version of this suite probed luma 2 and could not
+// tell 5x tiling from 1x. One directional light, no sky, GI off, and the
+// assertions below read a 3x3 REGION rather than one pixel.
+assert(world.setSky("color", { color: "#000000" }) === true, "a flat black sky");
+assert(world.gi({ mode: "off" }) === true, "GI OFF");
+world.setAmbient("#808080");
+var sun = scene.addLight("directional", { position: { x: 0, y: 6, z: 6 } });
+node.setProperty(sun, "intensity", 12.0);
+node.setProperty(sun, "lightColor", "#ffffff");
+node.transform(sun, { rotation: { x: -50, y: 0, z: 0 } });
+
 var ball = scene.addPrimitive("sphere", { position: { x: 0, y: 1, z: 0 } });
 assert(material.apply(ball, "Brick PBR") === true, "the sphere gets a PbrMaterial");
+// A WHITE base colour: the detail layer's contribution is what varies, not the
+// preset's brick albedo.
+assert(material.set(ball, { baseColor: "#ffffff", baseColorMap: "" }), "a plain white base");
 
 // ---- 1. the rows exist and are writable ----------------------------------
 var props = material.properties(ball);
@@ -77,8 +93,42 @@ assert(blendRow.options.indexOf("Overlay") === 7, "Overlay is index 7 (the rende
 editor.select(null);
 editor.frameNode(ball, { yaw: 25, pitch: 20, distance: 3.2 });
 editor.frame(4);
-var bare = editor.screenshot("detail_bare.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
-console.log("    " + show("BARE", bare));
+
+// A 3x3 REGION across the sphere, not one pixel: a detail map changes the
+// surface's TEXTURE, so a single fixed texel can land on a similar colour at
+// two tiling rates while the surface as a whole is plainly different.
+var REGION = [];
+for (var ry = 0; ry < 3; ry++)
+    for (var rx = 0; rx < 3; rx++)
+        // Biased ABOVE centre: the key light comes from above and in front, so
+        // the sphere's lower half is ambient-only and too dark to read a detail
+        // map off. Measured: centre-band mean 20, this band 40 under the same
+        // grade.
+        REGION.push({ x: 0.40 + rx * 0.10, y: 0.34 + ry * 0.09 });
+function regionShot(name) {
+    editor.frame(3);
+    // grade "tonemap" — the DETERMINISTIC filmic grade (fixed exposure, no
+    // bloom, no AO, no SMAA), which is the verb's own reproducible middle
+    // ground. "raw" is a linear readback and leaves a white dielectric under
+    // one light near black, where a detail map's contribution cannot be
+    // measured at all (the first version of this suite probed luma 2).
+    var p = editor.screenshot(name, 256, 256, REGION, "tonemap").probes;
+    var mean = 0, i;
+    for (i = 0; i < p.length; i++) mean += luma(p[i]);
+    mean /= p.length;
+    var varsum = 0;
+    for (i = 0; i < p.length; i++) varsum += (luma(p[i]) - mean) * (luma(p[i]) - mean);
+    return { mean: mean, sd: Math.sqrt(varsum / p.length),
+             probes: p.map(function (c) { return Math.round(luma(c)); }) };
+}
+var bareR = regionShot("detail_bare.png");
+console.log("    BARE   mean " + bareR.mean.toFixed(1) + " sd " + bareR.sd.toFixed(1) +
+            " [" + bareR.probes.join(",") + "]");
+// A floor, not a target: this catches "the subject is black, so every pixel
+// assertion below is vacuous", which is the failure mode that would make this
+// suite pass for the wrong reason.
+assert(bareR.mean > 25, "the subject is LIT enough to measure (mean " + bareR.mean.toFixed(1) + ")");
+var bare = { r: Math.round(bareR.mean), g: Math.round(bareR.mean), b: Math.round(bareR.mean) };
 
 // ---- 2 + 6. THE MARBLE PORT ----------------------------------------------
 // Ogre's own numbers. `detail_offset_scale0 0 0 5 5` is offset (0,0), scale (5,5).
@@ -137,38 +187,45 @@ assert(deps.indexOf(marbleDetail) >= 0 || material.get(ball).detail0Map.length >
 
 // ---- 6. PIXELS: the detail layer changes the surface ---------------------
 editor.frame(4);
-var withDetail = editor.screenshot("detail_marble.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
-console.log("    " + show("MARBLE", withDetail));
-assert(Math.abs(luma(withDetail) - luma(bare)) > 3,
-       "the detail layer reaches PIXELS (" + luma(bare).toFixed(1) + " -> " +
-       luma(withDetail).toFixed(1) + ")");
+var marbleR = regionShot("detail_marble.png");
+console.log("    MARBLE mean " + marbleR.mean.toFixed(1) + " sd " + marbleR.sd.toFixed(1) +
+            " [" + marbleR.probes.join(",") + "]");
+assert(Math.abs(marbleR.mean - bareR.mean) > 3,
+       "the detail layer reaches PIXELS (mean " + bareR.mean.toFixed(1) + " -> " +
+       marbleR.mean.toFixed(1) + ")");
 
 // The per-layer SCALE is the detail-tiling knob — textureScale tiles the BASE
 // maps only and deliberately does not reach detail UVs (D-5 / §3.3).
 assert(material.setDetail(ball, 0, { scale: { x: 1, y: 1 } }), "detail scale 1");
-editor.frame(3);
-var scale1 = editor.screenshot("detail_scale1.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
-console.log("    " + show("SCALE1", scale1));
-assert(Math.abs(luma(scale1) - luma(withDetail)) > 1.5,
-       "the PER-LAYER scale tiles the detail map (" + luma(withDetail).toFixed(1) +
-       " at 5x vs " + luma(scale1).toFixed(1) + " at 1x)");
+var scale1R = regionShot("detail_scale1.png");
+console.log("    SCALE1 mean " + scale1R.mean.toFixed(1) + " sd " + scale1R.sd.toFixed(1) +
+            " [" + scale1R.probes.join(",") + "]");
+// Compared PER PROBE, not on the mean: tiling redistributes the map across the
+// surface, and two tilings of one texture can average the same while no single
+// point matches. "Some probe moved" is the honest question.
+var moved = 0;
+for (var pi = 0; pi < scale1R.probes.length; pi++)
+    if (Math.abs(scale1R.probes[pi] - marbleR.probes[pi]) > 2) moved++;
+assert(moved >= 3,
+       "the PER-LAYER scale tiles the detail map — " + moved + "/9 probes moved between " +
+       "5x [" + marbleR.probes.join(",") + "] and 1x [" + scale1R.probes.join(",") + "]");
 assert(material.setDetail(ball, 0, { scale: { x: 5, y: 5 } }), "back to Marble");
 
 // ---- 5b. the UNAUTHORED second layer still changes nothing ---------------
 // Its rows exist and are writable; leaving them at their defaults must be
 // exactly as if they did not exist. Written to their OWN defaults and back.
-editor.frame(3);
-var before2 = editor.screenshot("detail_l1a.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
+var before2 = regionShot("detail_l1a.png");
 assert(material.setDetail(ball, 1, { weight: 1.0, normalWeight: 1.0,
                                      offset: { x: 0, y: 0 }, scale: { x: 1, y: 1 },
                                      blend: "NormalNonPremul" }),
        "write layer 1's DEFAULTS explicitly");
-editor.frame(3);
-var after2 = editor.screenshot("detail_l1b.png", 128, 128, [{ x: 0.5, y: 0.5 }]).probes[0];
-assert(Math.abs(after2.r - before2.r) <= 2 && Math.abs(after2.g - before2.g) <= 2 &&
-       Math.abs(after2.b - before2.b) <= 2,
-       "an unauthored layer at its defaults changes NOTHING " +
-       show("", before2) + " vs " + show("", after2));
+var after2 = regionShot("detail_l1b.png");
+var same = true;
+for (var qi = 0; qi < after2.probes.length; qi++)
+    if (Math.abs(after2.probes[qi] - before2.probes[qi]) > 1) same = false;
+assert(same,
+       "an unauthored layer at its defaults changes NOTHING [" + before2.probes.join(",") +
+       "] vs [" + after2.probes.join(",") + "]");
 
 // ---- 7. save / close / open ---------------------------------------------
 assert(project.save() === true, "project.save");
