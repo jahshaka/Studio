@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QtMath>
 #include <QColor>
+#include <QList>
 #include <QVector>
 #include "irisgl/irisglfwd.h"
 
@@ -146,7 +147,43 @@ protected:
 	iris::Vec3 oldPos, oldScale;
 	iris::Quat oldRot;
 
+	// ---- GROUP TRANSFORM (EDITOR_MULTISELECT_SPEC §2.4) -------------------
+	//
+	// The gizmo still belongs to the PRIMARY: it sits at its pivot, hit-tests
+	// against it and sizes itself from it, and the three subclasses go on
+	// writing exactly that one node. The group is applied AFTER them, as a
+	// DELTA read back off the primary — translate is the primary's snapped
+	// move applied to everyone, rotate and scale are the primary's delta about
+	// the primary's own pivot. That way snapping, axis constraints and the
+	// handle maths stay in one place and there is no second implementation of
+	// them to drift.
+	struct MemberStart
+	{
+		iris::SceneNodePtr node;
+		iris::Vec3 globalPos;
+		iris::Quat globalRot;
+		iris::Vec3 localPos, localScale;
+		iris::Quat localRot;
+	};
+	/// The D5-reduced selection (the primary included when it is in it).
+	/// Empty = single-node drag, i.e. exactly the pre-multiselect behaviour.
+	QList<iris::SceneNodePtr> group;
+	QVector<MemberStart> groupStart;
+	iris::Vec3 pivotStartPos, pivotStartScale;
+	iris::Quat pivotStartRot;
+
+	/// Snapshots every member's start transform (called by setInitialTransform,
+	/// which every subclass's startDragging already calls).
+	void captureGroupStart();
+
 public:
+	/// Applies the primary's delta to the rest of the group. Called at the end
+	/// of each subclass's drag() — and PUBLIC because it is the whole of the
+	/// group-transform maths, which gizmo.group_transform drives directly
+	/// (a synthetic ray that hits a handle is a test of the handle geometry,
+	/// not of this).
+	void applyGroupDelta();
+
 	Gizmo();
 	void setServices(StudioServices* s) { services = s; }
 	virtual void updateSize(iris::CameraNodePtr camera);
@@ -158,6 +195,11 @@ public:
 	GizmoTransformSpace getTransformSpace() const { return transformSpace; }
 	virtual void setSelectedNode(iris::SceneNodePtr node);
 	void clearSelectedNode();
+	/// The nodes a drag moves TOGETHER (EDITOR_MULTISELECT_SPEC §2.4) — the
+	/// D5-reduced selection set. An empty or single-entry list restores the
+	/// single-node behaviour exactly.
+	void setGroup(const QList<iris::SceneNodePtr> &nodes);
+	int groupSize() const { return group.size(); }
 
 	// undo-redo
 	void setInitialTransform();

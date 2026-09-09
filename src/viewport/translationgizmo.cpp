@@ -271,6 +271,9 @@ void TranslationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 vie
 	
 	//selectedNode->setLocalPos(localTarget);
 	selectedNode->setGlobalPos(targetPos);
+	// The rest of the selection follows the primary's delta (one place,
+	// EDITOR_MULTISELECT_SPEC §2.4); a no-op when nothing else is selected.
+	applyGroupDelta();
 	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 

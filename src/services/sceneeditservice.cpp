@@ -14,6 +14,8 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
 
+#include <algorithm>
+
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 
@@ -818,6 +820,176 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
     cmd->setText(QObject::tr("Paste %1").arg(node->getName()));
     undo->push(cmd);
     return node;
+}
+
+// ---- the selection SET (EDITOR_MULTISELECT_SPEC §2.5) ----------------------
+
+QList<iris::SceneNodePtr> SceneEditService::effectiveSet(const QList<iris::SceneNodePtr> &nodes)
+{
+    QList<iris::SceneNodePtr> out;
+    for (const auto &node : nodes) {
+        if (!node) continue;
+        bool ancestorSelected = false;
+        for (auto p = node->getParent(); !!p; p = p->getParent()) {
+            for (const auto &other : nodes)
+                if (!!other && other.data() == p.data()) { ancestorSelected = true; break; }
+            if (ancestorSelected) break;
+        }
+        if (ancestorSelected) continue;
+        bool seen = false;
+        for (const auto &o : out) if (o.data() == node.data()) { seen = true; break; }
+        if (!seen) out.append(node);
+    }
+    return SelectionService::sortDocumentOrder(out);
+}
+
+SceneEditService::DeleteSetResult
+SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
+{
+    DeleteSetResult result;
+    if (!scene()) return result;
+
+    // THE WORLD ROOT COMES OUT FIRST, before the D5 reduction (D6): every other
+    // node in the scene is its descendant, so reducing with the root still in
+    // the list would drop the whole selection and delete nothing. It is
+    // reported as skipped, not refused for everyone.
+    QList<iris::SceneNodePtr> input;
+    for (const auto &node : nodes) {
+        if (!node) continue;
+        if (node->isRootNode()) { result.skipped.append(node->getGUID()); continue; }
+        input.append(node);
+    }
+
+    QList<iris::SceneNodePtr> targets;
+    for (const auto &node : effectiveSet(input)) {
+        // A node the document marks non-removable is skipped and reported too.
+        if (!node->isRemovable()) { result.skipped.append(node->getGUID()); continue; }
+        targets.append(node);
+    }
+    if (targets.isEmpty()) return result;
+
+    // LAST FIRST. Every DeleteSceneNodeCommand captures its node's sibling
+    // index for its own undo; deleting an earlier sibling first would shift
+    // every later one, so the captured indices would restore the subtree in the
+    // wrong slot. effectiveSet() hands back document order, so reversing it is
+    // exactly "last sibling first, deepest last".
+    std::reverse(targets.begin(), targets.end());
+
+    const bool macro = targets.size() > 1 && undo && undo->stack();
+    if (macro) undo->stack()->beginMacro(QObject::tr("Delete %1 objects").arg(targets.size()));
+    for (const auto &node : targets) {
+        const QString guid = node->getGUID();
+        if (deleteNode(node)) result.deleted.append(guid);
+        else                  result.skipped.append(guid);
+    }
+    if (macro) undo->stack()->endMacro();
+
+    // The delete commands each re-selected (single) as they always have; the
+    // set ends EMPTY, which is what deleting what you had selected means.
+    if (selection) selection->clear();
+    return result;
+}
+
+QList<iris::SceneNodePtr>
+SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
+{
+    QList<iris::SceneNodePtr> copies;
+    if (!scene()) return copies;
+
+    QList<iris::SceneNodePtr> input;      // D6, same reason as deleteNodes
+    for (const auto &node : nodes) if (!!node && !node->isRootNode()) input.append(node);
+    QList<iris::SceneNodePtr> targets = effectiveSet(input);
+    if (targets.isEmpty()) return copies;
+
+    // The primary's copy has to become the new primary, so remember which
+    // original it was before the order is reversed.
+    iris::SceneNodePtr primarySource;
+    for (const auto &n : nodes) {
+        if (!n) continue;
+        for (const auto &t : targets) if (t.data() == n.data()) { primarySource = t; break; }
+        if (primarySource) break;
+    }
+
+    // Same reason as deleteNodes: each copy lands at its original's sibling
+    // index + 1, and doing the earlier siblings first would move the later
+    // originals out from under their own index.
+    std::reverse(targets.begin(), targets.end());
+
+    const bool macro = targets.size() > 1 && undo && undo->stack();
+    if (macro) undo->stack()->beginMacro(QObject::tr("Duplicate %1 objects").arg(targets.size()));
+    QList<QPair<iris::SceneNodePtr, iris::SceneNodePtr>> made;   // source -> copy
+    for (const auto &node : targets) {
+        auto copy = duplicateNode(node);
+        if (copy) made.append({ node, copy });
+    }
+    if (macro) undo->stack()->endMacro();
+
+    // Back to document order, primary's copy first.
+    iris::SceneNodePtr primaryCopy;
+    QList<iris::SceneNodePtr> rest;
+    for (const auto &pair : made) {
+        if (primarySource && pair.first.data() == primarySource.data()) primaryCopy = pair.second;
+        else rest.append(pair.second);
+    }
+    if (primaryCopy) copies.append(primaryCopy);
+    copies.append(SelectionService::sortDocumentOrder(rest));
+    if (selection && !copies.isEmpty()) selection->select(copies);
+    return copies;
+}
+
+int SceneEditService::copyNodes(const QList<iris::SceneNodePtr> &nodes)
+{
+    // The World root is not a copyable thing (D6) — copying it would put a
+    // second scene inside the scene — and it has to leave BEFORE the reduction
+    // or it would take every other member with it.
+    QList<iris::SceneNodePtr> input;
+    for (const auto &node : nodes) if (!!node && !node->isRootNode()) input.append(node);
+
+    QList<SceneFragment> fragments;
+    for (const auto &node : effectiveSet(input)) {
+        SceneFragment fragment = captureFragment(node);
+        if (!fragment.isNull()) fragments.append(fragment);
+    }
+    // An empty copy leaves the previous clipboard alone: Ctrl+C with nothing
+    // selected must not throw away what you copied a moment ago.
+    if (fragments.isEmpty()) return 0;
+    mClipboard = fragments;
+    return mClipboard.size();
+}
+
+QList<iris::SceneNodePtr> SceneEditService::paste()
+{
+    QList<iris::SceneNodePtr> pasted;
+    auto sc = scene();
+    if (!sc || mClipboard.isEmpty()) return pasted;
+
+    // D7 (a): beside the primary — its parent, its sibling index + 1 — exactly
+    // where Duplicate puts a copy. Root when there is no selection (or when the
+    // primary IS the root: a paste "beside the world" is a paste into it).
+    iris::SceneNodePtr parent = sc->getRootNode();
+    int index = -1;
+    if (selection) {
+        if (auto primary = selection->selected()) {
+            if (!primary->isRootNode() && !!primary->getParent()) {
+                parent = primary->getParent();
+                const int after = primary->siblingIndex();
+                index = after >= 0 ? after + 1 : -1;
+            }
+        }
+    }
+
+    const bool macro = mClipboard.size() > 1 && undo && undo->stack();
+    if (macro) undo->stack()->beginMacro(QObject::tr("Paste %1 objects").arg(mClipboard.size()));
+    for (const SceneFragment &fragment : mClipboard) {
+        auto node = insertFragment(fragment, parent, index);
+        if (!node) continue;
+        pasted.append(node);
+        if (index >= 0) ++index;      // keep the clipboard's order in the tree
+    }
+    if (macro) undo->stack()->endMacro();
+
+    if (selection && !pasted.isEmpty()) selection->select(pasted);
+    return pasted;
 }
 
 namespace {

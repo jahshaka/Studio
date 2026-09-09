@@ -164,6 +164,10 @@ public:
 
     /// The editor viewport (engine-backed, or the headless stand-in).
     IEditorViewport *viewport() { return sceneView; }
+    /// The outliner panel. Public because the OUTLINER is the authority on
+    /// visible row order — editor.selectRange has to ask it what lies between
+    /// two rows (EDITOR_MULTISELECT_SPEC §2.7); null in headless sessions.
+    SceneHierarchyWidget *hierarchyPanel() const { return sceneHierarchyWidget; }
     /// --engine-selftest: show the editor page, build the default scene the way
     /// newScene() does and start the viewport. False (with a reason) if the engine
     /// viewport is not in use or has no view.
@@ -542,6 +546,13 @@ public slots:
     /// — never undo()/redo() directly — so there is exactly one claimant for
     /// the chord and one place the routing rule lives.
     void undoActiveSpace();
+    /// The four edit chords, routed by the active space like undo/redo
+    /// (EDITOR_MULTISELECT_SPEC §2.6): the editor's selection SET, or the
+    /// Materials graph when that page is up.
+    void deleteActiveSpace();
+    void duplicateActiveSpace();
+    void copyActiveSpace();
+    void pasteActiveSpace();
     /// Space: node search on the Materials space, gizmo cycle elsewhere.
     void spaceKeyActiveSpace();
     void redoActiveSpace();
@@ -616,6 +627,7 @@ private:
     class SceneOpenRunner *openRunner = nullptr;
 
     void applySelectionToUi(iris::SceneNodePtr sceneNode);
+    void applySelectionSetToUi(const QList<iris::SceneNodePtr> &nodes);
     /// The widget fan-out for a selection change (viewport, properties,
     /// hierarchy, timeline) — driven by SelectionService::selectionChanged.
     /// The play-button chrome halves of the old enterEditMode/enterPlayMode —

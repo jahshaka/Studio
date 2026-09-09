@@ -13,10 +13,42 @@ target_include_directories(test_services PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
    )
-target_link_libraries(test_services PRIVATE Qt6::Gui Qt6::Widgets)
+# IrisGL since the selection became a SET (EDITOR_MULTISELECT_SPEC §2.1):
+# SelectionService orders its members in DOCUMENT pre-order, which means it
+# calls into the scene graph. This suite still builds no nodes — it exercises
+# the guard and re-emit contracts through null pointers, exactly as before.
+target_link_libraries(test_services PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
+target_include_directories(test_services PRIVATE
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 add_test(NAME services.core COMMAND test_services
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(services.core PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+
+# services.selection_set — the SET's own contracts (EDITOR_MULTISELECT_SPEC §5).
+# Real document nodes, so it boots the headless document graph like every other
+# document suite; no display, no GPU.
+add_executable(test_selection_set test_selection_set.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/selectionservice.cpp)
+set_target_properties(test_selection_set PROPERTIES AUTOMOC ON
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_selection_set PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_BINARY_DIR}/irisgl/thirdparty/assimp/include
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_selection_set PRIVATE IrisGL Qt6::Gui Qt6::Widgets)
+jah_document_graph(test_selection_set)
+add_test(NAME services.selection_set COMMAND test_selection_set
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(services.selection_set PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+jah_no_display(services.selection_set)
 
 # engine.error_pump — STABILITY_PROGRAM_SPEC Lane 1. The only suite in the tree
 # that links BOTH the engine and a Studio service, because that is exactly the

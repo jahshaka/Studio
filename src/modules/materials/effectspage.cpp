@@ -1407,6 +1407,41 @@ bool EffectsPage::openNodeSearch()
 	return graphicsView->openNodeSearch();
 }
 
+// The four edit chords, routed here by MainWindow when the Materials space is
+// active (EDITOR_MULTISELECT_SPEC §2.6). Each one is exactly what the graph
+// view's deleted QShortcut did, minus the ambiguity that made the chord
+// unreliable the moment a second WindowShortcut claimed it.
+bool EffectsPage::graphDeleteSelected()
+{
+	if (!scene) return false;
+	scene->deleteSelectedNodes();
+	scene->update();
+	return true;
+}
+
+bool EffectsPage::graphDuplicateSelected()
+{
+	if (!scene) return false;
+	scene->duplicateSelected();
+	scene->update();
+	return true;
+}
+
+bool EffectsPage::graphCopySelected()
+{
+	if (!scene) return false;
+	scene->copySelectedToClipboard();
+	return true;
+}
+
+bool EffectsPage::graphPaste()
+{
+	if (!scene) return false;
+	scene->pasteFromClipboard();
+	scene->update();
+	return true;
+}
+
 int EffectsPage::graphUndoCount() const { return stack ? stack->index() : 0; }
 
 int EffectsPage::graphRedoCount() const

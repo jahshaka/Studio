@@ -12,6 +12,7 @@
 // explicit no-ops here (documented per method).
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
+#include "irisgl/core/geometry/aabb.h"
 #include <memory>
 #include "viewport/engineviewwidget.h"
 #include "viewport/ieditorviewport.h"
@@ -53,6 +54,7 @@ public:
     void setScene(iris::ScenePtr scene) override;
     iris::ScenePtr getScene() override { return mScene; }
     void setSelectedNode(iris::SceneNodePtr sceneNode) override;
+    void setSelectedSet(const QList<iris::SceneNodePtr> &nodes) override;
     void clearSelectedNode() override;
     void focusOnNode(iris::SceneNodePtr sceneNode) override;
     void focusOnSelection() override;
@@ -60,7 +62,19 @@ public:
     /// centre (its origin when it has no meshes), else the last focus point,
     /// else the world origin.
     iris::Vec3 orbitPivot() const;
+    /// Hands the gizmo the D5-reduced selection set (empty for a single node).
+    void pushGizmoGroup();
+    /// The union of the selection set's world bounds (a member with no meshes
+    /// contributes its origin). False when the set is empty.
+    bool selectionBounds(iris::AABB &out) const;
+    /// F's framing over a point + radius; `orbitNode` (nullable) is what the
+    /// orbital controller re-pivots on when there is a single subject.
+    void focusOnTarget(const iris::Vec3 &target, float radius,
+                       const iris::SceneNodePtr &orbitNode);
     bool snapSelectionToFloor() override;
+    /// One member's drop onto the surface below it (snapSelectionToFloor runs
+    /// it per member inside one macro).
+    bool snapNodeToFloor(const iris::SceneNodePtr &node);
 
     iris::CameraNodePtr editorCamera() override { return mEditorCam; }
     void setEditorCamera(iris::CameraNodePtr camera) override;
@@ -407,6 +421,12 @@ private:
     /// (setScene/clearScene/beginSceneLoad) — the zero of presentsSinceBind.
     qulonglong mPresentBaseline = 0;
     iris::SceneNodePtr mSelectedNode;
+    /// The whole selection SET, primary FIRST (EDITOR_MULTISELECT_SPEC §2.3).
+    /// mSelectedNode stays the primary — the gizmo pivots on it, the pick
+    /// drill-down rule anchors on it, and every single-node path keeps working
+    /// — while the outline, the gizmo's group transform and the focus/orbit/
+    /// floor unions read this.
+    QList<iris::SceneNodePtr> mSelectedSet;
     /// Alt+LMB orbit pivot when nothing is selected: the last focus point
     /// (F on a node), else the world origin.
     iris::Vec3 mLastOrbitPivot;

@@ -105,6 +105,23 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             RUN_SERIAL TRUE
             TIMEOUT 400
             LABELS "app")
+        # app.multiselect_keys — the four EDIT CHORDS as real keys, in both
+        # spaces (EDITOR_MULTISELECT_SPEC §2.6/§5). Same shape and the same
+        # reasons as app.pacing_undo: shortcut ambiguity only exists in a live
+        # window, and "N objects delete as ONE undo step" cannot be asserted
+        # from a script run (a run is itself one open macro). Its own Xvfb, its
+        # own port, RUN_SERIAL like every input-synthesis suite.
+        set(_ms_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-keys-home)
+        file(MAKE_DIRECTORY ${_ms_home}/run)
+        add_test(NAME app.multiselect_keys
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/multiselect_keys.sh"
+                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 8751
+                 WORKING_DIRECTORY ${_ms_home}/run)
+        set_tests_properties(app.multiselect_keys PROPERTIES
+            ENVIRONMENT "HOME=${_ms_home}"
+            RUN_SERIAL TRUE
+            TIMEOUT 500
+            LABELS "app")
     else()
         message(STATUS "app.pacing_undo skipped: needs xdotool, curl, jq and Xvfb")
     endif()
@@ -134,5 +151,21 @@ add_test(NAME app.selection_outline
          WORKING_DIRECTORY ${_selo_home}/run)
 set_tests_properties(app.selection_outline PROPERTIES
     ENVIRONMENT "HOME=${_selo_home};JAHSHAKA_DATA_ROOT=${_selo_home}/.local/share/Jahshaka"
+    LABELS "app"
+    TIMEOUT 300)
+
+# ---- app.multiselect_outline ------------------------------------------------
+# EVERY member of a selection SET is outlined, not just the primary
+# (EDITOR_MULTISELECT_SPEC §2.3/D4 a). Two cubes, one per half of the frame,
+# probed in their own half — a secondary that quietly stopped drawing would pass
+# every verb suite in the program and fail only here. Same hull<->wireframe
+# style-toggle trick as app.selection_outline, so the gizmo cancels out.
+set(_mso_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-outline-home)
+file(MAKE_DIRECTORY ${_mso_home}/run)
+add_test(NAME app.multiselect_outline
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_multiselect_outline.js
+         WORKING_DIRECTORY ${_mso_home}/run)
+set_tests_properties(app.multiselect_outline PROPERTIES
+    ENVIRONMENT "HOME=${_mso_home}"
     LABELS "app"
     TIMEOUT 300)

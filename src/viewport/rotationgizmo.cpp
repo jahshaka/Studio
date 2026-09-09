@@ -269,6 +269,9 @@ void RotationGizmo::drag(iris::Vec3 rayPos, iris::Vec3 rayDir, iris::Vec3 viewDi
 	else
 		selectedNode->setLocalRot(nodeStartRot * rot);
 
+	// The rest of the selection follows the primary's delta (one place,
+	// EDITOR_MULTISELECT_SPEC §2.4); a no-op when nothing else is selected.
+	applyGroupDelta();
 	if (services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 

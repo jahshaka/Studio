@@ -152,6 +152,19 @@ iris::SceneNodePtr ScenePicker::pickRoot(iris::SceneNodePtr picked)
     return root;
 }
 
+iris::SceneNodePtr ScenePicker::resolveRootSelection(iris::SceneNodePtr picked,
+                                                     const QList<iris::SceneNodePtr> &selection,
+                                                     bool selectRootObject)
+{
+    if (!picked || !selectRootObject) return picked;
+    const iris::SceneNodePtr pickedRoot = pickRoot(picked);
+    // Membership, not equality: any MEMBER of the set standing at the picked
+    // root (or being the picked node itself) means the drill-down rule applies.
+    for (const auto &sel : selection)
+        if (sel == pickedRoot || sel == picked) return picked;
+    return pickedRoot;
+}
+
 iris::SceneNodePtr ScenePicker::resolveRootSelection(iris::SceneNodePtr picked, iris::SceneNodePtr lastSelected,
                                                      bool selectRootObject)
 {

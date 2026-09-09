@@ -121,6 +121,20 @@ public:
 	/// single-claimant routing pattern graphUndo established for Ctrl+Z. Tab
 	/// over the view still opens it too. False = no graph to search.
 	bool openNodeSearch();
+
+	// The graph's EDIT chords, page-scoped (EDITOR_MULTISELECT_SPEC §2.6).
+	//
+	// Delete, Ctrl+D, Ctrl+C and Ctrl+V are registry entries now — the editor
+	// needs them for the selection SET, and a bare WindowShortcut in the graph
+	// view would make each chord AMBIGUOUS, which is how Ctrl+Z came to do
+	// nothing on this page (see graphUndo above). So the graph's four bare
+	// QShortcuts are gone and these are what the shell calls when the Materials
+	// space is the active one: same scene methods, one claimant per chord.
+	// False = no graph (nothing to act on).
+	bool graphDeleteSelected();
+	bool graphDuplicateSelected();
+	bool graphCopySelected();
+	bool graphPaste();
 	/// Depth of the two halves of that stack — what the verbs report and what a
 	/// test asserts against.
 	int graphUndoCount() const;

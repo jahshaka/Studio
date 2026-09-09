@@ -14,8 +14,11 @@ For more information see the LICENSE file
 
 #include <QMenu>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QInputDialog>
 #include <QTreeWidgetItem>
+#include <QTreeWidgetItemIterator>
+#include <QItemSelectionModel>
 #include <QUndoStack>
 
 #include "commands/reparentscenenodecommand.h"
@@ -30,6 +33,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
+#include "services/selectionservice.h"
 #include "data/constants.h"
 #include "viewport/ieditorviewport.h"
 #include "services/planarreflectors.h"
@@ -238,6 +242,139 @@ QList<iris::SceneNodePtr> SceneHierarchyWidget::selectedNodes() const
     return out;
 }
 
+// ---- MULTI-SELECTION (EDITOR_MULTISELECT_SPEC §2.2) ------------------------
+
+bool SceneHierarchyWidget::isWorldRoot(const iris::SceneNodePtr &node) const
+{
+    return !!node && ((!!scene && scene->getRootNode() == node) || node->isRootNode());
+}
+
+QList<iris::SceneNodePtr> SceneHierarchyWidget::visibleNodeRows() const
+{
+    QList<iris::SceneNodePtr> rows;
+    // VISIBLE rows, in the order they are DRAWN. QTreeWidgetItemIterator's
+    // NotHidden flag covers hidden items; a collapsed subtree's children are
+    // not "hidden" items, so the ancestor test below is what excludes them —
+    // and it has to, because "everything between these two rows" means what is
+    // on screen, not what is in the document.
+    for (QTreeWidgetItemIterator it(ui->sceneTree, QTreeWidgetItemIterator::NotHidden); *it; ++it) {
+        QTreeWidgetItem *row = *it;
+        if (isFolderItem(row)) continue;              // a folder is a ROW, never a node
+        bool collapsedAncestor = false;
+        for (QTreeWidgetItem *p = row->parent(); p; p = p->parent())
+            if (!p->isExpanded()) { collapsedAncestor = true; break; }
+        if (collapsedAncestor) continue;
+        const auto node = nodeList.value(row->data(0, Qt::UserRole).toLongLong());
+        if (!node) continue;
+        rows.append(node);
+    }
+    return rows;
+}
+
+QList<iris::SceneNodePtr>
+SceneHierarchyWidget::nodesInVisibleRange(const iris::SceneNodePtr &a,
+                                          const iris::SceneNodePtr &b) const
+{
+    QList<iris::SceneNodePtr> out;
+    if (!a || !b) return out;
+
+    const QList<iris::SceneNodePtr> rows = visibleNodeRows();
+    int i = -1, j = -1;
+    for (int k = 0; k < rows.size(); ++k) {
+        if (rows[k].data() == a.data()) i = k;
+        if (rows[k].data() == b.data()) j = k;
+    }
+    if (i < 0 || j < 0) return out;
+    if (i > j) std::swap(i, j);
+
+    for (int k = i; k <= j; ++k) {
+        if (isWorldRoot(rows[k])) continue;           // D6
+        if (!out.contains(rows[k])) out.append(rows[k]);
+    }
+    return out;
+}
+
+// D1(b) — THE OWNER'S SHIFT RULE, and the one place it lives.
+//
+// "Shift-click should select all items from the TOPMOST SELECTED one to the
+// last one I Shift-click." That differs from Qt, Unreal and Blender in exactly
+// one case: after Ctrl-clicks that left the last-clicked row BELOW an
+// earlier-selected one (rows 5 and 8 selected, Shift+12 gives {5..12} here and
+// {8..12} everywhere else). Qt applies ITS range on the press, so this runs
+// from the press-time event filter and CONSUMES the event — otherwise the
+// panel would flash Qt's selection first and ours a moment later.
+void SceneHierarchyWidget::applyShiftRange(const iris::SceneNodePtr &clicked, bool additive)
+{
+    if (!clicked) return;
+    const QList<iris::SceneNodePtr> rows = visibleNodeRows();
+    if (rows.isEmpty()) return;
+
+    // The ANCHOR is the topmost selected VISIBLE row — not stored state, and
+    // not the current item (D2: the primary is the last clicked, the anchor is
+    // derived). With nothing selected, a Shift+click is a plain click.
+    QList<iris::SceneNodePtr> current = selectedNodes();
+    iris::SceneNodePtr anchor;
+    for (const auto &row : rows) {
+        if (isWorldRoot(row)) continue;
+        if (current.contains(row)) { anchor = row; break; }
+    }
+    if (!anchor) anchor = clicked;
+
+    QList<iris::SceneNodePtr> range = nodesInVisibleRange(anchor, clicked);
+    if (range.isEmpty()) return;
+
+    // Ctrl+Shift extends instead of replacing (Blender's additive range).
+    QList<iris::SceneNodePtr> members;
+    if (additive) {
+        for (const auto &n : current) if (!isWorldRoot(n)) members.append(n);
+    }
+    for (const auto &n : range) if (!members.contains(n)) members.append(n);
+
+    // The CLICKED row is the primary — every system makes the clicked row
+    // current, and the properties panel has to follow the mouse.
+    QList<iris::SceneNodePtr> ordered;
+    ordered.append(clicked);
+    for (const auto &n : members) if (n.data() != clicked.data()) ordered.append(n);
+
+    setSelectedSet(ordered);              // paint it now; the guard stops the echo
+    announceSet(ordered);
+}
+
+// One place decides whether a set is worth announcing, and in what shape.
+void SceneHierarchyWidget::announceSet(const QList<iris::SceneNodePtr> &nodes)
+{
+    QList<qint64> ids;
+    for (const auto &n : nodes) if (n) ids.append(n->getNodeId());
+    if (ids == lastAnnouncedSet) return;
+    lastAnnouncedSet = ids;
+    selectedNode = nodes.isEmpty() ? iris::SceneNodePtr() : nodes.first();
+    if (nodes.size() > 1) emit sceneNodeSetSelected(nodes);
+    else                  emit sceneNodeSelected(selectedNode);
+}
+
+void SceneHierarchyWidget::setSelectedSet(const QList<iris::SceneNodePtr> &nodes)
+{
+    selectedNode = nodes.isEmpty() ? iris::SceneNodePtr() : nodes.first();
+
+    suppressSelectionSignal = true;
+    ui->sceneTree->clearSelection();
+    QTreeWidgetItem *primaryItem = nullptr;
+    for (const auto &node : nodes) {
+        if (!node) continue;
+        auto *item = treeItemList.value(node->getNodeId());
+        if (!item) continue;
+        item->setSelected(true);
+        if (!primaryItem) primaryItem = item;
+    }
+    if (primaryItem) {
+        ui->sceneTree->setCurrentItem(primaryItem, 0,
+                                      QItemSelectionModel::NoUpdate);
+        ui->sceneTree->scrollTo(ui->sceneTree->currentIndex(),
+                                QAbstractItemView::PositionAtCenter);
+    }
+    suppressSelectionSignal = false;
+}
+
 bool SceneHierarchyWidget::isFolderable(const iris::SceneNodePtr &node) const
 {
     // Folders organise the ROOT LEVEL of the outliner (§6b, Unreal semantics):
@@ -258,9 +395,28 @@ void SceneHierarchyWidget::treeSelectionChanged()
     // everywhere else in the app.
     if (!current || isFolderItem(current)) return;
     const auto node = nodeList.value(current->data(0, Qt::UserRole).toLongLong());
-    if (!node || node == selectedNode) return;
-    selectedNode = node;
-    emit sceneNodeSelected(selectedNode);
+    if (!node) return;
+
+    // THE WHOLE SET, not currentItem() alone (EDITOR_MULTISELECT_SPEC §2.2).
+    // Qt's own Ctrl-toggle and plain click already produce the right set here;
+    // the only rule this panel has to impose is Shift's (applyShiftRange, on
+    // the press) and D6's — the World root is never a member of a multi, so a
+    // set that contains it plus something else drops it.
+    QList<iris::SceneNodePtr> set = selectedNodes();
+    if (set.size() > 1) {
+        QList<iris::SceneNodePtr> filtered;
+        for (const auto &n : set) if (!isWorldRoot(n)) filtered.append(n);
+        set = filtered;
+    }
+    if (set.isEmpty()) set = { node };
+
+    // The clicked/current row is the PRIMARY.
+    QList<iris::SceneNodePtr> ordered;
+    if (set.contains(node)) ordered.append(node);
+    for (const auto &n : set) if (n.data() != node.data()) ordered.append(n);
+    if (ordered.isEmpty()) return;
+
+    announceSet(ordered);
 }
 
 bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
@@ -278,6 +434,33 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
     // which, and it also feeds the drop indicator so the two read differently on
     // screen before the mouse is released.
     static const char *kTreeMime = "application/x-qabstractitemmodeldatalist";
+
+    // SHIFT+PRESS: OURS, not Qt's (EDITOR_MULTISELECT_SPEC §2.2/D1 b).
+    //
+    // With ExtendedSelection Qt applies its OWN range — anchored on the current
+    // item — inside mousePressEvent and fires itemSelectionChanged
+    // synchronously. The owner's rule anchors on the TOPMOST SELECTED row
+    // instead, so the press has to be intercepted and consumed here; letting Qt
+    // run first and correcting afterwards would show two different selections
+    // in one click. Ctrl+click and the plain click stay Qt's — those already
+    // match the rule.
+    if (watched == ui->sceneTree->viewport() && event->type() == QEvent::MouseButtonPress) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton && (me->modifiers() & Qt::ShiftModifier)) {
+            const QPoint pos = me->position().toPoint();
+            // Column 0 only: the eye and lock columns stay per-row toggles.
+            if (ui->sceneTree->columnAt(pos.x()) == 0) {
+                QTreeWidgetItem *row = ui->sceneTree->itemAt(pos);
+                const auto node = (row && !isFolderItem(row))
+                    ? nodeList.value(row->data(0, Qt::UserRole).toLongLong())
+                    : iris::SceneNodePtr();
+                if (node && !node->isRootNode()) {
+                    applyShiftRange(node, me->modifiers() & Qt::ControlModifier);
+                    return true;      // consumed: Qt's range must not also run
+                }
+            }
+        }
+    }
 
     if (event->type() == QEvent::DragEnter) {
         auto evt = static_cast<QDragEnterEvent*>(event);
@@ -652,15 +835,16 @@ void SceneHierarchyWidget::treeItemSelected(QTreeWidgetItem *item, int column)
         else releaseItemAndChildren(item);
     }
 	else {
-		// itemSelectionChanged has usually already reported this row (it fires
-		// on the press, before the click). Re-emitting would rebuild the whole
-		// properties panel a second time for one click, so only the case that
-		// signal cannot see — a click on the ALREADY current row — lands here.
-		qint64 nodeId = item->data(0, Qt::UserRole).toLongLong();
-		const auto node = nodeList.value(nodeId);
-		if (!node || node == selectedNode) return;
-		selectedNode = node;
-		emit sceneNodeSelected(selectedNode);
+		// ONE PATH OUT (EDITOR_MULTISELECT_SPEC §3.1). itemSelectionChanged has
+		// usually already reported this row — it fires on the press, before the
+		// click — and the case it cannot see is a click on the ALREADY current
+		// row. This branch used to emit a single node of its own, which walked
+		// straight past every set rule: a Ctrl+click on the World row announced
+		// the root as the selection even though D6 says the root is never part
+		// of a multi. So it goes through the same computation, and announceSet
+		// swallows the duplicate when the set has not actually changed (which
+		// is what kept one click from rebuilding the properties panel twice).
+		treeSelectionChanged();
 	}
 }
 
@@ -886,6 +1070,11 @@ void SceneHierarchyWidget::constraintsPicked(int constraintGuidToIndex, iris::Ph
 	selectedNode->physicsProperty.constraints.append(constraintProp);
 }
 
+// The menu rows and the toolbar button act on the SELECTION SET
+// (EDITOR_MULTISELECT_SPEC §2.5). MainWindow::deleteNode/duplicateNode are
+// themselves set-aware now, so these stay one-line delegators and all three
+// entry points (menu, toolbar, Del/Ctrl+D) share one implementation and one
+// undo step.
 void SceneHierarchyWidget::deleteNode()
 {
     mainWindow->deleteNode();
@@ -899,7 +1088,15 @@ void SceneHierarchyWidget::duplicateNode()
 
 void SceneHierarchyWidget::focusOnNode()
 {
-	if (mainWindow && mainWindow->viewport()) mainWindow->viewport()->focusOnNode(selectedNode);
+	// focusOnSelection frames the whole set's union bounds (§2.3); the
+	// single-node call is the fallback for a viewport that has no set.
+	if (mainWindow && mainWindow->viewport()) {
+		if (mainWindow->studioServices() && mainWindow->studioServices()->selection &&
+			mainWindow->studioServices()->selection->count() > 1)
+			mainWindow->viewport()->focusOnSelection();
+		else
+			mainWindow->viewport()->focusOnNode(selectedNode);
+	}
 }
 
 void SceneHierarchyWidget::exportNode(const iris::SceneNodePtr &node, ModelTypes modelType)
@@ -991,12 +1188,38 @@ void SceneHierarchyWidget::repopulateTree()
 
     populateTree(rootTreeItem, rootNode);
 
+    // THE SELECTION SURVIVES THE REBUILD (EDITOR_MULTISELECT_SPEC §2.2).
+    // clear() below throws away every row, and nothing used to put the
+    // selection back — so a Shift-range followed by any folder edit, reparent
+    // or hierarchyChanged lost the set the moment the command finished. The
+    // snapshot is by nodeId, which is exactly what structural undo preserves
+    // and what treeItemList is keyed on.
+    QList<qint64> selectedIds;
+    for (const auto &n : selectedNodes()) selectedIds.append(n->getNodeId());
+    const qint64 primaryId = selectedNode ? selectedNode->getNodeId() : -1;
+
     ui->sceneTree->clear();
     ui->sceneTree->addTopLevelItem(rootTreeItem);
     ui->sceneTree->expandItem(rootTreeItem);
     for (auto it = folderItemList.constBegin(); it != folderItemList.constEnd(); ++it)
         if (it.value()) it.value()->setExpanded(!collapsedFolders.contains(it.key()));
     //ui->sceneTree->expandAll();
+
+    if (!selectedIds.isEmpty()) {
+        QList<iris::SceneNodePtr> restored;
+        if (primaryId >= 0) {
+            const auto primary = nodeList.value(primaryId);
+            if (!!primary) restored.append(primary);
+        }
+        for (qint64 id : selectedIds) {
+            if (id == primaryId) continue;
+            const auto node = nodeList.value(id);
+            if (!!node) restored.append(node);
+        }
+        // Under the guard, and WITHOUT announcing: the document did not change
+        // its selection, the widget just rebuilt the rows that show it.
+        if (!restored.isEmpty()) setSelectedSet(restored);
+    }
 }
 
 void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,

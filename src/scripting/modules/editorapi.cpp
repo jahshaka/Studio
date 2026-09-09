@@ -30,6 +30,8 @@ For more information see the LICENSE file
 #include "viewport/flyspeedsettings.h"
 #include "scripting/modules/flyspeedverb.h"
 #include "shell/mainwindow.h"
+#include "ui/panels/scenehierarchywidget.h"
+#include "io/sceneformat.h"
 #include "services/services.h"
 #include "services/playbackservice.h"
 #include "services/sceneeditservice.h"
@@ -43,11 +45,58 @@ using namespace scriptmod;
 QVector<VerbInfo> EditorApi::verbs() const
 {
     return {
-        { "select", "editor.select(id | null) -> bool",
-          "Selects a node everywhere (viewport, hierarchy, properties); null or no argument deselects.",
+        { "select", "editor.select(id | [id] | null) -> bool",
+          "Selects a node — or a SET of nodes — everywhere (viewport, hierarchy, properties); "
+          "null, no argument or an empty array deselects. With an array the FIRST id becomes the "
+          "primary: the node the properties panel shows, the gizmo pivots on and every "
+          "single-target verb acts on (EDITOR_MULTISELECT_SPEC D2).",
           Needs::Document },
         { "selection", "editor.selection() -> id | null",
-          "The selected node's id, or null.",
+          "The PRIMARY selected node's id, or null. Unchanged by multi-selection: "
+          "editor.selectionSet() is the whole set.",
+          Needs::Document },
+        { "selectionSet", "editor.selectionSet() -> [id]",
+          "The whole selection: the primary first, then the rest in document pre-order "
+          "(an ancestor before its descendants, siblings by index). Empty when nothing is selected.",
+          Needs::Document },
+        { "selectAdd", "editor.selectAdd(id | [id]) -> bool",
+          "Adds to the selection without replacing it (the viewport's Shift+click, the tree's "
+          "Ctrl+click on an unselected row). The LAST id added becomes the primary.",
+          Needs::Document },
+        { "selectToggle", "editor.selectToggle(id) -> bool",
+          "Adds the node if it is not selected, removes it if it is (Ctrl+click), and returns its "
+          "membership AFTER the call. Removing the primary promotes the topmost remaining member.",
+          Needs::Document },
+        { "selectRange", "editor.selectRange(fromId, toId) -> [id]",
+          "Selects everything from one node to another INCLUSIVE, replacing the selection — the "
+          "tree's Shift+click. In the app the range spans VISIBLE OUTLINER ROWS (collapsed "
+          "subtrees and folder rows are not in it); with no window (--headless) it spans document "
+          "pre-order instead, which is the same answer for a fully expanded tree.",
+          Needs::Document },
+        { "selectNone", "editor.selectNone() -> bool",
+          "Clears the selection (the same as editor.select(null)).",
+          Needs::Document },
+        { "deleteSelection", "editor.deleteSelection() -> {deleted: [id], skipped: [id]}",
+          "Deletes the selection as ONE undo step. A member whose ancestor is also selected is "
+          "skipped (it goes with its ancestor), and the World root and non-removable nodes are "
+          "reported in `skipped` rather than refusing the whole delete.",
+          Needs::Document },
+        { "duplicateSelection", "editor.duplicateSelection() -> [id]",
+          "Duplicates the selection as ONE undo step — each copy lands right after its own "
+          "original — and selects the copies. Returns the new ids, the primary's copy first.",
+          Needs::Document },
+        { "copy", "editor.copy() -> n",
+          "Copies the selection into the EDITOR clipboard (in-app, never the system clipboard) as "
+          "scene fragments and returns how many. Not an undo entry. Copying nothing leaves the "
+          "previous clipboard alone.",
+          Needs::Document },
+        { "paste", "editor.paste() -> [id]",
+          "Pastes the clipboard beside the primary — same parent, sibling index + 1, local "
+          "transform kept — or at the scene root when nothing is selected. Fresh guids, one undo "
+          "step, and the pasted nodes become the selection.",
+          Needs::Document },
+        { "clipboard", "editor.clipboard() -> [{format, version, node, parent, index}]",
+          "The editor clipboard's fragments, in the shape node.serialize returns.",
           Needs::Document },
         { "gizmoMode", "editor.gizmoMode() -> \"translate\" | \"rotate\" | \"scale\"",
           "The active transform gizmo mode (W/E/R in the viewport; Space cycles).",
@@ -56,7 +105,9 @@ QVector<VerbInfo> EditorApi::verbs() const
           "Switches the transform gizmo, exactly like the W/E/R keys and the toolbar buttons.",
           Needs::Engine },
         { "focusSelection", "editor.focusSelection() -> bool",
-          "Frames the selected node in the editor camera (the F key): bounds-aware distance, current view direction kept. "
+          "Frames the selection in the editor camera (the F key): bounds-aware distance, current view direction kept. "
+          "With more than one node selected it frames the UNION of their world bounds, in one framing, so the whole set "
+          "ends up on screen (a member with no meshes contributes its origin). "
           "IN A ROTATION-LOCKED AXIS VIEW it CENTRES instead: the camera keeps its axis orientation, slides along the view axis until the node is centred, and the framing is done by the ortho zoom "
           "(backing off is invisible in an orthographic projection) — turning to face the node there would tilt a \"top\" view off the axis it is named after.",
           Needs::Engine },
@@ -327,6 +378,92 @@ QVector<VerbInfo> EditorApi::verbs() const
     };
 }
 
+// ---- selection helpers (EDITOR_MULTISELECT_SPEC §2.7) ----------------------
+
+bool EditorApi::resolveNodeArgument(const QVariant &id, const QString &verb,
+                                    QList<iris::SceneNodePtr> &out)
+{
+    out.clear();
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) return fail(QStringLiteral("%1: no scene is open").arg(verb));
+
+    const QVariant value = scriptmod::normalizeJs(id);
+    QStringList guids;
+    if (value.typeId() == QMetaType::QVariantList) {
+        for (const QVariant &entry : value.toList()) {
+            const QString guid = entry.toString();
+            if (!guid.isEmpty()) guids.append(guid);
+        }
+    } else {
+        const QString guid = value.toString();
+        if (!guid.isEmpty()) guids.append(guid);
+    }
+
+    for (const QString &guid : guids) {
+        auto node = findNodeByGuid(scene->getRootNode(), guid);
+        if (!node) return fail(QStringLiteral("%1: no node with id '%2'").arg(verb, guid));
+        bool seen = false;
+        for (const auto &n : out) if (n.data() == node.data()) { seen = true; break; }
+        if (!seen) out.append(node);
+    }
+    // D6: the World root never travels in a multi. On its own it is a normal
+    // selection (opening a scene selects it and shows the World panel).
+    if (out.size() > 1) {
+        QList<iris::SceneNodePtr> filtered;
+        for (const auto &n : out) if (!n->isRootNode()) filtered.append(n);
+        out = filtered;
+    }
+    return true;
+}
+
+namespace {
+
+/// Document pre-order, the World root excluded — the headless stand-in for
+/// "visible outliner rows" (identical for a fully expanded, folder-free tree).
+void preOrderNodes(const iris::SceneNodePtr &node, QList<iris::SceneNodePtr> &out)
+{
+    if (!node) return;
+    if (!node->isRootNode()) out.append(node);
+    const int kids = node->childCount();
+    for (int i = 0; i < kids; ++i)
+        if (iris::SceneNode *child = node->childAt(i))
+            preOrderNodes(child->sharedFromThis(), out);
+}
+
+} // namespace
+
+QList<iris::SceneNodePtr> EditorApi::rangeInVisibleOrder(const iris::SceneNodePtr &a,
+                                                         const iris::SceneNodePtr &b)
+{
+    QList<iris::SceneNodePtr> out;
+    if (!a || !b) return out;
+
+    // THE TREE IS THE AUTHORITY on row order when there is one: outliner
+    // folders reorder the root level and a collapsed subtree is not on screen,
+    // so "everything between these two rows" is a widget fact, not a document
+    // one (EDITOR_MULTISELECT_SPEC §2.2).
+    if (host.mainWindow) {
+        if (auto *panel = host.mainWindow->hierarchyPanel()) {
+            out = panel->nodesInVisibleRange(a, b);
+            if (!out.isEmpty()) return out;
+        }
+    }
+
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) return out;
+    QList<iris::SceneNodePtr> order;
+    preOrderNodes(scene->getRootNode(), order);
+    int i = -1, j = -1;
+    for (int k = 0; k < order.size(); ++k) {
+        if (order[k].data() == a.data()) i = k;
+        if (order[k].data() == b.data()) j = k;
+    }
+    if (i < 0 || j < 0) return out;
+    if (i > j) std::swap(i, j);
+    for (int k = i; k <= j; ++k) out.append(order[k]);
+    return out;
+}
+
 bool EditorApi::select(const QVariant &id)
 {
     if (!host.services || !host.services->selection || !host.services->sceneEdit)
@@ -334,14 +471,14 @@ bool EditorApi::select(const QVariant &id)
     auto scene = host.services->sceneEdit->scene();
     if (!scene) return fail("editor.select: no scene is open");
 
-    const QString guid = id.toString();
-    if (guid.isEmpty()) {
+    QList<iris::SceneNodePtr> nodes;
+    if (!resolveNodeArgument(id, QStringLiteral("editor.select"), nodes)) return false;
+    if (nodes.isEmpty()) {
         host.services->selection->select(iris::SceneNodePtr());
         return true;
     }
-    auto node = findNodeByGuid(scene->getRootNode(), guid);
-    if (!node) return fail(QStringLiteral("editor.select: no node with id '%1'").arg(guid));
-    host.services->selection->select(node);
+    if (nodes.size() == 1) host.services->selection->select(nodes.first());
+    else                   host.services->selection->select(nodes);
     return true;
 }
 
@@ -350,6 +487,166 @@ QVariant EditorApi::selection()
     if (!host.services || !host.services->selection) return QVariant();
     auto node = host.services->selection->selected();
     return node ? QVariant(node->getGUID()) : QVariant();
+}
+
+QVariantList EditorApi::selectionSet()
+{
+    QVariantList out;
+    if (!host.services || !host.services->selection) return out;
+    for (const auto &node : host.services->selection->selectedSet())
+        if (node) out.append(node->getGUID());
+    return out;
+}
+
+bool EditorApi::selectAdd(const QVariant &id)
+{
+    if (!host.services || !host.services->selection || !host.services->sceneEdit)
+        return fail("editor: not available in this session");
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) return fail("editor.selectAdd: no scene is open");
+
+    QList<iris::SceneNodePtr> nodes;
+    if (!resolveNodeArgument(id, QStringLiteral("editor.selectAdd"), nodes)) return false;
+    if (nodes.isEmpty()) return fail("editor.selectAdd: no node id given");
+    for (const auto &node : nodes) {
+        // D6: the World root is never a MEMBER of a multi — adding it would
+        // swallow the set (every other member is its descendant, so the D5
+        // reduction would drop them all). Adding it is a plain select, exactly
+        // as Ctrl+clicking it in the tree is.
+        if (node->isRootNode()) host.services->selection->select(node);
+        else                    host.services->selection->add(node);
+    }
+    return true;
+}
+
+bool EditorApi::selectToggle(const QString &id)
+{
+    if (!host.services || !host.services->selection || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return false;
+    }
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) { fail("editor.selectToggle: no scene is open"); return false; }
+    auto node = findNodeByGuid(scene->getRootNode(), id);
+    if (!node) {
+        fail(QStringLiteral("editor.selectToggle: no node with id '%1'").arg(id));
+        return false;
+    }
+    // D6: the World root is never a member of a multi-selection — a Ctrl+click
+    // on it is a plain click, because as a member it would poison delete
+    // (refused), transform (moves the world) and focus.
+    if (node->isRootNode()) {
+        host.services->selection->select(node);
+        return true;
+    }
+    return host.services->selection->toggle(node);
+}
+
+QVariantList EditorApi::selectRange(const QString &fromId, const QString &toId)
+{
+    QVariantList out;
+    if (!host.services || !host.services->selection || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return out;
+    }
+    auto scene = host.services->sceneEdit->scene();
+    if (!scene) { fail("editor.selectRange: no scene is open"); return out; }
+    auto from = findNodeByGuid(scene->getRootNode(), fromId);
+    auto to   = findNodeByGuid(scene->getRootNode(), toId);
+    if (!from) { fail(QStringLiteral("editor.selectRange: no node with id '%1'").arg(fromId)); return out; }
+    if (!to)   { fail(QStringLiteral("editor.selectRange: no node with id '%1'").arg(toId)); return out; }
+
+    QList<iris::SceneNodePtr> range = rangeInVisibleOrder(from, to);
+    if (range.isEmpty()) return out;
+    // The clicked end is the primary, exactly as it is in the tree (D2).
+    QList<iris::SceneNodePtr> ordered;
+    ordered.append(to);
+    for (const auto &n : range) if (n.data() != to.data()) ordered.append(n);
+    host.services->selection->select(ordered);
+    for (const auto &n : host.services->selection->selectedSet())
+        if (n) out.append(n->getGUID());
+    return out;
+}
+
+bool EditorApi::selectNone()
+{
+    if (!host.services || !host.services->selection)
+        return fail("editor: not available in this session");
+    host.services->selection->clear();
+    return true;
+}
+
+QVariantMap EditorApi::deleteSelection()
+{
+    QVariantMap out;
+    if (!host.services || !host.services->selection || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return out;
+    }
+    const auto set = host.services->selection->selectedSet();
+    if (set.isEmpty()) { fail("editor.deleteSelection: nothing is selected"); return out; }
+    const auto result = host.services->sceneEdit->deleteNodes(set);
+    out["deleted"] = QVariant(result.deleted);
+    out["skipped"] = QVariant(result.skipped);
+    return out;
+}
+
+QVariantList EditorApi::duplicateSelection()
+{
+    QVariantList out;
+    if (!host.services || !host.services->selection || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return out;
+    }
+    const auto set = host.services->selection->selectedSet();
+    if (set.isEmpty()) { fail("editor.duplicateSelection: nothing is selected"); return out; }
+    for (const auto &node : host.services->sceneEdit->duplicateNodes(set))
+        if (node) out.append(node->getGUID());
+    return out;
+}
+
+int EditorApi::copy()
+{
+    if (!host.services || !host.services->selection || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return 0;
+    }
+    const auto set = host.services->selection->selectedSet();
+    if (set.isEmpty()) { fail("editor.copy: nothing is selected"); return 0; }
+    return host.services->sceneEdit->copyNodes(set);
+}
+
+QVariantList EditorApi::paste()
+{
+    QVariantList out;
+    if (!host.services || !host.services->sceneEdit) {
+        fail("editor: not available in this session");
+        return out;
+    }
+    if (host.services->sceneEdit->clipboard().isEmpty()) {
+        fail("editor.paste: the clipboard is empty");
+        return out;
+    }
+    for (const auto &node : host.services->sceneEdit->paste())
+        if (node) out.append(node->getGUID());
+    return out;
+}
+
+QVariantList EditorApi::clipboard()
+{
+    QVariantList out;
+    if (!host.services || !host.services->sceneEdit) return out;
+    for (const SceneFragment &fragment : host.services->sceneEdit->clipboard()) {
+        // The same shape node.serialize returns — session node ids deliberately
+        // left out for the same reason it leaves them out.
+        out.append(QVariantMap{
+            { "format", QString::fromLatin1(sceneformat::kFormatId()) },
+            { "version", sceneformat::kVersion },
+            { "node", fragment.node.toVariantMap() },
+            { "parent", fragment.parentGuid },
+            { "index", fragment.siblingIndex } });
+    }
+    return out;
 }
 
 QString EditorApi::gizmoMode()
