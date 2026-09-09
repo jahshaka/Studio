@@ -119,6 +119,11 @@ void ScriptConsole::runInput()
     }
 }
 
+void ScriptConsole::focusInput()
+{
+    if (mInput) mInput->setFocus(Qt::ShortcutFocusReason);
+}
+
 void ScriptConsole::announce(const QString &text)
 {
     appendLine(text, QStringLiteral("#8ec6ff"));

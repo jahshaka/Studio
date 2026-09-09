@@ -3393,7 +3393,15 @@ void MainWindow::setupShortcuts()
             [this]() { saveScene(); });
     reg.add("console.toggle", "Script Console", "Windows",
             QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this, [this]() {
-                if (scriptConsoleDock) scriptConsoleDock->setVisible(!scriptConsoleDock->isVisible());
+                if (!scriptConsoleDock) return;
+                const bool show = !scriptConsoleDock->isVisible();
+                scriptConsoleDock->setVisible(show);
+                // AND PUT THE KEYBOARD IN IT. Ctrl+` used to open a console
+                // that still needed a mouse click before it would take a
+                // character — which also meant the chord rules the console is
+                // the natural place to exercise (Ctrl+A belongs to a focused
+                // text field) could not be reached from the keyboard at all.
+                if (show && scriptConsole) scriptConsole->focusInput();
             });
     reg.add("claude.toggle", "Claude Assistant", "Windows",
             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this,

@@ -250,15 +250,14 @@ sleep 0.5
 activate
 js "editor.select('$C')" > /dev/null
 BEFORE=$(js 'scene.nodes().length')
-# Ctrl+` opens the script console dock, whose input line is a text field; a
-# click lands the focus in it. NOTE-ONLY: the panel layout decides where that
-# line sits, so a miss must not fail the suite — the finding is recorded and
-# the Qt contract (a QLineEdit accepts the ShortcutOverride for Ctrl+C/V) is
-# what is being probed, not something this lane implements.
+# Ctrl+` opens the script console dock AND puts the keyboard in its input line
+# (mainwindow.cpp, 2026-09-09 — it used to open a console you had to click
+# before it would take a character, which is also why this probe used to guess
+# at a pixel and miss). NOTE-ONLY still: the Qt contract being probed (a text
+# widget accepts the ShortcutOverride for Ctrl+C/V) is not something this suite
+# implements, so a miss is recorded rather than gated.
 key ctrl+grave
-sleep 0.5
-xdotool mousemove --window "$WIN" $((WIN_W*55/100)) $((WIN_H*95/100)) click 1 2>/dev/null
-sleep 0.4
+sleep 0.6
 key ctrl+v
 AFTER=$(js 'scene.nodes().length')
 [ "$AFTER" = "$BEFORE" ] \
@@ -291,10 +290,13 @@ n_sel=$(printf '%s' "$SEL" | jq -r '.sel'); n_all=$(printf '%s' "$SEL" | jq -r '
 [ "$(printf '%s' "$SEL" | jq -r '.hasRoot')" = "false" ]     && ok "…and the one left out is the World root (D6)"     || bad "Ctrl+A put the World root in the selection"
 
 # ---- 5b(i): a focused text field keeps the chord ---------------------------
-# The console dock is already open from PART 4 and its input line is where that
-# part clicked. Click it again to be sure the focus is there.
-xdotool mousemove --window "$WIN" $((WIN_W*55/100)) $((WIN_H*95/100)) click 1 2>/dev/null
+# PART 5a just clicked the outliner, so the focus is in the TREE. Toggle the
+# console dock off and on: showing it focuses its input line (see PART 4), so
+# the focus is in a QPlainTextEdit by construction rather than by pixel-guess.
+key ctrl+grave
 sleep 0.4
+key ctrl+grave
+sleep 0.6
 BEFORE=$(js 'JSON.stringify(editor.selectionSet())')
 key ctrl+a
 AFTER=$(js 'JSON.stringify(editor.selectionSet())')
