@@ -77,74 +77,55 @@ set_tests_properties(app.startup_quiet PROPERTIES
     TIMEOUT 300
     LABELS "app")
 
-# app.pacing_undo — the frame-pacing loop (deep audit area 7 F8) and the Ctrl+Z
-# routing on the Materials page (area 1), both against the real binary with real
-# mouse and key events. The script's header says why nothing smaller can gate
-# either half: the render loop is a QTimer no script can step, and shortcut
-# ambiguity only exists in a live window with real widget visibility.
+# app.input_keys — EVERY INPUT-SYNTHESIS ASSERTION THE EDITOR HAS, ON ONE BOOT.
+#
+# This was three ctest rows until 2026-09-09: app.pacing_undo (the frame-pacing
+# loop, deep audit area 7 F8, plus the Ctrl+Z routing of area 1),
+# app.multiselect_keys (the four edit chords in both spaces,
+# EDITOR_MULTISELECT_SPEC §2.6/§5) and app.navigation_keys (the arrows fly, the
+# letters are free). Each started its own Xvfb, booted its own Jahshaka under
+# --mcp-port, hunted the main window and clicked it — three identical ~10 s
+# preambles — and all three were RUN_SERIAL, so the gate paid for them end to
+# end (TEST_GATE_AUDIT.md §5 step 6). They are three PARTS of one question, and
+# input_keys.sh asks all three in one window with every assertion and its
+# wording intact.
+#
+# RUN_SERIAL STAYS. Key ARRIVAL is timing-sensitive under load — the
+# WM-less-Xvfb arrival class in CLAUDE.md's gate facts — and this is now one
+# serial row instead of three.
 #
 # NOTE THE MISSING DISPLAY= : this is the one suite that does NOT take
-# JAH_TEST_DISPLAY. It synthesises input, and JAH_TEST_DISPLAY defaults to :0 —
-# so it starts and owns a private Xvfb instead (the script explains it fully).
-# Linux only, and registered only when the four tools it drives exist, so a box
-# without them says so at configure time instead of failing mysteriously.
+# JAH_TEST_DISPLAY. It synthesises input, and JAH_TEST_DISPLAY may name a
+# developer's live session — so it starts and owns a private Xvfb instead (the
+# script explains it fully). Linux only, and registered only when the four tools
+# it drives exist, so a box without them says so at configure time instead of
+# failing mysteriously.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_XDOTOOL xdotool)
     find_program(JAH_CURL curl)
     find_program(JAH_JQ jq)
     find_program(JAH_XVFB Xvfb)
     if(JAH_XDOTOOL AND JAH_CURL AND JAH_JQ AND JAH_XVFB)
-        set(_pu_home ${CMAKE_CURRENT_BINARY_DIR}/pacing-undo-home)
-        file(MAKE_DIRECTORY ${_pu_home}/run)
-        # A port of its own: mcp.e2e picks its own and both may run in one gate.
-        add_test(NAME app.pacing_undo
-                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pacing_undo.sh"
+        set(_ik_home ${CMAKE_CURRENT_BINARY_DIR}/input-keys-home)
+        file(MAKE_DIRECTORY ${_ik_home}/run)
+        # PORT 0 = EPHEMERAL. The app prints "MCP: port N" and the script reads
+        # it back; two suites both naming 8751 is what made -j4 unsafe
+        # (TEST_GATE_AUDIT.md §4.1).
+        add_test(NAME app.input_keys
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/input_keys.sh"
                          "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
-                 WORKING_DIRECTORY ${_pu_home}/run)
-        set_tests_properties(app.pacing_undo PROPERTIES
-            ENVIRONMENT "HOME=${_pu_home};JAHSHAKA_DATA_ROOT=${_pu_home}/.local/share/Jahshaka"
+                 WORKING_DIRECTORY ${_ik_home}/run)
+        # TIMEOUT is a DOCUMENTED EXCEPTION to the 6x policy, like the suite it
+        # replaces was: this row is one long chain of synthesised keys with
+        # fixed sleeps between them, and a loaded box stretches every one of
+        # them. 600 s against a ~40 s measured run.
+        set_tests_properties(app.input_keys PROPERTIES
+            ENVIRONMENT "HOME=${_ik_home};JAHSHAKA_DATA_ROOT=${_ik_home}/.local/share/Jahshaka"
             RUN_SERIAL TRUE
-            TIMEOUT 400
-            LABELS "app")
-        # app.multiselect_keys — the four EDIT CHORDS as real keys, in both
-        # spaces (EDITOR_MULTISELECT_SPEC §2.6/§5). Same shape and the same
-        # reasons as app.pacing_undo: shortcut ambiguity only exists in a live
-        # window, and "N objects delete as ONE undo step" cannot be asserted
-        # from a script run (a run is itself one open macro). Its own Xvfb, its
-        # own port, RUN_SERIAL like every input-synthesis suite.
-        set(_ms_home ${CMAKE_CURRENT_BINARY_DIR}/multiselect-keys-home)
-        file(MAKE_DIRECTORY ${_ms_home}/run)
-        add_test(NAME app.multiselect_keys
-                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/multiselect_keys.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
-                 WORKING_DIRECTORY ${_ms_home}/run)
-        set_tests_properties(app.multiselect_keys PROPERTIES
-            ENVIRONMENT "HOME=${_ms_home};JAHSHAKA_DATA_ROOT=${_ms_home}/.local/share/Jahshaka"
-            RUN_SERIAL TRUE
-            TIMEOUT 500
-            LABELS "app")
-        # app.navigation_keys — the editor's fly moved to the ARROW CLUSTER and
-        # W/A/S/D/Q/E were freed (owner decision 2026-09-09). input.fly_controls
-        # pins the movement maths headless; what only a live window can answer
-        # is whether the key ARRIVES (the arrows are WindowShortcut material all
-        # over the app and only reach the fly through the viewport's
-        # ShortcutOverride) and whether the freed letter now reaches the tool
-        # shortcut while the right button is held — which was the point of the
-        # change. Its own Xvfb, its own port, RUN_SERIAL like every
-        # input-synthesis suite.
-        set(_nk_home ${CMAKE_CURRENT_BINARY_DIR}/navigation-keys-home)
-        file(MAKE_DIRECTORY ${_nk_home}/run)
-        add_test(NAME app.navigation_keys
-                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/navigation_keys.sh"
-                         "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" 0
-                 WORKING_DIRECTORY ${_nk_home}/run)
-        set_tests_properties(app.navigation_keys PROPERTIES
-            ENVIRONMENT "HOME=${_nk_home};JAHSHAKA_DATA_ROOT=${_nk_home}/.local/share/Jahshaka"
-            RUN_SERIAL TRUE
-            TIMEOUT 500
+            TIMEOUT 600
             LABELS "app")
     else()
-        message(STATUS "app.pacing_undo / app.multiselect_keys / app.navigation_keys skipped: need xdotool, curl, jq and Xvfb")
+        message(STATUS "app.input_keys skipped: needs xdotool, curl, jq and Xvfb")
     endif()
 endif()
 
