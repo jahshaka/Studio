@@ -67,6 +67,11 @@ void AssetGridItem::setDrawerProvider(std::function<QVector<DrawerEntry>()> prov
 	drawerProvider = provider;
 }
 
+void AssetGridItem::setRiggedProvider(std::function<bool(const QString &)> provider)
+{
+	riggedProvider = provider;
+}
+
 void AssetGridItem::projectContextMenu(const QPoint &pos)
 {
 	QMenu menu("Context Menu", this);
@@ -110,6 +115,28 @@ void AssetGridItem::projectContextMenu(const QPoint &pos)
 			emit createMaterialFromImage(this);
 		});
 		menu.addAction(&createMaterial);
+	}
+
+	// AVATARS (AVATAR_ASSET_SPEC §5.5). Two rows, on two kinds of tile:
+	//   * an AVATAR tile opens in the Avatar module — the materials preset's
+	//     "Edit" affordance, which the asset drawer never got;
+	//   * a RIGGED MODEL tile mints one and opens it. That is the whole of D8:
+	//     an avatar is created by the gesture that wants one, so importing a
+	//     rigged prop does not litter the library with avatars nobody asked for.
+	const auto tileType = static_cast<ModelTypes>(metadata["type"].toInt());
+	QAction editAvatar("Edit in Avatar Module", this);
+	QAction createAvatar("Create Avatar", this);
+	if (tileType == ModelTypes::Avatar) {
+		connect(&editAvatar, &QAction::triggered, this, [this]() {
+			emit editAvatarAsset(this);
+		});
+		menu.addAction(&editAvatar);
+	} else if (tileType == ModelTypes::Object && riggedProvider
+	           && riggedProvider(metadata["guid"].toString())) {
+		connect(&createAvatar, &QAction::triggered, this, [this]() {
+			emit createAvatarFromModel(this);
+		});
+		menu.addAction(&createAvatar);
 	}
 
 	QAction remove("Delete", this);

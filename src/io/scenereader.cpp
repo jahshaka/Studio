@@ -848,6 +848,15 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         p.capsuleHeight = float(a["capsuleHeight"].toDouble(p.capsuleHeight));
         movement->setParams(p);
         sceneNode->setAvatarComponent(movement);
+
+        // THE LINK (AVATAR_ASSET_SPEC §5.4). Absent on a scene written before
+        // avatars were library assets, and absent on an unlinked scratch
+        // avatar (an `avatar.spawn` on a plain Object guid) — both load as
+        // exactly what they always were. When present, the recorded VERSION is
+        // what the load-time re-resolve compares against the project's pin.
+        sceneNode->avatarLink.asset = a["asset"].toString();
+        sceneNode->avatarLink.version = a["version"].toString();
+        sceneNode->avatarLink.name = a["name"].toString();
     }
 
     // THE LOCOMOTION STATE MACHINE (AVATAR_LOCOMOTION_SPEC §7). The roles a

@@ -38,6 +38,9 @@
 #include "services/assetstorepaths.h"
 #include "services/avatarassets.h"
 #include "services/projectassets.h"
+#include "io/scenewriter.h"
+#include "irisgl/document/physics/avatarmovement.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -328,6 +331,47 @@ int main(int argc, char **argv)
               "T7b: ... whose current version is what the project had");
         CHECK(AvatarAssets::projectVersion(guid, &projectA) == before,
               "T7b: the project keeps its pin");
+    }
+
+    // ---- T10 (writer half): the AVATAR LINK survives serialization --------
+    //
+    // The instance records WHICH ASSET it is and WHICH VERSION it resolved, so
+    // a scene reopened after a module save can tell that it is stale. An
+    // UNLINKED scratch avatar (an avatar.spawn on a plain model Object) must
+    // write no link at all — writing three empty strings would make every
+    // scratch avatar claim to be an instance of nothing.
+    {
+        auto linkedNode = iris::SceneNode::create();
+        linkedNode->setName("Jennifer");
+        linkedNode->setAvatarComponent(iris::AvatarMovementPtr(new iris::AvatarMovement()));
+        linkedNode->avatarLink.asset = avatarGuid;
+        linkedNode->avatarLink.version = "abc123";
+        linkedNode->avatarLink.name = "Jennifer";
+
+        QJsonObject written;
+        SceneWriter::writeSceneNode(written, linkedNode, false);
+        const QJsonObject block = written.value("avatar").toObject();
+        CHECK(block.value("asset").toString() == avatarGuid, "T10: the link's asset is written");
+        CHECK(block.value("version").toString() == "abc123", "T10: ... and its version");
+        CHECK(block.value("name").toString() == "Jennifer", "T10: ... and its name");
+        CHECK(block.contains("walkSpeed"),
+              "T10: ... beside the movement knobs, in the one avatar block");
+
+        auto scratch = iris::SceneNode::create();
+        scratch->setName("scratch");
+        scratch->setAvatarComponent(iris::AvatarMovementPtr(new iris::AvatarMovement()));
+        QJsonObject scratchObj;
+        SceneWriter::writeSceneNode(scratchObj, scratch, false);
+        const QJsonObject scratchBlock = scratchObj.value("avatar").toObject();
+        CHECK(!scratchBlock.contains("asset") && !scratchBlock.contains("version"),
+              "T10: an UNLINKED scratch avatar writes no link");
+
+        // The link travels with a DUPLICATE: a copy of an instance is a second
+        // instance of the same asset, not an orphan.
+        auto copy = linkedNode->duplicate();
+        CHECK(copy && copy->avatarLink.asset == avatarGuid
+                  && copy->avatarLink.version == "abc123",
+              "T10: duplicating an instance keeps the link");
     }
 
     // ---- R6: deleting a library avatar that projects pin ------------------

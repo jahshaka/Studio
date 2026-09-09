@@ -56,6 +56,10 @@ For more information see the LICENSE file
 #include "services/import/assetimportservice.h"
 #include "services/import/importbatchrunner.h"
 #include "services/projectassets.h"
+#include "services/avatarassets.h"
+#include "services/assetmetadata.h"
+#include "services/assetservice.h"
+#include "services/services.h"
 #include "services/imagematerial.h"
 #include "services/assetcas.h"
 #include <QSqlDatabase>
@@ -1027,6 +1031,42 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
             menu.addAction(action);
 		}
 
+		// AVATARS (AVATAR_ASSET_SPEC §5.5). The drawer is the PROJECT's view of
+		// the world, so everything here works on the project's version: Edit
+		// opens it in project scope, Update from Library re-pins to the
+		// library's current one (discarding this project's edits), and Save to
+		// Library publishes this project's version back. That is the owner's
+		// model spelled out in four menu rows.
+		if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Avatar)) {
+			const QString avatarGuid = item->data(MODEL_GUID_ROLE).toString();
+			action = new QAction(QIcon(), "Edit in Avatar Module", this);
+			connect(action, SIGNAL(triggered()), this, SLOT(editAvatarInModule()));
+			menu.addAction(action);
+
+			action = new QAction(QIcon(), "Add to Scene", this);
+			connect(action, SIGNAL(triggered()), this, SLOT(addAvatarToScene()));
+			menu.addAction(action);
+
+			action = new QAction(QIcon(), "Update from Library", this);
+			// Enabled only when there is something to take: the project's pin
+			// differs from the library's current version. A row that would do
+			// nothing is worse than one that is not there.
+			action->setEnabled(AvatarAssets::isEdited(avatarGuid, project));
+			connect(action, SIGNAL(triggered()), this, SLOT(updateAvatarFromLibrary()));
+			menu.addAction(action);
+
+			action = new QAction(QIcon(), "Save to Library", this);
+			connect(action, SIGNAL(triggered()), this, SLOT(saveAvatarToLibrary()));
+			menu.addAction(action);
+		}
+		else if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)
+		         && AssetMetadata::ensure(db, item->data(MODEL_GUID_ROLE).toString())
+		                .value(QStringLiteral("hasSkeleton")).toBool()) {
+			action = new QAction(QIcon(), "Create Avatar", this);
+			connect(action, SIGNAL(triggered()), this, SLOT(createAvatarFromModel()));
+			menu.addAction(action);
+		}
+
 		action = new QAction(QIcon(), "Delete", this);
 		connect(action, SIGNAL(triggered()), this, SLOT(deleteItem()));
 		menu.addAction(action);
@@ -1192,6 +1232,80 @@ void AssetWidget::createMaterialFromImage()
     if (project && !project->getProjectGuid().isEmpty())
         ProjectAssets::addToProject(materialGuid, db, project, ProjectAssets::AddKind::Direct);
 
+    updateAssetView(assetItem.selectedGuid);
+}
+
+// --- AVATARS (AVATAR_ASSET_SPEC §5.5) --------------------------------------
+//
+// Every one of these is a thin view over a VERB or over the AvatarAssets
+// service the verb calls — the drawer never grows a second implementation of
+// the model (which is exactly what the materials module's "Add to project"
+// did, and why this spec says mirror the UX, not the implementation).
+
+void AssetWidget::editAvatarInModule()
+{
+    if (!assetItem.wItem) return;
+    emit editAssetInModule(assetItem.wItem->data(MODEL_GUID_ROLE).toString(),
+                           QStringLiteral("avatar"), QStringLiteral("project"));
+}
+
+void AssetWidget::addAvatarToScene()
+{
+    if (!assetItem.wItem) return;
+    emit spawnAvatarInScene(assetItem.wItem->data(MODEL_GUID_ROLE).toString());
+}
+
+void AssetWidget::createAvatarFromModel()
+{
+    if (!assetItem.wItem) return;
+    const QString objectGuid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+
+    QString error;
+    // PROJECT scope: a drawer row is a project member, so the avatar minted
+    // from it belongs to this project until the user publishes it (D6).
+    const QString avatarGuid = AvatarAssets::create(objectGuid, AvatarAssets::Scope::Project, db,
+                                                    project, QString(), &error);
+    if (avatarGuid.isEmpty()) {
+        QMessageBox::warning(this, tr("Create Avatar"),
+                             tr("Could not create the avatar: %1").arg(error));
+        return;
+    }
+    updateAssetView(assetItem.selectedGuid);
+    emit editAssetInModule(avatarGuid, QStringLiteral("avatar"), QStringLiteral("project"));
+}
+
+void AssetWidget::updateAvatarFromLibrary()
+{
+    if (!assetItem.wItem) return;
+    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+    // CONFIRMED, because it throws away work: the project's own version of
+    // this avatar is replaced by the library's, and the pin is the only thing
+    // that named it.
+    if (QMessageBox::question(
+            this, tr("Update from Library"),
+            tr("Replace this project's version of the avatar with the library's current one?\n\n"
+               "Any edits made to it inside this project will no longer be used."))
+        != QMessageBox::Yes)
+        return;
+    if (!ProjectAssets::updatePinToLatest(guid, db, project)) {
+        QMessageBox::warning(this, tr("Update from Library"),
+                             tr("The project's pin could not be updated."));
+        return;
+    }
+    if (services && services->assets) services->assets->announcePinChanged(guid);
+    updateAssetView(assetItem.selectedGuid);
+}
+
+void AssetWidget::saveAvatarToLibrary()
+{
+    if (!assetItem.wItem) return;
+    const QString guid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
+    QString error;
+    if (AvatarAssets::saveToLibrary(guid, db, project, &error).isEmpty()) {
+        QMessageBox::warning(this, tr("Save to Library"),
+                             tr("Could not publish the avatar: %1").arg(error));
+        return;
+    }
     updateAssetView(assetItem.selectedGuid);
 }
 

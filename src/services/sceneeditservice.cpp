@@ -360,10 +360,33 @@ void SceneEditService::addMaterialMesh(const QString &path, bool ignore, iris::V
     // Same remap the paste path (insertFragment) uses.
     regenerateGuids(node);
 
-    // rename animation sources to relative paths
-    QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh));
-    auto relPath = QDir(project->folderPath).relativeFilePath(db->fetchAsset(meshGuid).name);
-    for (auto anim : node->getAnimations()) if (!!anim->skeletalAnimation) anim->skeletalAnimation->source = relPath;
+    // Animation sources: point the model's OWN clips at the model's file, and
+    // leave everybody else's alone.
+    //
+    // This used to rewrite EVERY skeletal clip on the node to the model file,
+    // unconditionally (AVATAR_MODULE_SPEC §A.9). That is right for the clips
+    // that came out of the model itself — their stored source is whatever path
+    // the author's machine had — and wrong for every clip loaded from another
+    // file: an avatar with a Walking.fbx clip had that clip re-sourced to the
+    // character on the next instantiation, so on reopen it resolved to the
+    // character's own animation and the character stopped walking.
+    //
+    // A clip belongs to this model when its source names the same FILE. Since
+    // the CAS a stored object's file name is its sha256, so the comparison is
+    // on the base name the writer recorded, not on the resolved path.
+    const QString meshGuid = db->fetchObjectMesh(guid, static_cast<int>(ModelTypes::Object),
+                                                 static_cast<int>(ModelTypes::Mesh));
+    const QString modelName = db->fetchAsset(meshGuid).name;
+    const QString relPath = QDir(project->folderPath).relativeFilePath(modelName);
+    const QString modelFile = QFileInfo(modelName).fileName();
+    for (auto anim : node->getAnimations()) {
+        if (!anim->skeletalAnimation) continue;
+        const QString source = anim->skeletalAnimation->source;
+        // Empty (a clip the blob never sourced) or this model's own file.
+        if (source.isEmpty() || QFileInfo(source).fileName() == modelFile
+            || QFileInfo(source).fileName() == QFileInfo(relPath).fileName())
+            anim->skeletalAnimation->source = relPath;
+    }
 
     // Honour the drop position (the viewport computed where the cursor hit the
     // scene) — legacy addMesh does the same; without this every dropped asset

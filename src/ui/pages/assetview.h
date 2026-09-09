@@ -94,6 +94,15 @@ signals:
 	/// panel so the membership is visible without a page round-trip.
 	void assetAddedToProject(const QString &guid);
 
+	/// THE DRAWER/GRID -> MODULE SEAM (AVATAR_ASSET_SPEC §5.5). A page asks
+	/// the SHELL to open an asset in a module; the shell switches space and
+	/// calls that module's API. The page never includes mainwindow.h and the
+	/// module never learns about the page — the seam the materials module
+	/// never got, and the reason "Edit" has only ever existed for shader files
+	/// (where it shells out to an external editor).
+	void editAssetInModule(const QString &guid, const QString &moduleId,
+	                       const QString &scope);
+
 public slots:
 	void fetchMetadata(AssetGridItem*, bool allowBackfill = true);
 	/// Lazy metadata backfill for pre-metadata library rows: computes the
@@ -151,6 +160,9 @@ public:
 	/// option B1): mints the companion PBR material asset, pins it into the
 	/// open project and adds its library tile.
 	void createMaterialFromImageTile(AssetGridItem *item);
+	/// "Create Avatar" on a rigged model tile: mints the avatar asset and opens
+	/// it in the module, one gesture (D8-A).
+	void createAvatarFromModelTile(AssetGridItem *item);
 	void showEvent(QShowEvent *event) override;
 
 	/// THE import dispatch (ASSET_DRAWERS_SPEC §3): every path (drop pad,

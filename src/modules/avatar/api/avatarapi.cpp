@@ -300,6 +300,93 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "by a later automatic re-match. Regenerates the default asset when that is what is "
           "installed, and leaves an authored asset alone. Undoable.",
           Needs::Document },
+
+        // ---- AVATAR ASSETS (AVATAR_ASSET_SPEC §6) -------------------------
+        { "library", "avatar.library({scope: 'library'|'project'|'all'}) -> [{guid, name, scope, version, libraryVersion, edited, bones, clips}]",
+          "The avatar ASSETS this session can open. Default scope 'all' lists the library rows "
+          "and, with a project open, the project's own versions of them. `version` is the "
+          "content id of the definition that scope would open; `libraryVersion` is the "
+          "library's current one; `edited` is true when a project's version has diverged from "
+          "the library (a project-scope save, or a library save the project has not taken). "
+          "This is the module's left column, as a verb.",
+          Needs::Document },
+        { "createAsset", "avatar.createAsset(objectGuid, {name, scope}) -> guid",
+          "Mints an avatar asset FROM a rigged model Object — 'Create Avatar' on a library "
+          "tile. The definition starts as the model plus its own in-file clips, named by the "
+          "same display rule the module uses (a Mixamo character's 'mixamo.com' becomes the "
+          "asset's name). scope 'library' (default) creates a library row; 'project' creates "
+          "one owned by the open project and pins it. Refuses a model with no skeleton, with "
+          "the bone count in the message, and refuses anything that is not an Object: an "
+          "avatar is made FROM a model, the model stays a model. NOT undoable — asset "
+          "mutations never are (SCRIPTING_SPEC \u00a71.6.5).",
+          Needs::Document },
+        { "importAvatar", "avatar.importAvatar(path, {scope, drawer, name}) -> {asset, avatar, name}",
+          "Imports a rigged model file through the ONE import pipeline and mints an avatar "
+          "asset from it, in one call — the module's 'Import Avatar…'. `asset` is the model "
+          "Object's guid, `avatar` the new avatar's. scope 'project' also pins it into the "
+          "open project. A file with no skeleton is imported (it is a perfectly good model) "
+          "and the AVATAR is refused, so nothing is lost either way. NOT undoable.",
+          Needs::Document },
+        { "open", "avatar.open(guid, {scope}) -> {guid, scope, version, name, dirty, definition}",
+          "Opens an avatar asset for editing at a SCOPE: 'library' reads the library's current "
+          "version, 'project' reads the version this project pinned. Everything the module "
+          "edits afterwards — clips, options, the default clip — edits THAT definition, and "
+          "`avatar.save` writes it back where it came from. With no scope given, a project "
+          "that has the asset opens the project's version (that is the one whose edits are "
+          "the user's own) and otherwise the library's. Replaces the retired "
+          "`avatar.loadPreview`: every load is an import now (\u00a74 D7).",
+          Needs::Document },
+        { "asset", "avatar.asset() -> {guid, scope, version, name, dirty, definition} | undefined",
+          "What the module currently has open, and whether it has unsaved edits. Undefined "
+          "when nothing is open.",
+          Needs::Document },
+        { "save", "avatar.save() -> {guid, scope, version}",
+          "Writes the open definition back TO THE SCOPE IT WAS OPENED FROM, and that is the "
+          "whole model: a LIBRARY save publishes a new version of the library asset and moves "
+          "no project's pin, so a project that already added the avatar keeps what it added; "
+          "a PROJECT save is copy-on-write — new content, this project's pin moves, the "
+          "library and every other project untouched. A project save also refreshes every "
+          "linked instance in the open scene, so a clip added here is playing on the character "
+          "in the viewport without reopening the scene. NOT undoable.",
+          Needs::Document },
+        { "saveToLibrary", "avatar.saveToLibrary(guid) -> {guid, version}",
+          "Publishes the open project's version of an avatar as the library's current one — "
+          "'you can always save the project avatar back to the asset later'. The project keeps "
+          "its pin (same content, now shared); other projects are unaffected until they call "
+          "assets.updateFromLibrary. An avatar CREATED inside this project is promoted IN "
+          "PLACE: it keeps its guid, so every instance already naming it stays valid. Without "
+          "a guid it publishes whatever is open. NOT undoable.",
+          Needs::Document },
+        { "removeClip", "avatar.removeClip(name) -> bool",
+          "Removes a clip from the OPEN definition (not from the library — the clip asset "
+          "stays where it is). Marks the definition dirty; `avatar.save` commits it. Clearing "
+          "the default clip re-points it at the first remaining clip.",
+          Needs::Document },
+        { "setClipOptions", "avatar.setClipOptions(name, {looping, rootMotion, name}) -> {name, looping, rootMotion}",
+          "Edits one clip entry of the open definition. Renaming through `name` is a rename of "
+          "the JOIN KEY every consumer uses (the scene plays clips by name, roles bind by "
+          "name), so it is refused when the new name is taken and it carries the default-clip "
+          "pointer with it. Marks the definition dirty.",
+          Needs::Document },
+        { "setDefaultClip", "avatar.setDefaultClip(name) -> bool",
+          "Which clip a freshly spawned instance plays. An empty name clears it. Refuses a "
+          "name the definition does not have.",
+          Needs::Document },
+        { "instances", "avatar.instances(assetGuid) -> [{node, name, asset, version, stale}]",
+          "The LINKED avatar instances in the open scene — wrappers spawned from an avatar "
+          "asset. `version` is the definition version that instance last resolved and `stale` "
+          "is true when the project's pin has moved since. Without a guid it lists every "
+          "linked instance. An `avatar.spawn` on a plain Object guid is a SCRATCH avatar with "
+          "no asset behind it and does not appear here (avatar.list lists those too).",
+          Needs::Document },
+        { "refreshInstances", "avatar.refreshInstances(assetGuid) -> {refreshed: [nodeIds], warnings: [...]}",
+          "Re-resolves every linked instance of an asset against the project's CURRENT pinned "
+          "definition: the clip set is replaced (the active clip is kept when it survives, "
+          "else the definition's default), and the movement/locomotion slots are re-applied "
+          "when the definition carries them. This is what a project-scope save and "
+          "assets.updateFromLibrary call, and it is exposed so the behaviour is testable "
+          "without a UI. NOT undoable — it is a re-resolve, not an edit.",
+          Needs::Document },
     };
 }
 
@@ -807,7 +894,40 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         autoNormalize = raw.toBool();
     }
 
-    const auto assetRow = host.db->fetchAsset(assetGuid);
+    // THE TWO SPAWN PATHS (AVATAR_ASSET_SPEC §5.4 / D10).
+    //
+    //   an AVATAR guid  -> a LINKED instance of the project's version of that
+    //                      asset: the definition names the model to
+    //                      instantiate, the clips to attach and the defaults
+    //                      to apply, and the instance records which version it
+    //                      resolved so a later module save can find it.
+    //   an OBJECT guid  -> exactly what it has always been: a SCRATCH avatar
+    //                      with no asset behind it. Kept deliberately — six
+    //                      suites spawn characters this way, and "put this
+    //                      rigged model in the scene and let me drive it" is a
+    //                      real thing to want.
+    auto assetRow = host.db->fetchAsset(assetGuid);
+    iris::AvatarDefinition definition;
+    QString definitionVersion;
+    bool linked = false;
+    if (assetRow.type == static_cast<int>(ModelTypes::Avatar)) {
+        if (AvatarAssets::projectVersion(assetGuid, host.project).isEmpty()) {
+            record(QStringLiteral("avatar.spawn: '%1' is not in this project — add it first "
+                                  "(assets.addToProject), so the scene instantiates the "
+                                  "PROJECT's version of it").arg(assetRow.name));
+            return QString();
+        }
+        if (!loadProjectDefinition("avatar.spawn", assetGuid, definition, &definitionVersion))
+            return QString();
+        linked = true;
+        assetRow = host.db->fetchAsset(definition.modelAsset);
+        if (assetRow.guid.isEmpty() || assetRow.type != static_cast<int>(ModelTypes::Object)) {
+            record(QStringLiteral("avatar.spawn: the avatar '%1' names a model this library "
+                                  "does not have").arg(definition.name));
+            return QString();
+        }
+    }
+    const QString modelGuid = linked ? definition.modelAsset : assetGuid;
     if (assetRow.guid.isEmpty() || assetRow.type != static_cast<int>(ModelTypes::Object)) {
         record(QStringLiteral("avatar.spawn: '%1' is not an object asset").arg(assetGuid));
         return QString();
@@ -832,7 +952,7 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     host.services->selection->select(iris::SceneNodePtr());
     host.services->sceneEdit->addMaterialMesh(QString(), hasPosition,
                                               scriptmod::vecFromJs(options.value("position")),
-                                              assetGuid, assetRow.name);
+                                              modelGuid, assetRow.name);
     auto node = host.services->selection->selected();
     if (!node) {
         record("avatar.spawn: the asset could not be instantiated");
@@ -901,6 +1021,23 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
                     n->setLocomotionComponent(iris::AvatarLocomotionPtr());
                 }
             }));
+    }
+
+    // THE LINK, and the definition applied through it (§5.4). The link is set
+    // BEFORE applyDefinition so the clip-attach path (which walks the wrapper)
+    // sees a fully-formed instance, and D5's naming lands here: the wrapper is
+    // named from the DEFINITION rather than from whatever the model file
+    // called its root node ("Armature", "RootNode", "Scene" — never the
+    // character's name).
+    if (linked) {
+        node->avatarLink.asset = assetGuid;
+        node->avatarLink.version = definitionVersion;
+        node->avatarLink.name = definition.name;
+        if (!definition.name.isEmpty()) node->setName(definition.name);
+        QStringList warnings;
+        applyDefinition(node, definition, definitionVersion, &warnings);
+        for (const QString &warning : warnings)
+            record(QStringLiteral("avatar.spawn: %1").arg(warning));
     }
 
     // F5: the clips and the authored asset, applied POST-SPAWN through exactly
@@ -1229,6 +1366,67 @@ QVariantMap AvatarApi::loadClip(const QString &nodeId, const QString &pathOrAsse
     if (!attachClipsFromFile("avatar.loadClip", node, absolutePath, guid,
                              options.value(QStringLiteral("name")).toString(), out))
         return QVariantMap();
+
+    // D9 — A LINKED INSTANCE HAS NO PRIVATE CLIPS. v1 has no per-instance
+    // overrides (the owner's "Make Unique" is a later stage, §11), so a clip
+    // loaded onto an instance is a clip added to the PROJECT'S VERSION of the
+    // asset: it is written into the definition, saved copy-on-write, and every
+    // instance in the project gets it. Without this the clip would live on one
+    // node until the next re-resolve and then silently vanish — the worst of
+    // the two behaviours.
+    //
+    // An UNLINKED scratch avatar (an Object spawn) keeps the instance-local
+    // behaviour, which is what every locomotion suite exercises.
+    const QString linkedAsset = linkedAssetOf(node);
+    if (!linkedAsset.isEmpty()) {
+        auto loaded = AvatarAssets::load(linkedAsset, AvatarAssets::Scope::Project, host.db,
+                                         host.project);
+        if (loaded.ok()) {
+            const QVariantList added = out.value(QStringLiteral("clips")).toList();
+            bool changed = false;
+            for (const QVariant &name : added) {
+                const QString clipName = name.toString();
+                if (loaded.definition.findClip(clipName)) continue;
+                iris::AvatarClipEntry entry;
+                entry.asset = guid;
+                entry.rawName = clipName;
+                entry.name = clipName;
+                loaded.definition.clips.append(entry);
+                changed = true;
+            }
+            if (changed) {
+                if (loaded.definition.defaultClip.isEmpty()
+                    && !loaded.definition.clips.isEmpty())
+                    loaded.definition.defaultClip = loaded.definition.clips.first().name;
+                QString error;
+                const QString version = AvatarAssets::save(linkedAsset,
+                                                           AvatarAssets::Scope::Project,
+                                                           loaded.definition, host.db,
+                                                           host.project, &error);
+                if (version.isEmpty()) {
+                    record(QStringLiteral("avatar.loadClip: the clip was attached, but the "
+                                          "project's version of '%1' could not be saved: %2")
+                               .arg(loaded.definition.name, error));
+                } else {
+                    out["asset"] = linkedAsset;
+                    out["version"] = version;
+                    // If the module has this avatar open, it is now looking at
+                    // a stale definition — reload it rather than let a later
+                    // Save overwrite the clip that was just added.
+                    if (mOpen.isOpen() && mOpen.guid == linkedAsset
+                        && mOpen.scope == AvatarAssets::Scope::Project && !mOpen.dirty) {
+                        mOpen.definition = loaded.definition;
+                        mOpen.version = version;
+                        notifyChanged();
+                    }
+                    if (host.services && host.services->assets)
+                        host.services->assets->announcePinChanged(linkedAsset);
+                    else
+                        onAssetPinChanged(linkedAsset);
+                }
+            }
+        }
+    }
     return out;
 }
 
@@ -1707,4 +1905,601 @@ bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QS
             }));
     }
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// AVATAR ASSETS (AVATAR_ASSET_SPEC §5.2/§5.3/§5.4)
+//
+// The module edits an ASSET — a library row or the open project's version of
+// one — and scenes hold INSTANCES of the project's version. Everything below
+// is document/DB/store work with no engine in it, which is what makes the
+// whole model testable headless.
+
+namespace {
+
+/// The definition as JS. Read-only: the module edits through the verbs, so a
+/// script that mutated this map would be editing a copy and wondering why
+/// nothing saved.
+QVariantMap definitionToJs(const iris::AvatarDefinition &def)
+{
+    QVariantList clips;
+    for (const auto &clip : def.clips)
+        clips.append(QVariantMap{ { "asset", clip.asset },
+                                  { "rawName", clip.rawName },
+                                  { "name", clip.name },
+                                  { "looping", clip.looping },
+                                  { "rootMotion", clip.rootMotion } });
+    QVariantList boneNames;
+    for (const QString &bone : def.rig.boneNames) boneNames.append(bone);
+    return {
+        { "name", def.name },
+        { "model", def.modelAsset },
+        { "rig", QVariantMap{ { "rigId", def.rig.rigId },
+                              { "bones", def.rig.bones },
+                              { "boneNames", boneNames } } },
+        { "clips", clips },
+        { "defaultClip", def.defaultClip },
+        { "hasLocomotion", def.hasLocomotion },
+        { "hasMovement", def.hasMovement },
+    };
+}
+
+/// Every LINKED avatar wrapper under `node`, depth-first.
+void collectLinkedInstances(const iris::SceneNodePtr &node, QVector<iris::SceneNodePtr> &out)
+{
+    if (!node) return;
+    if (node->hasAvatarComponent() && node->isLinkedAvatar()) out.append(node);
+    const int n = node->childCount();
+    for (int i = 0; i < n; ++i)
+        if (auto *child = node->childAt(i)) collectLinkedInstances(child->sharedFromThis(), out);
+}
+
+}   // namespace
+
+bool AvatarApi::requireOpenAsset(const char *verb)
+{
+    if (mOpen.isOpen()) return true;
+    record(QStringLiteral("%1: no avatar is open (avatar.open(guid) opens one)")
+               .arg(QString::fromLatin1(verb)));
+    return false;
+}
+
+QString AvatarApi::linkedAssetOf(const iris::SceneNodePtr &node) const
+{
+    return node ? node->avatarLink.asset : QString();
+}
+
+QVariantList AvatarApi::library(const QVariantMap &options)
+{
+    QVariantList out;
+    if (!host.db) { record("avatar.library: not available in this session"); return out; }
+
+    static const QStringList known = { "scope" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.library: unknown option '%1' (known: scope)")
+                       .arg(it.key()));
+            return out;
+        }
+    const QString scope = options.value(QStringLiteral("scope"),
+                                        QStringLiteral("all")).toString().toLower();
+    if (scope != QLatin1String("all") && scope != QLatin1String("library")
+        && scope != QLatin1String("project")) {
+        record("avatar.library: scope must be 'library', 'project' or 'all'");
+        return out;
+    }
+    const bool wantLibrary = scope != QLatin1String("project");
+    const bool wantProject = scope != QLatin1String("library");
+    const bool hasProject = host.project && !host.project->getProjectGuid().isEmpty();
+    if (scope == QLatin1String("project") && !hasProject) {
+        record("avatar.library: scope 'project' needs an open project");
+        return out;
+    }
+
+    const auto describe = [&](const AssetRecord &record, AvatarAssets::Scope s) {
+        const QString libraryVersion = AvatarAssets::libraryVersion(record.guid);
+        const QString projectVersion = AvatarAssets::projectVersion(record.guid, host.project);
+        const auto loaded = AvatarAssets::load(record.guid, s, host.db, host.project);
+        QVariantList clips;
+        for (const auto &clip : loaded.definition.clips) clips.append(clip.name);
+        return QVariantMap{
+            { "guid", record.guid },
+            { "name", record.name },
+            { "scope", AvatarAssets::scopeName(s) },
+            { "version", s == AvatarAssets::Scope::Project ? projectVersion : libraryVersion },
+            { "libraryVersion", libraryVersion },
+            // `edited` is the module's [edited] marker: the project's version
+            // is not the library's current one — either because the project
+            // saved its own, or because the library moved on without it.
+            { "edited", AvatarAssets::isEdited(record.guid, host.project) },
+            { "bones", loaded.definition.rig.bones },
+            { "clips", clips },
+            { "error", loaded.error },
+        };
+    };
+
+    for (const auto &row : host.db->fetchAssetsForAssetView()) {
+        if (row.type != static_cast<int>(ModelTypes::Avatar)) continue;
+        const bool pinned = hasProject
+                            && !AvatarAssets::projectVersion(row.guid, host.project).isEmpty();
+        if (wantLibrary && row.projectGuid.isEmpty())
+            out.append(describe(row, AvatarAssets::Scope::Library));
+        if (wantProject && pinned)
+            out.append(describe(row, AvatarAssets::Scope::Project));
+    }
+    return out;
+}
+
+QString AvatarApi::createAsset(const QString &objectGuid, const QVariantMap &options)
+{
+    if (!host.db) { record("avatar.createAsset: not available in this session"); return QString(); }
+
+    static const QStringList known = { "name", "scope" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.createAsset: unknown option '%1' (known: %2)")
+                       .arg(it.key(), known.join(QStringLiteral(", "))));
+            return QString();
+        }
+
+    AvatarAssets::Scope scope = AvatarAssets::Scope::Library;
+    if (options.contains(QStringLiteral("scope"))
+        && !AvatarAssets::scopeFromName(options.value(QStringLiteral("scope")).toString(), scope)) {
+        record("avatar.createAsset: scope must be 'library' or 'project'");
+        return QString();
+    }
+    if (scope == AvatarAssets::Scope::Project && !requireProject()) return QString();
+
+    QString error;
+    const QString guid = AvatarAssets::create(objectGuid, scope, host.db, host.project,
+                                              options.value(QStringLiteral("name")).toString(),
+                                              &error);
+    if (guid.isEmpty()) {
+        record(QStringLiteral("avatar.createAsset: %1").arg(error));
+        return QString();
+    }
+    notifyChanged();
+    return guid;
+}
+
+QVariantMap AvatarApi::importAvatar(const QString &path, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db || !host.services || !host.services->assets) {
+        record("avatar.importAvatar: not available in this session");
+        return out;
+    }
+
+    static const QStringList known = { "scope", "drawer", "name" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.importAvatar: unknown option '%1' (known: %2)")
+                       .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+    AvatarAssets::Scope scope = AvatarAssets::Scope::Library;
+    if (options.contains(QStringLiteral("scope"))
+        && !AvatarAssets::scopeFromName(options.value(QStringLiteral("scope")).toString(), scope)) {
+        record("avatar.importAvatar: scope must be 'library' or 'project'");
+        return out;
+    }
+    if (scope == AvatarAssets::Scope::Project && !requireProject()) return out;
+
+    const QFileInfo info(path);
+    if (!info.exists() || !info.isFile()) {
+        record(QStringLiteral("avatar.importAvatar: no such file '%1'").arg(path));
+        return out;
+    }
+
+    // THE ONE import pipeline — a rigged character is an ordinary model import
+    // (ASSET_PIPELINE_SPEC). The avatar is minted from the row afterwards, so a
+    // file that turns out not to be rigged still lands in the library as the
+    // perfectly good model it is, and only the AVATAR is refused.
+    const auto result = host.services->assets->importFile(
+        path, options.value(QStringLiteral("drawer"), -1).toInt());
+    if (result.objectGuid.isEmpty()) {
+        record(QStringLiteral("avatar.importAvatar: '%1' could not be imported: %2")
+                   .arg(info.fileName(), result.error));
+        return out;
+    }
+    out["asset"] = result.objectGuid;
+
+    QString error;
+    const QString avatarGuid = AvatarAssets::create(result.objectGuid, scope, host.db, host.project,
+                                                    options.value(QStringLiteral("name")).toString(),
+                                                    &error);
+    if (avatarGuid.isEmpty()) {
+        record(QStringLiteral("avatar.importAvatar: '%1' was imported as a model, but no avatar "
+                              "could be made from it: %2").arg(info.fileName(), error));
+        return out;
+    }
+    out["avatar"] = avatarGuid;
+    out["name"] = host.db->fetchAsset(avatarGuid).name;
+    notifyChanged();
+    return out;
+}
+
+QVariantMap AvatarApi::open(const QString &guid, const QVariantMap &options)
+{
+    QVariantMap out;
+    if (!host.db) { record("avatar.open: not available in this session"); return out; }
+
+    static const QStringList known = { "scope" };
+    for (auto it = options.constBegin(); it != options.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.open: unknown option '%1' (known: scope)").arg(it.key()));
+            return out;
+        }
+
+    AvatarAssets::Scope scope;
+    if (options.contains(QStringLiteral("scope"))) {
+        if (!AvatarAssets::scopeFromName(options.value(QStringLiteral("scope")).toString(), scope)) {
+            record("avatar.open: scope must be 'library' or 'project'");
+            return out;
+        }
+    } else {
+        // WITHOUT a scope: the project's version when it has one. That is the
+        // version whose edits are this user's own, and opening the library's
+        // by default would have made "edit my character" quietly edit
+        // everyone's.
+        scope = (!AvatarAssets::projectVersion(guid, host.project).isEmpty())
+                    ? AvatarAssets::Scope::Project
+                    : AvatarAssets::Scope::Library;
+    }
+
+    const auto loaded = AvatarAssets::load(guid, scope, host.db, host.project);
+    if (!loaded.ok()) {
+        record(QStringLiteral("avatar.open: %1").arg(loaded.error));
+        return out;
+    }
+
+    mOpen.guid = guid;
+    mOpen.scope = scope;
+    mOpen.version = loaded.oid;
+    mOpen.definition = loaded.definition;
+    mOpen.dirty = false;
+
+    // The PREVIEW follows the definition: the module's centre panel shows the
+    // model this avatar names, resolved through the CAS at the scope's version
+    // exactly as an instance would resolve it.
+    if (mModel) {
+        const QString modelPath =
+            (scope == AvatarAssets::Scope::Project && host.project)
+                ? AssetCas::resolvePinned(QSqlDatabase::database(), AssetStorePaths::root(),
+                                          host.project->getProjectGuid(), loaded.definition.modelAsset)
+                : AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(),
+                                          loaded.definition.modelAsset);
+        if (!modelPath.isEmpty() && QFileInfo::exists(modelPath)) {
+            QString loadError;
+            if (!mModel->load(modelPath, &loadError))
+                record(QStringLiteral("avatar.open: '%1' opened, but its model could not be "
+                                      "previewed: %2").arg(loaded.name, loadError));
+        }
+        notifySubjectChanged();
+    }
+    notifyChanged();
+    return asset();
+}
+
+QVariantMap AvatarApi::asset()
+{
+    QVariantMap out;
+    if (!mOpen.isOpen()) return out;
+    out["guid"] = mOpen.guid;
+    out["scope"] = AvatarAssets::scopeName(mOpen.scope);
+    out["version"] = mOpen.version;
+    out["name"] = mOpen.definition.name;
+    out["dirty"] = mOpen.dirty;
+    out["definition"] = definitionToJs(mOpen.definition);
+    return out;
+}
+
+QVariantMap AvatarApi::save()
+{
+    QVariantMap out;
+    if (!requireOpenAsset("avatar.save")) return out;
+    if (!host.db) { record("avatar.save: not available in this session"); return out; }
+
+    QString error;
+    const QString version = AvatarAssets::save(mOpen.guid, mOpen.scope, mOpen.definition, host.db,
+                                               host.project, &error);
+    if (version.isEmpty()) {
+        record(QStringLiteral("avatar.save: %1").arg(error));
+        return out;
+    }
+    mOpen.version = version;
+    mOpen.dirty = false;
+
+    // A PROJECT save moved this project's pin, which is exactly the event
+    // linked instances follow (§4 D4): they re-resolve NOW, so a clip added in
+    // the module is playing on the character in the viewport without the user
+    // reopening the scene.
+    if (mOpen.scope == AvatarAssets::Scope::Project) {
+        if (host.services && host.services->assets)
+            host.services->assets->announcePinChanged(mOpen.guid);
+        else
+            onAssetPinChanged(mOpen.guid);
+    }
+    out["guid"] = mOpen.guid;
+    out["scope"] = AvatarAssets::scopeName(mOpen.scope);
+    out["version"] = version;
+    notifyChanged();
+    return out;
+}
+
+QVariantMap AvatarApi::saveToLibrary(const QString &guid)
+{
+    QVariantMap out;
+    if (!host.db) { record("avatar.saveToLibrary: not available in this session"); return out; }
+    const QString target = guid.isEmpty() ? mOpen.guid : guid;
+    if (target.isEmpty()) {
+        record("avatar.saveToLibrary: no avatar is open and no guid was given");
+        return out;
+    }
+    if (!requireProject()) return out;
+
+    QString error;
+    const QString version = AvatarAssets::saveToLibrary(target, host.db, host.project, &error);
+    if (version.isEmpty()) {
+        record(QStringLiteral("avatar.saveToLibrary: %1").arg(error));
+        return out;
+    }
+    out["guid"] = target;
+    out["version"] = version;
+    notifyChanged();
+    return out;
+}
+
+bool AvatarApi::removeClip(const QString &name)
+{
+    if (!requireOpenAsset("avatar.removeClip")) return false;
+    int index = -1;
+    for (int i = 0; i < mOpen.definition.clips.size(); ++i)
+        if (mOpen.definition.clips[i].name == name) { index = i; break; }
+    if (index < 0)
+        return record(QStringLiteral("avatar.removeClip: '%1' has no clip called '%2'")
+                          .arg(mOpen.definition.name, name));
+
+    mOpen.definition.clips.remove(index);
+    // The default clip cannot name a clip that is gone — the file's own reader
+    // refuses that, so leaving it would make the definition unsaveable.
+    if (mOpen.definition.defaultClip == name)
+        mOpen.definition.defaultClip = mOpen.definition.clips.isEmpty()
+                                           ? QString()
+                                           : mOpen.definition.clips.first().name;
+    mOpen.dirty = true;
+    notifyChanged();
+    return true;
+}
+
+QVariantMap AvatarApi::setClipOptions(const QString &name, const QVariantMap &values)
+{
+    QVariantMap out;
+    if (!requireOpenAsset("avatar.setClipOptions")) return out;
+
+    static const QStringList known = { "looping", "rootMotion", "name" };
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+        if (!known.contains(it.key())) {
+            record(QStringLiteral("avatar.setClipOptions: unknown key '%1' (known: %2)")
+                       .arg(it.key(), known.join(QStringLiteral(", "))));
+            return out;
+        }
+
+    iris::AvatarClipEntry *entry = nullptr;
+    for (auto &clip : mOpen.definition.clips)
+        if (clip.name == name) { entry = &clip; break; }
+    if (!entry) {
+        record(QStringLiteral("avatar.setClipOptions: '%1' has no clip called '%2'")
+                   .arg(mOpen.definition.name, name));
+        return out;
+    }
+
+    if (values.contains(QStringLiteral("name"))) {
+        const QString wanted = values.value(QStringLiteral("name")).toString().trimmed();
+        if (wanted.isEmpty()) {
+            record("avatar.setClipOptions: a clip needs a name (it is the key the scene plays "
+                   "it by)");
+            return out;
+        }
+        if (wanted != name && mOpen.definition.findClip(wanted)) {
+            record(QStringLiteral("avatar.setClipOptions: '%1' already names another clip")
+                       .arg(wanted));
+            return out;
+        }
+        // The default-clip pointer is a NAME, so it travels with the rename or
+        // the definition stops parsing.
+        if (mOpen.definition.defaultClip == name) mOpen.definition.defaultClip = wanted;
+        entry->name = wanted;
+    }
+    if (values.contains(QStringLiteral("looping")))
+        entry->looping = values.value(QStringLiteral("looping")).toBool();
+    if (values.contains(QStringLiteral("rootMotion")))
+        entry->rootMotion = values.value(QStringLiteral("rootMotion")).toBool();
+
+    mOpen.dirty = true;
+    out["name"] = entry->name;
+    out["looping"] = entry->looping;
+    out["rootMotion"] = entry->rootMotion;
+    notifyChanged();
+    return out;
+}
+
+bool AvatarApi::setDefaultClip(const QString &name)
+{
+    if (!requireOpenAsset("avatar.setDefaultClip")) return false;
+    if (!name.isEmpty() && !mOpen.definition.findClip(name))
+        return record(QStringLiteral("avatar.setDefaultClip: '%1' has no clip called '%2'")
+                          .arg(mOpen.definition.name, name));
+    mOpen.definition.defaultClip = name;
+    mOpen.dirty = true;
+    notifyChanged();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// LINKED INSTANCES
+
+bool AvatarApi::loadProjectDefinition(const char *verb, const QString &assetGuid,
+                                      iris::AvatarDefinition &out, QString *versionOut)
+{
+    const QString v = QString::fromLatin1(verb);
+    const auto loaded = AvatarAssets::load(assetGuid, AvatarAssets::Scope::Project, host.db,
+                                           host.project);
+    if (!loaded.ok()) {
+        record(QStringLiteral("%1: %2").arg(v, loaded.error));
+        return false;
+    }
+    out = loaded.definition;
+    if (versionOut) *versionOut = loaded.oid;
+    return true;
+}
+
+bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
+                                const iris::AvatarDefinition &definition, const QString &version,
+                                QStringList *warningsOut)
+{
+    if (!node) return false;
+    auto *movement = node->avatar();
+    if (!movement) return false;
+
+    // MOVEMENT and LOCOMOTION are slots: absent means "the component's own
+    // defaults / the generated Biped Locomotion", which is what every scene
+    // built before avatars were assets already does — so an unauthored
+    // definition changes nothing about how a character behaves.
+    if (definition.hasMovement) movement->setParams(definition.movement);
+
+    // THE CLIP SET IS REPLACED, not merged (§7 R8): the definition is the
+    // truth about what this avatar can play, so a clip removed in the module
+    // has to leave the instance too or "remove" would look like it did nothing.
+    // The ACTIVE clip survives when it is still in the set.
+    QStringList wanted;
+    for (const auto &clip : definition.clips) wanted.append(clip.name);
+
+    for (const auto &clip : definition.clips) {
+        const QString path =
+            host.project ? AssetCas::resolvePinned(QSqlDatabase::database(),
+                                                   AssetStorePaths::root(),
+                                                   host.project->getProjectGuid(), clip.asset)
+                         : AssetCas::resolveSource(QSqlDatabase::database(),
+                                                   AssetStorePaths::root(), clip.asset);
+        if (path.isEmpty() || !QFileInfo::exists(path)) {
+            if (warningsOut)
+                warningsOut->append(QStringLiteral("clip '%1' has no stored bytes").arg(clip.name));
+            continue;
+        }
+        QVariantMap ignored;
+        // The clip is attached through the SAME route avatar.loadClip uses —
+        // parse, score against this rig, name by the shared rule — so a
+        // definition clip and a hand-loaded one are the same thing on the node.
+        if (!attachClipsFromFile("avatar.refreshInstances", node, path, clip.asset, clip.name,
+                                 ignored)) {
+            if (warningsOut) warningsOut->append(mLastError);
+        }
+    }
+
+    // Clips the definition no longer names go, on the CLIP HOST (the node the
+    // attach path writes to), leaving anything the definition does name.
+    {
+        std::function<void(const iris::SceneNodePtr &)> prune =
+            [&](const iris::SceneNodePtr &n) {
+                if (!n) return;
+                QList<iris::AnimationPtr> doomed;
+                for (const auto &anim : n->getAnimations())
+                    if (!anim.isNull() && anim->hasSkeletalAnimation()
+                        && !wanted.contains(anim->getName()))
+                        doomed.append(anim);
+                for (const auto &anim : doomed) n->deleteAnimation(anim);
+                for (int i = 0; i < n->childCount(); ++i)
+                    if (auto *c = n->childAt(i)) prune(c->sharedFromThis());
+            };
+        prune(node);
+    }
+
+    if (auto *loco = node->locomotion()) {
+        if (definition.hasLocomotion) {
+            QString error;
+            loco->markRolesFromFile(definition.locomotionRoles, false);
+            if (!loco->setAssetPreservingDefaultFlag(definition.locomotion, &error)
+                && warningsOut)
+                warningsOut->append(error);
+        } else {
+            loco->refreshClips(node, movement->params().walkSpeed, movement->params().runSpeed);
+        }
+    }
+
+    // The asset guid is the caller's (the linked spawn sets it, a refresh
+    // already matched on it); what this routine owns is WHICH VERSION the
+    // instance is now made of.
+    node->avatarLink.version = version;
+    node->avatarLink.name = definition.name;
+    return true;
+}
+
+QVariantList AvatarApi::instances(const QString &assetGuid)
+{
+    QVariantList out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.instances: no scene is open"); return out; }
+
+    QVector<iris::SceneNodePtr> found;
+    collectLinkedInstances(scene->getRootNode(), found);
+    for (const auto &node : found) {
+        if (!assetGuid.isEmpty() && node->avatarLink.asset != assetGuid) continue;
+        const QString pinned = AvatarAssets::projectVersion(node->avatarLink.asset, host.project);
+        out.append(QVariantMap{
+            { "node", node->getGUID() },
+            { "name", node->getName() },
+            { "asset", node->avatarLink.asset },
+            { "version", node->avatarLink.version },
+            // STALE = the project's pin has moved since this instance resolved.
+            // A scene loaded from a file written before a module save reads
+            // stale until it re-resolves, which is what the load-time pass and
+            // this verb both exist for.
+            { "stale", !pinned.isEmpty() && pinned != node->avatarLink.version },
+        });
+    }
+    return out;
+}
+
+QVariantMap AvatarApi::refreshInstances(const QString &assetGuid)
+{
+    QVariantMap out;
+    if (assetGuid.isEmpty()) {
+        record("avatar.refreshInstances: an avatar asset guid is required");
+        return out;
+    }
+    if (!requireProject()) return out;
+    auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
+                                                             : iris::ScenePtr();
+    if (!scene) { record("avatar.refreshInstances: no scene is open"); return out; }
+
+    iris::AvatarDefinition definition;
+    QString version;
+    if (!loadProjectDefinition("avatar.refreshInstances", assetGuid, definition, &version))
+        return out;
+
+    QVector<iris::SceneNodePtr> found;
+    collectLinkedInstances(scene->getRootNode(), found);
+    QVariantList refreshed;
+    QStringList warnings;
+    for (const auto &node : found) {
+        if (node->avatarLink.asset != assetGuid) continue;
+        if (applyDefinition(node, definition, version, &warnings))
+            refreshed.append(node->getGUID());
+    }
+    QVariantList warningList;
+    for (const QString &warning : warnings) warningList.append(warning);
+    out["refreshed"] = refreshed;
+    out["warnings"] = warningList;
+    return out;
+}
+
+void AvatarApi::onAssetPinChanged(const QString &assetGuid)
+{
+    if (assetGuid.isEmpty() || !host.db) return;
+    // Only avatar rows: the announcement is generic (every pin move fires it),
+    // and re-resolving instances for a texture's pin would be pure work.
+    if (!AvatarAssets::isAvatarRow(assetGuid, host.db)) return;
+    refreshInstances(assetGuid);
 }

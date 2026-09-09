@@ -18,6 +18,8 @@ For more information see the LICENSE file
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarspace.h"
 #include "data/settingsmanager.h"
+#include "services/assetservice.h"
+#include "services/services.h"
 #include "scripting/scriptengine.h"
 
 AvatarModule::AvatarModule() = default;
@@ -77,6 +79,17 @@ void AvatarModule::registerApi(ScriptEngine &engine)
         // Re-frame ONLY when the subject changed; doing it on every state
         // change would fight the user's orbit on every scrub.
         mApi->setSubjectDelegate([preview]() { preview->framePreview(); });
+    }
+    // THE PIN-CHANGE SUBSCRIPTION (AVATAR_ASSET_SPEC §4 D4). Every move of a
+    // project's pin — add to project, update from library, a copy-on-write
+    // save — changes which bytes this project's instances are made of, so
+    // linked avatar instances re-resolve on the spot instead of at the next
+    // scene open. The API module is owned by the ScriptEngine, which outlives
+    // this subscription's publisher for the life of the session.
+    if (host.services && host.services->assets) {
+        auto *api = mApi;
+        host.services->assets->onPinChanged(
+            [api](const QString &assetGuid) { api->onAssetPinChanged(assetGuid); });
     }
     engine.addModule(mApi);
 }

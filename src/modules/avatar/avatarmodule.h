@@ -46,6 +46,11 @@ public:
 
     /// The live page, for the shell's direct calls (page-switch refresh).
     avatar::AvatarPage *page() const { return mPage; }
+    /// The module's VERB surface. The shell's "Edit in Avatar Module" route
+    /// calls `avatar.open` through this rather than reaching into the page:
+    /// the verb is the capability and the page is a view over it, so the shell
+    /// seam and a script take exactly the same path (SCRIPTING_SPEC §2.3).
+    AvatarApi *api() const { return mApi; }
 
 private:
     ModuleHost host;

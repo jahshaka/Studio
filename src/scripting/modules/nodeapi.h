@@ -48,6 +48,10 @@ public:
     Q_INVOKABLE QVariant properties(const QString &id);
     Q_INVOKABLE QVariant info(const QString &id);
     Q_INVOKABLE QVariant boneNames(const QString &id);
+    /// The AVATAR LINK on a wrapper node (AVATAR_ASSET_SPEC §6): which avatar
+    /// asset this is an instance of, at which version. `undefined` for
+    /// everything else, including an unlinked scratch avatar.
+    Q_INVOKABLE QVariant avatar(const QString &id);
     Q_INVOKABLE QString skinningMode(const QString &id);
     Q_INVOKABLE bool setLightProfile(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant lightProfile(const QString &id);

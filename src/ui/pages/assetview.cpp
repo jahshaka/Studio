@@ -96,6 +96,7 @@ For more information see the LICENSE file
 #include "services/projectassets.h"
 #include "services/imagematerial.h"
 #include "services/assetmetadata.h"
+#include "services/avatarassets.h"
 #include "services/audiopeaks.h"
 #include "services/videoutils.h"
 #include "ui/controls/videopreviewwidget.h"
@@ -2541,6 +2542,41 @@ void AssetView::wireTile(AssetGridItem *gridItem)
 	connect(gridItem, &AssetGridItem::createMaterialFromImage, [this](AssetGridItem *item) {
 		createMaterialFromImageTile(item);
 	});
+
+	// AVATARS (§5.5). The rigged test is lazy — one metadata read when a menu
+	// is actually opened, never on the grid build.
+	gridItem->setRiggedProvider([this](const QString &guid) {
+		return AssetMetadata::ensure(db, guid).value(QStringLiteral("hasSkeleton")).toBool();
+	});
+	connect(gridItem, &AssetGridItem::editAvatarAsset, [this](AssetGridItem *item) {
+		if (!item || item->metadata.isEmpty()) return;
+		// The Assets page is the LIBRARY's view of the world, so its Edit opens
+		// the library version. The editor drawer's Edit opens the project's.
+		emit editAssetInModule(item->metadata["guid"].toString(), QStringLiteral("avatar"),
+		                       QStringLiteral("library"));
+	});
+	connect(gridItem, &AssetGridItem::createAvatarFromModel, [this](AssetGridItem *item) {
+		createAvatarFromModelTile(item);
+	});
+}
+
+void AssetView::createAvatarFromModelTile(AssetGridItem *item)
+{
+	if (!item || item->metadata.isEmpty()) return;
+	const QString objectGuid = item->metadata["guid"].toString();
+
+	QString error;
+	const QString avatarGuid = AvatarAssets::create(objectGuid, AvatarAssets::Scope::Library, db,
+	                                                project, QString(), &error);
+	if (avatarGuid.isEmpty()) {
+		QMessageBox::warning(this, tr("Create Avatar"),
+		                     tr("Could not create the avatar: %1").arg(error));
+		return;
+	}
+	// The library tile for the new avatar, same tail every mint path uses,
+	// and then straight into the module: "Create Avatar" is one gesture.
+	addLibraryTileForAsset(avatarGuid);
+	emit editAssetInModule(avatarGuid, QStringLiteral("avatar"), QStringLiteral("library"));
 }
 
 void AssetView::createMaterialFromImageTile(AssetGridItem *item)

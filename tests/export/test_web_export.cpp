@@ -31,6 +31,8 @@
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/assets/vertexbuffer.h"
 #include "irisgl/document/animation/skeletalanimation.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/physics/avatarmovement.h"
 
 #include "export/gltfexporter.h"
 #include "export/exportservice.h"
@@ -548,6 +550,68 @@ int main(int argc, char **argv)
             if (nv.toObject()["name"].toString() == "jointRoot") jointsInGraph = true;
         }
         CHECK(jointsInGraph, "joint nodes present in the node graph");
+
+        // ---- T13 (AVATAR_ASSET_SPEC §9): LIBRARY CLIPS EXPORT TOO ---------
+        //
+        // A clip loaded from another file — every Mixamo animation download,
+        // every clip in an avatar definition — is attached with
+        // `SceneNode::addAnimation` and NEVER reaches
+        // `Mesh::getSkeletalAnimations` (that map is filled once, at parse
+        // time, from the model file). The exporter read only the mesh map, so
+        // an exported character had its own idle and none of the animations
+        // the user actually loaded: it stood still on the web page and nothing
+        // said why.
+        {
+            auto walk = iris::SkeletalAnimation::create();
+            walk->name = "mixamo.com";
+            auto *walkBone = new iris::BoneAnimation();
+            walkBone->posKeys->addKey(iris::Vec3(0, 1, 0), 0.0);
+            walkBone->posKeys->addKey(iris::Vec3(0.5f, 1, 0), 1.0);
+            walkBone->rotKeys->addKey(iris::Quat(), 0.0);
+            walkBone->rotKeys->addKey(iris::Quat::fromAxisAndAngle(0, 0, 1, 45), 1.0);
+            walkBone->scaleKeys->addKey(iris::Vec3(1, 1, 1), 0.0);
+            walkBone->scaleKeys->addKey(iris::Vec3(1, 1, 1), 1.0);
+            walk->addBoneAnimation("jointTip", walkBone);
+
+            // The avatar shape: a WRAPPER carrying the component, the skinned
+            // mesh under it, and the library clip on the wrapper — exactly
+            // where avatar.loadClip and the linked spawn put it.
+            auto wrapper = iris::SceneNode::create();
+            wrapper->setName("Jennifer");
+            wrapper->setAvatarComponent(iris::AvatarMovementPtr(new iris::AvatarMovement()));
+            wrapper->avatarLink.asset = "avatar-guid";
+            wrapper->avatarLink.version = "v1";
+            wrapper->avatarLink.name = "Jennifer";
+            auto clip = iris::Animation::createFromSkeletalAnimation(walk);
+            clip->setName("Walking");
+            wrapper->addAnimation(clip);
+
+            auto instanceScene = iris::Scene::create();
+            instanceScene->rootNode->addChild(wrapper);
+            wrapper->addChild(armNode);
+
+            const auto gi = GltfExporter::exportScene(instanceScene, "Instance");
+            CHECK(gi.ok, "T13: the linked instance exports");
+            CHECK(gi.animationCount == 2,
+                  "T13: BOTH the model's own clip and the library clip export");
+            QStringList exported;
+            for (const auto &av : gi.json["animations"].toArray())
+                exported.append(av.toObject()["name"].toString());
+            CHECK(exported.contains("swing") && exported.contains("Walking"),
+                  "T13: ... under the names the SCENE plays them by");
+
+            // The link rides the extras so a viewer can offer clips by name.
+            bool sawAvatarExtras = false;
+            for (const auto &nv : gi.json["nodes"].toArray()) {
+                const QJsonObject jah = nv.toObject()["extras"].toObject()["jah"].toObject();
+                if (!jah.contains("avatar")) continue;
+                const QJsonObject av = jah["avatar"].toObject();
+                sawAvatarExtras = av["asset"].toString() == "avatar-guid"
+                                  && av["name"].toString() == "Jennifer"
+                                  && av["clips"].toArray().contains(QJsonValue("Walking"));
+            }
+            CHECK(sawAvatarExtras, "T13: the wrapper carries jah.avatar extras");
+        }
     }
 
     // ---- F1: exported joints carry a REAL bind pose ------------------------

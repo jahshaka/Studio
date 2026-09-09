@@ -18,6 +18,7 @@ namespace Ui {
 
 class Database;
 class Project;
+struct StudioServices;
 class ImportBatchRunner;
 class Subscriber;
 
@@ -228,6 +229,10 @@ public:
     /// (Phase 4: was the Globals::project static). Nothing on the construction
     /// path reads it — the first reads happen on user interaction.
     void setProject(Project *p) { project = p; }
+    /// The service bundle, for the pin-change announcement the drawer's
+    /// "Update from Library" fires (AVATAR_ASSET_SPEC §4 D4). Optional: the
+    /// panel works without it, the scene just re-resolves on the next open.
+    void setServices(StudioServices *s) { services = s; }
     ~AssetWidget();
 
 	AssetItem assetItem;
@@ -282,6 +287,14 @@ public:
 
 signals:
 	void assetItemSelected(QListWidgetItem*);
+	/// THE DRAWER -> MODULE SEAM (AVATAR_ASSET_SPEC §5.5): "Edit in Avatar
+	/// Module" on a drawer row. The shell switches space and calls the
+	/// module's verb; the panel never includes mainwindow.h.
+	void editAssetInModule(const QString &guid, const QString &moduleId, const QString &scope);
+	/// The scene wants an instance of an avatar asset ("Add to Scene", and the
+	/// viewport's drop of an avatar row). Routed through the shell for the
+	/// same reason.
+	void spawnAvatarInScene(const QString &guid);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event);
@@ -310,6 +323,12 @@ protected slots:
 	/// Image items (IMAGE_PLANE_SPEC option B1): mints the companion PBR
 	/// material asset for the selected image and pins it into the project.
 	void createMaterialFromImage();
+	/// AVATAR_ASSET_SPEC §5.5, the drawer's four avatar rows.
+	void editAvatarInModule();
+	void addAvatarToScene();
+	void createAvatarFromModel();
+	void updateAvatarFromLibrary();
+	void saveAvatarToLibrary();
     void exportSky();
     void exportMaterial();
 	void exportMaterialPreview();
@@ -335,6 +354,7 @@ private:
     QPoint startPos;
 
     Database *db;
+    StudioServices *services = nullptr;
     Project *project = nullptr;   // the live Project (Phase 4: was Globals::project)
 	ProgressDialog *progressDialog;
 	// Threaded import batch (UI-freeze fix): heavy pipeline half on a worker,

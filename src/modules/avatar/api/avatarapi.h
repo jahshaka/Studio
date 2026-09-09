@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "scripting/apimodule.h"
 
 #include "modules/avatar/avatarpreviewmodel.h"   // HeightNormalization (a member)
+#include "services/avatarassets.h"                // the open-asset scope + definition
 
 namespace avatar { class AvatarPreviewModel; }
 namespace iris { class AvatarPossession; class AvatarLocomotion; }
@@ -139,6 +140,34 @@ public:
     Q_INVOKABLE bool setClipRole(const QString &nodeId, const QString &role,
                                  const QString &clipName);
 
+    // ---- AVATAR ASSETS (AVATAR_ASSET_SPEC §6) -----------------------------
+    //
+    // The module edits an ASSET — a library one or the open project's version
+    // of one — and says which. Scenes hold INSTANCES of the project's version.
+    // Everything here is document/DB work: no engine, no display.
+    Q_INVOKABLE QVariantList library(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QString createAsset(const QString &objectGuid,
+                                    const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap importAvatar(const QString &path,
+                                         const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap open(const QString &guid, const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap asset();
+    Q_INVOKABLE QVariantMap save();
+    Q_INVOKABLE QVariantMap saveToLibrary(const QString &guid = QString());
+    Q_INVOKABLE bool removeClip(const QString &name);
+    Q_INVOKABLE QVariantMap setClipOptions(const QString &name, const QVariantMap &values);
+    Q_INVOKABLE bool setDefaultClip(const QString &name);
+
+    // ---- LINKED INSTANCES (AVATAR_ASSET_SPEC §5.4) ------------------------
+    Q_INVOKABLE QVariantList instances(const QString &assetGuid = QString());
+    Q_INVOKABLE QVariantMap refreshInstances(const QString &assetGuid);
+
+    /// The pin-change subscription's body (AssetService::onPinChanged): every
+    /// instance of `assetGuid` in the open scene re-resolves. Public so the
+    /// module can wire the announcement without the API knowing about services
+    /// it does not own.
+    void onAssetPinChanged(const QString &assetGuid);
+
 private:
     /// loadClip's halves, shared with spawn's `clips` option.
     /// Resolves a path OR an existing asset guid to a PINNED project asset and
@@ -162,6 +191,39 @@ private:
     void notifySubjectChanged();
     /// fail(), plus a copy of the message the widgets can read back.
     bool record(const QString &message);
+
+    // ---- what the module has OPEN (AVATAR_ASSET_SPEC §5.3) ---------------
+    //
+    // The module edits one avatar at a time and always knows WHICH SCOPE it
+    // came from, because a save has to go back where it was opened from —
+    // "asset edits go to the asset, project edits go to the project" is a
+    // property of the open document, not of a preference.
+    struct OpenAsset
+    {
+        QString guid;
+        AvatarAssets::Scope scope = AvatarAssets::Scope::Library;
+        QString version;                  ///< the oid it was read from
+        iris::AvatarDefinition definition;
+        bool dirty = false;
+        bool isOpen() const { return !guid.isEmpty(); }
+    };
+    OpenAsset mOpen;
+
+    /// The open definition, or a recorded refusal.
+    bool requireOpenAsset(const char *verb);
+    /// Applies a definition to a spawned wrapper: clips, defaults, movement,
+    /// locomotion. Shared by the linked spawn and by refreshInstances, so an
+    /// instance created now and one refreshed later cannot end up different.
+    bool applyDefinition(const iris::SceneNodePtr &node,
+                         const iris::AvatarDefinition &definition, const QString &version,
+                         QStringList *warningsOut);
+    /// The project's version of `assetGuid`, loaded — or a recorded refusal.
+    bool loadProjectDefinition(const char *verb, const QString &assetGuid,
+                               iris::AvatarDefinition &out, QString *versionOut);
+    /// D9: the linked instance's asset guid, or empty when the node is an
+    /// unlinked scratch avatar. Node-level edits on a LINKED instance are
+    /// redirected to the project's version of the asset.
+    QString linkedAssetOf(const iris::SceneNodePtr &node) const;
 
     QString mLastError;
     /// What avatar.spawn's height normalization did, per spawned node guid.
