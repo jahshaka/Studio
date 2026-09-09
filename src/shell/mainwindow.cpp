@@ -179,7 +179,13 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "services/sceneopenrunner.h"
 #include "services/mainthreadwatchdog.h"
+#include "shell/dockstate.h"
 #include "shell/shutdownorder.h"
+
+/// Where the EDITOR docks' layout lives. Deliberately not "windowState": that
+/// key is the OUTER window's, written by QMainWindow::saveState, and the two
+/// blobs describe two different QMainWindows.
+static const char *kViewportDockStateKey = "viewportDockState";
 #include "services/projectarchiver.h"
 #include "ui/dialogs/progressdialog.h"
 #include "services/sceneeditservice.h"
@@ -710,6 +716,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 	settings->setValue("geometry", saveGeometry());
 	settings->setValue("windowState", saveState());
+	// ...and the EDITOR DOCKS, which live in the nested `viewPort` QMainWindow
+	// and are therefore not in the line above (shell/dockstate.h).
+	DockState::save(viewPort, settings->settings, kViewportDockStateKey);
 
     // Orderly teardown BEFORE the window disappears: dialogs close with a
     // window still on screen, and a mid-flight import batch is aborted and
@@ -2232,6 +2241,15 @@ void MainWindow::setupDockWidgets()
     viewPort->addDockWidget(Qt::BottomDockWidgetArea, animationDock);
     viewPort->tabifyDockWidget(animationDock, assetDock);
 
+    // ...and the USER's layout on top of it, if there is one. The docks belong
+    // to this nested QMainWindow, so MainWindow's own restoreState (which the
+    // constructor calls) never reached them: every move, resize, float, tab
+    // and close was forgotten at exit. `restoredViewportDocks` is what tells
+    // applyRightColumnWidthOnce to keep its hands off — a remembered column
+    // width must win over the compiled-in default (shell/dockstate.h).
+    restoredViewportDocks =
+        settings ? DockState::restore(viewPort, settings->settings, kViewportDockStateKey) : false;
+
 	viewPort->setStyleSheet(StyleSheet::QMenuFlat());
 }
 
@@ -2262,6 +2280,11 @@ void MainWindow::applyRightColumnWidthOnce()
 {
     if (rightColumnSized) return;
     rightColumnSized = true;
+    // A RESTORED LAYOUT ALREADY SAID HOW WIDE THE COLUMN IS. This is the
+    // compiled-in DEFAULT width, applied once per session; overriding a width
+    // the user dragged and this window just restored would make the dock state
+    // look like it was not saved at all.
+    if (restoredViewportDocks) return;
     QTimer::singleShot(0, this, [this]() {
         if (!viewPort || !sceneNodePropertiesDock) return;
         // BOTH docks in the column, from the one constant. Presets sits under

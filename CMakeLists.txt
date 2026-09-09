@@ -410,6 +410,7 @@ set(SRCS
 )
 
 set(HEADERS
+    src/shell/dockstate.h
     src/shell/mainwindow.h 
     src/ui/controls/colorvaluewidget.h 
     src/ui/controls/colorpickerwidget.h 

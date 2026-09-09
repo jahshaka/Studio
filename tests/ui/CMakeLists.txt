@@ -528,3 +528,22 @@ add_test(NAME ui.project_tile COMMAND test_project_tile
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(ui.project_tile PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "ui")
+
+# ui.dock_state — the editor's dock layout survives a restart (hygiene lane,
+# 2026-09-09). The editor docks live in a NESTED QMainWindow whose saveState()
+# was never called, so MainWindow's own windowState never described them. Drives
+# shell/dockstate.h against a real QSettings file and a real nested QMainWindow
+# built the way the shell builds one. Widgets only: no engine, no project,
+# no display.
+add_executable(test_dock_state test_dock_state.cpp)
+set_target_properties(test_dock_state PROPERTIES
+    AUTOMOC ON CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_dock_state PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_dock_state PRIVATE Qt6::Widgets)
+add_test(NAME ui.dock_state COMMAND test_dock_state
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(ui.dock_state PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120 LABELS "ui")
+jah_no_display(ui.dock_state)

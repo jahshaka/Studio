@@ -716,6 +716,10 @@ private:
     void applyRightColumnWidthOnce();
     /// Whether that has happened — after it has, a user's drag wins.
     bool rightColumnSized = false;
+    /// True when the nested `viewPort` QMainWindow's dock layout came back from
+    /// settings — the once-per-session default column width then stands down
+    /// (shell/dockstate.h).
+    bool restoredViewportDocks = false;
     QTabWidget *presetsTabWidget;
 
     QDockWidget *assetDock;
