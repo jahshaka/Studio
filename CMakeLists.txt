@@ -240,6 +240,7 @@ set(SRCS
     src/services/projectassets.cpp
     src/services/engineerrorpump.cpp
     src/services/framepacing.cpp
+    src/services/ogresamples.cpp
     src/services/jahlog.cpp
     src/services/sessionmarkers.cpp
     src/services/perfsampler.cpp

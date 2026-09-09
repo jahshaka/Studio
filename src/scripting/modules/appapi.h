@@ -49,6 +49,9 @@ public:
     Q_INVOKABLE QVariantMap threading();
     Q_INVOKABLE QVariantMap textureStreaming();
     Q_INVOKABLE QVariantMap waitForTextures();
+    Q_INVOKABLE QVariantList ogreSamples();
+    Q_INVOKABLE QVariantMap launchOgreSample(const QString &name,
+                                             const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList apiProblems();
 };
 

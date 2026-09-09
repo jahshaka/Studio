@@ -25,6 +25,9 @@ For more information see the LICENSE file
 #include "services/framepacing.h"
 #include "data/settingsmanager.h"
 #include "services/jahlog.h"
+#include "services/ogresamples.h"
+#include "data/constants.h"
+#include "irisgl/core/irisutils.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -252,6 +255,26 @@ QVector<VerbInfo> AppApi::verbs() const
           "wait, so a script can bracket an open with two calls and say how many textures it "
           "cost.",
           Needs::Engine },
+        { "ogreSamples", "app.ogreSamples() -> [{name, title, note, available, path, running, portArchive, portAvailable}]",
+          "The Ogre-Next samples this program ports (SPECS/OGRE_SAMPLES_TAB_SPEC.md §3), each with "
+          "whether ITS ORIGINAL BINARY can be launched on this machine. A curated inventory, not a "
+          "directory scan: `available` is false on every tree that did not opt into building Ogre's "
+          "samples (OGRE_SAMPLES=1 ./irisgl/scripts/build-ogre.sh), which is the normal case — the "
+          "originals are the reference picture beside our ports, a developer convenience, never a "
+          "shipping dependency. `portArchive` is where our port of that scene lives in scenes/ogre "
+          "and `portAvailable` says whether it has been authored yet. `note` is what the port "
+          "cannot show, and belongs on the tile beside it.",
+          Needs::Document },
+        { "launchOgreSample", "app.launchOgreSample(name, {fullscreen, width, height}) -> {launched, path, pid, reason}",
+          "Runs Ogre's ORIGINAL binary for `name` (the base name, e.g. 'PbsMaterials') as a separate "
+          "process, for a side-by-side against our port. Never throws: a tree without the samples "
+          "built, a headless session, or a copy of that sample this session already started all "
+          "return launched:false with a `reason` to show. Windowed 1920x1080 by DEFAULT and "
+          "deliberately — their Vulkan config defaults Full Screen to Yes and Video Mode to the "
+          "largest mode, so an unseeded launch takes over the whole display and reads as a frozen "
+          "editor. The sample runs from its own build directory (its resources2.cfg points into the "
+          "Ogre source tree) and gets its own Ogre::Root in its own process.",
+          Needs::Document },
         { "apiProblems", "app.apiProblems() -> [string]",
           "Everything wrong with the scripting API's OWN metadata, as sentences: a verb with no "
           "doc string or signature, a duplicate name, a module that registers nothing, or — the "
@@ -433,6 +456,51 @@ QVariantMap AppApi::engineErrors(bool reset)
     // over. Needs::Document for the same reason.
     const QVariantMap out = EngineErrorPump::instance().report();
     if (reset) EngineErrorPump::instance().reset();
+    return out;
+}
+
+QVariantList AppApi::ogreSamples()
+{
+    // Needs::Document: this is a question about FILES ON DISK, answerable in a
+    // headless run — and answering it there is the point, because the honest
+    // answer everywhere but a comparison tree is "not built".
+    QVariantList out;
+    const QDir scenes(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    for (const ogresamples::Entry &e : ogresamples::catalog()) {
+        QVariantMap m;
+        m.insert("name", e.name);
+        m.insert("title", e.title);
+        m.insert("note", e.note);
+        const QString bin = ogresamples::binaryPath(e.name);
+        m.insert("available", !bin.isEmpty());
+        m.insert("path", bin);
+        m.insert("running", ogresamples::isRunning(e.name));
+        const QString archive =
+            scenes.absoluteFilePath(QStringLiteral("ogre/") + e.name + QStringLiteral(".zip"));
+        m.insert("portArchive", archive);
+        m.insert("portAvailable", QFileInfo::exists(archive));
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantMap AppApi::launchOgreSample(const QString &name, const QVariantMap &options)
+{
+    // REFUSAL, NOT EXCEPTION. Every failure here is an ordinary state of the
+    // world (samples not built, no display, already running), so the verb
+    // reports rather than throws — the button shows `reason` as a tooltip and
+    // a script can branch on `launched`.
+    ogresamples::LaunchOptions opts;
+    if (options.contains("width"))      opts.width = options.value("width").toInt();
+    if (options.contains("height"))     opts.height = options.value("height").toInt();
+    if (options.contains("fullscreen")) opts.fullscreen = options.value("fullscreen").toBool();
+
+    const ogresamples::LaunchResult r = ogresamples::launch(name, opts);
+    QVariantMap out;
+    out.insert("launched", r.launched);
+    out.insert("path", r.path);
+    out.insert("pid", r.pid);
+    if (!r.reason.isEmpty()) out.insert("reason", r.reason);
     return out;
 }
 

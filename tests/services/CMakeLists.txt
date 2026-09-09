@@ -94,6 +94,28 @@ set_tests_properties(services.animation_undo PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
 jah_no_display(services.animation_undo)
 
+# services.ogre_samples — the seeded ogre.cfg and the launch guards
+# (SPECS/OGRE_SAMPLES_TAB_SPEC.md §7.3/§9.2). Pure file + string work: links
+# the service and the two-line settings manager it reads its override from,
+# no engine, no document, no display. The headless e2e proves the VERBS refuse;
+# this proves the file they would write is windowed rather than fullscreen,
+# which is the value that decides whether "Launch Original" is a side-by-side
+# or a takeover of the owner's screen.
+add_executable(test_ogre_samples test_ogre_samples.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/ogresamples.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp)
+set_target_properties(test_ogre_samples PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_ogre_samples PRIVATE
+    ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_ogre_samples PRIVATE Qt6::Gui Qt6::Widgets)
+add_test(NAME services.ogre_samples COMMAND test_ogre_samples
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(services.ogre_samples PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "services")
+jah_no_display(services.ogre_samples)
+
 # The sanitizer lanes (scripts/sanitize.sh).
 #   tsan  services.memory registers and drops session assets the way the app
 #         does from more than one thread's callbacks.
