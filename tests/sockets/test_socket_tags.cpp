@@ -262,6 +262,49 @@ int main(int argc, char **argv)
             CHECK(same, "...and the rider keeps its last pose");
         }
 
+        // D. THE RIDER IS DELETED WHILE IT RIDES. Everything here is keyed by
+        // DOCUMENT NODE POINTER — the mirror's rider map, the graph's shadow
+        // parents — so a node that leaves the document has to take its
+        // bookkeeping with it or the next sweep reads freed memory.
+        {
+            CHECK(character->addSocket(socket), "the socket comes back");
+            CHECK(doc->attachToSocket(sword, character->getGUID(), "hand", &err),
+                  "and the sword rides it again");
+            mirror.sync();
+            mirror.sync();
+            CHECK(scene->boneAttachment(mirror.engineNode(sword.data())) != 0, "armed");
+            group->removeChild(sword);
+            doc->removeNode(sword);
+            sword.reset();
+            mirror.sync();
+            mirror.sync();
+            CHECK(true, "deleting a rider mid-ride does not fault");
+        }
+
+        // D. THE OWNER IS DELETED WHILE SOMETHING RIDES IT: the tag points into
+        // its skeleton, so the engine has to free the rider first.
+        {
+            auto prop = iris::SceneNode::create();
+            prop->setName("prop");
+            group->addChild(prop, false);
+            doc->addNode(prop);
+            CHECK(doc->attachToSocket(prop, character->getGUID(), "hand", &err),
+                  "a prop rides the character");
+            mirror.sync();
+            mirror.sync();
+            const NodeId propId = mirror.engineNode(prop.data());
+            CHECK(scene->boneAttachment(propId) != 0, "armed");
+            doc->getRootNode()->removeChild(character);
+            doc->removeNode(character);
+            character.reset();
+            mirror.sync();
+            mirror.sync();
+            CHECK(scene->boneAttachment(mirror.engineNode(prop.data())) == 0,
+                  "deleting the OWNER takes its riders off their bones");
+            CHECK(!iris::graph::isSocketRider(prop->graphNode()),
+                  "...and the shadow parent goes with it");
+        }
+
         mirror.setSource(nullptr);
         dg.engine()->destroyScene(scene);
     }
