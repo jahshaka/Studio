@@ -465,10 +465,20 @@ iris::ScenePtr MainWindow::createDefaultScene()
         node->physicsProperty = physicsProperties;
     }
 
-	// if we reached this far, the project dir has already been created
-	// we can copy some default assets to each project here
-	QFile::copy(IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"),
-		QDir(project->getProjectFolder()).filePath("Tile.png"));
+	// The ground's tile. A REAL project (one with a guid and a folder) still
+	// gets the legacy copy + catalog row below, which the writer/reader
+	// project-folder fallback resolves on save/reopen (scenereader.cpp,
+	// materialreader.cpp — the default-assets-through-the-CAS lane deletes all
+	// of it). The STARTUP PLACEHOLDER project (Project::createNew: no guid,
+	// folder = QDir::currentPath()) must not: for years it copied Tile.png
+	// beside the binary and inserted a bare "Tile.png" row with an EMPTY
+	// project guid into the library DB on every launch — the stray Tile.png the
+	// governance notes warn about, and a row per boot nobody could see. It never
+	// saves, so it references the shipped file directly.
+	const QString shippedTile = IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
+	QString tilePath = shippedTile;
+	if (project && !project->getProjectGuid().isEmpty()) {
+	QFile::copy(shippedTile, QDir(project->getProjectFolder()).filePath("Tile.png"));
 
 	auto thumb = ThumbnailManager::createThumbnail(
 		IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png"), 72, 72);
@@ -500,12 +510,14 @@ iris::ScenePtr MainWindow::createDefaultScene()
     assetTexture->assetGuid = assetGuid;
     assetTexture->path = QDir(project->getProjectFolder()).filePath("Tile.png");
     AssetManager::addAsset(assetTexture);
+	tilePath = assetTexture->path;
+	}
 
     // The default scene's ground, as a PbrMaterial (HLMS_ADOPTION P4b). The
     // roughness is what the legacy Default shader's shininess 0 already meant
     // through the mirror's remap, so the floor renders exactly as it did.
     auto m = iris::PbrMaterial::create();
-    m->setValue("baseColorMap", QDir(project->getProjectFolder()).filePath("Tile.png"));
+    m->setValue("baseColorMap", tilePath);
     m->setValue("textureScale", 4.f);
     m->setValue("roughness", 1.0f);
     m->setValue("metallic", 0.0f);
