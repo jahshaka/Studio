@@ -410,7 +410,7 @@ static void fourCase()
                 double(drift) / double(again.rgba.size()));
 
     std::printf("-- the same scene with four focused maps\n");
-    CHECK(impl->rebuildShadowAtlas(impl->shadowResolution(), 4u), "the atlas rebuilt at N=4");
+    CHECK(impl->rebuildShadowAtlas(impl->shadowResolution(), 4u, true), "the atlas rebuilt at N=4");
     render(engine.get(), 8);
     Image four;
     v->readPixels(four);
@@ -425,7 +425,7 @@ static void fourCase()
     CHECK(shadowed4 == 4, "all four lamps cast a shadow with four maps (%d did)", shadowed4);
     std::printf("    mean luminance: N=2 %.2f, N=4 %.2f\n", meanLum(two), meanLum(four));
     // ...and back down, to see whether the brightness follows the map count.
-    impl->rebuildShadowAtlas(impl->shadowResolution(), 2u);
+    impl->rebuildShadowAtlas(impl->shadowResolution(), 2u, true);
     render(engine.get(), 8);
     Image back;
     v->readPixels(back);
@@ -465,7 +465,7 @@ static void staticCase()
     auto *impl = static_cast<OgreEngine *>(engine.get());
     auto *view = static_cast<OgreView *>(v);
     Room room = buildRoom(engine.get(), v, "roomStatic", 4, false);
-    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u);
+    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u, true);
     render(engine.get(), 6);
 
     PassCounter counter;
@@ -553,7 +553,7 @@ static void r3Case()
     CHECK(st.probeShadows, "the probe captures really are shadowed (the precondition for R3)");
     std::printf("    rebuilding the atlas (this is where the definition dies)\n");
     std::fflush(stdout);
-    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u);
+    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u, true);
     render(engine.get(), 4);
     Image img;
     CHECK(v->readPixels(img), "the engine survived the rebuild and still renders");
@@ -577,7 +577,7 @@ static void attenCase()
     View *v = engine->createOffscreenView("spike", 200, 200, Colour(0, 0, 0));
     auto *impl = static_cast<OgreEngine *>(engine.get());
     Room room = buildRoom(engine.get(), v, "roomAtten", 4, false);
-    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u);
+    impl->rebuildShadowAtlas(impl->shadowResolution(), 4u, true);
     render(engine.get(), 8);
     Image mapped;
     v->readPixels(mapped);
