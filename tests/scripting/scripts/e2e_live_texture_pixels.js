@@ -17,6 +17,9 @@ function assert(cond, msg) {
     console.log("ok: " + msg);
 }
 function show(tag, c) { return tag + " (" + c.r + "," + c.g + "," + c.b + ")"; }
+function dist(a, b) {
+    return Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+}
 
 var guid = project.create("Live Pixels " + Date.now());
 assert(guid.length > 10, "project.create");
@@ -84,11 +87,22 @@ console.log("    " + show("LAST", last));
 assert(last.r > last.g + 30 && last.b > last.g + 30,
        "the last write (magenta) is what is drawn " + show("", last));
 
-// ---- 6. destroying it under a live binding does not crash --------------
+// ---- 6. removing it under a live binding does not crash ----------------
+// And it does not blank the surface either: the renderer's copy of the last
+// pixels lives until nothing binds it, so what stops is the UPDATING. That is
+// the documented behaviour of texture.remove and it is asserted here rather
+// than described.
 assert(texture.remove(tex) === true, "texture.remove while bound");
 editor.frame(3);
 var gone = probe("live_gone.png");
 console.log("    " + show("GONE", gone));
 assert(scene.nodes().length >= 1, "the scene still renders with a dead reference");
+assert(dist(gone, last) <= 6,
+       "the surface keeps the last pixels it was given (" + dist(gone, last) + ")");
+assert(material.set(cube, { baseColorMap: "" }) === true, "clearing the map is what blanks it");
+editor.frame(3);
+var cleared = probe("live_cleared.png");
+console.log("    " + show("CLEARED", cleared));
+assert(dist(cleared, gone) > 20, "and it IS a different picture (" + dist(cleared, gone) + ")");
 
 console.log("e2e live texture pixels: all assertions passed");

@@ -119,8 +119,9 @@ assert(texture.remove(mipped) === true, "texture.remove");
 assert(texture.info(mipped) === null, "the identity is gone");
 assert(texture.remove(mipped) === false, "destroying it twice answers false");
 assert(texture.remove(tex) === true, "destroy the bound one too");
-// A material still holding the reference is not a crash: the slot resolves to
-// nothing, exactly like a file that was deleted underneath it.
+// A material still holding the reference is not a crash: the row keeps the
+// string it was told, and the renderer keeps drawing the last pixels it was
+// given until the binding goes away (the pixel suite probes exactly that).
 assert(material.get(cube).baseColorMap === "live://" + tex,
        "the material keeps the reference string it was told");
 assert(material.set(cube, { baseColorMap: "" }) === true, "and the slot can be cleared");

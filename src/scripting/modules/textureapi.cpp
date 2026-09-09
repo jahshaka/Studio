@@ -131,8 +131,11 @@ QVector<VerbInfo> TextureApi::verbs() const
           "wrapper owns that name and would shadow the verb): its identity, its pixels and any video "
           "bound to it "
           "(video.bind). False when the guid names none. A material still bound to it keeps the "
-          "reference string and simply samples nothing — the renderer frees its copy on the next "
-          "sweep. Nothing on disk is touched, because a live texture was never on disk.",
+          "reference string and goes on showing the LAST pixels it was given — the renderer's copy "
+          "of them lives until nothing binds it any more, at which point the ordinary sweep frees "
+          "it; what stops is the updating, not the drawing. Clear the map (material.set(node, "
+          "{baseColorMap: \'\'}) ) to get rid of the picture. Nothing on disk is touched, because "
+          "a live texture was never on disk.",
           Needs::Document },
     };
 }
