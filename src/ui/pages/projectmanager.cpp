@@ -874,6 +874,9 @@ void ProjectManager::openSampleBrowser()
 		QListWidgetItem *item = list->currentItem();
 		const bool hasArchive = item && QFileInfo::exists(item->data(Qt::UserRole).toString());
 		select->setEnabled(hasArchive);
+		// The Ogre tab opens OUR PORT of the scene, not their sample — say so,
+		// because the button beside it runs their binary.
+		select->setText(ogreTab ? QStringLiteral("Open Port") : QStringLiteral("Open"));
 		launchOriginal->setVisible(ogreTab);
 		if (ogreTab) {
 			const QString name = item ? item->data(Qt::UserRole + 1).toString() : QString();
