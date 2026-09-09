@@ -47,6 +47,11 @@ assert(meta.bones > 40, "...and the bones its channels drive (" + meta.bones + "
 assert(typeof meta.rigId === "string" && meta.rigId.length > 0,
        "the clip advertises a RIG ID — which rigs it fits, without opening it");
 
+// The tile's Rebuild Thumbnail, as a verb: a clip has no engine render to make
+// (nothing to play it ON), so it redraws the POSE STRIP from the stored bytes
+// — document-only, which is why it answers here with no engine at all.
+assert(assets.refreshThumbnail(clip), "the clip's thumbnail rebuilds (the pose strip)");
+
 // ---- 2. the listing --------------------------------------------------------
 
 var animations = assets.list({ type: "animation" });

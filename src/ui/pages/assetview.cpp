@@ -81,6 +81,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/services.h"
 #include "services/assetstore.h"
+#include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
@@ -2661,6 +2662,16 @@ void AssetView::rebuildTileThumbnail(AssetGridItem *item)
 		viewer->loadJafSky(guid);
 		const QImage shot = viewer->takeScreenshot(512, 512);
 		if (!shot.isNull()) pixmap = QPixmap::fromImage(shot);
+		break;
+	}
+	case ModelTypes::Animation: {
+		// The POSE STRIP the import drew, redrawn from the stored bytes. There
+		// is nothing to render in a viewer — a clip has no geometry of its own
+		// and playing it needs a rig to play it on — so the default branch
+		// below would replace a readable thumbnail with a file icon.
+		QImage strip;
+		animfile::read(sourceFile, &strip, 256, 256);
+		if (!strip.isNull()) pixmap = QPixmap::fromImage(strip);
 		break;
 	}
 	default:

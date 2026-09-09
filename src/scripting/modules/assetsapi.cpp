@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "export/exportcontentsource.h"
 #include "export/rawexporter.h"
+#include "services/animationfile.h"
 #include "services/assetcas.h"
 #include "services/assetgc.h"
 #include "services/assetservice.h"
@@ -497,7 +498,15 @@ QString AssetsApi::import(const QString &path)
         return QString();
     }
     // Best effort thumbnail when the engine is up; headless-doc runs skip it.
-    if (host.isEngineReady()) refreshThumbnail(result.objectGuid);
+    // OBJECTS ONLY: the engine render exists because a mesh import's tile is
+    // otherwise blank. Every other type this entry point can now produce (an
+    // ANIMATION asset — a model file with no geometry) was given its final
+    // thumbnail by its importer, and asking for a rebuild here threw the whole
+    // verb AFTER a successful import, which is a passing import reported as a
+    // failure (found driving the real UI, where the engine IS up).
+    if (host.isEngineReady()
+        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
+        refreshThumbnail(result.objectGuid);
     return result.objectGuid;
 }
 
@@ -830,6 +839,18 @@ bool AssetsApi::refreshThumbnail(const QString &guid)
         // when decode fails, so this always writes something sensible.
         const QPixmap thumb = VideoUtils::thumbnailFor(storeFileFor(guid));
         return host.db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(thumb));
+    }
+    if (record.type == static_cast<int>(ModelTypes::Animation)) {
+        // The POSE STRIP the import drew, redrawn — a clip file has no engine
+        // render to make (there is nothing to put the clip ON), so this is the
+        // same three projected poses, from the stored bytes. Document-only,
+        // like the image and audio rows above it.
+        QImage strip;
+        animfile::read(storeFileFor(guid), &strip, 256, 256);
+        if (strip.isNull())
+            return fail("assets.refreshThumbnail: could not read the animation");
+        return host.db->updateAssetThumbnail(
+            guid, AssetHelper::makeBlobFromPixmap(QPixmap::fromImage(strip)));
     }
     if (record.type == static_cast<int>(ModelTypes::File)) {
         return host.db->updateAssetThumbnail(
