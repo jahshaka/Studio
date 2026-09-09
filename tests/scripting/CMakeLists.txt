@@ -893,3 +893,25 @@ set_tests_properties(scripting.e2e.scene_bounds PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 180)
+
+# scripting.e2e.ogre_samples — SPECS/OGRE_SAMPLES_TAB_SPEC.md §6, the API-first
+# half of the Ogre-samples tab: app.ogreSamples() (the curated inventory the
+# tab's tiles are built from) and app.launchOgreSample() (the Launch Original
+# button's verb).
+#
+# --headless AND jah_no_display, deliberately. THE REFUSAL IS THE TEST: Ogre's
+# own sample binaries are opt-in at engine-build time (OGRE_SAMPLES=1
+# ./irisgl/scripts/build-ogre.sh) and exist in no CI tree and on no macOS box,
+# so this suite proves the verbs answer honestly and spawn NOTHING when they
+# are absent — never that a sample runs. A gate that launched a second Vulkan
+# application would be a gate that fights the machine it runs on.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ogre_samples)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME scripting.e2e.ogre_samples
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_ogre_samples.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(scripting.e2e.ogre_samples PROPERTIES
+    ENVIRONMENT "HOME=${_home}"
+    LABELS "scripting"
+    TIMEOUT 120)
+jah_no_display(scripting.e2e.ogre_samples)

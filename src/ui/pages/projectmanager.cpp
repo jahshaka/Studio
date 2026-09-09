@@ -30,6 +30,7 @@ For more information see the LICENSE file
 #include <QThread>
 #include <QTreeWidgetItem>
 #include <QStyledItemDelegate>
+#include <QTabWidget>
 #include <QOffscreenSurface>
 
 // (No assimp include: this TU never used one, and the line that was here
@@ -57,6 +58,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/projectarchiver.h"
 #include "services/assetstorepaths.h"
+#include "services/ogresamples.h"
 #include <QSqlDatabase>
 #include "services/projectassets.h"
 #include "services/loadtimeline.h"
@@ -697,20 +699,16 @@ void ProjectManager::changePreviewSize(QString scale)
     dynamicGrid->scaleTile(scale);
 }
 
-void ProjectManager::openSampleBrowser()
+QListWidget *ProjectManager::buildSampleList(const QMap<QString, QString> &entries,
+                                            const QString &dir)
 {
-    // 3 columns x 2 rows of uniformly sized tiles: every preview center-cropped
-    // to the same 16:9 thumb (the physics preview's shape, at the smaller
-    // display scale), names on a black bar in white like the desktop tiles.
+    // 3 columns of uniformly sized tiles: every preview center-cropped to the
+    // same 16:9 thumb (the physics preview's shape, at the smaller display
+    // scale), names on a black bar in white like the desktop tiles.
     const QSize sampleIconSize(192, 108);
     const QSize sampleGridSize(sampleIconSize.width() + 6,
                                sampleIconSize.height() + 30);
 
-    sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    sampleDialog.setWindowTitle("Sample Scenes");
-    sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
-
-    QGridLayout *layout = new QGridLayout();
     QListWidget *sampleList = new QListWidget();
     sampleList->setAttribute(Qt::WA_MacShowFocusRect, false);
     sampleList->setObjectName("sampleList");
@@ -728,6 +726,53 @@ void ProjectManager::openSampleBrowser()
     sampleList->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     sampleList->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    // center-crop, never squash: scale so the thumb is fully covered, then
+    // cut the overhang symmetrically. A MISSING preview yields a flat dark
+    // tile rather than nothing at all — the Ogre tab lists ports whose preview
+    // is shot by the authoring script that has not run yet.
+    const auto croppedThumb = [&sampleIconSize](const QString &path) {
+        const QPixmap src(path);
+        if (src.isNull()) {
+            QPixmap placeholder(sampleIconSize);
+            placeholder.fill(QColor("#2b2b2b"));
+            return placeholder;
+        }
+        QPixmap scaled = src.scaled(sampleIconSize, Qt::KeepAspectRatioByExpanding,
+                                    Qt::SmoothTransformation);
+        const QRect cropRect(QPoint((scaled.width() - sampleIconSize.width()) / 2,
+                                    (scaled.height() - sampleIconSize.height()) / 2),
+                             sampleIconSize);
+        return scaled.copy(cropRect);
+    };
+
+    QMap<QString, QString>::const_iterator it;
+    for (it = entries.begin(); it != entries.end(); ++it){
+        auto item = new QListWidgetItem();
+        item->setData(Qt::DisplayRole, it.value());
+        item->setData(Qt::UserRole, QDir(dir).filePath(it.value()) + ".zip");
+        item->setIcon(QIcon(croppedThumb(QDir(dir).filePath(it.key()))));
+        item->setSizeHint(sampleGridSize - QSize(4, 4));
+        sampleList->addItem(item);
+    }
+
+    // fixed size that fits the grid cleanly. Seven samples since the Mirror
+    // Room landed, so the last row is half full — a 4x2 dialog is 200 px wider
+    // than this one and buys nothing.
+    const int sampleColumns = 3;
+    const int sampleRows = std::max(1, (sampleList->count() + sampleColumns - 1) / sampleColumns);
+    sampleList->setFixedSize(sampleColumns * sampleGridSize.width() + 16,
+                             sampleRows * sampleGridSize.height() + 12);
+    return sampleList;
+}
+
+void ProjectManager::openSampleBrowser()
+{
+    sampleDialog.setWindowFlags(sampleDialog.windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    sampleDialog.setWindowTitle("Sample Scenes");
+    sampleDialog.setAttribute(Qt::WA_MacShowFocusRect, false);
+
+    QGridLayout *layout = new QGridLayout();
+
     // preview file -> sample name; the NAME is also the archive's file name
     // (scenes/<name>.zip), so a new sample is a preview + an archive + a line
     // here. The map is sorted by KEY, which is the display order.
@@ -741,37 +786,53 @@ void ProjectManager::openSampleBrowser()
     samples.insert("preview/showroom.png",   "Showroom");
 
     QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    QListWidget *sampleList = buildSampleList(samples, dir.absolutePath());
 
-    // center-crop, never squash: scale so the thumb is fully covered, then
-    // cut the overhang symmetrically
-    const auto croppedThumb = [&sampleIconSize](const QString &path) {
-        const QPixmap src(path);
-        if (src.isNull()) return src;
-        QPixmap scaled = src.scaled(sampleIconSize, Qt::KeepAspectRatioByExpanding,
-                                    Qt::SmoothTransformation);
-        const QRect cropRect(QPoint((scaled.width() - sampleIconSize.width()) / 2,
-                                    (scaled.height() - sampleIconSize.height()) / 2),
-                             sampleIconSize);
-        return scaled.copy(cropRect);
-    };
-
-    QMap<QString, QString>::const_iterator it;
-    for (it = samples.begin(); it != samples.end(); ++it){
-        auto item = new QListWidgetItem();
-        item->setData(Qt::DisplayRole, it.value());
-        item->setData(Qt::UserRole, QDir(dir.absolutePath()).filePath(it.value()) + ".zip");
-        item->setIcon(QIcon(croppedThumb(QDir(dir.absolutePath()).filePath(it.key()))));
-        item->setSizeHint(sampleGridSize - QSize(4, 4));
-        sampleList->addItem(item);
+    // ---- the second tab: our ports of Ogre-Next's demo scenes -------------
+    // The PORTS are what a tile opens (scenes/ogre/<Name>.zip, authored by the
+    // scripts in scenes/tools). Their ORIGINAL binary, when this tree opted
+    // into building Ogre's samples, is the reference picture beside it — the
+    // Launch Original button, which disables itself everywhere else
+    // (SPECS/OGRE_SAMPLES_TAB_SPEC.md §5).
+    const QString ogreDir = dir.absoluteFilePath(QStringLiteral("ogre"));
+    QMap<QString, QString> ogreEntries;
+    for (const ogresamples::Entry &e : ogresamples::catalog())
+        ogreEntries.insert(QStringLiteral("preview/") + e.name.toLower() + QStringLiteral(".png"),
+                           e.name);
+    QListWidget *ogreList = buildSampleList(ogreEntries, ogreDir);
+    for (int i = 0; i < ogreList->count(); ++i) {
+        QListWidgetItem *item = ogreList->item(i);
+        const QString name = item->data(Qt::DisplayRole).toString();
+        const ogresamples::Entry *e = ogresamples::entry(name);
+        // UserRole stays the port archive (openSampleProject is untouched);
+        // UserRole + 1 carries the sample's binary base name, which is what
+        // Launch Original needs and what the display title no longer is.
+        item->setData(Qt::UserRole + 1, name);
+        if (e && !e->title.isEmpty()) item->setData(Qt::DisplayRole, e->title);
+        const bool portReady = QFileInfo::exists(item->data(Qt::UserRole).toString());
+        QStringList tip;
+        if (e && !e->note.isEmpty()) tip << e->note;
+        if (!portReady) tip << QStringLiteral("The port of this scene has not been authored yet.");
+        if (ogresamples::binaryPath(name).isEmpty())
+            tip << QStringLiteral("Ogre's original is not built in this tree "
+                                  "(OGRE_SAMPLES=1 ./irisgl/scripts/build-ogre.sh).");
+        item->setToolTip(tip.join(QStringLiteral("\n")));
     }
 
-    // fixed size that fits the grid cleanly (title + grid + button row). Seven
-    // samples since the Mirror Room landed, so the last row is half full — a
-    // 4x2 dialog is 200 px wider than this one and buys nothing.
-    const int sampleColumns = 3;
-    const int sampleRows = (sampleList->count() + sampleColumns - 1) / sampleColumns;
-    sampleList->setFixedSize(sampleColumns * sampleGridSize.width() + 16,
-                             sampleRows * sampleGridSize.height() + 12);
+    // Size BOTH lists from the larger one so switching tabs never resizes the
+    // fixed dialog.
+    const QSize listSize(std::max(sampleList->width(), ogreList->width()),
+                         std::max(sampleList->height(), ogreList->height()));
+    sampleList->setFixedSize(listSize);
+    ogreList->setFixedSize(listSize);
+
+    auto tabs = new QTabWidget();
+    // A BARE QTabWidget paints the platform-light pane over a dark dialog
+    // (owner regression 2026-08-31) — the centralized sheet covers the tab
+    // bar, the pane, page backgrounds and text defaults.
+    tabs->setStyleSheet(StyleSheet::PreferencesTabs());
+    tabs->addTab(sampleList, "Jahshaka Samples");
+    tabs->addTab(ogreList, "Ogre Samples");
 
     auto instructions = new QLabel("Double click on a sample scene to import it in the editor");
     instructions->setObjectName("instructions");
@@ -779,49 +840,107 @@ void ProjectManager::openSampleBrowser()
     instructions->setStyleSheet(StyleSheet::ProjectManagerInstructions());
 
 	auto cancel = new QPushButton("Cancel");
+	auto launchOriginal = new QPushButton("Launch Original");
 	auto select = new QPushButton("Open");
 	select->setDisabled(true);
+	launchOriginal->setDisabled(true);
+	launchOriginal->hide();
 	auto wid = new QWidget;
 	auto layout1 = new QHBoxLayout;
 	wid->setLayout(layout1);
 	layout1->addStretch();
 	layout1->addWidget(cancel);
+	layout1->addWidget(launchOriginal);
 	layout1->addWidget(select);
 	// owner: no background band behind the button row; Open blue, Cancel grey.
 	// Classic keeps its big-button sheets; Qlementine uses the shared chrome spec.
 	if (ThemeManager::classicActive()) {
 		cancel->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
+		launchOriginal->setStyleSheet(StyleSheet::QPushButtonGreyscaleBig());
 		select->setStyleSheet(StyleSheet::QPushButtonBlueBig());
 	} else {
 		cancel->setStyleSheet(ThemeManager::chromeButtonSheet());
+		launchOriginal->setStyleSheet(ThemeManager::chromeButtonSheet());
 		select->setStyleSheet(ThemeManager::chromeAccentButtonSheet());
 	}
 	layout1->setContentsMargins(0, 10, 0, 10);
 
-	connect(sampleList, SIGNAL(itemDoubleClicked(QListWidgetItem*)), SLOT(openSampleProject(QListWidgetItem*)));
-	connect(sampleList, &QListWidget::itemClicked, [=](QListWidgetItem *item) {
-		select->setDisabled(false);
-		});
+	// One selection rule for both tabs: Open needs an archive that EXISTS
+	// (an Ogre tile whose port has not been authored yet is browsable, not
+	// openable), Launch Original needs the sample binary to be built here.
+	const auto refreshButtons = [=]() {
+		const bool ogreTab = tabs->currentIndex() == 1;
+		QListWidget *list = ogreTab ? ogreList : sampleList;
+		QListWidgetItem *item = list->currentItem();
+		const bool hasArchive = item && QFileInfo::exists(item->data(Qt::UserRole).toString());
+		select->setEnabled(hasArchive);
+		// The Ogre tab opens OUR PORT of the scene, not their sample — say so,
+		// because the button beside it runs their binary.
+		select->setText(ogreTab ? QStringLiteral("Open Port") : QStringLiteral("Open"));
+		launchOriginal->setVisible(ogreTab);
+		if (ogreTab) {
+			const QString name = item ? item->data(Qt::UserRole + 1).toString() : QString();
+			const QString bin = name.isEmpty() ? QString() : ogresamples::binaryPath(name);
+			launchOriginal->setEnabled(!bin.isEmpty());
+			launchOriginal->setToolTip(
+				bin.isEmpty()
+					? QStringLiteral("Ogre's own samples are not built in this tree — build them "
+									 "with OGRE_SAMPLES=1 ./irisgl/scripts/build-ogre.sh")
+					: QStringLiteral("Run %1 side by side with the port").arg(QFileInfo(bin).fileName()));
+		}
+	};
 
+	const auto openSelected = [=]() {
+		QListWidget *list = tabs->currentIndex() == 1 ? ogreList : sampleList;
+		if (QListWidgetItem *item = list->currentItem()) {
+			if (QFileInfo::exists(item->data(Qt::UserRole).toString()))
+				openSampleProject(item);
+		}
+	};
+
+	connect(sampleList, &QListWidget::itemDoubleClicked, this, &ProjectManager::openSampleProject);
+	connect(ogreList, &QListWidget::itemDoubleClicked, this, [=](QListWidgetItem *item) {
+		if (QFileInfo::exists(item->data(Qt::UserRole).toString())) openSampleProject(item);
+	});
+	connect(sampleList, &QListWidget::itemClicked, this, [=](QListWidgetItem *) { refreshButtons(); });
+	connect(ogreList, &QListWidget::itemClicked, this, [=](QListWidgetItem *) { refreshButtons(); });
+	connect(tabs, &QTabWidget::currentChanged, this, [=](int) { refreshButtons(); });
 
 	connect(cancel, &QPushButton::clicked, [=]() {
 		sampleDialog.close();
 		});
-	connect(select, &QPushButton::clicked, [=]() {
-		openSampleProject(sampleList->currentItem());
-	});
-
+	connect(select, &QPushButton::clicked, this, openSelected);
+	// The SAME function app.launchOgreSample() calls (API-first: the verb and
+	// its test came first, and this button is a second caller of the service
+	// underneath it — not a private path).
+	connect(launchOriginal, &QPushButton::clicked, this, [=]() {
+		QListWidgetItem *item = ogreList->currentItem();
+		if (!item) return;
+		const ogresamples::LaunchResult r =
+			ogresamples::launch(item->data(Qt::UserRole + 1).toString());
+		if (!r.launched)
+			QMessageBox::information(&sampleDialog, "Ogre sample", r.reason);
+		});
 
     layout->addWidget(instructions);
-    layout->addWidget(sampleList, 1, 0, Qt::AlignHCenter);
+    layout->addWidget(tabs, 1, 0, Qt::AlignHCenter);
     layout->addWidget(wid);
     // a blank line's worth of air above the (centered) title; the button row
     // supplies its own padding at the bottom
     layout->setContentsMargins(12, 20, 12, 0);
     layout->setSpacing(8);
 
+    // The dialog OBJECT is a member reused across opens, and everything above
+    // is rebuilt each time. QWidget::setLayout silently KEEPS the first layout
+    // and drops the new one, so the second open would show the previous open's
+    // widgets (invisible while both tabs held the same content; not invisible
+    // once a port lands between two opens) and leak a whole tile list. Tear
+    // the old content down first.
+    qDeleteAll(sampleDialog.findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly));
+    delete sampleDialog.layout();
     sampleDialog.setLayout(layout);
     sampleDialog.setFixedSize(sampleDialog.sizeHint());
+    refreshButtons();
     sampleDialog.exec();
 }
 

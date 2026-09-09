@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include <QDialog>
 #include <QFutureWatcher>
+#include <QListWidget>
 #include <QListWidgetItem>
 #include <QPointer>
 #include <QStringList>
@@ -142,6 +143,17 @@ protected slots:
 
 
     void openSampleBrowser();
+
+private:
+    /// The sample browser's tile list, extracted from openSampleBrowser so the
+    /// Ogre-ports tab is the SAME widget with different entries
+    /// (SPECS/OGRE_SAMPLES_TAB_SPEC.md §5.1). `entries` maps a preview image
+    /// (relative to `dir`) to the sample's base name — which is also the
+    /// archive's file name, so Qt::UserRole carries `dir/<name>.zip` and
+    /// openSampleProject needs no knowledge of which tab it came from.
+    QListWidget *buildSampleList(const QMap<QString, QString> &entries, const QString &dir);
+
+protected slots:
 
     /// The install half of importProjectFromFile: everything that used to
     /// follow the synchronous ProjectArchiver call.
