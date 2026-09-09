@@ -214,11 +214,29 @@ function fmt(p) { return "(" + p.r + "," + p.g + "," + p.b + ")"; }
 function selectionStaysOutOfTheMirror() {
     var panel = scene.find("MirrorPanel");
     assert(!!panel, "the MirrorPanel is findable by name");
-    // Interior probes: the centre and two points a short way off it, all well
-    // inside the panel once frameNode has filled the frame with it.
-    var probes = [{ x: 0.50, y: 0.50 }, { x: 0.45, y: 0.52 }, { x: 0.55, y: 0.48 }];
+    // Interior probes, all well inside the panel and all OFF THE GIZMO. The
+    // centre pixel is where the translate gizmo's origin ball is drawn the
+    // moment the panel is selected, so a probe at (0.50, 0.50) measures the
+    // GIZMO and reports "selecting the panel changed its reflection" — which is
+    // what it did on this sample's re-stage (2026-09-09: red 250,40,40 ->
+    // gizmo-ball blue 65,118,232, with every off-axis probe bit-identical).
+    // The shipped probes only avoided it by accident: frameNode put the camera
+    // outside the room, where they measured a dark wall and nothing moved.
+    // These three sit on the reflected red wall and the reflected green teapot,
+    // clear of the gizmo's origin ball and of both visible axis arrows.
+    var probes = [{ x: 0.35, y: 0.62 }, { x: 0.35, y: 0.38 }, { x: 0.40, y: 0.45 }];
     editor.select(null);
-    editor.frameNode(panel, {});
+    // AN EXPLICIT CAMERA, NOT frameNode (changed 2026-09-09 with the sample's
+    // re-stage to 1 unit = 1 metre). frameNode fills the view with the node, so
+    // for this 3 m panel at the convention's 45-degree lens it wants ~7 m of
+    // distance — and 7 m does not exist inside an 8.5 m sealed room, so the
+    // camera landed OUTSIDE the walls and the "panel interior" probes were
+    // measuring the red wall through the back of the room (60,48,49). The pose
+    // below stands 4.5 m out along the panel's own normal (it is turned 28
+    // degrees about Y), inside the room, with the panel filling ~78% of the
+    // frame height: the centre probes are on the panel and nowhere else.
+    editor.setCamera({ position: { x: 2.11, y: 1.75, z: 1.76 },
+                       lookAt: { x: 0.0, y: 1.75, z: -2.2 }, fov: 45 });
     editor.frame(30, 1.0 / 60.0);
     var before = editor.screenshot("mirror_selection_unselected.png", 320, 240, probes);
     editor.select(panel);
