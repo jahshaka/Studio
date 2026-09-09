@@ -254,6 +254,9 @@ public:
     QVector<AssetPinRecord> fetchAssetPins(const QString &guid);
     /// How many projects pin this asset — the count without the names.
     int countAssetPins(const QString &guid);
+    /// Drop ONE project's pin on an asset (project_assets row). True when the row
+    /// went or was never there; false on a database error.
+    bool unpinAsset(const QString &projectGuid, const QString &assetGuid);
     QVector<AssetRecord> fetchAssetsFromParent(const QString &guid);
 	QVector<AssetRecord> fetchAssetsByType(const int &type, const QString &projectGuid);
 	QVector<AssetRecord> fetchAssetsByViewFilter(const AssetViewFilter& filter);

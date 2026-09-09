@@ -58,6 +58,18 @@ struct Outcome
 /// its OWN pins); `force` is the hard delete.
 Outcome remove(Database *db, const QString &guid, bool keepShared = true, bool force = false);
 
+/// THE PROJECT-SIDE REMOVE (code review 2026-09-10): take `guid` OUT OF ONE
+/// PROJECT and touch the library not at all. The project panel's Delete used
+/// to call the library delete, which under the pin law UNLISTED the library
+/// tile and left the project exactly as it was — the opposite of what the
+/// user asked. This drops the project's pin on the asset and on the closure
+/// members only this asset depends on (a texture two pinned models share keeps
+/// its pin), scrubs the session records, and reaps a row that was UNLISTED
+/// and has just lost its last pin (otherwise it would be invisible, unpinned
+/// and undeletable). `pinCount` reports the pins dropped; `unlisted` reports a
+/// reap. A listed row is never deleted here — it is still a library asset.
+Outcome removeFromProject(Database *db, const QString &guid, const QString &projectGuid);
+
 } // namespace assetdelete
 
 #endif // ASSETDELETE_H

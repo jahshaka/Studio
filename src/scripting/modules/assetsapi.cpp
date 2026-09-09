@@ -216,6 +216,16 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "{force: true} is the hard delete (\"delete everywhere\"): the pins are dropped and the rows go whether or not projects used it. "
           "The asset's CONTENT is not unlinked in any of these cases — objects can be shared or pinned, so reclaiming them is assets.gc's job (an unlisted asset's bytes stay REFERENCED there; a force-deleted one's become reclaimable). PERMANENT — no undo.",
           Needs::Document },
+        { "removeFromProject", "assets.removeFromProject(guid) -> bool",
+          "Takes an asset OUT OF THE OPEN PROJECT and leaves the library alone: the project's "
+          "pin on the asset goes, and the pins on the dependency members only this asset uses "
+          "(a texture two pinned models share keeps its pin). The library row, its content and "
+          "every other project's pin are untouched. A row that was already removed from the "
+          "library (assets.remove on a pinned asset) and has just lost its LAST pin is deleted "
+          "for good, because nothing can reach it any more. This is what the project panel's "
+          "Delete does; assets.remove is the library's delete. False with app.lastError when "
+          "no project is open or the guid is unknown.",
+          Needs::Document },
         { "pins", "assets.pins(guid) -> [{project, name}]",
           "Which PROJECTS pin this asset — the reference-with-pin rows that make a library delete an unlist. "
           "`project` is the project's guid, `name` its display name (the guid again if the project row is gone). "
@@ -895,6 +905,16 @@ bool AssetsApi::remove(const QString &guid, const QVariantMap &options)
     const bool force = normalizeJs(options.value("force", false)).toBool();
     const auto outcome = assetdelete::remove(host.db, guid, keepShared, force);
     if (!outcome.ok) return fail(QStringLiteral("assets.remove: %1").arg(outcome.error));
+    return true;
+}
+
+bool AssetsApi::removeFromProject(const QString &guid)
+{
+    if (!host.db) return fail("assets: not available in this session");
+    if (!host.project || host.project->getProjectGuid().isEmpty())
+        return fail("assets.removeFromProject: no project is open");
+    const auto outcome = assetdelete::removeFromProject(host.db, guid, host.project->getProjectGuid());
+    if (!outcome.ok) return fail(QStringLiteral("assets.removeFromProject: %1").arg(outcome.error));
     return true;
 }
 

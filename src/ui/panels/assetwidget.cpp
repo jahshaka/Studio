@@ -56,6 +56,7 @@ For more information see the LICENSE file
 #include "services/import/assetimportservice.h"
 #include "services/import/importbatchrunner.h"
 #include "services/projectassets.h"
+#include "services/assetdelete.h"
 #include "services/avatarassets.h"
 #include "services/assetmetadata.h"
 #include "services/assetservice.h"
@@ -1657,7 +1658,22 @@ void AssetWidget::deleteItem()
 		}
 	}
 
-	// Delete asset and dependencies
+	// Remove a PINNED library asset from THIS project (code review 2026-09-10):
+	// the panel's Delete used to run the library delete, which under the pin
+	// law unlisted the library tile and left the project untouched — the
+	// opposite of the click. The project-side remove drops the project's pins
+	// (assets.removeFromProject — the same service); the library keeps the row.
+	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET && project &&
+	    db->countAssetPins(item->data(MODEL_GUID_ROLE).toString()) > 0) {
+		const auto outcome = assetdelete::removeFromProject(
+			db, item->data(MODEL_GUID_ROLE).toString(), project->getProjectGuid());
+		if (!outcome.ok) qWarning("project panel: %s", qPrintable(outcome.error));
+		updateAssetView(assetItem.selectedGuid, activeFilter, showDependencies);
+		populateAssetTree(false);
+		return;
+	}
+
+	// Delete asset and dependencies (a legacy project-scoped row, never pinned)
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
 		QStringList dependentAssets;
 		for (const auto &files :

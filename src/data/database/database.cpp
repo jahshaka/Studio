@@ -1239,6 +1239,16 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
     return pins;
 }
 
+bool Database::unpinAsset(const QString &projectGuid, const QString &assetGuid)
+{
+    if (!checkIfTableExists("project_assets")) return true;
+    QSqlQuery query;
+    query.prepare("DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    query.addBindValue(projectGuid);
+    query.addBindValue(assetGuid);
+    return executeAndCheckQuery(query, "UnpinAsset");
+}
+
 int Database::countAssetPins(const QString &guid)
 {
     if (guid.isEmpty() || !db.isOpen()) return 0;

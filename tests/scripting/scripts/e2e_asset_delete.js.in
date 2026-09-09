@@ -137,4 +137,30 @@ assert(assets.list({ scope: "project" }).filter(function (a) { return a.guid ===
 assert(gcObjectIds().indexOf(clipOid) !== -1,
        "and its content is now reclaimable by assets.gc");
 
+// ---- the PROJECT-side remove (code review 2026-09-10) ----------------------
+// The project panel's Delete is assets.removeFromProject: the pin goes, the
+// library row stays listed; a row already removed from the library that loses
+// its last pin is reaped.
+// (an AUDIO fixture: adding an IMAGE to a project also mints its companion
+// image material, which then hides the texture from the library grid as a
+// dependee — a separate question, MASTER_QUEUE §26.)
+var pr = freshImport("@SOURCE_DIR@/tests/scripting/fixtures/tiny.wav");
+assert(pr.length > 10, "a fresh import for the project-side remove");
+assert(project.create("Delete E " + Date.now()).length > 10, "project E");
+var prIn = assets.addToProject(pr);
+assert(prIn.length > 10 && assets.pins(pr).length === 1, "pinned by project E");
+assert(assets.removeFromProject(pr) === true, "assets.removeFromProject");
+assert(assets.pins(pr).length === 0, "the pin is gone");
+assert(assets.metadata(pr).listed === true, "the library row is still LISTED");
+assert(assets.list({ scope: "project" }).filter(function (a) { return a.guid === pr; }).length === 0,
+       "and the project no longer lists it");
+assert(assets.list({ scope: "store" }).filter(function (a) { return a.guid === pr; }).length === 1,
+       "while the library still does");
+// unlisted + last pin dropped = reaped
+assert(assets.addToProject(pr).length > 10, "pinned again");
+assert(assets.remove(pr) === true && assets.metadata(pr).listed === false, "removed from the library (unlisted, pinned)");
+assert(assets.removeFromProject(pr) === true, "then removed from its last project");
+mustThrow(function () { assets.metadata(pr); }, "the orphaned unlisted row was reaped");
+mustThrow(function () { assets.removeFromProject("no-such-guid"); }, "unknown guid refused");
+
 console.log("asset delete e2e passed");
