@@ -11,8 +11,8 @@ carries the rules.
 | Tier | What runs | When | Who runs it |
 |---|---|---|---|
 | **SCOPED** | the suites `scripts/gate-scope.sh <base>..<tip>` selects from the touched paths | a lane's own gate; a merge of that lane | the lane (feature-/engine-builder), or gate-runner with the selection |
-| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$" -E "^gi\.ddgi_raster$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`) and the raster probe build; `--timeout 120` is the default for rows that set none. **Measured 494 s (8 min 14 s) at -j4 on 1920x1080 after the cleanup (2026-09-10)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
-| **PUSH** (full) | `ctest -j4 --timeout 120 --output-on-failure` (all suites) + the `--engine-selftest` sha256 | once per BATCH of merged lanes, before a push — **SUSPENDED (owner, 2026-09-09) until the suite cleanup lands**; pushes gate on MERGE meanwhile | gate-runner |
+| **MERGE** | `ctest -j4 --timeout 120 --output-on-failure -LE "^(benchmark\|shadercache-attack)$" -E "^gi\.ddgi_raster$"` — everything except the two wall-clock benches (label `benchmark`; their `--smoke` rows, label `benchmark-smoke`, DO run), the ASan shader-cache attack (`shadercache-attack`) and the raster probe build; `--timeout 120` is the default for rows that set none. **Measured 494 s (8 min 14 s) in the lane's worktree and 572 s (9 min 32 s) on the main tree at -j4, 1920x1080, 286/287 (2026-09-10)** | a lane whose scope falls back (see §3), any merge the lead wants covered wider, and — while the full gate is under moratorium — the gate before a push | gate-runner |
+| **PUSH** | the MERGE tier + the `--engine-selftest` sha256 (the moratorium of 2026-09-09 lifted 2026-09-10 with the cleanup: the four nightly suites are NIGHTLY, not push, unless the batch touched their subject) | once per BATCH of merged lanes, before a push | gate-runner |
 | **NIGHTLY** (after the cleanup) | scenegraph.benchmark `--assert`, shadercache.container_asan, gi.ddgi_raster, the rigperf bench — the guards that need a quiet box or minutes of one process | once a day / before a tag, on a quiet box | the lead |
 
 Tiers are contracts: nobody hand-picks suites out of one. A lane says which tier it ran and
@@ -27,9 +27,8 @@ other Vulkan gates (or the owner's app plus one) are live.
 
 - Its OWN Xvfb display AT 1920x1080 (`Xvfb :NN -screen 0 1920x1080x24`; framing-dependent pixel suites move with the window aspect — a 1600x1000 display reds scripting.e2e.particles), `DISPLAY=:NN` explicit on every ctest/app command line (never the
   inherited environment, never `:0`).
-- `JAHSHAKA_DATA_ROOT=<scratch>` + a scratch `HOME` on every invocation, EXCEPT
-  `app.data_root`, whose child is deliberately un-overridden: run it with
-  `env -u JAHSHAKA_DATA_ROOT` or it reds on two assertions.
+- `JAHSHAKA_DATA_ROOT=<scratch>` + a scratch `HOME` on every invocation (`app.data_root`
+  scrubs the variable itself since the cleanup — no exception needed).
 - A BYTE COPY of `build-linux/bin/jahsettings.ini` before, restored after if the hash moved.
 - Logs named by commit (`gate-<sha>-pass1.log`, `-solo-<suite>-N.log`), scratch ≤ a few
   hundred MB, deleted at the end. Kill only pids you spawned.
@@ -92,7 +91,14 @@ sun_light, ui.media_lazy, gi.budget. Every failure in a gate report carries a ve
 (environmental + evidence, or real + the failing assertion); a report without verdicts is
 not a gate.
 
-## 5. Why the full gate costs 25 minutes, and what the cleanup changes
+## 5. Why the full gate cost 25 minutes, and what the cleanup changed
+
+**After the cleanup (2026-09-10, measured on the main tree at 8cb9af75): 287 suites, 572 s at
+-j4.** The remaining floor is a ~112 s serial tail at the end of the run (the RUN_SERIAL
+islands drain single-file; `app.input_keys` alone is 55 s and runs last with three cores
+idle) — the next win is splitting that driver or scheduling the serial rows first
+(ctest `COST` property). Slowest parallel rows: log.perf 40 s, possession 39, sockets.e2e 39,
+samples.session 37, workflow_grid 36, reopen_fidelity 36, shadercache.app 36.
 
 | Contributor | Seconds | Why |
 |---|---|---|
