@@ -9,9 +9,12 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
+#include <algorithm>
+
 #include "services/services.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
+#include "scripting/modules/moduleshared.h"
 
 #include "shell/mainwindow.h"
 #include "ui/pages/projectmanager.h"
@@ -213,6 +216,19 @@ QVector<VerbInfo> AppApi::verbs() const
           "backend exposes no byte count for them, so the rows are the counts that size them "
           "plus the process's resident set (`residentBytes`, Linux), where a shrink shows. "
           "Cheap — reads the pool tables, renders nothing.",
+          Needs::Engine },
+        { "textureMemory", "app.textureMemory({top?, resident?}) -> {count, totalBytes, residentBytes, pooledBytes, renderTargetBytes, entries:[{name, resource, width, height, depth, slices, mipmaps, msaa, format, bytes, renderTarget, uav, manual, pooled, residency}]}",
+          "WHICH TEXTURES hold the GPU memory app.memoryStats reports: every texture the "
+          "renderer's texture manager knows, LARGEST FIRST, with the totals over all of them. "
+          "On Vulkan textures live in the same pools as the buffers, so this is the "
+          "attribution behind `gpuPoolCapacityBytes` (a default scene boots at ~3.2 GB of "
+          "pool capacity — shadow atlases, GI volumes, render targets and the library's "
+          "images, and this says which). `top` limits the entry list (default 50, 0 = all); "
+          "the totals always cover everything. `resident: true` lists only textures that "
+          "are on the GPU (residency 'Resident'); a texture 'OnStorage' is declared and "
+          "costs nothing yet. `bytes` is each texture's own footprint (all mips, slices, "
+          "MSAA); a `pooled` texture is a slice of a master array and carries none of the "
+          "pool's waste. Cheap — walks the entry table, renders nothing.",
           Needs::Engine },
         { "reclaimMemory", "app.reclaimMemory() -> {before: {...}, after: {...}}",
           "RECLAIM: shrinks every scene manager's SIMD pools to what is live (they never shrink "
@@ -797,6 +813,72 @@ QVariantMap AppApi::memoryStats()
         return out;
     }
     return memoryStatsToMap(m);
+}
+
+QVariantMap AppApi::textureMemory(const QVariantMap &options)
+{
+    QVariantMap out;
+    auto engine = EngineHost::instance().engine();
+    if (!engine) { fail("app.textureMemory: no engine in this session"); return out; }
+    std::vector<jahshaka::engine::TextureMemoryEntry> entries;
+    if (!engine->textureMemory(entries)) {
+        fail("app.textureMemory: the engine could not walk its textures");
+        return out;
+    }
+    const QVariant topValue = scriptmod::normalizeJs(options.value(QStringLiteral("top")));
+    int top = 50;
+    if (topValue.isValid() && !topValue.isNull()) {
+        bool numeric = false;
+        const double asked = topValue.toDouble(&numeric);
+        if (!numeric || asked < 0) {
+            fail("app.textureMemory: top must be a number >= 0 (0 = every entry)");
+            return out;
+        }
+        top = int(asked);
+    }
+    const bool residentOnly = scriptmod::normalizeJs(options.value(QStringLiteral("resident"))).toBool();
+
+    std::sort(entries.begin(), entries.end(),
+              [](const jahshaka::engine::TextureMemoryEntry &a,
+                 const jahshaka::engine::TextureMemoryEntry &b) {
+                  if (a.bytes != b.bytes) return a.bytes > b.bytes;
+                  return a.name < b.name;
+              });
+    qulonglong total = 0, resident = 0, pooled = 0, rtt = 0;
+    QVariantList rows;
+    for (const auto &e : entries) {
+        const bool isResident = e.residency == "Resident";
+        total += e.bytes;
+        if (isResident) resident += e.bytes;
+        if (e.pooled) pooled += e.bytes;
+        if (e.renderTarget) rtt += e.bytes;
+        if (residentOnly && !isResident) continue;
+        if (top > 0 && rows.size() >= top) continue;
+        QVariantMap row;
+        row.insert("name", QString::fromStdString(e.name));
+        row.insert("resource", QString::fromStdString(e.resource));
+        row.insert("width", e.width);
+        row.insert("height", e.height);
+        row.insert("depth", e.depth);
+        row.insert("slices", e.slices);
+        row.insert("mipmaps", e.mipmaps);
+        row.insert("msaa", e.msaa);
+        row.insert("format", QString::fromStdString(e.format));
+        row.insert("bytes", qulonglong(e.bytes));
+        row.insert("renderTarget", e.renderTarget);
+        row.insert("uav", e.uav);
+        row.insert("manual", e.manual);
+        row.insert("pooled", e.pooled);
+        row.insert("residency", QString::fromStdString(e.residency));
+        rows.append(row);
+    }
+    out.insert("count", int(entries.size()));
+    out.insert("totalBytes", total);
+    out.insert("residentBytes", resident);
+    out.insert("pooledBytes", pooled);
+    out.insert("renderTargetBytes", rtt);
+    out.insert("entries", rows);
+    return out;
 }
 
 QVariantMap AppApi::reclaimMemory()

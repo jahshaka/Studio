@@ -32,6 +32,39 @@ assert(m0.gpuPoolFreeBytes <= m0.gpuPoolCapacityBytes, "free <= capacity");
 assert(m0.sceneManagers >= 1, "at least the staging manager is walked (" + m0.sceneManagers + ")");
 console.log("    baseline: " + JSON.stringify(m0));
 
+// ---- textureMemory: the attribution behind the GPU rows --------------------
+// Headless the NULL render system still owns a TextureGpuManager, so the
+// walk is real; how many textures it knows is a property of the boot path,
+// never pinned. Shape, ordering and the totals' arithmetic are what is
+// asserted; `top` and `resident` narrow the list, never the totals.
+var tm = app.textureMemory();
+var TKEYS = ["count", "totalBytes", "residentBytes", "pooledBytes", "renderTargetBytes", "entries"];
+for (var t = 0; t < TKEYS.length; ++t)
+    assert(tm[TKEYS[t]] !== undefined, "app.textureMemory has '" + TKEYS[t] + "'");
+assert(tm.entries.length <= 50 && tm.entries.length <= tm.count, "default top is 50, never above count");
+var sum = 0, sorted = true;
+var all = app.textureMemory({ top: 0 });
+assert(all.entries.length === all.count, "top 0 lists every entry (" + all.count + ")");
+for (var r = 0; r < all.entries.length; ++r) {
+    var row = all.entries[r];
+    assert(typeof row.name === "string" && typeof row.bytes === "number" && typeof row.residency === "string",
+           r === 0 ? "entry rows carry name/bytes/residency" : "row " + r);
+    sum += row.bytes;
+    if (r > 0 && all.entries[r - 1].bytes < row.bytes) sorted = false;
+}
+assert(sorted, "entries are largest first");
+assert(sum === all.totalBytes, "totalBytes is the sum over every entry (" + sum + ")");
+assert(all.residentBytes <= all.totalBytes && all.pooledBytes <= all.totalBytes,
+       "resident/pooled never exceed the total");
+var res = app.textureMemory({ top: 0, resident: true });
+for (var q = 0; q < res.entries.length; ++q)
+    if (res.entries[q].residency !== "Resident") throw new Error("resident filter leaked " + res.entries[q].residency);
+assert(res.totalBytes === all.totalBytes, "resident filter narrows the list, not the totals");
+var threw = false;
+try { app.textureMemory({ top: -1 }); } catch (e) { threw = String(e).indexOf("top must be") >= 0; }
+assert(threw, "top -1 is a caller error: it throws with the reason");
+console.log("    textures: " + all.count + ", total " + all.totalBytes + " B, resident " + all.residentBytes + " B");
+
 // ---- a burst of nodes is counted ------------------------------------------
 // Empties, on purpose: a document node is an engine scene NODE, which is what
 // the node pools hold, and headless there is no Item behind a primitive (the
