@@ -153,7 +153,15 @@ enum class ModelTypes
     // block (the photometric scale the mirror divides intensity by) and its own
     // thumbnail (a polar lobe plot — the only way to tell two profiles apart).
     // APPENDED, never inserted: the value is persisted in every assets row.
-    LightProfile	// Supported
+    LightProfile,	// Supported
+    // AVATAR ASSETS (AVATAR_ASSET_SPEC §4 D1). A library row whose `source`
+    // file is the avatar DEFINITION (irisgl/document/assets/avatardefinition.h)
+    // — the rigged model Object stays an Object, because a rigged statue is
+    // still scenery, and the Avatar row is the INTENT. Being a row with a
+    // source file is the whole design: it pins per project, copies on write,
+    // archives and garbage-collects through the pipeline unchanged.
+    // APPENDED, never inserted: the value is persisted in every assets row.
+    Avatar			// Supported
 };
 
 #define	MODEL_GUID_ROLE		0x0113

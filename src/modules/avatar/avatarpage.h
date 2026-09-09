@@ -74,15 +74,28 @@ public:
     /// the AI fix wave's gate B).
     void detachModel();
 
+signals:
+    /// The left column's project actions. They are ROUTED rather than done
+    /// here for the same reason the drawer's are: pinning an asset and
+    /// spawning into the editor's scene belong to the shell's services, and a
+    /// module page that reached for them would be reaching past its host.
+    void addAvatarToProject(const QString &guid);
+    void addAvatarToScene(const QString &guid);
+    void updateAvatarFromLibrary(const QString &guid);
+
 private:
     QWidget *buildLeftColumn();
     QWidget *buildCentreColumn();
     QWidget *buildRightColumn();
-    void onLoadClicked();
+    void onImportClicked(bool intoProject);
     void onLoadAnimationClicked();
-    void loadPath(const QString &path);
-    void refreshHistory();
+    void onSaveClicked();
+    void refreshLibrary();
     void refreshTransportReadout();
+    /// The guid + scope of the selected left-column row, or empty.
+    QString selectedAvatarGuid(QString *scopeOut = nullptr) const;
+    void openSelected(const QString &guid, const QString &scope);
+    void showLibraryMenu(const QPoint &pos);
 
 
     AvatarPreviewModel   *mModel = nullptr;
@@ -91,8 +104,15 @@ private:
 
     QWidget     *mPreviewSlot = nullptr;
     QLabel      *mPreviewPlaceholder = nullptr;
-    QListWidget *mHistory = nullptr;
-    QPushButton *mLoadButton = nullptr;
+    /// THE LIBRARY LIST (AVATAR_ASSET_SPEC §5.3): two sections — the library's
+    /// avatar assets, and (with a project open) this project's versions of
+    /// them, marked when they have diverged. It replaces the session file list
+    /// the module shipped with: every load is an import now (D7).
+    QTreeWidget *mLibrary = nullptr;
+    QPushButton *mImportButton = nullptr;
+    QPushButton *mImportToProjectButton = nullptr;
+    QPushButton *mSaveButton = nullptr;
+    QLabel      *mScopeLabel = nullptr;
     QPushButton *mLoadAnimButton = nullptr;
     QComboBox   *mSpaceCombo = nullptr;
     QCheckBox   *mMeshToggle = nullptr;

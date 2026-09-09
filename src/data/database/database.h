@@ -190,6 +190,12 @@ public:
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
 	bool updateAssetViewFilter(const QString& guid, const int& filter);
+    /// Re-home an asset row: which PROJECT owns it, or none (an empty guid =
+    /// a LIBRARY row). "Save to Library" for an avatar minted inside a project
+    /// promotes it IN PLACE with this (AVATAR_ASSET_SPEC §4 D6-A) — the row
+    /// keeps its guid, so every instance that already points at it stays valid
+    /// where minting a fresh library row would have orphaned them all.
+    bool updateAssetProject(const QString &guid, const QString &projectGuid);
 	bool updateProjectDesktop(const QString &guid, int desktop);
 	bool updateProjectPosition(const QString &guid, float x, float y);
 	// slider mode (DESKTOP_SLIDER_SPEC.md): filmstrip {row, orderIndex}

@@ -57,6 +57,11 @@ public:
 	/// AssetView injects the live drawer list; the context menu's Move to ▸
 	/// submenu enumerates it on open (ASSET_DRAWERS_SPEC §1).
 	void setDrawerProvider(std::function<QVector<DrawerEntry>()> provider);
+	/// "Does this model carry a skeleton?" — answered LAZILY, when the menu is
+	/// built, because the answer costs a metadata read (and, for a row imported
+	/// before the rig fields existed, one backfill parse) and almost no tile is
+	/// ever right-clicked.
+	void setRiggedProvider(std::function<bool(const QString &guid)> provider);
 
 	/// The double-click loading pulse (§1 tile interaction flip): shown from
 	/// the click until the viewer reports the load finished.
@@ -91,6 +96,11 @@ signals:
 	/// Image tiles only (IMAGE_PLANE_SPEC option B1): create the companion
 	/// PBR material asset for this image.
 	void createMaterialFromImage(AssetGridItem*);
+	/// AVATAR_ASSET_SPEC §5.5. "Edit in Avatar Module" on an avatar tile, and
+	/// "Create Avatar" on a RIGGED model tile (D8: an avatar is minted lazily,
+	/// from the gesture, so a rigged statue stays a statue).
+	void editAvatarAsset(AssetGridItem*);
+	void createAvatarFromModel(AssetGridItem*);
 
 private:
 	void startDrag();
@@ -99,6 +109,7 @@ private:
 	bool dragCandidate = false;
 
 	std::function<QVector<DrawerEntry>()> drawerProvider;
+	std::function<bool(const QString &)> riggedProvider;
 
 	QLabel *loadingOverlay = nullptr;
 	QTimer *loadingPulse = nullptr;

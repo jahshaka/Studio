@@ -147,6 +147,7 @@ For more information see the LICENSE file
 #include "modules/materials/materialsmodule.h"
 #include "modules/publish/publishmodule.h"
 #include "modules/avatar/avatarmodule.h"
+#include "modules/avatar/api/avatarapi.h"
 #include "player/playermodule.h"
 #include "services/playerservice.h"
 #include "modules/studiomodule.h"
@@ -1001,6 +1002,39 @@ static const char *spaceName(WindowSpaces s)
 	return "?";
 }
 
+void MainWindow::spawnAvatarAsset(const QString &guid, const iris::Vec3 &position,
+                                  bool hasPosition)
+{
+    if (!avatarModule) return;
+    auto *api = avatarModule->api();
+    if (!api) return;
+    QVariantMap options;
+    if (hasPosition)
+        options.insert(QStringLiteral("position"),
+                       QVariantMap{ { "x", position.x() }, { "y", position.y() },
+                                    { "z", position.z() } });
+    if (api->quietly([&] { return api->spawn(guid, options); }).isEmpty()
+        && !api->lastError().isEmpty())
+        QMessageBox::warning(this, tr("Add Avatar to Scene"), api->lastError());
+}
+
+void MainWindow::openAssetInModule(const QString &guid, const QString &moduleId,
+                                   const QString &scope)
+{
+    if (moduleId != QLatin1String("avatar") || !avatarModule) return;
+    switchSpace(WindowSpaces::AVATAR);
+    if (auto *api = avatarModule->api()) {
+        QVariantMap options;
+        if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
+        const QVariantMap opened = api->quietly([&] { return api->open(guid, options); });
+        // A refusal is the module's own message (a definition that will not
+        // parse, a project scope with nothing pinned) — shown here because a
+        // menu click has no JS engine to throw into.
+        if (opened.isEmpty() && !api->lastError().isEmpty())
+            QMessageBox::warning(this, tr("Edit in Avatar Module"), api->lastError());
+    }
+}
+
 void MainWindow::switchSpace(WindowSpaces space, bool force)
 {
 	if (currentSpace == space && !force)
@@ -1328,6 +1362,11 @@ void MainWindow::openStageBind(bool playMode)
 		gridCheckAction->setChecked(editorData->showGrid);
 		physicsCheckAction->setChecked(editorData->showDebugDrawFlags);
 	}
+
+	// THE SCENE IS OPEN (AVATAR_ASSET_SPEC §4 D4, the load-time half). Fired
+	// HERE and not when the reader returned: a subscriber's job is to walk the
+	// scene that is now installed, and until setScene above it was not.
+	if (services) services->announceSceneOpened();
 }
 
 void MainWindow::openStageReadDocument(bool playMode, const iris::MeshPrewarmPtr &prewarm)
@@ -2188,6 +2227,12 @@ void MainWindow::setupDockWidgets()
     assetWidget->installEventFilter(this);
 
 	connect(assetWidget, SIGNAL(assetItemSelected(QListWidgetItem*)), this, SLOT(assetItemSelected(QListWidgetItem*)));
+    assetWidget->setServices(services);
+    // The drawer's avatar rows (AVATAR_ASSET_SPEC §5.5) come back here: the
+    // panel decides WHAT it wants, the shell knows WHERE the modules are.
+    connect(assetWidget, &AssetWidget::editAssetInModule, this, &MainWindow::openAssetInModule);
+    connect(assetWidget, &AssetWidget::spawnAvatarInScene, this,
+            [this](const QString &guid) { spawnAvatarAsset(guid, iris::Vec3(), false); });
 
 	assetWidget->sceneView = sceneView;
 
@@ -2835,6 +2880,10 @@ void MainWindow::setupDesktop()
 	// from the pinned membership on every add.
 	connect(_assetView, &AssetView::assetAddedToProject, this,
 	        [this](const QString &) { assetWidget->refresh(); });
+	// THE PAGE -> MODULE SEAM (AVATAR_ASSET_SPEC §5.5): a page asks for an
+	// asset to be opened in a module; the shell switches space and calls that
+	// module's VERB. Neither side learns about the other.
+	connect(_assetView, &AssetView::editAssetInModule, this, &MainWindow::openAssetInModule);
 
 	ui->stackedWidget->addWidget(pmContainer);
 	

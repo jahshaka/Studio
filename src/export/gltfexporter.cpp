@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/assets/vertexbuffer.h"
+#include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/skybake.h"
@@ -800,7 +801,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     {
         int meshNodeIndex;
         iris::MeshPtr mesh;
-        MeshBuffers buffers;   // holds JOINTS/WEIGHTS float data
+        MeshBuffers buffers;      // holds JOINTS/WEIGHTS float data
+        iris::SceneNodePtr node;  // the mesh NODE — where library clips live
     };
     std::vector<PendingSkin> pendingSkins;
 
@@ -824,6 +826,30 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // budget story and would move the export suites' pixels. Written only
         // when true, like "visible" above.
         if (node->getPlanarReflector()) jah["planarReflector"] = true;
+        // AVATAR INSTANCES (AVATAR_ASSET_SPEC §5.6): which avatar asset this
+        // wrapper is, at which version, and the clips it carries — so a viewer
+        // can offer "play Walking" by name instead of by animation index. An
+        // unlinked scratch avatar writes nothing, like every other extra here.
+        if (node->isLinkedAvatar()) {
+            QJsonObject avatarObj;
+            avatarObj["asset"] = node->avatarLink.asset;
+            avatarObj["version"] = node->avatarLink.version;
+            avatarObj["name"] = node->avatarLink.name;
+            QJsonArray clipNames;
+            std::function<void(const iris::SceneNodePtr &)> names =
+                [&](const iris::SceneNodePtr &n) {
+                    if (!n) return;
+                    for (const auto &anim : n->getAnimations())
+                        if (!anim.isNull() && anim->hasSkeletalAnimation()
+                            && !clipNames.contains(QJsonValue(anim->getName())))
+                            clipNames.append(anim->getName());
+                    for (int i = 0; i < n->childCount(); ++i)
+                        if (auto *child = n->childAt(i)) names(child->sharedFromThis());
+                };
+            names(node);
+            avatarObj["clips"] = clipNames;
+            jah["avatar"] = avatarObj;
+        }
 
         int myIndexReserved = -1;   // filled at the end; children need our index order
         QJsonArray children;
@@ -871,7 +897,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                         meshIdx = c.meshes.size() - 1;
                         c.meshIndex.insert(mesh.data(), meshIdx);
                         if (skinned)
-                            pendingSkins.push_back({ -1 /* patched below */, mesh, std::move(mb) });
+                            pendingSkins.push_back({ -1 /* patched below */, mesh, std::move(mb),
+                                                     node });
                     } else {
                         c.warnings.append(QStringLiteral("mesh '%1' has no exportable geometry")
                                               .arg(node->getName()));
@@ -1147,7 +1174,46 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // Skeletal animations: LINEAR samplers per bone T/R/S — matches the
         // document's interpolation (audit §1 "Skeletal animations"; keys are
         // read from the LIVE document because SceneWriter persists only refs).
-        const auto anims = ps.mesh->getSkeletalAnimations();
+        //
+        // TWO SOURCES, and the second one is why an exported avatar used to
+        // stand still (AVATAR_ASSET_SPEC §5.6, verified 2026-09-09):
+        //
+        //   * `Mesh::getSkeletalAnimations` — the clips that came out of the
+        //     MODEL FILE, filled once by Mesh::loadAnimatedMesh at parse time.
+        //   * the SCENE NODES' own animation lists — every clip loaded from
+        //     another file (`avatar.loadClip`, the definition's clips at
+        //     spawn) is attached with `SceneNode::addAnimation` and NEVER
+        //     reaches the mesh map. Reading only the mesh map therefore
+        //     exported a Mixamo character with its idle and none of the
+        //     animations the user actually loaded, silently.
+        //
+        // The walk starts at the outermost AVATAR WRAPPER when there is one —
+        // the clip host may be the wrapper, a sibling piece or the mesh node
+        // itself (SceneMirror::clipHostOf takes the first one depth-first), so
+        // anything narrower misses a real case.
+        auto anims = ps.mesh->getSkeletalAnimations();
+        {
+            iris::SceneNodePtr clipRoot = ps.node;
+            for (iris::SceneNodePtr n = ps.node; n; n = n->getParent())
+                if (n->hasAvatarComponent()) clipRoot = n;
+            std::function<void(const iris::SceneNodePtr &)> gather =
+                [&](const iris::SceneNodePtr &n) {
+                    if (!n) return;
+                    for (const auto &anim : n->getAnimations()) {
+                        if (anim.isNull() || !anim->hasSkeletalAnimation()) continue;
+                        const auto skelAnim = anim->getSkeletalAnimation();
+                        if (!skelAnim) continue;
+                        // The NODE's display name wins: it is what the scene
+                        // plays the clip by ("Walking", not "mixamo.com").
+                        const QString name = anim->getName().isEmpty() ? skelAnim->name
+                                                                       : anim->getName();
+                        if (!anims.contains(name)) anims.insert(name, skelAnim);
+                    }
+                    for (int i = 0; i < n->childCount(); ++i)
+                        if (auto *child = n->childAt(i)) gather(child->sharedFromThis());
+                };
+            gather(clipRoot);
+        }
         for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
             const iris::SkeletalAnimationPtr &anim = it.value();
             if (!anim) continue;

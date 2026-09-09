@@ -49,6 +49,7 @@ public:
     Q_INVOKABLE bool moveDrawer(int id, int parentId);
     Q_INVOKABLE bool moveToDrawer(const QString &guid, int id);
     Q_INVOKABLE QString addToProject(const QString &guid);
+    Q_INVOKABLE QVariantMap updateFromLibrary(const QString &guid);
     Q_INVOKABLE QString addToScene(const QString &guid, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap importAndPlace(const QString &path, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList builtins();

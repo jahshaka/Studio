@@ -18,6 +18,11 @@ For more information see the LICENSE file
 #include "modules/avatar/avatarpreviewmodel.h"
 #include "modules/avatar/avatarspace.h"
 #include "data/settingsmanager.h"
+#include "services/assetservice.h"
+#include "services/projectassets.h"
+
+#include <QSet>
+#include "services/services.h"
 #include "scripting/scriptengine.h"
 
 AvatarModule::AvatarModule() = default;
@@ -61,6 +66,29 @@ void AvatarModule::registerApi(ScriptEngine &engine)
     }
     if (mPage) {
         auto *page = mPage;
+        // The page's project actions, routed through the services the module
+        // WAS given (ModuleHost) — the page never reaches for them itself.
+        auto host_ = host;
+        auto *api = mApi;
+        QObject::connect(page, &avatar::AvatarPage::addAvatarToProject, page,
+                         [host_, page](const QString &guid) {
+            if (!host_.db || !host_.project) return;
+            ProjectAssets::addToProject(guid, host_.db, host_.project,
+                                        ProjectAssets::AddKind::Direct);
+            page->refreshFromModel();
+        });
+        QObject::connect(page, &avatar::AvatarPage::updateAvatarFromLibrary, page,
+                         [host_, page](const QString &guid) {
+            if (!host_.db || !host_.project) return;
+            if (!ProjectAssets::updatePinToLatest(guid, host_.db, host_.project)) return;
+            if (host_.services && host_.services->assets)
+                host_.services->assets->announcePinChanged(guid);
+            page->refreshFromModel();
+        });
+        QObject::connect(page, &avatar::AvatarPage::addAvatarToScene, page,
+                         [api](const QString &guid) {
+            if (api) api->spawn(guid);
+        });
         // The page is a VIEW over the verbs: whoever calls one — a button, the
         // console, an MCP session — the widgets re-read the model afterwards.
         mApi->setChangedDelegate([page]() { page->refreshFromModel(); });
@@ -77,6 +105,25 @@ void AvatarModule::registerApi(ScriptEngine &engine)
         // Re-frame ONLY when the subject changed; doing it on every state
         // change would fight the user's orbit on every scrub.
         mApi->setSubjectDelegate([preview]() { preview->framePreview(); });
+    }
+    // THE PIN-CHANGE SUBSCRIPTION (AVATAR_ASSET_SPEC §4 D4). Every move of a
+    // project's pin — add to project, update from library, a copy-on-write
+    // save — changes which bytes this project's instances are made of, so
+    // linked avatar instances re-resolve on the spot instead of at the next
+    // scene open. The API module is owned by the ScriptEngine, which outlives
+    // this subscription's publisher for the life of the session.
+    if (host.services && host.services->assets) {
+        auto *api = mApi;
+        host.services->assets->onPinChanged(
+            [api](const QString &assetGuid) { api->onAssetPinChanged(assetGuid); });
+    }
+    // A SCENE CAN BE STALE THE MOMENT IT LOADS: an instance records the
+    // definition version it last resolved, and a scene saved before a module
+    // save comes back naming an older one. The pin signal above covers "the
+    // asset changed while the scene was open"; this covers the other end.
+    if (host.services) {
+        auto *api = mApi;
+        host.services->onSceneOpened([api]() { api->onSceneOpened(); });
     }
     engine.addModule(mApi);
 }

@@ -778,6 +778,21 @@ bool Database::updateAssetViewFilter(const QString& guid, const int& filter)
 	return ok;
 }
 
+bool Database::updateAssetProject(const QString &guid, const QString &projectGuid)
+{
+	QSqlQuery query;
+	query.prepare("UPDATE assets SET project_guid = ? WHERE guid = ?");
+	// An empty project guid must be stored as NULL, not as '': the library
+	// listings test the column for NULL-ness (fetchAssetsForAssetView), and an
+	// empty string would be a project row belonging to a project named "".
+	query.addBindValue(projectGuid.isEmpty() ? QVariant(QMetaType(QMetaType::QString))
+	                                         : QVariant(projectGuid));
+	query.addBindValue(guid);
+	const bool ok = executeAndCheckQuery(query, "UpdateAssetProject");
+	if (ok) refreshSidecar(guid);   // project_guid is a sidecar field (I2)
+	return ok;
+}
+
 bool Database::updateProjectDesktop(const QString &guid, int desktop)
 {
 	QSqlQuery query;
@@ -1405,7 +1420,12 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 AssetRecord Database::fetchAsset(const QString &guid)
 {
     QSqlQuery query;
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags FROM assets WHERE guid = ? ");
+    // project_guid is selected (AVATAR_ASSET_SPEC lane): the column decides
+    // whether a row is a LIBRARY asset or one owned by a project, and this
+    // read is what every "is this mine?" caller uses. It was omitted, so
+    // `fetchAsset(guid).projectGuid` was the empty string for every row in the
+    // catalog — silently answering "library" for project assets.
+    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid FROM assets WHERE guid = ? ");
     query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchAsset");
 
@@ -1428,6 +1448,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
             // "read the row, change one field, write both" needs the row to
             // actually carry them.
             data.tags = query.value(9).toByteArray();
+            data.projectGuid = query.value(10).toString();
             return data;
         }
     }
@@ -1467,6 +1488,25 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
     return sizes;
 }
 
+// The "hide dependees" rule, in ONE place (AVATAR_ASSET_SPEC, found while
+// building it). Three listings hide assets that appear as a `dependee`, and
+// the rule exists to hide MEMBER rows an import created — the Mesh and Texture
+// rows that ride an Object. An AVATAR row depends on the rigged Object it
+// instantiates, which under the naive rule made "Create Avatar" DELETE the
+// model from the Assets grid: the user's own imported character silently
+// vanished from the library the moment they made an avatar of it.
+//
+// So the rule is "hide rows that are a MEMBER of something", and membership is
+// what an import's own edges mean — not what a REFERENCE means. Avatar edges
+// are references, and are excluded here rather than at each call site.
+inline QString dependeeSubquery(const QString &column)
+{
+    return QStringLiteral("%1 NOT IN (SELECT dependee FROM dependencies "
+                          "WHERE depender_type != %2)")
+        .arg(column)
+        .arg(static_cast<int>(ModelTypes::Avatar));
+}
+
 QVector<AssetRecord> Database::fetchAssetsForAssetView()
 {
     QSqlQuery query;
@@ -1481,7 +1521,7 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         // (pre-drawers deleteCollection orphaned assets instead of reassigning)
         "LEFT JOIN collections C ON A.collection = C.collection_id "
         "WHERE A.view_filter = :view_filter "
-        "AND A.guid NOT IN (SELECT dependee from dependencies) "
+        "AND " + dependeeSubquery(QStringLiteral("A.guid")) + " "
         "ORDER BY A.name DESC"
     );
     query.bindValue(":view_filter", AssetViewFilter::AssetsView);
@@ -1521,7 +1561,7 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     QString nonDependentQuery =
         "SELECT name, thumbnail, guid, parent, type, properties "
         "FROM assets A WHERE parent = ? AND project_guid = ? "
-        "AND A.guid NOT IN (SELECT dependee FROM dependencies) ";
+        "AND " + dependeeSubquery(QStringLiteral("A.guid")) + " ";
 
     QString orderQuery = "ORDER BY A.name DESC";
 
@@ -1570,7 +1610,7 @@ QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGu
 
     QString sql = "SELECT asset_guid FROM project_assets WHERE project_guid = ?";
     if (!includeDependencies)
-        sql += " AND asset_guid NOT IN (SELECT dependee FROM dependencies)";
+        sql += " AND " + dependeeSubquery(QStringLiteral("asset_guid"));
 
     QSqlQuery query;
     query.prepare(sql);

@@ -468,6 +468,16 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         avatarObj["capsuleAuto"] = p.capsuleAuto;
         avatarObj["capsuleRadius"] = p.capsuleRadius;
         avatarObj["capsuleHeight"] = p.capsuleHeight;
+        // THE LINK (AVATAR_ASSET_SPEC §5.4): which avatar ASSET this wrapper
+        // instantiates and WHICH VERSION of it it last resolved. Written only
+        // when there is one — an `avatar.spawn` on a plain Object guid is a
+        // scratch avatar with no asset behind it (D10), and writing three
+        // empty strings for it would make every such node claim a link.
+        if (sceneNode->avatarLink.isLinked()) {
+            avatarObj["asset"] = sceneNode->avatarLink.asset;
+            avatarObj["version"] = sceneNode->avatarLink.version;
+            avatarObj["name"] = sceneNode->avatarLink.name;
+        }
         sceneNodeObj["avatar"] = avatarObj;
     }
 

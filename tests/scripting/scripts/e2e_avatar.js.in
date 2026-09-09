@@ -5,10 +5,20 @@
 // prove the skeleton-only view.
 //
 // Part 0 (the viewer half, everything down to "---- clear ----") creates no
-// project, imports no asset and touches no scene. The AVATAR_LOCOMOTION Stage 2
-// section at the bottom does — it is the API-first half of the movement
-// component, and it needs a real project, a real library asset and a real
-// save/reopen to prove the serialization.
+// PROJECT and touches no scene, but it does import: every load is an import
+// now (AVATAR_ASSET_SPEC §4 D7 — loadPreview/history/forget are gone), so the
+// character arrives as an AVATAR ASSET in a scratch library and the page opens
+// it. The AVATAR_LOCOMOTION Stage 2 section at the bottom adds a real project,
+// a real pin and a real save/reopen to prove the serialization.
+//
+// THE SCRATCH STORE, and why there is no setStoreRoot call: the store's
+// default root is AppDataLocation/AssetStore, and AppDataLocation follows
+// $HOME — so the throwaway HOME this suite runs on ALREADY isolates the
+// content store as well as the database. Re-pointing it with the verb would
+// write `assets/storeRoot` into jahsettings.ini, which in a QT_DEBUG build
+// lives beside the binary and is shared with every other run in this build
+// directory (CLAUDE.md). The assertion below proves the isolation instead of
+// arranging it.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -32,10 +42,26 @@ assert(app.space("avatar"), "app.space('avatar')");
 // timestamp — delta 0, false red (2026-09-05).
 assert(avatar.spaceMode("grid") === "grid", "pin the space to Grid for pixel probes");
 
+// ---- the scratch store: nothing here may touch the real library ----------
+var storeRoot = assets.storeStatus().root;
+console.log("store root: " + storeRoot);
+assert(storeRoot.indexOf("e2e-home-avatar") >= 0,
+       "the content store is inside this suite's throwaway HOME, not the real library");
+
+// EVERY LOAD IS AN IMPORT (D7). The character becomes an avatar ASSET and the
+// module opens it; there is no session-file path left, which is the point.
+// A second import of the same file re-uses nothing on purpose — each call
+// mints its own row, so the checks below never share state.
+function loadRig(path) {
+    var r = avatar.importAvatar(path);
+    assert(!!r && r.avatar, "avatar.importAvatar(" + path.split("/").pop() + ")");
+    return avatar.preview();
+}
+
 // ---- load, with no project open at all ----
 assert(!avatar.preview(), "nothing is loaded to begin with");
-var info = avatar.loadPreview(RIG);
-assert(!!info, "avatar.loadPreview -> " + JSON.stringify(info));
+var info = loadRig(RIG);
+assert(!!info, "the imported avatar is open in the preview -> " + JSON.stringify(info));
 assert(info.bones === 2, "the rig reports 2 bones");
 assert(info.meshes === 1, "one mesh (the single-mesh path ITEM ZERO fixed)");
 assert(info.influences === 4, "4 influences per vertex");
@@ -92,7 +118,12 @@ assert(avatar.time() === 0, "stop rewinds to 0");
 // The character is already loaded; WALK is an ANIMATION-ONLY file (zero
 // meshes) for the same rig, MISMATCH one for a different rig.
 var clipsBefore = avatar.clips().length;
-var added = avatar.loadAnimation(WALK);
+// {asset:false} — INSPECTION. This fixture is an animation-only .glb (zero
+// meshes), which the mesh import pipeline refuses; the ASSET route is proved
+// against an importable clip by scripting.e2e.avatar_assets and by
+// avatar.loadClip in avatar_verbs. The option is explicit for exactly that
+// reason: the limitation is visible here rather than hidden in a fallback.
+var added = avatar.loadAnimation(WALK, { asset: false });
 assert(!!added && added.added === 1, "avatar.loadAnimation added one clip -> " + JSON.stringify(added.match));
 assert(added.match.matched === added.match.boneChannels && added.match.matched > 0,
        "every bone channel of the clip matched the loaded rig");
@@ -120,7 +151,7 @@ assert(avatar.stop(), "stop");
 
 // a clip for a DIFFERENT rig is refused by name, not silently loaded
 var refusedRig = "";
-try { avatar.loadAnimation(MISMATCH); } catch (e) { refusedRig = String(e); }
+try { avatar.loadAnimation(MISMATCH, { asset: false }); } catch (e) { refusedRig = String(e); }
 assert(refusedRig.indexOf("hips") >= 0, "a foreign rig is refused, naming the bone: " + refusedRig);
 assert(avatar.clips().length === clipsBefore + 1, "... and nothing was added");
 
@@ -129,21 +160,27 @@ assert(avatar.preview().rootMotion === false, "root motion is off by default (wa
 assert(avatar.setRootMotion(true) && avatar.preview().rootMotion === true, "avatar.setRootMotion(true)");
 assert(avatar.setRootMotion(false) && avatar.preview().rootMotion === false, "avatar.setRootMotion(false)");
 
-// the session list the left column shows
-var hist = avatar.history();
-assert(hist.length === 1 && hist[0].loaded === true, "avatar.history() lists the loaded character");
-assert(avatar.forget(hist[0].file), "avatar.forget() drops it (the left column's Delete)");
-assert(avatar.history().length === 0 && !avatar.preview(),
-       "... and clears the preview, because it was the loaded file");
-assert(!!avatar.loadPreview(RIG), "reload for the remaining checks");
+// THE LEFT COLUMN, after D7: the library's avatar assets, not a session file
+// list. Everything loaded above is a real row, which is the whole change.
+var library = avatar.library({ scope: "library" });
+assert(library.length >= 1, "avatar.library() lists the imported avatars (" + library.length + ")");
+var openNow = avatar.asset();
+assert(!!openNow && openNow.scope === "library",
+       "avatar.asset() reports what is open, and from which scope");
+assert(library.filter(function (a) { return a.guid === openNow.guid; }).length === 1,
+       "... and the open avatar is one of the library's rows");
+assert(openNow.definition.rig.bones === 2, "... carrying the rig it was minted from");
 
 // ---- refusals are clean errors, never crashes ----
 var refusedBadClip = false;
 try { avatar.setClip("no such clip"); } catch (e) { refusedBadClip = true; }
 assert(refusedBadClip, "avatar.setClip refuses an unknown clip");
 var refusedBadFile = false;
-try { avatar.loadPreview("/nowhere/at/all.fbx"); } catch (e) { refusedBadFile = true; }
-assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
+try { avatar.importAvatar("/nowhere/at/all.fbx"); } catch (e) { refusedBadFile = true; }
+assert(refusedBadFile, "avatar.importAvatar refuses a missing file");
+var refusedRetired = false;
+try { avatar.loadPreview(RIG); } catch (e) { refusedRetired = true; }
+assert(refusedRetired, "avatar.loadPreview is GONE — there is no second way to load a character");
 
 // ---- THE PIVOT-PRESERVING FBX, all the way to pixels ----------------------
 // ANIMATION_ENGINE_MIGRATION_SPEC R1, end to end and from outside the app.
@@ -152,7 +189,7 @@ assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
 // that does not compose that chain produces a frozen character while passing
 // every glTF test in the tree.
 {
-    var fbx = avatar.loadPreview(PIVOT_FBX);
+    var fbx = loadRig(PIVOT_FBX);
     assert(!!fbx && fbx.bones === 2, "the pivot FBX loads: " + JSON.stringify(fbx.clips));
     assert(fbx.activeClip === "Walk",
            "the REAL clip is active, not the zero-length T-pose the file also carries");
@@ -181,7 +218,7 @@ assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
            "R1: and the PIXELS moved with it — a pivot-preserving FBX animates end to end");
 
     assert(avatar.clearPreview(), "the FBX preview clears");
-    assert(!!avatar.loadPreview(RIG), "reload the glTF rig for the remaining checks");
+    assert(!!loadRig(RIG), "reload the glTF rig for the remaining checks");
 }
 
 // ---- HEIGHT: the unit fix, normalization, and the ceiling -----------------
@@ -196,7 +233,7 @@ assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
     assert(here.normalized === false && Math.abs(here.normalizeFactor - 1) < 1e-6,
            "a plausible character is left EXACTLY as authored");
 
-    var giant = avatar.loadPreview(GIANT);
+    var giant = loadRig(GIANT);
     assert(Math.abs(giant.sourceHeight - 17.25) < 0.05,
            "the giant fixture imports at " + giant.sourceHeight.toFixed(2) + " m (Dreyar's size)");
     assert(giant.normalized === true && Math.abs(giant.height - 1.75) < 0.02,
@@ -218,11 +255,11 @@ assert(refusedBadFile, "avatar.loadPreview refuses a missing file");
     // The FBX half, through the real app: pivot_rig.fbx DECLARES metres
     // (UnitScaleFactor 100), so the unit fix leaves it at metre scale — a file
     // declaring centimetres would arrive 100x smaller.
-    var fbx = avatar.loadPreview(PIVOT_FBX);
+    var fbx = loadRig(PIVOT_FBX);
     assert(fbx.height > 0.5 && fbx.height < 3.0,
            "the metre-declared FBX imports at " + fbx.height.toFixed(3) + " m");
     assert(fbx.normalized === false, "... so it is not normalized either");
-    assert(!!avatar.loadPreview(RIG), "reload the glTF rig for the remaining checks");
+    assert(!!loadRig(RIG), "reload the glTF rig for the remaining checks");
 }
 
 // ---- clear ----

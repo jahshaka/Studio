@@ -16,9 +16,11 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QImageReader>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QSet>
 #include <QStandardPaths>
 #include <QtEndian>
+#include <functional>
 
 #include "assimp/Importer.hpp"
 #include "assimp/material.h"
@@ -30,6 +32,8 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/iesprofile.h"
+#include "services/rigsignature.h"
+#include "irisgl/document/assets/avatardefinition.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "data/project.h"
@@ -130,6 +134,64 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
     int textures = texturePaths.size();
     if (textures == 0) textures = static_cast<int>(scene->mNumTextures);
 
+    // ---- THE RIG BLOCK (AVATAR_ASSET_SPEC §5.1) ---------------------------
+    //
+    // Whether a model is riggable is a property of the FILE, so it belongs in
+    // the metadata every import already computes rather than in a second parse
+    // the avatar module pays later. It is what `assets.list({rigged:true})`
+    // filters on, what "Create Avatar" is offered from, and what the avatar
+    // definition's `rig` block is copied from.
+    //
+    // BONE names come from the meshes' bone lists; NODE names from the scene
+    // hierarchy. Both matter: the clip <-> rig join is by SCENE-NODE name
+    // (rigsignature.h), and an FBX carries bones assimp never gives a mesh.
+    QStringList boneNames;
+    QSet<QString> boneSeen;
+    for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
+        const aiMesh *mesh = scene->mMeshes[i];
+        for (unsigned b = 0; b < mesh->mNumBones; ++b) {
+            const QString name = QString::fromUtf8(mesh->mBones[b]->mName.C_Str());
+            if (name.isEmpty() || boneSeen.contains(name)) continue;
+            boneSeen.insert(name);
+            boneNames.append(name);
+        }
+    }
+
+    QStringList nodeNames;
+    QSet<QString> nodeSeen;
+    std::function<void(const aiNode *)> walk = [&](const aiNode *node) {
+        if (!node) return;
+        const QString name = QString::fromUtf8(node->mName.C_Str());
+        if (!name.isEmpty() && !nodeSeen.contains(name)) {
+            nodeSeen.insert(name);
+            nodeNames.append(name);
+        }
+        for (unsigned i = 0; i < node->mNumChildren; ++i) walk(node->mChildren[i]);
+    };
+    walk(scene->mRootNode);
+
+    // Clips: name, LENGTH IN SECONDS (a file's ticks are meaningless to a
+    // reader, and ticksPerSecond is 0 in more exports than not — the same
+    // fallback iris::Mesh::extractAnimations uses), and how much of the clip
+    // is bone work rather than assimp pivot bookkeeping.
+    QJsonArray animations;
+    for (unsigned i = 0; i < scene->mNumAnimations; ++i) {
+        const aiAnimation *anim = scene->mAnimations[i];
+        if (!anim) continue;
+        const double tps = anim->mTicksPerSecond > 0.0 ? anim->mTicksPerSecond : 25.0;
+        int boneChannels = 0;
+        for (unsigned c = 0; c < anim->mNumChannels; ++c) {
+            const QString channel = QString::fromUtf8(anim->mChannels[c]->mNodeName.C_Str());
+            if (!rig::isPivotChannel(channel)) ++boneChannels;
+        }
+        QJsonObject clip;
+        clip["name"] = QString::fromUtf8(anim->mName.C_Str());
+        clip["length"] = anim->mDuration / tps;
+        clip["channels"] = static_cast<int>(anim->mNumChannels);
+        clip["boneChannels"] = boneChannels;
+        animations.append(clip);
+    }
+
     QJsonObject meta;
     meta["kind"] = "model";
     meta["format"] = formatOf(sourceFile);
@@ -139,6 +201,12 @@ QJsonObject AssetMetadata::forModelScene(const aiScene *scene, const QString &so
     meta["meshes"] = static_cast<int>(scene->mNumMeshes);
     meta["materials"] = static_cast<int>(scene->mNumMaterials);
     meta["textures"] = textures;
+    meta["hasSkeleton"] = !boneNames.isEmpty();
+    meta["bones"] = boneNames.size();
+    meta["boneNames"] = QJsonArray::fromStringList(boneNames);
+    meta["nodeNames"] = QJsonArray::fromStringList(nodeNames);
+    meta["rigId"] = rig::rigId(boneNames);
+    meta["animations"] = animations;
     return meta;
 }
 
@@ -216,6 +284,39 @@ QJsonObject AssetMetadata::forLightProfileFile(const QString &filePath)
     return meta;
 }
 
+QJsonObject AssetMetadata::forAvatarFile(const QString &filePath)
+{
+    QJsonObject meta;
+    meta["kind"] = "avatar";
+    meta["format"] = formatOf(filePath);
+    meta["fileSize"] = sizeOf(filePath);
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) return meta;
+    const QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
+    file.close();
+
+    iris::AvatarDefinition def;
+    QString error;
+    if (!iris::avatarDefinitionFromJson(obj, def, &error)) {
+        // A row whose definition will not parse still gets a block, for the
+        // same reason a bad .ies does: otherwise the lazy backfill re-parses
+        // it on every inspection. The refusal is carried so the UI can SAY
+        // what is wrong instead of showing a nameless tile.
+        meta["error"] = error;
+        return meta;
+    }
+    meta["name"] = def.name;
+    meta["model"] = def.modelAsset;
+    meta["rigId"] = def.rig.rigId;
+    meta["bones"] = def.rig.bones;
+    meta["defaultClip"] = def.defaultClip;
+    QJsonArray clips;
+    for (const auto &clip : def.clips) clips.append(clip.name);
+    meta["clips"] = clips;
+    return meta;
+}
+
 QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFolder)
 {
     const QDir dir(storeFolder);
@@ -248,6 +349,11 @@ QJsonObject AssetMetadata::computeForStore(int assetType, const QString &storeFo
         if (!ies.isEmpty()) return forLightProfileFile(ies);
         break;
     }
+    case ModelTypes::Avatar: {
+        const QString definition = findByExtension(storeFolder, Constants::AVATAR_EXTS);
+        if (!definition.isEmpty()) return forAvatarFile(definition);
+        break;
+    }
     default:
         break;
     }
@@ -275,7 +381,20 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     if (record.guid.isEmpty()) return QJsonObject();
 
     QJsonObject props = QJsonDocument::fromJson(record.properties).object();
-    if (props.contains("metadata")) return props["metadata"].toObject();
+    if (props.contains("metadata")) {
+        const QJsonObject stored = props["metadata"].toObject();
+        // A MODEL block written before the rig fields existed (AVATAR_ASSET
+        // §5.1) is incomplete, not absent — and the "metadata exists, stop"
+        // short-circuit below would keep it incomplete forever, so
+        // `assets.list({rigged:true})` would never see a single library row
+        // imported before this build. One extra key is the version marker:
+        // recompute once, persist, and every later call is the fast path
+        // again. (Ships-as-new-app means no MIGRATIONS; a lazy backfill that
+        // already exists for exactly this is not one.)
+        if (stored.value("kind").toString() != QLatin1String("model")
+            || stored.contains("hasSkeleton"))
+            return stored;
+    }
 
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
     QJsonObject meta = computeForStore(record.type, QDir(root).filePath(guid));
@@ -291,6 +410,7 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
             case ModelTypes::Music: meta = forAudioFile(source); break;
             case ModelTypes::Video: meta = forVideoFile(source); break;
             case ModelTypes::LightProfile: meta = forLightProfileFile(source); break;
+            case ModelTypes::Avatar: meta = forAvatarFile(source); break;
             default: meta = forGenericFile(source); break;
             }
         }

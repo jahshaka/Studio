@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QSqlError>
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVector>
@@ -29,6 +30,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/logger.h"
 #include "data/database/casschema.h"
+#include "data/database/database.h"   // DbTransaction
 #include "data/project.h"          // ModelTypes — the asset `type` column
 #include "services/assetstorepaths.h"
 #include "services/filewriteatomic.h"
@@ -189,6 +191,64 @@ bool ingestFile(QSqlDatabase conn, const QString &root, const QString &srcPath,
     insertLink.addBindValue(name.isEmpty() ? info.fileName() : name);
     insertLink.exec();
     return true;
+}
+
+QString sourceOid(QSqlDatabase conn, const QString &guid)
+{
+    QSqlQuery query(conn);
+    query.prepare("SELECT oid FROM asset_files WHERE asset_guid = ? "
+                  "ORDER BY CASE role WHEN 'source' THEN 0 ELSE 1 END, name");
+    query.addBindValue(guid);
+    if (query.exec() && query.next()) return query.value(0).toString();
+    return QString();
+}
+
+bool moveSourcePointer(QSqlDatabase conn, const QString &guid, const QString &oid,
+                       const QString &name, QString *errorOut)
+{
+    if (oid.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("no content id to point at");
+        return false;
+    }
+
+    // Which row: the named one, else the asset's single source row.
+    QString targetName = name;
+    if (targetName.isEmpty()) {
+        QSqlQuery pick(conn);
+        pick.prepare("SELECT name FROM asset_files WHERE asset_guid = ? AND role = 'source'");
+        pick.addBindValue(guid);
+        if (pick.exec() && pick.next()) targetName = pick.value(0).toString();
+    }
+    if (targetName.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("asset %1 has no source file row").arg(guid);
+        return false;
+    }
+
+    // DELETE + INSERT, not UPDATE: the refcount triggers are AFTER INSERT and
+    // AFTER DELETE on asset_files, so an UPDATE would move the pointer while
+    // leaving the OLD object's refcount inflated (it is then never collectable)
+    // and the new one's at zero (assets.gc would reap the bytes the library
+    // just published). One transaction, so a reader never sees no source row.
+    DbTransaction tx(conn);
+    QSqlQuery drop(conn);
+    drop.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = 'source' AND name = ?");
+    drop.addBindValue(guid);
+    drop.addBindValue(targetName);
+    if (!drop.exec()) {
+        if (errorOut) *errorOut = drop.lastError().text();
+        return false;
+    }
+    QSqlQuery add(conn);
+    add.prepare("INSERT OR REPLACE INTO asset_files (asset_guid, role, oid, name) "
+                "VALUES (?, 'source', ?, ?)");
+    add.addBindValue(guid);
+    add.addBindValue(oid);
+    add.addBindValue(targetName);
+    if (!add.exec()) {
+        if (errorOut) *errorOut = add.lastError().text();
+        return false;
+    }
+    return tx.commit();
 }
 
 QString resolveSource(QSqlDatabase conn, const QString &root,

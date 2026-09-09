@@ -186,6 +186,16 @@ public:
     QFont headerGlyphFont() const;
 
 	WindowSpaces getWindowSpace();
+	/// Opens a library asset in the module that owns its kind, switching to
+	/// that module's space (AVATAR_ASSET_SPEC §5.5). Called by the Assets page
+	/// and the editor's asset drawer; both go through the module's VERB, never
+	/// through its widgets.
+	void openAssetInModule(const QString &guid, const QString &moduleId, const QString &scope);
+	/// Instantiates an avatar ASSET into the open scene through the module's
+	/// `avatar.spawn` verb — the drawer's "Add to Scene" and the viewport's
+	/// drop of an avatar row take the same path a script does.
+	/// `hasPosition` false spawns in front of the editor camera.
+	void spawnAvatarAsset(const QString &guid, const iris::Vec3 &position, bool hasPosition);
 	void deselectViewports();
 
 	/// Views dropdown / view.* shortcuts / editor.setView verb — ONE path:

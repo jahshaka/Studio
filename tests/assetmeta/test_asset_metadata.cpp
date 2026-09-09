@@ -8,18 +8,25 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
+#include <QMap>
+#include <QStringList>
 #include <cstdio>
 
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assetmetadata.h"
+#include "services/rigsignature.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 static const char *FIXTURES = JAHSHAKA_TEST_SOURCE_DIR "/tests/scripting/fixtures";
 static const char *CUBE_OBJ = JAHSHAKA_TEST_SOURCE_DIR "/app/content/primitives/cube.obj";
+// The generated two-bone skinned fixture (tests/avatar/fixtures/make_rig_glb.py):
+// joints jointRoot/jointTip, clips "Idle" and the junk name "mixamo.com".
+static const char *RIG_GLB = JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb";
 
 int main(int argc, char **argv)
 {
@@ -58,6 +65,63 @@ int main(int argc, char **argv)
         CHECK(meta["meshes"].toInt() >= 1, "model: mesh count >= 1");
         CHECK(meta["materials"].toInt() >= 1, "model: material count >= 1");
         CHECK(meta["fileSize"].toInteger() > 0, "model: file size > 0");
+        // An UNRIGGED model still answers the rig question — with "no". A
+        // missing key and a false one are different answers to a filter.
+        CHECK(meta.contains("hasSkeleton") && !meta["hasSkeleton"].toBool(),
+              "model: cube.obj hasSkeleton == false");
+        CHECK(meta["bones"].toInt() == 0, "model: cube.obj has no bones");
+        CHECK(meta["rigId"].toString().isEmpty(),
+              "model: an unrigged model has NO rig id (not a hash of nothing)");
+        CHECK(meta["animations"].toArray().isEmpty(), "model: cube.obj has no clips");
+    }
+
+
+    // ---- T1 (AVATAR_ASSET_SPEC §9): the RIG block ------------------------
+    //
+    // Whether a model can be an avatar, which skeleton it is, and what it can
+    // play — all from the metadata the import already computes. This is what
+    // `assets.list({rigged:true})` filters on and what the avatar definition's
+    // `rig` block is copied from, so it is asserted on a REAL rigged file.
+    {
+        const QJsonObject meta = AssetMetadata::forModelFile(RIG_GLB);
+        CHECK(meta["kind"].toString() == "model", "rig: kind model");
+        CHECK(meta["hasSkeleton"].toBool(), "rig: rig2.glb hasSkeleton");
+        CHECK(meta["bones"].toInt() == 2, "rig: rig2.glb has 2 bones");
+
+        QStringList bones;
+        for (const auto &v : meta["boneNames"].toArray()) bones.append(v.toString());
+        CHECK(bones.contains("jointRoot") && bones.contains("jointTip"),
+              "rig: both bone names present");
+
+        QStringList nodes;
+        for (const auto &v : meta["nodeNames"].toArray()) nodes.append(v.toString());
+        CHECK(nodes.contains("jointRoot") && nodes.contains("arm"),
+              "rig: node names cover the joints AND the skinned mesh node");
+
+        const QString id = meta["rigId"].toString();
+        CHECK(id.size() == 40, "rig: rigId is a sha1 hex digest");
+        // Identity is the SET of bone names, not their order: the same names
+        // in the other order must hash the same, a different rig must not.
+        CHECK(rig::rigId({ "jointTip", "jointRoot" }) == id,
+              "rig: rigId is order-independent");
+        CHECK(rig::rigId({ "jointRoot", "jointTip", "jointThird" }) != id,
+              "rig: a different skeleton hashes differently");
+
+        const QJsonArray clips = meta["animations"].toArray();
+        CHECK(clips.size() == 2, "rig: both clips described");
+        QMap<QString, double> lengths;
+        for (const auto &v : clips) {
+            const QJsonObject clip = v.toObject();
+            lengths.insert(clip["name"].toString(), clip["length"].toDouble());
+        }
+        CHECK(lengths.contains("Idle") && lengths.contains("mixamo.com"),
+              "rig: clips keep the file's RAW names (mixamo.com included)");
+        CHECK(lengths.value("Idle") > 0.0 && lengths.value("mixamo.com") > 0.0,
+              "rig: both clips carry a length in seconds");
+        CHECK(lengths.value("Idle") < 60.0,
+              "rig: the length is SECONDS, not ticks (a 1 s clip is not 25)");
+        CHECK(clips.at(0).toObject()["boneChannels"].toInt() > 0,
+              "rig: bone channels counted (no assimp pivots in a glTF)");
     }
 
     // ---- store-folder dispatch ----

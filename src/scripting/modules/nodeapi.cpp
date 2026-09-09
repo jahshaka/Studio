@@ -10,6 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/animation/animation.h"
+#include "irisgl/document/animation/locomotion.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/nodeapi.h"
@@ -105,6 +107,14 @@ QVector<VerbInfo> NodeApi::verbs() const
           Needs::Document },
         { "boneNames", "node.boneNames(id) -> [string]",
           "The node's rig, in bone-index order (the index its vertex weights name). Empty for anything unrigged.",
+          Needs::Document },
+        { "avatar", "node.avatar(id) -> {asset, version, name, linked, activeClip, clips:[string]} | undefined",
+          "The AVATAR LINK on a wrapper node: which avatar ASSET this node is an instance of "
+          "and which version of its definition it last resolved, plus the clips it carries. "
+          "Undefined on anything that is not an avatar wrapper. `linked` is false for a "
+          "SCRATCH avatar (an avatar.spawn on a plain model Object guid) — it has movement and "
+          "locomotion but no asset behind it, so nothing re-resolves it and module edits never "
+          "reach it.",
           Needs::Document },
         { "skinningMode", "node.skinningMode(id) -> \"gpu\" | \"none\"",
           "How the node deforms: \"gpu\" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), \"none\" when it is static. Diagnostic.",
@@ -805,6 +815,44 @@ QVariant NodeApi::boneNames(const QString &id)
     if (auto skel = skeletonOf(node))
         for (const auto &bone : skel->bones) out.append(bone->name);
     return out;
+}
+
+QVariant NodeApi::avatar(const QString &id)
+{
+    auto node = nodeOrFail(id, QStringLiteral("node.avatar"));
+    if (!node) return QVariant();
+    // Not an avatar at all: UNDEFINED rather than an empty map. "This node has
+    // no avatar" and "this avatar has no clips" are different answers and a
+    // script has to be able to tell them apart.
+    if (!node->hasAvatarComponent()) return QVariant();
+
+    QVariantList clips;
+    QString activeClip;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (!n) return;
+        for (const auto &anim : n->getAnimations()) {
+            if (anim.isNull() || !anim->hasSkeletalAnimation()) continue;
+            if (!clips.contains(anim->getName())) clips.append(anim->getName());
+        }
+        for (int i = 0; i < n->childCount(); ++i)
+            if (auto *c = n->childAt(i)) walk(c->sharedFromThis());
+    };
+    walk(node);
+    if (auto *loco = node->locomotion()) {
+        const auto &weights = loco->weights();
+        float best = 0.0f;
+        for (const auto &weight : weights)
+            if (weight.weight > best) { best = weight.weight; activeClip = weight.clip; }
+    }
+
+    return QVariantMap{
+        { "asset", node->avatarLink.asset },
+        { "version", node->avatarLink.version },
+        { "name", node->avatarLink.name },
+        { "linked", node->isLinkedAvatar() },
+        { "activeClip", activeClip },
+        { "clips", clips },
+    };
 }
 
 QString NodeApi::skinningMode(const QString &id)

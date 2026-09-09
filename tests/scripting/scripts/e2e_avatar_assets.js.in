@@ -1,0 +1,209 @@
+// scripting.e2e.avatar_assets — AVATAR_ASSET_SPEC §9 gate T14, the owner's
+// whole story in one run.
+//
+// The owner asked for four things and this script is all four, end to end:
+//
+//   1. avatars are LIBRARY ASSETS the Avatar module edits, the way the
+//      materials module edits presets;
+//   2. "Add to Project" yields a UNIQUE version — asset edits go to the asset,
+//      project edits go to the project, from the moment it is added;
+//   3. a scene holds an INSTANCE of the PROJECT's version, and a project-side
+//      edit reaches it without reopening anything;
+//   4. you can always save the project avatar back to the asset later.
+//
+// Every step is a VERB — the same ones the module's widgets, an MCP session
+// and the owner's own tooling call. --headless: everything here is
+// Needs::Document (the definition, the pins, the scene edits and the spawn all
+// run on the NULL render system).
+//
+// THE FIXTURE PAIR, generated at build time from the shipped Skeletal
+// Animation sample (tests/avatar/fixtures/): beta_mannequin.dae (Mixamo's
+// Beta, full skeleton, its dance clip stripped) and beta_walk.dae (the same
+// file with the BODY stripped and its clip renamed "Walking" — the shape
+// Mixamo hands you for a "without skin" download). They share their joint
+// names by construction, which is the join key a skeletal clip uses.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function refused(fn, msg) {
+    var threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    assert(threw, msg);
+}
+function clipNamesOf(definition) {
+    return definition.clips.map(function (c) { return c.name; });
+}
+
+var RIG  = "@JAHSHAKA_MANNEQUIN_DAE@";
+var WALK = "@JAHSHAKA_BETA_WALK_DAE@";
+
+// ---- 1. import a rigged model; it is discoverable AS rigged --------------
+
+project.create("avatar assets");
+var projectGuid = project.list()
+                      .filter(function (p) { return p.name === "avatar assets"; })[0].guid;
+
+var modelGuid = assets.import(RIG);
+assert(modelGuid.length > 10, "assets.import(beta_mannequin.dae) -> " + modelGuid);
+
+var meta = assets.metadata(modelGuid);
+assert(meta.hasSkeleton === true, "the import recorded a skeleton");
+assert(meta.bones > 10, "... with " + meta.bones + " bones");
+assert(typeof meta.rigId === "string" && meta.rigId.length === 40,
+       "... and a stable rig id: " + meta.rigId);
+
+var rigged = assets.list({ rigged: true }).map(function (a) { return a.guid; });
+assert(rigged.indexOf(modelGuid) >= 0, "assets.list({rigged:true}) finds it");
+
+// ---- 2. mint the avatar asset (D8: lazily, from the gesture) ------------
+
+var avatarGuid = avatar.createAsset(modelGuid);
+assert(avatarGuid.length > 10, "avatar.createAsset -> " + avatarGuid);
+assert(assets.list({ type: "avatar" })
+           .filter(function (a) { return a.guid === avatarGuid; }).length === 1,
+       "it is an 'avatar' library row");
+
+// The rigged model must NOT vanish from the library because an avatar now
+// depends on it — the "hide dependees" rule is about import MEMBERS.
+assert(assets.list({ type: "object" })
+           .filter(function (a) { return a.guid === modelGuid; }).length === 1,
+       "the rigged model is still listed after Create Avatar");
+
+var opened = avatar.open(avatarGuid, { scope: "library" });
+assert(opened.guid === avatarGuid && opened.scope === "library",
+       "avatar.open(library) -> " + opened.name);
+assert(opened.definition.model === modelGuid, "the definition names the model");
+assert(opened.definition.rig.rigId === meta.rigId,
+       "... and carries the SAME rig id the metadata computed");
+assert(opened.dirty === false, "a freshly opened definition is not dirty");
+
+var v1 = opened.version;
+assert(v1.length > 10, "the library has a version: " + v1);
+
+// ---- 3. a LIBRARY edit publishes a new version --------------------------
+
+assert(!!avatar.loadAnimation(WALK),
+       "avatar.loadAnimation(beta_walk.dae) onto the open library avatar");
+assert(avatar.asset().dirty === true, "... marks the definition dirty");
+
+var saved = avatar.save();
+assert(saved.scope === "library", "avatar.save writes back to the LIBRARY scope");
+assert(saved.version !== v1, "... as a NEW version: " + saved.version);
+var v2 = saved.version;
+assert(avatar.asset().dirty === false, "... and the definition is clean again");
+
+var libraryClips = clipNamesOf(avatar.asset().definition);
+assert(libraryClips.length >= 1,
+       "the published definition lists its clips: " + libraryClips.join(", "));
+
+// ---- 4. Add to Project pins the CURRENT version -------------------------
+
+assert(assets.addToProject(avatarGuid) === avatarGuid,
+       "assets.addToProject returns the SAME guid — a pin, not a copy");
+
+var projectRow = avatar.library({ scope: "project" })
+                       .filter(function (a) { return a.guid === avatarGuid; })[0];
+assert(!!projectRow, "the project has a version of the avatar");
+assert(projectRow.version === v2, "... pinned at the library's CURRENT version");
+assert(projectRow.edited === false, "... so it reads as linked, not edited");
+
+// ---- 5. a scene holds an INSTANCE of the project's version --------------
+
+var instance = avatar.spawn(avatarGuid, { position: { x: 0, y: 0, z: 0 } });
+assert(instance && instance.length > 10, "avatar.spawn(avatarGuid) -> " + instance);
+
+var link = node.avatar(instance);
+assert(!!link && link.linked === true, "node.avatar reports a LINKED instance");
+assert(link.asset === avatarGuid, "... naming the avatar asset");
+assert(link.version === v2, "... at the version the project pinned");
+assert(link.name === opened.definition.name || link.name.length > 0,
+       "... and carrying the definition's name");
+// D5: the wrapper is named from the DEFINITION, not from whatever the model
+// file called its root node ("Armature", "Scene", "RootNode").
+assert(node.info(instance).name === link.name,
+       "the wrapper node is named from the definition: " + link.name);
+
+for (var i = 0; i < link.clips.length; ++i)
+    assert(libraryClips.indexOf(link.clips[i]) >= 0,
+           "the instance carries the definition's clip '" + link.clips[i] + "'");
+
+var instances = avatar.instances(avatarGuid);
+assert(instances.length === 1 && instances[0].node === instance,
+       "avatar.instances lists it");
+assert(instances[0].stale === false, "... and it is not stale");
+
+// An OBJECT spawn is still the unlinked scratch path (D10) — six suites do it.
+var scratch = avatar.spawn(modelGuid);
+assert(scratch && scratch.length > 10, "avatar.spawn(objectGuid) still works");
+assert(node.avatar(scratch).linked === false,
+       "... as an UNLINKED scratch avatar with no asset behind it");
+assert(avatar.instances().length === 1,
+       "... which avatar.instances does not list (it is nobody's instance)");
+
+// ---- 6. a PROJECT edit reaches the instance, without a reopen -----------
+
+var projectOpen = avatar.open(avatarGuid, { scope: "project" });
+assert(projectOpen.scope === "project", "avatar.open(project) opens the project's version");
+assert(projectOpen.version === v2, "... at the pinned version");
+
+var beforeRename = clipNamesOf(projectOpen.definition)[0];
+avatar.setClipOptions(beforeRename, { name: "Project Walk" });
+assert(avatar.asset().dirty === true, "editing the project's version marks it dirty");
+
+var projectSaved = avatar.save();
+assert(projectSaved.scope === "project", "avatar.save writes to the PROJECT scope");
+assert(projectSaved.version !== v2, "... COPY-ON-WRITE: a new version " + projectSaved.version);
+var vProject = projectSaved.version;
+
+// THE LIBRARY IS UNTOUCHED — that is the owner's rule, asserted.
+var libraryRow = avatar.library({ scope: "library" })
+                       .filter(function (a) { return a.guid === avatarGuid; })[0];
+assert(libraryRow.libraryVersion === v2, "the LIBRARY still points at its own version");
+assert(avatar.library({ scope: "project" })
+           .filter(function (a) { return a.guid === avatarGuid; })[0].edited === true,
+       "the project's version now reads as [edited]");
+
+// ... and the instance already standing in the scene followed the pin.
+var afterLink = node.avatar(instance);
+assert(afterLink.version === vProject,
+       "the INSTANCE re-resolved to the project's new version WITHOUT a reopen");
+assert(afterLink.clips.indexOf("Project Walk") >= 0,
+       "... and plays the renamed clip: " + afterLink.clips.join(", "));
+
+// ---- 7. save/reopen: the link survives, and so do foreign clips ---------
+
+assert(project.save(), "project.save");
+assert(project.close(), "project.close");
+assert(project.open(projectGuid), "project.open");
+var reopened = avatar.instances(avatarGuid);
+assert(reopened.length === 1, "the linked instance survives save + reopen");
+assert(reopened[0].version === vProject, "... still on the project's version");
+var reopenedLink = node.avatar(reopened[0].node);
+assert(reopenedLink.asset === avatarGuid, "... and still names its asset");
+assert(reopenedLink.clips.indexOf("Project Walk") >= 0,
+       "... with its clips intact (the clip-source rewrite no longer eats them)");
+
+// ---- 8. Save to Library publishes the project's version ----------------
+
+var published = avatar.saveToLibrary(avatarGuid);
+assert(published.version === vProject, "avatar.saveToLibrary publishes the project's version");
+var afterPublish = avatar.library({ scope: "library" })
+                        .filter(function (a) { return a.guid === avatarGuid; })[0];
+assert(afterPublish.libraryVersion === vProject,
+       "the library now points at what the project had");
+assert(avatar.library({ scope: "project" })
+           .filter(function (a) { return a.guid === avatarGuid; })[0].edited === false,
+       "... and the project reads as linked again (same content, now shared)");
+
+// ---- 9. refusals say what is wrong -------------------------------------
+
+refused(function () { avatar.open("not-a-guid"); },
+        "avatar.open refuses an unknown guid");
+refused(function () { avatar.setDefaultClip("no such clip"); },
+        "avatar.setDefaultClip refuses a clip the definition does not have");
+refused(function () { avatar.createAsset(avatarGuid); },
+        "avatar.createAsset refuses something that is not a model");
+
+console.log("avatar assets e2e: all checks passed");

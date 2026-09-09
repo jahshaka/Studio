@@ -101,34 +101,114 @@ QWidget *AvatarPage::buildLeftColumn()
     title->setObjectName("avatarLibraryTitle");
     layout->addWidget(title);
 
-    // D0.4 A: Load... plus a session history. The library list (assets.list
-    // filtered on metadata.hasSkeleton) is Part 1's — there is no skeleton
-    // metadata to filter on yet.
-    mHistory = new QListWidget(column);
-    mHistory->setToolTip(tr("Files loaded in this session"));
-    connect(mHistory, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
-        if (item) loadPath(item->data(Qt::UserRole).toString());
+    // THE LIBRARY LIST (AVATAR_ASSET_SPEC §5.3), two sections. LIBRARY is the
+    // store's avatar assets; PROJECT is this project's own versions of them,
+    // marked [edited] when the pin has diverged from the library's current
+    // version. That marking IS the owner's model made visible: asset edits go
+    // to the asset, project edits go to the project, and the user can always
+    // see which one they are looking at.
+    mLibrary = new QTreeWidget(column);
+    mLibrary->setColumnCount(2);
+    mLibrary->setHeaderLabels({ tr("Avatar"), tr("Version") });
+    mLibrary->setRootIsDecorated(true);
+    mLibrary->header()->setStretchLastSection(true);
+    mLibrary->setToolTip(tr("Double-click to edit; right-click for project actions"));
+    connect(mLibrary, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem *item, int) {
+        if (!item) return;
+        const QString guid = item->data(0, Qt::UserRole).toString();
+        if (guid.isEmpty()) return;   // a section header
+        openSelected(guid, item->data(0, Qt::UserRole + 1).toString());
     });
-    // Right-click Delete drops the row (avatar.forget) — the session list is
-    // module state, so removing a row deletes nothing on disk. Clearing the
-    // preview when it was the loaded file is the verb's business, not the
-    // widget's.
-    mHistory->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(mHistory, &QListWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
-        auto *item = mHistory->itemAt(pos);
-        if (!item || !mApi) return;
-        QMenu menu(this);
-        QAction *remove = menu.addAction(tr("Delete"));
-        if (menu.exec(mHistory->viewport()->mapToGlobal(pos)) != remove) return;
-        mApi->forget(item->data(Qt::UserRole).toString());
-        refreshFromModel();
-    });
-    layout->addWidget(mHistory, 1);
+    mLibrary->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(mLibrary, &QTreeWidget::customContextMenuRequested,
+            this, &AvatarPage::showLibraryMenu);
+    layout->addWidget(mLibrary, 1);
 
-    mLoadButton = new QPushButton(tr("Load..."), column);
-    connect(mLoadButton, &QPushButton::clicked, this, &AvatarPage::onLoadClicked);
-    layout->addWidget(mLoadButton);
+    // EVERY LOAD IS AN IMPORT (D7): a file picked here goes through the one
+    // import pipeline and becomes a library row, not a session entry that dies
+    // with the process. The second button does the same and pins it, so
+    // "bring this character into my project" is one gesture rather than three.
+    mImportButton = new QPushButton(tr("Import Avatar..."), column);
+    connect(mImportButton, &QPushButton::clicked, this, [this]() { onImportClicked(false); });
+    layout->addWidget(mImportButton);
+
+    mImportToProjectButton = new QPushButton(tr("Import to Project..."), column);
+    mImportToProjectButton->setToolTip(tr("Import the file AND add it to the open project, in "
+                                          "one step"));
+    connect(mImportToProjectButton, &QPushButton::clicked, this, [this]() { onImportClicked(true); });
+    layout->addWidget(mImportToProjectButton);
     return column;
+}
+
+QString AvatarPage::selectedAvatarGuid(QString *scopeOut) const
+{
+    if (!mLibrary) return QString();
+    auto *item = mLibrary->currentItem();
+    if (!item) return QString();
+    if (scopeOut) *scopeOut = item->data(0, Qt::UserRole + 1).toString();
+    return item->data(0, Qt::UserRole).toString();
+}
+
+void AvatarPage::openSelected(const QString &guid, const QString &scope)
+{
+    if (!mApi || guid.isEmpty()) return;
+    QVariantMap options;
+    if (!scope.isEmpty()) options.insert(QStringLiteral("scope"), scope);
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const QVariantMap opened = mApi->quietly([&] { return mApi->open(guid, options); });
+    QApplication::restoreOverrideCursor();
+    if (opened.isEmpty() && !mApi->lastError().isEmpty())
+        QMessageBox::warning(this, tr("Open Avatar"), mApi->lastError());
+    refreshFromModel();
+}
+
+void AvatarPage::showLibraryMenu(const QPoint &pos)
+{
+    if (!mApi || !mLibrary) return;
+    auto *item = mLibrary->itemAt(pos);
+    if (!item) return;
+    const QString guid = item->data(0, Qt::UserRole).toString();
+    if (guid.isEmpty()) return;
+    const QString scope = item->data(0, Qt::UserRole + 1).toString();
+    const bool isProject = scope == QLatin1String("project");
+    const bool edited = item->data(0, Qt::UserRole + 2).toBool();
+
+    QMenu menu(this);
+    QAction *edit = menu.addAction(tr("Edit"));
+    QAction *addToProject = isProject ? nullptr : menu.addAction(tr("Add to Project"));
+    QAction *addToScene = isProject ? menu.addAction(tr("Add to Scene")) : nullptr;
+    // Only offered when it would DO something: a pin already on the library's
+    // current version has nothing to take.
+    QAction *update = (isProject && edited) ? menu.addAction(tr("Update from Library")) : nullptr;
+    QAction *publish = isProject ? menu.addAction(tr("Save to Library")) : nullptr;
+
+    QAction *chosen = menu.exec(mLibrary->viewport()->mapToGlobal(pos));
+    if (!chosen) return;
+    if (chosen == edit) { openSelected(guid, scope); return; }
+    if (addToProject && chosen == addToProject) {
+        // The generic verb, not an avatar-shaped copy of it: an avatar is
+        // pinned exactly like every other asset (§4 D3).
+        emit addAvatarToProject(guid);
+        refreshFromModel();
+        return;
+    }
+    if (addToScene && chosen == addToScene) { emit addAvatarToScene(guid); return; }
+    if (update && chosen == update) {
+        if (QMessageBox::question(
+                this, tr("Update from Library"),
+                tr("Replace this project's version of the avatar with the library's current "
+                   "one?\n\nAny edits made to it inside this project will no longer be used."))
+            == QMessageBox::Yes)
+            emit updateAvatarFromLibrary(guid);
+        refreshFromModel();
+        return;
+    }
+    if (publish && chosen == publish) {
+        const QVariantMap result = mApi->quietly([&] { return mApi->saveToLibrary(guid); });
+        if (result.isEmpty() && !mApi->lastError().isEmpty())
+            QMessageBox::warning(this, tr("Save to Library"), mApi->lastError());
+        refreshFromModel();
+    }
 }
 
 QWidget *AvatarPage::buildCentreColumn()
@@ -239,6 +319,20 @@ QWidget *AvatarPage::buildRightColumn()
     auto *layout = new QVBoxLayout(column);
     layout->setContentsMargins(0, 0, 0, 0);
 
+    // WHICH SCOPE IS OPEN, and whether it has unsaved edits. The module edits
+    // EITHER a library asset OR the project's version of one, and the owner's
+    // rule ("asset edits go to the asset, project edits go to the project")
+    // only works if the user can see which one they have.
+    mScopeLabel = new QLabel(column);
+    mScopeLabel->setWordWrap(true);
+    mScopeLabel->setObjectName("avatarScopeLabel");
+    layout->addWidget(mScopeLabel);
+
+    mSaveButton = new QPushButton(tr("Save"), column);
+    mSaveButton->setToolTip(tr("Writes the definition back to the scope it was opened from"));
+    connect(mSaveButton, &QPushButton::clicked, this, &AvatarPage::onSaveClicked);
+    layout->addWidget(mSaveButton);
+
     auto *detailsTitle = new QLabel(tr("DETAILS"), column);
     layout->addWidget(detailsTitle);
     mDetails = new QLabel(column);
@@ -258,7 +352,52 @@ QWidget *AvatarPage::buildRightColumn()
     // It carries the DISPLAY name, which is what avatar.setClip takes.
     connect(mAnimations, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem *item, int) {
         if (!item || !mApi) return;
-        mApi->setClip(item->text(0));
+        mApi->setClip(item->data(0, Qt::UserRole).toString());
+        refreshFromModel();
+    });
+    // With an avatar OPEN the rows are the DEFINITION's clips, so the menu
+    // edits the definition (and marks it dirty) rather than the preview: the
+    // module edits an asset, and this is where the clip half of one is edited.
+    mAnimations->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(mAnimations, &QTreeWidget::customContextMenuRequested, this,
+            [this](const QPoint &pos) {
+        if (!mApi) return;
+        auto *item = mAnimations->itemAt(pos);
+        if (!item) return;
+        const QVariantMap open = mApi->asset();
+        if (open.isEmpty()) return;   // inspection-only preview: nothing to edit
+        const QString name = item->data(0, Qt::UserRole).toString();
+        const bool looping = item->data(0, Qt::UserRole + 1).toBool();
+        const bool rootMotion = item->data(0, Qt::UserRole + 2).toBool();
+        const bool isDefault = item->data(0, Qt::UserRole + 3).toBool();
+
+        QMenu menu(this);
+        QAction *loop = menu.addAction(tr("Looping"));
+        loop->setCheckable(true);
+        loop->setChecked(looping);
+        QAction *root = menu.addAction(tr("Root Motion"));
+        root->setCheckable(true);
+        root->setChecked(rootMotion);
+        QAction *makeDefault = menu.addAction(tr("Set as Default"));
+        makeDefault->setEnabled(!isDefault);
+        menu.addSeparator();
+        QAction *remove = menu.addAction(tr("Remove"));
+
+        QAction *chosen = menu.exec(mAnimations->viewport()->mapToGlobal(pos));
+        if (!chosen) return;
+        mApi->quietly([&] {
+            if (chosen == loop)
+                mApi->setClipOptions(name, { { QStringLiteral("looping"), !looping } });
+            else if (chosen == root)
+                mApi->setClipOptions(name, { { QStringLiteral("rootMotion"), !rootMotion } });
+            else if (chosen == makeDefault)
+                mApi->setDefaultClip(name);
+            else if (chosen == remove)
+                mApi->removeClip(name);
+            return true;
+        });
+        if (!mApi->lastError().isEmpty())
+            QMessageBox::warning(this, tr("Clip"), mApi->lastError());
         refreshFromModel();
     });
     layout->addWidget(mAnimations, 1);
@@ -283,15 +422,45 @@ void AvatarPage::setPreviewWidget(IAvatarPreviewWidget *preview)
     preview->setPreviewModel(mModel);
 }
 
-void AvatarPage::onLoadClicked()
+void AvatarPage::onImportClicked(bool intoProject)
 {
+    if (!mApi) return;
     QStringList filters;
     for (const auto &ext : Constants::MODEL_EXTS) filters.append("*." + ext);
     const QString path = QFileDialog::getOpenFileName(
-        this, tr("Load a rigged model"), QString(),
-        tr("Models (%1)").arg(filters.join(' ')));
+        this, intoProject ? tr("Import an avatar into the project") : tr("Import an avatar"),
+        QString(), tr("Models (%1)").arg(filters.join(' ')));
     if (path.isEmpty()) return;
-    loadPath(path);
+
+    // R0.11: the assimp parse is synchronous on the UI thread — a large FBX
+    // freezes the page for seconds. The busy cursor is the honest stopgap; the
+    // threaded ImportBatchRunner is a later problem if it becomes one.
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    QVariantMap options;
+    if (intoProject) options.insert(QStringLiteral("scope"), QStringLiteral("project"));
+    const QVariantMap result = mApi->quietly([&] { return mApi->importAvatar(path, options); });
+    QApplication::restoreOverrideCursor();
+
+    const QString avatarGuid = result.value(QStringLiteral("avatar")).toString();
+    if (avatarGuid.isEmpty()) {
+        QMessageBox::warning(this, tr("Import Avatar"),
+                             mApi->lastError().isEmpty()
+                                 ? tr("That file could not be imported as an avatar.")
+                                 : mApi->lastError());
+        refreshFromModel();
+        return;
+    }
+    // The verb already opened it (D7-A) — the page just catches up.
+    refreshFromModel();
+}
+
+void AvatarPage::onSaveClicked()
+{
+    if (!mApi) return;
+    const QVariantMap result = mApi->quietly([&] { return mApi->save(); });
+    if (result.isEmpty() && !mApi->lastError().isEmpty())
+        QMessageBox::warning(this, tr("Save Avatar"), mApi->lastError());
+    refreshFromModel();
 }
 
 void AvatarPage::onLoadAnimationClicked()
@@ -312,7 +481,7 @@ void AvatarPage::onLoadAnimationClicked()
     if (path.isEmpty()) return;
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const QVariant result = mApi->loadAnimation(path);
+    const QVariant result = mApi->quietly([&] { return mApi->loadAnimation(path); });
     QApplication::restoreOverrideCursor();
     // A rig mismatch is a REFUSAL, not a silent no-op: the verb throws, and
     // the message names the bones the loaded rig does not have.
@@ -323,32 +492,46 @@ void AvatarPage::onLoadAnimationClicked()
     refreshFromModel();
 }
 
-void AvatarPage::loadPath(const QString &path)
+void AvatarPage::refreshLibrary()
 {
-    if (!mApi || path.isEmpty()) return;
-    // R0.11: the assimp parse is synchronous on the UI thread — a large FBX
-    // freezes the page for seconds. The stub accepts that with a busy cursor;
-    // the threaded ImportBatchRunner is Part 1's problem if it becomes one.
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    mApi->loadPreview(path);
-    QApplication::restoreOverrideCursor();
-    // Re-framing and the widget refresh ride the verb's own delegates
-    // (AvatarModule::registerApi), so a scripted load looks identical.
-    refreshFromModel();
-}
+    if (!mLibrary || !mApi) return;
+    const QString openGuid = mApi->asset().value(QStringLiteral("guid")).toString();
+    const QString openScope = mApi->asset().value(QStringLiteral("scope")).toString();
 
-void AvatarPage::refreshHistory()
-{
-    // The session list lives in the MODEL (avatar.history/avatar.forget), so a
-    // scripted load shows up here exactly like a clicked one.
-    const QString current = mModel->filePath();
-    mHistory->clear();
-    for (const QString &path : mModel->history()) {
-        auto *item = new QListWidgetItem(QFileInfo(path).fileName(), mHistory);
-        item->setData(Qt::UserRole, path);
-        item->setToolTip(path);
-        if (path == current) mHistory->setCurrentItem(item);
+    mLibrary->clear();
+    auto *libraryRoot = new QTreeWidgetItem(mLibrary, { tr("LIBRARY"), QString() });
+    libraryRoot->setFirstColumnSpanned(true);
+    QTreeWidgetItem *projectRoot = nullptr;
+
+    for (const QVariant &row : mApi->library()) {
+        const QVariantMap avatarRow = row.toMap();
+        const QString scope = avatarRow.value(QStringLiteral("scope")).toString();
+        const bool isProject = scope == QLatin1String("project");
+        if (isProject && !projectRoot) {
+            projectRoot = new QTreeWidgetItem(mLibrary, { tr("PROJECT"), QString() });
+            projectRoot->setFirstColumnSpanned(true);
+        }
+        const bool edited = avatarRow.value(QStringLiteral("edited")).toBool();
+        const QString version = avatarRow.value(QStringLiteral("version")).toString();
+        auto *item = new QTreeWidgetItem(isProject ? projectRoot : libraryRoot);
+        item->setText(0, avatarRow.value(QStringLiteral("name")).toString()
+                         + (isProject && edited ? tr("  [edited]") : QString()));
+        // The version is a content id, so the first eight hex digits are what a
+        // person can actually compare between two rows.
+        item->setText(1, version.left(8));
+        item->setToolTip(1, version);
+        item->setData(0, Qt::UserRole, avatarRow.value(QStringLiteral("guid")));
+        item->setData(0, Qt::UserRole + 1, scope);
+        item->setData(0, Qt::UserRole + 2, edited);
+        const QVariantList clips = avatarRow.value(QStringLiteral("clips")).toList();
+        item->setToolTip(0, tr("bones: %1 · clips: %2")
+                                .arg(avatarRow.value(QStringLiteral("bones")).toInt())
+                                .arg(clips.size()));
+        if (avatarRow.value(QStringLiteral("guid")).toString() == openGuid && scope == openScope)
+            mLibrary->setCurrentItem(item);
     }
+    mLibrary->expandAll();
+    libraryRoot->setHidden(libraryRoot->childCount() == 0);
 }
 
 void AvatarPage::refreshFromModel()
@@ -369,21 +552,63 @@ void AvatarPage::refreshFromModel()
     for (const QWidget *w : transport) const_cast<QWidget *>(w)->setEnabled(loaded);
     mLoadAnimButton->setEnabled(loaded);
 
-    refreshHistory();
+    refreshLibrary();
 
     const auto clips = mModel->clips();
-    mAnimations->clear();
+    // WITH AN AVATAR OPEN the rows are the DEFINITION's clips — the avatar's
+    // authored clip list, which is what a spawned instance will play — and the
+    // preview's lengths are joined in by name. Without one (the inspection
+    // path) they are the preview's, exactly as before.
+    const QVariantMap openAsset = mApi ? mApi->asset() : QVariantMap();
+    const QVariantList definitionClips =
+        openAsset.value(QStringLiteral("definition")).toMap()
+            .value(QStringLiteral("clips")).toList();
+    const QString defaultClip = openAsset.value(QStringLiteral("definition")).toMap()
+                                    .value(QStringLiteral("defaultClip")).toString();
+    QMap<QString, float> lengthByName;
+    QString activeClip;
     for (const auto &clip : clips) {
-        auto *item = new QTreeWidgetItem(mAnimations);
-        item->setText(0, clip.name);
-        item->setText(1, QString::number(clip.length, 'f', 2) + " s");
-        // A cross-file clip says which file it came from; a same-file one says
-        // what the file called it (every Mixamo clip says "mixamo.com").
-        item->setToolTip(0, clip.external
-                                ? tr("from %1 (in the file: %2)")
-                                      .arg(QFileInfo(clip.source).fileName(), clip.rawName)
-                                : tr("in the file: %1").arg(clip.rawName));
-        if (clip.active) mAnimations->setCurrentItem(item);
+        lengthByName.insert(clip.name, clip.length);
+        if (clip.active) activeClip = clip.name;
+    }
+
+    mAnimations->clear();
+    if (!definitionClips.isEmpty()) {
+        for (const QVariant &row : definitionClips) {
+            const QVariantMap clip = row.toMap();
+            const QString name = clip.value(QStringLiteral("name")).toString();
+            auto *item = new QTreeWidgetItem(mAnimations);
+            const bool isDefault = name == defaultClip;
+            item->setText(0, isDefault ? name + tr("  (default)") : name);
+            item->setText(1, lengthByName.contains(name)
+                                 ? QString::number(lengthByName.value(name), 'f', 2) + " s"
+                                 // A clip the definition names but the preview
+                                 // has not loaded is not an error: it is a
+                                 // library clip whose bytes are only fetched
+                                 // when an instance plays it.
+                                 : tr("—"));
+            item->setToolTip(0, tr("in the file: %1")
+                                    .arg(clip.value(QStringLiteral("rawName")).toString()));
+            item->setData(0, Qt::UserRole, name);
+            item->setData(0, Qt::UserRole + 1, clip.value(QStringLiteral("looping")));
+            item->setData(0, Qt::UserRole + 2, clip.value(QStringLiteral("rootMotion")));
+            item->setData(0, Qt::UserRole + 3, isDefault);
+            if (name == activeClip) mAnimations->setCurrentItem(item);
+        }
+    } else {
+        for (const auto &clip : clips) {
+            auto *item = new QTreeWidgetItem(mAnimations);
+            item->setText(0, clip.name);
+            item->setText(1, QString::number(clip.length, 'f', 2) + " s");
+            // A cross-file clip says which file it came from; a same-file one
+            // says what the file called it (every Mixamo clip says "mixamo.com").
+            item->setToolTip(0, clip.external
+                                    ? tr("from %1 (in the file: %2)")
+                                          .arg(QFileInfo(clip.source).fileName(), clip.rawName)
+                                    : tr("in the file: %1").arg(clip.rawName));
+            item->setData(0, Qt::UserRole, clip.name);
+            if (clip.active) mAnimations->setCurrentItem(item);
+        }
     }
 
     const float duration = mModel->duration();
@@ -393,8 +618,26 @@ void AvatarPage::refreshFromModel()
     // Only what is loadable today (§0.8): no skinning mode (GPU_SKINNING's
     // verb), no controller block (Part 2), no source asset guid (Part 1 —
     // there is no library row).
+    // The scope banner + Save. Enabled only when there IS something to save,
+    // so the button never lies about having work to do.
+    if (mScopeLabel && mSaveButton) {
+        if (openAsset.isEmpty()) {
+            mScopeLabel->setText(tr("No avatar open."));
+            mSaveButton->setEnabled(false);
+        } else {
+            const bool dirty = openAsset.value(QStringLiteral("dirty")).toBool();
+            const QString scope = openAsset.value(QStringLiteral("scope")).toString();
+            mScopeLabel->setText(
+                tr("<b>%1</b> — editing the %2 version%3")
+                    .arg(openAsset.value(QStringLiteral("name")).toString().toHtmlEscaped(),
+                         scope == QLatin1String("project") ? tr("PROJECT's") : tr("LIBRARY"),
+                         dirty ? tr(" · <i>unsaved changes</i>") : QString()));
+            mSaveButton->setEnabled(dirty);
+        }
+    }
+
     if (!loaded) {
-        mDetails->setText(tr("Nothing loaded. Use Load... to open a rigged model."));
+        mDetails->setText(tr("Nothing loaded. Import an avatar, or pick one from the list."));
     } else {
         mDetails->setText(tr("<b>%1</b><br/>%2<br/><br/>bones: %3<br/>meshes: %4<br/>"
                              "vertices: %5<br/>influences/vertex: %6<br/>clips: %7")

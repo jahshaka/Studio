@@ -11,6 +11,7 @@ add_executable(test_importer_glb test_importer_glb.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
@@ -95,6 +96,7 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
@@ -147,6 +149,7 @@ add_executable(test_importer_security test_importer_security.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
@@ -209,6 +212,7 @@ add_executable(test_importer_materials test_importer_materials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
@@ -259,6 +263,7 @@ add_executable(test_importer_texture_guids test_importer_texture_guids.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetmetadata.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp

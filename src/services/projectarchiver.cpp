@@ -57,6 +57,8 @@ QString typeNameOf(int type)
     case ModelTypes::Sky: return "sky";
     case ModelTypes::ParticleSystem: return "particle_system";
     case ModelTypes::File: return "file";
+    case ModelTypes::LightProfile: return "lightprofile";
+    case ModelTypes::Avatar: return "avatar";
     default: return "asset";
     }
 }

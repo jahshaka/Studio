@@ -684,6 +684,11 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         }
         emit mEvents.addDroppedMesh(QDir(mProject->getProjectFolder()).filePath(role.value(2).toString()),
                                     true, mDragScenePos, role.value(3).toString(), role.value(1).toString());
+    } else if (type == static_cast<int>(ModelTypes::Avatar)) {
+        // AVATAR_ASSET_SPEC §5.5: dropping an avatar row spawns a LINKED
+        // instance of the project's version — the same `avatar.spawn` verb the
+        // drawer's "Add to Scene" and a script call, at the tracked drop point.
+        if (mMainWindow) mMainWindow->spawnAvatarAsset(role.value(3).toString(), mDragScenePos, true);
     } else if (type == static_cast<int>(ModelTypes::Material)) {
         if (mDragPreviewNode && mMainWindow) {
             auto target = mDragPreviewNode;
