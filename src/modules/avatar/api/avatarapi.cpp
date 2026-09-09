@@ -309,12 +309,16 @@ QVector<VerbInfo> AvatarApi::verbs() const
           "is an empty string and that is not an error: the default asset degrades — no `run` "
           "gives a two-sample blend space, no `land` skips the Land state entirely.",
           Needs::Document },
-        { "setClipRole", "avatar.setClipRole(nodeId, role, clipName) -> bool",
+        { "setClipRole", "avatar.setClipRole(nodeId, role, clipNameOrAssetGuid) -> bool",
           "Binds one role by hand: `idle`, `walk`, `run`, `jumpStart` (or `jump-start`), "
           "`fallLoop` (or `fall-loop`), `land`. An empty clipName UNBINDS the role, which is "
           "how you tell the default asset to skip a state. A hand-bound role is never clobbered "
           "by a later automatic re-match. Regenerates the default asset when that is what is "
-          "installed, and leaves an authored asset alone. Undoable.",
+          "installed, and leaves an authored asset alone. Undoable. "
+          "Takes an ANIMATION ASSET's guid as well as a clip name: it resolves to the clip that "
+          "asset contributed to this character (the name is a rule — the row's base name, "
+          "uniquified — not something the caller chose), and refuses when the asset's clip is "
+          "not on the character yet, naming avatar.loadClip.",
           Needs::Document },
 
         // ---- AVATAR ASSETS (AVATAR_ASSET_SPEC §6) -------------------------
@@ -1997,15 +2001,66 @@ bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QS
         return record(QStringLiteral("avatar.setClipRole: '%1' is not a role (known: idle, "
                                      "walk, run, jumpStart, fallLoop, land)").arg(role));
 
+    // AN ANIMATION ASSET'S GUID instead of a clip name. Roles are bound by
+    // clip name because that is what the state machine plays, but the thing a
+    // caller HAS after avatar.loadClip is the asset guid — and the name the
+    // clip ended up with is a rule (rig::displayNameFor, plus uniquifying),
+    // not something the caller chose. So a guid resolves to the clip THIS
+    // ASSET contributed to THIS character.
+    QString clip = clipName;
+    if (host.db && !clipName.isEmpty()) {
+        const AssetRecord asset = host.db->fetchAsset(clipName);
+        if (!asset.guid.isEmpty()) {
+            if (asset.type != static_cast<int>(ModelTypes::Animation))
+                return record(QStringLiteral("avatar.setClipRole: '%1' is not an animation "
+                                             "asset — pass a clip NAME or an Animation guid")
+                                  .arg(asset.name.isEmpty() ? clipName : asset.name));
+            const iris::AvatarMovementParams params =
+                node->hasAvatarComponent() ? node->avatar()->params()
+                                           : iris::AvatarMovementParams();
+            loco->refreshClips(node, params.walkSpeed, params.runSpeed);
+            // The join is the asset's OWN clip names: both sides ran the same
+            // naming rule (rig::displayNameFor — the file's clip name when it
+            // has a real one, the file's base name when it says "mixamo.com"),
+            // so the row's metadata already knows what the clips are called.
+            // Matching the ROW's name instead would miss every clip that came
+            // with a name of its own.
+            const QString shown = QFileInfo(asset.name).completeBaseName();
+            QStringList candidates;
+            const QJsonObject meta = AssetMetadata::ensure(host.db, asset.guid);
+            for (const QJsonValue &entry : meta.value(QStringLiteral("clips")).toArray()) {
+                const QString name = entry.toObject().value(QStringLiteral("name")).toString();
+                if (!name.isEmpty()) candidates.append(name);
+            }
+            if (candidates.isEmpty()) candidates.append(shown);
+
+            clip.clear();
+            const QMap<QString, float> &lengths = loco->clipLengths();
+            for (const QString &candidate : candidates) {
+                if (lengths.contains(candidate)) { clip = candidate; break; }
+                // "Walking 2" — the uniquifying suffix a second load of the
+                // same file adds; the first match wins deterministically
+                // (clipLengths is a QMap, sorted by name).
+                for (auto it = lengths.constBegin(); it != lengths.constEnd(); ++it)
+                    if (it.key().startsWith(candidate)) { clip = it.key(); break; }
+                if (!clip.isEmpty()) break;
+            }
+            if (clip.isEmpty())
+                return record(QStringLiteral("avatar.setClipRole: no clip from '%1' is on '%2' "
+                                             "— avatar.loadClip it first")
+                                  .arg(shown, node->getName()));
+        }
+    }
+
     const QString before = loco->roles().get(r);
-    loco->setClipRole(r, clipName);
+    loco->setClipRole(r, clip);
     if (host.services && host.services->undo) {
         auto weak = node.toWeakRef();
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("clip role"),
-            [weak, r, clipName]() {
+            [weak, r, clip]() {
                 if (auto n = weak.toStrongRef())
-                    if (auto *l = n->locomotion()) l->setClipRole(r, clipName);
+                    if (auto *l = n->locomotion()) l->setClipRole(r, clip);
             },
             [weak, r, before]() {
                 if (auto n = weak.toStrongRef())

@@ -79,6 +79,20 @@ assert(loaded.match.matched === loaded.match.boneChannels,
 assert(avatar.clipRoles(av).walk === "Walking",
        "the walk role bound itself from the clip's name");
 
+// A ROLE BOUND BY ASSET GUID: the caller has the guid, not the name the clip
+// ended up with (that is a rule, not a choice).
+assert(avatar.setClipRole(av, "idle", clip),
+       "avatar.setClipRole takes the Animation asset's guid");
+assert(avatar.clipRoles(av).idle === "Walking",
+       "...and resolved it to the clip that asset put on this character");
+var wrongType = false;
+try { wrongType = !avatar.setClipRole(av, "idle", rig); } catch (e) { wrongType = true; }
+assert(wrongType, "a guid that is not an animation asset is refused");
+var notLoaded = false;
+var lonely = avatar.spawn(rig);
+try { notLoaded = !avatar.setClipRole(lonely, "walk", clip); } catch (e) { notLoaded = true; }
+assert(notLoaded, "an asset whose clip is not on the character is refused (load it first)");
+
 var listedClips = avatar.animations();
 console.log("avatar.animations: " + JSON.stringify(listedClips));
 assert(listedClips.length === 1 && listedClips[0].guid === clip,
